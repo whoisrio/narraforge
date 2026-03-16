@@ -1,0 +1,55 @@
+# Logs
+backend/logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+backend/.venv/
+backend/venv/
+.env.local
+backend/.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+backend/*.db
+backend/*.sqlite
+
+# Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Node
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local

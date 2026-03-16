@@ -1,0 +1,28 @@
+# 测试框架
+pytest==7.4.4
+pytest-asyncio==0.23.2
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-xdist==3.5.0
+
+# HTTP 测试
+httpx==0.26.0
+requests-mock==1.11.0
+
+# 数据库测试
+pytest-sqlalchemy==1.5.0
+sqlalchemy-utils==0.41.1
+
+# Mock 和测试工具
+freezegun==1.2.2
+factory-boy==3.3.0
+Faker==21.0.0
+
+# 代码质量
+black==23.12.1
+flake8==6.1.0
+isort==5.13.2
+mypy==1.8.0
+
+# FastAPI 测试支持
+starlette-testclient==0.3.0

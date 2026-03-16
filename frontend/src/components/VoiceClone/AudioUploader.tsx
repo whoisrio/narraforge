@@ -10,8 +10,9 @@ export function AudioUploader({ onUploadComplete }: AudioUploaderProps) {
   const [dragOver, setDragOver] = useState(false);
 
   const handleFile = async (file: File) => {
-    if (!file.name.match(/\.(mp3|wav)$/i)) {
-      alert('Please upload MP3 or WAV files only');
+    // 接受录制的 WebM 格式以及 MP3/WAV
+    if (!file.name.match(/\.(mp3|wav|webm)$/i)) {
+      alert('Please upload MP3, WAV, or WebM files only');
       return;
     }
 
@@ -52,7 +53,7 @@ export function AudioUploader({ onUploadComplete }: AudioUploaderProps) {
     >
       <input
         type="file"
-        accept=".mp3,.wav"
+        accept=".mp3,.wav,.webm"
         onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         style={{ display: 'none' }}
         id="audio-upload"
@@ -65,7 +66,7 @@ export function AudioUploader({ onUploadComplete }: AudioUploaderProps) {
           <div>
             <div style={{ fontSize: '24px', marginBottom: '8px' }}>📁</div>
             <div>Drag & drop audio file here</div>
-            <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>or click to browse (MP3, WAV)</div>
+            <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>or click to browse (MP3, WAV, WebM)</div>
           </div>
         )}
       </label>

@@ -5,10 +5,13 @@ from typing import List, Optional
 import uuid
 import os
 import aiofiles
+import logging
 
 from app.core.database import get_db
 from app.core.config import settings
 from app.services.qwen_tts_service import get_tts_service, QwenTTSService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -38,7 +41,13 @@ class BatchTTSRequest(BaseModel):
 
 @router.post("/synthesize")
 async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
-    """合成语音 - 使用千问 TTS API"""
+    """
+    合成语音 - 使用千问 TTS API
+    
+    为什么需要检查 voice_id：
+    - 如果传入了 voice_id（克隆的声音），需要使用声音克隆模型
+    - 如果没有传入，则使用标准 TTS 模型和默认声音
+    """
     audio_id = str(uuid.uuid4())
     audio_path = settings.voices_dir / f"tts_{audio_id}.wav"
 
@@ -48,16 +57,34 @@ async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
     try:
         tts_service = await get_tts_service()
 
-        # 调用千问 TTS API
-        audio_data = await tts_service.synthesize_speech(
-            text=request.text,
-            voice_id=voice_id,
-            speed=request.speed,
-            volume=request.volume,
-            pitch=request.pitch,
-            format="wav",
-            sample_rate=16000,
-        )
+        # 判断是否使用克隆声音（克隆的 voice_id 通常不是预定义的标准声音）
+        standard_voices = ["xiaoyun", "xiaoyuan", "ruoxi", "xiaogang", "yunjian"]
+        is_cloned_voice = voice_id not in standard_voices
+
+        if is_cloned_voice:
+            # 使用克隆声音进行合成
+            logger.info(f"Using cloned voice ID: {voice_id}")
+            audio_data = await tts_service.clone_voice(
+                voice_id=voice_id,
+                text=request.text,
+                speed=request.speed,
+                volume=request.volume,
+                pitch=request.pitch,
+                format="wav",
+                sample_rate=16000,
+            )
+        else:
+            # 使用标准 TTS 声音
+            logger.info(f"Using standard voice: {voice_id}")
+            audio_data = await tts_service.synthesize_speech(
+                text=request.text,
+                voice_id=voice_id,
+                speed=request.speed,
+                volume=request.volume,
+                pitch=request.pitch,
+                format="wav",
+                sample_rate=16000,
+            )
 
         # 保存音频文件
         async with aiofiles.open(audio_path, "wb") as f:
@@ -73,11 +100,13 @@ async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
                 "pitch": request.pitch,
                 "emotion": request.emotion,
                 "voice_id": voice_id,
+                "is_cloned_voice": is_cloned_voice,
             }
         }
 
     except Exception as e:
         # 如果 API 调用失败，返回错误
+        logger.error(f"TTS synthesis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
 
 
