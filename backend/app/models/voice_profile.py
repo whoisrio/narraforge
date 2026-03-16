@@ -1,0 +1,21 @@
+from sqlalchemy import Column, String, DateTime, Boolean
+from datetime import datetime
+import uuid
+
+from app.core.database import Base
+
+
+class VoiceProfile(Base):
+    __tablename__ = "voice_profiles"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = Column(String, nullable=False)
+    audio_path = Column(String, nullable=False)
+
+    # 千问声音克隆相关字段
+    qwen_voice_id = Column(String, nullable=True)  # 千问返回的声音ID
+    role = Column(String, default="custom")  # 角色: male/female/custom
+    is_cloned = Column(Boolean, default=False)  # 是否已完成克隆
+    cloned_at = Column(DateTime, nullable=True)  # 克隆完成时间
+
+    created_at = Column(DateTime, default=datetime.utcnow)
