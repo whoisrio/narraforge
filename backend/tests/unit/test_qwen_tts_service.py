@@ -296,3 +296,93 @@ class TestQwenTTSService:
             # 关闭服务
             await close_tts_service()
             assert tts_module._tts_service is None
+
+    @pytest.mark.asyncio
+    async def test_list_cloned_voices_success(self):
+        """测试列出已克隆的声音成功"""
+        with patch("app.services.qwen_tts_service.settings") as mock_settings:
+            mock_settings.qwen_api_key = "test_api_key"
+
+            service = QwenTTSService()
+
+            expected_result = [
+                {"voice_id": "voice_001", "name": "clone001", "status": "OK"},
+                {"voice_id": "voice_002", "name": "clone002", "status": "OK"},
+            ]
+
+            with patch.object(service, "_list_cloned_voices_sync") as mock_sync:
+                mock_sync.return_value = expected_result
+
+                result = await service.list_cloned_voices()
+
+                assert result == expected_result
+                mock_sync.assert_called_once_with()
+
+    def test_list_cloned_voices_sync_success(self):
+        """测试同步列出已克隆的声音成功"""
+        with patch("app.services.qwen_tts_service.settings") as mock_settings:
+            mock_settings.qwen_api_key = "test_api_key"
+
+            service = QwenTTSService()
+
+            mock_response_data = {
+                "code": "Success",
+                "output": {
+                    "voices": [
+                        {"voice_id": "voice_001", "preferred_name": "clone001", "status": "OK"},
+                        {"voice_id": "voice_002", "preferred_name": "clone002", "status": "OK"},
+                    ]
+                }
+            }
+
+            with patch("urllib.request.urlopen") as mock_urlopen:
+                mock_response = Mock()
+                mock_response.read.return_value = bytes(
+                    '{"code": "Success", "output": {"voices": [{"voice_id": "voice_001", "preferred_name": "clone001", "status": "OK"}, {"voice_id": "voice_002", "preferred_name": "clone002", "status": "OK"}]}}',
+                    "utf-8"
+                )
+                mock_urlopen.return_value.__enter__.return_value = mock_response
+
+                result = service._list_cloned_voices_sync()
+
+                assert len(result) == 2
+                assert result[0]["voice_id"] == "voice_001"
+                assert result[1]["voice_id"] == "voice_002"
+
+    def test_list_cloned_voices_sync_empty(self):
+        """测试同步列出已克隆的声音为空"""
+        with patch("app.services.qwen_tts_service.settings") as mock_settings:
+            mock_settings.qwen_api_key = "test_api_key"
+
+            service = QwenTTSService()
+
+            with patch("urllib.request.urlopen") as mock_urlopen:
+                mock_response = Mock()
+                mock_response.read.return_value = bytes(
+                    '{"code": "Success", "output": {"voices": []}}',
+                    "utf-8"
+                )
+                mock_urlopen.return_value.__enter__.return_value = mock_response
+
+                result = service._list_cloned_voices_sync()
+
+                assert result == []
+
+    def test_list_cloned_voices_sync_no_voices_key(self):
+        """测试同步列出已克隆的声音返回空（没有voices字段）"""
+        with patch("app.services.qwen_tts_service.settings") as mock_settings:
+            mock_settings.qwen_api_key = "test_api_key"
+
+            service = QwenTTSService()
+
+            with patch("urllib.request.urlopen") as mock_urlopen:
+                mock_response = Mock()
+                mock_response.read.return_value = bytes(
+                    '{"code": "Success", "output": {}}',
+                    "utf-8"
+                )
+                mock_urlopen.return_value.__enter__.return_value = mock_response
+
+                result = service._list_cloned_voices_sync()
+
+                assert result == []

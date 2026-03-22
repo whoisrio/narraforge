@@ -54,6 +54,9 @@ SQLite at `backend/voice_clone.db` with models:
 - `/api/timeline/*` - Video timeline management
 - `/api/config/*` - TTS model config
 
+### Testing
+All test must be in tests directory.
+
 ## Environment
 
 Required in `backend/.env`:

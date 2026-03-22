@@ -9,6 +9,7 @@ interface VoiceListProps {
 export function VoiceList({ onRefresh }: VoiceListProps) {
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [registeringId, setRegisteringId] = useState<string | null>(null);
   const [showRegisterDialog, setShowRegisterDialog] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState<VoiceProfile | null>(null);
@@ -16,14 +17,43 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
   const [registerRole, setRegisterRole] = useState('custom');
   const [registerResult, setRegisterResult] = useState<any>(null);
 
+  // 获取已克隆的声音列表（优先从 Qwen 同步）
   const fetchVoices = async () => {
     try {
-      const list = await voiceApi.list();
-      setVoices(list);
+      // 总是先尝试同步
+      try {
+        setSyncing(true);
+        await voiceApi.syncFromQwen();
+      } catch (e) {
+        console.warn('Sync from Qwen failed, using local data:', e);
+      } finally {
+        setSyncing(false);
+      }
+
+      // 获取所有声音，然后过滤
+      const all = await voiceApi.list();
+      // 只显示已克隆的
+      const cloned = all.filter(v => v.is_cloned && v.qwen_voice_id);
+      setVoices(cloned);
     } catch (err) {
       console.error('Failed to fetch voices:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSyncFromQwen = async () => {
+    setSyncing(true);
+    try {
+      const result = await voiceApi.syncFromQwen();
+      alert(result.message);
+      fetchVoices();
+      onRefresh?.();
+    } catch (err) {
+      console.error('Sync failed:', err);
+      alert('Sync failed, please try again');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -75,11 +105,28 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
     }
   };
 
-  if (loading) return <div>Loading voices...</div>;
+  if (loading || syncing) return <div>{syncing ? 'Syncing from Qwen...' : 'Loading voices...'}</div>;
 
   return (
     <div style={{ marginTop: '24px' }}>
-      <h3>🎤 Cloned Voices</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <h3>🎤 Cloned Voices</h3>
+        <button
+          onClick={handleSyncFromQwen}
+          disabled={syncing}
+          style={{
+            padding: '8px 16px',
+            fontSize: '14px',
+            background: syncing ? '#ccc' : '#2196f3',
+            color: 'white',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: syncing ? 'not-allowed' : 'pointer',
+          }}
+        >
+          {syncing ? 'Syncing...' : '🔄 Sync from Qwen'}
+        </button>
+      </div>
       {voices.length === 0 ? (
         <div style={{ color: '#666', padding: '20px', textAlign: 'center' }}>
           No voices yet. Upload or record audio to clone.

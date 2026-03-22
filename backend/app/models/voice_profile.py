@@ -12,9 +12,12 @@ class VoiceProfile(Base):
     name = Column(String, nullable=False)
     audio_path = Column(String, nullable=False)
 
+    # 外部音频 URL（七牛云、AWS S3 等云存储）
+    external_audio_url = Column(String, nullable=True)
+
     # 千问声音克隆相关字段
-    qwen_voice_id = Column(String, nullable=True)  # 千问返回的声音ID
-    role = Column(String, default="custom")  # 角色: male/female/custom
+    qwen_voice_id = Column(String, nullable=True)  # 千问返回的声音 ID
+    role = Column(String, default="custom")  # 角色：male/female/custom
     is_cloned = Column(Boolean, default=False)  # 是否已完成克隆
     cloned_at = Column(DateTime, nullable=True)  # 克隆完成时间
 

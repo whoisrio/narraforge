@@ -19,8 +19,20 @@ export const voiceApi = {
     return data;
   },
 
+  // 只获取已克隆的声音（从 Qwen 同步的）
+  listCloned: async (): Promise<VoiceProfile[]> => {
+    const all = await voiceApi.list();
+    return all.filter(v => v.is_cloned && v.qwen_voice_id);
+  },
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/clone/${id}`);
+  },
+
+  // 从 Qwen 同步已克隆的声音
+  syncFromQwen: async () => {
+    const { data } = await api.post('/clone/sync-from-qwen');
+    return data;
   },
 
   // 使用克隆声音合成文本

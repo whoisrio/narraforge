@@ -4,7 +4,8 @@
       "mcp__context7__resolve-library-id",
       "WebFetch(domain:help.aliyun.com)",
       "WebSearch",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(cd:*)"
     ]
   }
 }

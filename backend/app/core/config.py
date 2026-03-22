@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     qwen_api_key: str = ""
     qwen_model: str = "qwen-tts"
 
+    # 公网访问 URL（CosyVoice 声音注册需要公网可访问的音频 URL）
+    # 本地开发可以使用 ngrok 暴露的 URL，如：https://xxxx.ngrok.io
+    # 生产环境使用实际域名，如：https://your-domain.com
+    public_base_url: str = ""
+
     # 日志配置
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     log_format: str = "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
