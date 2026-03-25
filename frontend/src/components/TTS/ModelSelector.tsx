@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { configApi } from '../../services/api';
 import type { TTSConfig } from '../../types';
+import { Button, Input, Card, EmptyState } from '../ui';
 
 interface ModelSelectorProps {
   onSelect?: (config: TTSConfig) => void;
@@ -56,116 +57,138 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
     }
   };
 
-  if (loading) return <div>Loading models...</div>;
+  const headerStyle = {
+    display: 'flex',
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: 'var(--spacing-md)',
+  };
+
+  const h3Style = {
+    margin: 0,
+    fontSize: 'var(--font-size-lg)',
+    fontWeight: 'var(--font-weight-semibold)',
+  };
+
+  const formContainerStyle = {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 'var(--spacing-sm)',
+  };
+
+  const configItemStyle = (isDefault: boolean) => ({
+    display: 'flex',
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    padding: 'var(--spacing-md)',
+    border: isDefault ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-md)',
+    backgroundColor: isDefault ? 'rgba(76, 175, 80, 0.1)' : 'var(--color-surface)',
+    cursor: 'pointer' as const,
+    transition: 'background-color var(--transition-fast), border-color var(--transition-fast)',
+  });
+
+  const defaultBadgeStyle = {
+    marginLeft: 'var(--spacing-sm)',
+    fontSize: '10px',
+    background: 'var(--color-success)',
+    color: 'white',
+    padding: '2px 6px',
+    borderRadius: 'var(--radius-sm)',
+    fontWeight: 'var(--font-weight-medium)',
+  };
+
+  const handleConfigClick = (config: TTSConfig) => {
+    onSelect?.(config);
+  };
+
+  if (loading) {
+    return <Card><h3 style={h3Style}>🤖 Model Configuration</h3><div style={{ padding: 'var(--spacing-xl)' }}>Loading models...</div></Card>;
+  }
 
   return (
-    <div style={{ padding: '16px', border: '1px solid #eee', borderRadius: '8px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <h3>🤖 Model Configuration</h3>
-        <button
+    <Card>
+      <div style={headerStyle}>
+        <h3 style={h3Style}>🤖 Model Configuration</h3>
+        <Button
+          variant={showForm ? 'ghost' : 'primary'}
+          size="sm"
           onClick={() => setShowForm(!showForm)}
-          style={{
-            padding: '6px 12px',
-            fontSize: '12px',
-            background: '#1976d2',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
         >
           {showForm ? 'Cancel' : '+ Add Model'}
-        </button>
+        </Button>
       </div>
 
       {showForm && (
-        <div style={{ padding: '12px', background: '#f5f5f5', borderRadius: '4px', marginBottom: '16px' }}>
-          <input
+        <div style={{ ...formContainerStyle, padding: 'var(--spacing-md)', background: 'rgba(25, 118, 210, 0.05)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--spacing-md)' }}>
+          <Input
+            label="Model name"
             type="text"
-            placeholder="Model name"
+            placeholder="Enter model name"
             value={newConfig.name}
             onChange={(e) => setNewConfig({ ...newConfig, name: e.target.value })}
-            style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
           />
-          <input
+          <Input
+            label="Provider"
             type="text"
-            placeholder="Provider (qwen/azure/openai)"
+            placeholder="qwen/azure/openai"
             value={newConfig.provider}
             onChange={(e) => setNewConfig({ ...newConfig, provider: e.target.value })}
-            style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
           />
-          <input
+          <Input
+            label="Model name"
             type="text"
-            placeholder="Model name"
+            placeholder="qwen-tts"
             value={newConfig.model_name}
             onChange={(e) => setNewConfig({ ...newConfig, model_name: e.target.value })}
-            style={{ width: '100%', padding: '8px', marginBottom: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
           />
-          <button
+          <Button
+            variant="primary"
+            fullWidth
             onClick={handleCreate}
-            style={{
-              width: '100%',
-              padding: '8px',
-              background: '#4caf50',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
+            disabled={!newConfig.name.trim()}
           >
             Create
-          </button>
+          </Button>
         </div>
       )}
 
       {configs.length === 0 ? (
-        <div style={{ color: '#666', textAlign: 'center', padding: '20px' }}>
-          No models configured. Add a model to get started.
-        </div>
+        <EmptyState
+          icon="🤖"
+          title="No Models Configured"
+          description="Add a model configuration to get started."
+        />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
           {configs.map((config) => (
             <div
               key={config.id}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '12px',
-                border: config.is_default ? '2px solid #4caf50' : '1px solid #eee',
-                borderRadius: '4px',
-                background: config.is_default ? '#f1f8e9' : 'white',
-                cursor: 'pointer',
-              }}
-              onClick={() => onSelect?.(config)}
+              style={configItemStyle(config.is_default)}
+              onClick={() => handleConfigClick(config)}
             >
               <div>
-                <div style={{ fontWeight: '500' }}>
+                <div style={{ fontWeight: 'var(--font-weight-medium)', display: 'flex', alignItems: 'center' }}>
                   {config.name}
-                  {config.is_default && <span style={{ marginLeft: '8px', fontSize: '10px', background: '#4caf50', color: 'white', padding: '2px 6px', borderRadius: '4px' }}>DEFAULT</span>}
+                  {config.is_default && <span style={defaultBadgeStyle}>DEFAULT</span>}
                 </div>
-                <div style={{ fontSize: '12px', color: '#666' }}>
+                <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
                   {config.provider} / {config.model_name}
                 </div>
               </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(config.id); }}
-                style={{
-                  padding: '4px 8px',
-                  fontSize: '12px',
-                  background: '#ffebee',
-                  color: '#c62828',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                Delete
-              </button>
+              {!config.is_default && (
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={(e) => { e.stopPropagation(); handleDelete(config.id); }}
+                >
+                  Delete
+                </Button>
+              )}
             </div>
           ))}
         </div>
       )}
-    </div>
+    </Card>
   );
 }

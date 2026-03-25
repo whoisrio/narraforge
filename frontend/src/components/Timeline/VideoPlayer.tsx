@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { Card, EmptyState } from '../ui';
 
 interface VideoPlayerProps {
   url?: string;
@@ -45,20 +46,28 @@ export function VideoPlayer({ url, onTimeUpdate, onDuration, playing = false }: 
     }
   }, [playing]);
 
+  const videoStyle = {
+    width: '100%',
+    borderRadius: 'var(--radius-lg)',
+    overflow: 'hidden' as const,
+    background: 'var(--color-background)',
+  };
+
+  const timeInfoStyle = {
+    marginTop: 'var(--spacing-sm)',
+    fontSize: 'var(--font-size-sm)',
+    color: 'var(--color-text-secondary)',
+  };
+
   if (!url) {
     return (
-      <div style={{
-        width: '100%',
-        height: '300px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f5f5f5',
-        borderRadius: '8px',
-        color: '#666',
-      }}>
-        No video uploaded
-      </div>
+      <Card>
+        <EmptyState
+          icon="🎬"
+          title="No Video"
+          description="Upload a video to get started."
+        />
+      </Card>
     );
   }
 
@@ -68,9 +77,9 @@ export function VideoPlayer({ url, onTimeUpdate, onDuration, playing = false }: 
         ref={videoRef}
         src={url}
         controls
-        style={{ width: '100%', borderRadius: '8px', overflow: 'hidden' }}
+        style={videoStyle}
       />
-      <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+      <div style={timeInfoStyle}>
         Current: {currentTime.toFixed(1)}s / Duration: {duration.toFixed(1)}s
       </div>
     </div>

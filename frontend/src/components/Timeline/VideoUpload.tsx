@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { timelineApi } from '../../services/api';
+import { Button } from '../ui';
 
 interface VideoUploadProps {
   projectId: string;
@@ -31,20 +32,12 @@ export function VideoUpload({ projectId, onUploadComplete }: VideoUploadProps) {
         onChange={handleFileChange}
         style={{ display: 'none' }}
       />
-      <button
+      <Button
+        variant="primary"
         onClick={() => fileInputRef.current?.click()}
-        style={{
-          padding: '8px 16px',
-          fontSize: '14px',
-          background: '#1976d2',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-        }}
       >
         📹 Upload Video
-      </button>
+      </Button>
     </div>
   );
 }

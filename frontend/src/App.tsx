@@ -8,13 +8,19 @@ import { VideoPlayer } from './components/Timeline/VideoPlayer';
 import { VideoUpload } from './components/Timeline/VideoUpload';
 import { Timeline } from './components/Timeline/Timeline';
 import { timelineApi } from './services/api';
+import { Tabs } from './components/ui';
 import type { TimelineProject } from './types';
+
+interface AppTab {
+  id: 'clone' | 'tts' | 'timeline';
+  label: string;
+  icon: string;
+}
 
 function App() {
   const [activeTab, setActiveTab] = useState<'clone' | 'tts' | 'timeline'>('clone');
   const [voiceRefreshKey, setVoiceRefreshKey] = useState(0);
 
-  // Timeline state
   const [projects, setProjects] = useState<TimelineProject[]>([]);
   const [currentProject, setCurrentProject] = useState<TimelineProject | null>(null);
 
@@ -53,72 +59,108 @@ function App() {
     }
   };
 
+  const tabs: AppTab[] = [
+    { id: 'clone', label: 'Voice Clone', icon: '🔊' },
+    { id: 'tts', label: 'TTS', icon: '📝' },
+    { id: 'timeline', label: 'Timeline', icon: '🎬' },
+  ];
+
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId as 'clone' | 'tts' | 'timeline');
+  };
+
+  const headerStyle: React.CSSProperties = {
+    background: 'var(--color-surface)',
+    borderBottom: `1px solid var(--color-border-light)`,
+    padding: 'var(--spacing-md) var(--spacing-lg)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  };
+
+  const h1Style: React.CSSProperties = {
+    margin: 0,
+    fontSize: 'var(--font-size-xl)',
+    fontWeight: 'var(--font-weight-semibold)',
+    color: 'var(--color-text-primary)',
+  };
+
+  const mainStyle: React.CSSProperties = {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    padding: 'var(--spacing-lg)',
+  };
+
+  const gridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 'var(--spacing-lg)',
+  };
+
+  const projectHeaderStyle: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 'var(--spacing-md)',
+  };
+
+  const h2Style: React.CSSProperties = {
+    margin: 0,
+    fontSize: 'var(--font-size-lg)',
+    fontWeight: 'var(--font-weight-semibold)',
+  };
+
+  const actionButtonsStyle: React.CSSProperties = {
+    display: 'flex',
+    gap: 'var(--spacing-sm)',
+  };
+
+  const projectListStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 'var(--spacing-sm)',
+  };
+
+  const projectItemStyle = (isSelected: boolean): React.CSSProperties => ({
+    padding: 'var(--spacing-md)',
+    border: isSelected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
+    borderRadius: 'var(--radius-md)',
+    cursor: 'pointer',
+    background: isSelected ? 'rgba(25, 118, 210, 0.1)' : 'var(--color-surface)',
+    transition: 'background-color var(--transition-fast), border-color var(--transition-fast)',
+  });
+
+  const emptyProjectStyle: React.CSSProperties = {
+    textAlign: 'center',
+    padding: 'var(--spacing-3xl)',
+    color: 'var(--color-text-secondary)',
+  };
+
+  const timelineGridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '2fr 1fr',
+    gap: 'var(--spacing-lg)',
+  };
+
   return (
-    <div style={{ minHeight: '100vh', background: '#fafafa' }}>
-      {/* Header */}
-      <header style={{
-        background: 'white',
-        borderBottom: '1px solid #eee',
-        padding: '16px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}>
-        <h1 style={{ margin: 0, fontSize: '24px', color: '#333' }}>
-          🎙️ Voice Clone Studio
-        </h1>
-        <nav style={{ display: 'flex', gap: '8px' }}>
-          <button
-            onClick={() => setActiveTab('clone')}
-            style={{
-              padding: '8px 16px',
-              background: activeTab === 'clone' ? '#1976d2' : 'transparent',
-              color: activeTab === 'clone' ? 'white' : '#666',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            🔊 Voice Clone
-          </button>
-          <button
-            onClick={() => setActiveTab('tts')}
-            style={{
-              padding: '8px 16px',
-              background: activeTab === 'tts' ? '#1976d2' : 'transparent',
-              color: activeTab === 'tts' ? 'white' : '#666',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            📝 TTS
-          </button>
-          <button
-            onClick={() => setActiveTab('timeline')}
-            style={{
-              padding: '8px 16px',
-              background: activeTab === 'timeline' ? '#1976d2' : 'transparent',
-              color: activeTab === 'timeline' ? 'white' : '#666',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            🎬 Timeline
-          </button>
-        </nav>
+    <div style={{ minHeight: '100.5vh', background: 'var(--color-background)' }}>
+      <header style={headerStyle}>
+        <h1 style={h1Style}>🎙️ Voice Clone Studio</h1>
       </header>
 
-      {/* Main Content */}
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
-        {/* Voice Clone Tab */}
+      <main style={mainStyle}>
+        <Tabs
+          tabs={tabs}
+          activeTab={activeTab}
+          onChange={handleTabChange}
+        />
+
         {activeTab === 'clone' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div style={gridStyle}>
             <div>
-              <h2 style={{ marginBottom: '16px' }}>Clone Your Voice</h2>
+              <h2 style={h2Style}>Clone Your Voice</h2>
               <AudioUploader onUploadComplete={() => setVoiceRefreshKey(k => k + 1)} />
-              <div style={{ marginTop: '24px' }}>
+              <div style={{ marginTop: 'var(--spacing-lg)' }}>
                 <AudioRecorder onRecordComplete={() => setVoiceRefreshKey(k => k + 1)} />
               </div>
             </div>
@@ -126,28 +168,26 @@ function App() {
           </div>
         )}
 
-        {/* TTS Tab */}
         {activeTab === 'tts' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div style={gridStyle}>
             <TTSControls />
             <ModelSelector />
           </div>
         )}
 
-        {/* Timeline Tab */}
         {activeTab === 'timeline' && (
           <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 style={{ margin: 0 }}>Video Timeline</h2>
-              <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={projectHeaderStyle}>
+              <h2 style={h2Style}>Video Timeline</h2>
+              <div style={actionButtonsStyle}>
                 <button
                   onClick={handleCreateProject}
                   style={{
-                    padding: '8px 16px',
-                    background: '#4caf50',
+                    padding: 'var(--spacing-sm) var(--spacing-md)',
+                    background: 'var(--color-success)',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: 'var(--radius-md)',
                     cursor: 'pointer',
                   }}
                 >
@@ -163,13 +203,13 @@ function App() {
             </div>
 
             {currentProject ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
+              <div style={timelineGridStyle}>
                 <div>
                   <VideoPlayer
                     url={currentProject.video_url}
                   />
                   {currentProject.video_url && (
-                    <div style={{ marginTop: '24px' }}>
+                    <div style={{ marginTop: 'var(--spacing-lg)' }}>
                       <Timeline
                         projectId={currentProject.id}
                         segments={currentProject.segments}
@@ -180,19 +220,13 @@ function App() {
                   )}
                 </div>
                 <div>
-                  <h3>Projects</h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <h2 style={{ ...h2Style, fontSize: 'var(--font-size-base)' }}>Projects</h2>
+                  <div style={projectListStyle}>
                     {projects.map((project) => (
                       <div
                         key={project.id}
                         onClick={() => setCurrentProject(project)}
-                        style={{
-                          padding: '12px',
-                          border: currentProject?.id === project.id ? '2px solid #1976d2' : '1px solid #eee',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          background: currentProject?.id === project.id ? '#e3f2fd' : 'white',
-                        }}
+                        style={projectItemStyle(currentProject?.id === project.id)}
                       >
                         {project.name}
                       </div>
@@ -201,7 +235,7 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '60px', color: '#666' }}>
+              <div style={emptyProjectStyle}>
                 No project selected. Create or select a project to get started.
               </div>
             )}

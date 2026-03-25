@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { voiceApi } from '../../services/api';
+import { Loading } from '../ui';
 
 interface AudioUploaderProps {
   onUploadComplete?: () => void;
@@ -10,7 +11,6 @@ export function AudioUploader({ onUploadComplete }: AudioUploaderProps) {
   const [dragOver, setDragOver] = useState(false);
 
   const handleFile = async (file: File) => {
-    // 接受录制的 WebM 格式以及 MP3/WAV
     if (!file.name.match(/\.(mp3|wav|webm)$/i)) {
       alert('Please upload MP3, WAV, or WebM files only');
       return;
@@ -35,21 +35,39 @@ export function AudioUploader({ onUploadComplete }: AudioUploaderProps) {
     if (file) handleFile(file);
   };
 
+  const uploadZoneStyle = {
+    border: `2px dashed ${dragOver ? 'var(--color-primary)' : 'var(--color-border)'}`,
+    borderRadius: 'var(--radius-lg)',
+    padding: 'var(--spacing-2xl)',
+    textAlign: 'center' as const,
+    cursor: uploading ? 'wait' : 'pointer',
+    backgroundColor: dragOver ? 'rgba(25, 118, 210, 0.05)' : 'var(--color-surface)',
+    transition: 'all var(--transition-fast)',
+  };
+
+  const iconStyle = {
+    fontSize: '48px',
+    marginBottom: 'var(--spacing-sm)',
+  };
+
+  const titleStyle = {
+    fontSize: 'var(--font-size-base)',
+    fontWeight: 'var(--font-weight-medium)',
+    marginBottom: 'var(--spacing-xs)',
+  };
+
+  const subtitleStyle = {
+    fontSize: 'var(--font-size-sm)',
+    color: 'var(--color-text-secondary)',
+  };
+
   return (
     <div
       className={`upload-zone ${dragOver ? 'drag-over' : ''} ${uploading ? 'uploading' : ''}`}
       onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
-      style={{
-        border: '2px dashed #ccc',
-        borderRadius: '8px',
-        padding: '40px',
-        textAlign: 'center',
-        cursor: 'pointer',
-        background: dragOver ? '#f0f0f0' : 'white',
-        transition: 'all 0.2s',
-      }}
+      style={uploadZoneStyle}
     >
       <input
         type="file"
@@ -61,12 +79,12 @@ export function AudioUploader({ onUploadComplete }: AudioUploaderProps) {
       />
       <label htmlFor="audio-upload" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
         {uploading ? (
-          <div>Uploading...</div>
+          <Loading message="Uploading..." />
         ) : (
           <div>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>📁</div>
-            <div>Drag & drop audio file here</div>
-            <div style={{ color: '#666', fontSize: '12px', marginTop: '4px' }}>or click to browse (MP3, WAV, WebM)</div>
+            <div style={iconStyle}>📁</div>
+            <div style={titleStyle}>Drag & drop audio file here</div>
+            <div style={subtitleStyle}>or click to browse (MP3, WAV, WebM)</div>
           </div>
         )}
       </label>

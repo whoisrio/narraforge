@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { voiceApi } from '../../services/api';
+import { Button, Card } from '../ui';
 
 interface AudioRecorderProps {
   onRecordComplete?: () => void;
@@ -56,85 +57,58 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
     }
   };
 
+  const recordingIndicatorStyle = {
+    display: 'flex' as const,
+    alignItems: 'center' as const,
+    gap: 'var(--spacing-sm)',
+    marginBottom: 'var(--spacing-md)',
+    color: 'var(--color-danger)',
+    fontWeight: 'var(--font-weight-medium)',
+  };
+
+  const pulsingDotStyle = {
+    width: '12px',
+    height: '12px',
+    borderRadius: '50%',
+    backgroundColor: 'var(--color-danger)',
+    animation: 'pulse 1s infinite',
+  };
+
   return (
-    <div style={{ padding: '16px', border: '1px solid #eee', borderRadius: '8px' }}>
-      <h3>🎙️ Real-time Recording</h3>
+    <Card>
+      <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>🎙️ Real-time Recording</h3>
 
       {!recording && !audioBlob && (
-        <button
-          onClick={startRecording}
-          style={{
-            padding: '12px 24px',
-            fontSize: '16px',
-            background: '#e53935',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-          }}
-        >
+        <Button variant="danger" fullWidth onClick={startRecording}>
           Start Recording
-        </button>
+        </Button>
       )}
 
       {recording && (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: 'red', animation: 'pulse 1s infinite' }} />
+          <div style={recordingIndicatorStyle}>
+            <span style={pulsingDotStyle} />
             Recording...
           </div>
-          <button
-            onClick={stopRecording}
-            style={{
-              padding: '12px 24px',
-              fontSize: '16px',
-              background: '#666',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
+          <Button variant="secondary" fullWidth onClick={stopRecording}>
             Stop
-          </button>
+          </Button>
         </div>
       )}
 
       {audioBlob && (
-        <div>
-          <audio src={URL.createObjectURL(audioBlob)} controls style={{ width: '100%', margin: '12px 0' }} />
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={uploadRecording}
-              style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                background: '#4caf50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
+          <audio src={URL.createObjectURL(audioBlob)} controls style={{ width: '100%', margin: 0 }} />
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+            <Button variant="primary" onClick={uploadRecording}>
               Upload
-            </button>
-            <button
-              onClick={() => setAudioBlob(null)}
-              style={{
-                padding: '8px 16px',
-                fontSize: '14px',
-                background: '#666',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
+            </Button>
+            <Button variant="ghost" onClick={() => setAudioBlob(null)}>
               Discard
-            </button>
+            </Button>
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }

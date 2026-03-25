@@ -1,9 +1,16 @@
 import { useState, useEffect } from 'react';
 import { ttsApi, voiceApi } from '../../services/api';
 import type { TTSRequest, TTSResult, VoiceProfile } from '../../types';
+import { Button, Input, Select, Slider, Card, Alert } from '../ui';
 
 interface TTSControlsProps {
   onSynthesize?: (result: TTSResult) => void;
+}
+
+interface Tab {
+  id: 'standard' | 'cloned';
+  label: string;
+  icon: string;
 }
 
 export function TTSControls({ onSynthesize }: TTSControlsProps) {
@@ -17,23 +24,23 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('xiaoyun');
   const [useClonedVoice, setUseClonedVoice] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // 加载可用的克隆声音列表
-  useEffect(() => {
-    const loadVoices = async () => {
-      try {
-        const list = await voiceApi.list();
-        setVoices(list);
-        // 如果有已克隆的声音，默认选择第一个
-        const clonedVoice = list.find(v => v.is_cloned && v.qwen_voice_id);
-        if (clonedVoice) {
-          setSelectedVoiceId(clonedVoice.qwen_voice_id!);
-          setUseClonedVoice(true);
-        }
-      } catch (err) {
-        console.error('Failed to load voices:', err);
+  const loadVoices = async () => {
+    try {
+      const list = await voiceApi.list();
+      setVoices(list);
+      const clonedVoice = list.find(v => v.is_cloned && v.qwen_voice_id);
+      if (clonedVoice) {
+        setSelectedVoiceId(clonedVoice.qwen_voice_id!);
+        setUseClonedVoice(true);
       }
-    };
+    } catch (err) {
+      console.error('Failed to load voices:', err);
+    }
+  };
+
+  useEffect(() => {
     loadVoices();
   }, []);
 
@@ -41,6 +48,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
     if (!text.trim()) return;
 
     setSynthesizing(true);
+    setError(null);
     try {
       const request: TTSRequest = {
         text,
@@ -55,199 +63,181 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
       onSynthesize?.(res);
     } catch (err) {
       console.error('Synthesis failed:', err);
-      alert('Synthesis failed');
+      setError('Synthesis failed');
     } finally {
       setSynthesizing(false);
     }
   };
 
+  const tabs: Tab[] = [
+    { id: 'standard', label: 'Standard Voices', icon: '📢' },
+    { id: 'cloned', label: 'Cloned Voices', icon: '🎤' },
+  ];
+
+  const handleTabChange = (tabId: string) => {
+    if (tabId === 'standard') {
+      setUseClonedVoice(false);
+      setSelectedVoiceId('xiaoyun');
+    } else {
+      const clonedVoice = voices.find(v => v.is_cloned && v.qwen_voice_id);
+      if (clonedVoice) {
+        setUseClonedVoice(true);
+        setSelectedVoiceId(clonedVoice.qwen_voice_id!);
+      }
+    }
+  };
+
+  const standardVoices = [
+    { value: 'xiaoyun', label: '云溪 (Xiaoyun) - Female' },
+    { value: 'xiaoyuan', label: '晓晓 (Xiaoyuan) - Female' },
+    { value: 'ruoxi', label: '若曦 (Ruoxi) - Female' },
+    { value: 'xiaogang', label: '小刚 (Xiaogang) - Male' },
+    { value: 'yunjian', label: '云健 (Yunjian) - Male' },
+  ];
+
+  const clonedVoiceOptions = voices
+    .filter(v => v.is_cloned && v.qwen_voice_id)
+    .map(voice => ({ value: voice.qwen_voice_id!, label: `${voice.name} (Cloned)` }));
+
+  const currentVoiceOptions = useClonedVoice ? clonedVoiceOptions : standardVoices;
+
+  const emotionOptions = [
+    { value: 'neutral', label: 'Neutral' },
+    { value: 'happy', label: 'Happy' },
+    { value: 'sad', label: 'Sad' },
+    { value: 'excited', label: 'Excited' },
+  ];
+
+  const headerStyle: React.CSSProperties = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 'var(--spacing-md)',
+  };
+
+  const h3Style: React.CSSProperties = {
+    margin: 0,
+    fontSize: 'var(--font-size-lg)',
+    fontWeight: 'var(--font-weight-semibold)',
+  };
+
+  const tabsContainerStyle: React.CSSProperties = {
+    marginBottom: 'var(--spacing-md)',
+  };
+
+  const textareaContainerStyle: React.CSSProperties = {
+    marginBottom: 'var(--spacing-md)',
+  };
+
+  const controlsContainerStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 'var(--spacing-md)',
+    marginBottom: 'var(--spacing-md)',
+  };
+
+  const resultStyle: React.CSSProperties = {
+    marginTop: 'var(--spacing-md)',
+  };
+
   return (
-    <div style={{ padding: '16px', border: '1px solid #eee', borderRadius: '8px' }}>
-      <h3>🔊 Text to Speech</h3>
-
-      {/* 音色选择器 */}
-      <div style={{ marginBottom: '16px' }}>
-        <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: '500' }}>
-          🔉 Voice Selection
-        </label>
-        
-        {/* 音色类型切换 */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-          <button
-            onClick={() => {
-              setUseClonedVoice(false);
-              setSelectedVoiceId('xiaoyun');
-            }}
-            style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              background: !useClonedVoice ? '#1976d2' : 'white',
-              color: !useClonedVoice ? 'white' : '#666',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-            }}
-          >
-            📢 Standard Voices
-          </button>
-          <button
-            onClick={() => {
-              const clonedVoice = voices.find(v => v.is_cloned && v.qwen_voice_id);
-              if (clonedVoice) {
-                setUseClonedVoice(true);
-                setSelectedVoiceId(clonedVoice.qwen_voice_id!);
-              }
-            }}
-            style={{
-              padding: '8px 16px',
-              fontSize: '13px',
-              background: useClonedVoice ? '#1976d2' : 'white',
-              color: useClonedVoice ? 'white' : '#666',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              opacity: voices.some(v => v.is_cloned && v.qwen_voice_id) ? 1 : 0.5,
-            }}
-            disabled={!voices.some(v => v.is_cloned && v.qwen_voice_id)}
-          >
-            🎤 Cloned Voices
-          </button>
-        </div>
-
-        {/* 音色下拉选择 */}
-        <select
-          value={selectedVoiceId}
-          onChange={(e) => setSelectedVoiceId(e.target.value)}
-          style={{ width: '100%', padding: '10px', borderRadius: '4px', border: '1px solid #ddd', fontSize: '14px' }}
-        >
-          {!useClonedVoice ? (
-            <>
-              <option value="xiaoyun">云溪 (Xiaoyun) - Female</option>
-              <option value="xiaoyuan">晓晓 (Xiaoyuan) - Female</option>
-              <option value="ruoxi">若曦 (Ruoxi) - Female</option>
-              <option value="xiaogang">小刚 (Xiaogang) - Male</option>
-              <option value="yunjian">云健 (Yunjian) - Male</option>
-            </>
-          ) : (
-            voices.filter(v => v.is_cloned && v.qwen_voice_id).map((voice) => (
-              <option key={voice.id} value={voice.qwen_voice_id}>
-                {voice.name} (Cloned)
-              </option>
-            ))
-          )}
-        </select>
-        
-        {useClonedVoice && voices.filter(v => v.is_cloned && v.qwen_voice_id).length === 0 && (
-          <div style={{ marginTop: '8px', padding: '8px', background: '#fff3cd', borderRadius: '4px', fontSize: '13px', color: '#856404' }}>
-            ⚠️ No cloned voices available. Please clone a voice first in the Voice Clone tab.
-          </div>
-        )}
+    <Card>
+      <div style={headerStyle}>
+        <h3 style={h3Style}>🔊 Text to Speech</h3>
       </div>
 
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        placeholder="Enter text to convert to speech..."
-        rows={4}
-        style={{
-          width: '100%',
-          padding: '12px',
-          border: '1px solid #ddd',
-          borderRadius: '4px',
-          fontSize: '14px',
-          resize: 'vertical',
-          marginBottom: '16px',
-        }}
+      <div style={tabsContainerStyle}>
+        <Tabs
+          tabs={tabs}
+          activeTab={useClonedVoice ? 'cloned' : 'standard'}
+          onChange={handleTabChange}
+        />
+      </div>
+
+      <Select
+        label="Voice Selection"
+        options={currentVoiceOptions}
+        value={selectedVoiceId}
+        onChange={(e) => setSelectedVoiceId(e.target.value as string)}
+        disabled={useClonedVoice && clonedVoiceOptions.length === 0}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>
-            Speed: {speed}
-          </label>
-          <input
-            type="range"
-            min="0.5"
-            max="2"
-            step="0.1"
-            value={speed}
-            onChange={(e) => setSpeed(parseFloat(e.target.value))}
-            style={{ width: '100%' }}
-          />
-        </div>
+      {useClonedVoice && clonedVoiceOptions.length === 0 && (
+        <Alert variant="warning">
+          ⚠️ No cloned voices available. Please clone a voice first in the Voice Clone tab.
+        </Alert>
+      )}
 
-        <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>
-            Volume: {volume}
-          </label>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="5"
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            style={{ width: '100%' }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>
-            Pitch: {pitch}
-          </label>
-          <input
-            type="range"
-            min="-12"
-            max="12"
-            step="1"
-            value={pitch}
-            onChange={(e) => setPitch(parseInt(e.target.value))}
-            style={{ width: '100%' }}
-          />
-        </div>
-
-        <div>
-          <label style={{ display: 'block', marginBottom: '4px', fontSize: '14px' }}>
-            Emotion
-          </label>
-          <select
-            value={emotion}
-            onChange={(e) => setEmotion(e.target.value)}
-            style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
-          >
-            <option value="neutral">Neutral</option>
-            <option value="happy">Happy</option>
-            <option value="sad">Sad</option>
-            <option value="excited">Excited</option>
-          </select>
-        </div>
+      <div style={textareaContainerStyle}>
+        <Input
+          label="Text"
+          type="textarea"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Enter text to convert to speech..."
+        />
       </div>
 
-      <button
+      <div style={controlsContainerStyle}>
+        <Slider
+          label="Speed"
+          value={speed}
+          onChange={setSpeed}
+          min={0.5}
+          max={2}
+          step={0.1}
+        />
+
+        <Slider
+          label="Volume"
+          value={volume}
+          onChange={setVolume}
+          min={0}
+          max={100}
+          step={5}
+        />
+
+        <Slider
+          label="Pitch"
+          value={pitch}
+          onChange={(val) => setPitch(val as number)}
+          min={-12}
+          max={12}
+          step={1}
+        />
+
+        <Select
+          label="Emotion"
+          options={emotionOptions}
+          value={emotion}
+          onChange={(e) => setEmotion(e.target.value as string)}
+        />
+      </div>
+
+      <Button
+        variant="primary"
+        fullWidth
         onClick={handleSynthesize}
-        disabled={synthesizing || !text.trim()}
-        style={{
-          width: '100%',
-          padding: '12px',
-          fontSize: '16px',
-          background: synthesizing ? '#ccc' : '#1976d2',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: synthesizing ? 'wait' : 'pointer',
-        }}
+        loading={synthesizing}
+        disabled={!text.trim()}
       >
         {synthesizing ? 'Synthesizing...' : 'Generate Speech'}
-      </button>
+      </Button>
+
+      {error && (
+        <Alert variant="error" style={{ marginTop: 'var(--spacing-md)' }}>
+          {error}
+        </Alert>
+      )}
 
       {result && (
-        <div style={{ marginTop: '16px', padding: '12px', background: '#f5f5f5', borderRadius: '4px' }}>
+        <div style={resultStyle}>
           <audio src={result.audio_url} controls style={{ width: '100%' }} />
-          <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+          <div style={{ marginTop: 'var(--spacing-sm)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
             Params: speed={result.params.speed}, volume={result.params.volume}, pitch={result.params.pitch}, emotion={result.params.emotion}
           </div>
         </div>
       )}
-    </div>
+    </Card>
   );
 }
