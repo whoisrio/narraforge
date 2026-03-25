@@ -24,10 +24,6 @@ function App() {
   const [projects, setProjects] = useState<TimelineProject[]>([]);
   const [currentProject, setCurrentProject] = useState<TimelineProject | null>(null);
 
-  useEffect(() => {
-    loadProjects();
-  }, []);
-
   const loadProjects = async () => {
     try {
       const list = await timelineApi.listProjects();
@@ -39,6 +35,10 @@ function App() {
       console.error('Failed to load projects:', err);
     }
   };
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   const handleCreateProject = async () => {
     const name = prompt('Enter project name:');
@@ -108,6 +108,7 @@ function App() {
     margin: 0,
     fontSize: 'var(--font-size-lg)',
     fontWeight: 'var(--font-weight-semibold)',
+    color: 'var(--color-text-primary)',
   };
 
   const actionButtonsStyle: React.CSSProperties = {

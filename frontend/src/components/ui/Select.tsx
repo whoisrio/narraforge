@@ -41,18 +41,6 @@ export const Select: React.FC<SelectProps> = ({ label, error, options, className
       <select
         style={selectStyle}
         {...props}
-        onFocus={(e) => {
-          // @ts-ignore
-          e.currentTarget.style.borderColor = 'var(--color-primary)';
-          // @ts-ignore
-          e.currentTarget.style.boxShadow = '0 0 0 2px rgba(25, 118, 210, 0.2)';
-        }}
-        onBlur={(e) => {
-          // @ts-ignore
-          e.currentTarget.style.borderColor = error ? 'var(--color-danger)' : 'var(--color-border)';
-          // @ts-ignore
-          e.currentTarget.style.boxShadow = 'none';
-        }}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
