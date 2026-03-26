@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AudioUploader } from './components/VoiceClone/AudioUploader';
 import { AudioRecorder } from './components/VoiceClone/AudioRecorder';
 import { VoiceList } from './components/VoiceClone/VoiceList';
@@ -24,17 +24,19 @@ function App() {
   const [projects, setProjects] = useState<TimelineProject[]>([]);
   const [currentProject, setCurrentProject] = useState<TimelineProject | null>(null);
 
-  const loadProjects = async () => {
+  const loadProjects = useCallback(async () => {
     try {
       const list = await timelineApi.listProjects();
       setProjects(list);
       if (list.length > 0 && !currentProject) {
-        setCurrentProject(list[0]);
+        {
+          setCurrentProject(list[0]);
+        }
       }
     } catch (err) {
       console.error('Failed to load projects:', err);
     }
-  };
+  }, [currentProject]);
 
   useEffect(() => {
     loadProjects();
