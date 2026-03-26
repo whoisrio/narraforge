@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ttsApi, voiceApi } from '../../services/api';
 import type { TTSRequest, TTSResult, VoiceProfile } from '../../types';
-import { Button, Input, Select, Slider, Card, Alert } from '../ui';
+import { Button, Input, Select, Slider, Card, Alert, Tabs } from '../ui';
 
 interface TTSControlsProps {
   onSynthesize?: (result: TTSResult) => void;

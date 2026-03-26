@@ -4,9 +4,10 @@ export interface AlertProps {
   variant?: 'success' | 'error' | 'warning' | 'info';
   children: React.ReactNode;
   onDismiss?: () => void;
+  style?: React.CSSProperties;
 }
 
-export const Alert: React.FC<AlertProps> = ({ variant = 'info', children, onDismiss }) => {
+export const Alert: React.FC<AlertProps> = ({ variant = 'info', children, onDismiss, style }) => {
   const variantStyles: Record<string, { backgroundColor: string; borderColor: string; color: string; icon: string }> = {
     success: {
       backgroundColor: 'rgba(76, 175, 80, 0.1)',
@@ -34,18 +35,19 @@ export const Alert: React.FC<AlertProps> = ({ variant = 'info', children, onDism
     },
   };
 
-  const style = variantStyles[variant];
+  const variantStyle = variantStyles[variant];
 
   const containerStyle: React.CSSProperties = {
     padding: 'var(--spacing-md) var(--spacing-lg)',
     borderRadius: 'var(--radius-md)',
-    border: `1px solid ${style.borderColor}`,
-    backgroundColor: style.backgroundColor,
-    color: style.color,
+    border: `1px solid ${variantStyle.borderColor}`,
+    backgroundColor: variantStyle.backgroundColor,
+    color: variantStyle.color,
     display: 'flex',
     alignItems: 'flex-start',
     gap: 'var(--spacing-sm)',
     position: 'relative',
+    ...style,
   };
 
   const iconStyle: React.CSSProperties = {
@@ -68,7 +70,7 @@ export const Alert: React.FC<AlertProps> = ({ variant = 'info', children, onDism
 
   return (
     <div style={containerStyle} role="alert">
-      <span style={iconStyle} aria-hidden="true">{style.icon}</span>
+      <span style={iconStyle} aria-hidden={true}>{variantStyle.icon}</span>
       <div style={{ flex: 1 }}>{children}</div>
       {onDismiss && (
         <button

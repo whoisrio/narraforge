@@ -318,7 +318,7 @@ export function Timeline({ projectId, segments, onSegmentsChange, videoUrl, onTi
               <Button
                 variant="danger"
                 size="sm"
-                onClick={handleDeleteSegment(segment.id)}
+                onClick={() => handleDeleteSegment(segment.id)}
               >
                 Delete
               </Button>

@@ -79,18 +79,16 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   return (
     <div style={overlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-        {(title || onClose) && (
+        {(title) && (
           <div style={headerStyle}>
-            {title && <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>{title}</h2>}
-            {onClose && (
-              <button
-                style={closeButtonStyle}
-                onClick={onClose}
-                aria-label="Close modal"
-              >
-                ×
-              </button>
-            )}
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>{title}</h2>
+            <button
+              style={closeButtonStyle}
+              onClick={onClose}
+              aria-label="Close modal"
+            >
+              ×
+            </button>
           </div>
         )}
         <div style={bodyStyle}>{children}</div>

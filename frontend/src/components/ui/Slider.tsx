@@ -1,12 +1,13 @@
 import React from 'react';
 
-export interface SliderProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'value'> {
+export interface SliderProps {
   label?: string;
   value: number;
   onChange: (value: number) => void;
   min?: number;
   max?: number;
   step?: number;
+  className?: string;
 }
 
 export const Slider: React.FC<SliderProps> = ({
@@ -17,7 +18,6 @@ export const Slider: React.FC<SliderProps> = ({
   max = 100,
   step = 1,
   className,
-  ...props
 }) => {
   const containerStyle: React.CSSProperties = {
     marginBottom: 'var(--spacing-md)',
@@ -63,7 +63,6 @@ export const Slider: React.FC<SliderProps> = ({
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
         style={sliderStyle}
-        {...props}
       />
     </div>
   );

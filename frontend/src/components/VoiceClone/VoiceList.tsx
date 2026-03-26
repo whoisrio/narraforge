@@ -208,7 +208,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
                   </div>
                 </div>
                 <div style={actionButtonsStyle}>
-                  {!voice.is.is_cloned && (
+                  {!voice.is_cloned && (
                     <Button
                       variant="primary"
                       size="sm"
