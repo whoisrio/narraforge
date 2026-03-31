@@ -27,6 +27,8 @@ export interface TimelineSegment {
   start_time: number;
   end_time: number;
   audio_url?: string;
+  voice_id?: string;
+  voice?: VoiceProfile;
 }
 
 export interface TimelineProject {

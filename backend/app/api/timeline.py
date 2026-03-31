@@ -201,3 +201,56 @@ async def synthesize_project(project_id: str, db: Session = Depends(get_db)):
             raise HTTPException(status_code=500, detail=f"Failed to synthesize segment {segment.id}: {str(e)}")
 
     return {"segments": results}
+
+
+class VoiceAssignmentRequest(BaseModel):
+    voice_id: str
+
+
+@router.post("/segment/{segment_id}/voice")
+def assign_voice_to_segment(segment_id: str, request: VoiceAssignmentRequest, db: Session = Depends(get_db)):
+    """为时间段分配声音"""
+    from app.models import VoiceProfile
+
+    segment = db.query(TimelineSegment).filter(TimelineSegment.id == segment_id).first()
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+
+    segment.voice_id = request.voice_id
+    db.commit()
+    db.refresh(segment)
+
+    return {
+        "id": segment.id,
+        "text": segment.text,
+        "voice_id": segment.voice_id,
+        "voice": {
+            "id": voice.id,
+            "name": voice.name,
+            "qwen_voice_id": voice.qwen_voice_id,
+            "role": voice.role
+        } if voice else None
+    }
+
+
+@router.delete("/segment/{segment_id}/voice")
+def remove_voice_from_segment(segment_id: str, db: Session = Depends(get_db)):
+    """移除时间段的声嘶分配"""
+    segment = db.query(TimelineSegment).filter(TimelineSegment.id == segment_id).first()
+    if not segment:
+        raise HTTPException(status_code=404, detail="Segment not found")
+
+    segment.voice_id = None
+    db.commit()
+    db.refresh(segment)
+
+    return {
+        "id": segment.id,
+        "text": segment.text,
+        "voice_id": None,
+        "message": "Voice assignment removed"
+    }

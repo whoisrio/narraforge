@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, DateTime, Boolean
+from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
 
@@ -22,3 +23,6 @@ class VoiceProfile(Base):
     cloned_at = Column(DateTime, nullable=True)  # 克隆完成时间
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    segments = relationship("TimelineSegment", back_populates="voice")
