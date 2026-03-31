@@ -6,7 +6,9 @@
       "WebSearch",
       "Bash(curl:*)",
       "Bash(cd:*)",
-      "Bash(openspec status:*)"
+      "Bash(openspec status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   },
   "hooks": {
