@@ -1,244 +1,160 @@
-import { useState, useEffect } from 'react';
-import { AudioUploader } from './components/VoiceClone/AudioUploader';
-import { AudioRecorder } from './components/VoiceClone/AudioRecorder';
-import { VoiceList } from './components/VoiceClone/VoiceList';
-import { TTSControls } from './components/TTS/TTSControls';
-import { ModelSelector } from './components/TTS/ModelSelector';
-import { VideoPlayer } from './components/Timeline/VideoPlayer';
-import { VideoUpload } from './components/Timeline/VideoUpload';
-import { Timeline } from './components/Timeline/Timeline';
-import { timelineApi } from './services/api';
-import { Tabs } from './components/ui';
-import type { TimelineProject } from './types';
-
-interface AppTab {
-  id: 'clone' | 'tts' | 'timeline';
-  label: string;
-  icon: string;
-}
+import { useState, useEffect, useCallback } from 'react';
+import type { TimelineProject, VoiceProfile } from './types';
+import { TimelineView } from './components/TimelineView/TimelineView';
+import { timelineApi, voiceApi } from './services/api';
+import styles from './App.module.css';
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'clone' | 'tts' | 'timeline'>('clone');
-  const [voiceRefreshKey, setVoiceRefreshKey] = useState(0);
-
   const [projects, setProjects] = useState<TimelineProject[]>([]);
-  const [currentProject, setCurrentProject] = useState<TimelineProject | null>(null);
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const [voices, setVoices] = useState<VoiceProfile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
+  // Load initial data
   useEffect(() => {
-    const loadProjects = async () => {
+    const loadData = async () => {
       try {
-        const list = await timelineApi.listProjects();
-        setProjects(list);
-        if (list.length > 0 && !currentProject) {
-          setCurrentProject(list[0]);
+        setIsLoading(true);
+        const [projectsData, voicesData] = await Promise.all([
+          timelineApi.listProjects(),
+          voiceApi.listCloned().catch(() => []), // Don't fail if voices can't load
+        ]);
+        setProjects(projectsData);
+        setVoices(voicesData);
+        if (projectsData.length > 0) {
+          setCurrentProjectId(projectsData[0].id);
         }
       } catch (err) {
-        console.error('Failed to load projects:', err);
+        console.error('Failed to load data:', err);
+        setError('Failed to load projects. Please try refreshing.');
+      } finally {
+        setIsLoading(false);
       }
     };
-    loadProjects();
-  }, [currentProject]);
 
+    loadData();
+  }, []);
+
+  // Get current project details
+  const loadProjectDetails = useCallback(async (projectId: string) => {
+    try {
+      const project = await timelineApi.getProject(projectId);
+      setProjects((prev) =>
+        prev.map((p) => (p.id === projectId ? project : p))
+      );
+      return project;
+    } catch (err) {
+      console.error('Failed to load project details:', err);
+      return null;
+    }
+  }, []);
+
+  // Handle project creation
   const handleCreateProject = async () => {
     const name = prompt('Enter project name:');
     if (!name) return;
+
     try {
-      const project = await timelineApi.createProject(name);
-      setProjects([project, ...projects]);
-      setCurrentProject(project);
+      const newProject = await timelineApi.createProject(name);
+      setProjects((prev) => [newProject, ...prev]);
+      setCurrentProjectId(newProject.id);
     } catch (err) {
       console.error('Failed to create project:', err);
+      alert('Failed to create project. Please try again.');
     }
   };
 
-  const handleSegmentsChange = async () => {
-    if (currentProject) {
-      const updated = await timelineApi.getProject(currentProject.id);
-      setCurrentProject(updated);
+  // Handle project update (from child components)
+  const handleProjectUpdate = useCallback((updatedProject: TimelineProject) => {
+    setProjects((prev) =>
+      prev.map((p) => (p.id === updatedProject.id ? updatedProject : p))
+    );
+  }, []);
+
+  // Refresh voices
+  const handleRefreshVoices = useCallback(async () => {
+    try {
+      const voicesData = await voiceApi.listCloned();
+      setVoices(voicesData);
+    } catch (err) {
+      console.error('Failed to refresh voices:', err);
     }
-  };
+  }, []);
 
-  const tabs: AppTab[] = [
-    { id: 'clone', label: 'Voice Clone', icon: '🔊' },
-    { id: 'tts', label: 'TTS', icon: '📝' },
-    { id: 'timeline', label: 'Timeline', icon: '🎬' },
-  ];
+  const currentProject = projects.find((p) => p.id === currentProjectId);
 
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId as 'clone' | 'tts' | 'timeline');
-  };
+  if (isLoading) {
+    return (
+      <div className={styles.loading}>
+        <div className={styles.spinner} />
+        Loading...
+      </div>
+    );
+  }
 
-  const headerStyle: React.CSSProperties = {
-    background: 'var(--color-surface)',
-    borderBottom: `1px solid var(--color-border-light)`,
-    padding: 'var(--spacing-md) var(--spacing-lg)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  };
-
-  const h1Style: React.CSSProperties = {
-    margin: 0,
-    fontSize: 'var(--font-size-xl)',
-    fontWeight: 'var(--font-weight-semibold)',
-    color: 'var(--color-text-primary)',
-  };
-
-  const mainStyle: React.CSSProperties = {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: 'var(--spacing-lg)',
-  };
-
-  const gridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: 'var(--spacing-lg)',
-  };
-
-  const projectHeaderStyle: React.CSSProperties = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 'var(--spacing-md)',
-  };
-
-  const h2Style: React.CSSProperties = {
-    margin: 0,
-    fontSize: 'var(--font-size-lg)',
-    fontWeight: 'var(--font-weight-semibold)',
-    color: 'var(--color-text-primary)',
-  };
-
-  const actionButtonsStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: 'var(--spacing-sm)',
-  };
-
-  const projectListStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 'var(--spacing-sm)',
-  };
-
-  const projectItemStyle = (isSelected: boolean): React.CSSProperties => ({
-    padding: 'var(--spacing-md)',
-    border: isSelected ? '2px solid var(--color-primary)' : '1px solid var(--color-border)',
-    borderRadius: 'var(--radius-md)',
-    cursor: 'pointer',
-    background: isSelected ? 'rgba(25, 118, 210, 0.1)' : 'var(--color-surface)',
-    transition: 'background-color var(--transition-fast), border-color var(--transition-fast)',
-  });
-
-  const emptyProjectStyle: React.CSSProperties = {
-    textAlign: 'center',
-    padding: 'var(--spacing-3xl)',
-    color: 'var(--color-text-secondary)',
-  };
-
-  const timelineGridStyle: React.CSSProperties = {
-    display: 'grid',
-    gridTemplateColumns: '2fr 1fr',
-    gap: 'var(--spacing-lg)',
-  };
+  if (error) {
+    return (
+      <div className={styles.emptyState}>
+        <div className={styles.emptyIcon}>⚠️</div>
+        <div className={styles.emptyTitle}>Error</div>
+        <div className={styles.emptyHint}>{error}</div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ minHeight: '100.5vh', background: 'var(--color-background)' }}>
-      <header style={headerStyle}>
-        <h1 style={h1Style}>🎙️ Voice Clone Studio</h1>
+    <div className={styles.app}>
+      {/* Header */}
+      <header className={styles.header}>
+        <div className={styles.logo}>
+          <span>🎙️</span>
+          <span>Voice Clone Studio</span>
+        </div>
+
+        <div className={styles.headerActions}>
+          {projects.length > 0 && (
+            <div className={styles.projectSelector}>
+              <select
+                className={styles.projectSelect}
+                value={currentProjectId || ''}
+                onChange={(e) => setCurrentProjectId(e.target.value)}
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            className={styles.newProjectButton}
+            onClick={handleCreateProject}
+          >
+            + New Project
+          </button>
+        </div>
       </header>
 
-      <main style={mainStyle}>
-        <Tabs
-          tabs={tabs}
-          activeTab={activeTab}
-          onChange={handleTabChange}
-        />
-
-        {activeTab === 'clone' && (
-          <div style={gridStyle}>
-            <div>
-              <h2 style={h2Style}>Clone Your Voice</h2>
-              <AudioUploader onUploadComplete={() => setVoiceRefreshKey(k => k + 1)} />
-              <div style={{ marginTop: 'var(--spacing-lg)' }}>
-                <AudioRecorder onRecordComplete={() => setVoiceRefreshKey(k => k + 1)} />
-              </div>
+      {/* Main Content */}
+      <main className={styles.main}>
+        {currentProject ? (
+          <TimelineView
+            project={currentProject}
+            voices={voices}
+            onProjectUpdate={handleProjectUpdate}
+          />
+        ) : (
+          <div className={styles.emptyState}>
+            <div className={styles.emptyIcon}>🎬</div>
+            <div className={styles.emptyTitle}>
+              No projects yet
             </div>
-            <VoiceList key={voiceRefreshKey} onRefresh={() => setVoiceRefreshKey(k => k + 1)} />
-          </div>
-        )}
-
-        {activeTab === 'tts' && (
-          <div style={gridStyle}>
-            <TTSControls />
-            <ModelSelector />
-          </div>
-        )}
-
-        {activeTab === 'timeline' && (
-          <div>
-            <div style={projectHeaderStyle}>
-              <h2 style={h2Style}>Video Timeline</h2>
-              <div style={actionButtonsStyle}>
-                <button
-                  onClick={handleCreateProject}
-                  style={{
-                    padding: 'var(--spacing-sm) var(--spacing-md)',
-                    background: 'var(--color-success)',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  + New Project
-                </button>
-                {currentProject && (
-                  <VideoUpload
-                    projectId={currentProject.id}
-                    onUploadComplete={handleSegmentsChange}
-                  />
-                )}
-              </div>
+            <div className={styles.emptyHint}>
+              Create a new project to start editing video with voice cloning
             </div>
-
-            {currentProject ? (
-              <div style={timelineGridStyle}>
-                <div>
-                  <VideoPlayer
-                    url={currentProject.video_url}
-                  />
-                  {currentProject.video_url && (
-                    <div style={{ marginTop: 'var(--spacing-lg)' }}>
-                      <Timeline
-                        projectId={currentProject.id}
-                        segments={currentProject.segments}
-                        onSegmentsChange={handleSegmentsChange}
-                        videoUrl={currentProject.video_url}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <h2 style={{ ...h2Style, fontSize: 'var(--font-size-base)' }}>Projects</h2>
-                  <div style={projectListStyle}>
-                    {projects.map((project) => (
-                      <div
-                        key={project.id}
-                        onClick={() => setCurrentProject(project)}
-                        style={projectItemStyle(currentProject?.id === project.id)}
-                      >
-                        {project.name}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div style={emptyProjectStyle}>
-                No project selected. Create or select a project to get started.
-              </div>
-            )}
           </div>
         )}
       </main>
