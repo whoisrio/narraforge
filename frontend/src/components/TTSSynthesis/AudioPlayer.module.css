@@ -1,0 +1,80 @@
+.container {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+.container h3 {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 2px solid #e5e5e5;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading span {
+  display: block;
+}
+
+.player {
+  margin-bottom: 1rem;
+}
+
+.audio {
+  width: 100%;
+}
+
+.downloadSection {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.downloadSection select {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+  background: white;
+}
+
+.downloadButton {
+  padding: 0.5rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.downloadButton:hover {
+  background: #2563eb;
+}
+
+.info {
+  color: #666;
+  font-size: 0.875rem;
+}
+
+.info p {
+  margin: 0.25rem 0;
+}
