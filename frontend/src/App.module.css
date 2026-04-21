@@ -1,77 +1,62 @@
 /* App Component Styles */
 
 .app {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  background: var(--color-background);
-  overflow: hidden;
+  background: #f5f5f5;
 }
 
 /* Header */
 .header {
+  background: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-md) var(--spacing-lg);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  flex-shrink: 0;
 }
 
 .logo {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-xl);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-primary);
+  gap: 0.5rem;
+  font-size: 1.25rem;
+  font-weight: 600;
 }
 
-.headerActions {
+/* Tab Navigation */
+.tabs {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
+  gap: 0.5rem;
 }
 
-.projectSelector {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-}
-
-.projectSelect {
-  padding: var(--spacing-sm) var(--spacing-md);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  font-size: var(--font-size-base);
-  cursor: pointer;
-  min-width: 150px;
-}
-
-.newProjectButton {
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-primary);
-  color: var(--color-text-on-primary);
+.tab {
+  padding: 0.5rem 1rem;
   border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-base);
-  font-weight: var(--font-weight-medium);
+  background: #f5f5f5;
+  border-radius: 0.5rem;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  font-size: 1rem;
+  transition: background 0.2s;
 }
 
-.newProjectButton:hover {
-  background: var(--color-primary-dark);
+.tab:hover {
+  background: #e5e5e5;
+}
+
+.tab.active {
+  background: #3b82f6;
+  color: white;
 }
 
 /* Main Content */
 .main {
   flex: 1;
-  display: flex;
-  overflow: hidden;
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 /* Empty State */
@@ -127,43 +112,5 @@
 @keyframes spin {
   to {
     transform: rotate(360deg);
-  }
-}
-
-/* Responsive */
-@media (max-width: 1024px) {
-  .videoStage {
-    flex: 0 0 60%;
-  }
-
-  .voicePanel {
-    flex: 0 0 40%;
-  }
-}
-
-@media (max-width: 768px) {
-  .main {
-    flex-direction: column;
-  }
-
-  .videoStage {
-    flex: 0 0 60%;
-    border-right: none;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .voicePanel {
-    flex: 0 0 40%;
-  }
-
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--spacing-sm);
-  }
-
-  .headerActions {
-    width: 100%;
-    justify-content: space-between;
   }
 }
