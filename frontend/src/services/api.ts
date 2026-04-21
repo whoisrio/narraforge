@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TimelineProject, TTSRequest, TTSResult } from '../types';
+import type { VoiceProfile, TTSConfig, TimelineProject, TTSRequest, TTSResult, DefaultVoice } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -50,6 +50,11 @@ export const voiceApi = {
 
 // TTS API
 export const ttsApi = {
+  getVoices: async (): Promise<{ default: DefaultVoice[]; cloned: VoiceProfile[] }> => {
+    const { data } = await api.get<{ default: DefaultVoice[]; cloned: VoiceProfile[] }>('/tts/voices');
+    return data;
+  },
+
   synthesize: async (request: TTSRequest): Promise<TTSResult> => {
     const { data } = await api.post<TTSResult>('/tts/synthesize', request);
     return data;

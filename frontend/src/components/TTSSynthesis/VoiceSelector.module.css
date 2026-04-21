@@ -1,0 +1,65 @@
+.container {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+.container h3 {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+}
+
+.group {
+  margin-bottom: 1.5rem;
+}
+
+.group h4 {
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.voiceList {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.voice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f9f9f9;
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.voice:hover {
+  background: #f0f0f0;
+}
+
+.voice.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.name {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.gender {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+}
