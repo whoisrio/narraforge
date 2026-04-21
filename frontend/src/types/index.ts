@@ -1,3 +1,4 @@
+// Voice Profile (cloned voices)
 export interface VoiceProfile {
   id: string;
   name: string;
@@ -9,61 +10,44 @@ export interface VoiceProfile {
   created_at: string;
 }
 
-export interface TTSConfig {
+// Default voices from Qwen
+export interface DefaultVoice {
   id: string;
   name: string;
-  provider: string;
-  model_name: string;
-  language: string;
-  speed: number;
-  volume: number;
-  pitch: number;
-  emotion?: string;
-  is_default: boolean;
+  gender: 'male' | 'female';
 }
 
-export interface TimelineSegment {
-  id: string;
-  text: string;
-  start_time: number;
-  end_time: number;
-  audio_url?: string;
-  voice_id?: string;
-  voice?: VoiceProfile;
-}
-
-export interface TimelineProject {
-  id: string;
-  name: string;
-  video_url?: string;
-  segments: TimelineSegment[];
-}
-
+// TTS Request params
 export interface TTSRequest {
   text: string;
-  language: string;
-  speed: number;
-  volume: number;
-  pitch: number;
-  emotion?: string;
-  voice_id?: string;
+  voice_id: string;
+  language: 'Chinese' | 'English' | 'Japanese' | 'Korean';
+  speed: number; // 0.5 - 2.0
+  volume: number; // 0 - 100
+  pitch: number; // -12 to 12
+  emotion?: 'neutral' | 'happy' | 'sad' | 'nervous' | 'excited';
+  format?: 'mp3' | 'wav';
 }
 
+// TTS Result
 export interface TTSResult {
   audio_id: string;
   audio_url: string;
   text: string;
   params: {
+    voice_id: string;
     speed: number;
     volume: number;
     pitch: number;
-    emotion: string;
+    language?: string;
+    emotion?: string;
   };
 }
 
-export interface DefaultVoice {
+// Voice upload response
+export interface UploadVoiceResponse {
   id: string;
   name: string;
-  gender: 'male' | 'female';
-  description?: string;
+  audio_url: string;
+  is_cloned: boolean;
 }
