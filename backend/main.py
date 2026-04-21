@@ -92,9 +92,8 @@ def health():
 
 
 # Import and include routers
-from app.api import clone, tts, timeline, config
+from app.api import clone, tts, config
 
 app.include_router(clone.router, prefix="/api/clone", tags=["voice-clone"])
 app.include_router(tts.router, prefix="/api/tts", tags=["tts"])
-app.include_router(timeline.router, prefix="/api/timeline", tags=["timeline"])
 app.include_router(config.router, prefix="/api/config", tags=["config"])
