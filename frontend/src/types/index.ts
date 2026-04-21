@@ -14,10 +14,11 @@ export interface TTSConfig {
   name: string;
   provider: string;
   model_name: string;
+  language: string;
   speed: number;
   volume: number;
   pitch: number;
-  emotion: string;
+  emotion?: string;
   is_default: boolean;
 }
 
@@ -40,10 +41,11 @@ export interface TimelineProject {
 
 export interface TTSRequest {
   text: string;
+  language: string;
   speed: number;
   volume: number;
   pitch: number;
-  emotion: string;
+  emotion?: string;
   voice_id?: string;
 }
 

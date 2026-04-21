@@ -1,0 +1,44 @@
+.container {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+.container h3 {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.control label {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.control select,
+.control input[type="range"] {
+  width: 100%;
+}
+
+.control select {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+  background: white;
+}
+
+.control input[type="range"] {
+  cursor: pointer;
+}
