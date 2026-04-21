@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TimelineProject, TTSRequest, TTSResult, DefaultVoice } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, DefaultVoice } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -92,49 +92,6 @@ export const configApi = {
 
   setDefault: async (id: string): Promise<void> => {
     await api.post(`/config/models/${id}/set-default`);
-  },
-};
-
-// Timeline API
-export const timelineApi = {
-  listProjects: async (): Promise<TimelineProject[]> => {
-    const { data } = await api.get<TimelineProject[]>('/timeline/project');
-    return data;
-  },
-
-  createProject: async (name: string): Promise<TimelineProject> => {
-    const { data } = await api.post<TimelineProject>('/timeline/project', { name });
-    return data;
-  },
-
-  getProject: async (id: string): Promise<TimelineProject> => {
-    const { data } = await api.get<TimelineProject>(`/timeline/project/${id}`);
-    return data;
-  },
-
-  uploadVideo: async (projectId: string, file: File): Promise<{ video_url: string }> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const { data } = await api.post<{ video_url: string }>(`/timeline/project/${projectId}/video`, formData);
-    return data;
-  },
-
-  addSegment: async (projectId: string, text: string, startTime: number, endTime: number) => {
-    const { data } = await api.post(`/timeline/project/${projectId}/segment`, {
-      text,
-      start_time: startTime,
-      end_time: endTime
-    });
-    return data;
-  },
-
-  deleteSegment: async (segmentId: string): Promise<void> => {
-    await api.delete(`/timeline/segment/${segmentId}`);
-  },
-
-  synthesizeProject: async (projectId: string): Promise<{ segments: Array<{ segment_id: string; audio_id: string; audio_url: string; text: string; start_time: number; end_time: number }> }> => {
-    const { data } = await api.post(`/timeline/project/${projectId}/synthesize`);
-    return data;
   },
 };
 
