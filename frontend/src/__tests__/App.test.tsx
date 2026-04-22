@@ -6,8 +6,8 @@ describe('App', () => {
   it('should render tab navigation with two tabs', () => {
     render(<App />);
 
-    expect(screen.getByText('声音克隆')).toBeInTheDocument();
-    expect(screen.getByText('文字转语音')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-voice-clone')).toBeInTheDocument();
+    expect(screen.getByTestId('tab-tts-synthesis')).toBeInTheDocument();
   });
 
   it('should show VoiceClone tab by default', () => {
@@ -20,9 +20,12 @@ describe('App', () => {
   it('should switch to TTSSynthesis tab when clicked', () => {
     render(<App />);
 
+    const voiceCloneTab = screen.getByTestId('tab-voice-clone');
     const ttsTab = screen.getByTestId('tab-tts-synthesis');
+
     fireEvent.click(ttsTab);
 
+    expect(voiceCloneTab.className).not.toContain('active');
     expect(ttsTab.className).toContain('active');
   });
 });

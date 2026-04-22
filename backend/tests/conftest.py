@@ -112,24 +112,30 @@ def client(db_session) -> Generator[TestClient, None, None]:
 
 @pytest.fixture
 def mock_tts_service():
-    """模拟 Qwen TTS 服务"""
-    with patch("app.services.qwen_tts_service.QwenTTSService") as mock:
-        service = Mock()
+    """模拟 Qwen TTS 服务 - patch 各模块中的 get_tts_service 引用"""
+    service = Mock()
 
-        # 模拟音频数据（WAV 头部）
-        mock_audio_data = b'RIFF\x00\x00\x00WAVEfmt\x00\x00\x00data\x00\x00\x00'
+    mock_audio_data = b'RIFF\x00\x00\x00WAVEfmt\x00\x00\x00data\x00\x00\x00'
 
-        # 配置模拟方法
-        service.synthesize_speech = AsyncMock(return_value=mock_audio_data)
-        service.clone_voice = AsyncMock(return_value=mock_audio_data)
-        service.register_cloned_voice = AsyncMock(return_value={
-            "voice_id": "test_cloned_voice_123",
-            "voice_name": "Test Voice",
-            "role": "custom"
-        })
+    service.synthesize_speech = AsyncMock(return_value=mock_audio_data)
+    service.clone_voice = AsyncMock(return_value=mock_audio_data)
+    service.register_cloned_voice = AsyncMock(return_value={
+        "voice_id": "test_cloned_voice_123",
+        "voice_name": "Test Voice",
+        "role": "custom"
+    })
+    service.list_cloned_voices = AsyncMock(return_value=[])
 
-        mock.return_value = service
+    # 重置全局单例
+    import app.services.qwen_tts_service as tts_module
+    tts_module._tts_service = None
+
+    async_mock = AsyncMock(return_value=service)
+    with patch("app.api.tts.get_tts_service", async_mock), \
+         patch("app.api.clone.get_tts_service", async_mock):
         yield service
+
+    tts_module._tts_service = None
 
 
 @pytest.fixture

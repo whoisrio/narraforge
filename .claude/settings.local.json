@@ -8,7 +8,13 @@
       "Bash(cd:*)",
       "Bash(openspec status:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npx vitest *)",
+      "Bash(npm install *)",
+      "Bash(npm test *)",
+      "Bash(.venv/Scripts/python -m pytest tests/integration/test_tts_api.py::TestTTSAPI::test_synthesize_speech_with_defaults -v --tb=long)",
+      "Bash(.venv/Scripts/python -m pytest tests/integration/test_tts_api.py -v --tb=short -p no:warnings)",
+      "Bash(.venv/Scripts/python *)"
     ]
   },
   "hooks": {

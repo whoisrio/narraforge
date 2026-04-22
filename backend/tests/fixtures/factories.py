@@ -11,7 +11,6 @@ from factory.alchemy import SQLAlchemyModelFactory
 from app.core.database import SessionLocal
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_config import TTSConfig
-from app.models.timeline import TimelineProject, TimelineSegment
 
 
 class VoiceProfileFactory(SQLAlchemyModelFactory):
@@ -59,39 +58,6 @@ class TTSConfigFactory(SQLAlchemyModelFactory):
     volume = 80
     pitch = 0
     emotion = "neutral"
-    created_at = factory.LazyFunction(datetime.utcnow)
-
-
-class TimelineProjectFactory(SQLAlchemyModelFactory):
-    """TimelineProject 工厂"""
-
-    class Meta:
-        model = TimelineProject
-        sqlalchemy_session = SessionLocal
-        sqlalchemy_session_persistence = "commit"
-
-    id = factory.LazyFunction(lambda: str(uuid.uuid4()))
-    name = factory.Faker("sentence", nb_words=3)
-    description = factory.Faker("paragraph")
-    created_at = factory.LazyFunction(datetime.utcnow)
-
-
-class TimelineSegmentFactory(SQLAlchemyModelFactory):
-    """TimelineSegment 工厂"""
-
-    class Meta:
-        model = TimelineSegment
-        sqlalchemy_session = SessionLocal
-        sqlalchemy_session_persistence = "commit"
-
-    id = factory.LazyFunction(lambda: str(uuid.uuid4()))
-    project_id = factory.LazyFunction(lambda: str(uuid.uuid4()))
-    text = factory.Faker("sentence")
-    start_time = factory.Sequence(lambda n: float(n))
-    end_time = factory.Sequence(lambda n: float(n + 1))
-    audio_path = factory.LazyFunction(
-        lambda: f"/tmp/test_segment_{uuid.uuid4().hex}.wav"
-    )
     created_at = factory.LazyFunction(datetime.utcnow)
 
 

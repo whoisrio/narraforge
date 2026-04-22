@@ -9,6 +9,9 @@ from app.core.database import Base
 class VoiceProfile(Base):
     __tablename__ = "voice_profiles"
 
+    def __repr__(self):
+        return f"<VoiceProfile(id={self.id}, name={self.name})>"
+
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
     audio_path = Column(String, nullable=False)
@@ -23,6 +26,3 @@ class VoiceProfile(Base):
     cloned_at = Column(DateTime, nullable=True)  # 克隆完成时间
 
     created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    segments = relationship("TimelineSegment", back_populates="voice")
