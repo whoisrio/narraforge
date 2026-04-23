@@ -10,13 +10,6 @@ export interface VoiceProfile {
   created_at: string;
 }
 
-// Default voices from Qwen
-export interface DefaultVoice {
-  id: string;
-  name: string;
-  gender: 'male' | 'female';
-}
-
 // TTS Request params
 export interface TTSRequest {
   text: string;
@@ -50,4 +43,20 @@ export interface UploadVoiceResponse {
   name: string;
   audio_url: string;
   is_cloned: boolean;
+}
+
+// TTS Synthesis History Record
+export interface TTSResultRecord {
+  id: string;
+  text: string;
+  voice_id: string;
+  voice_name: string;
+  audio_url: string;
+  audio_format: string;
+  speed: number;
+  volume: number;
+  pitch: number;
+  emotion: string;
+  language: string;
+  created_at: string;
 }

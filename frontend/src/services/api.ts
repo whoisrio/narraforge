@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, DefaultVoice } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -50,9 +50,9 @@ export const voiceApi = {
 
 // TTS API
 export const ttsApi = {
-  getVoices: async (): Promise<{ default: DefaultVoice[]; cloned: VoiceProfile[] }> => {
-    const { data } = await api.get<{ default: DefaultVoice[]; cloned: VoiceProfile[] }>('/tts/voices');
-    return data;
+  getVoices: async (): Promise<VoiceProfile[]> => {
+    const { data } = await api.get<{ voices: VoiceProfile[] }>('/tts/voices');
+    return data.voices;
   },
 
   synthesize: async (request: TTSRequest): Promise<TTSResult> => {
@@ -60,12 +60,21 @@ export const ttsApi = {
     return data;
   },
 
-  batch: async (segments: { text: string; start_time: number; end_time: number }[], params: Omit<TTSRequest, 'text' | 'voice_id'>) => {
+  batch: async (segments: { text: string; start_time: number; end_time: number }[], params: Omit<TTSRequest, 'text' | 'voice_id'> & { voice_id: string }) => {
     const { data } = await api.post('/tts/batch', {
       segments,
       ...params
     });
     return data;
+  },
+
+  getHistory: async (): Promise<TTSResultRecord[]> => {
+    const { data } = await api.get<{ results: TTSResultRecord[] }>('/tts/history');
+    return data.results;
+  },
+
+  deleteResult: async (id: string): Promise<void> => {
+    await api.delete(`/tts/history/${id}`);
   },
 };
 
