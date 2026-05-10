@@ -1,4 +1,4 @@
-/* Global styles for Voice Clone Studio */
+/* Global styles for Voice Clone Studio — Apple Visual Language */
 
 /* Import variables */
 @import './variables.css';
@@ -16,19 +16,21 @@
 }
 
 html {
-  font-size: 16px;
+  font-size: 17px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   font-size: var(--font-size-base);
-  line-height: 1.5;
+  line-height: 1.47;
   color: var(--color-text-primary);
   background-color: var(--color-background);
   min-height: 100vh;
+  font-feature-settings: 'ss03' 1;
+  letter-spacing: -0.01em;
 }
 
 /* Focus styles for accessibility */
@@ -50,6 +52,10 @@ button {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+button:active:not(:disabled) {
+  transform: scale(0.95);
 }
 
 /* Remove default input styles */

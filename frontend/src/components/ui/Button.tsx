@@ -19,7 +19,7 @@ export const Button: React.FC<ButtonProps> = ({
   ...props
 }) => {
   const buttonStyle: React.CSSProperties = {
-    transition: 'background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal), opacity var(--transition-normal)',
+    transition: 'background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal), opacity var(--transition-normal), transform 0.1s ease',
     cursor: 'pointer',
     border: '1px solid transparent',
     fontFamily: 'inherit',
@@ -30,6 +30,7 @@ export const Button: React.FC<ButtonProps> = ({
     opacity: disabled || loading ? 0.6 : 1,
     pointerEvents: disabled || loading ? 'none' : 'auto',
     width: fullWidth ? '100%' : 'auto',
+    borderRadius: 'var(--radius-full)',
   };
 
   const getVariantStyles = () => {
@@ -39,17 +40,19 @@ export const Button: React.FC<ButtonProps> = ({
         color: 'white',
       },
       secondary: {
-        backgroundColor: 'var(--color-secondary)',
-        color: 'white',
+        backgroundColor: 'transparent',
+        color: 'var(--color-primary)',
+        borderColor: 'var(--color-primary)',
       },
       danger: {
         backgroundColor: 'var(--color-danger)',
         color: 'white',
       },
       ghost: {
-        backgroundColor: 'transparent',
+        backgroundColor: 'var(--color-surface-hover)',
         color: 'var(--color-text-primary)',
-        borderColor: 'var(--color-border)',
+        border: '1px solid var(--color-border-light)',
+        borderRadius: 'var(--radius-md)',
       },
     };
     return variantStyles[variant];
@@ -57,9 +60,9 @@ export const Button: React.FC<ButtonProps> = ({
 
   const getSizeStyles = () => {
     const sizes: Record<string, React.CSSProperties> = {
-      sm: { padding: 'var(--spacing-xs) var(--spacing-sm)', fontSize: 'var(--font-size-sm)' },
-      md: { padding: 'var(--spacing-sm) var(--spacing-md)', fontSize: 'var(--font-size-base)' },
-      lg: { padding: 'var(--spacing-md) var(--spacing-lg)', fontSize: 'var(--font-size-lg)' },
+      sm: { padding: 'var(--spacing-xs) var(--spacing-md)', fontSize: 'var(--font-size-sm)' },
+      md: { padding: '11px 22px', fontSize: 'var(--font-size-base)' },
+      lg: { padding: '14px 28px', fontSize: 'var(--font-size-lg)', fontWeight: 300 },
     };
     return sizes[size];
   };

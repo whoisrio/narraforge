@@ -1,35 +1,35 @@
-/* Global CSS Variables for Voice Clone Studio */
+/* Global CSS Variables — Apple Visual Language */
 
 :root {
   /* Colors */
-  --color-primary: #1976d2;
-  --color-primary-light: #42a5f5;
-  --color-primary-dark: #1565c0;
+  --color-primary: #0066cc;
+  --color-primary-light: #0071e3;
+  --color-primary-dark: #0055aa;
   --color-success: #4caf50;
   --color-warning: #ff9800;
   --color-error: #f44336;
 
   /* Background & Surface */
-  --color-background: #f5f5f5;
+  --color-background: #f5f5f7;
   --color-surface: #ffffff;
-  --color-surface-hover: #f8f9fa;
-  --color-surface-active: #e3f2fd;
+  --color-surface-hover: #fafafc;
+  --color-surface-active: #f0f0f0;
 
   /* Text */
-  --color-text-primary: #212121;
-  --color-text-secondary: #757575;
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #7a7a7a;
   --color-text-disabled: #bdbdbd;
   --color-text-on-primary: #ffffff;
 
   /* Borders */
   --color-border: #e0e0e0;
-  --color-border-light: #eeeeee;
-  --color-border-focus: #1976d2;
+  --color-border-light: #f0f0f0;
+  --color-border-focus: #0071e3;
 
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
-  --spacing-md: 16px;
+  --spacing-md: 17px;
   --spacing-lg: 24px;
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
@@ -38,22 +38,22 @@
   /* Typography */
   --font-size-xs: 12px;
   --font-size-sm: 14px;
-  --font-size-base: 16px;
+  --font-size-base: 17px;
   --font-size-lg: 18px;
-  --font-size-xl: 20px;
+  --font-size-xl: 21px;
   --font-size-2xl: 24px;
-  --font-size-3xl: 32px;
+  --font-size-3xl: 34px;
 
   --font-weight-regular: 400;
-  --font-weight-medium: 500;
+  --font-weight-medium: 600;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
   /* Border Radius */
-  --radius-sm: 4px;
+  --radius-sm: 5px;
   --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  --radius-lg: 18px;
+  --radius-xl: 18px;
   --radius-full: 9999px;
 
   /* Transitions */

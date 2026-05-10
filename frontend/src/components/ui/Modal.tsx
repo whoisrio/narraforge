@@ -39,7 +39,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   const modalStyle: React.CSSProperties = {
     backgroundColor: 'var(--color-surface)',
     borderRadius: 'var(--radius-lg)',
-    boxShadow: 'var(--shadow-xl)',
+    boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.22) 3px 5px 30px',
     maxWidth: '90%',
     width: '100%',
     maxHeight: '90vh',

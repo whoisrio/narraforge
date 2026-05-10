@@ -1,29 +1,31 @@
 .container {
-  background: white;
-  border-radius: 1rem;
-  padding: 1.5rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--color-border-light);
 }
 
 .container h3 {
-  margin-bottom: 1rem;
-  font-size: 1.125rem;
+  margin-bottom: var(--spacing-md);
+  font-size: var(--font-size-lg);
+  font-weight: 600;
 }
 
 .loading,
 .empty {
   text-align: center;
-  padding: 2rem;
-  color: #666;
+  padding: var(--spacing-2xl);
+  color: var(--color-text-secondary);
 }
 
 .spinner {
   width: 2rem;
   height: 2rem;
-  border: 2px solid #e5e5e5;
-  border-top-color: #3b82f6;
+  border: 2px solid var(--color-border-light);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
-  margin: 0 auto 1rem;
+  margin: 0 auto var(--spacing-md);
 }
 
 @keyframes spin {
@@ -35,7 +37,7 @@
 }
 
 .player {
-  margin-bottom: 1rem;
+  margin-bottom: var(--spacing-md);
 }
 
 .audio {
@@ -45,36 +47,40 @@
 .downloadSection {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
 }
 
 .downloadSection select {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 0.25rem;
-  background: white;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
 }
 
 .downloadButton {
-  padding: 0.5rem 1rem;
-  background: #3b82f6;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-primary);
   color: white;
   border: none;
-  border-radius: 0.25rem;
+  border-radius: var(--radius-full);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .downloadButton:hover {
-  background: #2563eb;
+  background: var(--color-primary-light);
+}
+
+.downloadButton:active {
+  transform: scale(0.95);
 }
 
 .info {
-  color: #666;
-  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
 }
 
 .info p {
-  margin: 0.25rem 0;
+  margin: var(--spacing-xs) 0;
 }

@@ -11,16 +11,15 @@ export interface CardProps {
 export const Card: React.FC<CardProps> = ({ header, footer, children, className, style }) => {
   const cardStyle: React.CSSProperties = {
     backgroundColor: 'var(--color-surface)',
-    border: `1px solid var(--color-border)`,
+    border: '1px solid var(--color-border-light)',
     borderRadius: 'var(--radius-lg)',
-    boxShadow: 'var(--shadow-sm)',
     overflow: 'hidden',
     ...style,
   };
 
   const headerStyle: React.CSSProperties = {
     padding: 'var(--spacing-md) var(--spacing-lg)',
-    borderBottom: header ? `1px solid var(--color-border-light)` : 'none',
+    borderBottom: header ? '1px solid var(--color-border-light)' : 'none',
     backgroundColor: 'var(--color-surface)',
   };
 
@@ -30,7 +29,7 @@ export const Card: React.FC<CardProps> = ({ header, footer, children, className,
 
   const footerStyle: React.CSSProperties = {
     padding: 'var(--spacing-md) var(--spacing-lg)',
-    borderTop: footer ? `1px solid var(--color-border-light)` : 'none',
+    borderTop: footer ? '1px solid var(--color-border-light)' : 'none',
     backgroundColor: 'var(--color-surface)',
   };
 
