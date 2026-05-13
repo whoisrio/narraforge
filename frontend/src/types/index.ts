@@ -13,13 +13,18 @@ export interface VoiceProfile {
 // TTS Request params
 export interface TTSRequest {
   text: string;
+  engine?: 'cosyvoice' | 'edge_tts';
   voice_id: string;
-  language: 'Chinese' | 'English' | 'Japanese' | 'Korean';
-  speed: number; // 0.5 - 2.0
-  volume: number; // 0 - 100
-  pitch: number; // -12 to 12
+  language?: 'Chinese' | 'English' | 'Japanese' | 'Korean';
+  speed?: number; // 0.5 - 2.0
+  volume?: number; // 0 - 100
+  pitch?: number; // -12 to 12
   emotion?: 'neutral' | 'happy' | 'sad' | 'nervous' | 'excited';
   format?: 'mp3' | 'wav';
+  // Edge-TTS params
+  edge_voice?: string;
+  edge_rate?: string;
+  edge_volume?: string;
 }
 
 // TTS Result
@@ -59,4 +64,14 @@ export interface TTSResultRecord {
   emotion: string;
   language: string;
   created_at: string;
+}
+
+// Edge-TTS Voice
+export interface EdgeVoice {
+  name: string;
+  short_name: string;
+  display_name: string;
+  gender: string;
+  locale: string;
+  language: string;
 }

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -75,6 +75,20 @@ export const ttsApi = {
 
   deleteResult: async (id: string): Promise<void> => {
     await api.delete(`/tts/history/${id}`);
+  },
+
+  getEdgeVoices: async (language?: string, gender?: string): Promise<EdgeVoice[]> => {
+    const params = new URLSearchParams();
+    if (language) params.set('language', language);
+    if (gender) params.set('gender', gender);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const { data } = await api.get<{ voices: EdgeVoice[] }>(`/tts/edge-voices${qs}`);
+    return data.voices;
+  },
+
+  getEdgeLanguages: async (): Promise<string[]> => {
+    const { data } = await api.get<{ languages: string[] }>('/tts/edge-languages');
+    return data.languages;
   },
 };
 
