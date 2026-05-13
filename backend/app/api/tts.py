@@ -22,13 +22,19 @@ router = APIRouter()
 
 class TTSRequest(BaseModel):
     text: str
-    voice_id: str
+    engine: str = "cosyvoice"  # "cosyvoice" | "edge_tts"
+    # CosyVoice params
+    voice_id: str = ""
     speed: float = 1.0
     volume: float = 80
     pitch: int = 0
     emotion: str = "neutral"
     language: str = "Chinese"
     format: str = "wav"
+    # Edge-TTS params
+    edge_voice: str = ""
+    edge_rate: str = "+0%"
+    edge_volume: str = "+0%"
 
 
 class SegmentRequest(BaseModel):
@@ -65,7 +71,15 @@ def _result_to_dict(r: TTSResultRecord) -> dict:
 
 @router.post("/synthesize")
 async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
-    """合成语音 - 使用克隆声音"""
+    """合成语音 - 支持多引擎"""
+    if request.engine == "edge_tts":
+        return await _synthesize_edge_tts(request, db)
+    else:
+        return await _synthesize_cosyvoice(request, db)
+
+
+async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_db)):
+    """CosyVoice 引擎合成"""
     audio_fmt = request.format or "wav"
     audio_id = str(uuid.uuid4())
     audio_path = settings.voices_dir / f"tts_{audio_id}.{audio_fmt}"
@@ -131,6 +145,62 @@ async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"TTS synthesis failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
+
+
+async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db)):
+    """Edge-TTS 引擎合成"""
+    if not request.edge_voice:
+        raise HTTPException(status_code=400, detail="edge_voice is required for edge_tts engine")
+
+    audio_id = str(uuid.uuid4())
+    audio_path = settings.voices_dir / f"tts_{audio_id}.mp3"
+
+    try:
+        from app.services.edge_tts_service import get_edge_tts_service
+        edge_service = get_edge_tts_service()
+
+        logger.info(f"Synthesizing with edge-tts: voice={request.edge_voice}, text={request.text[:50]}...")
+        audio_data, audio_format = await edge_service.synthesize(
+            text=request.text,
+            voice=request.edge_voice,
+            rate=request.edge_rate,
+            volume=request.edge_volume,
+        )
+
+        async with aiofiles.open(audio_path, "wb") as f:
+            await f.write(audio_data)
+
+        record = TTSResultRecord(
+            id=audio_id,
+            text=request.text,
+            voice_id=request.edge_voice,
+            voice_name=request.edge_voice,
+            audio_path=str(audio_path),
+            audio_format="mp3",
+            speed=1.0,
+            volume=80,
+            pitch=0,
+            emotion="neutral",
+            language="Chinese",
+        )
+        db.add(record)
+        db.commit()
+
+        return {
+            "audio_id": audio_id,
+            "audio_url": f"/api/tts/audio/{audio_id}",
+            "text": request.text,
+            "params": {
+                "engine": "edge_tts",
+                "edge_voice": request.edge_voice,
+                "edge_rate": request.edge_rate,
+                "edge_volume": request.edge_volume,
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Edge-TTS synthesis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Edge-TTS synthesis failed: {str(e)}")
 
 
 @router.get("/history")
@@ -233,3 +303,29 @@ async def list_available_voices(db: Session = Depends(get_db)):
     ]
 
     return {"voices": voices}
+
+
+@router.get("/edge-voices")
+async def list_edge_voices(language: Optional[str] = None, gender: Optional[str] = None):
+    """获取 Edge-TTS 可用音色列表"""
+    try:
+        from app.services.edge_tts_service import get_edge_tts_service
+        edge_service = get_edge_tts_service()
+        voices = await edge_service.list_voices(language=language, gender=gender)
+        return {"voices": voices}
+    except Exception as e:
+        logger.error(f"Failed to list edge-tts voices: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list edge-tts voices: {str(e)}")
+
+
+@router.get("/edge-languages")
+async def list_edge_languages():
+    """获取 Edge-TTS 可用语言列表"""
+    try:
+        from app.services.edge_tts_service import get_edge_tts_service
+        edge_service = get_edge_tts_service()
+        languages = await edge_service.get_available_languages()
+        return {"languages": languages}
+    except Exception as e:
+        logger.error(f"Failed to list edge-tts languages: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list edge-tts languages: {str(e)}")
