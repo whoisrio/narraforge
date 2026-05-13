@@ -1,0 +1,127 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.section {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+.section h3 {
+  margin-bottom: 1rem;
+  font-size: 1.125rem;
+}
+
+.filters {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  flex: 1;
+}
+
+.filter label {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.filter select {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 0.25rem;
+  background: white;
+  font-size: 0.875rem;
+}
+
+.voiceGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.voiceCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.5rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.voiceCard:hover {
+  border-color: #3b82f6;
+}
+
+.voiceCard.active {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.voiceName {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.voiceLocale {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.voiceGender {
+  font-size: 0.75rem;
+  color: #666;
+  background: #f5f5f5;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+}
+
+.params {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.param {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.param label {
+  font-size: 0.875rem;
+  color: #666;
+  font-weight: 500;
+}
+
+.param input[type="range"] {
+  width: 100%;
+  cursor: pointer;
+}
+
+.loading,
+.error,
+.empty {
+  text-align: center;
+  padding: 1.5rem;
+  color: #666;
+}
+
+.error {
+  color: #ef4444;
+}
