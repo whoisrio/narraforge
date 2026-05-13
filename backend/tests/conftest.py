@@ -210,6 +210,42 @@ def mock_http_client():
         yield client
 
 
+@pytest.fixture
+def mock_edge_tts_service():
+    """模拟 Edge TTS 服务"""
+    from app.services import edge_tts_service as edge_module
+    edge_module._edge_tts_service = None
+
+    service = Mock()
+    fake_audio = b'\xff\xfb\x90\x00' * 50
+
+    service.synthesize = AsyncMock(return_value=(fake_audio, "mp3"))
+    service.list_voices = AsyncMock(return_value=[
+        {
+            "name": "Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)",
+            "short_name": "zh-CN-XiaoxiaoNeural",
+            "display_name": "Xiaoxiao",
+            "gender": "Female",
+            "locale": "zh-CN",
+            "language": "Chinese",
+        },
+        {
+            "name": "Microsoft Server Speech Text to Speech Voice (en-US, GuyNeural)",
+            "short_name": "en-US-GuyNeural",
+            "display_name": "Guy",
+            "gender": "Male",
+            "locale": "en-US",
+            "language": "English",
+        },
+    ])
+    service.get_available_languages = AsyncMock(return_value=["Chinese", "English"])
+
+    with patch("app.services.edge_tts_service.get_edge_tts_service", return_value=service):
+        yield service
+
+    edge_module._edge_tts_service = None
+
+
 @pytest.fixture(autouse=True)
 def cleanup_test_files():
     """每次测试后清理测试文件"""
