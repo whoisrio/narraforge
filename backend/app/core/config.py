@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     uploads_dir: Path = base_dir / "uploads"
     voices_dir: Path = uploads_dir / "voices"
     videos_dir: Path = uploads_dir / "videos"
+    srt_output_dir: Path = uploads_dir / "srt"
     logs_dir: Path = base_dir / "logs"
 
     # Database
@@ -61,6 +62,7 @@ class Settings(BaseSettings):
         # Ensure directories exist
         self.voices_dir.mkdir(parents=True, exist_ok=True)
         self.videos_dir.mkdir(parents=True, exist_ok=True)
+        self.srt_output_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
