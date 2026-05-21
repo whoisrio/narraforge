@@ -55,7 +55,7 @@ Modify `app/services/voice_to_srt_service.py`:
 
 - Refactor `voicetosrt()` to return both the file path AND the SRT content string, so the API doesn't need to re-read the file.
 - Output directory: `backend/output/srt/` (configurable via `OUTPUT_DIR` env var, same as current logic).
-- File naming: `{stem}_{timestamp}.srt` with a UUID-based `file_id` prefix for the download endpoint.
+- File naming: `{file_id}_{stem}_{timestamp}.srt` where `file_id` is a UUID. The download endpoint scans the output directory for filenames starting with `{file_id}_` to locate the file.
 - The service should accept an uploaded file path (from the API handler's temp save), not handle file upload itself.
 
 ### Router Registration
