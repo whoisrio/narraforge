@@ -246,6 +246,26 @@ def mock_edge_tts_service():
     edge_module._edge_tts_service = None
 
 
+@pytest.fixture
+def mock_voice_to_srt():
+    """模拟 VoiceToSrt 服务"""
+    from app.services.voice_to_srt_service import SrtResult
+
+    mock_result = SrtResult(
+        file_path=Path("/tmp/fake.srt"),
+        content="1\n00:00:01,000 --> 00:00:03,500\nHello world\n\n",
+        filename="test_20260521_143052.srt",
+        language="en",
+        language_probability=0.98,
+    )
+
+    with patch("app.api.speech_to_text.VoiceToSrt") as mock_class:
+        mock_instance = Mock()
+        mock_instance.voicetosrt.return_value = mock_result
+        mock_class.return_value = mock_instance
+        yield mock_instance
+
+
 @pytest.fixture(autouse=True)
 def cleanup_test_files():
     """每次测试后清理测试文件"""
