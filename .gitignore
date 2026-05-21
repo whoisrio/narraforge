@@ -56,3 +56,4 @@ frontend/node_modules/
 frontend/dist/
 frontend/.env.local
 .gstack/
+node_modules
