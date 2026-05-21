@@ -118,4 +118,28 @@ export const configApi = {
   },
 };
 
+export interface TranscribeResult {
+  file_id: string;
+  filename: string;
+  content: string;
+  language: string;
+  language_probability: number;
+  download_url: string;
+}
+
+export const speechToTextApi = {
+  transcribe: async (
+    file: File,
+    modelSize: string = 'large-v3',
+    beamSize: number = 5,
+  ): Promise<TranscribeResult> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('model_size', modelSize);
+    formData.append('beam_size', String(beamSize));
+    const { data } = await api.post<TranscribeResult>('/speech-to-text/transcribe', formData);
+    return data;
+  },
+};
+
 export default api;
