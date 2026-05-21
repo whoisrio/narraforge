@@ -57,3 +57,6 @@ frontend/dist/
 frontend/.env.local
 .gstack/
 node_modules
+*.env
+output
+backend/output

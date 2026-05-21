@@ -16,6 +16,7 @@ dependencies = [
     "dashscope>=1.25.0",
     "edge-tts>=7.0.0",
     "faster-whisper>=1.2.1",
+    "qiniu>=7.17.0",
 ]
 
 [project.optional-dependencies]
