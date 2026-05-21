@@ -32,10 +32,13 @@ def setup_test_environment():
     # 覆盖配置文件中的目录
     original_voices_dir = settings.voices_dir
     original_database_url = settings.database_url
+    original_srt_dir = settings.srt_output_dir
 
     # 设置为测试目录
     settings.voices_dir = Path(TEST_VOICES_DIR)
     settings.database_url = TEST_DATABASE_URL
+    settings.srt_output_dir = Path(TEST_UPLOADS_DIR) / "srt"
+    settings.srt_output_dir.mkdir(parents=True, exist_ok=True)
 
     # 创建临时目录
     os.makedirs(TEST_VOICES_DIR, exist_ok=True)
@@ -51,6 +54,7 @@ def setup_test_environment():
     # 恢复原始设置
     settings.voices_dir = original_voices_dir
     settings.database_url = original_database_url
+    settings.srt_output_dir = original_srt_dir
 
 
 @pytest.fixture(scope="session")
@@ -279,3 +283,12 @@ def cleanup_test_files():
                     os.remove(os.path.join(test_dir, file))
                 except:
                     pass
+
+    # 清理 srt 子目录
+    srt_dir = os.path.join(TEST_UPLOADS_DIR, "srt")
+    if os.path.exists(srt_dir):
+        for file in os.listdir(srt_dir):
+            try:
+                os.remove(os.path.join(srt_dir, file))
+            except:
+                pass

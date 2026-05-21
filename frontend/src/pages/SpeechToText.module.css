@@ -89,6 +89,17 @@
   font-size: var(--font-size-base);
 }
 
+.audioPlayer {
+  margin-top: var(--spacing-lg);
+  display: flex;
+  justify-content: center;
+}
+
+.audio {
+  width: 100%;
+  border-radius: var(--radius-md);
+}
+
 .params {
   display: flex;
   flex-direction: column;
@@ -154,6 +165,10 @@
 .processingText {
   margin-top: var(--spacing-md);
   font-size: var(--font-size-base);
+}
+
+.historySection {
+  margin-top: var(--spacing-2xl);
 }
 
 @media (max-width: 768px) {

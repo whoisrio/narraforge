@@ -127,6 +127,17 @@ export interface TranscribeResult {
   download_url: string;
 }
 
+export interface TranscriptionRecord {
+  id: string;
+  original_filename: string;
+  audio_url: string;
+  srt_download_url: string;
+  language: string;
+  language_probability: number;
+  model_size: string;
+  created_at: string;
+}
+
 export const speechToTextApi = {
   transcribe: async (
     file: File,
@@ -139,6 +150,15 @@ export const speechToTextApi = {
     formData.append('beam_size', String(beamSize));
     const { data } = await api.post<TranscribeResult>('/speech-to-text/transcribe', formData);
     return data;
+  },
+
+  getHistory: async (): Promise<TranscriptionRecord[]> => {
+    const { data } = await api.get<{ results: TranscriptionRecord[] }>('/speech-to-text/history');
+    return data.results;
+  },
+
+  deleteRecord: async (id: string): Promise<void> => {
+    await api.delete(`/speech-to-text/history/${id}`);
   },
 };
 

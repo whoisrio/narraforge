@@ -1,9 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
-import { speechToTextApi, TranscribeResult } from '../services/api';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { speechToTextApi } from '../services/api';
+import type { TranscribeResult, TranscriptionRecord } from '../services/api';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Slider } from '../components/ui/Slider';
 import { Loading } from '../components/ui/Loading';
+import { TranscriptionHistory } from '../components/SpeechToText';
 import styles from './SpeechToText.module.css';
 
 const MODEL_OPTIONS = [
@@ -22,6 +24,8 @@ export function SpeechToText() {
   const [result, setResult] = useState<TranscribeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [history, setHistory] = useState<TranscriptionRecord[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback((selectedFile: File) => {
@@ -33,6 +37,8 @@ export function SpeechToText() {
     setFile(selectedFile);
     setResult(null);
     setError(null);
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(URL.createObjectURL(selectedFile));
   }, []);
 
   const handleDrop = useCallback(
@@ -52,6 +58,7 @@ export function SpeechToText() {
     try {
       const res = await speechToTextApi.transcribe(file, modelSize, beamSize);
       setResult(res);
+      loadHistory();
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Transcription failed');
     } finally {
@@ -60,12 +67,42 @@ export function SpeechToText() {
   };
 
   const handleDownload = () => {
-    if (!result) return;
+    if (!result || !file) return;
+    const stem = file.name.replace(/\.[^.]+$/, '');
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const filename = `${stem}_${date}.srt`;
+    const blob = new Blob([result.content], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = result.download_url;
-    link.download = result.filename;
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
+
+  const loadHistory = useCallback(async () => {
+    try {
+      const data = await speechToTextApi.getHistory();
+      setHistory(data);
+    } catch (error) {
+      console.error('Failed to load history:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  const handleDeleteRecord = useCallback(async (id: string) => {
+    try {
+      await speechToTextApi.deleteRecord(id);
+      setHistory(prev => prev.filter(r => r.id !== id));
+    } catch (error) {
+      console.error('Failed to delete record:', error);
+    }
+  }, []);
 
   return (
     <div className={styles.container}>
@@ -112,6 +149,12 @@ export function SpeechToText() {
                 if (f) handleFileSelect(f);
               }}
             />
+
+            {audioUrl && (
+              <div className={styles.audioPlayer}>
+                <audio controls src={audioUrl} className={styles.audio} />
+              </div>
+            )}
 
             <div className={styles.params}>
               <Select
@@ -180,6 +223,10 @@ export function SpeechToText() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className={styles.historySection}>
+        <TranscriptionHistory records={history} onDelete={handleDeleteRecord} />
       </div>
     </div>
   );
