@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.models import VoiceProfile
 from app.services.qwen_tts_service import get_tts_service
+from app.services.qiniu_service import is_qiniu_configured, upload_to_qiniu
 
 logger = logging.getLogger(__name__)
 
@@ -74,14 +75,6 @@ class RegisterRequest(BaseModel):
     voice_id: str
     name: str = None
     role: str = "custom"
-
-
-class CloneSynthesizeRequest(BaseModel):
-    voice_id: str
-    text: str
-    speed: float = 1.0
-    volume: float = 80
-    pitch: int = 0
 
 
 class UploadFromUrlRequest(BaseModel):
@@ -264,18 +257,26 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    # 优先使用外部音频 URL（如果有），其次使用本地文件路径
-    audio_path_for_clone = None
-    if hasattr(voice, 'external_audio_url') and voice.external_audio_url:
-        # 使用外部音频 URL（七牛云、AWS S3 等）
-        audio_path_for_clone = voice.external_audio_url
-        logger.info(f"Using external audio URL for cloning: {audio_path_for_clone}")
-    elif os.path.exists(voice.audio_path):
-        # 使用本地文件路径
-        audio_path_for_clone = voice.audio_path
-        logger.info(f"Using local audio file for cloning: {audio_path_for_clone}")
-    else:
-        raise HTTPException(status_code=404, detail="Audio file not found")
+    # 优先使用外部音频 URL（如果有），否则上传本地文件到七牛云
+    if not voice.external_audio_url:
+        if not os.path.exists(voice.audio_path):
+            raise HTTPException(status_code=404, detail="Audio file not found")
+        if not is_qiniu_configured():
+            raise HTTPException(
+                status_code=500,
+                detail="Qiniu not configured; cannot generate public URL for cloning",
+            )
+        try:
+            key = os.path.basename(voice.audio_path)
+            qiniu_url = upload_to_qiniu(voice.audio_path, key)
+            voice.external_audio_url = qiniu_url
+            db.commit()
+            db.refresh(voice)
+        except RuntimeError as e:
+            raise HTTPException(status_code=500, detail=f"Qiniu upload failed: {e}")
+
+    audio_path_for_clone = voice.external_audio_url
+    logger.info(f"Using external audio URL for cloning: {audio_path_for_clone}")
 
     try:
         tts_service = await get_tts_service()
@@ -447,74 +448,28 @@ def get_voice(voice_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/{voice_id}")
-def delete_voice(voice_id: str, db: Session = Depends(get_db)):
-    """删除声音"""
+async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
+    """删除声音 - 同时删除 Qwen 云端音色、本地音频文件和数据库记录"""
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    if os.path.exists(voice.audio_path):
+    # 先尝试删除 Qwen 云端音色（如果已克隆）
+    if voice.qwen_voice_id:
+        try:
+            tts_service = await get_tts_service()
+            await tts_service.delete_cloned_voice(voice.qwen_voice_id)
+        except Exception as e:
+            logger.error(f"Failed to delete voice from Qwen: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to delete cloned voice on Qwen: {str(e)}",
+            )
+
+    if voice.audio_path and os.path.exists(voice.audio_path):
         os.remove(voice.audio_path)
 
     db.delete(voice)
     db.commit()
 
     return {"message": "Voice deleted"}
-
-
-@router.post("/synthesize")
-async def clone_synthesize(request: CloneSynthesizeRequest, db: Session = Depends(get_db)):
-    """使用克隆的声音合成文本"""
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
-    if not voice:
-        raise HTTPException(status_code=404, detail="Voice profile not found")
-
-    if not voice.is_cloned or not voice.qwen_voice_id:
-        raise HTTPException(status_code=400, detail="Voice not registered. Please call /create-clone first.")
-
-    audio_id = str(uuid.uuid4())
-    output_path = settings.voices_dir / f"cloned_{audio_id}.wav"
-
-    try:
-        tts_service = await get_tts_service()
-
-        # 使用已注册的 voice_id 进行合成
-        audio_data = await tts_service.clone_voice(
-            voice_id=voice.qwen_voice_id,
-            text=request.text,
-            speed=request.speed,
-            volume=request.volume,
-            pitch=request.pitch,
-            format="wav",
-            sample_rate=16000,
-        )
-
-        async with aiofiles.open(output_path, "wb") as f:
-            await f.write(audio_data)
-
-        return {
-            "audio_id": audio_id,
-            "audio_url": f"/api/clone/cloned_audio/{audio_id}",
-            "text": request.text,
-            "voice_id": voice.qwen_voice_id,
-            "params": {
-                "speed": request.speed,
-                "volume": request.volume,
-                "pitch": request.pitch,
-            }
-        }
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Voice cloning failed: {str(e)}")
-
-
-@router.get("/cloned_audio/{audio_id}")
-async def get_cloned_audio(audio_id: str):
-    """获取克隆合成的音频"""
-    audio_path = settings.voices_dir / f"cloned_{audio_id}.wav"
-
-    from fastapi.responses import FileResponse
-    if os.path.exists(audio_path):
-        return FileResponse(audio_path, media_type="audio/wav")
-    else:
-        raise HTTPException(status_code=404, detail="Cloned audio not found")

@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     voices_dir: Path = uploads_dir / "voices"
     videos_dir: Path = uploads_dir / "videos"
     srt_output_dir: Path = uploads_dir / "srt"
+    output_dir: Path = base_dir / "output"
+    clone_voices_dir: Path = output_dir / "clone_voices"
     logs_dir: Path = base_dir / "logs"
 
     # Database
@@ -43,6 +45,12 @@ class Settings(BaseSettings):
     # 本地开发可以使用 ngrok 暴露的 URL，如：https://xxxx.ngrok.io
     # 生产环境使用实际域名，如：https://your-domain.com
     public_base_url: str = ""
+
+    # 七牛云对象存储
+    oss_ak: str = ""
+    oss_sk: str = ""
+    bucket_name: str = ""
+    bucket_domain: str = ""
 
     # 日志配置
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
@@ -63,6 +71,7 @@ class Settings(BaseSettings):
         self.voices_dir.mkdir(parents=True, exist_ok=True)
         self.videos_dir.mkdir(parents=True, exist_ok=True)
         self.srt_output_dir.mkdir(parents=True, exist_ok=True)
+        self.clone_voices_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod

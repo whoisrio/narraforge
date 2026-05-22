@@ -34,18 +34,6 @@ export const voiceApi = {
     const { data } = await api.post('/clone/sync-from-qwen');
     return data;
   },
-
-  // 使用克隆声音合成文本
-  synthesize: async (voiceId: string, text: string, speed: number = 1.0, volume: number = 80, pitch: number = 0) => {
-    const { data } = await api.post('/clone/synthesize', {
-      voice_id: voiceId,
-      text,
-      speed,
-      volume,
-      pitch,
-    });
-    return data;
-  },
 };
 
 // TTS API

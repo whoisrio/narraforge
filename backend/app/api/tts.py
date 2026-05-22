@@ -25,6 +25,7 @@ class TTSRequest(BaseModel):
     engine: str = "cosyvoice"  # "cosyvoice" | "edge_tts"
     # CosyVoice params
     voice_id: str = ""
+    instruction: str = "字正腔圆，播音腔"
     speed: float = 1.0
     volume: float = 80
     pitch: int = 0
@@ -80,10 +81,9 @@ async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
 
 async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_db)):
     """CosyVoice 引擎合成"""
-    audio_fmt = request.format or "wav"
-    audio_id = str(uuid.uuid4())
-    audio_path = settings.voices_dir / f"tts_{audio_id}.{audio_fmt}"
+    audio_fmt = request.format or "mp3"
 
+    logger.info(f'request is: {request}')
     if not request.voice_id:
         raise HTTPException(status_code=400, detail="voice_id is required")
 
@@ -91,7 +91,9 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         tts_service = await get_tts_service()
 
         logger.info(f"Synthesizing with cloned voice: {request.voice_id}")
-        audio_data = await tts_service.clone_voice(
+        # clone_voice 现在直接下载并落盘到 settings.clone_voices_dir，
+        # 返回文件绝对路径，文件名形如 {voice_id}_{YYYYMMDDHHMMSS}.{ext}
+        audio_path = await tts_service.clone_voice(
             voice_id=request.voice_id,
             text=request.text,
             speed=request.speed,
@@ -99,10 +101,10 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
             pitch=request.pitch,
             format=audio_fmt,
             sample_rate=16000,
+            instruction=request.instruction,
         )
 
-        async with aiofiles.open(audio_path, "wb") as f:
-            await f.write(audio_data)
+        audio_id = Path(audio_path).stem
 
         # 查询声音名称用于历史记录展示
         voice = (
@@ -118,7 +120,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
             text=request.text,
             voice_id=request.voice_id,
             voice_name=voice_name,
-            audio_path=str(audio_path),
+            audio_path=audio_path,
             audio_format=audio_fmt,
             speed=request.speed,
             volume=request.volume,
@@ -239,10 +241,8 @@ async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_d
         tts_service = await get_tts_service()
 
         for segment in request.segments:
-            audio_id = str(uuid.uuid4())
-            audio_path = settings.voices_dir / f"tts_{audio_id}.wav"
-
-            audio_data = await tts_service.clone_voice(
+            # clone_voice 现在返回落盘后的绝对路径
+            audio_path = await tts_service.clone_voice(
                 voice_id=request.voice_id,
                 text=segment.text,
                 speed=request.speed,
@@ -250,11 +250,10 @@ async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_d
                 pitch=request.pitch,
                 format="wav",
                 sample_rate=16000,
+                instruction="字正腔圆，播音腔",
             )
 
-            async with aiofiles.open(audio_path, "wb") as f:
-                await f.write(audio_data)
-
+            audio_id = Path(audio_path).stem
             results.append({
                 "audio_id": audio_id,
                 "audio_url": f"/api/tts/audio/{audio_id}",
@@ -270,14 +269,21 @@ async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_d
 
 
 @router.get("/audio/{audio_id}")
-async def get_tts_audio(audio_id: str):
-    """获取 TTS 生成的音频"""
+async def get_tts_audio(audio_id: str, db: Session = Depends(get_db)):
+    """获取 TTS 生成的音频 - 优先按 DB 记录的 audio_path 返回，兼容历史 tts_{id}.{ext} 文件"""
+    record = db.query(TTSResultRecord).filter(TTSResultRecord.id == audio_id).first()
+    if record and os.path.exists(record.audio_path):
+        ext = (record.audio_format or "mp3").lower()
+        media_type = "audio/mpeg" if ext == "mp3" else f"audio/{ext}"
+        return FileResponse(record.audio_path, media_type=media_type)
+
+    # 兼容旧记录 / 旧 batch 临时文件命名：uploads/voices/tts_{id}.{ext}
     voices_dir = settings.voices_dir
     for ext in ["wav", "mp3", "ogg"]:
-        audio_path = voices_dir / f"tts_{audio_id}.{ext}"
-        if os.path.exists(audio_path):
+        legacy_path = voices_dir / f"tts_{audio_id}.{ext}"
+        if os.path.exists(legacy_path):
             media_type = f"audio/{ext}" if ext != "mp3" else "audio/mpeg"
-            return FileResponse(audio_path, media_type=media_type)
+            return FileResponse(legacy_path, media_type=media_type)
 
     raise HTTPException(status_code=404, detail="Audio not found")
 

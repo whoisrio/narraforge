@@ -21,6 +21,10 @@ import logging
 import ssl
 import http.cookiejar
 import time
+from dashscope.audio.tts_v2 import VoiceEnrollmentService
+from dotenv import load_dotenv
+import dashscope
+
 
 from app.core.config import settings
 
@@ -329,6 +333,7 @@ class QwenTTSService:
         self,
         voice_id: str,
         text: str,
+        instruction: str, #clone时使用的声音输出指导
         speed: float = 1.0,
         volume: float = 80,
         pitch: int = 0,
@@ -351,13 +356,14 @@ class QwenTTSService:
         return await loop.run_in_executor(
             None,
             self._clone_voice_sync,
-            voice_id, text, speed, volume, pitch, format, sample_rate
+            voice_id, text, instruction, speed, volume, pitch, format, sample_rate
         )
 
     def _clone_voice_sync(
         self,
         voice_id: str,
         text: str,
+        instruction: str,
         speed: float = 1.0,
         volume: float = 80,
         pitch: int = 0,
@@ -372,7 +378,7 @@ class QwenTTSService:
         - CosyVoice 系列：使用 cosyvoice 模型和注册的 voice_id 进行合成
         """
         if self.is_cosyvoice:
-            return self._clone_voice_cosyvoice(voice_id, text, speed, volume, pitch, format, sample_rate)
+            return self._clone_voice_cosyvoice(voice_id, text, instruction, speed, volume, pitch, format, sample_rate)
         else:
             return self._clone_voice_tts(voice_id, text, speed, volume, pitch, format, sample_rate)
 
@@ -456,51 +462,81 @@ class QwenTTSService:
         self,
         voice_id: str,
         text: str,
+        instruction: str = "字正腔圆，播音腔",
         speed: float = 1.0,
         volume: float = 80,
         pitch: int = 0,
-        format: str = "wav",
+        format: str = "mp3",
         sample_rate: int = 16000,
-    ) -> bytes:
+    ) -> str:
         """
-        CosyVoice 系列模型的声音克隆方法
-        
-        使用 dashscope SDK 的 SpeechSynthesizer 进行语音合成：
-        1. 配置全局 dashscope.api_key 和 base_http_api_url
-        2. 创建 SpeechSynthesizer 实例，传入 model 和 voice
-        3. 调用 call() 方法返回二进制音频数据
-        
-        为什么使用 SDK：
-        - 示例代码使用 SpeechSynthesizer.call() 直接返回音频
-        - 避免 HTTP API 的 url error 问题
-        - 支持更多参数（speech_rate, volume, pitch 等）
+        CosyVoice 系列模型的声音克隆方法。
+
+        使用 dashscope HttpSpeechSynthesizer 提交非流式合成请求，拿到 audio_url 后
+        立即下载到 backend/output/clone_voices/{voice_id}_{YYYYMMDDHHMMSS}.{ext}，
+        返回文件的绝对路径供 API 层写入数据库 / 提供下载。
+
+        为什么下载并落盘：
+        - audio_url 是 dashscope 的临时下载链接，会过期，必须立刻下载
+        - 落盘后调用方拿到稳定路径，无需再处理流式字节，方便复用
         """
         import dashscope
-        from dashscope.audio.tts_v2 import SpeechSynthesizer
-        
-        # 配置全局 API Key 和 URL（根据示例代码）
+        from dashscope.audio.http_tts.http_speech_synthesizer import HttpSpeechSynthesizer
+        from datetime import datetime
+        import requests as req
+
         dashscope.api_key = self.api_key
         dashscope.base_http_api_url = 'https://dashscope.aliyuncs.com/api/v1'
-        
+
         logger.info(f"Synthesizing speech with CosyVoice: model={self.model}, voice={voice_id}")
-        
+
         try:
-            # 创建 SpeechSynthesizer 实例
-            # 根据示例代码，参数包括：model, voice, speech_rate 等
-            # 注意：pitch 和 volume 参数可能不被支持
-            synthesizer = SpeechSynthesizer(
+            ops = {
+                "instruction": instruction,
+                "speed": speed,
+                "volume": volume,
+                "pitch": pitch,
+            }
+            logger.info(f'ops is : {ops}')
+            result = HttpSpeechSynthesizer.call(
                 model=self.model,
+                text=text,
                 voice=voice_id,
-                speech_rate=speed
+                sample_rate=sample_rate,
+                stream=False,
+                format=format,
+                api_key=self.api_key,
+                **ops,
             )
-            
-            # 调用 call() 方法返回二进制音频数据
-            audio_data = synthesizer.call(text)
-            
-            logger.info(f"Speech synthesis successful. Request ID: {synthesizer.get_last_request_id()}")
-            
-            return audio_data
-            
+
+            audio_url = getattr(result, "audio_url", None)
+            if not audio_url:
+                raise Exception(f"CosyVoice response missing audio_url: {result}")
+
+            logger.info(f"音频 URL: {audio_url}")
+            logger.info(f"音频 ID: {result.audio_id}")
+            logger.info(f"过期时间: {result.expires_at}")
+
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            file_name = f"{voice_id}_{timestamp}.{format}"
+            output_path = settings.clone_voices_dir / file_name
+
+            # 下载音频（dashscope 链接无需鉴权，禁用代理避免本地代理干扰）
+            download_resp = req.get(
+                audio_url,
+                timeout=60,
+                stream=True,
+                proxies={'http': None, 'https': None},
+            )
+            download_resp.raise_for_status()
+            with open(output_path, "wb") as f:
+                for chunk in download_resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+
+            logger.info(f"Cloned audio saved to: {output_path}")
+            return str(output_path)
+
         except Exception as e:
             error_msg = f"SpeechSynthesizer error: {e}"
             logger.error(error_msg)
@@ -960,65 +996,50 @@ class QwenTTSService:
 
         调用 qwen-voice-enrollment API 的 list action 获取所有已注册的声音
         """
-        # 构建请求体 - 使用 action: "list"
-        request_body = {
-            "model": "qwen-voice-enrollment",
-            "input": {
-                "action": "list",
-            },
-        }
 
-        url = f"{self.BASE_URL}{self.VOICE_ENROLLMENT_API_PATH}"
-        headers = self._get_headers()
+        load_dotenv()
+        # 1. 环境准备
+        # 推荐通过环境变量配置API Key
+        # 新加坡和北京地域的API Key不同。获取API Key：https://help.aliyun.com/zh/model-studio/get-api-key
+        # 若没有配置环境变量，请用百炼API Key将下行替换为：dashscope.api_key = "sk-xxx"
+
+        dashscope.api_key = os.getenv("QWEN_API_KEY")
+        dashscope.model = os.getenv("QWEN_MODEL")
+        if not dashscope.api_key:
+            raise ValueError("QWEN_API_KEY environment variable not set.")
 
         logger.info(f"Listing cloned voices from Qwen API")
 
-        try:
-            data = json.dumps(request_body).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-            context = ssl.create_default_context()
+        service = VoiceEnrollmentService();
+        voices = service.list_voices('',page_index=0,page_size=10)
 
-            with urllib.request.urlopen(req, context=context) as response:
-                result = json.loads(response.read().decode("utf-8"))
+        return voices
 
-            logger.info(f"List voices response: {result}")
+    async def delete_cloned_voice(self, voice_id: str) -> None:
+        """
+        删除已克隆的音色 - 调用 Qwen VoiceEnrollmentService.delete_voice
 
-            # 检查 API 错误
-            if "code" in result and result["code"] != "Success":
-                error_msg = f"List voices API error: {result.get('message', 'Unknown error')}"
-                logger.error(error_msg)
-                raise Exception(error_msg)
+        Args:
+            voice_id: 千问平台的音色 ID
+        """
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(
+            None,
+            self._delete_cloned_voice_sync,
+            voice_id,
+        )
 
-            # 解析返回的声音列表
-            if "output" in result and "voices" in result["output"]:
-                voices = result["output"]["voices"]
-                logger.info(f"Qwen voices response: {json.dumps(voices, ensure_ascii=False)}")
-                return [
-                    {
-                        "voice_id": v.get("voice_id"),
-                        "name": v.get("preferred_name", v.get("name")),
-                        "status": v.get("status", "UNKNOWN"),
-                        "role": v.get("gender", v.get("role", "custom")),
-                    }
-                    for v in voices
-                ]
+    def _delete_cloned_voice_sync(self, voice_id: str) -> None:
+        """同步执行删除音色"""
+        load_dotenv()
+        dashscope.api_key = os.getenv("QWEN_API_KEY")
+        if not dashscope.api_key:
+            raise ValueError("QWEN_API_KEY environment variable not set.")
 
-            # 如果没有 voices 字段，返回空列表
-            logger.warning(f"No voices in response: {result}")
-            return []
-
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            error_msg = f"List voices API HTTP error: {e.code} - {error_body}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-        except urllib.error.URLError as e:
-            logger.error(f"List voices API URL error: {e}")
-            raise Exception(f"List voices API request failed: {str(e)}")
-        except Exception as e:
-            logger.error(f"List voices failed: {str(e)}")
-            raise
-
+        logger.info(f"Deleting cloned voice from Qwen API: {voice_id}")
+        service = VoiceEnrollmentService()
+        service.delete_voice(voice_id=voice_id)
+        logger.info(f"Voice deleted from Qwen. Request ID: {service.get_last_request_id()}")
 
 # 全局服务实例
 _tts_service: Optional[QwenTTSService] = None
