@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { VoiceSelector } from '../components/TTSSynthesis/VoiceSelector';
 import { ParameterControls } from '../components/TTSSynthesis/ParameterControls';
 import { EdgeTTSParameterControls } from '../components/TTSSynthesis/EdgeTTSParameterControls';
@@ -8,7 +8,7 @@ import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
 import { ttsApi } from '../services/api';
 import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { useStorageMode } from '../hooks/useStorageMode';
-import type { TTSRequest, TTSResult, TTSResultRecord } from '../types';
+import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile } from '../types';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts';
@@ -39,38 +39,103 @@ export function TTSSynthesis() {
   const [result, setResult] = useState<TTSResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [history, setHistory] = useState<TTSResultRecord[]>([]);
+  const [voices, setVoices] = useState<VoiceProfile[]>([]);
+
+  // 建立 voice_id → description 映射，用于在历史记录中将 voice_name 替换为描述
+  const voiceDescriptionMap = useMemo(() => {
+    const map = new Map<string, string>();
+    voices.forEach(v => {
+      if (v.description && v.qwen_voice_id) {
+        map.set(v.qwen_voice_id, v.description);
+      }
+    });
+    return map;
+  }, [voices]);
+
+  // 加载声音列表，用于下拉选择和历史记录的描述匹配
+  useEffect(() => {
+    ttsApi.getVoices().then(setVoices).catch(() => {});
+  }, []);
+
+  // 用 ref 跟踪当前模式，避免异步竞态：初始 backend 模式的结果覆盖后续 frontend 模式的结果
+  const storageModeRef = useRef(storageMode);
+  storageModeRef.current = storageMode;
+
+  // 用 ref 确保 loadHistory 总能拿到最新的描述映射
+  const voiceDescriptionMapRef = useRef(voiceDescriptionMap);
+  voiceDescriptionMapRef.current = voiceDescriptionMap;
+
+  /** 用声音描述替换 voice_name（优先显示描述） */
+  const enrichVoiceName = useCallback((voiceId: string, voiceName: string) => {
+    return voiceDescriptionMapRef.current.get(voiceId) || voiceName;
+  }, []);
+
+  // 保存 blob URL 以便清理，避免内存泄漏
+  const blobUrlsRef = useRef<string[]>([]);
+
+  // 清理上次加载产生的 blob URL
+  const revokeBlobUrls = useCallback(() => {
+    blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    blobUrlsRef.current = [];
+  }, []);
 
   const loadHistory = useCallback(async () => {
+    const modeAtStart = storageModeRef.current;
     try {
-      if (storageMode === 'frontend') {
+      if (modeAtStart === 'frontend') {
         // 前端存储模式：从 IndexedDB 加载
         const localRecords = await getTTSHistory();
+        // 如果在此期间模式已切换，丢弃本次结果
+        if (storageModeRef.current !== modeAtStart) return;
+
+        // 清理旧的 blob URL，为每条记录生成新的
+        revokeBlobUrls();
+
         // 将 TTSLocalRecord 转换为 TTSResultRecord 格式
-        const mapped: TTSResultRecord[] = localRecords.map((r) => ({
-          id: r.id,
-          text: r.text,
-          voice_id: r.voice_id,
-          voice_name: r.voice_name,
-          audio_url: '', // 前端模式下无后端 URL
-          audio_format: r.audio_format,
-          speed: r.speed,
-          volume: r.volume,
-          pitch: r.pitch,
-          emotion: r.emotion,
-          language: r.language,
-          created_at: r.created_at,
-        }));
+        const mapped: TTSResultRecord[] = localRecords.map((r) => {
+          // 旧记录可能没有 audioBlob，此时不生成播放 URL
+          const blobUrl = r.audioBlob ? URL.createObjectURL(r.audioBlob) : '';
+          if (blobUrl) blobUrlsRef.current.push(blobUrl);
+          return {
+            id: r.id,
+            text: r.text,
+            voice_id: r.voice_id,
+            voice_name: enrichVoiceName(r.voice_id, r.voice_name),
+            audio_url: blobUrl,
+            audio_format: r.audio_format,
+            speed: r.speed,
+            volume: r.volume,
+            pitch: r.pitch,
+            emotion: r.emotion,
+            language: r.language,
+            created_at: r.created_at,
+          };
+        });
         setHistory(mapped);
       } else {
         const data = await ttsApi.getHistory();
-        setHistory(data);
+        // 如果在此期间模式已切换，丢弃本次结果
+        if (storageModeRef.current !== modeAtStart) return;
+        // 用声音描述替换 voice_name
+        const enriched = data.map(r => ({
+          ...r,
+          voice_name: enrichVoiceName(r.voice_id, r.voice_name),
+        }));
+        setHistory(enriched);
       }
     } catch (error) {
       console.error('Failed to load history:', error);
     }
-  }, [storageMode]);
+  }, []);
 
-  useEffect(() => { loadHistory(); }, [loadHistory]);
+  useEffect(() => { loadHistory(); }, [storageMode, loadHistory]);
+
+  // 组件卸载时清理 blob URL，避免内存泄漏
+  useEffect(() => {
+    return () => {
+      revokeBlobUrls();
+    };
+  }, [revokeBlobUrls]);
 
   const handleSynthesize = useCallback(async () => {
     if (!text.trim()) {

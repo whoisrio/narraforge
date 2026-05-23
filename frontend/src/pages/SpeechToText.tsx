@@ -32,6 +32,18 @@ export function SpeechToText() {
   const [history, setHistory] = useState<TranscriptionRecord[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 用 ref 跟踪当前模式，避免异步竞态
+  const storageModeRef = useRef(storageMode);
+  storageModeRef.current = storageMode;
+
+  // 保存 blob URL 以便清理，避免内存泄漏
+  const blobUrlsRef = useRef<string[]>([]);
+
+  const revokeBlobUrls = useCallback(() => {
+    blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    blobUrlsRef.current = [];
+  }, []);
+
   const handleFileSelect = useCallback((selectedFile: File) => {
     const ext = selectedFile.name.split('.').pop()?.toLowerCase();
     if (ext !== 'wav' && ext !== 'mp3') {
@@ -68,6 +80,7 @@ export function SpeechToText() {
         await saveSTTResult({
           id: res.file_id,
           original_filename: file.name,
+          audioBlob: file, // 保存原始音频文件，以便历史回放
           srtContent: res.content,
           language: res.language,
           language_probability: res.language_probability,
@@ -101,33 +114,56 @@ export function SpeechToText() {
   };
 
   const loadHistory = useCallback(async () => {
+    const modeAtStart = storageModeRef.current;
     try {
-      if (storageMode === 'frontend') {
+      if (modeAtStart === 'frontend') {
         // 前端存储模式：从 IndexedDB 加载，映射为 TranscriptionRecord 格式
         const localRecords = await getSTTHistory();
-        const mapped: TranscriptionRecord[] = localRecords.map((r) => ({
-          id: r.id,
-          original_filename: r.original_filename,
-          audio_url: '',
-          srt_download_url: '',
-          language: r.language,
-          language_probability: r.language_probability,
-          model_size: r.model_size,
-          created_at: r.created_at,
-        }));
+        if (storageModeRef.current !== modeAtStart) return;
+
+        // 清理旧的 blob URL，为每条记录生成新的
+        revokeBlobUrls();
+
+        const mapped: TranscriptionRecord[] = localRecords.map((r) => {
+          // 旧记录可能没有 audioBlob，此时不生成播放 URL
+          const audioUrl = r.audioBlob ? URL.createObjectURL(r.audioBlob) : '';
+          if (audioUrl) blobUrlsRef.current.push(audioUrl);
+
+          // 为 SRT 内容生成 blob URL，以便历史下载
+          const srtBlob = new Blob([r.srtContent || ''], { type: 'text/plain;charset=utf-8' });
+          const srtUrl = URL.createObjectURL(srtBlob);
+          blobUrlsRef.current.push(srtUrl);
+
+          return {
+            id: r.id,
+            original_filename: r.original_filename,
+            audio_url: audioUrl,
+            srt_download_url: srtUrl,
+            language: r.language,
+            language_probability: r.language_probability,
+            model_size: r.model_size,
+            created_at: r.created_at,
+          };
+        });
         setHistory(mapped);
       } else {
         const data = await speechToTextApi.getHistory();
+        if (storageModeRef.current !== modeAtStart) return;
         setHistory(data);
       }
     } catch (error) {
       console.error('Failed to load history:', error);
     }
-  }, [storageMode]);
+  }, []);
 
+  useEffect(() => { loadHistory(); }, [storageMode, loadHistory]);
+
+  // 组件卸载时清理 blob URL，避免内存泄漏
   useEffect(() => {
-    loadHistory();
-  }, [loadHistory]);
+    return () => {
+      revokeBlobUrls();
+    };
+  }, [revokeBlobUrls]);
 
   const handleDeleteRecord = useCallback(async (id: string) => {
     try {
@@ -151,9 +187,11 @@ export function SpeechToText() {
 
       // 前端存储模式：存入 IndexedDB
       if (storageMode === 'frontend') {
+        // multi 模式下无单个 File，保存第一个文件的 Blob 作为归档
         await saveSTTResult({
           id: res.file_id,
           original_filename: 'merged_audio.mp3',
+          audioBlob: files[0],
           srtContent: res.content,
           language: res.language,
           language_probability: res.language_probability,

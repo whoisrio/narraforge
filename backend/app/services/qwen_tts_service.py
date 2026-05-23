@@ -107,229 +107,229 @@ class QwenTTSService:
 
         raise Exception("TTS task timeout")
 
-    async def synthesize_speech(
-        self,
-        text: str,
-        voice_id: str = "xiaoyun",
-        speed: float = 1.0,
-        volume: float = 80,
-        pitch: float = 1.0,
-        format: str = "wav",
-        sample_rate: int = 16000,
-    ) -> bytes:
-        """
-        合成语音 (异步版本，使用线程执行同步请求)
+    # async def synthesize_speech(
+    #     self,
+    #     text: str,
+    #     voice_id: str = "xiaoyun",
+    #     speed: float = 1.0,
+    #     volume: float = 80,
+    #     pitch: float = 1.0,
+    #     format: str = "wav",
+    #     sample_rate: int = 16000,
+    # ) -> bytes:
+    #     """
+    #     合成语音 (异步版本，使用线程执行同步请求)
 
-        Args:
-            text: 要合成的文本
-            voice_id: 声音 ID (如: xiaoyun, xiaoyuan, ruoxi, etc.)
-            speed: 语速 (0.5-2.0)
-            volume: 音量 (0-100)
-            pitch: 音调比率 (0.5-2.0)
-            format: 音频格式 (wav, mp3)
-            sample_rate: 采样率
+    #     Args:
+    #         text: 要合成的文本
+    #         voice_id: 声音 ID (如: xiaoyun, xiaoyuan, ruoxi, etc.)
+    #         speed: 语速 (0.5-2.0)
+    #         volume: 音量 (0-100)
+    #         pitch: 音调比率 (0.5-2.0)
+    #         format: 音频格式 (wav, mp3)
+    #         sample_rate: 采样率
 
-        Returns:
-            音频数据 (bytes)
-        """
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            self._synthesize_speech_sync,
-            text, voice_id, speed, volume, pitch, format, sample_rate
-        )
+    #     Returns:
+    #         音频数据 (bytes)
+    #     """
+    #     loop = asyncio.get_event_loop()
+    #     return await loop.run_in_executor(
+    #         None,
+    #         self._synthesize_speech_sync,
+    #         text, voice_id, speed, volume, pitch, format, sample_rate
+    #     )
 
-    def _synthesize_speech_sync(
-        self,
-        text: str,
-        voice_id: str = "xiaoyun",
-        speed: float = 1.0,
-        volume: float = 80,
-        pitch: float = 1.0,
-        format: str = "wav",
-        sample_rate: int = 16000,
-    ) -> bytes:
-        """
-        同步执行 TTS 合成 - 根据模型系列自动选择调用方式
+    # def _synthesize_speech_sync(
+    #     self,
+    #     text: str,
+    #     voice_id: str = "xiaoyun",
+    #     speed: float = 1.0,
+    #     volume: float = 80,
+    #     pitch: float = 1.0,
+    #     format: str = "wav",
+    #     sample_rate: int = 16000,
+    # ) -> bytes:
+    #     """
+    #     同步执行 TTS 合成 - 根据模型系列自动选择调用方式
         
-        为什么需要判断模型系列：
-        - TTS 系列 (qwen-tts-*): 使用 HTTP API，通过 task_id 轮询获取结果
-        - CosyVoice 系列 (cosyvoice-*): 使用 WebSocket API，支持实时流式合成
-        """
-        if self.is_cosyvoice:
-            return self._synthesize_speech_cosyvoice(text, voice_id, speed, volume, pitch, format, sample_rate)
-        else:
-            return self._synthesize_speech_tts(text, voice_id, speed, volume, pitch, format, sample_rate)
+    #     为什么需要判断模型系列：
+    #     - TTS 系列 (qwen-tts-*): 使用 HTTP API，通过 task_id 轮询获取结果
+    #     - CosyVoice 系列 (cosyvoice-*): 使用 WebSocket API，支持实时流式合成
+    #     """
+    #     if self.is_cosyvoice:
+    #         return self._synthesize_speech_cosyvoice(text, voice_id, speed, volume, pitch, format, sample_rate)
+    #     else:
+    #         return self._synthesize_speech_tts(text, voice_id, speed, volume, pitch, format, sample_rate)
 
-    def _synthesize_speech_tts(
-        self,
-        text: str,
-        voice_id: str = "xiaoyun",
-        speed: float = 1.0,
-        volume: float = 80,
-        pitch: float = 1.0,
-        format: str = "wav",
-        sample_rate: int = 16000,
-    ) -> bytes:
-        """TTS 系列模型的语音合成方法"""
-        # 构建请求体
-        request_body = {
-            "model": "qwen-tts",
-            "input": {
-                "text": text,
-            },
-            "parameters": {
-                "voice": voice_id,
-                "speed_ratio": speed,
-                "volume": volume,
-                "pitch_ratio": pitch,
-                "format": format,
-                "sample_rate": sample_rate,
-            },
-        }
+    # def _synthesize_speech_tts(
+    #     self,
+    #     text: str,
+    #     voice_id: str = "xiaoyun",
+    #     speed: float = 1.0,
+    #     volume: float = 80,
+    #     pitch: float = 1.0,
+    #     format: str = "wav",
+    #     sample_rate: int = 16000,
+    # ) -> bytes:
+    #     """TTS 系列模型的语音合成方法"""
+    #     # 构建请求体
+    #     request_body = {
+    #         "model": "qwen-tts",
+    #         "input": {
+    #             "text": text,
+    #         },
+    #         "parameters": {
+    #             "voice": voice_id,
+    #             "speed_ratio": speed,
+    #             "volume": volume,
+    #             "pitch_ratio": pitch,
+    #             "format": format,
+    #             "sample_rate": sample_rate,
+    #         },
+    #     }
 
-        url = f"{self.BASE_URL}{self.TTS_API_PATH}"
-        headers = self._get_headers()
+    #     url = f"{self.BASE_URL}{self.TTS_API_PATH}"
+    #     headers = self._get_headers()
 
-        logger.info(f"Calling Qwen TTS API with voice_id: {voice_id}, text: {text[:50]}...")
+    #     logger.info(f"Calling Qwen TTS API with voice_id: {voice_id}, text: {text[:50]}...")
 
-        try:
-            # 提交 TTS 任务
-            data = json.dumps(request_body).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers=headers)
-            context = ssl.create_default_context()
+    #     try:
+    #         # 提交 TTS 任务
+    #         data = json.dumps(request_body).encode("utf-8")
+    #         req = urllib.request.Request(url, data=data, headers=headers)
+    #         context = ssl.create_default_context()
 
-            with urllib.request.urlopen(req, context=context) as response:
-                result = json.loads(response.read().decode("utf-8"))
+    #         with urllib.request.urlopen(req, context=context) as response:
+    #             result = json.loads(response.read().decode("utf-8"))
 
-            # 检查错误
-            if "code" in result and result["code"] != "Success":
-                error_msg = f"TTS API error: {result.get('message', 'Unknown error')}"
-                logger.error(error_msg)
-                raise Exception(error_msg)
+    #         # 检查错误
+    #         if "code" in result and result["code"] != "Success":
+    #             error_msg = f"TTS API error: {result.get('message', 'Unknown error')}"
+    #             logger.error(error_msg)
+    #             raise Exception(error_msg)
 
-            # 获取任务 ID
-            task_id = None
-            if "output" in result and "task_id" in result["output"]:
-                task_id = result["output"]["task_id"]
-            else:
-                # 有些 API 可能直接返回音频
-                if "output" in result and "audio" in result["output"]:
-                    return base64.b64decode(result["output"]["audio"]["data"])
-                logger.warning(f"Unexpected response: {result}")
-                raise Exception("No task_id in response")
+    #         # 获取任务 ID
+    #         task_id = None
+    #         if "output" in result and "task_id" in result["output"]:
+    #             task_id = result["output"]["task_id"]
+    #         else:
+    #             # 有些 API 可能直接返回音频
+    #             if "output" in result and "audio" in result["output"]:
+    #                 return base64.b64decode(result["output"]["audio"]["data"])
+    #             logger.warning(f"Unexpected response: {result}")
+    #             raise Exception("No task_id in response")
 
-            # 等待任务完成
-            completed_result = self._wait_for_task_completion(task_id)
+    #         # 等待任务完成
+    #         completed_result = self._wait_for_task_completion(task_id)
 
-            # 获取音频数据
-            if "output" in completed_result and "audio" in completed_result["output"]:
-                audio_data = completed_result["output"]["audio"]["data"]
-                return base64.b64decode(audio_data)
-            else:
-                logger.warning(f"Unexpected completed result: {completed_result}")
-                raise Exception("No audio in completed task")
+    #         # 获取音频数据
+    #         if "output" in completed_result and "audio" in completed_result["output"]:
+    #             audio_data = completed_result["output"]["audio"]["data"]
+    #             return base64.b64decode(audio_data)
+    #         else:
+    #             logger.warning(f"Unexpected completed result: {completed_result}")
+    #             raise Exception("No audio in completed task")
 
-        except urllib.error.HTTPError as e:
-            error_msg = f"TTS API HTTP error: {e.code} - {e.read().decode('utf-8')}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-        except urllib.error.URLError as e:
-            logger.error(f"TTS API URL error: {e}")
-            raise Exception(f"TTS API request failed: {str(e)}")
+    #     except urllib.error.HTTPError as e:
+    #         error_msg = f"TTS API HTTP error: {e.code} - {e.read().decode('utf-8')}"
+    #         logger.error(error_msg)
+    #         raise Exception(error_msg)
+    #     except urllib.error.URLError as e:
+    #         logger.error(f"TTS API URL error: {e}")
+    #         raise Exception(f"TTS API request failed: {str(e)}")
 
-    def _synthesize_speech_cosyvoice(
-        self,
-        text: str,
-        voice_id: str = "xiaoyun",
-        speed: float = 1.0,
-        volume: float = 80,
-        pitch: float = 1.0,
-        format: str = "wav",
-        sample_rate: int = 16000,
-    ) -> bytes:
-        """
-        CosyVoice 系列模型的语音合成方法
+    # def _synthesize_speech_cosyvoice(
+    #     self,
+    #     text: str,
+    #     voice_id: str = "xiaoyun",
+    #     speed: float = 1.0,
+    #     volume: float = 80,
+    #     pitch: float = 1.0,
+    #     format: str = "wav",
+    #     sample_rate: int = 16000,
+    # ) -> bytes:
+    #     """
+    #     CosyVoice 系列模型的语音合成方法
         
-        为什么使用不同的 API：
-        - CosyVoice 系列使用 WebSocket API 进行实时流式合成
-        - 支持声音复刻音色（voice_id 为注册后的声音 ID）
-        - 返回二进制音频数据而非 task_id
+    #     为什么使用不同的 API：
+    #     - CosyVoice 系列使用 WebSocket API 进行实时流式合成
+    #     - 支持声音复刻音色（voice_id 为注册后的声音 ID）
+    #     - 返回二进制音频数据而非 task_id
         
-        API 文档参考：docs/qwen 语音合成 api 说明.md - Cosyvoice 系列模型
-        """
-        # CosyVoice 使用不同的模型名称和参数结构
-        # 注意：voice_id 应该是注册后返回的声音 ID
-        request_body = {
-            "model": self.model,  # cosyvoice-v3.5-plus 或 cosyvoice-v3.5-flash
-            "input": {
-                "text": text,
-            },
-            "parameters": {
-                "voice": voice_id,  # 使用注册的声音 ID 或预设音色
-                "speed": speed,
-                "volume": volume,
-                "pitch": pitch,
-                "format": format,
-                "sample_rate": sample_rate,
-                "response_mode": "streaming",  # CosyVoice 支持流式返回
-            },
-        }
+    #     API 文档参考：docs/qwen 语音合成 api 说明.md - Cosyvoice 系列模型
+    #     """
+    #     # CosyVoice 使用不同的模型名称和参数结构
+    #     # 注意：voice_id 应该是注册后返回的声音 ID
+    #     request_body = {
+    #         "model": self.model,  # cosyvoice-v3.5-plus 或 cosyvoice-v3.5-flash
+    #         "input": {
+    #             "text": text,
+    #         },
+    #         "parameters": {
+    #             "voice": voice_id,  # 使用注册的声音 ID 或预设音色
+    #             "speed": speed,
+    #             "volume": volume,
+    #             "pitch": pitch,
+    #             "format": format,
+    #             "sample_rate": sample_rate,
+    #             "response_mode": "streaming",  # CosyVoice 支持流式返回
+    #         },
+    #     }
 
-        url = f"{self.BASE_URL}{self.TTS_API_PATH}"
-        headers = self._get_headers()
+    #     url = f"{self.BASE_URL}{self.TTS_API_PATH}"
+    #     headers = self._get_headers()
 
-        logger.info(f"Calling CosyVoice API with model: {self.model}, voice_id: {voice_id}, text: {text[:50]}...")
+    #     logger.info(f"Calling CosyVoice API with model: {self.model}, voice_id: {voice_id}, text: {text[:50]}...")
 
-        try:
-            data = json.dumps(request_body).encode("utf-8")
-            req = urllib.request.Request(url, data=data, headers=headers)
-            context = ssl.create_default_context()
+    #     try:
+    #         data = json.dumps(request_body).encode("utf-8")
+    #         req = urllib.request.Request(url, data=data, headers=headers)
+    #         context = ssl.create_default_context()
 
-            with urllib.request.urlopen(req, context=context) as response:
-                # CosyVoice 可能直接返回音频数据或 task_id
-                content_type = response.headers.get('Content-Type', '')
+    #         with urllib.request.urlopen(req, context=context) as response:
+    #             # CosyVoice 可能直接返回音频数据或 task_id
+    #             content_type = response.headers.get('Content-Type', '')
                 
-                if 'audio' in content_type:
-                    # 直接返回音频数据
-                    return response.read()
-                else:
-                    # 返回 JSON，可能包含 task_id
-                    result = json.loads(response.read().decode("utf-8"))
+    #             if 'audio' in content_type:
+    #                 # 直接返回音频数据
+    #                 return response.read()
+    #             else:
+    #                 # 返回 JSON，可能包含 task_id
+    #                 result = json.loads(response.read().decode("utf-8"))
                     
-                    # 检查错误
-                    if "code" in result and result["code"] != "Success":
-                        error_msg = f"CosyVoice API error: {result.get('message', 'Unknown error')}"
-                        logger.error(error_msg)
-                        raise Exception(error_msg)
+    #                 # 检查错误
+    #                 if "code" in result and result["code"] != "Success":
+    #                     error_msg = f"CosyVoice API error: {result.get('message', 'Unknown error')}"
+    #                     logger.error(error_msg)
+    #                     raise Exception(error_msg)
                     
-                    # 如果有 task_id，轮询获取音频
-                    if "output" in result and "task_id" in result["output"]:
-                        task_id = result["output"]["task_id"]
-                        logger.info(f"CosyVoice task submitted, task_id: {task_id}")
+    #                 # 如果有 task_id，轮询获取音频
+    #                 if "output" in result and "task_id" in result["output"]:
+    #                     task_id = result["output"]["task_id"]
+    #                     logger.info(f"CosyVoice task submitted, task_id: {task_id}")
                         
-                        completed_result = self._wait_for_task_completion(task_id)
+    #                     completed_result = self._wait_for_task_completion(task_id)
                         
-                        if "output" in completed_result and "audio" in completed_result["output"]:
-                            return base64.b64decode(completed_result["output"]["audio"]["data"])
-                        else:
-                            raise Exception("No audio in completed task")
-                    elif "output" in result and "audio" in result["output"]:
-                        # 直接返回 base64 音频
-                        return base64.b64decode(result["output"]["audio"]["data"])
-                    else:
-                        logger.warning(f"Unexpected CosyVoice response: {result}")
-                        raise Exception("Unexpected CosyVoice response format")
+    #                     if "output" in completed_result and "audio" in completed_result["output"]:
+    #                         return base64.b64decode(completed_result["output"]["audio"]["data"])
+    #                     else:
+    #                         raise Exception("No audio in completed task")
+    #                 elif "output" in result and "audio" in result["output"]:
+    #                     # 直接返回 base64 音频
+    #                     return base64.b64decode(result["output"]["audio"]["data"])
+    #                 else:
+    #                     logger.warning(f"Unexpected CosyVoice response: {result}")
+    #                     raise Exception("Unexpected CosyVoice response format")
 
-        except urllib.error.HTTPError as e:
-            error_msg = f"CosyVoice API HTTP error: {e.code} - {e.read().decode('utf-8')}"
-            logger.error(error_msg)
-            raise Exception(error_msg)
-        except urllib.error.URLError as e:
-            logger.error(f"CosyVoice API URL error: {e}")
-            raise Exception(f"CosyVoice API request failed: {str(e)}")
+    #     except urllib.error.HTTPError as e:
+    #         error_msg = f"CosyVoice API HTTP error: {e.code} - {e.read().decode('utf-8')}"
+    #         logger.error(error_msg)
+    #         raise Exception(error_msg)
+    #     except urllib.error.URLError as e:
+    #         logger.error(f"CosyVoice API URL error: {e}")
+    #         raise Exception(f"CosyVoice API request failed: {str(e)}")
 
-    async def clone_voice(
+    async def synthesize_speech(
         self,
         voice_id: str,
         text: str,
@@ -355,11 +355,11 @@ class QwenTTSService:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None,
-            self._clone_voice_sync,
+            self._synthesize_speech_sync,
             voice_id, text, instruction, speed, volume, pitch, format, sample_rate
         )
 
-    def _clone_voice_sync(
+    def _synthesize_speech_sync(
         self,
         voice_id: str,
         text: str,
@@ -378,11 +378,11 @@ class QwenTTSService:
         - CosyVoice 系列：使用 cosyvoice 模型和注册的 voice_id 进行合成
         """
         if self.is_cosyvoice:
-            return self._clone_voice_cosyvoice(voice_id, text, instruction, speed, volume, pitch, format, sample_rate)
+            return self._synthesize_voice_cosyvoice(voice_id, text, instruction, speed, volume, pitch, format, sample_rate)
         else:
-            return self._clone_voice_tts(voice_id, text, speed, volume, pitch, format, sample_rate)
+            return self._synthesize_voice_tts(voice_id, text, speed, volume, pitch, format, sample_rate)
 
-    def _clone_voice_tts(
+    def _synthesize_voice_tts(
         self,
         voice_id: str,
         text: str,
@@ -458,7 +458,7 @@ class QwenTTSService:
             logger.error(f"Voice Cloning API URL error: {e}")
             raise Exception(f"Voice Cloning API request failed: {str(e)}")
 
-    def _clone_voice_cosyvoice(
+    def _synthesize_voice_cosyvoice(
         self,
         voice_id: str,
         text: str,
@@ -496,8 +496,9 @@ class QwenTTSService:
                 "speed": speed,
                 "volume": volume,
                 "pitch": pitch,
-                "enable_markdown_filter": True, #默认启动markdown标记过滤
             }
+            #"enable_markdown_filter": True, #默认启动markdown标记过滤
+
             logger.info(f'ops is : {ops}')
             result = HttpSpeechSynthesizer.call(
                 model=self.model,

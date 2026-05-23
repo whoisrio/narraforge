@@ -38,7 +38,7 @@ export function TranscriptionHistory({ records, onDelete }: TranscriptionHistory
               <a
                 className={styles.downloadButton}
                 href={record.srt_download_url}
-                download
+                download={`${record.original_filename.replace(/\.[^.]+$/, '')}.srt`}
               >
                 SRT
               </a>

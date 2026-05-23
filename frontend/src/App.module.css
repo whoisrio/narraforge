@@ -27,6 +27,34 @@
   letter-spacing: -0.01em;
 }
 
+/* 返回首页按钮 */
+.backButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  padding: 4px 0;
+  transition: color var(--transition-fast);
+}
+
+.backButton:hover {
+  color: #ffffff;
+}
+
+.backButton svg {
+  flex-shrink: 0;
+}
+
+.logoText {
+  font-weight: 600;
+  font-size: var(--font-size-base);
+  letter-spacing: -0.01em;
+}
+
 /* Tab Navigation */
 .tabs {
   display: flex;

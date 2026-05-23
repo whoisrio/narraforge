@@ -95,7 +95,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         logger.info(f"Synthesizing with cloned voice: {request.voice_id}")
         # clone_voice 现在直接下载并落盘到 settings.clone_voices_dir，
         # 返回文件绝对路径，文件名形如 {voice_id}_{YYYYMMDDHHMMSS}.{ext}
-        audio_path = await tts_service.clone_voice(
+        audio_path = await tts_service.synthesize_speech(
             voice_id=request.voice_id,
             text=request.text,
             speed=request.speed,
@@ -114,7 +114,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
             .filter(VoiceProfile.qwen_voice_id == request.voice_id)
             .first()
         )
-        voice_name = voice.name if voice else request.voice_id
+        voice_name = voice.description or voice.name if voice else request.voice_id
 
         if is_frontend_storage(db):
             # 前端存储模式：读取音频返回 base64，不落盘到后端持久目录
@@ -349,6 +349,7 @@ async def list_available_voices(db: Session = Depends(get_db)):
         {
             "id": str(v.id),
             "name": v.name,
+            "description": v.description,
             "audio_url": v.external_audio_url or v.audio_path,
             "qwen_voice_id": v.qwen_voice_id,
             "is_cloned": v.is_cloned,

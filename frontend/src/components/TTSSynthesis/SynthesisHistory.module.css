@@ -52,7 +52,7 @@
 
 .cardHeader {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--spacing-sm);
   margin-bottom: 6px;
 }
@@ -67,8 +67,31 @@
   white-space: nowrap;
 }
 
+/* 展开时允许换行，完整显示文字 */
+.textPreviewExpanded {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
 .textPreview:hover {
   color: var(--color-primary);
+}
+
+.expandButton {
+  padding: 1px 6px;
+  background: none;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.expandButton:hover {
+  background: var(--color-primary);
+  color: white;
 }
 
 .voiceBadge {

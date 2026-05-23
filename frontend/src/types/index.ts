@@ -105,6 +105,7 @@ export interface TTSLocalRecord {
 export interface STTLocalRecord {
   id: string;
   original_filename: string;
+  audioBlob: Blob;
   srtContent: string;
   language: string;
   language_probability: number;
