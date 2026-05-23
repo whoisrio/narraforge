@@ -1,0 +1,151 @@
+.container {
+  margin-top: var(--spacing-lg);
+}
+
+.toggle {
+  width: 100%;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  text-align: left;
+}
+
+.toggle:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.panel {
+  margin-top: var(--spacing-md);
+  display: flex;
+  gap: var(--spacing-lg);
+}
+
+.selectSection,
+.orderSection {
+  flex: 1;
+  min-width: 0;
+}
+
+.selectSection h3,
+.orderSection h3 {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: var(--spacing-xs);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 6px 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+}
+
+.item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.emptyHint {
+  padding: 12px;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  text-align: center;
+}
+
+.orderList {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.orderItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-primary);
+  margin-bottom: 2px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.orderIndex {
+  color: var(--color-primary);
+  font-weight: 600;
+  min-width: 20px;
+}
+
+.orderLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orderActions {
+  display: flex;
+  gap: 2px;
+}
+
+.orderActions button {
+  background: none;
+  border: none;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+
+.orderActions button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary);
+}
+
+.orderActions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.mergeButton {
+  margin-top: var(--spacing-md);
+  width: 100%;
+  padding: 10px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
+.mergeButton:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.mergeButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

@@ -1,42 +1,58 @@
 .container {
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-lg);
-  border: 1px solid var(--color-border-light);
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 12px;
 }
 
-.container h3 {
-  margin-bottom: var(--spacing-md);
-  font-size: var(--font-size-lg);
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: #fafafa;
+  cursor: pointer;
   font-weight: 600;
+  font-size: 14px;
+}
+
+.header:hover {
+  background: #f0f0f0;
+}
+
+.arrow {
+  color: #007aff;
+  font-size: 13px;
 }
 
 .controls {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--spacing-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid #e8e8e8;
 }
 
 .control {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
+  align-items: center;
+  gap: 10px;
 }
 
 .control label {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  font-weight: 600;
-}
-
-.control select,
-.control input[type="range"] {
-  width: 100%;
+  min-width: 40px;
+  font-size: 13px;
 }
 
 .control select {
-  padding: var(--spacing-sm);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  flex: 1;
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.control input[type="range"] {
+  flex: 1;
 }

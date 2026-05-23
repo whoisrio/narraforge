@@ -26,6 +26,18 @@ if 'voice_profiles' in tables:
         print("[SUCCESS] external_audio_url column added!")
     else:
         print("[INFO] external_audio_url column already exists")
+    
+    # 检查 description 列是否存在
+    if 'description' not in columns:
+        print("Adding description column...")
+        with engine.connect() as conn:
+            conn.execute(text(
+                "ALTER TABLE voice_profiles ADD COLUMN description TEXT"
+            ))
+            conn.commit()
+        print("[SUCCESS] description column added!")
+    else:
+        print("[INFO] description column already exists")
 else:
     print("[WARNING] voice_profiles table not found. Creating all tables...")
     Base.metadata.create_all(bind=engine)

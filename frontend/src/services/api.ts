@@ -25,6 +25,14 @@ export const voiceApi = {
     return all.filter(v => v.is_cloned && v.qwen_voice_id);
   },
 
+  createClone: async (voiceId: string, name?: string): Promise<VoiceProfile> => {
+    const { data } = await api.post<VoiceProfile>('/clone/create-clone', {
+      voice_id: voiceId,
+      name,
+    });
+    return data;
+  },
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/clone/${id}`);
   },
@@ -33,6 +41,11 @@ export const voiceApi = {
   syncFromQwen: async () => {
     const { data } = await api.post('/clone/sync-from-qwen');
     return data;
+  },
+
+  // 更新声音描述
+  updateDescription: async (id: string, description: string): Promise<void> => {
+    await api.patch(`/clone/${id}/description`, { description });
   },
 };
 
@@ -104,6 +117,16 @@ export const configApi = {
   setDefault: async (id: string): Promise<void> => {
     await api.post(`/config/models/${id}/set-default`);
   },
+
+  getStorageMode: async (): Promise<{ storage_mode: string }> => {
+    const { data } = await api.get<{ storage_mode: string }>('/config/storage-mode');
+    return data;
+  },
+
+  setStorageMode: async (mode: string): Promise<{ storage_mode: string }> => {
+    const { data } = await api.put<{ storage_mode: string }>('/config/storage-mode', { storage_mode: mode });
+    return data;
+  },
 };
 
 export interface TranscribeResult {
@@ -147,6 +170,20 @@ export const speechToTextApi = {
 
   deleteRecord: async (id: string): Promise<void> => {
     await api.delete(`/speech-to-text/history/${id}`);
+  },
+
+  /** 多音频合并转写：按顺序上传多个音频文件，后端用 ffmpeg 合并后统一识别 */
+  multiTranscribe: async (
+    files: File[],
+    modelSize: string = 'large-v3',
+    beamSize: number = 5,
+  ): Promise<TranscribeResult> => {
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+    formData.append('model_size', modelSize);
+    formData.append('beam_size', String(beamSize));
+    const { data } = await api.post<TranscribeResult>('/speech-to-text/multi-transcribe', formData);
+    return data;
   },
 };
 

@@ -6,10 +6,9 @@ import styles from './VoiceSelector.module.css';
 interface VoiceSelectorProps {
   selectedVoiceId: string;
   onVoiceSelect: (voiceId: string) => void;
-  onDelete?: (voiceId: string) => void;
 }
 
-export function VoiceSelector({ selectedVoiceId, onVoiceSelect, onDelete }: VoiceSelectorProps) {
+export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorProps) {
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -19,6 +18,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect, onDelete }: Voic
       try {
         const data = await ttsApi.getVoices();
         setVoices(data);
+        // 未选择声音时，自动选中第一个
         if (data.length > 0 && !selectedVoiceId) {
           onVoiceSelect(data[0].qwen_voice_id || data[0].id);
         }
@@ -46,45 +46,26 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect, onDelete }: Voic
 
   return (
     <div className={styles.container}>
-      <h3>选择声音</h3>
-      <div className={styles.voiceList}>
+      <label htmlFor="voice-select" className={styles.label}>选择声音</label>
+      <select
+        id="voice-select"
+        className={styles.select}
+        value={selectedVoiceId || ''}
+        onChange={(e) => onVoiceSelect(e.target.value)}
+        data-testid="voice-select"
+      >
+        {!selectedVoiceId && (
+          <option value="" disabled>请选择声音...</option>
+        )}
         {voices.map(voice => {
           const voiceKey = voice.qwen_voice_id || voice.id;
           return (
-            <button
-              key={voice.id}
-              data-testid={`voice-${voice.id}`}
-              className={`${styles.voice} ${selectedVoiceId === voiceKey ? styles.active : ''}`}
-              onClick={() => onVoiceSelect(voiceKey)}
-            >
-              <span className={styles.name}>{voice.name}</span>
-              <span className={styles.tag}>克隆</span>
-              {onDelete && (
-                <span
-                  className={styles.deleteBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('确定删除这个声音？')) onDelete(voice.id);
-                  }}
-                >
-                  ×
-                </span>
-              )}
-              {onDelete && (
-                <span
-                  className={styles.deleteBtn}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (confirm('确定删除这个声音？')) onDelete(voice.profileId);
-                  }}
-                >
-                  ×
-                </span>
-              )}
-            </button>
+            <option key={voice.id} value={voiceKey}>
+              {voice.description || voice.name} · 克隆
+            </option>
           );
         })}
-      </div>
+      </select>
     </div>
   );
 }

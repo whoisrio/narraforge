@@ -8,7 +8,7 @@ describe('ParameterControls', () => {
     language: 'Chinese',
     speed: 1.0,
     volume: 80,
-    pitch: 0,
+    pitch: 1.0,
   };
 
   it('should render all parameter controls', () => {

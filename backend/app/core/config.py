@@ -91,6 +91,9 @@ class Settings(BaseSettings):
             key, _, value = line.partition("=")
             key = key.strip()
             value = value.strip().strip('"').strip("'")
+            # 去除行内注释（# 及其后的内容），避免注释文本被误当作值的一部分
+            if "#" in value:
+                value = value.split("#", 1)[0].strip()
             if _ENV_VAR_PATTERN.search(value):
                 value = _resolve_env_refs(value)
             result[key.lower()] = value

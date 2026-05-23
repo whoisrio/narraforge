@@ -34,7 +34,8 @@ describe('VoiceClone Page', () => {
       list: vi.fn().mockResolvedValue(mockVoices),
       delete: vi.fn().mockResolvedValue(undefined),
       syncFromQwen: vi.fn().mockResolvedValue({}),
-      synthesize: vi.fn().mockResolvedValue({}),
+      updateDescription: vi.fn().mockResolvedValue(undefined),
+      createClone: vi.fn().mockResolvedValue({}),
     });
 
     render(<VoiceClone />);
@@ -51,7 +52,8 @@ describe('VoiceClone Page', () => {
       list: vi.fn().mockResolvedValue([]),
       delete: vi.fn().mockResolvedValue(undefined),
       syncFromQwen: vi.fn().mockResolvedValue({}),
-      synthesize: vi.fn().mockResolvedValue({}),
+      updateDescription: vi.fn().mockResolvedValue(undefined),
+      createClone: vi.fn().mockResolvedValue({}),
     });
 
     render(<VoiceClone />);

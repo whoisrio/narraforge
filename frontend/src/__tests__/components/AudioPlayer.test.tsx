@@ -11,7 +11,7 @@ describe('AudioPlayer', () => {
     params: {
       speed: 1.0,
       volume: 80,
-      pitch: 0,
+      pitch: 1.0,
       emotion: 'neutral',
     },
   };

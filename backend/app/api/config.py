@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 from app.core.database import get_db
+from app.core.system_config_service import get_storage_mode, set_storage_mode, STORAGE_MODE_BACKEND, STORAGE_MODE_FRONTEND
 from app.models import TTSConfig, ModelProvider, Emotion
 
 router = APIRouter()
@@ -13,9 +14,9 @@ class ConfigCreate(BaseModel):
     name: str
     provider: str = "qwen"
     model_name: str = "qwen-tts"
-    speed: float = 1.0
+    speed: float = Field(default=1.0, ge=0.5, le=2.0, description="语速比率，0.5-2.0")
     volume: float = 80
-    pitch: int = 0
+    pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="音调比率，0.5-2.0")
     emotion: str = "neutral"
 
 
@@ -23,9 +24,9 @@ class ConfigUpdate(BaseModel):
     name: Optional[str] = None
     provider: Optional[str] = None
     model_name: Optional[str] = None
-    speed: Optional[float] = None
+    speed: Optional[float] = Field(default=None, ge=0.5, le=2.0, description="语速比率，0.5-2.0")
     volume: Optional[float] = None
-    pitch: Optional[int] = None
+    pitch: Optional[float] = Field(default=None, ge=0.5, le=2.0, description="音调比率，0.5-2.0")
     emotion: Optional[str] = None
 
 
@@ -142,3 +143,31 @@ def set_default_config(config_id: str, db: Session = Depends(get_db)):
     db.commit()
 
     return {"message": "Default config set"}
+
+
+# ---------------------------------------------------------------------------
+# 存储模式配置
+# ---------------------------------------------------------------------------
+
+class StorageModeRequest(BaseModel):
+    storage_mode: str  # "backend" | "frontend"
+
+
+@router.get("/storage-mode")
+def get_storage_mode_endpoint(db: Session = Depends(get_db)):
+    """获取当前存储模式"""
+    mode = get_storage_mode(db)
+    return {"storage_mode": mode}
+
+
+@router.put("/storage-mode")
+def set_storage_mode_endpoint(data: StorageModeRequest, db: Session = Depends(get_db)):
+    """设置存储模式"""
+    if data.storage_mode not in (STORAGE_MODE_BACKEND, STORAGE_MODE_FRONTEND):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid storage_mode: {data.storage_mode}. Must be 'backend' or 'frontend'"
+        )
+    set_storage_mode(db, data.storage_mode)
+    db.commit()
+    return {"storage_mode": data.storage_mode}

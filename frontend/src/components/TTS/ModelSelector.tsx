@@ -17,7 +17,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
     model_name: 'qwen-tts',
     speed: 1.0,
     volume: 80,
-    pitch: 0,
+    pitch: 1.0,
     emotion: 'neutral',
   });
 
@@ -39,7 +39,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
   const handleCreate = async () => {
     try {
       await configApi.createModel(newConfig);
-      setNewConfig({ name: '', provider: 'qwen', model_name: 'qwen-tts', speed: 1.0, volume: 80, pitch: 0, emotion: 'neutral' });
+      setNewConfig({ name: '', provider: 'qwen', model_name: 'qwen-tts', speed: 1.0, volume: 80, pitch: 1.0, emotion: 'neutral' });
       setShowForm(false);
       fetchConfigs();
     } catch (err) {

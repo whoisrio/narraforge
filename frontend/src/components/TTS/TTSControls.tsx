@@ -17,7 +17,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
   const [text, setText] = useState('');
   const [speed, setSpeed] = useState(1.0);
   const [volume, setVolume] = useState(80);
-  const [pitch, setPitch] = useState(0);
+  const [pitch, setPitch] = useState(1.0);
   const [emotion, setEmotion] = useState('neutral');
   const [synthesizing, setSynthesizing] = useState(false);
   const [result, setResult] = useState<TTSResult | null>(null);
@@ -97,7 +97,8 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
 
   const clonedVoiceOptions = voices
     .filter(v => v.is_cloned && v.qwen_voice_id)
-    .map(voice => ({ value: voice.qwen_voice_id!, label: `${voice.name} (Cloned)` }));
+    // 有描述时显示描述，无描述时回退到 voice_id（用于区分不同声音）
+    .map(voice => ({ value: voice.qwen_voice_id!, label: voice.description || voice.qwen_voice_id! }));
 
   const currentVoiceOptions = useClonedVoice ? clonedVoiceOptions : standardVoices;
 
@@ -201,9 +202,9 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
           label="Pitch"
           value={pitch}
           onChange={(val) => setPitch(val as number)}
-          min={-12}
-          max={12}
-          step={1}
+          min={0.5}
+          max={2}
+          step={0.1}
         />
 
         <Select

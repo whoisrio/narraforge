@@ -25,4 +25,7 @@ class VoiceProfile(Base):
     is_cloned = Column(Boolean, default=False)  # 是否已完成克隆
     cloned_at = Column(DateTime, nullable=True)  # 克隆完成时间
 
+    # 用户自定义的声音描述，用于替代无意义的 voice_id 显示
+    description = Column(String, nullable=True)
+
     created_at = Column(DateTime, default=datetime.utcnow)

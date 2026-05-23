@@ -1,9 +1,9 @@
 import { useState, useRef } from 'react';
-import { voiceApi } from '../../services/api';
 import { Button, Card } from '../ui';
 
 interface AudioRecorderProps {
-  onRecordComplete?: () => void;
+  /** 录制完成后回调，传递构建好的 File 对象 */
+  onRecordComplete?: (file: File) => void;
 }
 
 export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
@@ -24,7 +24,7 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
         }
       };
 
-      mediaRecorder.current.onstop = async () => {
+      mediaRecorder.current.onstop = () => {
         const blob = new Blob(chunks.current, { type: 'audio/webm' });
         setAudioBlob(blob);
         stream.getTracks().forEach(track => track.stop());
@@ -43,18 +43,12 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
     setRecording(false);
   };
 
-  const uploadRecording = async () => {
+  /** 确认录制，构建 File 对象交给父组件处理 */
+  const confirmRecording = () => {
     if (!audioBlob) return;
-
     const file = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
-    try {
-      await voiceApi.upload(file);
-      setAudioBlob(null);
-      onRecordComplete?.();
-    } catch (err) {
-      console.error('Upload failed:', err);
-      alert('Upload failed');
-    }
+    onRecordComplete?.(file);
+    setAudioBlob(null);
   };
 
   const recordingIndicatorStyle = {
@@ -76,11 +70,11 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
 
   return (
     <Card>
-      <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>🎙️ Real-time Recording</h3>
+      <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>🎙️ 实时录制</h3>
 
       {!recording && !audioBlob && (
         <Button variant="danger" fullWidth onClick={startRecording}>
-          Start Recording
+          开始录制
         </Button>
       )}
 
@@ -88,10 +82,10 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
         <div>
           <div style={recordingIndicatorStyle}>
             <span style={pulsingDotStyle} />
-            Recording...
+            录制中...
           </div>
           <Button variant="secondary" fullWidth onClick={stopRecording}>
-            Stop
+            停止
           </Button>
         </div>
       )}
@@ -100,11 +94,11 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
           <audio src={URL.createObjectURL(audioBlob)} controls style={{ width: '100%', margin: 0 }} />
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-            <Button variant="primary" onClick={uploadRecording}>
-              Upload
+            <Button variant="primary" onClick={confirmRecording}>
+              确认
             </Button>
             <Button variant="ghost" onClick={() => setAudioBlob(null)}>
-              Discard
+              丢弃
             </Button>
           </div>
         </div>

@@ -1,10 +1,9 @@
 .container {
-  max-width: 1400px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .header {
-  margin-bottom: var(--spacing-2xl);
+  margin-bottom: var(--spacing-xl);
   text-align: center;
 }
 
@@ -17,12 +16,50 @@
 
 .header p {
   color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* 分段控制器 - iOS风格 */
+.engineSwitch {
+  display: inline-flex;
+  background: #f0f0f0;
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: var(--spacing-xl);
+  position: relative;
+}
+
+.engineOption {
+  position: relative;
+  padding: 8px 24px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #888;
+  cursor: pointer;
+  transition: color 0.25s, background 0.25s;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.engineOption:hover {
+  color: #555;
+}
+
+.engineOption.active {
+  background: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .content {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 左 75% : 右 25%，百分比不受子内容 min-width 影响 */
+  grid-template-columns: 75% 25%;
   gap: var(--spacing-2xl);
+  align-items: start;
 }
 
 .leftColumn {
@@ -34,7 +71,7 @@
 .rightColumn {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
 }
 
 .textSection {
@@ -45,12 +82,14 @@
 
 .textarea {
   width: 100%;
+  min-height: 200px;
   padding: var(--spacing-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   font-size: var(--font-size-base);
   resize: vertical;
   font-family: inherit;
+  line-height: 1.6;
 }
 
 .textarea:focus {
@@ -113,36 +152,9 @@
   .content {
     grid-template-columns: 1fr;
   }
-}
 
-.engineTabs {
-  display: flex;
-  gap: 0;
-  background: #f5f5f5;
-  border-radius: 0.5rem;
-  padding: 0.25rem;
-  margin-bottom: 1.5rem;
-}
-
-.engineTab {
-  flex: 1;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 0.375rem;
-  background: transparent;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  color: #666;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.engineTab:hover {
-  color: #333;
-}
-
-.engineTab.active {
-  background: white;
-  color: #1890ff;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  .engineOption {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
 }

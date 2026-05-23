@@ -19,7 +19,7 @@ class TTSResultRecord(Base):
     audio_format = Column(String, default="wav")
     speed = Column(Float, default=1.0)
     volume = Column(Float, default=80)
-    pitch = Column(Integer, default=0)
+    pitch = Column(Float, default=1.0)  # 音调比率 0.5-2.0
     emotion = Column(String, default="neutral")
     language = Column(String, default="Chinese")
     created_at = Column(DateTime, default=datetime.utcnow)

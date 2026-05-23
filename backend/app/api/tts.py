@@ -1,16 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 import uuid
 import os
+import base64
 import logging
 from pathlib import Path
 import aiofiles
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.system_config_service import is_frontend_storage
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_result import TTSResultRecord
 from app.services.qwen_tts_service import get_tts_service, QwenTTSService
@@ -26,9 +28,9 @@ class TTSRequest(BaseModel):
     # CosyVoice params
     voice_id: str = ""
     instruction: str = "字正腔圆，播音腔"
-    speed: float = 1.0
+    speed: float = Field(default=1.0, ge=0.5, le=2.0, description="语速比率，0.5-2.0")
     volume: float = 80
-    pitch: int = 0
+    pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="音调比率，0.5-2.0")
     emotion: str = "neutral"
     language: str = "Chinese"
     format: str = "wav"
@@ -47,9 +49,9 @@ class SegmentRequest(BaseModel):
 class BatchTTSRequest(BaseModel):
     segments: List[SegmentRequest]
     voice_id: str
-    speed: float = 1.0
+    speed: float = Field(default=1.0, ge=0.5, le=2.0, description="语速比率，0.5-2.0")
     volume: float = 80
-    pitch: int = 0
+    pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="音调比率，0.5-2.0")
     emotion: str = "neutral"
 
 
@@ -80,7 +82,7 @@ async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
 
 
 async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_db)):
-    """CosyVoice 引擎合成"""
+    """CosyVoice 引擎合成 - 根据存储模式决定是否持久化到后端"""
     audio_fmt = request.format or "mp3"
 
     logger.info(f'request is: {request}')
@@ -114,35 +116,60 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         )
         voice_name = voice.name if voice else request.voice_id
 
-        # 保存合成记录
-        record = TTSResultRecord(
-            id=audio_id,
-            text=request.text,
-            voice_id=request.voice_id,
-            voice_name=voice_name,
-            audio_path=audio_path,
-            audio_format=audio_fmt,
-            speed=request.speed,
-            volume=request.volume,
-            pitch=request.pitch,
-            emotion=request.emotion,
-            language=request.language,
-        )
-        db.add(record)
-        db.commit()
-
-        return {
-            "audio_id": audio_id,
-            "audio_url": f"/api/tts/audio/{audio_id}",
-            "text": request.text,
-            "params": {
-                "speed": request.speed,
-                "volume": request.volume,
-                "pitch": request.pitch,
-                "emotion": request.emotion,
+        if is_frontend_storage(db):
+            # 前端存储模式：读取音频返回 base64，不落盘到后端持久目录
+            with open(audio_path, "rb") as f:
+                audio_base64 = base64.b64encode(f.read()).decode("utf-8")
+            # 清理 clone_voices_dir 中的临时落盘文件
+            try:
+                os.remove(audio_path)
+            except OSError:
+                pass
+            return {
+                "audio_id": audio_id,
+                "audio_base64": audio_base64,
+                "audio_format": audio_fmt,
+                "text": request.text,
                 "voice_id": request.voice_id,
+                "voice_name": voice_name,
+                "params": {
+                    "speed": request.speed,
+                    "volume": request.volume,
+                    "pitch": request.pitch,
+                    "emotion": request.emotion,
+                    "voice_id": request.voice_id,
+                }
             }
-        }
+        else:
+            # 后端存储模式：保持现状，持久化记录
+            record = TTSResultRecord(
+                id=audio_id,
+                text=request.text,
+                voice_id=request.voice_id,
+                voice_name=voice_name,
+                audio_path=audio_path,
+                audio_format=audio_fmt,
+                speed=request.speed,
+                volume=request.volume,
+                pitch=request.pitch,
+                emotion=request.emotion,
+                language=request.language,
+            )
+            db.add(record)
+            db.commit()
+
+            return {
+                "audio_id": audio_id,
+                "audio_url": f"/api/tts/audio/{audio_id}",
+                "text": request.text,
+                "params": {
+                    "speed": request.speed,
+                    "volume": request.volume,
+                    "pitch": request.pitch,
+                    "emotion": request.emotion,
+                    "voice_id": request.voice_id,
+                }
+            }
 
     except Exception as e:
         logger.error(f"TTS synthesis failed: {str(e)}")
@@ -172,33 +199,55 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
         async with aiofiles.open(audio_path, "wb") as f:
             await f.write(audio_data)
 
-        record = TTSResultRecord(
-            id=audio_id,
-            text=request.text,
-            voice_id=request.edge_voice,
-            voice_name=request.edge_voice,
-            audio_path=str(audio_path),
-            audio_format="mp3",
-            speed=1.0,
-            volume=80,
-            pitch=0,
-            emotion="neutral",
-            language="Chinese",
-        )
-        db.add(record)
-        db.commit()
-
-        return {
-            "audio_id": audio_id,
-            "audio_url": f"/api/tts/audio/{audio_id}",
-            "text": request.text,
-            "params": {
-                "engine": "edge_tts",
-                "edge_voice": request.edge_voice,
-                "edge_rate": request.edge_rate,
-                "edge_volume": request.edge_volume,
+        if is_frontend_storage(db):
+            # 前端存储模式：返回 base64，不持久化
+            audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+            try:
+                os.remove(str(audio_path))
+            except OSError:
+                pass
+            return {
+                "audio_id": audio_id,
+                "audio_base64": audio_base64,
+                "audio_format": "mp3",
+                "text": request.text,
+                "voice_id": request.edge_voice,
+                "voice_name": request.edge_voice,
+                "params": {
+                    "engine": "edge_tts",
+                    "edge_voice": request.edge_voice,
+                    "edge_rate": request.edge_rate,
+                    "edge_volume": request.edge_volume,
+                }
             }
-        }
+        else:
+            record = TTSResultRecord(
+                id=audio_id,
+                text=request.text,
+                voice_id=request.edge_voice,
+                voice_name=request.edge_voice,
+                audio_path=str(audio_path),
+                audio_format="mp3",
+                speed=1.0,
+                volume=80,
+                pitch=1.0,
+                emotion="neutral",
+                language="Chinese",
+            )
+            db.add(record)
+            db.commit()
+
+            return {
+                "audio_id": audio_id,
+                "audio_url": f"/api/tts/audio/{audio_id}",
+                "text": request.text,
+                "params": {
+                    "engine": "edge_tts",
+                    "edge_voice": request.edge_voice,
+                    "edge_rate": request.edge_rate,
+                    "edge_volume": request.edge_volume,
+                }
+            }
 
     except Exception as e:
         logger.error(f"Edge-TTS synthesis failed: {str(e)}")

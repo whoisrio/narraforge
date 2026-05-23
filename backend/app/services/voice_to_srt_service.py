@@ -1,9 +1,40 @@
+import logging
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from faster_whisper import WhisperModel
+from dotenv import load_dotenv
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+# ---------------------------------------------------------------------------
+# 日志配置：同时输出到控制台和文件，确保模型下载进度在两种输出中可见
+# ---------------------------------------------------------------------------
+_logger = logging.getLogger('voice_to_srt')
+_logger.setLevel(logging.INFO)
+
+_console_handler = logging.StreamHandler(sys.stdout)
+_console_handler.setFormatter(logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'
+))
+_logger.addHandler(_console_handler)
+
+_log_dir = Path(__file__).parent.parent.parent / 'logs'
+_log_dir.mkdir(parents=True, exist_ok=True)
+_file_handler = logging.FileHandler(_log_dir / 'voice_to_srt.log', encoding='utf-8')
+_file_handler.setFormatter(logging.Formatter(
+    '%(asctime)s [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S'
+))
+_logger.addHandler(_file_handler)
+
+# 将 huggingface_hub 内部的下载日志也转发到我们的输出，以便看到传输详情
+_hf_logger = logging.getLogger('huggingface_hub')
+_hf_logger.setLevel(logging.INFO)
+_hf_logger.addHandler(_console_handler)
+_hf_logger.addHandler(_file_handler)
 
 
 @dataclass
@@ -41,6 +72,62 @@ class VoiceToSrt:
         ms = int(round((seconds - int(seconds)) * 1000))
         return f'{h:02d}:{m:02d}:{s:02d},{ms:03d}'
 
+    # ------------------------------------------------------------------
+    # faster_whisper 内置的模型名称到 HuggingFace repo_id 的映射
+    # ------------------------------------------------------------------
+    _MODEL_REPOS: dict[str, str] = {
+        'tiny.en':              'Systran/faster-whisper-tiny.en',
+        'tiny':                 'Systran/faster-whisper-tiny',
+        'base.en':              'Systran/faster-whisper-base.en',
+        'base':                 'Systran/faster-whisper-base',
+        'small.en':             'Systran/faster-whisper-small.en',
+        'small':                'Systran/faster-whisper-small',
+        'medium.en':            'Systran/faster-whisper-medium.en',
+        'medium':               'Systran/faster-whisper-medium',
+        'large-v1':             'Systran/faster-whisper-large-v1',
+        'large-v2':             'Systran/faster-whisper-large-v2',
+        'large-v3':             'Systran/faster-whisper-large-v3',
+        'large':                'Systran/faster-whisper-large-v3',
+        'distil-large-v2':      'Systran/faster-distil-whisper-large-v2',
+        'distil-large-v3':      'Systran/faster-distil-whisper-large-v3',
+        'distil-medium.en':     'Systran/faster-distil-whisper-medium.en',
+        'distil-small.en':      'Systran/faster-distil-whisper-small.en',
+    }
+
+    def _download_model(self, model_size: str) -> str:
+        """下载 faster-whisper 模型，通过日志输出下载进度，返回模型本地路径。
+
+        与 faster_whisper 不同，这里在初始化 WhisperModel 之前手动触发下载，
+        以便将下载进度同时输出到控制台和日志文件。
+        """
+        from huggingface_hub import snapshot_download, try_to_load_from_cache
+
+        # 将模型简称映射为 HuggingFace repo_id（与 faster_whisper 行为一致）
+        repo_id = self._MODEL_REPOS.get(model_size, model_size)
+
+        # 先检查核心文件 model.bin 是否已缓存
+        cached = try_to_load_from_cache(repo_id, 'model.bin')
+        if cached is not None:
+            _logger.info(f'模型 {model_size} 已缓存 (repo: {repo_id})')
+        else:
+            _logger.info(f'模型 {model_size} 未缓存，开始从 {repo_id} 下载...')
+
+        # snapshot_download 自带 tqdm 进度条（显示在控制台），同时缓存命中时立即返回
+        local_path = snapshot_download(
+            repo_id,
+            allow_patterns=[
+                'config.json',
+                'tokenizer.json',
+                'model.bin',
+                'preprocessor_config.json',
+            ],
+        )
+
+        if cached is None:
+            _logger.info(f'模型 {model_size} 下载完成 (path: {local_path})')
+
+        return local_path
+
     def voicetosrt(
         self,
         input_file: str,
@@ -52,11 +139,12 @@ class VoiceToSrt:
         compute_type: str = 'int8',
         beam_size: int = 5,
     ) -> SrtResult:
-        from faster_whisper import WhisperModel
-        from dotenv import load_dotenv
+
         load_dotenv()
 
-        model = WhisperModel(model_size, device=device, compute_type=compute_type)
+        # 先手动下载模型（带进度日志），再加载到 faster_whisper
+        model_path = self._download_model(model_size)
+        model = WhisperModel(model_path, device=device, compute_type=compute_type)
         segments, info = model.transcribe(input_file, beam_size=beam_size)
 
         # Build SRT content in memory
@@ -112,3 +200,5 @@ if __name__ == '__main__':
     )
     print(f'SRT saved: {result.file_path}')
     print(f'Language: {result.language} ({result.language_probability:.4f})')
+    _logger.info(f'SRT saved: {result.file_path}')
+    _logger.info(f'Language: {result.language} ({result.language_probability:.4f})')

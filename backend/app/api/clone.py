@@ -83,6 +83,10 @@ class UploadFromUrlRequest(BaseModel):
     role: str = "custom"
 
 
+class UpdateDescriptionRequest(BaseModel):
+    description: str = ""
+
+
 # ============ Routes ============
 
 @router.post("/upload")
@@ -322,6 +326,7 @@ def list_voices(db: Session = Depends(get_db)):
     return [
         {
             "id": v.id,
+            "description": v.description,
             "name": v.name,
             "audio_url": f"/api/clone/audio/{v.id}",
             "qwen_voice_id": v.qwen_voice_id,
@@ -350,7 +355,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
     try:
         # 获取 Qwen 上的所有已克隆声音
         qwen_voices = await tts_service.list_cloned_voices()
-
+        logger.info(f"Processing voice {qwen_voices}")
         synced_count = 0
         existing_count = 0
         results = []
@@ -415,6 +420,41 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Failed to sync voices from Qwen: {e}")
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@router.patch("/{voice_id}/description")
+def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, db: Session = Depends(get_db)):
+    """
+    更新声音的描述信息
+
+    为什么需要专用接口而不是通用 PATCH：
+    - 当前只有 description 一个可编辑字段，专用接口职责单一
+    - 避免通用 PATCH 引入修改 voice_id/name 等敏感字段的安全隐患
+    """
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+
+    # 空字符串视为清除描述，统一存为 NULL 以简化前端判断逻辑
+    new_description = request.description.strip() or None
+
+    # 描述不得与其他声音重复，避免混淆
+    if new_description is not None:
+        duplicate = db.query(VoiceProfile).filter(
+            VoiceProfile.description == new_description,
+            VoiceProfile.id != voice_id,  # 排除自身
+        ).first()
+        if duplicate:
+            raise HTTPException(status_code=409, detail="该描述已用于其他声音，请使用不同的描述")
+
+    voice.description = new_description
+    db.commit()
+    db.refresh(voice)
+
+    return {
+        "id": voice.id,
+        "description": voice.description,
+    }
 
 
 @router.get("/audio/{voice_id}")

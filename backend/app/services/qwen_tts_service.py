@@ -113,7 +113,7 @@ class QwenTTSService:
         voice_id: str = "xiaoyun",
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
     ) -> bytes:
@@ -125,7 +125,7 @@ class QwenTTSService:
             voice_id: 声音 ID (如: xiaoyun, xiaoyuan, ruoxi, etc.)
             speed: 语速 (0.5-2.0)
             volume: 音量 (0-100)
-            pitch: 音调 (-12 到 12)
+            pitch: 音调比率 (0.5-2.0)
             format: 音频格式 (wav, mp3)
             sample_rate: 采样率
 
@@ -145,7 +145,7 @@ class QwenTTSService:
         voice_id: str = "xiaoyun",
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
     ) -> bytes:
@@ -167,7 +167,7 @@ class QwenTTSService:
         voice_id: str = "xiaoyun",
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
     ) -> bytes:
@@ -244,7 +244,7 @@ class QwenTTSService:
         voice_id: str = "xiaoyun",
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
     ) -> bytes:
@@ -336,7 +336,7 @@ class QwenTTSService:
         instruction: str, #clone时使用的声音输出指导
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
     ) -> bytes:
@@ -366,7 +366,7 @@ class QwenTTSService:
         instruction: str,
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
     ) -> bytes:
@@ -388,7 +388,7 @@ class QwenTTSService:
         text: str,
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
     ) -> bytes:
@@ -465,7 +465,7 @@ class QwenTTSService:
         instruction: str = "字正腔圆，播音腔",
         speed: float = 1.0,
         volume: float = 80,
-        pitch: int = 0,
+        pitch: float = 1.0,
         format: str = "mp3",
         sample_rate: int = 16000,
     ) -> str:
@@ -496,6 +496,7 @@ class QwenTTSService:
                 "speed": speed,
                 "volume": volume,
                 "pitch": pitch,
+                "enable_markdown_filter": True, #默认启动markdown标记过滤
             }
             logger.info(f'ops is : {ops}')
             result = HttpSpeechSynthesizer.call(

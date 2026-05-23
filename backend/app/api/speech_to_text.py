@@ -1,8 +1,10 @@
 import os
 import uuid
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
+from typing import List, Optional
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
 from fastapi.responses import FileResponse
@@ -10,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.system_config_service import is_frontend_storage
 from app.models.transcription_record import TranscriptionRecord
 from app.services.voice_to_srt_service import VoiceToSrt
 
@@ -108,23 +111,26 @@ async def transcribe(
             beam_size=beam_size,
         )
 
-        # Persist audio file
-        audio_dest = str(settings.srt_output_dir / f"{file_id}_original.{file_ext}")
-        shutil.copy2(tmp_path, audio_dest)
+        if is_frontend_storage(db):
+            # 前端存储模式：不持久化音频和记录，直接返回 SRT 内容
+            pass
+        else:
+            # 后端存储模式：持久化音频文件和识别记录
+            audio_dest = str(settings.srt_output_dir / f"{file_id}_original.{file_ext}")
+            shutil.copy2(tmp_path, audio_dest)
 
-        # Save transcription record
-        record = TranscriptionRecord(
-            original_filename=file.filename,
-            audio_path=audio_dest,
-            srt_file_id=file_id,
-            language=result.language,
-            language_probability=result.language_probability,
-            model_size=model_size,
-        )
-        db.add(record)
-        db.commit()
+            record = TranscriptionRecord(
+                original_filename=file.filename,
+                audio_path=audio_dest,
+                srt_file_id=file_id,
+                language=result.language,
+                language_probability=result.language_probability,
+                model_size=model_size,
+            )
+            db.add(record)
+            db.commit()
 
-        _enforce_history_limit("default_user", db)
+            _enforce_history_limit("default_user", db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Transcription failed: {str(e)}")
     finally:
@@ -136,7 +142,7 @@ async def transcribe(
         "content": result.content,
         "language": result.language,
         "language_probability": result.language_probability,
-        "download_url": f"/api/speech-to-text/download/{file_id}",
+        "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
     }
 
 
@@ -186,3 +192,98 @@ def get_audio(record_id: str, db: Session = Depends(get_db)):
         media_type=media_type,
         filename=os.path.basename(record.audio_path),
     )
+
+
+def _merge_audio_files(input_paths: List[str], output_path: str) -> None:
+    """
+    使用 ffmpeg concat filter 合并多个音频文件。
+    不要求格式统一，ffmpeg 会自动重编码为一致的输出格式。
+    输出格式根据扩展名自动推断，这里统一输出为 .mp3。
+    """
+    cmd = ['ffmpeg', '-y']
+    for p in input_paths:
+        cmd.extend(['-i', p])
+
+    # 构建 concat filter： [0:a][1:a][2:a]concat=n=3:v=0:a=1[out]
+    filter_parts = ''.join(f'[{i}:a]' for i in range(len(input_paths)))
+    filter_str = f'{filter_parts}concat=n={len(input_paths)}:v=0:a=1[out]'
+    cmd.extend(['-filter_complex', filter_str, '-map', '[out]', '-ac', '1', output_path])
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(f"ffmpeg merge failed: {result.stderr.strip()}")
+
+
+@router.post("/multi-transcribe")
+async def multi_transcribe(
+    files: List[UploadFile] = File(...),
+    model_size: str = Form("large-v3"),
+    beam_size: int = Form(5),
+    db: Session = Depends(get_db),
+):
+    """
+    多音频合并 + 字幕识别。
+    接收多个音频文件，按上传顺序用 ffmpeg 合并后统一转写。
+    """
+    if not files:
+        raise HTTPException(status_code=400, detail="At least one audio file is required")
+    if model_size not in WHISPER_MODEL_SIZES:
+        raise HTTPException(status_code=400, detail=f"Invalid model size: {model_size}")
+
+    tmp_dir = Path(tempfile.mkdtemp(prefix="multi_stt_"))
+    try:
+        # 保存所有上传文件到临时目录
+        temp_paths: List[str] = []
+        for f in files:
+            ext = f.filename.split(".")[-1].lower() if f.filename else "mp3"
+            if ext not in ALLOWED_EXTENSIONS:
+                ext = "mp3"
+            tmp_path = tmp_dir / f"{uuid.uuid4().hex[:8]}.{ext}"
+            content = await f.read()
+            with open(tmp_path, "wb") as fh:
+                fh.write(content)
+            temp_paths.append(str(tmp_path))
+
+        # ffmpeg 合并
+        merged_path = str(tmp_dir / "merged.mp3")
+        _merge_audio_files(temp_paths, merged_path)
+
+        # 转写合并后的音频
+        file_id = str(uuid.uuid4())
+        service = VoiceToSrt()
+        result = service.voicetosrt(
+            input_file=merged_path,
+            file_id=file_id,
+            model_size=model_size,
+            beam_size=beam_size,
+        )
+
+        if is_frontend_storage(db):
+            # 前端存储模式：不持久化
+            pass
+        else:
+            # 后端存储模式：持久化合并音频和识别记录
+            audio_dest = str(settings.srt_output_dir / f"{file_id}_merged.mp3")
+            shutil.copy2(merged_path, audio_dest)
+
+            record = TranscriptionRecord(
+                original_filename="merged_audio.mp3",
+                audio_path=audio_dest,
+                srt_file_id=file_id,
+                language=result.language,
+                language_probability=result.language_probability,
+                model_size=model_size,
+            )
+            db.add(record)
+            db.commit()
+
+        return {
+            "file_id": file_id,
+            "filename": "merged_audio",
+            "content": result.content,
+            "language": result.language,
+            "language_probability": result.language_probability,
+            "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
+        }
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)

@@ -1,7 +1,5 @@
 .container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: var(--spacing-2xl);
+  width: 100%;
 }
 
 .header {
@@ -22,7 +20,8 @@
 
 .content {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 用百分比而非 fr，避免子内容撑大某一列 */
+  grid-template-columns: 50% 50%;
   gap: var(--spacing-2xl);
 }
 

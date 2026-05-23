@@ -1,16 +1,25 @@
 import { useState, useCallback, useEffect } from 'react';
 import { VoiceSelector } from '../components/TTSSynthesis/VoiceSelector';
 import { ParameterControls } from '../components/TTSSynthesis/ParameterControls';
+import { EdgeTTSParameterControls } from '../components/TTSSynthesis/EdgeTTSParameterControls';
 import { AudioPlayer } from '../components/TTSSynthesis/AudioPlayer';
 import { SynthesisHistory } from '../components/TTSSynthesis/SynthesisHistory';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
-import { ttsApi, voiceApi } from '../services/api';
+import { ttsApi } from '../services/api';
+import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
+import { useStorageMode } from '../hooks/useStorageMode';
 import type { TTSRequest, TTSResult, TTSResultRecord } from '../types';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts';
 
+/** Edge-TTS 参数值转格式化字符串 */
+function toEdgeFormat(value: number) {
+  return value >= 0 ? `+${value}%` : `${value}%`;
+}
+
 export function TTSSynthesis() {
+  const { mode: storageMode } = useStorageMode();
   const [engine, setEngine] = useState<Engine>('cosyvoice');
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
@@ -18,13 +27,14 @@ export function TTSSynthesis() {
     language: 'Chinese',
     speed: 1.0,
     volume: 80,
-    pitch: 0,
+    pitch: 1.0,
     emotion: undefined,
   });
 
-  // Edge-TTS state
+  // Edge-TTS state - 拆分为声音 + 独立的语速/音量数值
   const [edgeVoice, setEdgeVoice] = useState('');
-  const [edgeParams, setEdgeParams] = useState({ edge_rate: '+0%', edge_volume: '+0%' });
+  const [edgeRate, setEdgeRate] = useState(0);
+  const [edgeVolume, setEdgeVolume] = useState(0);
 
   const [result, setResult] = useState<TTSResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,12 +42,33 @@ export function TTSSynthesis() {
 
   const loadHistory = useCallback(async () => {
     try {
-      const data = await ttsApi.getHistory();
-      setHistory(data);
+      if (storageMode === 'frontend') {
+        // 前端存储模式：从 IndexedDB 加载
+        const localRecords = await getTTSHistory();
+        // 将 TTSLocalRecord 转换为 TTSResultRecord 格式
+        const mapped: TTSResultRecord[] = localRecords.map((r) => ({
+          id: r.id,
+          text: r.text,
+          voice_id: r.voice_id,
+          voice_name: r.voice_name,
+          audio_url: '', // 前端模式下无后端 URL
+          audio_format: r.audio_format,
+          speed: r.speed,
+          volume: r.volume,
+          pitch: r.pitch,
+          emotion: r.emotion,
+          language: r.language,
+          created_at: r.created_at,
+        }));
+        setHistory(mapped);
+      } else {
+        const data = await ttsApi.getHistory();
+        setHistory(data);
+      }
     } catch (error) {
       console.error('Failed to load history:', error);
     }
-  }, []);
+  }, [storageMode]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
@@ -67,10 +98,34 @@ export function TTSSynthesis() {
           engine: 'edge_tts',
           voice_id: '',
           edge_voice: edgeVoice,
-          edge_rate: edgeParams.edge_rate,
-          edge_volume: edgeParams.edge_volume,
+          edge_rate: toEdgeFormat(edgeRate),
+          edge_volume: toEdgeFormat(edgeVolume),
           format: 'mp3',
         });
+
+        // 前端存储模式：将 base64 结果存入 IndexedDB
+        if (storageMode === 'frontend' && response.audio_base64) {
+          const byteStr = atob(response.audio_base64);
+          const byteNums = new Uint8Array(byteStr.length);
+          for (let i = 0; i < byteStr.length; i++) {
+            byteNums[i] = byteStr.charCodeAt(i);
+          }
+          await saveTTSResult({
+            id: response.audio_id,
+            text: response.text,
+            voice_id: response.voice_id || '',
+            voice_name: response.voice_name || '',
+            audioBlob: new Blob([byteNums], { type: 'audio/mpeg' }),
+            audio_format: 'mp3',
+            speed: 1.0,
+            volume: edgeVolume,
+            pitch: 1.0,
+            emotion: 'neutral',
+            language: 'Chinese',
+            created_at: new Date().toISOString(),
+          });
+        }
+
         setResult(response);
       } else {
         const response = await ttsApi.synthesize({
@@ -79,10 +134,34 @@ export function TTSSynthesis() {
           language: params.language || 'Chinese',
           speed: params.speed ?? 1.0,
           volume: params.volume ?? 80,
-          pitch: params.pitch ?? 0,
+          pitch: params.pitch ?? 1.0,
           emotion: params.emotion,
           format: 'mp3',
         });
+
+        // 前端存储模式：将 base64 结果存入 IndexedDB
+        if (storageMode === 'frontend' && response.audio_base64) {
+          const byteStr = atob(response.audio_base64);
+          const byteNums = new Uint8Array(byteStr.length);
+          for (let i = 0; i < byteStr.length; i++) {
+            byteNums[i] = byteStr.charCodeAt(i);
+          }
+          await saveTTSResult({
+            id: response.audio_id,
+            text: response.text,
+            voice_id: response.voice_id || '',
+            voice_name: response.voice_name || '',
+            audioBlob: new Blob([byteNums], { type: 'audio/mpeg' }),
+            audio_format: response.audio_format || 'mp3',
+            speed: response.params.speed ?? 1.0,
+            volume: response.params.volume ?? 80,
+            pitch: response.params.pitch ?? 1.0,
+            emotion: response.params.emotion || 'neutral',
+            language: response.params.language || 'Chinese',
+            created_at: new Date().toISOString(),
+          });
+        }
+
         setResult(response);
       }
 
@@ -93,43 +172,63 @@ export function TTSSynthesis() {
     } finally {
       setIsLoading(false);
     }
-  }, [text, engine, selectedVoiceId, edgeVoice, edgeParams, params, loadHistory]);
+  }, [text, engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, params, loadHistory, storageMode]);
 
   const handleDeleteResult = useCallback(async (id: string) => {
     try {
-      await ttsApi.deleteResult(id);
+      if (storageMode === 'frontend') {
+        await deleteTTSResult(id);
+      } else {
+        await ttsApi.deleteResult(id);
+      }
       setHistory(prev => prev.filter(r => r.id !== id));
     } catch (error) {
       console.error('Failed to delete result:', error);
       alert('删除失败');
     }
-  }, []);
+  }, [storageMode]);
 
-  const handlePlayResult = useCallback((record: TTSResultRecord) => {
-    setResult({
-      audio_id: record.id,
-      audio_url: record.audio_url,
-      text: record.text,
-      params: {
-        voice_id: record.voice_id,
-        speed: record.speed,
-        volume: record.volume,
-        pitch: record.pitch,
-        language: record.language,
-        emotion: record.emotion,
-      },
-    });
-  }, []);
-
-  const handleDeleteVoice = useCallback(async (profileId: string) => {
-    try {
-      await voiceApi.delete(profileId);
-      setSelectedVoiceId('');
-    } catch (error) {
-      console.error('Failed to delete voice:', error);
-      alert('删除声音失败');
+  const handlePlayResult = useCallback(async (record: TTSResultRecord) => {
+    if (storageMode === 'frontend') {
+      // 前端存储模式：从 IndexedDB 加载 Blob 转为 base64 播放
+      const blob = await getTTSAudioBlob(record.id);
+      if (blob) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          setResult({
+            audio_id: record.id,
+            audio_base64: base64,
+            audio_format: record.audio_format || 'mp3',
+            text: record.text,
+            params: {
+              voice_id: record.voice_id,
+              speed: record.speed,
+              volume: record.volume,
+              pitch: record.pitch,
+              language: record.language,
+              emotion: record.emotion,
+            },
+          });
+        };
+        reader.readAsDataURL(blob);
+      }
+    } else {
+      setResult({
+        audio_id: record.id,
+        audio_url: record.audio_url,
+        text: record.text,
+        params: {
+          voice_id: record.voice_id,
+          speed: record.speed,
+          volume: record.volume,
+          pitch: record.pitch,
+          language: record.language,
+          emotion: record.emotion,
+        },
+      });
     }
-  }, []);
+  }, [storageMode]);
 
   const canSynthesize = engine === 'edge_tts'
     ? text.trim() && edgeVoice
@@ -142,16 +241,16 @@ export function TTSSynthesis() {
         <p>使用克隆的声音生成语音</p>
       </div>
 
-      {/* Engine Selector */}
-      <div className={styles.engineTabs}>
+      {/* Engine Selector - 分段控制器 */}
+      <div className={styles.engineSwitch}>
         <button
-          className={`${styles.engineTab} ${engine === 'cosyvoice' ? styles.active : ''}`}
+          className={`${styles.engineOption} ${engine === 'cosyvoice' ? styles.active : ''}`}
           onClick={() => setEngine('cosyvoice')}
         >
           CosyVoice
         </button>
         <button
-          className={`${styles.engineTab} ${engine === 'edge_tts' ? styles.active : ''}`}
+          className={`${styles.engineOption} ${engine === 'edge_tts' ? styles.active : ''}`}
           onClick={() => setEngine('edge_tts')}
         >
           Edge-TTS
@@ -187,24 +286,29 @@ export function TTSSynthesis() {
             <VoiceSelector
               selectedVoiceId={selectedVoiceId}
               onVoiceSelect={setSelectedVoiceId}
-              onDelete={handleDeleteVoice}
             />
           ) : (
             <EdgeTTSPanel
               selectedVoice={edgeVoice}
               onVoiceSelect={setEdgeVoice}
-              onParamsChange={setEdgeParams}
             />
           )}
         </div>
 
         {/* Right Column: Params & Player & History */}
         <div className={styles.rightColumn}>
-          {/* Parameter Controls (CosyVoice only) */}
-          {engine === 'cosyvoice' && (
+          {/* Parameter Controls - engine dependent */}
+          {engine === 'cosyvoice' ? (
             <ParameterControls
               params={params}
               onParamChange={setParams}
+            />
+          ) : (
+            <EdgeTTSParameterControls
+              rate={edgeRate}
+              volume={edgeVolume}
+              onRateChange={setEdgeRate}
+              onVolumeChange={setEdgeVolume}
             />
           )}
 

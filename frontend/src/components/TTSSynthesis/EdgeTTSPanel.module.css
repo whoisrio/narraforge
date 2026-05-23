@@ -1,127 +1,85 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-}
-
-.section {
-  background: white;
-  border-radius: 1rem;
-  padding: 1.5rem;
-}
-
-.section h3 {
-  margin-bottom: 1rem;
-  font-size: 1.125rem;
+  gap: 0.75rem;
 }
 
 .filters {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
 }
 
 .filter {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 0.25rem;
   flex: 1;
 }
 
 .filter label {
-  font-size: 0.875rem;
-  color: #666;
+  font-size: 0.8125rem;
+  color: #888;
   font-weight: 500;
 }
 
 .filter select {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 0.25rem;
-  background: white;
-  font-size: 0.875rem;
-}
-
-.voiceGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 0.5rem;
-  max-height: 240px;
-  overflow-y: auto;
-}
-
-.voiceCard {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.75rem 0.5rem;
+  padding: 0.5rem 0.625rem;
   border: 1px solid #e5e5e5;
-  border-radius: 0.5rem;
-  background: white;
-  cursor: pointer;
-  transition: all 0.15s;
-  text-align: center;
-}
-
-.voiceCard:hover {
-  border-color: #3b82f6;
-}
-
-.voiceCard.active {
-  border-color: #3b82f6;
-  background: #eff6ff;
-}
-
-.voiceName {
+  border-radius: 0.375rem;
+  background: #fff;
   font-size: 0.875rem;
-  font-weight: 500;
+  color: #333;
+  cursor: pointer;
 }
 
-.voiceLocale {
-  font-size: 0.75rem;
-  color: #666;
+.filter select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
-.voiceGender {
-  font-size: 0.75rem;
-  color: #666;
-  background: #f5f5f5;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
-}
-
-.params {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.param {
+.voiceSelect {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.25rem;
 }
 
-.param label {
-  font-size: 0.875rem;
-  color: #666;
+.voiceSelect label {
+  font-size: 0.8125rem;
+  color: #888;
   font-weight: 500;
 }
 
-.param input[type="range"] {
+.select {
   width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid #e5e5e5;
+  border-radius: 0.375rem;
+  background: #fff;
+  font-size: 0.875rem;
+  color: #333;
   cursor: pointer;
+}
+
+.select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
 }
 
 .loading,
 .error,
 .empty {
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #999;
   text-align: center;
-  padding: 1.5rem;
-  color: #666;
+  border: 1px dashed #e5e5e5;
+  border-radius: 0.375rem;
 }
 
 .error {
   color: #ef4444;
+  border-color: #fecaca;
+  background: #fef2f2;
 }

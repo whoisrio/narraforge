@@ -19,6 +19,12 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
   const [registerResult, setRegisterResult] = useState<{ qwen_voice_id?: string; role?: string; cloned_at?: string } | null>(null);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  // 内联编辑状态
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingDescription, setEditingDescription] = useState('');
+  const [editingError, setEditingError] = useState('');
+  const [savingId, setSavingId] = useState<string | null>(null);
+
   const fetchVoices = async () => {
     try {
       try {
@@ -70,6 +76,20 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
     }
   };
 
+  const handleClearAll = async () => {
+    if (!confirm('确定要删除所有克隆声音吗？此操作不可撤销。')) return;
+    // 逐个删除所有声音，即使某个失败也继续
+    for (const voice of [...voices]) {
+      try {
+        await voiceApi.delete(voice.id);
+      } catch (err) {
+        console.error(`Failed to delete voice ${voice.id}:`, err);
+      }
+    }
+    setVoices([]);
+    onRefresh?.();
+  };
+
   const handleRegisterClick = (voice: VoiceProfile) => {
     setSelectedVoice(voice);
     setRegisterName(voice.name);
@@ -105,6 +125,52 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
     setShowRegisterDialog(false);
     setSelectedVoice(null);
     setRegisterResult(null);
+  };
+
+  // 内联编辑：开始编辑声音描述
+  const handleStartEdit = (voice: VoiceProfile) => {
+    setEditingId(voice.id);
+    setEditingDescription(voice.description || '');
+    setEditingError('');  // 清除上次错误
+  };
+
+  // 内联编辑：取消编辑
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditingDescription('');
+    setEditingError('');
+  };
+
+  // 内联编辑：保存描述
+  const handleSaveDescription = async (voiceId: string) => {
+    const voice = voices.find(v => v.id === voiceId);
+    if (!voice) return;
+    // 值没变化则不请求
+    if (editingDescription.trim() === (voice.description || '')) {
+      setEditingId(null);
+      return;
+    }
+
+    setSavingId(voiceId);
+    try {
+      await voiceApi.updateDescription(voiceId, editingDescription.trim());
+      // 更新本地 state 避免重新请求
+      setVoices(prev => prev.map(v =>
+        v.id === voiceId ? { ...v, description: editingDescription.trim() || undefined } : v
+      ));
+      setEditingId(null);
+      setEditingError('');
+    } catch (err: any) {
+      // 409 表示描述重复，显示错误提示并保持编辑状态让用户修改
+      if (err?.response?.status === 409) {
+        setEditingError(err.response.data?.detail || '该描述已用于其他声音');
+      } else {
+        console.error('Failed to save description:', err);
+        setEditingId(null);
+      }
+    } finally {
+      setSavingId(null);
+    }
   };
 
   const headerStyle: React.CSSProperties = {
@@ -161,15 +227,25 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
     <div>
       <div style={headerStyle}>
         <h3 style={h3Style}>🎤 Cloned Voices</h3>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleSyncFromQwen}
-          disabled={syncing}
-          loading={syncing}
-        >
-          🔄 Sync from Qwen
-        </Button>
+        <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleSyncFromQwen}
+            disabled={syncing}
+            loading={syncing}
+          >
+            🔄 Sync from Qwen
+          </Button>
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={handleClearAll}
+            disabled={voices.length === 0}
+          >
+            🗑️ Clear All
+          </Button>
+        </div>
       </div>
 
       {syncMessage && (
@@ -192,12 +268,53 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
                 <div style={voiceInfoStyle}>
                   <audio src={voice.audio_url} controls style={{ height: '32px' }} />
                   <div>
-                    <div style={voiceNameStyle}>{voice.name}</div>
+                    {editingId === voice.id ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <input
+                          type="text"
+                          value={editingDescription}
+                          onChange={(e) => setEditingDescription(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveDescription(voice.id);
+                            if (e.key === 'Escape') handleCancelEdit();
+                          }}
+                          disabled={savingId === voice.id}
+                          autoFocus
+                          style={{
+                            padding: '2px 6px',
+                            fontSize: 'var(--font-size-base)',
+                            fontWeight: 'var(--font-weight-medium)',
+                            border: '1px solid var(--color-primary)',
+                            borderRadius: '4px',
+                            width: '200px',
+                          }}
+                        />
+                        <Button variant="ghost" size="sm" onClick={() => handleSaveDescription(voice.id)} disabled={savingId === voice.id}>✓</Button>
+                        <Button variant="ghost" size="sm" onClick={handleCancelEdit}>✕</Button>
+                        {editingError && (
+                          <div style={{ color: 'var(--color-error)', fontSize: 'var(--font-size-sm)', marginTop: '4px' }}>
+                            {editingError}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <div style={voiceNameStyle}>
+                          {voice.description || voice.qwen_voice_id || 'N/A'}
+                        </div>
+                        <span
+                          onClick={() => handleStartEdit(voice)}
+                          style={{ cursor: 'pointer', fontSize: '12px', opacity: 0.6 }}
+                          title="编辑描述"
+                        >
+                          ✏️
+                        </span>
+                      </div>
+                    )}
                     <div style={voiceMetaStyle}>
                       {voice.is_cloned ? (
                         <>
                           <span style={{ color: 'var(--color-success)', marginRight: 'var(--spacing-xs)' }}>✓ Cloned</span>
-                          ID: {voice.qwen_voice_id || 'N/A'}
                           {' | '}Role: {voice.role}
                           {voice.cloned_at && ` | ${new Date(voice.cloned_at).toLocaleDateString()}`}
                         </>

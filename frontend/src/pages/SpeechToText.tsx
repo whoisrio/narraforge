@@ -1,11 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { speechToTextApi } from '../services/api';
 import type { TranscribeResult, TranscriptionRecord } from '../services/api';
+import { saveSTTResult, getSTTHistory, deleteSTTResult } from '../services/indexedDB';
+import { useStorageMode } from '../hooks/useStorageMode';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { Slider } from '../components/ui/Slider';
 import { Loading } from '../components/ui/Loading';
 import { TranscriptionHistory } from '../components/SpeechToText';
+import { MultiAudioSelector } from '../components/SpeechToText';
 import styles from './SpeechToText.module.css';
 
 const MODEL_OPTIONS = [
@@ -17,6 +20,7 @@ const MODEL_OPTIONS = [
 ];
 
 export function SpeechToText() {
+  const { mode: storageMode } = useStorageMode();
   const [file, setFile] = useState<File | null>(null);
   const [modelSize, setModelSize] = useState('large-v3');
   const [beamSize, setBeamSize] = useState(5);
@@ -58,6 +62,20 @@ export function SpeechToText() {
     try {
       const res = await speechToTextApi.transcribe(file, modelSize, beamSize);
       setResult(res);
+
+      // 前端存储模式：将识别结果存入 IndexedDB
+      if (storageMode === 'frontend') {
+        await saveSTTResult({
+          id: res.file_id,
+          original_filename: file.name,
+          srtContent: res.content,
+          language: res.language,
+          language_probability: res.language_probability,
+          model_size: modelSize,
+          created_at: new Date().toISOString(),
+        });
+      }
+
       loadHistory();
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Transcription failed');
@@ -84,12 +102,28 @@ export function SpeechToText() {
 
   const loadHistory = useCallback(async () => {
     try {
-      const data = await speechToTextApi.getHistory();
-      setHistory(data);
+      if (storageMode === 'frontend') {
+        // 前端存储模式：从 IndexedDB 加载，映射为 TranscriptionRecord 格式
+        const localRecords = await getSTTHistory();
+        const mapped: TranscriptionRecord[] = localRecords.map((r) => ({
+          id: r.id,
+          original_filename: r.original_filename,
+          audio_url: '',
+          srt_download_url: '',
+          language: r.language,
+          language_probability: r.language_probability,
+          model_size: r.model_size,
+          created_at: r.created_at,
+        }));
+        setHistory(mapped);
+      } else {
+        const data = await speechToTextApi.getHistory();
+        setHistory(data);
+      }
     } catch (error) {
       console.error('Failed to load history:', error);
     }
-  }, []);
+  }, [storageMode]);
 
   useEffect(() => {
     loadHistory();
@@ -97,12 +131,44 @@ export function SpeechToText() {
 
   const handleDeleteRecord = useCallback(async (id: string) => {
     try {
-      await speechToTextApi.deleteRecord(id);
+      if (storageMode === 'frontend') {
+        await deleteSTTResult(id);
+      } else {
+        await speechToTextApi.deleteRecord(id);
+      }
       setHistory(prev => prev.filter(r => r.id !== id));
     } catch (error) {
       console.error('Failed to delete record:', error);
     }
-  }, []);
+  }, [storageMode]);
+
+  const handleMultiTranscribe = async (files: File[]) => {
+    setProcessing(true);
+    setError(null);
+    try {
+      const res = await speechToTextApi.multiTranscribe(files, modelSize, beamSize);
+      setResult(res);
+
+      // 前端存储模式：存入 IndexedDB
+      if (storageMode === 'frontend') {
+        await saveSTTResult({
+          id: res.file_id,
+          original_filename: 'merged_audio.mp3',
+          srtContent: res.content,
+          language: res.language,
+          language_probability: res.language_probability,
+          model_size: modelSize,
+          created_at: new Date().toISOString(),
+        });
+      }
+
+      loadHistory();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Multi-transcribe failed');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   return (
     <div className={styles.container}>
@@ -226,6 +292,7 @@ export function SpeechToText() {
       </div>
 
       <div className={styles.historySection}>
+        <MultiAudioSelector onTranscribe={handleMultiTranscribe} processing={processing} />
         <TranscriptionHistory records={history} onDelete={handleDeleteRecord} />
       </div>
     </div>
