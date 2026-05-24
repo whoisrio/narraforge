@@ -339,6 +339,8 @@ class QwenTTSService:
         pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
+        enable_ssml: bool = False,
+        enable_markdown_filter: bool = False,
     ) -> bytes:
         """
         声音克隆 - 使用已注册的 voice_id 进行语音合成 (异步版本)
@@ -351,12 +353,15 @@ class QwenTTSService:
             pitch: 音调
             format: 音频格式
             sample_rate: 采样率
+            enable_ssml: 是否启用 SSML 解析
+            enable_markdown_filter: 是否过滤 Markdown 标记
         """
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
             None,
             self._synthesize_speech_sync,
-            voice_id, text, instruction, speed, volume, pitch, format, sample_rate
+            voice_id, text, instruction, speed, volume, pitch, format, sample_rate,
+            enable_ssml, enable_markdown_filter,
         )
 
     def _synthesize_speech_sync(
@@ -369,6 +374,8 @@ class QwenTTSService:
         pitch: float = 1.0,
         format: str = "wav",
         sample_rate: int = 16000,
+        enable_ssml: bool = False,
+        enable_markdown_filter: bool = False,
     ) -> bytes:
         """
         同步执行声音克隆 - 根据模型系列自动选择调用方式
@@ -378,7 +385,7 @@ class QwenTTSService:
         - CosyVoice 系列：使用 cosyvoice 模型和注册的 voice_id 进行合成
         """
         if self.is_cosyvoice:
-            return self._synthesize_voice_cosyvoice(voice_id, text, instruction, speed, volume, pitch, format, sample_rate)
+            return self._synthesize_voice_cosyvoice(voice_id, text, instruction, speed, volume, pitch, format, sample_rate, enable_ssml, enable_markdown_filter)
         else:
             return self._synthesize_voice_tts(voice_id, text, speed, volume, pitch, format, sample_rate)
 
@@ -468,6 +475,8 @@ class QwenTTSService:
         pitch: float = 1.0,
         format: str = "mp3",
         sample_rate: int = 16000,
+        enable_ssml: bool = False,
+        enable_markdown_filter: bool = False,
     ) -> str:
         """
         CosyVoice 系列模型的声音克隆方法。
@@ -496,8 +505,9 @@ class QwenTTSService:
                 "speed": speed,
                 "volume": volume,
                 "pitch": pitch,
+                "enable_ssml": enable_ssml,
+                "enable_markdown_filter": enable_markdown_filter,
             }
-            #"enable_markdown_filter": True, #默认启动markdown标记过滤
 
             logger.info(f'ops is : {ops}')
             result = HttpSpeechSynthesizer.call(

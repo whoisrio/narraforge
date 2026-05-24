@@ -27,13 +27,14 @@ class TTSRequest(BaseModel):
     engine: str = "cosyvoice"  # "cosyvoice" | "edge_tts"
     # CosyVoice params
     voice_id: str = ""
-    instruction: str = "字正腔圆，播音腔"
+    instruction: str = "音调偏高，语速中等，充满活力和感染力，适合广告配音"
     speed: float = Field(default=1.0, ge=0.5, le=2.0, description="语速比率，0.5-2.0")
     volume: float = 80
     pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="音调比率，0.5-2.0")
-    emotion: str = "neutral"
     language: str = "Chinese"
     format: str = "wav"
+    enable_ssml: bool = False
+    enable_markdown_filter: bool = False
     # Edge-TTS params
     edge_voice: str = ""
     edge_rate: str = "+0%"
@@ -52,7 +53,6 @@ class BatchTTSRequest(BaseModel):
     speed: float = Field(default=1.0, ge=0.5, le=2.0, description="语速比率，0.5-2.0")
     volume: float = 80
     pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="音调比率，0.5-2.0")
-    emotion: str = "neutral"
 
 
 def _result_to_dict(r: TTSResultRecord) -> dict:
@@ -66,7 +66,7 @@ def _result_to_dict(r: TTSResultRecord) -> dict:
         "speed": r.speed,
         "volume": r.volume,
         "pitch": r.pitch,
-        "emotion": r.emotion,
+        "instruction": r.instruction,
         "language": r.language,
         "created_at": r.created_at.isoformat() if r.created_at else None,
     }
@@ -104,6 +104,8 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
             format=audio_fmt,
             sample_rate=16000,
             instruction=request.instruction,
+            enable_ssml=request.enable_ssml,
+            enable_markdown_filter=request.enable_markdown_filter,
         )
 
         audio_id = Path(audio_path).stem
@@ -136,7 +138,9 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                     "speed": request.speed,
                     "volume": request.volume,
                     "pitch": request.pitch,
-                    "emotion": request.emotion,
+                    "instruction": request.instruction,
+                    "enable_ssml": request.enable_ssml,
+                    "enable_markdown_filter": request.enable_markdown_filter,
                     "voice_id": request.voice_id,
                 }
             }
@@ -152,7 +156,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                 speed=request.speed,
                 volume=request.volume,
                 pitch=request.pitch,
-                emotion=request.emotion,
+                instruction=request.instruction,
                 language=request.language,
             )
             db.add(record)
@@ -166,7 +170,9 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                     "speed": request.speed,
                     "volume": request.volume,
                     "pitch": request.pitch,
-                    "emotion": request.emotion,
+                    "instruction": request.instruction,
+                    "enable_ssml": request.enable_ssml,
+                    "enable_markdown_filter": request.enable_markdown_filter,
                     "voice_id": request.voice_id,
                 }
             }
@@ -231,7 +237,7 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
                 speed=1.0,
                 volume=80,
                 pitch=1.0,
-                emotion="neutral",
+                instruction="",
                 language="Chinese",
             )
             db.add(record)

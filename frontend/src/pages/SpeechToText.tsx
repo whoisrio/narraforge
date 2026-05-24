@@ -31,6 +31,7 @@ export function SpeechToText() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [history, setHistory] = useState<TranscriptionRecord[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const multiAudioRef = useRef<HTMLDivElement>(null);
 
   // 用 ref 跟踪当前模式，避免异步竞态
   const storageModeRef = useRef(storageMode);
@@ -288,6 +289,15 @@ export function SpeechToText() {
                 {processing ? '识别中...' : '开始识别'}
               </Button>
             </div>
+
+            <div className={styles.quickEntry}>
+              <button
+                type="button"
+                onClick={() => multiAudioRef.current?.scrollIntoView({ behavior: 'smooth' })}
+              >
+                或使用「多音频合并转写」- 按顺序合并多个 TTS 音频后识别
+              </button>
+            </div>
           </div>
         </div>
 
@@ -329,7 +339,7 @@ export function SpeechToText() {
         </div>
       </div>
 
-      <div className={styles.historySection}>
+      <div className={styles.historySection} ref={multiAudioRef}>
         <MultiAudioSelector onTranscribe={handleMultiTranscribe} processing={processing} />
         <TranscriptionHistory records={history} onDelete={handleDeleteRecord} />
       </div>

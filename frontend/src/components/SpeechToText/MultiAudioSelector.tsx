@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { TTSResultRecord } from '../../types';
 import type { TTSLocalRecord } from '../../types';
 import { ttsApi } from '../../services/api';
 import { getTTSHistory } from '../../services/indexedDB';
@@ -9,7 +8,6 @@ import styles from './MultiAudioSelector.module.css';
 interface AudioItem {
   id: string;
   label: string;
-  /** 后端模式：音频 URL；前端模式：base64 */
   audioUrl?: string;
   audioBase64?: string;
   audio_format?: string;
@@ -47,14 +45,12 @@ async function loadFrontendHistory(): Promise<AudioItem[]> {
 export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelectorProps) {
   const { mode } = useStorageMode();
   const [items, setItems] = useState<AudioItem[]>([]);
-  const [expanded, setExpanded] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
 
-  // 加载可选音频列表
+  // 始终加载可选音频列表
   useEffect(() => {
-    if (!expanded) return;
     (mode === 'frontend' ? loadFrontendHistory() : loadBackendHistory()).then(setItems);
-  }, [expanded, mode]);
+  }, [mode]);
 
   // checkbox 切换选中
   const toggleSelect = useCallback((id: string) => {
@@ -100,11 +96,9 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
     for (const item of orderedItems) {
       let blob: Blob;
       if (item.audioBase64) {
-        // 前端存储模式：Blob URL → Blob
         const resp = await fetch(item.audioBase64);
         blob = await resp.blob();
       } else if (item.audioUrl) {
-        // 后端存储模式：通过 API 获取音频
         const resp = await fetch(item.audioUrl);
         blob = await resp.blob();
       } else {
@@ -122,46 +116,66 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
 
   return (
     <div className={styles.container}>
-      <button
-        className={styles.toggle}
-        onClick={() => setExpanded(!expanded)}
-      >
-        {expanded ? '收起' : '展开'} 多音频合并转写
-      </button>
-
-      {expanded && (
-        <div className={styles.panel}>
-          <div className={styles.selectSection}>
-            <h3>可选音频（{items.length}）</h3>
-            <div className={styles.list}>
-              {items.map((it) => (
-                <label key={it.id} className={styles.item}>
-                  <input
-                    type="checkbox"
-                    checked={it.selected}
-                    onChange={() => toggleSelect(it.id)}
-                  />
-                  <span className={styles.label}>{it.label}</span>
-                </label>
-              ))}
-              {items.length === 0 && (
-                <div className={styles.emptyHint}>暂无合成音频，请先在"文字转语音"页合成语音</div>
-              )}
-            </div>
+      <div className={styles.cardHeader}>
+        <div>
+          <div className={styles.title}>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M4 6h4v8H4V6zM10 4h6v12h-6V4z" fill="currentColor" opacity="0.3"/>
+              <path d="M4 14l4-4 3 3 3-5 4 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            </svg>
+            多音频合并转写
+            <span className={styles.badge}>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                <path d="M5 1L6.5 3.5L9.5 4L7.25 6L7.75 9L5 7.5L2.25 9L2.75 6L0.5 4L3.5 3.5L5 1Z" fill="currentColor"/>
+              </svg>
+              高级功能
+            </span>
           </div>
+          <div className={styles.subtitle}>
+            从文字转语音的历史记录中选择多个音频，按顺序合并后进行语音识别
+          </div>
+        </div>
+      </div>
 
-          {selectedList.length > 0 && (
-            <div className={styles.orderSection}>
-              <h3>合并顺序（已选 {selectedList.length} 项，可拖拽排序）</h3>
+      <div className={styles.panel}>
+        <div className={styles.selectSection}>
+          <h3>
+            可选音频
+            <span className={styles.count}>{items.length}</span>
+          </h3>
+          <div className={styles.list}>
+            {items.map((it) => (
+              <label key={it.id} className={styles.item}>
+                <input
+                  type="checkbox"
+                  checked={it.selected}
+                  onChange={() => toggleSelect(it.id)}
+                />
+                <span className={styles.label}>{it.label}</span>
+              </label>
+            ))}
+            {items.length === 0 && (
+              <div className={styles.emptyHint}>暂无合成音频，请先在"文字转语音"页合成语音</div>
+            )}
+          </div>
+        </div>
+
+        <div className={styles.orderSection}>
+          <h3>
+            合并顺序
+            <span className={styles.count}>{selectedList.length}</span>
+          </h3>
+          {selectedList.length > 0 ? (
+            <>
               <div className={styles.orderList}>
                 {selectedList.map((it, idx) => (
                   <div key={it.id} className={styles.orderItem}>
                     <span className={styles.orderIndex}>{idx + 1}.</span>
                     <span className={styles.orderLabel}>{it.label}</span>
                     <div className={styles.orderActions}>
-                      <button onClick={() => moveUp(it.id)} disabled={idx === 0}>▲</button>
-                      <button onClick={() => moveDown(it.id)} disabled={idx === selectedList.length - 1}>▼</button>
-                      <button onClick={() => toggleSelect(it.id)}>✕</button>
+                      <button onClick={() => moveUp(it.id)} disabled={idx === 0} title="上移">▲</button>
+                      <button onClick={() => moveDown(it.id)} disabled={idx === selectedList.length - 1} title="下移">▼</button>
+                      <button onClick={() => toggleSelect(it.id)} title="移除">✕</button>
                     </div>
                   </div>
                 ))}
@@ -173,10 +187,12 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
               >
                 {processing ? '合并转写中...' : `合并并转写 (${selectedList.length} 个文件)`}
               </button>
-            </div>
+            </>
+          ) : (
+            <div className={styles.emptyHint}>勾选左侧音频后，按添加顺序排列</div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

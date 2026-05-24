@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ttsApi } from '../../services/api';
+import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import type { VoiceProfile } from '../../types';
 import styles from './VoiceSelector.module.css';
 
@@ -12,7 +13,9 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const { refreshCounter } = useVoiceRefresh();
 
+  // refreshCounter 变化时重新拉取，确保 clone/delete/update description 后列表同步
   useEffect(() => {
     const loadVoices = async () => {
       try {
@@ -30,7 +33,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
       }
     };
     loadVoices();
-  }, []);
+  }, [refreshCounter]);
 
   if (isLoading) {
     return <div className={styles.loading}>加载声音列表...</div>;

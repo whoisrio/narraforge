@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { voiceApi } from '../../services/api';
+import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import type { VoiceProfile } from '../../types';
 import { Button, Modal, Input, Select, Loading, EmptyState, Card, Alert } from '../ui';
 
@@ -24,6 +25,8 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
   const [editingDescription, setEditingDescription] = useState('');
   const [editingError, setEditingError] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
+
+  const { refreshCounter, triggerRefresh } = useVoiceRefresh();
 
   const fetchVoices = async () => {
     try {
@@ -63,13 +66,14 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
 
   useEffect(() => {
     fetchVoices();
-  }, []);
+  }, [refreshCounter]);
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this voice?')) return;
     try {
       await voiceApi.delete(id);
       fetchVoices();
+      triggerRefresh();
       onRefresh?.();
     } catch (err) {
       console.error('Delete failed:', err);
@@ -87,6 +91,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
       }
     }
     setVoices([]);
+    triggerRefresh();
     onRefresh?.();
   };
 
@@ -113,6 +118,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
       }).then(r => r.json());
       setRegisterResult(result);
       fetchVoices();
+      triggerRefresh();
     } catch (err) {
       console.error('Register failed:', err);
       alert('Voice registration failed, please try again');
@@ -158,6 +164,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
       setVoices(prev => prev.map(v =>
         v.id === voiceId ? { ...v, description: editingDescription.trim() || undefined } : v
       ));
+      triggerRefresh(); // 通知 TTS 页面刷新声音列表
       setEditingId(null);
       setEditingError('');
     } catch (err: any) {

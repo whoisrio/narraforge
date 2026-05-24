@@ -20,7 +20,9 @@ export interface TTSRequest {
   speed?: number; // 0.5 - 2.0
   volume?: number; // 0 - 100
   pitch?: number; // 0.5 - 2.0
-  emotion?: 'neutral' | 'happy' | 'sad' | 'nervous' | 'excited';
+  instruction?: string;
+  enable_ssml?: boolean;
+  enable_markdown_filter?: boolean;
   format?: 'mp3' | 'wav';
   // Edge-TTS params
   edge_voice?: string;
@@ -43,7 +45,9 @@ export interface TTSResult {
     volume?: number;
     pitch?: number;
     language?: string;
-    emotion?: string;
+    instruction?: string;
+    enable_ssml?: boolean;
+    enable_markdown_filter?: boolean;
     engine?: string;
     edge_voice?: string;
     edge_rate?: string;
@@ -70,7 +74,7 @@ export interface TTSResultRecord {
   speed: number;
   volume: number;
   pitch: number;
-  emotion: string;
+  instruction: string;
   language: string;
   created_at: string;
 }
@@ -96,7 +100,7 @@ export interface TTSLocalRecord {
   speed: number;
   volume: number;
   pitch: number;
-  emotion: string;
+  instruction: string;
   language: string;
   created_at: string;
 }

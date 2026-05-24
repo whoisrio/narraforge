@@ -1,0 +1,56 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.urlInput {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: var(--radius-md, 0.5rem);
+  font-size: var(--font-size-base, 0.875rem);
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.urlInput:focus {
+  border-color: var(--color-primary, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.urlInput::placeholder {
+  color: #9ca3af;
+}
+
+.confirmButton {
+  padding: 0.5rem 1rem;
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md, 0.5rem);
+  cursor: pointer;
+  font-size: var(--font-size-base, 0.875rem);
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.confirmButton:hover:not(:disabled) {
+  background: var(--color-primary-hover, #1d4ed8);
+}
+
+.confirmButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  color: var(--color-danger, #dc2626);
+  font-size: 0.8125rem;
+}
+
+.hint {
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 0.8125rem;
+}

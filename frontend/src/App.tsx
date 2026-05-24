@@ -5,6 +5,7 @@ import { TTSSynthesis } from './pages/TTSSynthesis';
 import { SpeechToText } from './pages/SpeechToText';
 import { configApi } from './services/api';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
+import { VoiceRefreshProvider, useVoiceRefresh } from './hooks/useVoiceRefresh';
 import styles from './App.module.css';
 
 /** 页面状态：主页 或 三个工具页 */
@@ -15,14 +16,14 @@ type View = Page | Tab;
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
   const [activeTab, setActiveTab] = useState<Tab>('voice-clone');
-  const [storageMode, setStorageMode] = useState<StorageMode>('backend');
+  const [storageMode, setStorageMode] = useState<StorageMode>('frontend');
   const [showSettings, setShowSettings] = useState(false);
 
   // 启动时从后端加载存储模式配置
   useEffect(() => {
     configApi.getStorageMode().then(
       (data) => setStorageMode(data.storage_mode as StorageMode),
-      () => console.warn('Failed to load storage mode, using default backend'),
+      () => console.warn('Failed to load storage mode, using default frontend'),
     );
   }, []);
 
@@ -125,17 +126,19 @@ export default function App() {
 
         {/* 工具页 —— 三页面全挂载，CSS 控制显隐，切换时不丢失状态 */}
         {!isHome && (
-          <main className={styles.main}>
-            <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none' }}>
-              <VoiceClone />
-            </div>
-            <div style={{ display: activeTab === 'tts-synthesis' ? 'block' : 'none' }}>
-              <TTSSynthesis />
-            </div>
-            <div style={{ display: activeTab === 'speech-to-text' ? 'block' : 'none' }}>
-              <SpeechToText />
-            </div>
-          </main>
+          <VoiceRefreshProvider>
+            <main className={styles.main}>
+              <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none' }}>
+                <VoiceClone />
+              </div>
+              <div style={{ display: activeTab === 'tts-synthesis' ? 'block' : 'none' }}>
+                <TTSSynthesis />
+              </div>
+              <div style={{ display: activeTab === 'speech-to-text' ? 'block' : 'none' }}>
+                <SpeechToText />
+              </div>
+            </main>
+          </VoiceRefreshProvider>
         )}
       </div>
     </StorageModeContext.Provider>

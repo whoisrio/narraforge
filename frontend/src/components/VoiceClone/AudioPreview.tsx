@@ -3,62 +3,84 @@ import { voiceApi } from '../../services/api';
 import styles from './AudioPreview.module.css';
 
 interface AudioPreviewProps {
-  file: File;
+  /** 文件模式：用户录制/上传的 File，组件负责 upload → clone */
+  file?: File;
+  /** URL 模式：已经通过 upload-from-url 创建好的 voice ID，跳过上传直接 clone */
+  voiceId?: string;
+  /** URL 模式下用于预览播放的音频地址 */
+  audioUrl?: string;
   onCloneSuccess: () => void;
   onCancel: () => void;
 }
 
-/** 录音/上传完成后展示音频预览，依次执行 upload → clone，失败则回滚删除 */
-export function AudioPreview({ file, onCloneSuccess, onCancel }: AudioPreviewProps) {
+/** 录音/上传完成后展示音频预览，依次执行 upload → clone（失败则回滚删除）。URL 模式下跳过 upload 直接 clone */
+export function AudioPreview({ file, voiceId, audioUrl, onCloneSuccess, onCancel }: AudioPreviewProps) {
   const [isCloning, setIsCloning] = useState(false);
   const [step, setStep] = useState<'idle' | 'uploading' | 'cloning'>('idle');
   const [error, setError] = useState('');
-  /** 暂存 upload 返回的 voice_id，用于 clone 或回滚 */
+  /** 暂存 upload 返回的 voice_id，用于 clone 或回滚（仅文件模式） */
   const [uploadedVoiceId, setUploadedVoiceId] = useState<string | null>(null);
 
-  const audioUrl = URL.createObjectURL(file);
+  /** 文件模式下用于播放的本地 blob URL */
+  const blobUrl = file ? URL.createObjectURL(file) : null;
+  /** 实际用于播放的音频地址 */
+  const playUrl = audioUrl || blobUrl || '';
 
-  /** 两步流程：上传文件 → 注册克隆。失败则回滚删除上传记录 */
+  /** 两步流程：上传（文件模式）→ 注册克隆。失败则回滚 */
   const handleClone = async () => {
     setIsCloning(true);
     setError('');
 
+    let targetVoiceId: string;
+
     try {
-      // Step 1: 上传音频文件
-      setStep('uploading');
-      const uploadResult = await voiceApi.upload(file);
-      setUploadedVoiceId(uploadResult.id);
+      if (voiceId) {
+        // URL 模式：已有 voice_id，直接克隆，无需回滚（由 UrlInput 创建）
+        targetVoiceId = voiceId;
+        setStep('cloning');
+      } else if (file) {
+        // 文件模式：先上传再克隆（现有逻辑）
+        setStep('uploading');
+        const uploadResult = await voiceApi.upload(file);
+        targetVoiceId = uploadResult.id;
+        setUploadedVoiceId(targetVoiceId);
+        setStep('cloning');
+      } else {
+        setError('缺少音频数据');
+        return;
+      }
 
-      // Step 2: 调用千问注册克隆
-      setStep('cloning');
-      await voiceApi.createClone(uploadResult.id);
+      await voiceApi.createClone(targetVoiceId);
 
-      // 全部成功，通知父组件
-      URL.revokeObjectURL(audioUrl);
+      // 成功，清理 blob URL 并通知父组件
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
       onCloneSuccess();
     } catch (err) {
       console.error('Clone failed:', err);
 
-      // 失败回滚：删除已上传的 voice 记录
-      if (uploadedVoiceId) {
+      // 文件模式：失败回滚删除已上传的记录
+      if (uploadedVoiceId && !voiceId) {
         try {
           await voiceApi.delete(uploadedVoiceId);
         } catch (rollbackErr) {
           console.error('Rollback failed:', rollbackErr);
         }
       }
-      setError('克隆失败，已回滚上传。请重试');
+      setError('克隆失败，请重试');
       setStep('idle');
-      setUploadedVoiceId(null);
     } finally {
       setIsCloning(false);
     }
   };
 
   const handleCancel = () => {
-    URL.revokeObjectURL(audioUrl);
-    // 如果已上传但未完成 clone，也需要删除
-    if (uploadedVoiceId) {
+    if (blobUrl) {
+      URL.revokeObjectURL(blobUrl);
+    }
+    // 如果已上传但未完成 clone（文件模式），也需要删除
+    if (uploadedVoiceId && !voiceId) {
       voiceApi.delete(uploadedVoiceId).catch(e => console.error('Cleanup failed:', e));
     }
     onCancel();
@@ -76,12 +98,18 @@ export function AudioPreview({ file, onCloneSuccess, onCancel }: AudioPreviewPro
       </div>
 
       <div className={styles.fileInfo}>
-        <span className={styles.fileIcon}>📁</span>
-        <span className={styles.fileName}>{file.name}</span>
-        <span className={styles.fileSize}>{(file.size / 1024).toFixed(1)} KB</span>
+        <span className={styles.fileIcon}>{voiceId ? '🌐' : '📁'}</span>
+        <span className={styles.fileName}>
+          {voiceId ? '外部音频' : file?.name}
+        </span>
+        {file && (
+          <span className={styles.fileSize}>{(file.size / 1024).toFixed(1)} KB</span>
+        )}
       </div>
 
-      <audio className={styles.audioPlayer} src={audioUrl} controls />
+      {playUrl && (
+        <audio className={styles.audioPlayer} src={playUrl} controls />
+      )}
 
       {error && <div className={styles.error}>{error}</div>}
 

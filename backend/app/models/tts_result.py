@@ -20,6 +20,6 @@ class TTSResultRecord(Base):
     speed = Column(Float, default=1.0)
     volume = Column(Float, default=80)
     pitch = Column(Float, default=1.0)  # 音调比率 0.5-2.0
-    emotion = Column(String, default="neutral")
+    instruction = Column(String, default="音调偏高，语速中等，充满活力和感染力，适合广告配音")
     language = Column(String, default="Chinese")
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -25,7 +25,7 @@ def set_config(db: Session, key: str, value: str) -> None:
 
 def get_storage_mode(db: Session) -> str:
     """获取当前存储模式，默认 backend"""
-    mode = get_config(db, "storage_mode", STORAGE_MODE_BACKEND)
+    mode = get_config(db, "storage_mode", STORAGE_MODE_FRONTEND)
     if mode not in VALID_STORAGE_MODES:
         return STORAGE_MODE_BACKEND
     return mode

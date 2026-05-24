@@ -14,6 +14,15 @@ export const voiceApi = {
     return data;
   },
 
+  /** 从公网 URL 下载音频并创建声音记录，后端会校验 URL 可访问性并下载到 uploads 目录 */
+  uploadFromUrl: async (audioUrl: string, name?: string): Promise<VoiceProfile> => {
+    const { data } = await api.post<VoiceProfile>('/clone/upload-from-url', {
+      audio_url: audioUrl,
+      name,
+    });
+    return data;
+  },
+
   list: async (): Promise<VoiceProfile[]> => {
     const { data } = await api.get<VoiceProfile[]>('/clone/list');
     return data;

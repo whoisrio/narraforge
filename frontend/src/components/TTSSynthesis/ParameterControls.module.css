@@ -56,3 +56,89 @@
 .control input[type="range"] {
   flex: 1;
 }
+
+/* 复刻指令 */
+.instructionSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.instructionSection > label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.instructionInput {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.charCount {
+  align-self: flex-end;
+  font-size: 11px;
+  color: #999;
+}
+
+.presetButtons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.presetButton {
+  padding: 4px 10px;
+  border: 1px solid #ddd;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.presetButton:hover {
+  border-color: #007aff;
+  color: #007aff;
+}
+
+.presetActive {
+  background: #007aff;
+  color: #fff;
+  border-color: #007aff;
+}
+
+/* 开关选项 */
+.toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.toggleButton {
+  padding: 2px 12px;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  background: #f5f5f5;
+  font-size: 12px;
+  cursor: pointer;
+  min-width: 40px;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.toggleOn {
+  background: #007aff;
+  color: #fff;
+  border-color: #007aff;
+}

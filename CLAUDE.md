@@ -19,7 +19,7 @@ npm run lint     # Run ESLint
 ### Backend
 ```bash
 cd backend
-source .venv/Scripts/activate  # Windows: .venv\Scripts\activate
+source .venv/Scripts/activate  # Windows: .venv\Scripts\activate.ps1 (powershell) or activate.bat
 python -m uvicorn main:app --host 127.0.0.1 --port 8002
 ```
 

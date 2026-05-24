@@ -6,7 +6,7 @@ export const StorageModeContext = createContext<{
   mode: StorageMode;
   setMode: (mode: StorageMode) => void;
 }>({
-  mode: 'backend',
+  mode: 'frontend',
   setMode: () => {},
 });
 

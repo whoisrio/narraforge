@@ -8,6 +8,7 @@ import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
 import { ttsApi } from '../services/api';
 import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { useStorageMode } from '../hooks/useStorageMode';
+import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile } from '../types';
 import styles from './TTSSynthesis.module.css';
 
@@ -20,6 +21,7 @@ function toEdgeFormat(value: number) {
 
 export function TTSSynthesis() {
   const { mode: storageMode } = useStorageMode();
+  const { refreshCounter } = useVoiceRefresh();
   const [engine, setEngine] = useState<Engine>('cosyvoice');
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
@@ -28,7 +30,6 @@ export function TTSSynthesis() {
     speed: 1.0,
     volume: 80,
     pitch: 1.0,
-    emotion: undefined,
   });
 
   // Edge-TTS state - 拆分为声音 + 独立的语速/音量数值
@@ -53,9 +54,10 @@ export function TTSSynthesis() {
   }, [voices]);
 
   // 加载声音列表，用于下拉选择和历史记录的描述匹配
+  // refreshCounter 变化时重新拉取，确保 clone/delete/update description 后列表同步
   useEffect(() => {
     ttsApi.getVoices().then(setVoices).catch(() => {});
-  }, []);
+  }, [refreshCounter]);
 
   // 用 ref 跟踪当前模式，避免异步竞态：初始 backend 模式的结果覆盖后续 frontend 模式的结果
   const storageModeRef = useRef(storageMode);
@@ -106,7 +108,7 @@ export function TTSSynthesis() {
             speed: r.speed,
             volume: r.volume,
             pitch: r.pitch,
-            emotion: r.emotion,
+            instruction: r.instruction,
             language: r.language,
             created_at: r.created_at,
           };
@@ -185,7 +187,7 @@ export function TTSSynthesis() {
             speed: 1.0,
             volume: edgeVolume,
             pitch: 1.0,
-            emotion: 'neutral',
+            instruction: '',
             language: 'Chinese',
             created_at: new Date().toISOString(),
           });
@@ -200,7 +202,9 @@ export function TTSSynthesis() {
           speed: params.speed ?? 1.0,
           volume: params.volume ?? 80,
           pitch: params.pitch ?? 1.0,
-          emotion: params.emotion,
+          instruction: params.instruction || '',
+          enable_ssml: params.enable_ssml ?? false,
+          enable_markdown_filter: params.enable_markdown_filter ?? false,
           format: 'mp3',
         });
 
@@ -221,7 +225,7 @@ export function TTSSynthesis() {
             speed: response.params.speed ?? 1.0,
             volume: response.params.volume ?? 80,
             pitch: response.params.pitch ?? 1.0,
-            emotion: response.params.emotion || 'neutral',
+            instruction: response.params.instruction || '',
             language: response.params.language || 'Chinese',
             created_at: new Date().toISOString(),
           });
@@ -272,7 +276,7 @@ export function TTSSynthesis() {
               volume: record.volume,
               pitch: record.pitch,
               language: record.language,
-              emotion: record.emotion,
+              instruction: record.instruction,
             },
           });
         };
@@ -289,7 +293,7 @@ export function TTSSynthesis() {
           volume: record.volume,
           pitch: record.pitch,
           language: record.language,
-          emotion: record.emotion,
+          instruction: record.instruction,
         },
       });
     }

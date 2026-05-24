@@ -18,7 +18,6 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
   const [speed, setSpeed] = useState(1.0);
   const [volume, setVolume] = useState(80);
   const [pitch, setPitch] = useState(1.0);
-  const [emotion, setEmotion] = useState('neutral');
   const [synthesizing, setSynthesizing] = useState(false);
   const [result, setResult] = useState<TTSResult | null>(null);
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
@@ -55,7 +54,6 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
         speed,
         volume,
         pitch,
-        emotion,
         voice_id: selectedVoiceId,
       };
       const res = await ttsApi.synthesize(request);
@@ -101,13 +99,6 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
     .map(voice => ({ value: voice.qwen_voice_id!, label: voice.description || voice.qwen_voice_id! }));
 
   const currentVoiceOptions = useClonedVoice ? clonedVoiceOptions : standardVoices;
-
-  const emotionOptions = [
-    { value: 'neutral', label: 'Neutral' },
-    { value: 'happy', label: 'Happy' },
-    { value: 'sad', label: 'Sad' },
-    { value: 'excited', label: 'Excited' },
-  ];
 
   const headerStyle: React.CSSProperties = {
     display: 'flex',
@@ -206,13 +197,6 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
           max={2}
           step={0.1}
         />
-
-        <Select
-          label="Emotion"
-          options={emotionOptions}
-          value={emotion}
-          onChange={(e) => setEmotion(e.target.value as string)}
-        />
       </div>
 
       <Button
@@ -235,7 +219,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
         <div style={resultStyle}>
           <audio src={result.audio_url} controls style={{ width: '100%' }} />
           <div style={{ marginTop: 'var(--spacing-sm)', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-            Params: speed={result.params.speed}, volume={result.params.volume}, pitch={result.params.pitch}, emotion={result.params.emotion}
+            Params: speed={result.params.speed}, volume={result.params.volume}, pitch={result.params.pitch}, instruction={result.params.instruction}
           </div>
         </div>
       )}
