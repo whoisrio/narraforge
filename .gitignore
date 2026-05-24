@@ -61,3 +61,7 @@ node_modules
 output
 backend/output
 backend/.env
+
+backend/__pycache__/
+backend/*.py[cod]
+backend/*$py.class
