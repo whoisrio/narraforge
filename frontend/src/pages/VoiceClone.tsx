@@ -142,8 +142,8 @@ export function VoiceClone() {
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1>声音克隆</h1>
-        <p>创建你自己的声音模型</p>
+        <h1>声音复刻</h1>
+        <p>完美复刻你的声音</p>
       </div>
 
       <div className={styles.content}>

@@ -47,10 +47,10 @@ export default function Landing({ onNavigate }: LandingProps) {
       {/* ── Feature 1: Voice Clone ── */}
       <FeatureTile
         number="01"
-        title="声音克隆"
+        title="声音复刻"
         subtitle="Voice Cloning"
         body="上传一段 30 秒的音频样本，AI 即可精准复刻说话人的音色、语调与情感韵律。克隆后的声音可用于任意文本的语音合成，让每个字都像是原声。"
-        action="体验声音克隆"
+        action="体验声音复刻"
         onAction={() => onNavigate('voice-clone')}
         theme="white"
       />

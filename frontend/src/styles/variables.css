@@ -8,6 +8,7 @@
   --color-success: #4caf50;
   --color-warning: #ff9800;
   --color-error: #f44336;
+  --color-danger: #f44336;   /* 兼容 danger 变体按钮 */
 
   /* Background & Surface */
   --color-background: #f5f5f7;

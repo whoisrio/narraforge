@@ -11,7 +11,7 @@ describe('VoiceClone Page', () => {
   it('should render page title and sections', () => {
     render(<VoiceClone />);
 
-    expect(screen.getByText('声音克隆')).toBeInTheDocument();
+    expect(screen.getByText('声音复刻')).toBeInTheDocument();
     expect(screen.getByText('录制音频')).toBeInTheDocument();
     expect(screen.getByText('上传音频')).toBeInTheDocument();
   });

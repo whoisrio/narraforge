@@ -20,6 +20,12 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
   const [registerResult, setRegisterResult] = useState<{ qwen_voice_id?: string; role?: string; cloned_at?: string } | null>(null);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
+  // 删除确认弹窗状态
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // null 表示"全部删除"，string 表示删除单条
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   // 内联编辑状态
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingDescription, setEditingDescription] = useState('');
@@ -68,31 +74,50 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
     fetchVoices();
   }, [refreshCounter]);
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this voice?')) return;
+  // 为什么用 Modal 而非 confirm()：
+  // confirm() 的 UI 不可定制且在不同浏览器下表现不一致，Modal 可以统一风格并提供更清晰的操作提示
+  const handleDeleteClick = (id: string) => {
+    setDeleteTarget(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleClearAllClick = () => {
+    setDeleteTarget(null); // null 表示全部删除
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    setDeleting(true);
     try {
-      await voiceApi.delete(id);
+      if (deleteTarget === null) {
+        // 全部删除：逐个删除，某个失败也继续
+        for (const voice of [...voices]) {
+          try {
+            await voiceApi.delete(voice.id);
+          } catch (err) {
+            console.error(`Failed to delete voice ${voice.id}:`, err);
+          }
+        }
+        setVoices([]);
+      } else {
+        // 单条删除
+        await voiceApi.delete(deleteTarget);
+      }
       fetchVoices();
       triggerRefresh();
       onRefresh?.();
     } catch (err) {
       console.error('Delete failed:', err);
+    } finally {
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+      setDeleteTarget(null);
     }
   };
 
-  const handleClearAll = async () => {
-    if (!confirm('确定要删除所有克隆声音吗？此操作不可撤销。')) return;
-    // 逐个删除所有声音，即使某个失败也继续
-    for (const voice of [...voices]) {
-      try {
-        await voiceApi.delete(voice.id);
-      } catch (err) {
-        console.error(`Failed to delete voice ${voice.id}:`, err);
-      }
-    }
-    setVoices([]);
-    triggerRefresh();
-    onRefresh?.();
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setDeleteTarget(null);
   };
 
   const handleRegisterClick = (voice: VoiceProfile) => {
@@ -247,7 +272,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
           <Button
             variant="danger"
             size="sm"
-            onClick={handleClearAll}
+            onClick={handleClearAllClick}
             disabled={voices.length === 0}
           >
             🗑️ Clear All
@@ -344,7 +369,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => handleDelete(voice.id)}
+                    onClick={() => handleDeleteClick(voice.id)}
                   >
                     Delete
                   </Button>
@@ -408,6 +433,32 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
             <div><strong>Cloned at:</strong> {registerResult.cloned_at ? new Date(registerResult.cloned_at).toLocaleString() : 'N/A'}</div>
           </Alert>
         )}
+      </Modal>
+
+      {/* 删除确认弹窗 — 为什么需要确认：删除会同时移除 Qwen 云端音色和本地数据，不可恢复 */}
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={handleCancelDelete}
+        title="确认删除"
+        footer={
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={handleCancelDelete} disabled={deleting}>
+              取消
+            </Button>
+            <Button variant="danger" onClick={handleConfirmDelete} loading={deleting}>
+              {deleting ? '删除中...' : '确认删除'}
+            </Button>
+          </div>
+        }
+      >
+        <p style={{ marginBottom: 'var(--spacing-sm)' }}>
+          {deleteTarget === null
+            ? '确定要删除所有克隆声音吗？'
+            : `确定要删除声音 "${voices.find(v => v.id === deleteTarget)?.name || deleteTarget}" 吗？`}
+        </p>
+        <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
+          此操作会同步删除 Qwen 云端的音色数据，不可撤销。
+        </p>
       </Modal>
     </div>
   );

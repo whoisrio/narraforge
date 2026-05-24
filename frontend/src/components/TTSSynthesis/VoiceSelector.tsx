@@ -44,7 +44,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
   }
 
   if (voices.length === 0) {
-    return <div className={styles.empty}>暂无克隆声音，请先在"声音克隆"页面上传音频</div>;
+    return <div className={styles.empty}>暂无克隆声音，请先在"声音复刻"页面上传音频</div>;
   }
 
   return (

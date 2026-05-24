@@ -23,6 +23,8 @@ services:
       - /app/node_modules
     environment:
       - VITE_API_URL=http://localhost:8002
+      # Docker 容器间通过服务名通信，backend 内部监听 8000
+      - VITE_BACKEND_URL=http://backend:8000
     depends_on:
       - backend
     networks:

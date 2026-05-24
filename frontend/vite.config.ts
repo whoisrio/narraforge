@@ -18,7 +18,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://backend:8000',
+        // 本地开发默认指向 127.0.0.1:8002，Docker 环境通过 VITE_BACKEND_URL=http://backend:8000 覆盖
+        target: process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
     },
