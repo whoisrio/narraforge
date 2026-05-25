@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voice Studio — Cover</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --color-primary: #6366f1;
+      --color-primary-light: #818cf8;
+      --color-primary-dark: #4f46e5;
+      --color-cta: #f97316;
+      --color-surface: #ffffff;
+      --color-text-primary: #0f172a;
+      --color-text-secondary: #475569;
+      --glow-primary: rgba(99, 102, 241, 0.15);
+    }
+
+    [data-theme="dark"] {
+      --color-surface: #0f172a;
+      --color-text-primary: #f1f5f9;
+      --color-text-secondary: #94a3b8;
+      --glow-primary: rgba(129, 140, 248, 0.2);
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    .cover {
+      width: 1920px;
+      height: 1080px;
+      position: relative;
+      background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #312e81 70%, #0f172a 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    /* Ambient background orbs */
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.3;
+      pointer-events: none;
+    }
+    .orb-1 {
+      width: 600px; height: 600px;
+      background: #6366f1;
+      top: -15%; left: -10%;
+      animation: orbFloat1 12s ease-in-out infinite;
+    }
+    .orb-2 {
+      width: 500px; height: 500px;
+      background: #f97316;
+      bottom: -20%; right: -5%;
+      animation: orbFloat2 15s ease-in-out infinite;
+    }
+    .orb-3 {
+      width: 400px; height: 400px;
+      background: #818cf8;
+      top: 40%; right: 25%;
+      animation: orbFloat3 10s ease-in-out infinite;
+    }
+
+    @keyframes orbFloat1 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(40px, -30px) scale(1.05); }
+      66% { transform: translate(-20px, 20px) scale(0.95); }
+    }
+    @keyframes orbFloat2 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(-50px, -40px) scale(1.1); }
+    }
+    @keyframes orbFloat3 {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(30px, 50px) scale(1.08); }
+    }
+
+    /* Grid pattern overlay */
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(99, 102, 241, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(99, 102, 241, 0.04) 1px, transparent 1px);
+      background-size: 80px 80px;
+      pointer-events: none;
+    }
+
+    /* Waveform decoration */
+    .waveform-row {
+      position: absolute;
+      left: 50%; transform: translateX(-50%);
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 80px;
+      pointer-events: none;
+    }
+    .waveform-row.top { top: 12%; }
+    .waveform-row.bottom { bottom: 12%; }
+
+    .wave-bar {
+      width: 5px;
+      border-radius: 3px;
+      background: linear-gradient(to top, var(--color-primary), var(--color-primary-light));
+      opacity: 0.25;
+      animation: wavePulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes wavePulse {
+      0%, 100% { transform: scaleY(0.3); opacity: 0.15; }
+      50% { transform: scaleY(1); opacity: 0.4; }
+    }
+
+    /* Main content */
+    .content {
+      position: relative;
+      z-index: 2;
+      text-align: center;
+      padding: 0 120px;
+    }
+
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 28px;
+      border: 1px solid rgba(129, 140, 248, 0.3);
+      border-radius: 9999px;
+      background: rgba(129, 140, 248, 0.08);
+      backdrop-filter: blur(10px);
+      margin-bottom: 48px;
+      font-size: 16px;
+      font-weight: 500;
+      color: #a5b4fc;
+      letter-spacing: 0.05em;
+    }
+    .badge-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34, 197, 94, 0.5);
+      animation: dotPulse 2s ease-in-out infinite;
+    }
+    @keyframes dotPulse {
+      0%, 100% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.5); }
+      50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.8); }
+    }
+
+    /* Title */
+    .title {
+      font-size: 120px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1;
+      margin-bottom: 32px;
+      background: linear-gradient(135deg, #e0e7ff 0%, #a5b4fc 40%, #c7d2fe 70%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-shadow: none;
+    }
+
+    /* Divider */
+    .divider {
+      width: 200px;
+      height: 2px;
+      margin: 0 auto 40px;
+      background: linear-gradient(90deg, transparent, var(--color-primary-light), var(--color-cta), var(--color-primary-light), transparent);
+      border-radius: 1px;
+    }
+
+    /* Subtitle */
+    .subtitle {
+      font-size: 28px;
+      font-weight: 500;
+      color: #94a3b8;
+      letter-spacing: 0.02em;
+      line-height: 1.6;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .subtitle em {
+      font-style: normal;
+      color: #a5b4fc;
+      font-weight: 600;
+    }
+
+    /* Tech chips */
+    .tech-chips {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-top: 56px;
+    }
+    .chip {
+      padding: 12px 28px;
+      border-radius: 12px;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      border: 1px solid rgba(129, 140, 248, 0.2);
+    }
+    .chip-1 {
+      background: rgba(99, 102, 241, 0.12);
+      color: #a5b4fc;
+    }
+    .chip-2 {
+      background: rgba(249, 115, 22, 0.1);
+      color: #fb923c;
+    }
+    .chip-3 {
+      background: rgba(34, 197, 94, 0.1);
+      color: #4ade80;
+    }
+
+    /* Corner accent lines */
+    .corner-line {
+      position: absolute;
+      pointer-events: none;
+    }
+    .corner-line::before,
+    .corner-line::after {
+      content: '';
+      position: absolute;
+      background: rgba(129, 140, 248, 0.25);
+    }
+    .corner-tl { top: 80px; left: 80px; }
+    .corner-tl::before { width: 80px; height: 1px; top: 0; left: 0; }
+    .corner-tl::after { width: 1px; height: 80px; top: 0; left: 0; }
+
+    .corner-br { bottom: 80px; right: 80px; }
+    .corner-br::before { width: 80px; height: 1px; bottom: 0; right: 0; }
+    .corner-br::after { width: 1px; height: 80px; bottom: 0; right: 0; }
+  </style>
+</head>
+<body>
+  <div class="cover">
+    <!-- Ambient orbs -->
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+
+    <!-- Grid overlay -->
+    <div class="grid-overlay"></div>
+
+    <!-- Corner accents -->
+    <div class="corner-line corner-tl"></div>
+    <div class="corner-line corner-br"></div>
+
+    <!-- Top waveform -->
+    <div class="waveform-row top">
+      <div class="wave-bar" style="height: 30px; animation-delay: 0s;"></div>
+      <div class="wave-bar" style="height: 50px; animation-delay: 0.1s;"></div>
+      <div class="wave-bar" style="height: 70px; animation-delay: 0.2s;"></div>
+      <div class="wave-bar" style="height: 55px; animation-delay: 0.3s;"></div>
+      <div class="wave-bar" style="height: 80px; animation-delay: 0.4s;"></div>
+      <div class="wave-bar" style="height: 45px; animation-delay: 0.5s;"></div>
+      <div class="wave-bar" style="height: 65px; animation-delay: 0.6s;"></div>
+      <div class="wave-bar" style="height: 75px; animation-delay: 0.7s;"></div>
+      <div class="wave-bar" style="height: 40px; animation-delay: 0.8s;"></div>
+      <div class="wave-bar" style="height: 60px; animation-delay: 0.9s;"></div>
+      <div class="wave-bar" style="height: 50px; animation-delay: 1.0s;"></div>
+      <div class="wave-bar" style="height: 70px; animation-delay: 1.1s;"></div>
+      <div class="wave-bar" style="height: 35px; animation-delay: 1.2s;"></div>
+      <div class="wave-bar" style="height: 55px; animation-delay: 1.3s;"></div>
+    </div>
+
+    <!-- Bottom waveform -->
+    <div class="waveform-row bottom">
+      <div class="wave-bar" style="height: 45px; animation-delay: 0s;"></div>
+      <div class="wave-bar" style="height: 65px; animation-delay: 0.15s;"></div>
+      <div class="wave-bar" style="height: 40px; animation-delay: 0.3s;"></div>
+      <div class="wave-bar" style="height: 75px; animation-delay: 0.45s;"></div>
+      <div class="wave-bar" style="height: 55px; animation-delay: 0.6s;"></div>
+      <div class="wave-bar" style="height: 80px; animation-delay: 0.75s;"></div>
+      <div class="wave-bar" style="height: 35px; animation-delay: 0.9s;"></div>
+      <div class="wave-bar" style="height: 60px; animation-delay: 1.05s;"></div>
+      <div class="wave-bar" style="height: 70px; animation-delay: 1.2s;"></div>
+      <div class="wave-bar" style="height: 50px; animation-delay: 1.35s;"></div>
+    </div>
+
+    <!-- Content -->
+    <div class="content">
+      <div class="badge">
+        <span class="badge-dot"></span>
+        AI-Powered Audio Workstation
+      </div>
+
+      <h1 class="title">Voice Studio</h1>
+
+      <div class="divider"></div>
+
+      <p class="subtitle">
+        基于 <em>CosyVoice</em> · <em>Edge-TTS</em> · <em>Faster-Whisper</em><br>
+        将文字、声音、字幕融为一体的 AI 音频工作站
+      </p>
+
+      <div class="tech-chips">
+        <span class="chip chip-1">CosyVoice</span>
+        <span class="chip chip-2">Edge-TTS</span>
+        <span class="chip chip-3">Faster-Whisper</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
