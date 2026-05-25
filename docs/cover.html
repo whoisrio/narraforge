@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Superpowers 实践 — 封面</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-dark: #0a0a0a;
+  --bg-white: #ffffff;
+  --bg-cream: #f5f3ee;
+  --accent-blue: #4361ee;
+  --accent-yellow: #ffd60a;
+  --accent-coral: #ff6b4a;
+  --text-dark: #0a0a0a;
+  --text-light: #ffffff;
+  --font-display: 'Manrope', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font-display);
+  background: var(--bg-dark);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 60px;
+  padding: 60px 40px;
+  min-height: 100vh;
+}
+
+/* ===== 通用封面容器 ===== */
+.cover-wrapper {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  flex-shrink: 0;
+}
+
+/* ===== 横封面 16:9 ===== */
+.cover-landscape {
+  width: 960px;
+  height: 540px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+/* ===== 竖封面 9:16 ===== */
+.cover-portrait {
+  width: 405px;
+  height: 720px;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* ===== 横封面左面板 ===== */
+.landscape-left {
+  background: var(--bg-white);
+  color: var(--text-dark);
+  padding: 48px 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+}
+
+.landscape-left .tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+  font-weight: 700;
+}
+
+.landscape-left .title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.landscape-left .title-main {
+  font-size: 52px;
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.landscape-left .title-main .highlight {
+  display: inline-block;
+  background: var(--accent-yellow);
+  padding: 0 0.2em;
+  transform: skewX(-6deg);
+}
+
+.landscape-left .subtitle {
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: #444;
+  max-width: 360px;
+  margin-top: 6px;
+}
+
+.landscape-left .subtitle strong {
+  color: var(--accent-blue);
+  font-weight: 700;
+}
+
+.landscape-left .bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #999;
+}
+
+.landscape-left .bottom-row .dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--accent-coral);
+}
+
+/* ===== 横封面右面板 ===== */
+.landscape-right {
+  background: var(--accent-blue);
+  color: var(--text-light);
+  padding: 48px 52px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 右面板装饰圆 */
+.landscape-right::before {
+  content: '';
+  position: absolute;
+  top: -80px; right: -80px;
+  width: 260px; height: 260px;
+  background: var(--accent-yellow);
+  border-radius: 50%;
+  opacity: 0.2;
+}
+
+.landscape-right::after {
+  content: '';
+  position: absolute;
+  bottom: -60px; left: -60px;
+  width: 200px; height: 200px;
+  background: var(--accent-coral);
+  border-radius: 50%;
+  opacity: 0.15;
+}
+
+.landscape-right .feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+  z-index: 2;
+}
+
+.landscape-right .feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.landscape-right .feature-icon {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.landscape-right .feature-icon.yellow { background: var(--accent-yellow); color: var(--text-dark); }
+.landscape-right .feature-icon.coral { background: var(--accent-coral); color: var(--text-light); }
+.landscape-right .feature-icon.white { background: rgba(255,255,255,0.2); color: var(--text-light); }
+
+.landscape-right .feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.landscape-right .feature-name {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.landscape-right .feature-desc {
+  font-size: 13px;
+  opacity: 0.75;
+  line-height: 1.5;
+}
+
+.landscape-right .brand-mark {
+  position: relative;
+  z-index: 2;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+/* ===== 中间分割线（横封面） ===== */
+.landscape-divider {
+  position: absolute;
+  left: 50%; top: 0; bottom: 0;
+  width: 6px;
+  background: var(--bg-dark);
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+/* ===== 竖封面上面板 ===== */
+.portrait-top {
+  background: var(--bg-white);
+  color: var(--text-dark);
+  padding: 48px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+}
+
+.portrait-top .tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+  font-weight: 700;
+}
+
+.portrait-top .title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.portrait-top .title-main {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+.portrait-top .title-main .highlight {
+  display: inline-block;
+  background: var(--accent-yellow);
+  padding: 0 0.2em;
+  transform: skewX(-6deg);
+}
+
+.portrait-top .subtitle {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.6;
+  color: #444;
+  max-width: 300px;
+  margin-top: 4px;
+}
+
+.portrait-top .subtitle strong {
+  color: var(--accent-blue);
+  font-weight: 700;
+}
+
+.portrait-top .bottom-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #999;
+}
+
+.portrait-top .bottom-row .dot {
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--accent-coral);
+}
+
+/* ===== 竖封面下面板 ===== */
+.portrait-bottom {
+  background: var(--accent-blue);
+  color: var(--text-light);
+  padding: 44px 40px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+
+.portrait-bottom::before {
+  content: '';
+  position: absolute;
+  bottom: -100px; right: -100px;
+  width: 280px; height: 280px;
+  background: var(--accent-yellow);
+  border-radius: 50%;
+  opacity: 0.18;
+}
+
+.portrait-bottom::after {
+  content: '';
+  position: absolute;
+  top: -60px; left: -60px;
+  width: 180px; height: 180px;
+  background: var(--accent-coral);
+  border-radius: 50%;
+  opacity: 0.12;
+}
+
+.portrait-bottom .feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  z-index: 2;
+}
+
+.portrait-bottom .feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.portrait-bottom .feature-icon {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.portrait-bottom .feature-icon.yellow { background: var(--accent-yellow); color: var(--text-dark); }
+.portrait-bottom .feature-icon.coral { background: var(--accent-coral); color: var(--text-light); }
+.portrait-bottom .feature-icon.white { background: rgba(255,255,255,0.2); color: var(--text-light); }
+
+.portrait-bottom .feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.portrait-bottom .feature-name {
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.portrait-bottom .feature-desc {
+  font-size: 12px;
+  opacity: 0.75;
+  line-height: 1.5;
+}
+
+.portrait-bottom .brand-mark {
+  position: relative;
+  z-index: 2;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+
+/* ===== 中间分割线（竖封面） ===== */
+.portrait-divider {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 6px;
+  background: var(--bg-dark);
+  transform: translateY(-50%);
+  z-index: 5;
+}
+
+/* ===== 标签 ===== */
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: -40px;
+}
+
+/* ===== 响应式 ===== */
+@media (max-width: 1100px) {
+  .cover-landscape { width: 768px; height: 432px; }
+  .landscape-left { padding: 36px 40px; }
+  .landscape-right { padding: 36px 40px; }
+  .landscape-left .title-main { font-size: 42px; }
+}
+
+@media (max-width: 850px) {
+  body { padding: 30px 16px; gap: 40px; }
+  .cover-landscape { width: 100%; height: auto; aspect-ratio: 16/9; }
+  .cover-portrait { width: min(100%, 405px); height: auto; aspect-ratio: 9/16; }
+  .landscape-left .title-main { font-size: clamp(28px, 5vw, 42px); }
+  .portrait-top .title-main { font-size: clamp(32px, 7vw, 48px); }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== 横封面 16:9 ===== -->
+<p class="section-label">横封面 · Landscape 16:9</p>
+<div class="cover-wrapper cover-landscape">
+  <div class="landscape-divider"></div>
+
+  <div class="landscape-left">
+    <span class="tag">Voice Clone Studio</span>
+
+    <div class="title-block">
+      <h1 class="title-main">
+        <span class="highlight">Super</span>powers<br>实践
+      </h1>
+      <p class="subtitle">
+        让<strong>AI</strong>替你开口，一个<strong>语音合成</strong>，字幕识别小工具
+      </p>
+    </div>
+
+    <div class="bottom-row">
+      <span>2025</span>
+      <span class="dot"></span>
+      <span>Qwen CosyVoice</span>
+      <span class="dot"></span>
+      <span>Open Source</span>
+    </div>
+  </div>
+
+  <div class="landscape-right">
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="feature-icon yellow">🎙</div>
+        <div class="feature-text">
+          <div class="feature-name">语音克隆</div>
+          <div class="feature-desc">上传音频样本，克隆专属音色</div>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon coral">🔊</div>
+        <div class="feature-text">
+          <div class="feature-name">语音合成</div>
+          <div class="feature-desc">文本转语音，支持多种音色切换</div>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon white">📝</div>
+        <div class="feature-text">
+          <div class="feature-name">字幕识别</div>
+          <div class="feature-desc">自动生成时间轴字幕，精准对齐</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="brand-mark">Voice Clone Studio · v1.0</div>
+  </div>
+</div>
+
+<!-- ===== 竖封面 9:16 ===== -->
+<p class="section-label">竖封面 · Portrait 9:16</p>
+<div class="cover-wrapper cover-portrait">
+  <div class="portrait-divider"></div>
+
+  <div class="portrait-top">
+    <span class="tag">Voice Clone Studio</span>
+
+    <div class="title-block">
+      <h1 class="title-main">
+        <span class="highlight">Super</span>powers<br>实践
+      </h1>
+      <p class="subtitle">
+        让<strong>AI</strong>替你开口，一个<strong>语音合成</strong>，字幕识别小工具
+      </p>
+    </div>
+
+    <div class="bottom-row">
+      <span>2025</span>
+      <span class="dot"></span>
+      <span>CosyVoice</span>
+    </div>
+  </div>
+
+  <div class="portrait-bottom">
+    <div class="feature-list">
+      <div class="feature-item">
+        <div class="feature-icon yellow">🎙</div>
+        <div class="feature-text">
+          <div class="feature-name">语音克隆</div>
+          <div class="feature-desc">上传音频样本，克隆专属音色</div>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon coral">🔊</div>
+        <div class="feature-text">
+          <div class="feature-name">语音合成</div>
+          <div class="feature-desc">文本转语音，支持多种音色</div>
+        </div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon white">📝</div>
+        <div class="feature-text">
+          <div class="feature-name">字幕识别</div>
+          <div class="feature-desc">自动生成时间轴字幕</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="brand-mark">Voice Clone Studio · v1.0</div>
+  </div>
+</div>
+
+</body>
+</html>

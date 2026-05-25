@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Studio — 给独立创作者的视频配音小工具</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* ===========================================
+   THEME — Electric Studio
+   Change these CSS variables to retheme the deck
+   =========================================== */
+:root {
+  --bg-dark: #0a0a0a;
+  --bg-white: #ffffff;
+  --bg-cream: #f5f3ee;
+  --accent-blue: #4361ee;
+  --accent-yellow: #ffd60a;
+  --accent-coral: #ff6b4a;
+  --text-dark: #0a0a0a;
+  --text-light: #ffffff;
+  --text-muted: #6b7280;
+
+  --font-display: 'Manrope', sans-serif;
+  --font-mono: 'Space Mono', monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-normal: 0.7s;
+}
+
+/* ===========================================
+   VIEWPORT FITTING — MANDATORY BASE
+   =========================================== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow-x: hidden; font-family: var(--font-display); color: var(--text-dark); background: var(--bg-dark); }
+html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+
+.slide {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+:root {
+  --title-size: clamp(1.5rem, 5vw, 4rem);
+  --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
+  --h3-size: clamp(1rem, 2.5vw, 1.75rem);
+  --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
+  --small-size: clamp(0.65rem, 1vw, 0.875rem);
+  --slide-padding: clamp(1.5rem, 4vw, 4rem);
+  --content-gap: clamp(0.5rem, 2vw, 2rem);
+  --element-gap: clamp(0.25rem, 1vw, 1rem);
+}
+
+img { max-width: 100%; max-height: min(50vh, 400px); object-fit: contain; }
+
+@media (max-height: 700px) {
+  :root {
+    --slide-padding: clamp(0.75rem, 3vw, 2rem);
+    --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
+    --h2-size: clamp(1rem, 3vw, 1.75rem);
+  }
+}
+@media (max-height: 600px) {
+  :root { --title-size: clamp(1.1rem, 4vw, 2rem); --body-size: clamp(0.7rem, 1.2vw, 0.95rem); }
+  .nav-dots, .keyboard-hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; }
+  html { scroll-behavior: auto; }
+}
+
+/* ===========================================
+   ANIMATIONS — reveal on enter viewport
+   =========================================== */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity var(--duration-normal) var(--ease-out-expo),
+              transform var(--duration-normal) var(--ease-out-expo);
+}
+.slide.visible .reveal { opacity: 1; transform: translateY(0); }
+.slide.visible .reveal:nth-child(1) { transition-delay: 0.05s; }
+.slide.visible .reveal:nth-child(2) { transition-delay: 0.15s; }
+.slide.visible .reveal:nth-child(3) { transition-delay: 0.25s; }
+.slide.visible .reveal:nth-child(4) { transition-delay: 0.35s; }
+.slide.visible .reveal:nth-child(5) { transition-delay: 0.45s; }
+.slide.visible .reveal:nth-child(6) { transition-delay: 0.55s; }
+
+/* ===========================================
+   SHARED — meta/brand/dots
+   =========================================== */
+.brand-mono {
+  font-family: var(--font-mono);
+  font-size: clamp(0.7rem, 0.9vw, 0.85rem);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.tag-pill {
+  display: inline-block;
+  border: 1.5px solid currentColor;
+  padding: 0.45em 1em;
+  font-size: clamp(0.7rem, 0.9vw, 0.85rem);
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* ===========================================
+   SLIDE 1 — Title (split panel)
+   =========================================== */
+.title-slide {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+.title-slide .panel {
+  padding: var(--slide-padding);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+}
+.title-slide .top { background: var(--bg-white); color: var(--text-dark); }
+.title-slide .bottom { background: var(--accent-blue); color: var(--text-light); }
+.title-slide .bar {
+  position: absolute; left: 0; right: 0; top: 50%;
+  height: 8px; background: var(--bg-dark);
+  transform: translateY(-50%); z-index: 2;
+}
+.title-headline {
+  font-size: clamp(2rem, 6.5vw, 5.5rem);
+  font-weight: 800; line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+.title-headline span {
+  display: inline-block; padding: 0 0.3em;
+  background: var(--accent-yellow);
+  transform: skewX(-6deg);
+}
+.title-subhead {
+  font-size: clamp(1.4rem, 4vw, 3rem);
+  font-weight: 700; line-height: 1.05;
+}
+.meta-row {
+  display: flex; gap: 1.2rem; align-items: center;
+  font-size: clamp(0.7rem, 1vw, 0.9rem); font-weight: 500;
+}
+.meta-row .dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; display: inline-block; }
+
+/* ===========================================
+   STANDARD CONTENT SLIDE (cream)
+   =========================================== */
+.content-slide {
+  background: var(--bg-cream);
+  padding: var(--slide-padding);
+  flex-direction: column;
+  justify-content: space-between;
+}
+.content-slide .topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  color: var(--text-muted);
+}
+.content-slide .topbar .number {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: clamp(0.8rem, 1.1vw, 1rem);
+  color: var(--accent-blue);
+}
+.content-slide h2 {
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 800; line-height: 1.0;
+  letter-spacing: -0.02em;
+  max-width: 90%;
+}
+.content-slide h2 em {
+  font-style: normal;
+  background: var(--accent-yellow);
+  padding: 0 0.2em;
+  display: inline-block;
+  transform: skewX(-6deg);
+}
+.content-slide .body {
+  font-size: clamp(1rem, 1.5vw, 1.3rem);
+  line-height: 1.55;
+  font-weight: 400;
+  color: #2d2d2d;
+  max-width: 850px;
+}
+.content-slide .body strong { color: var(--accent-blue); font-weight: 700; }
+.content-slide .footnote {
+  font-family: var(--font-mono);
+  font-size: clamp(0.65rem, 0.85vw, 0.8rem);
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+
+/* ===========================================
+   FEATURE GRID — 3 cards
+   =========================================== */
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(0.8rem, 1.5vw, 1.5rem);
+  margin-top: clamp(0.8rem, 2vw, 1.5rem);
+}
+.feature-card {
+  background: var(--bg-white);
+  border: 2px solid var(--text-dark);
+  border-radius: 14px;
+  padding: clamp(1rem, 2.2vw, 2rem);
+  display: flex; flex-direction: column;
+  gap: clamp(0.5rem, 1vw, 1rem);
+  position: relative;
+  transition: transform 0.4s var(--ease-out-expo), box-shadow 0.4s;
+}
+.feature-card:hover {
+  transform: translate(-4px, -4px);
+  box-shadow: 8px 8px 0 var(--text-dark);
+}
+.feature-card .num {
+  font-family: var(--font-mono);
+  font-size: clamp(0.75rem, 1vw, 0.9rem);
+  font-weight: 700;
+  color: var(--accent-blue);
+}
+.feature-card .icon {
+  width: clamp(36px, 5vw, 56px);
+  height: clamp(36px, 5vw, 56px);
+  border-radius: 50%;
+  background: var(--accent-yellow);
+  display: flex; align-items: center; justify-content: center;
+  font-size: clamp(1.1rem, 2vw, 1.6rem);
+}
+.feature-card:nth-child(2) .icon { background: var(--accent-coral); }
+.feature-card:nth-child(3) .icon { background: var(--accent-blue); color: var(--text-light); }
+.feature-card .name {
+  font-size: clamp(1.1rem, 1.8vw, 1.5rem);
+  font-weight: 800; line-height: 1.1;
+}
+.feature-card .desc {
+  font-size: clamp(0.8rem, 1.1vw, 1rem);
+  line-height: 1.5; color: #444;
+}
+.feature-card .tech {
+  margin-top: auto;
+  font-family: var(--font-mono);
+  font-size: clamp(0.65rem, 0.85vw, 0.8rem);
+  color: var(--text-muted);
+  padding-top: 0.5rem;
+  border-top: 1px dashed #cbcbcb;
+}
+
+/* ===========================================
+   CHAPTER DIVIDER (full bleed colored)
+   =========================================== */
+.chapter-divider {
+  padding: var(--slide-padding);
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+.chapter-divider.c1 { background: var(--accent-yellow); color: var(--text-dark); }
+.chapter-divider.c2 { background: var(--accent-coral); color: var(--text-light); }
+.chapter-divider.c3 { background: var(--accent-blue); color: var(--text-light); }
+.chapter-divider .topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  font-family: var(--font-mono);
+  font-size: clamp(0.7rem, 0.9vw, 0.85rem);
+  letter-spacing: 0.15em; text-transform: uppercase;
+  opacity: 0.7;
+}
+.chapter-divider .main {
+  display: flex; flex-direction: column;
+  gap: clamp(0.6rem, 1.2vw, 1.2rem);
+  max-width: 1100px;
+}
+.chapter-divider .eyebrow {
+  font-family: var(--font-mono);
+  font-size: clamp(0.9rem, 1.3vw, 1.2rem);
+  letter-spacing: 0.25em; text-transform: uppercase;
+  font-weight: 700;
+}
+.chapter-divider .ch-num {
+  font-family: var(--font-mono);
+  font-size: clamp(5rem, 18vw, 14rem);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  opacity: 0.95;
+}
+.chapter-divider h2 {
+  font-size: clamp(2rem, 6vw, 4.5rem);
+  font-weight: 800; line-height: 1.0;
+  letter-spacing: -0.02em;
+}
+.chapter-divider .tagline {
+  font-size: clamp(1rem, 1.6vw, 1.4rem);
+  font-weight: 500;
+  max-width: 700px;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+.chapter-divider .bottom-meta {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  font-family: var(--font-mono);
+  font-size: clamp(0.7rem, 0.9vw, 0.85rem);
+  letter-spacing: 0.1em;
+  opacity: 0.7;
+}
+
+/* ===========================================
+   FEATURE DETAIL SLIDE — two column
+   =========================================== */
+.detail-slide {
+  background: var(--bg-white);
+  padding: var(--slide-padding);
+  display: grid;
+  grid-template-columns: 42% 58%;
+}
+.detail-slide .left {
+  padding-right: clamp(1rem, 3vw, 2.5rem);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: clamp(0.8rem, 1.5vw, 1.4rem);
+  border-right: 2px solid var(--text-dark);
+}
+.detail-slide .right {
+  padding-left: clamp(1rem, 3vw, 2.5rem);
+  display: flex; flex-direction: column; justify-content: center;
+  gap: clamp(0.6rem, 1.2vw, 1rem);
+}
+.detail-slide .chapter-mono {
+  font-family: var(--font-mono);
+  font-size: clamp(0.75rem, 1vw, 0.9rem);
+  color: var(--accent-blue);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+.detail-slide h2 {
+  font-size: clamp(1.6rem, 3.8vw, 3rem);
+  font-weight: 800; line-height: 1.0;
+  letter-spacing: -0.02em;
+}
+.detail-slide .lead {
+  font-size: clamp(0.9rem, 1.3vw, 1.1rem);
+  line-height: 1.6;
+  color: #2d2d2d;
+}
+.detail-slide .lead strong { color: var(--accent-blue); font-weight: 700; }
+.detail-slide ul {
+  list-style: none;
+  display: flex; flex-direction: column;
+  gap: clamp(0.6rem, 1.2vw, 1rem);
+}
+.detail-slide li {
+  display: flex; gap: clamp(0.8rem, 1.5vw, 1.2rem);
+  align-items: flex-start;
+  font-size: clamp(0.9rem, 1.2vw, 1.05rem);
+  line-height: 1.5;
+  padding: clamp(0.7rem, 1.3vw, 1rem) clamp(0.9rem, 1.5vw, 1.2rem);
+  background: var(--bg-cream);
+  border-left: 4px solid var(--accent-blue);
+  border-radius: 0 8px 8px 0;
+}
+.detail-slide li .step {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--accent-blue);
+  flex-shrink: 0;
+  font-size: clamp(0.8rem, 1.1vw, 1rem);
+}
+.detail-slide li strong { color: var(--text-dark); font-weight: 700; }
+.detail-slide .callout {
+  background: var(--accent-yellow);
+  padding: clamp(0.6rem, 1.2vw, 1rem);
+  border-radius: 8px;
+  font-size: clamp(0.8rem, 1.05vw, 0.95rem);
+  line-height: 1.5;
+  font-weight: 500;
+  border: 2px solid var(--text-dark);
+}
+.detail-slide .callout b { font-weight: 800; }
+
+/* TTS two-method block */
+.method-pair {
+  display: flex; flex-direction: column; gap: clamp(0.7rem, 1.3vw, 1.1rem);
+}
+.method {
+  border: 2px solid var(--text-dark);
+  border-radius: 10px;
+  padding: clamp(0.8rem, 1.5vw, 1.2rem);
+  display: flex; flex-direction: column; gap: 0.4rem;
+}
+.method.primary { background: var(--accent-yellow); }
+.method.secondary { background: var(--bg-cream); }
+.method .label {
+  font-family: var(--font-mono);
+  font-size: clamp(0.65rem, 0.85vw, 0.8rem);
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--accent-blue);
+}
+.method.primary .label { color: var(--text-dark); }
+.method .method-title {
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  font-weight: 800;
+  line-height: 1.2;
+}
+.method .method-desc {
+  font-size: clamp(0.85rem, 1.1vw, 1rem);
+  line-height: 1.5;
+  color: #2d2d2d;
+}
+.method .method-desc strong { color: var(--accent-blue); font-weight: 700; }
+.method.primary .method-desc strong { color: var(--text-dark); }
+.method .free-tag {
+  display: inline-block;
+  background: var(--text-dark);
+  color: var(--text-light);
+  padding: 0.2em 0.6em;
+  font-family: var(--font-mono);
+  font-size: clamp(0.6rem, 0.8vw, 0.75rem);
+  font-weight: 700;
+  border-radius: 4px;
+  letter-spacing: 0.1em;
+  width: fit-content;
+}
+
+/* ===========================================
+   STACK / DARK SLIDE
+   =========================================== */
+.stack-slide {
+  background: var(--bg-dark);
+  color: var(--text-light);
+  padding: var(--slide-padding);
+  justify-content: space-between;
+}
+.stack-slide .topbar { color: rgba(255,255,255,0.5); }
+.stack-slide .topbar .number { color: var(--accent-yellow); }
+.stack-slide h2 {
+  font-size: clamp(2rem, 5vw, 4rem);
+  font-weight: 800; line-height: 1.0;
+  letter-spacing: -0.02em;
+  max-width: 90%;
+}
+.stack-slide h2 em {
+  font-style: normal;
+  color: var(--accent-yellow);
+}
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(0.8rem, 1.5vw, 1.5rem);
+}
+.stack-card {
+  border: 1.5px solid rgba(255,255,255,0.15);
+  padding: clamp(1rem, 1.8vw, 1.5rem);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+  transition: border-color 0.3s, background 0.3s;
+}
+.stack-card:hover { border-color: var(--accent-yellow); background: rgba(255,214,10,0.05); }
+.stack-card .label {
+  font-family: var(--font-mono);
+  font-size: clamp(0.65rem, 0.85vw, 0.8rem);
+  color: var(--accent-yellow);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+}
+.stack-card .title {
+  font-size: clamp(1rem, 1.5vw, 1.3rem);
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+}
+.stack-card .meta {
+  font-size: clamp(0.8rem, 1.05vw, 0.95rem);
+  color: rgba(255,255,255,0.65);
+  line-height: 1.5;
+}
+
+/* ===========================================
+   DEPENDENCY SLIDE — list with badges
+   =========================================== */
+.dep-slide {
+  background: var(--bg-cream);
+  padding: var(--slide-padding);
+  flex-direction: column;
+  justify-content: space-between;
+}
+.dep-list {
+  display: flex; flex-direction: column;
+  gap: clamp(0.8rem, 1.5vw, 1.3rem);
+  margin-top: clamp(1rem, 2vw, 1.5rem);
+}
+.dep-item {
+  display: grid;
+  grid-template-columns: clamp(60px, 8vw, 100px) 1fr auto;
+  gap: clamp(0.8rem, 2vw, 1.8rem);
+  align-items: center;
+  padding: clamp(0.9rem, 1.5vw, 1.3rem) clamp(1rem, 2vw, 1.8rem);
+  background: var(--bg-white);
+  border: 2px solid var(--text-dark);
+  border-radius: 12px;
+  transition: transform 0.3s var(--ease-out-expo), box-shadow 0.3s;
+}
+.dep-item:hover {
+  transform: translate(-3px, -3px);
+  box-shadow: 6px 6px 0 var(--accent-blue);
+}
+.dep-item .dep-num {
+  font-family: var(--font-mono);
+  font-size: clamp(1.6rem, 3.5vw, 2.6rem);
+  font-weight: 700;
+  color: var(--accent-blue);
+  line-height: 1;
+}
+.dep-item .dep-content { display: flex; flex-direction: column; gap: 0.25rem; }
+.dep-item .dep-title {
+  font-size: clamp(1rem, 1.5vw, 1.3rem);
+  font-weight: 800;
+  line-height: 1.2;
+}
+.dep-item .dep-desc {
+  font-size: clamp(0.85rem, 1.1vw, 1rem);
+  color: #444;
+  line-height: 1.5;
+}
+.dep-item .dep-desc strong { color: var(--accent-blue); font-weight: 700; }
+.dep-item .dep-badge {
+  font-family: var(--font-mono);
+  font-size: clamp(0.65rem, 0.85vw, 0.8rem);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 0.4em 0.9em;
+  border-radius: 999px;
+  background: var(--accent-yellow);
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+.dep-item .dep-badge.optional { background: var(--bg-cream); border: 1.5px solid var(--text-muted); color: var(--text-muted); }
+
+/* ===========================================
+   CLOSING SLIDE
+   =========================================== */
+.closing-slide {
+  background: var(--accent-blue);
+  color: var(--text-light);
+  padding: var(--slide-padding);
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+}
+.closing-slide::before {
+  content: '';
+  position: absolute;
+  top: -200px; right: -200px;
+  width: 600px; height: 600px;
+  background: var(--accent-yellow);
+  border-radius: 50%;
+  opacity: 0.18;
+  filter: blur(40px);
+}
+.closing-slide::after {
+  content: '';
+  position: absolute;
+  bottom: -150px; left: -150px;
+  width: 500px; height: 500px;
+  background: var(--accent-coral);
+  border-radius: 50%;
+  opacity: 0.15;
+  filter: blur(40px);
+}
+.closing-slide .topbar { color: rgba(255,255,255,0.7); position: relative; z-index: 2; }
+.closing-slide .center {
+  position: relative; z-index: 2;
+  display: flex; flex-direction: column;
+  gap: clamp(1rem, 2vw, 2rem);
+  max-width: 1000px;
+}
+.closing-slide .eyebrow {
+  font-family: var(--font-mono);
+  font-size: clamp(0.8rem, 1vw, 0.95rem);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent-yellow);
+  font-weight: 700;
+}
+.closing-slide h2 {
+  font-size: clamp(2.4rem, 7vw, 6rem);
+  font-weight: 800; line-height: 0.95;
+  letter-spacing: -0.02em;
+}
+.closing-slide h2 em {
+  font-style: italic;
+  font-weight: 500;
+}
+.closing-slide .links {
+  display: flex; gap: 1rem; flex-wrap: wrap;
+  position: relative; z-index: 2;
+}
+.closing-slide .link {
+  display: inline-flex; align-items: center; gap: 0.5em;
+  padding: 0.7em 1.4em;
+  background: var(--bg-dark);
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: clamp(0.8rem, 1.1vw, 1rem);
+  color: var(--text-light);
+  text-decoration: none;
+  transition: transform 0.3s, background 0.3s;
+}
+.closing-slide .link:hover {
+  transform: translateY(-3px);
+  background: var(--accent-yellow);
+  color: var(--text-dark);
+}
+
+/* ===========================================
+   PROGRESS BAR + NAV DOTS
+   =========================================== */
+.progress-bar {
+  position: fixed; top: 0; left: 0;
+  height: 3px;
+  background: var(--accent-yellow);
+  z-index: 1000;
+  transition: width 0.3s ease;
+  width: 0;
+}
+.nav-dots {
+  position: fixed;
+  right: clamp(0.5rem, 1.5vw, 1.5rem);
+  top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column;
+  gap: 0.6rem; z-index: 999;
+}
+.nav-dots button {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.4;
+  transition: opacity 0.3s, background 0.3s, transform 0.3s;
+}
+.nav-dots button:hover { opacity: 0.8; }
+.nav-dots button.active {
+  opacity: 1;
+  background: currentColor;
+  transform: scale(1.2);
+}
+.keyboard-hint {
+  position: fixed;
+  bottom: clamp(0.8rem, 1.5vw, 1.5rem);
+  left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono);
+  font-size: clamp(0.6rem, 0.8vw, 0.75rem);
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  z-index: 999;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* ===========================================
+   INLINE EDITING (opt-in)
+   =========================================== */
+.edit-hotzone {
+  position: fixed; top: 0; left: 0;
+  width: 80px; height: 80px;
+  z-index: 10000; cursor: pointer;
+}
+.edit-toggle {
+  position: fixed; top: 15px; left: 15px;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--bg-dark);
+  color: var(--text-light);
+  border: 2px solid var(--accent-yellow);
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 10001;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  display: flex; align-items: center; justify-content: center;
+}
+.edit-toggle.show,
+.edit-toggle.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+.edit-toggle.active {
+  background: var(--accent-yellow);
+  color: var(--text-dark);
+  transform: rotate(90deg);
+}
+.edit-banner {
+  position: fixed;
+  top: 15px; left: 50%; transform: translateX(-50%);
+  background: var(--accent-yellow);
+  color: var(--text-dark);
+  padding: 0.5em 1.2em;
+  border-radius: 999px;
+  font-size: clamp(0.7rem, 0.95vw, 0.85rem);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+.edit-banner.active { opacity: 1; }
+body.edit-active [contenteditable="true"] {
+  outline: 1.5px dashed var(--accent-blue);
+  outline-offset: 4px;
+  border-radius: 2px;
+  cursor: text;
+}
+body.edit-active [contenteditable="true"]:focus {
+  outline: 2px solid var(--accent-blue);
+  background: rgba(67, 97, 238, 0.05);
+}
+</style>
+</head>
+<body>
+
+<!-- ===========================================
+     INLINE EDITING UI
+     =========================================== -->
+<div class="edit-hotzone" aria-hidden="true"></div>
+<button class="edit-toggle" id="editToggle" title="Edit mode (E)">✏️</button>
+<div class="edit-banner" id="editBanner">EDITING · Ctrl+S to save</div>
+
+<!-- Progress bar -->
+<div class="progress-bar" id="progressBar"></div>
+<!-- Nav dots -->
+<nav class="nav-dots" id="navDots" aria-label="Slide navigation"></nav>
+<!-- Keyboard hint -->
+<div class="keyboard-hint">← → SPACE · E to edit</div>
+
+<!-- ===========================================
+     SLIDE 1 — TITLE
+     =========================================== -->
+<section class="slide title-slide">
+  <div class="bar"></div>
+  <div class="panel top">
+    <div class="brand-mono reveal" contenteditable="false">// VOICE STUDIO · 2026</div>
+    <h1 class="title-headline reveal" contenteditable="false">让 AI<br>替你<span>开口</span></h1>
+    <div class="meta-row reveal" contenteditable="false">
+      <span>视频配音 · 字幕生成</span>
+      <span class="dot"></span>
+      <span>Vibe Coding</span>
+    </div>
+  </div>
+  <div class="panel bottom">
+    <div class="brand-mono reveal" contenteditable="false">PRODUCT DEMO</div>
+    <p class="title-subhead reveal" contenteditable="false">一个为<br>独立创作者<br>而生的小工具</p>
+    <div class="reveal" contenteditable="false">
+      <span class="tag-pill">CLONE · TTS · SUBTITLES</span>
+    </div>
+  </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 2 — WHY (problem)
+     =========================================== -->
+<section class="slide content-slide">
+  <div class="topbar reveal" contenteditable="false">
+    <div class="brand-mono">VOICE STUDIO</div>
+    <div class="number">01 / 09</div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: clamp(1rem, 2vw, 1.8rem);">
+    <h2 class="reveal" contenteditable="true">为什么<br>做这个 <em>小工具</em>？</h2>
+    <p class="body reveal" contenteditable="true">
+      用 <strong>Camtasia</strong> 剪视频时，自带的语音识别比较拉胯；
+      剪映 VIP 或 ElevenLabs 等专业工具又是付费订阅。<br><br>
+      如果你和我一样，业余时间做点小视频、习惯先写稿子、又不想自个儿配音 ——
+      <strong>那这个工具也许对你有一丢丢帮助</strong>。
+    </p>
+  </div>
+  <div class="footnote reveal" contenteditable="false">// FOR_INDIE_CREATORS · ZERO_SUBSCRIPTION</div>
+</section>
+
+<!-- ===========================================
+     SLIDE 3 — TECH STACK / HOW IT WAS BUILT
+     =========================================== -->
+<section class="slide stack-slide">
+  <div class="topbar reveal" contenteditable="false">
+    <div class="brand-mono">BUILT WITH</div>
+    <div class="number">02 / 09</div>
+  </div>
+  <div style="display: flex; flex-direction: column; gap: clamp(1rem, 2vw, 1.8rem);">
+    <h2 class="reveal" contenteditable="true">完全靠 AI <em>vibe coded</em><br>出来的小工具</h2>
+    <div class="stack-grid">
+      <div class="stack-card reveal" contenteditable="false">
+        <div class="label">CORE BUILD</div>
+        <div class="title" contenteditable="true">Claude + GLM5.1</div>
+        <div class="meta" contenteditable="true">主要由 Claude 接入 GLM5.1 搭建基础功能</div>
+      </div>
+      <div class="stack-card reveal" contenteditable="false">
+        <div class="label">PATCHES</div>
+        <div class="title" contenteditable="true">Trae (免费额度)</div>
+        <div class="meta" contenteditable="true">基础功能 ready 后，小功能迭代和 bug 修复</div>
+      </div>
+      <div class="stack-card reveal" contenteditable="false">
+        <div class="label">SKILLS</div>
+        <div class="title" contenteditable="true">superpowers · frontend design · webapp testing</div>
+        <div class="meta" contenteditable="true">设计计划、界面、功能验证一条龙；这类小工具手拿把掐</div>
+      </div>
+      <div class="stack-card reveal" contenteditable="false">
+        <div class="label">RULES &amp; DESIGN</div>
+        <div class="title" contenteditable="true">Everything Claude Code · getdesign.md</div>
+        <div class="meta" contenteditable="true">Python / TS 编码规则约束 + 主页设计参考</div>
+      </div>
+    </div>
+  </div>
+  <div class="brand-mono reveal" contenteditable="false" style="color: rgba(255,255,255,0.4);">
+    // VIBE_CODING_WORKFLOW · 2026
+  </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 4 — FEATURE OVERVIEW (3 cards)
+     =========================================== -->
+<section class="slide content-slide">
+  <div class="topbar reveal" contenteditable="false">
+    <div class="brand-mono">FEATURES OVERVIEW</div>
+    <div class="number">03 / 09</div>
+  </div>
+  <div>
+    <h2 class="reveal" contenteditable="true"><em>三个</em>核心能力<br>覆盖配音全流程</h2>
+    <div class="feature-grid">
+      <div class="feature-card reveal" contenteditable="false">
+        <div class="num">01</div>
+        <div class="icon">🎙️</div>
+        <div class="name" contenteditable="true">声音复刻</div>
+        <div class="desc" contenteditable="true">基于 CosyVoice，录音或上传文件克隆你自己的声音。</div>
+        <div class="tech">QWEN · COSYVOICE</div>
+      </div>
+      <div class="feature-card reveal" contenteditable="false">
+        <div class="num">02</div>
+        <div class="icon">🔊</div>
+        <div class="name" contenteditable="true">语音合成</div>
+        <div class="desc" contenteditable="true">克隆的声音或 Edge-TTS 免费引擎，把文稿变成配音。</div>
+        <div class="tech">COSYVOICE · EDGE-TTS</div>
+      </div>
+      <div class="feature-card reveal" contenteditable="false">
+        <div class="num">03</div>
+        <div class="icon">📝</div>
+        <div class="name" contenteditable="true">字幕生成</div>
+        <div class="desc" contenteditable="true">本地 faster-whisper 模型，一键输出 .srt 时间轴。</div>
+        <div class="tech">WHISPER · LOCAL · SRT</div>
+      </div>
+    </div>
+  </div>
+  <div class="footnote reveal" contenteditable="false">// 接下来 · 逐个详解</div>
+</section>
+
+<!-- ===========================================
+     CHAPTER 1 — VOICE CLONE DIVIDER
+     =========================================== -->
+<section class="slide chapter-divider c1">
+  <div class="topbar reveal" contenteditable="false">
+    <div>CHAPTER ONE</div>
+    <div>04 / 09</div>
+  </div>
+  <div class="main">
+    <div class="eyebrow reveal" contenteditable="true">PART 01 — VOICE CLONE</div>
+    <div class="ch-num reveal" contenteditable="false">01</div>
+    <h2 class="reveal" contenteditable="true">声音复刻</h2>
+    <p class="tagline reveal" contenteditable="true">把你的声音变成一份可调用的 voice ID</p>
+  </div>
+  <div class="bottom-meta reveal" contenteditable="false">
+    <span>↘ COSYVOICE · QWEN</span>
+    <span>VOICE STUDIO</span>
+  </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 6 — VOICE CLONE DETAIL
+     =========================================== -->
+<section class="slide detail-slide">
+  <div class="left">
+    <div class="chapter-mono reveal" contenteditable="false">05 / 09 — 详解</div>
+    <h2 class="reveal" contenteditable="true">声音复刻<br>怎么用？</h2>
+    <p class="lead reveal" contenteditable="true">
+      依赖 QWEN 提供的 <strong>CosyVoice</strong> 服务，
+      支持<strong>录音</strong>或<strong>上传现成音频</strong>两种方式。
+    </p>
+    <div class="callout reveal" contenteditable="true">
+      ⚠️ <b>关键点：</b>克隆 API 要求声音必须有<b>可访问外链</b>，
+      所以工具需要后端配置 OBS + 域名。
+    </div>
+  </div>
+  <div class="right">
+    <ul>
+      <li class="reveal" contenteditable="false">
+        <span class="step">A</span>
+        <span contenteditable="true"><strong>有 OBS / 域名：</strong>直接在工具里录音或上传，自动走完外链流程。</span>
+      </li>
+      <li class="reveal" contenteditable="false">
+        <span class="step">B</span>
+        <span contenteditable="true"><strong>没有后端存储：</strong>把原始音频传到 <strong>tmpfile.link</strong> 等免认证临时存储。</span>
+      </li>
+      <li class="reveal" contenteditable="false">
+        <span class="step">C</span>
+        <span contenteditable="true">把得到的<strong>文件链接</strong>填回工具，触发 CosyVoice 克隆。</span>
+      </li>
+      <li class="reveal" contenteditable="false">
+        <span class="step">D</span>
+        <span contenteditable="true">克隆完成后，得到一个属于你的<strong>专属 voice ID</strong>，下一步合成会用到。</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===========================================
+     CHAPTER 2 — TTS DIVIDER
+     =========================================== -->
+<section class="slide chapter-divider c2">
+  <div class="topbar reveal" contenteditable="false">
+    <div>CHAPTER TWO</div>
+    <div>06 / 09</div>
+  </div>
+  <div class="main">
+    <div class="eyebrow reveal" contenteditable="true">PART 02 — TEXT-TO-SPEECH</div>
+    <div class="ch-num reveal" contenteditable="false">02</div>
+    <h2 class="reveal" contenteditable="true">语音合成</h2>
+    <p class="tagline reveal" contenteditable="true">两种方式：付费克隆音 / 完全免费的 Edge-TTS</p>
+  </div>
+  <div class="bottom-meta reveal" contenteditable="false">
+    <span>↘ COSYVOICE · EDGE-TTS</span>
+    <span>VOICE STUDIO</span>
+  </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 8 — TTS DETAIL (two methods)
+     =========================================== -->
+<section class="slide detail-slide">
+  <div class="left">
+    <div class="chapter-mono reveal" contenteditable="false">07 / 09 — 详解</div>
+    <h2 class="reveal" contenteditable="true">两条<br>合成路径</h2>
+    <p class="lead reveal" contenteditable="true">
+      把写好的稿子变成配音，<strong>付费</strong>和<strong>免费</strong>各走一条。
+    </p>
+    <div class="callout reveal" contenteditable="true">
+      💡 <b>关于 SSML：</b>CosyVoice 支持 SSML 标记，
+      但目前需要手写。后续会加上可视化编辑，方便生成有趣对话。
+    </div>
+  </div>
+  <div class="right">
+    <div class="method-pair">
+      <div class="method primary reveal" contenteditable="false">
+        <div class="label">方式 01 · 用克隆声音</div>
+        <div class="method-title" contenteditable="true">CosyVoice 合成</div>
+        <div class="method-desc" contenteditable="true">用上一步复刻的声音生成配音。新账号有<strong>免费 token</strong>，付费使用也很便宜。</div>
+      </div>
+      <div class="method secondary reveal" contenteditable="false">
+        <div class="label">方式 02 · 零成本</div>
+        <div class="method-title" contenteditable="true">Edge-TTS <span class="free-tag">FREE</span></div>
+        <div class="method-desc" contenteditable="true">完全免费、不需要克隆声音。抖音上刷到的不少配音，背后就是 <strong>Edge-TTS</strong>。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===========================================
+     CHAPTER 3 — SUBTITLES DIVIDER
+     =========================================== -->
+<section class="slide chapter-divider c3">
+  <div class="topbar reveal" contenteditable="false">
+    <div>CHAPTER THREE</div>
+    <div>08 / 09</div>
+  </div>
+  <div class="main">
+    <div class="eyebrow reveal" contenteditable="true">PART 03 — SUBTITLES</div>
+    <div class="ch-num reveal" contenteditable="false">03</div>
+    <h2 class="reveal" contenteditable="true">字幕生成</h2>
+    <p class="tagline reveal" contenteditable="true">本地 faster-whisper，离线输出 .srt 时间轴</p>
+  </div>
+  <div class="bottom-meta reveal" contenteditable="false">
+    <span>↘ FASTER-WHISPER · LOCAL</span>
+    <span>VOICE STUDIO</span>
+  </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 10 — SUBTITLE DETAIL
+     =========================================== -->
+<section class="slide detail-slide">
+  <div class="left">
+    <div class="chapter-mono reveal" contenteditable="false">09 / 09 — 详解</div>
+    <h2 class="reveal" contenteditable="true">字幕生成<br>怎么跑？</h2>
+    <p class="lead reveal" contenteditable="true">
+      使用本地的 <strong>fast-whisper</strong> 模型进行语音识别，
+      直接保存为标准 <strong>.srt</strong> 字幕文件。
+    </p>
+    <div class="callout reveal" contenteditable="true">
+      🎯 <b>亮点：</b>支持把上一步合成的<b>多段语音拼装识别</b>，
+      一次性得到完整的时间轴。
+    </div>
+  </div>
+  <div class="right">
+    <ul>
+      <li class="reveal" contenteditable="false">
+        <span class="step">A</span>
+        <span contenteditable="true">直接上传任意要识别的<strong>语音/视频文件</strong>，一键转字幕。</span>
+      </li>
+      <li class="reveal" contenteditable="false">
+        <span class="step">B</span>
+        <span contenteditable="true">或者选择刚刚合成的语音，工具会自动<strong>拼装多段音频</strong>。</span>
+      </li>
+      <li class="reveal" contenteditable="false">
+        <span class="step">C</span>
+        <span contenteditable="true">输出标准 <strong>.srt</strong>，直接导入 Camtasia / Premiere / 剪映。</span>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 11 — DEPENDENCIES
+     =========================================== -->
+<section class="slide dep-slide">
+  <div class="topbar reveal" contenteditable="false" style="display: flex; justify-content: space-between; color: var(--text-muted);">
+    <div class="brand-mono">DEPENDENCIES</div>
+    <div class="brand-mono" style="color: var(--accent-blue);">EXTRA / 09</div>
+  </div>
+  <div>
+    <h2 class="reveal" contenteditable="true" style="font-size: clamp(2rem, 5vw, 4rem); font-weight: 800; line-height: 1.0; letter-spacing: -0.02em;">
+      跑起来<br>需要点啥？
+    </h2>
+    <div class="dep-list">
+      <div class="dep-item reveal" contenteditable="false">
+        <div class="dep-num">01</div>
+        <div class="dep-content">
+          <div class="dep-title" contenteditable="true">QWEN API Key</div>
+          <div class="dep-desc" contenteditable="true">用于<strong>声音复刻</strong>和<strong>CosyVoice 合成</strong>；只用 Edge-TTS 可跳过。</div>
+        </div>
+        <div class="dep-badge">REQUIRED</div>
+      </div>
+      <div class="dep-item reveal" contenteditable="false">
+        <div class="dep-num">02</div>
+        <div class="dep-content">
+          <div class="dep-title" contenteditable="true">faster-whisper-large-v3</div>
+          <div class="dep-desc" contenteditable="true">字幕功能依赖，默认从 HuggingFace 下载 <strong>~3GB</strong>，需自备梯子或用国内镜像。</div>
+        </div>
+        <div class="dep-badge optional">FOR SRT</div>
+      </div>
+      <div class="dep-item reveal" contenteditable="false">
+        <div class="dep-num">03</div>
+        <div class="dep-content">
+          <div class="dep-title" contenteditable="true">ffmpeg</div>
+          <div class="dep-desc" contenteditable="true">把<strong>多段合成语音</strong>拼到一块再提取字幕时需要；做过视频的你大概率已经装好了。</div>
+        </div>
+        <div class="dep-badge optional">FOR MERGE</div>
+      </div>
+    </div>
+  </div>
+  <div class="footnote reveal" contenteditable="false" style="font-family: var(--font-mono); font-size: clamp(0.65rem, 0.85vw, 0.8rem); color: var(--text-muted); letter-spacing: 0.05em;">
+    // SET_AND_FORGET
+  </div>
+</section>
+
+<!-- ===========================================
+     SLIDE 12 — CLOSING
+     =========================================== -->
+<section class="slide closing-slide">
+  <div class="topbar reveal" contenteditable="false" style="display: flex; justify-content: space-between;">
+    <div class="brand-mono">— END —</div>
+    <div class="brand-mono">VOICE STUDIO</div>
+  </div>
+  <div class="center">
+    <div class="eyebrow reveal" contenteditable="true">CODE IS ON GITHUB</div>
+    <h2 class="reveal" contenteditable="true">就这样，<em>拜拜</em><br>了您。</h2>
+    <p style="font-size: clamp(1rem, 1.5vw, 1.3rem); line-height: 1.55; max-width: 700px; font-weight: 300;" class="reveal" contenteditable="true">
+      希望能给和我一样的业余视频创作者一丢丢帮助。<br>
+      代码已上传 GitHub，欢迎自取、改造、把玩。
+    </p>
+  </div>
+  <div class="links reveal" contenteditable="false">
+    <a href="#" class="link" contenteditable="true">→ GitHub Repo</a>
+    <a href="#" class="link" contenteditable="true">→ 云百炼 · CosyVoice</a>
+    <a href="#" class="link" contenteditable="true">→ faster-whisper</a>
+  </div>
+</section>
+
+<script>
+/* ===========================================
+   SLIDE PRESENTATION CONTROLLER
+   =========================================== */
+class SlidePresentation {
+  constructor() {
+    this.slides = Array.from(document.querySelectorAll('.slide'));
+    this.currentSlide = 0;
+    this.progressBar = document.getElementById('progressBar');
+    this.navDotsContainer = document.getElementById('navDots');
+    this.setupIntersectionObserver();
+    this.setupNavDots();
+    this.setupKeyboardNav();
+    this.setupTouchNav();
+    this.setupScrollProgress();
+  }
+
+  setupIntersectionObserver() {
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.5) {
+          entry.target.classList.add('visible');
+          this.currentSlide = this.slides.indexOf(entry.target);
+          this.updateNavDots();
+        }
+      });
+    }, { threshold: [0.5] });
+    this.slides.forEach(s => observer.observe(s));
+  }
+
+  setupNavDots() {
+    // Always clear first to avoid duplicates when file is re-opened
+    this.navDotsContainer.innerHTML = '';
+    this.slides.forEach((_, i) => {
+      const btn = document.createElement('button');
+      btn.setAttribute('aria-label', `Go to slide ${i + 1}`);
+      btn.addEventListener('click', () => this.goToSlide(i));
+      this.navDotsContainer.appendChild(btn);
+    });
+    this.updateNavDots();
+  }
+
+  updateNavDots() {
+    const dots = this.navDotsContainer.querySelectorAll('button');
+    dots.forEach((d, i) => d.classList.toggle('active', i === this.currentSlide));
+    const slide = this.slides[this.currentSlide];
+    // Heuristic: dark / colored slides get light dots, light slides get dark dots
+    const isDark = slide.classList.contains('stack-slide') ||
+                   slide.classList.contains('closing-slide') ||
+                   slide.classList.contains('title-slide') ||
+                   slide.classList.contains('c2') ||
+                   slide.classList.contains('c3');
+    this.navDotsContainer.style.color = isDark ? '#ffffff' : '#0a0a0a';
+  }
+
+  goToSlide(index) {
+    if (index < 0 || index >= this.slides.length) return;
+    this.slides[index].scrollIntoView({ behavior: 'smooth' });
+  }
+
+  setupKeyboardNav() {
+    document.addEventListener('keydown', (e) => {
+      if (e.target.getAttribute('contenteditable') === 'true') return;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        e.preventDefault();
+        this.goToSlide(this.currentSlide + 1);
+      } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        this.goToSlide(this.currentSlide - 1);
+      } else if (e.key === 'Home') {
+        e.preventDefault();
+        this.goToSlide(0);
+      } else if (e.key === 'End') {
+        e.preventDefault();
+        this.goToSlide(this.slides.length - 1);
+      }
+    });
+  }
+
+  setupTouchNav() {
+    let startY = 0;
+    document.addEventListener('touchstart', (e) => { startY = e.touches[0].clientY; }, { passive: true });
+    document.addEventListener('touchend', (e) => {
+      const diff = startY - e.changedTouches[0].clientY;
+      if (Math.abs(diff) > 50) this.goToSlide(this.currentSlide + (diff > 0 ? 1 : -1));
+    }, { passive: true });
+  }
+
+  setupScrollProgress() {
+    document.addEventListener('scroll', () => {
+      const scrolled = window.scrollY;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      const pct = max > 0 ? (scrolled / max) * 100 : 0;
+      this.progressBar.style.width = pct + '%';
+    }, { passive: true });
+  }
+}
+
+/* ===========================================
+   INLINE EDITOR (opt-in)
+   =========================================== */
+class InlineEditor {
+  constructor() {
+    this.isActive = false;
+    this.STORAGE_KEY = 'voice-studio-slides-edits';
+    this.editables = document.querySelectorAll('[contenteditable="true"]');
+    this.toggleBtn = document.getElementById('editToggle');
+    this.banner = document.getElementById('editBanner');
+    this.restoreFromStorage();
+    this.setupSaveOnInput();
+    this.setupKeyboardShortcut();
+    this.editables.forEach(el => el.setAttribute('contenteditable', 'false'));
+  }
+
+  toggleEditMode() {
+    this.isActive = !this.isActive;
+    document.body.classList.toggle('edit-active', this.isActive);
+    this.toggleBtn.classList.toggle('active', this.isActive);
+    this.banner.classList.toggle('active', this.isActive);
+    this.editables.forEach(el => {
+      el.setAttribute('contenteditable', this.isActive ? 'true' : 'false');
+    });
+    this.toggleBtn.innerHTML = this.isActive ? '✓' : '✏️';
+  }
+
+  setupSaveOnInput() {
+    this.editables.forEach((el, i) => {
+      el.addEventListener('input', () => this.saveToStorage(i, el.innerHTML));
+    });
+  }
+
+  saveToStorage(index, html) {
+    try {
+      const data = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '{}');
+      data[index] = html;
+      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(data));
+    } catch (e) { console.warn('Save failed', e); }
+  }
+
+  restoreFromStorage() {
+    try {
+      const data = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '{}');
+      this.editables.forEach((el, i) => {
+        if (data[i] !== undefined) el.innerHTML = data[i];
+      });
+    } catch (e) { console.warn('Restore failed', e); }
+  }
+
+  setupKeyboardShortcut() {
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault();
+        this.exportFile();
+      }
+    });
+  }
+
+  exportFile() {
+    // Strip edit state so the saved file opens cleanly
+    const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
+    const previousStates = editableEls.map(el => el.getAttribute('contenteditable'));
+    editableEls.forEach(el => el.removeAttribute('contenteditable'));
+    document.body.classList.remove('edit-active');
+    this.toggleBtn.classList.remove('active', 'show');
+    this.banner.classList.remove('active', 'show');
+
+    const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+    // Restore live state so user can keep editing
+    if (this.isActive) {
+      document.body.classList.add('edit-active');
+      this.toggleBtn.classList.add('active');
+      this.banner.classList.add('active');
+    }
+    editableEls.forEach((el, i) => {
+      if (previousStates[i] !== null) el.setAttribute('contenteditable', previousStates[i]);
+    });
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'voice-studio-presentation.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+}
+
+const presentation = new SlidePresentation();
+const editor = new InlineEditor();
+
+// ===========================================
+// EDIT TOGGLE — hotzone hover + click + E key
+// ===========================================
+const hotzone = document.querySelector('.edit-hotzone');
+const editToggle = document.getElementById('editToggle');
+let hideTimeout = null;
+
+hotzone.addEventListener('mouseenter', () => {
+  clearTimeout(hideTimeout);
+  editToggle.classList.add('show');
+});
+hotzone.addEventListener('mouseleave', () => {
+  hideTimeout = setTimeout(() => {
+    if (!editor.isActive) editToggle.classList.remove('show');
+  }, 400);
+});
+editToggle.addEventListener('mouseenter', () => clearTimeout(hideTimeout));
+editToggle.addEventListener('mouseleave', () => {
+  hideTimeout = setTimeout(() => {
+    if (!editor.isActive) editToggle.classList.remove('show');
+  }, 400);
+});
+editToggle.addEventListener('click', () => editor.toggleEditMode());
+hotzone.addEventListener('click', () => editor.toggleEditMode());
+
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'e' || e.key === 'E') &&
+      e.target.getAttribute('contenteditable') !== 'true' &&
+      !e.metaKey && !e.ctrlKey) {
+    editor.toggleEditMode();
+  }
+});
+</script>
+</body>
+</html>
