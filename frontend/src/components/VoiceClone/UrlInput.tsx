@@ -78,7 +78,7 @@ export function UrlInput({ onUrlConfirmed, onBack }: UrlInputProps) {
         </button>
         <button
           className={styles.confirmButton}
-          style={{ background: '#6b7280' }}
+          style={{ background: 'var(--color-text-muted)' }}
           onClick={onBack}
           disabled={isLoading}
         >

@@ -10,6 +10,7 @@
   margin-bottom: var(--spacing-md);
   font-size: var(--font-size-lg);
   font-weight: 600;
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);

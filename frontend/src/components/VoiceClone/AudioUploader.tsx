@@ -29,7 +29,7 @@ export function AudioUploader({ onFileSelected }: AudioUploaderProps) {
     padding: 'var(--spacing-2xl)',
     textAlign: 'center' as const,
     cursor: 'pointer',
-    backgroundColor: dragOver ? 'rgba(25, 118, 210, 0.05)' : 'var(--color-surface)',
+    backgroundColor: dragOver ? 'var(--glow-primary)' : 'var(--color-surface)',
     transition: 'all var(--transition-fast)',
   };
 

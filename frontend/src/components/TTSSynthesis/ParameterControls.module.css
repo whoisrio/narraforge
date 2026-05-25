@@ -1,8 +1,9 @@
 .container {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 12px;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .header {
@@ -12,18 +13,19 @@
   width: 100%;
   padding: 8px 14px;
   border: none;
-  background: #fafafa;
+  background: var(--color-surface-hover);
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .header:hover {
-  background: #f0f0f0;
+  background: var(--color-surface-active);
 }
 
 .arrow {
-  color: #007aff;
+  color: var(--color-primary);
   font-size: 13px;
 }
 
@@ -32,7 +34,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  border-top: 1px solid #e8e8e8;
+  border-top: 1px solid var(--color-border-light);
 }
 
 .control {
@@ -49,8 +51,16 @@
 .control select {
   flex: 1;
   padding: 4px 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.control select option {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
 }
 
 .control input[type="range"] {
@@ -72,16 +82,19 @@
 .instructionInput {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 13px;
   box-sizing: border-box;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .charCount {
   align-self: flex-end;
   font-size: 11px;
-  color: #999;
+  color: var(--color-text-muted);
 }
 
 .presetButtons {
@@ -92,23 +105,23 @@
 
 .presetButton {
   padding: 4px 10px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: #fff;
+  background: var(--color-surface);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: all 0.15s, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .presetButton:hover {
-  border-color: #007aff;
-  color: #007aff;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .presetActive {
-  background: #007aff;
-  color: #fff;
-  border-color: #007aff;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  border-color: var(--color-primary);
 }
 
 /* 开关选项 */
@@ -127,18 +140,18 @@
 
 .toggleButton {
   padding: 2px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  background: #f5f5f5;
+  background: var(--color-surface-hover);
   font-size: 12px;
   cursor: pointer;
   min-width: 40px;
   text-align: center;
-  transition: all 0.15s;
+  transition: all 0.15s, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .toggleOn {
-  background: #007aff;
-  color: #fff;
-  border-color: #007aff;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  border-color: var(--color-primary);
 }

@@ -22,11 +22,12 @@
 /* 分段控制器 - iOS风格 */
 .engineSwitch {
   display: inline-flex;
-  background: #f0f0f0;
-  border-radius: 10px;
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
   padding: 3px;
   margin-bottom: var(--spacing-xl);
   position: relative;
+  transition: background-color 0.3s ease;
 }
 
 .engineOption {
@@ -35,9 +36,9 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  color: #888;
+  color: var(--color-text-muted);
   cursor: pointer;
   transition: color 0.25s, background 0.25s;
   white-space: nowrap;
@@ -45,13 +46,13 @@
 }
 
 .engineOption:hover {
-  color: #555;
+  color: var(--color-text-secondary);
 }
 
 .engineOption.active {
-  background: #fff;
-  color: #1a1a1a;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-md);
 }
 
 .content {
@@ -90,12 +91,15 @@
   resize: vertical;
   font-family: inherit;
   line-height: 1.6;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
 }
 
 .textarea:focus {
   outline: none;
   border-color: var(--color-border-focus);
-  box-shadow: 0 0 0 2px rgba(0, 113, 227, 0.2);
+  box-shadow: var(--glow-primary);
 }
 
 .textInfo {
@@ -155,6 +159,6 @@
 
   .engineOption {
     padding: 8px 16px;
-    font-size: 13px;
+    font-size: var(--font-size-xs);
   }
 }

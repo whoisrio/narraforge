@@ -68,6 +68,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
     margin: 0,
     fontSize: 'var(--font-size-lg)',
     fontWeight: 'var(--font-weight-semibold)',
+    color: 'var(--color-text-primary)',
   };
 
   const formContainerStyle = {
@@ -83,7 +84,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
     padding: 'var(--spacing-md)',
     border: isDefault ? '2px solid var(--color-success)' : '1px solid var(--color-border)',
     borderRadius: 'var(--radius-md)',
-    backgroundColor: isDefault ? 'rgba(76, 175, 80, 0.1)' : 'var(--color-surface)',
+    backgroundColor: isDefault ? 'color-mix(in srgb, var(--color-success) 10%, transparent)' : 'var(--color-surface)',
     cursor: 'pointer' as const,
     transition: 'background-color var(--transition-fast), border-color var(--transition-fast)',
   });
@@ -92,7 +93,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
     marginLeft: 'var(--spacing-sm)',
     fontSize: '10px',
     background: 'var(--color-success)',
-    color: 'white',
+    color: 'var(--color-text-on-primary)',
     padding: '2px 6px',
     borderRadius: 'var(--radius-sm)',
     fontWeight: 'var(--font-weight-medium)',
@@ -120,7 +121,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
       </div>
 
       {showForm && (
-        <div style={{ ...formContainerStyle, padding: 'var(--spacing-md)', background: 'rgba(25, 118, 210, 0.05)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--spacing-md)' }}>
+        <div style={{ ...formContainerStyle, padding: 'var(--spacing-md)', background: 'var(--glow-primary)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--spacing-md)' }}>
           <Input
             label="Model name"
             type="text"

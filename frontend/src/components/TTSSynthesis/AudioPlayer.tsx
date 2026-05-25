@@ -7,7 +7,7 @@ interface AudioPlayerProps {
   isLoading: boolean;
 }
 
-/** 将 base64 解码后转为 Blob URL */
+/** 将 base64 转 Blob URL（用于音频播放） */
 function base64ToBlobUrl(base64: string, format: string): string {
   const mimeType = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
   const byteChars = atob(base64);
@@ -22,7 +22,6 @@ function base64ToBlobUrl(base64: string, format: string): string {
 export function AudioPlayer({ result, isLoading }: AudioPlayerProps) {
   const [format, setFormat] = useState<'mp3' | 'wav'>('mp3');
 
-  // 根据存储模式生成音频 URL（后端存储直接用 audio_url，前端存储用 base64 转 Blob URL）
   const audioSrc = useMemo(() => {
     if (!result) return '';
     if (result.audio_base64) {
@@ -31,36 +30,36 @@ export function AudioPlayer({ result, isLoading }: AudioPlayerProps) {
     return result.audio_url || '';
   }, [result]);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!result) return;
 
-    // base64 模式：直接触发 base64 下载
     if (result.audio_base64) {
-      const mimeType = format === 'wav' ? 'audio/wav' : 'audio/mpeg';
-      const byteStr = atob(result.audio_base64);
-      const byteNums = new Uint8Array(byteStr.length);
-      for (let i = 0; i < byteStr.length; i++) {
-        byteNums[i] = byteStr.charCodeAt(i);
-      }
-      const blob = new Blob([byteNums], { type: mimeType });
+      const mimeType = result.audio_format === 'wav' ? 'audio/wav' : 'audio/mpeg';
+      // 用 fetch data URI 解码 base64，比 atob 更高效可靠
+      const dataUrl = `data:${mimeType};base64,${result.audio_base64}`;
+      const resp = await fetch(dataUrl);
+      const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `voice_clone_${result.audio_id}.${format}`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 1000);
       return;
     }
 
     const url = result.audio_url;
+    if (!url) return;
     const link = document.createElement('a');
     link.href = url;
     link.download = `voice_clone_${result.audio_id}.${format}`;
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    setTimeout(() => document.body.removeChild(link), 1000);
   };
 
   if (isLoading) {

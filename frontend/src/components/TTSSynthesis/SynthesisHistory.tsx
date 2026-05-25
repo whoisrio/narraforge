@@ -66,7 +66,7 @@ export function SynthesisHistory({ results, onDelete, onPlay }: SynthesisHistory
                 <audio controls className={styles.audio} src={record.audio_url} />
                 <a
                   className={styles.downloadButton}
-                  href={`/api/tts/audio/${record.id}`}
+                  href={record.audio_url}
                   download={`tts_${record.id}.${record.audio_format}`}
                 >
                   下载

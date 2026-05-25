@@ -1,4 +1,4 @@
-/* Global styles for Voice Clone Studio — Apple Visual Language */
+/* Global styles for Voice Studio — Dark Studio Pro */
 
 /* Import variables */
 @import './variables.css';
@@ -16,21 +16,21 @@
 }
 
 html {
-  font-size: 17px;
+  font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   font-size: var(--font-size-base);
-  line-height: 1.47;
+  line-height: var(--line-height-normal);
   color: var(--color-text-primary);
   background-color: var(--color-background);
   min-height: 100vh;
-  font-feature-settings: 'ss03' 1;
   letter-spacing: -0.01em;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Focus styles for accessibility */
@@ -55,7 +55,7 @@ button:disabled {
 }
 
 button:active:not(:disabled) {
-  transform: scale(0.95);
+  transform: scale(0.97);
 }
 
 /* Remove default input styles */
@@ -77,6 +77,26 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Placeholder styles for all inputs */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+/* Ensure all form elements respect theme colors */
+input,
+textarea,
+select {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+select option {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
 /* Utility classes */
 .sr-only {
   position: absolute;
@@ -92,18 +112,17 @@ a:hover {
 
 /* Scrollbar styles */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-border-light);
-  border-radius: var(--radius-sm);
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: var(--radius-sm);
+  background: var(--color-text-muted);
+  border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -113,5 +132,5 @@ a:hover {
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-border) var(--color-border-light);
+  scrollbar-color: var(--color-text-muted) transparent;
 }

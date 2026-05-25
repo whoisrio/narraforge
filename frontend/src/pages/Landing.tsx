@@ -26,6 +26,11 @@ export default function Landing({ onNavigate }: LandingProps) {
         <div className={styles.heroImage}>
           <img src={heroImage} alt="" />
         </div>
+        <div className={styles.waveform}>
+          {Array.from({ length: 12 }, (_, i) => (
+            <span key={i} className={styles.waveformBar} style={{ animationDelay: `${i * 0.1}s` }} />
+          ))}
+        </div>
         <div className={styles.heroCopy}>
           <h1 className={styles.heroTitle}>
             Voice Studio

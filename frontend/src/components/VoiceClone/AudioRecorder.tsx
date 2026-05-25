@@ -70,7 +70,7 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
 
   return (
     <Card>
-      <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>🎙️ 实时录制</h3>
+      <h3 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-text-primary)' }}>🎙️ 实时录制</h3>
 
       {!recording && !audioBlob && (
         <Button variant="danger" fullWidth onClick={startRecording}>

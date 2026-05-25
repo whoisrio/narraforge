@@ -39,7 +39,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   const modalStyle: React.CSSProperties = {
     backgroundColor: 'var(--color-surface)',
     borderRadius: 'var(--radius-lg)',
-    boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.22) 3px 5px 30px',
+    boxShadow: 'var(--shadow-lg)',
     maxWidth: '90%',
     width: '100%',
     maxHeight: '90vh',
@@ -81,7 +81,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
         {(title) && (
           <div style={headerStyle}>
-            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)' }}>{title}</h2>
+            <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-text-primary)' }}>{title}</h2>
             <button
               style={closeButtonStyle}
               onClick={onClose}

@@ -1,9 +1,10 @@
 .container {
   margin-top: 1rem;
   padding: 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .header {
@@ -16,7 +17,7 @@
 .label {
   font-size: 0.8125rem;
   font-weight: 600;
-  color: #64748b;
+  color: var(--color-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -24,7 +25,7 @@
 /* 克隆进行中的步骤提示 */
 .stepIndicator {
   font-size: 0.75rem;
-  color: #1890ff;
+  color: var(--color-primary);
   font-weight: 500;
 }
 
@@ -41,13 +42,13 @@
 }
 
 .fileName {
-  color: #334155;
+  color: var(--color-text-primary);
   font-weight: 500;
   word-break: break-all;
 }
 
 .fileSize {
-  color: #94a3b8;
+  color: var(--color-text-muted);
   font-size: 0.8125rem;
   flex-shrink: 0;
 }
@@ -60,7 +61,7 @@
 }
 
 .error {
-  color: #ef4444;
+  color: var(--color-danger);
   font-size: 0.8125rem;
   margin-bottom: 0.75rem;
 }
@@ -75,36 +76,37 @@
   padding: 0.625rem 1rem;
   border: none;
   border-radius: 0.375rem;
-  background: #1890ff;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .cloneButton:hover:not(:disabled) {
-  background: #1677cc;
+  background: var(--color-primary-light);
 }
 
 .cloneButton:disabled {
-  background: #b0d4f1;
+  background: var(--color-primary-light);
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
 .cancelButton {
   padding: 0.625rem 1rem;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--color-border);
   border-radius: 0.375rem;
-  background: #fff;
-  color: #64748b;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
   font-size: 0.875rem;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .cancelButton:hover:not(:disabled) {
-  background: #f1f5f9;
+  background: var(--color-surface-hover);
 }
 
 .cancelButton:disabled {

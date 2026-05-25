@@ -216,6 +216,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
     margin: 0,
     fontSize: 'var(--font-size-lg)',
     fontWeight: 'var(--font-weight-semibold)',
+    color: 'var(--color-text-primary)',
   };
 
   const voiceCardStyle: React.CSSProperties = {
@@ -319,6 +320,8 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
                             border: '1px solid var(--color-primary)',
                             borderRadius: '4px',
                             width: '200px',
+                            background: 'var(--color-surface)',
+                            color: 'var(--color-text-primary)',
                           }}
                         />
                         <Button variant="ghost" size="sm" onClick={() => handleSaveDescription(voice.id)} disabled={savingId === voice.id}>✓</Button>

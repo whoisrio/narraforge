@@ -10,27 +10,27 @@ export interface AlertProps {
 export const Alert: React.FC<AlertProps> = ({ variant = 'info', children, onDismiss, style }) => {
   const variantStyles: Record<string, { backgroundColor: string; borderColor: string; color: string; icon: string }> = {
     success: {
-      backgroundColor: 'rgba(76, 175, 80, 0.1)',
-      borderColor: '#4caf50',
-      color: '#2e7d32',
+      backgroundColor: 'color-mix(in srgb, var(--color-success) 10%, transparent)',
+      borderColor: 'var(--color-success)',
+      color: 'var(--color-success)',
       icon: '✓',
     },
     error: {
-      backgroundColor: 'rgba(244, 67, 54, 0.1)',
-      borderColor: '#f44336',
-      color: '#c62828',
+      backgroundColor: 'color-mix(in srgb, var(--color-danger) 10%, transparent)',
+      borderColor: 'var(--color-danger)',
+      color: 'var(--color-danger)',
       icon: '✕',
     },
     warning: {
-      backgroundColor: 'rgba(255, 152, 0, 0.1)',
-      borderColor: '#ff9800',
-      color: '#ef6c00',
+      backgroundColor: 'color-mix(in srgb, var(--color-warning) 10%, transparent)',
+      borderColor: 'var(--color-warning)',
+      color: 'var(--color-warning)',
       icon: '⚠',
     },
     info: {
-      backgroundColor: 'rgba(0, 188, 212, 0.1)',
-      borderColor: '#00bcd4',
-      color: '#00838f',
+      backgroundColor: 'color-mix(in srgb, var(--color-info) 10%, transparent)',
+      borderColor: 'var(--color-info)',
+      color: 'var(--color-info)',
       icon: 'ℹ',
     },
   };

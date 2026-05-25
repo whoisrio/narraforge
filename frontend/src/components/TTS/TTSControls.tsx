@@ -111,6 +111,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
     margin: 0,
     fontSize: 'var(--font-size-lg)',
     fontWeight: 'var(--font-weight-semibold)',
+    color: 'var(--color-text-primary)',
   };
 
   const tabsContainerStyle: React.CSSProperties = {

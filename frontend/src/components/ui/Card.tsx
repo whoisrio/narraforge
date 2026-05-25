@@ -14,6 +14,7 @@ export const Card: React.FC<CardProps> = ({ header, footer, children, className,
     border: '1px solid var(--color-border-light)',
     borderRadius: 'var(--radius-lg)',
     overflow: 'hidden',
+    color: 'var(--color-text-primary)',
     ...style,
   };
 

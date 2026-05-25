@@ -46,7 +46,7 @@ export const Input: React.FC<InputProps> = ({ type = 'text', label, error, class
       {...props}
       onFocus={(e) => {
         e.currentTarget.style.borderColor = 'var(--color-primary)';
-        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(0, 113, 227, 0.2)';
+        e.currentTarget.style.boxShadow = '0 0 0 2px var(--glow-primary)';
       }}
       onBlur={(e) => {
         e.currentTarget.style.borderColor = error ? 'var(--color-danger)' : 'var(--color-border)';

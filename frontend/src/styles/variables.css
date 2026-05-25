@@ -1,36 +1,36 @@
-/* Global CSS Variables — Apple Visual Language */
+/* Global CSS Variables — Voice Studio Design System */
 
 :root {
   /* Colors */
-  --color-primary: #0066cc;
-  --color-primary-light: #0071e3;
-  --color-primary-dark: #0055aa;
-  --color-success: #4caf50;
-  --color-warning: #ff9800;
-  --color-error: #f44336;
-  --color-danger: #f44336;   /* 兼容 danger 变体按钮 */
+  --color-primary: #6366f1;
+  --color-primary-light: #818cf8;
+  --color-primary-dark: #4f46e5;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-danger: #ef4444;
 
   /* Background & Surface */
-  --color-background: #f5f5f7;
+  --color-background: #f8fafc;
   --color-surface: #ffffff;
-  --color-surface-hover: #fafafc;
-  --color-surface-active: #f0f0f0;
+  --color-surface-hover: #f1f5f9;
+  --color-surface-active: #e2e8f0;
 
   /* Text */
-  --color-text-primary: #1d1d1f;
-  --color-text-secondary: #7a7a7a;
-  --color-text-disabled: #bdbdbd;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-disabled: #cbd5e1;
   --color-text-on-primary: #ffffff;
 
   /* Borders */
-  --color-border: #e0e0e0;
-  --color-border-light: #f0f0f0;
-  --color-border-focus: #0071e3;
+  --color-border: #e2e8f0;
+  --color-border-light: #f1f5f9;
+  --color-border-focus: #6366f1;
 
   /* Spacing */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
-  --spacing-md: 17px;
+  --spacing-md: 16px;
   --spacing-lg: 24px;
   --spacing-xl: 32px;
   --spacing-2xl: 48px;
@@ -39,28 +39,28 @@
   /* Typography */
   --font-size-xs: 12px;
   --font-size-sm: 14px;
-  --font-size-base: 17px;
-  --font-size-lg: 18px;
-  --font-size-xl: 21px;
+  --font-size-base: 15px;
+  --font-size-lg: 17px;
+  --font-size-xl: 20px;
   --font-size-2xl: 24px;
-  --font-size-3xl: 34px;
+  --font-size-3xl: 32px;
 
   --font-weight-regular: 400;
-  --font-weight-medium: 600;
+  --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
   /* Border Radius */
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 18px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --radius-xl: 18px;
   --radius-full: 9999px;
 
   /* Transitions */
   --transition-fast: 150ms ease;
-  --transition-normal: 250ms ease;
-  --transition-slow: 350ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
 
   /* Z-Index Scale */
   --z-dropdown: 100;
@@ -72,9 +72,27 @@
   --z-tooltip: 700;
 }
 
-/* Dark mode support (future) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Can add dark mode variables here */
-  }
+/* Dark mode */
+[data-theme="dark"] {
+  --color-primary: #818cf8;
+  --color-primary-light: #a5b4fc;
+  --color-primary-dark: #6366f1;
+  --color-success: #4ade80;
+  --color-warning: #fbbf24;
+  --color-error: #f87171;
+  --color-danger: #f87171;
+
+  --color-background: #0f0f23;
+  --color-surface: #1a1a2e;
+  --color-surface-hover: #22223a;
+  --color-surface-active: #2a2a42;
+
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-disabled: #475569;
+  --color-text-on-primary: #ffffff;
+
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-light: rgba(255, 255, 255, 0.04);
+  --color-border-focus: #818cf8;
 }

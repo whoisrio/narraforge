@@ -1,48 +1,48 @@
-/* App Component Styles */
+/* App Component Styles — Dark Studio Pro */
 
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--color-background);
+  transition: background-color 0.3s ease;
 }
 
-/* Header */
+/* ---- Header / Navigation ---- */
 .header {
-  background: #000000;
-  padding: 0 2rem;
-  height: var(--header-height);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 20px;
+  height: var(--header-height);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(20px);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-.logo {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  font-size: var(--font-size-lg);
-  font-weight: 600;
-  color: #ffffff;
-  letter-spacing: -0.01em;
+[data-theme="dark"] .header {
+  background: rgba(15, 15, 35, 0.85);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
-/* 返回首页按钮 */
+/* ---- Back Button + Logo ---- */
 .backButton {
   display: flex;
   align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.7);
+  gap: 8px;
+  color: var(--color-text-secondary);
   cursor: pointer;
   font-size: var(--font-size-sm);
-  padding: 4px 0;
+  padding: 6px 0;
   transition: color var(--transition-fast);
 }
 
 .backButton:hover {
-  color: #ffffff;
+  color: var(--color-primary);
 }
 
 .backButton svg {
@@ -50,39 +50,151 @@
 }
 
 .logoText {
-  font-weight: 600;
+  font-weight: 700;
   font-size: var(--font-size-base);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+  color: var(--color-text-primary);
 }
 
-/* Tab Navigation */
+[data-theme="dark"] .logoText {
+  background: linear-gradient(135deg, var(--color-text-primary), var(--color-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ---- Tab Navigation ---- */
 .tabs {
   display: flex;
-  gap: var(--spacing-xs);
+  gap: 4px;
+  background: var(--color-surface-hover);
+  padding: 3px;
+  border-radius: var(--radius-md);
 }
 
 .tab {
-  padding: var(--spacing-xs) var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
   border: none;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.8);
-  border-radius: var(--radius-full);
+  background: none;
+  color: var(--color-text-muted);
+  border-radius: 8px;
   cursor: pointer;
   font-size: var(--font-size-sm);
-  transition: background var(--transition-normal);
+  font-weight: 500;
+  transition: all var(--transition-normal);
   letter-spacing: -0.01em;
 }
 
 .tab:hover {
-  background: rgba(255, 255, 255, 0.15);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-active);
 }
 
 .tab.active {
   background: var(--color-primary);
-  color: white;
+  color: #ffffff;
+  box-shadow: 0 0 16px var(--glow-primary);
 }
 
-/* Main Content */
+.tab svg {
+  flex-shrink: 0;
+}
+
+/* ---- Header Actions ---- */
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Theme Toggle ---- */
+.themeToggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-normal);
+}
+
+.themeToggle:hover {
+  background: var(--color-surface-active);
+  color: var(--color-primary);
+}
+
+/* ---- Settings ---- */
+.settingsArea {
+  position: relative;
+}
+
+.settingsButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  border: none;
+  transition: all var(--transition-normal);
+}
+
+.settingsButton:hover {
+  background: var(--color-surface-active);
+  color: var(--color-primary);
+}
+
+.settingsPanel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  min-width: 200px;
+  z-index: var(--z-popover);
+  box-shadow: var(--shadow-lg);
+}
+
+.settingsItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.settingsItem label {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.settingsItem select {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.settingsItem select option {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+/* ---- Main Content ---- */
 .main {
   flex: 1;
   padding: var(--spacing-2xl);
@@ -91,7 +203,7 @@
   width: 100%;
 }
 
-/* Empty State */
+/* ---- Empty State ---- */
 .emptyState {
   display: flex;
   flex-direction: column;
@@ -121,7 +233,7 @@
   max-width: 400px;
 }
 
-/* Loading State */
+/* ---- Loading State ---- */
 .loading {
   display: flex;
   align-items: center;
@@ -147,59 +259,23 @@
   }
 }
 
-/* Settings */
-.settingsArea {
-  position: relative;
-}
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  .header {
+    padding: 0 12px;
+  }
 
-.settingsButton {
-  background: rgba(255, 255, 255, 0.08);
-  border: none;
-  color: white;
-  font-size: 18px;
-  cursor: pointer;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--transition-normal);
-}
+  .tab {
+    padding: 6px 10px;
+    font-size: var(--font-size-xs);
+    gap: 4px;
+  }
 
-.settingsButton:hover {
-  background: rgba(255, 255, 255, 0.2);
-}
+  .tab svg {
+    display: none;
+  }
 
-.settingsPanel {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 8px);
-  background: #1a1a1a;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  padding: var(--spacing-md);
-  min-width: 200px;
-  z-index: 100;
-}
-
-.settingsItem {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.settingsItem label {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: var(--font-size-sm);
-}
-
-.settingsItem select {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: var(--font-size-sm);
-  cursor: pointer;
+  .main {
+    padding: var(--spacing-lg);
+  }
 }
