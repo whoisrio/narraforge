@@ -209,9 +209,12 @@ def _merge_audio_files(input_paths: List[str], output_path: str) -> None:
     filter_str = f'{filter_parts}concat=n={len(input_paths)}:v=0:a=1[out]'
     cmd.extend(['-filter_complex', filter_str, '-map', '[out]', '-ac', '1', output_path])
 
-    result = subprocess.run(cmd, capture_output=True, text=True)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        raise RuntimeError("ffmpeg not found. Please install ffmpeg from https://ffmpeg.org/download.html")
     if result.returncode != 0:
-        raise RuntimeError(f"ffmpeg merge failed: {result.stderr.strip()}")
+        raise RuntimeError(f"ffmpeg merge failed: {(result.stderr or '').strip()}")
 
 
 @router.post("/multi-transcribe")

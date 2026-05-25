@@ -397,7 +397,7 @@ class QwenTTSService:
         volume: float = 80,
         pitch: float = 1.0,
         format: str = "wav",
-        sample_rate: int = 16000,
+        sample_rate: int = 24000,
     ) -> bytes:
         """TTS 系列模型的声音克隆方法"""
         import time

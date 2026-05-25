@@ -65,3 +65,9 @@ backend/.env
 backend/__pycache__/
 backend/*.py[cod]
 backend/*$py.class
+
+# ai tools
+.claude
+.agents
+.trae
+.superpowers
