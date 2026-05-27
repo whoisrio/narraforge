@@ -1,5 +1,5 @@
 """
-更新数据库 Schema - 添加 external_audio_url 字段到 voice_profiles 表
+更新数据库 Schema - 添加 clone_engine 字段到 voice_profiles 表
 """
 from sqlalchemy import create_engine, text, inspect
 from app.core.database import Base, engine
@@ -12,32 +12,20 @@ tables = inspector.get_table_names()
 print(f"Found tables: {tables}")
 
 if 'voice_profiles' in tables:
-    # 检查 external_audio_url 列是否存在
+    # 检查 clone_engine 列是否存在
     columns = [col['name'] for col in inspector.get_columns('voice_profiles')]
     print(f"voice_profiles columns: {columns}")
     
-    if 'external_audio_url' not in columns:
-        print("Adding external_audio_url column...")
+    if 'clone_engine' not in columns:
+        print("Adding clone_engine column...")
         with engine.connect() as conn:
             conn.execute(text(
-                "ALTER TABLE voice_profiles ADD COLUMN external_audio_url VARCHAR"
+                "ALTER TABLE voice_profiles ADD COLUMN clone_engine VARCHAR"
             ))
             conn.commit()
-        print("[SUCCESS] external_audio_url column added!")
+        print("[SUCCESS] clone_engine column added!")
     else:
-        print("[INFO] external_audio_url column already exists")
-    
-    # 检查 description 列是否存在
-    if 'description' not in columns:
-        print("Adding description column...")
-        with engine.connect() as conn:
-            conn.execute(text(
-                "ALTER TABLE voice_profiles ADD COLUMN description TEXT"
-            ))
-            conn.commit()
-        print("[SUCCESS] description column added!")
-    else:
-        print("[INFO] description column already exists")
+        print("[INFO] clone_engine column already exists")
 else:
     print("[WARNING] voice_profiles table not found. Creating all tables...")
     Base.metadata.create_all(bind=engine)

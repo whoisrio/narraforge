@@ -8,6 +8,9 @@ import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { VoiceProfile } from '../types';
 import styles from './VoiceClone.module.css';
 
+/** 克隆引擎类型 */
+type CloneEngine = 'qwen' | 'mimo';
+
 /** 克隆流程的三个步骤 */
 type CloneStep = 'choose-method' | 'input' | 'preview-clone';
 
@@ -17,6 +20,7 @@ type InputMethod = 'record' | 'upload' | 'url' | null;
 export function VoiceClone() {
   const [step, setStep] = useState<CloneStep>('choose-method');
   const [method, setMethod] = useState<InputMethod>(null);
+  const [engine, setEngine] = useState<CloneEngine>('qwen');
 
   /** 录制或上传后得到的 File 对象 */
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -44,7 +48,11 @@ export function VoiceClone() {
   const renderMethodSelector = () => (
     <div className={styles.methodSelector}>
       <h2>选择声音来源</h2>
-      <p className={styles.methodSelectorHint}>请选择一种方式提供声音样本</p>
+      <p className={styles.methodSelectorHint}>
+        {engine === 'mimo'
+          ? '录制或上传音频，MiMo 会即时复刻音色'
+          : '请选择一种方式提供声音样本'}
+      </p>
 
       <div className={styles.methodCards}>
         <button
@@ -65,14 +73,17 @@ export function VoiceClone() {
           <span className={styles.methodDesc}>上传 MP3、WAV、WebM 音频文件</span>
         </button>
 
-        <button
-          className={styles.methodCard}
-          onClick={() => { setMethod('url'); setStep('input'); }}
-        >
-          <span className={styles.methodIcon}>🌐</span>
-          <span className={styles.methodTitle}>公网地址</span>
-          <span className={styles.methodDesc}>提供已有音频文件的公网 URL</span>
-        </button>
+        {/* MiMo 不需要公网地址，它直接读取本地音频转 base64 */}
+        {engine === 'qwen' && (
+          <button
+            className={styles.methodCard}
+            onClick={() => { setMethod('url'); setStep('input'); }}
+          >
+            <span className={styles.methodIcon}>🌐</span>
+            <span className={styles.methodTitle}>公网地址</span>
+            <span className={styles.methodDesc}>提供已有音频文件的公网 URL</span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -123,6 +134,7 @@ export function VoiceClone() {
       {pendingFile && (
         <AudioPreview
           file={pendingFile}
+          engine={engine}
           onCloneSuccess={handleCloneSuccess}
           onCancel={resetToChooseMethod}
         />
@@ -132,6 +144,7 @@ export function VoiceClone() {
         <AudioPreview
           voiceId={urlVoice.id}
           audioUrl={urlVoice.audio_url}
+          engine={engine}
           onCloneSuccess={handleCloneSuccess}
           onCancel={resetToChooseMethod}
         />
@@ -144,6 +157,22 @@ export function VoiceClone() {
       <div className={styles.header}>
         <h1>声音复刻</h1>
         <p>完美复刻你的声音</p>
+      </div>
+
+      {/* 复刻引擎选择 */}
+      <div className={styles.engineSwitch}>
+        <button
+          className={`${styles.engineOption} ${engine === 'qwen' ? styles.active : ''}`}
+          onClick={() => setEngine('qwen')}
+        >
+          CosyVoice (Qwen)
+        </button>
+        <button
+          className={`${styles.engineOption} ${engine === 'mimo' ? styles.active : ''}`}
+          onClick={() => setEngine('mimo')}
+        >
+          MiMo-TTS
+        </button>
       </div>
 
       <div className={styles.content}>
@@ -159,7 +188,7 @@ export function VoiceClone() {
         {/* 右侧：声音列表（始终显示） */}
         <div className={styles.listSection}>
           <div className={styles.card}>
-            <VoiceList />
+            <VoiceList engine={engine} />
           </div>
         </div>
       </div>

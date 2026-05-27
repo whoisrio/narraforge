@@ -6,15 +6,39 @@ export interface VoiceProfile {
   description?: string;  // 用户自定义的声音描述
   qwen_voice_id?: string;
   role?: string;
+  clone_engine?: 'qwen' | 'mimo';  // 复刻引擎来源
   is_cloned?: boolean;
   cloned_at?: string;
   created_at: string;
 }
 
+// TTS Config (model configurations)
+export interface TTSConfig {
+  id: string;
+  name: string;
+  provider: 'qwen' | 'azure' | 'openai' | 'mimo';
+  model_name: string;
+  speed: number;
+  volume: number;
+  pitch: number;
+  emotion: 'happy' | 'sad' | 'neutral' | 'excited';
+  is_default: boolean;
+  created_at: string;
+}
+
+// MiMo TTS 预置音色
+export interface MiMoPresetVoice {
+  voice_id: string;
+  name: string;
+  language: string;
+  gender: string;
+  description: string;
+}
+
 // TTS Request params
 export interface TTSRequest {
   text: string;
-  engine?: 'cosyvoice' | 'edge_tts';
+  engine?: 'cosyvoice' | 'edge_tts' | 'mimo_preset' | 'mimo_voicedesign' | 'mimo_voiceclone';
   voice_id: string;
   language?: 'Chinese' | 'English' | 'Japanese' | 'Korean';
   speed?: number; // 0.5 - 2.0
@@ -28,6 +52,11 @@ export interface TTSRequest {
   edge_voice?: string;
   edge_rate?: string;
   edge_volume?: string;
+  // MiMo TTS params
+  mimo_voice?: string;           // 预置音色ID
+  mimo_voice_description?: string;  // 音色描述文本（voicedesign模式）
+  mimo_audio_base64?: string;    // 克隆音频base64（voiceclone模式）
+  mimo_mime_type?: string;       // 克隆音频MIME类型
 }
 
 // TTS Result

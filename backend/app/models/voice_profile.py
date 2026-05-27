@@ -25,6 +25,12 @@ class VoiceProfile(Base):
     is_cloned = Column(Boolean, default=False)  # 是否已完成克隆
     cloned_at = Column(DateTime, nullable=True)  # 克隆完成时间
 
+    # 克隆引擎：'qwen'（千问CosyVoice）或 'mimo'（MiMo TTS）
+    clone_engine = Column(String, nullable=True)  # 区分复刻来源
+
+    # MiMo 声音复刻相关字段（预留）
+    mimo_voice_id = Column(String, nullable=True)  # MiMo 声音复刻的标记
+
     # 用户自定义的声音描述，用于替代无意义的 voice_id 显示
     description = Column(String, nullable=True)
 

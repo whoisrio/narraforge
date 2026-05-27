@@ -18,6 +18,41 @@
   color: var(--color-text-secondary);
 }
 
+.engineSwitch {
+  display: inline-flex;
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  margin-bottom: var(--spacing-xl);
+  position: relative;
+  transition: background-color 0.3s ease;
+}
+
+.engineOption {
+  position: relative;
+  padding: 8px 24px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color 0.25s, background 0.25s;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.engineOption:hover {
+  color: var(--color-text-secondary);
+}
+
+.engineOption.active {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-md);
+}
+
 .content {
   display: grid;
   /* 用百分比而非 fr，避免子内容撑大某一列 */

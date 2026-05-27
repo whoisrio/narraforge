@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -36,6 +36,15 @@ export const voiceApi = {
 
   createClone: async (voiceId: string, name?: string): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone', {
+      voice_id: voiceId,
+      name,
+    });
+    return data;
+  },
+
+  /** MiMo 声音复刻 - 仅标记为 MiMo 复刻，无需云端注册 */
+  createCloneMiMo: async (voiceId: string, name?: string): Promise<VoiceProfile> => {
+    const { data } = await api.post<VoiceProfile>('/clone/create-clone-mimo', {
       voice_id: voiceId,
       name,
     });
@@ -102,6 +111,60 @@ export const ttsApi = {
   },
 };
 
+// MiMo TTS API
+export const mimoTtsApi = {
+  /** 获取 MiMo 预置音色列表 */
+  getPresetVoices: async (): Promise<MiMoPresetVoice[]> => {
+    const { data } = await api.get<{ voices: MiMoPresetVoice[] }>('/mimo-tts/voices');
+    return data.voices;
+  },
+
+  /** 使用预置音色合成语音 */
+  synthesizePreset: async (params: {
+    text: string;
+    voice: string;
+    instruction?: string;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/mimo-tts/preset', params);
+    return data;
+  },
+
+  /** 使用文本描述设计音色合成语音 */
+  synthesizeVoiceDesign: async (params: {
+    voice_description: string;
+    text?: string;
+    optimize_text_preview?: boolean;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/mimo-tts/voicedesign', params);
+    return data;
+  },
+
+  /** 使用本地声音进行音色复刻合成 */
+  synthesizeVoiceClone: async (params: {
+    text: string;
+    voice_id: string;
+    instruction?: string;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/mimo-tts/voiceclone', params);
+    return data;
+  },
+
+  /** 直接使用 Base64 音频进行音色复刻合成 */
+  synthesizeVoiceCloneDirect: async (params: {
+    text: string;
+    audio_base64: string;
+    mime_type?: string;
+    instruction?: string;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/mimo-tts/voiceclone-direct', params);
+    return data;
+  },
+};
+
 // Config API
 export const configApi = {
   listModels: async (): Promise<TTSConfig[]> => {
@@ -109,7 +172,7 @@ export const configApi = {
     return data;
   },
 
-  createModel: async (config: Omit<TTSConfig, 'id' | 'is_default'>): Promise<TTSConfig> => {
+  createModel: async (config: Omit<TTSConfig, 'id' | 'is_default' | 'created_at'>): Promise<TTSConfig> => {
     const { data } = await api.post<TTSConfig>('/config/models', config);
     return data;
   },

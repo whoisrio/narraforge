@@ -5,10 +5,12 @@ import type { VoiceProfile } from '../../types';
 import { Button, Modal, Input, Select, Loading, EmptyState, Card, Alert } from '../ui';
 
 interface VoiceListProps {
+  /** 当前选择的复刻引擎，控制 UI 呈现 */
+  engine?: 'qwen' | 'mimo';
   onRefresh?: () => void;
 }
 
-export function VoiceList({ onRefresh }: VoiceListProps) {
+export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -36,17 +38,26 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
 
   const fetchVoices = async () => {
     try {
-      try {
-        setSyncing(true);
-        await voiceApi.syncFromQwen();
-      } catch (e) {
-        console.warn('Sync from Qwen failed, using local data:', e);
-      } finally {
-        setSyncing(false);
+      // 仅 CosyVoice 模式下尝试从 Qwen 同步
+      if (engine === 'qwen') {
+        try {
+          setSyncing(true);
+          await voiceApi.syncFromQwen();
+        } catch (e) {
+          console.warn('Sync from Qwen failed, using local data:', e);
+        } finally {
+          setSyncing(false);
+        }
       }
 
       const all = await voiceApi.list();
-      const cloned = all.filter(v => v.is_cloned && v.qwen_voice_id);
+      // 根据引擎筛选已克隆的声音
+      const cloned = all.filter(v => {
+        if (!v.is_cloned) return false;
+        if (engine === 'mimo') return v.clone_engine === 'mimo';
+        // CosyVoice: 显示 qwen 引擎的，以及没有 clone_engine 标记的旧数据（兼容）
+        return v.clone_engine === 'qwen' || (!v.clone_engine && v.qwen_voice_id);
+      });
       setVoices(cloned);
     } catch (err) {
       console.error('Failed to fetch voices:', err);
@@ -54,6 +65,12 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
       setLoading(false);
     }
   };
+
+  // 引擎切换时重新拉取
+  useEffect(() => {
+    setLoading(true);
+    fetchVoices();
+  }, [engine, refreshCounter]);
 
   const handleSyncFromQwen = async () => {
     setSyncing(true);
@@ -69,10 +86,6 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
       setSyncing(false);
     }
   };
-
-  useEffect(() => {
-    fetchVoices();
-  }, [refreshCounter]);
 
   // 为什么用 Modal 而非 confirm()：
   // confirm() 的 UI 不可定制且在不同浏览器下表现不一致，Modal 可以统一风格并提供更清晰的操作提示
@@ -252,6 +265,18 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
     gap: 'var(--spacing-sm)',
   };
 
+  const engineBadgeStyle = (eng?: string): React.CSSProperties => ({
+    display: 'inline-block',
+    padding: '1px 6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    background: eng === 'mimo' ? 'var(--color-primary-light, #e3f2fd)' : 'var(--color-success-light, #e8f5e9)',
+    color: eng === 'mimo' ? 'var(--color-primary, #1976d2)' : 'var(--color-success, #2e7d32)',
+    marginLeft: '6px',
+  });
+
   if (loading || syncing) {
     return <Loading message={syncing ? 'Syncing from Qwen...' : 'Loading voices...'} />;
   }
@@ -259,17 +284,22 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
   return (
     <div>
       <div style={headerStyle}>
-        <h3 style={h3Style}>🎤 Cloned Voices</h3>
+        <h3 style={h3Style}>
+          🎤 {engine === 'mimo' ? 'MiMo 复刻声音' : 'CosyVoice 克隆声音'}
+        </h3>
         <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleSyncFromQwen}
-            disabled={syncing}
-            loading={syncing}
-          >
-            🔄 Sync from Qwen
-          </Button>
+          {/* Sync from Qwen 仅在 CosyVoice 模式下显示 */}
+          {engine === 'qwen' && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleSyncFromQwen}
+              disabled={syncing}
+              loading={syncing}
+            >
+              🔄 Sync from Qwen
+            </Button>
+          )}
           <Button
             variant="danger"
             size="sm"
@@ -291,7 +321,11 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
         <EmptyState
           icon="🎙️"
           title="No Voices Yet"
-          description="Upload or record audio to clone (1) voice."
+          description={
+            engine === 'mimo'
+              ? "录制或上传音频，使用 MiMo 即时复刻音色。"
+              : "Upload or record audio to clone a voice."
+          }
         />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
@@ -335,8 +369,13 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <div style={voiceNameStyle}>
-                          {voice.description || voice.qwen_voice_id || 'N/A'}
+                          {voice.description || voice.qwen_voice_id || voice.name || 'N/A'}
                         </div>
+                        {voice.clone_engine && (
+                          <span style={engineBadgeStyle(voice.clone_engine)}>
+                            {voice.clone_engine === 'mimo' ? 'MiMo' : 'Qwen'}
+                          </span>
+                        )}
                         <span
                           onClick={() => handleStartEdit(voice)}
                           style={{ cursor: 'pointer', fontSize: '12px', opacity: 0.6 }}
@@ -350,7 +389,8 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
                       {voice.is_cloned ? (
                         <>
                           <span style={{ color: 'var(--color-success)', marginRight: 'var(--spacing-xs)' }}>✓ Cloned</span>
-                          {' | '}Role: {voice.role}
+                          {voice.clone_engine === 'qwen' && voice.role && ` | Role: ${voice.role}`}
+                          {voice.clone_engine === 'mimo' && ' | MiMo 即时复刻'}
                           {voice.cloned_at && ` | ${new Date(voice.cloned_at).toLocaleDateString()}`}
                         </>
                       ) : (
@@ -360,7 +400,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
                   </div>
                 </div>
                 <div style={actionButtonsStyle}>
-                  {!voice.is_cloned && (
+                  {!voice.is_cloned && voice.clone_engine !== 'mimo' && (
                     <Button
                       variant="primary"
                       size="sm"
@@ -438,7 +478,7 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
         )}
       </Modal>
 
-      {/* 删除确认弹窗 — 为什么需要确认：删除会同时移除 Qwen 云端音色和本地数据，不可恢复 */}
+      {/* 删除确认弹窗 — 为什么需要确认：删除会同时移除云端音色和本地数据，不可恢复 */}
       <Modal
         isOpen={showDeleteConfirm}
         onClose={handleCancelDelete}
@@ -456,11 +496,11 @@ export function VoiceList({ onRefresh }: VoiceListProps) {
       >
         <p style={{ marginBottom: 'var(--spacing-sm)' }}>
           {deleteTarget === null
-            ? '确定要删除所有克隆声音吗？'
+            ? `确定要删除所有${engine === 'mimo' ? 'MiMo' : 'CosyVoice'}复刻声音吗？`
             : `确定要删除声音 "${voices.find(v => v.id === deleteTarget)?.name || deleteTarget}" 吗？`}
         </p>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-          此操作会同步删除 Qwen 云端的音色数据，不可撤销。
+          此操作会同步删除云端的音色数据（如有），不可撤销。
         </p>
       </Modal>
     </div>

@@ -297,6 +297,7 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         voice.role = result.get("role", request.role)
         voice.is_cloned = True
         voice.cloned_at = datetime.utcnow()
+        voice.clone_engine = "qwen"
 
         if request.name:
             voice.name = request.name
@@ -319,6 +320,48 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Voice registration failed: {str(e)}")
 
 
+@router.post("/create-clone-mimo")
+async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_db)):
+    """
+    MiMo 声音复刻 - 仅保存音频并标记为 MiMo 复刻，无需注册到云端。
+
+    MiMo 的 voiceclone 是无状态的：每次合成都需要传音频样本（base64），
+    没有持久化 voice_id。此接口只是将上传的音频标记为「MiMo 复刻」，
+    后续在 TTS 合成时自动读取音频文件转 base64 发给 MiMo API。
+    """
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+
+    if not voice.audio_path or not os.path.exists(voice.audio_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    try:
+        voice.is_cloned = True
+        voice.cloned_at = datetime.utcnow()
+        voice.clone_engine = "mimo"
+        voice.mimo_voice_id = "mimo_voiceclone"  # 标记使用 MiMo voiceclone
+
+        if request.name:
+            voice.name = request.name
+
+        db.commit()
+        db.refresh(voice)
+
+        return {
+            "id": voice.id,
+            "name": voice.name,
+            "clone_engine": "mimo",
+            "is_cloned": voice.is_cloned,
+            "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
+            "audio_url": f"/api/clone/audio/{voice.id}",
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"MiMo voice clone failed: {str(e)}")
+
+
 @router.get("/list")
 def list_voices(db: Session = Depends(get_db)):
     """获取声音列表"""
@@ -331,6 +374,7 @@ def list_voices(db: Session = Depends(get_db)):
             "audio_url": f"/api/clone/audio/{v.id}",
             "qwen_voice_id": v.qwen_voice_id,
             "role": v.role,
+            "clone_engine": v.clone_engine,
             "is_cloned": v.is_cloned,
             "cloned_at": v.cloned_at.isoformat() if v.cloned_at else None,
             "created_at": v.created_at.isoformat(),
@@ -396,6 +440,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                     role=qwen_voice.get("role", "custom"),
                     is_cloned=True,
                     cloned_at=datetime.utcnow(),
+                    clone_engine="qwen",
                     audio_path="",  # 从 Qwen 同步的没有本地音频文件
                 )
                 db.add(new_voice)
@@ -481,6 +526,7 @@ def get_voice(voice_id: str, db: Session = Depends(get_db)):
         "audio_url": f"/api/clone/audio/{voice.id}",
         "qwen_voice_id": voice.qwen_voice_id,
         "role": voice.role,
+        "clone_engine": voice.clone_engine,
         "is_cloned": voice.is_cloned,
         "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
         "created_at": voice.created_at.isoformat(),
@@ -489,13 +535,13 @@ def get_voice(voice_id: str, db: Session = Depends(get_db)):
 
 @router.delete("/{voice_id}")
 async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
-    """删除声音 - 同时删除 Qwen 云端音色、本地音频文件和数据库记录"""
+    """删除声音 - 同时删除 Qwen 云端音色（如有）、本地音频文件和数据库记录"""
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    # 先尝试删除 Qwen 云端音色（如果已克隆）
-    if voice.qwen_voice_id:
+    # Qwen 声音需要删除云端音色；MiMo 声音无云端数据，跳过
+    if voice.clone_engine != "mimo" and voice.qwen_voice_id:
         try:
             tts_service = await get_tts_service()
             await tts_service.delete_cloned_voice(voice.qwen_voice_id)

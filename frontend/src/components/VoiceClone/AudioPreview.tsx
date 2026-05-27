@@ -9,12 +9,14 @@ interface AudioPreviewProps {
   voiceId?: string;
   /** URL 模式下用于预览播放的音频地址 */
   audioUrl?: string;
+  /** 复刻引擎：qwen（千问CosyVoice）或 mimo（MiMo TTS） */
+  engine?: 'qwen' | 'mimo';
   onCloneSuccess: () => void;
   onCancel: () => void;
 }
 
 /** 录音/上传完成后展示音频预览，依次执行 upload → clone（失败则回滚删除）。URL 模式下跳过 upload 直接 clone */
-export function AudioPreview({ file, voiceId, audioUrl, onCloneSuccess, onCancel }: AudioPreviewProps) {
+export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onCloneSuccess, onCancel }: AudioPreviewProps) {
   const [isCloning, setIsCloning] = useState(false);
   const [step, setStep] = useState<'idle' | 'uploading' | 'cloning'>('idle');
   const [error, setError] = useState('');
@@ -50,7 +52,12 @@ export function AudioPreview({ file, voiceId, audioUrl, onCloneSuccess, onCancel
         return;
       }
 
-      await voiceApi.createClone(targetVoiceId);
+      // 根据引擎选择不同的克隆 API
+      if (engine === 'mimo') {
+        await voiceApi.createCloneMiMo(targetVoiceId);
+      } else {
+        await voiceApi.createClone(targetVoiceId);
+      }
 
       // 成功，清理 blob URL 并通知父组件
       if (blobUrl) {
@@ -68,7 +75,7 @@ export function AudioPreview({ file, voiceId, audioUrl, onCloneSuccess, onCancel
           console.error('Rollback failed:', rollbackErr);
         }
       }
-      setError('克隆失败，请重试');
+      setError(engine === 'mimo' ? 'MiMo 复刻失败，请重试' : '克隆失败，请重试');
       setStep('idle');
     } finally {
       setIsCloning(false);
@@ -86,13 +93,15 @@ export function AudioPreview({ file, voiceId, audioUrl, onCloneSuccess, onCancel
     onCancel();
   };
 
+  const engineLabel = engine === 'mimo' ? 'MiMo-TTS' : 'CosyVoice';
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <span className={styles.label}>待处理音频</span>
         {step !== 'idle' && (
           <span className={styles.stepIndicator}>
-            {step === 'uploading' ? '上传中...' : '克隆注册中...'}
+            {step === 'uploading' ? '上传中...' : `${engineLabel} 复刻中...`}
           </span>
         )}
       </div>
@@ -119,7 +128,9 @@ export function AudioPreview({ file, voiceId, audioUrl, onCloneSuccess, onCancel
           onClick={handleClone}
           disabled={isCloning}
         >
-          {isCloning ? (step === 'uploading' ? '上传中...' : '克隆注册中...') : 'Clone Voice'}
+          {isCloning
+            ? (step === 'uploading' ? '上传中...' : `${engineLabel} 复刻中...`)
+            : `使用 ${engineLabel} 复刻`}
         </button>
         <button
           className={styles.cancelButton}

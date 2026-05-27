@@ -345,7 +345,7 @@ async def get_tts_audio(audio_id: str, db: Session = Depends(get_db)):
 
 @router.get("/voices")
 async def list_available_voices(db: Session = Depends(get_db)):
-    """获取可用的克隆声音列表"""
+    """获取可用的 CosyVoice 克隆声音列表（仅 Qwen 引擎）"""
     cloned = (
         db.query(VoiceProfile)
         .filter(VoiceProfile.is_cloned == True, VoiceProfile.qwen_voice_id.isnot(None))
@@ -358,6 +358,7 @@ async def list_available_voices(db: Session = Depends(get_db)):
             "description": v.description,
             "audio_url": v.external_audio_url or v.audio_path,
             "qwen_voice_id": v.qwen_voice_id,
+            "clone_engine": v.clone_engine,
             "is_cloned": v.is_cloned,
             "created_at": v.created_at.isoformat() if v.created_at else None,
         }
