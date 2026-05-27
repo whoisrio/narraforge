@@ -25,6 +25,7 @@ export function VoiceClone() {
   const [step, setStep] = useState<CloneStep>('choose-method');
   const [method, setMethod] = useState<InputMethod>(null);
   const [engine, setEngine] = useState<CloneEngine>('qwen');
+  const [designEngine, setDesignEngine] = useState<CloneEngine>('mimo');
 
   /** 录制或上传后得到的 File 对象 */
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -158,37 +159,62 @@ export function VoiceClone() {
 
   // ---- 音色设计区（占位） ----
   const renderDesignSection = () => (
-    <div className={styles.placeholderSection}>
-      <div className={styles.placeholderIcon}>🎨</div>
-      <h3>音色设计</h3>
-      <p className={styles.placeholderDesc}>
-        通过文本描述设计全新音色，或对已有声音进行风格调整。
-      </p>
-      <div className={styles.placeholderFeatures}>
-        <div className={styles.placeholderFeature}>
-          <span className={styles.featureIcon}>✍️</span>
-          <div>
-            <div className={styles.featureTitle}>文本描述定制</div>
-            <div className={styles.featureDesc}>用自然语言描述想要的音色特征，AI 自动生成</div>
-          </div>
-        </div>
-        <div className={styles.placeholderFeature}>
-          <span className={styles.featureIcon}>🎭</span>
-          <div>
-            <div className={styles.featureTitle}>风格迁移</div>
-            <div className={styles.featureDesc}>将已有声音转换为不同风格（温柔、激昂、播音腔等）</div>
-          </div>
-        </div>
-        <div className={styles.placeholderFeature}>
-          <span className={styles.featureIcon}>🔀</span>
-          <div>
-            <div className={styles.featureTitle}>声音混合</div>
-            <div className={styles.featureDesc}>混合多个声音特征，创造独特音色</div>
-          </div>
-        </div>
+    <>
+      {/* 设计引擎选择 */}
+      <div className={styles.engineSwitch}>
+        <button
+          className={`${styles.engineOption} ${designEngine === 'qwen' ? styles.active : ''}`}
+          onClick={() => setDesignEngine('qwen')}
+        >
+          CosyVoice (Qwen)
+        </button>
+        <button
+          className={`${styles.engineOption} ${designEngine === 'mimo' ? styles.active : ''}`}
+          onClick={() => setDesignEngine('mimo')}
+        >
+          MiMo-TTS
+        </button>
       </div>
-      <div className={styles.placeholderBadge}>即将推出</div>
-    </div>
+
+      <div className={styles.placeholderSection}>
+        <div className={styles.placeholderIcon}>🎨</div>
+        <h3>音色设计</h3>
+        <p className={styles.placeholderDesc}>
+          通过文本描述设计全新音色，或对已有声音进行风格调整。
+        </p>
+        <div className={styles.placeholderFeatures}>
+          {designEngine === 'mimo' ? (
+            <>
+              <div className={styles.placeholderFeature}>
+                <span className={styles.featureIcon}>✍️</span>
+                <div>
+                  <div className={styles.featureTitle}>文本描述定制</div>
+                  <div className={styles.featureDesc}>用自然语言描述想要的音色特征，MiMo 即时生成</div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className={styles.placeholderFeature}>
+                <span className={styles.featureIcon}>🎭</span>
+                <div>
+                  <div className={styles.featureTitle}>风格迁移</div>
+                  <div className={styles.featureDesc}>将已有声音转换为不同风格（温柔、激昂、播音腔等）</div>
+                </div>
+              </div>
+              <div className={styles.placeholderFeature}>
+                <span className={styles.featureIcon}>🔀</span>
+                <div>
+                  <div className={styles.featureTitle}>声音混合</div>
+                  <div className={styles.featureDesc}>混合多个声音特征，创造独特音色</div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+        <div className={styles.placeholderBadge}>即将推出</div>
+      </div>
+    </>
   );
 
   return (
@@ -246,12 +272,14 @@ export function VoiceClone() {
           </div>
         </div>
 
-        {/* 右侧：声音列表（始终显示） */}
-        <div className={styles.listSection}>
-          <div className={styles.card}>
-            <VoiceList engine={engine} />
+        {/* 右侧：声音列表（仅声音克隆时显示） */}
+        {section === 'clone' && (
+          <div className={styles.listSection}>
+            <div className={styles.card}>
+              <VoiceList engine={engine} />
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
