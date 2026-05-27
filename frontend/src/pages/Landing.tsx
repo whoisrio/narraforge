@@ -36,7 +36,7 @@ export default function Landing({ onNavigate }: LandingProps) {
             Voice Studio
           </h1>
           <p className={styles.heroLead}>
-            基于 Qwen CosyVoice | Edge-tts | Faster-whisper 模型，将文字、声音、字幕融为一体的 AI 音频工作站
+            基于 Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper 模型，将音色设计、文字转语音、语音转字幕融为一体的 AI 音频工作站
           </p>
           <div className={styles.heroActions}>
             <button
@@ -49,13 +49,13 @@ export default function Landing({ onNavigate }: LandingProps) {
         </div>
       </section>
 
-      {/* ── Feature 1: Voice Clone ── */}
+      {/* ── Feature 1: Voice Design ── */}
       <FeatureTile
         number="01"
-        title="声音复刻"
-        subtitle="Voice Cloning"
-        body="上传一段 30 秒的音频样本，AI 即可精准复刻说话人的音色、语调与情感韵律。克隆后的声音可用于任意文本的语音合成，让每个字都像是原声。"
-        action="体验声音复刻"
+        title="音色设计"
+        subtitle="Voice Design"
+        body="上传一段 30 秒的音频样本，AI 即可精准复刻说话人的音色、语调与情感韵律。支持 CosyVoice 云端注册与 MiMo 即时复刻两种引擎，克隆后的声音可用于任意文本的语音合成。"
+        action="体验音色设计"
         onAction={() => onNavigate('voice-clone')}
         theme="white"
       />
@@ -65,7 +65,7 @@ export default function Landing({ onNavigate }: LandingProps) {
         number="02"
         title="文字转语音"
         subtitle="Text to Speech"
-        body="输入文字，即刻生成自然流畅的语音。支持多语种切换、语速与音调调节，满足播客、配音、无障碍朗读等多样化场景。"
+        body="输入文字，即刻生成自然流畅的语音。支持 CosyVoice、MiMo TTS、Edge-TTS 三引擎切换，多语种、语速音调调节，满足播客、配音、无障碍朗读等多样化场景。"
         action="体验文字转语音"
         onAction={() => onNavigate('tts-synthesis')}
         theme="parchment"
