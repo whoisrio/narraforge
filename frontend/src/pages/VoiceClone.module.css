@@ -53,6 +53,103 @@
   box-shadow: var(--shadow-md);
 }
 
+/* 顶层功能区切换 */
+.sectionTabs {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xl);
+}
+
+.sectionTab {
+  padding: 10px 24px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.sectionTab:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.sectionTab.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+/* 音色设计占位区 */
+.placeholderSection {
+  text-align: center;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+}
+
+.placeholderIcon {
+  font-size: 48px;
+  margin-bottom: var(--spacing-md);
+}
+
+.placeholderSection h3 {
+  font-size: var(--font-size-xl);
+  font-weight: 600;
+  margin-bottom: var(--spacing-sm);
+}
+
+.placeholderDesc {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-xl);
+}
+
+.placeholderFeatures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  text-align: left;
+  max-width: 400px;
+  margin: 0 auto var(--spacing-xl);
+}
+
+.placeholderFeature {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+}
+
+.featureIcon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.featureTitle {
+  font-weight: 600;
+  font-size: var(--font-size-base);
+  margin-bottom: 2px;
+}
+
+.featureDesc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.placeholderBadge {
+  display: inline-block;
+  padding: 4px 16px;
+  background: var(--color-primary-light, #e3f2fd);
+  color: var(--color-primary, #1976d2);
+  border-radius: 20px;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+}
+
 .content {
   display: grid;
   /* 用百分比而非 fr，避免子内容撑大某一列 */

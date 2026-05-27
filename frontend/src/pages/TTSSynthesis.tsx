@@ -42,11 +42,8 @@ export function TTSSynthesis() {
   // MiMo TTS state
   const [mimoMode, setMimoMode] = useState<MiMoMode>('preset');
   const [mimoPresetVoice, setMimoPresetVoice] = useState('冰糖');
-  const [mimoVoiceDescription, setMimoVoiceDescription] = useState('');
-  const [mimoSynthText, setMimoSynthText] = useState('');
   const [mimoInstruction, setMimoInstruction] = useState('');
   const [mimoCloneVoiceId, setMimoCloneVoiceId] = useState('');
-  const [mimoOptimizeText, setMimoOptimizeText] = useState(true);
 
   const [result, setResult] = useState<TTSResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -181,10 +178,6 @@ export function TTSSynthesis() {
       alert('请选择一个预置音色');
       return;
     }
-    if (engine === 'mimo_tts' && mimoMode === 'voicedesign' && !mimoVoiceDescription.trim()) {
-      alert('请填写音色描述');
-      return;
-    }
     if (engine === 'mimo_tts' && mimoMode === 'voiceclone' && !mimoCloneVoiceId) {
       alert('请选择一个声音用于复刻');
       return;
@@ -205,15 +198,6 @@ export function TTSSynthesis() {
             format: 'wav',
           });
           await saveFrontendResult(resp, 'wav', mimoPresetVoice, mimoPresetVoice, mimoInstruction, 'Chinese');
-        } else if (mimoMode === 'voicedesign') {
-          resp = await mimoTtsApi.synthesizeVoiceDesign({
-            text: mimoSynthText || undefined,
-            voice_description: mimoVoiceDescription,
-            optimize_text_preview: mimoOptimizeText,
-            format: 'wav',
-          });
-          const label = mimoVoiceDescription.slice(0, 30) + (mimoVoiceDescription.length > 30 ? '...' : '');
-          await saveFrontendResult(resp, 'wav', label, '', mimoVoiceDescription, 'Chinese');
         } else {
           // voiceclone
           resp = await mimoTtsApi.synthesizeVoiceClone({
@@ -273,8 +257,8 @@ export function TTSSynthesis() {
     }
   }, [
     text, engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, params,
-    mimoMode, mimoPresetVoice, mimoVoiceDescription, mimoSynthText,
-    mimoInstruction, mimoCloneVoiceId, mimoOptimizeText,
+    mimoMode, mimoPresetVoice,
+    mimoInstruction, mimoCloneVoiceId,
     loadHistory, storageMode, voices, saveFrontendResult,
   ]);
 
@@ -338,7 +322,6 @@ export function TTSSynthesis() {
     : engine === 'mimo_tts'
       ? text.trim() && (
         (mimoMode === 'preset' && mimoPresetVoice) ||
-        (mimoMode === 'voicedesign' && mimoVoiceDescription.trim()) ||
         (mimoMode === 'voiceclone' && mimoCloneVoiceId)
       )
       : text.trim() && selectedVoiceId;
@@ -423,16 +406,10 @@ export function TTSSynthesis() {
               onModeChange={setMimoMode}
               onPresetVoiceSelect={setMimoPresetVoice}
               selectedPresetVoice={mimoPresetVoice}
-              onVoiceDescriptionChange={setMimoVoiceDescription}
-              voiceDescription={mimoVoiceDescription}
-              onSynthTextChange={setMimoSynthText}
-              synthText={mimoSynthText}
               onInstructionChange={setMimoInstruction}
               instruction={mimoInstruction}
               onCloneVoiceSelect={setMimoCloneVoiceId}
               selectedCloneVoiceId={mimoCloneVoiceId}
-              optimizeTextPreview={mimoOptimizeText}
-              onOptimizeTextPreviewChange={setMimoOptimizeText}
             />
           )}
         </div>

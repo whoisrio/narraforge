@@ -17,7 +17,11 @@ type CloneStep = 'choose-method' | 'input' | 'preview-clone';
 /** 用户选择的输入方式 */
 type InputMethod = 'record' | 'upload' | 'url' | null;
 
+/** 顶层功能区 */
+type Section = 'clone' | 'design';
+
 export function VoiceClone() {
+  const [section, setSection] = useState<Section>('clone');
   const [step, setStep] = useState<CloneStep>('choose-method');
   const [method, setMethod] = useState<InputMethod>(null);
   const [engine, setEngine] = useState<CloneEngine>('qwen');
@@ -152,36 +156,93 @@ export function VoiceClone() {
     </div>
   );
 
+  // ---- 音色设计区（占位） ----
+  const renderDesignSection = () => (
+    <div className={styles.placeholderSection}>
+      <div className={styles.placeholderIcon}>🎨</div>
+      <h3>音色设计</h3>
+      <p className={styles.placeholderDesc}>
+        通过文本描述设计全新音色，或对已有声音进行风格调整。
+      </p>
+      <div className={styles.placeholderFeatures}>
+        <div className={styles.placeholderFeature}>
+          <span className={styles.featureIcon}>✍️</span>
+          <div>
+            <div className={styles.featureTitle}>文本描述定制</div>
+            <div className={styles.featureDesc}>用自然语言描述想要的音色特征，AI 自动生成</div>
+          </div>
+        </div>
+        <div className={styles.placeholderFeature}>
+          <span className={styles.featureIcon}>🎭</span>
+          <div>
+            <div className={styles.featureTitle}>风格迁移</div>
+            <div className={styles.featureDesc}>将已有声音转换为不同风格（温柔、激昂、播音腔等）</div>
+          </div>
+        </div>
+        <div className={styles.placeholderFeature}>
+          <span className={styles.featureIcon}>🔀</span>
+          <div>
+            <div className={styles.featureTitle}>声音混合</div>
+            <div className={styles.featureDesc}>混合多个声音特征，创造独特音色</div>
+          </div>
+        </div>
+      </div>
+      <div className={styles.placeholderBadge}>即将推出</div>
+    </div>
+  );
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <h1>声音复刻</h1>
-        <p>完美复刻你的声音</p>
+        <h1>音色设计</h1>
+        <p>创建和管理你的专属音色</p>
       </div>
 
-      {/* 复刻引擎选择 */}
-      <div className={styles.engineSwitch}>
+      {/* 顶层功能区切换 */}
+      <div className={styles.sectionTabs}>
         <button
-          className={`${styles.engineOption} ${engine === 'qwen' ? styles.active : ''}`}
-          onClick={() => setEngine('qwen')}
+          className={`${styles.sectionTab} ${section === 'clone' ? styles.active : ''}`}
+          onClick={() => setSection('clone')}
         >
-          CosyVoice (Qwen)
+          🎙️ 声音克隆
         </button>
         <button
-          className={`${styles.engineOption} ${engine === 'mimo' ? styles.active : ''}`}
-          onClick={() => setEngine('mimo')}
+          className={`${styles.sectionTab} ${section === 'design' ? styles.active : ''}`}
+          onClick={() => setSection('design')}
         >
-          MiMo-TTS
+          🎨 音色设计
         </button>
       </div>
 
       <div className={styles.content}>
-        {/* 左侧：方法选择 / 输入 / 预览（根据步骤切换） */}
+        {/* 左侧：功能区 */}
         <div className={styles.inputSection}>
           <div className={styles.card}>
-            {step === 'choose-method' && renderMethodSelector()}
-            {step === 'input' && renderInput()}
-            {step === 'preview-clone' && renderPreview()}
+            {section === 'clone' ? (
+              <>
+                {/* 克隆引擎选择 */}
+                <div className={styles.engineSwitch}>
+                  <button
+                    className={`${styles.engineOption} ${engine === 'qwen' ? styles.active : ''}`}
+                    onClick={() => setEngine('qwen')}
+                  >
+                    CosyVoice (Qwen)
+                  </button>
+                  <button
+                    className={`${styles.engineOption} ${engine === 'mimo' ? styles.active : ''}`}
+                    onClick={() => setEngine('mimo')}
+                  >
+                    MiMo-TTS
+                  </button>
+                </div>
+
+                {step === 'choose-method' && renderMethodSelector()}
+                {step === 'input' && renderInput()}
+                {step === 'preview-clone' && renderPreview()}
+              </>
+            ) : (
+              renderDesignSection()
+            )}
           </div>
         </div>
 
