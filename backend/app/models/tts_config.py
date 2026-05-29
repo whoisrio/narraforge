@@ -10,6 +10,7 @@ class ModelProvider(str, enum.Enum):
     QWEN = "qwen"
     AZURE = "azure"
     OPENAI = "openai"
+    MIMO = "mimo"
 
 
 class Emotion(str, enum.Enum):

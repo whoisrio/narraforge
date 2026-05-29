@@ -11,7 +11,15 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
   const [configs, setConfigs] = useState<TTSConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [newConfig, setNewConfig] = useState({
+  const [newConfig, setNewConfig] = useState<{
+    name: string;
+    provider: TTSConfig['provider'];
+    model_name: string;
+    speed: number;
+    volume: number;
+    pitch: number;
+    emotion: TTSConfig['emotion'];
+  }>({
     name: '',
     provider: 'qwen',
     model_name: 'qwen-tts',
@@ -134,7 +142,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
             type="text"
             placeholder="qwen/azure/openai"
             value={newConfig.provider}
-            onChange={(e) => setNewConfig({ ...newConfig, provider: e.target.value })}
+            onChange={(e) => setNewConfig({ ...newConfig, provider: e.target.value as TTSConfig['provider'] })}
           />
           <Input
             label="Model name"
