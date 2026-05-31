@@ -41,9 +41,14 @@ class Settings(BaseSettings):
     qwen_api_key: str = ""
     qwen_model: str = "qwen-tts"
 
-    # API Keys (MiMo TTS)
+    # MiMo TTS API (小米 MiMo-V2.5-TTS 系列)
     mimo_api_key: str = ""
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
+
+    # LLM 字幕校准/翻译（默认复用 MiMo 配置）
+    llm_api_key: str = ""           # 留空则自动回退到 mimo_api_key
+    llm_base_url: str = ""          # 留空则自动回退到 mimo_base_url
+    llm_model: str = "mimo-v2.5-pro"
 
     # 公网访问 URL（CosyVoice 声音注册需要公网可访问的音频 URL）
     # 本地开发可以使用 ngrok 暴露的 URL，如：https://xxxx.ngrok.io

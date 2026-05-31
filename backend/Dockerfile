@@ -1,10 +1,10 @@
-FROM python:3.12-slim
+FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/library/python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies (ffmpeg for audio merge)
-# Use --no-install-recommends to avoid pulling heavy optional dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+# 换阿里云 apt 镜像源，避免容器内访问外网失败
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 # Install uv

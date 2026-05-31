@@ -38,18 +38,6 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
 
   const fetchVoices = async () => {
     try {
-      // 仅 CosyVoice 模式下尝试从 Qwen 同步
-      if (engine === 'qwen') {
-        try {
-          setSyncing(true);
-          await voiceApi.syncFromQwen();
-        } catch (e) {
-          console.warn('Sync from Qwen failed, using local data:', e);
-        } finally {
-          setSyncing(false);
-        }
-      }
-
       const all = await voiceApi.list();
       // 根据引擎筛选已克隆的声音
       const cloned = all.filter(v => {
@@ -277,8 +265,8 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
     marginLeft: '6px',
   });
 
-  if (loading || syncing) {
-    return <Loading message={syncing ? 'Syncing from Qwen...' : 'Loading voices...'} />;
+  if (loading) {
+    return <Loading message="Loading voices..." />;
   }
 
   return (

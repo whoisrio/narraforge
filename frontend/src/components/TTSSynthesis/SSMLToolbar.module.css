@@ -1,3 +1,4 @@
+/* ─── 工具栏容器 ─── */
 .toolbar {
   margin-top: var(--spacing-sm);
   padding: var(--spacing-sm);
@@ -6,6 +7,51 @@
   border: 1px solid var(--color-border-light);
 }
 
+/* ─── 分类标签栏 ─── */
+.categoryTabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: var(--spacing-sm);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: 2px;
+}
+
+.categoryTab {
+  padding: 5px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs, 12px);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.categoryTab:hover {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.categoryTabActive {
+  background: var(--color-primary);
+  color: white;
+}
+
+.categoryTabActive:hover {
+  background: var(--color-primary);
+  color: white;
+  opacity: 0.9;
+}
+
+.categorySpacer {
+  flex: 1;
+}
+
+/* ─── 标签按钮区 ─── */
 .tagGrid {
   display: flex;
   flex-wrap: wrap;
@@ -13,7 +59,7 @@
 }
 
 .tagButton {
-  padding: 4px 10px;
+  padding: 5px 12px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-surface);
@@ -21,7 +67,7 @@
   font-size: var(--font-size-xs, 12px);
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   white-space: nowrap;
 }
 
@@ -29,6 +75,7 @@
   background: var(--color-primary);
   color: white;
   border-color: var(--color-primary);
+  transform: translateY(-1px);
 }
 
 .dangerButton {
@@ -41,6 +88,171 @@
   color: white;
 }
 
+/* ─── 模板库 ─── */
+.templateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.templateCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.templateCard:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.templateName {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.templateDesc {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-secondary);
+}
+
+.templateCode {
+  font-size: 10px;
+  color: var(--color-primary);
+  background: var(--color-surface-hover);
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-family: 'SF Mono', 'Consolas', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── 结构树面板 ─── */
+.treePanel {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: var(--spacing-xs);
+}
+
+.treeEmpty {
+  padding: var(--spacing-md);
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.treeIssues {
+  margin-bottom: var(--spacing-sm);
+}
+
+.treeError,
+.treeWarning {
+  padding: 4px 8px;
+  margin-bottom: 2px;
+  border-radius: 4px;
+  font-size: var(--font-size-xs, 11px);
+  cursor: pointer;
+}
+
+.treeError {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--color-error, #ef4444);
+}
+
+.treeWarning {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.treeNode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin: 2px;
+  border-radius: 4px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  cursor: pointer;
+  transition: all 0.1s;
+  font-size: var(--font-size-xs, 11px);
+}
+
+.treeNode:hover {
+  border-color: var(--color-primary);
+}
+
+.treeTag {
+  color: var(--color-primary);
+  font-weight: 600;
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.treeAttrs {
+  color: var(--color-text-muted);
+  font-family: 'SF Mono', 'Consolas', monospace;
+  font-size: 10px;
+}
+
+/* ─── 语法高亮覆盖层 ─── */
+.highlightOverlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: hidden;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  padding: inherit;
+  border: transparent;
+  color: transparent;
+}
+
+.hlTagOpen {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+.hlTagClose {
+  color: #3b82f6;
+  opacity: 0.7;
+}
+
+.hlTagSelfClose {
+  color: #8b5cf6;
+  font-weight: 600;
+}
+
+.hlTagPronounce {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.hlTagBreak {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.hlTagSayas {
+  color: #ec4899;
+  font-weight: 600;
+}
+
+/* ─── 提示条 ─── */
 .hint {
   margin-top: var(--spacing-xs);
   font-size: var(--font-size-xs, 11px);
@@ -48,7 +260,7 @@
   line-height: 1.4;
 }
 
-/* 属性输入弹窗 */
+/* ─── 属性编辑弹窗 ─── */
 .dialogOverlay {
   position: fixed;
   inset: 0;
@@ -63,8 +275,8 @@
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
-  min-width: 320px;
-  max-width: 420px;
+  min-width: 360px;
+  max-width: 480px;
   box-shadow: var(--shadow-lg);
 }
 
@@ -92,6 +304,12 @@
   color: var(--color-text-primary);
 }
 
+.attrHint {
+  font-weight: 400;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs, 11px);
+}
+
 .attrField input,
 .attrField select {
   width: 100%;
@@ -111,6 +329,29 @@
   box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 59, 130, 246), 0.2);
 }
 
+/* ─── 实时预览 ─── */
+.previewBox {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-background);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-light);
+}
+
+.previewLabel {
+  font-size: var(--font-size-xs, 11px);
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.previewBox code {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  font-family: 'SF Mono', 'Consolas', monospace;
+  word-break: break-all;
+}
+
+/* ─── 弹窗按钮 ─── */
 .dialogActions {
   display: flex;
   gap: var(--spacing-sm);

@@ -142,6 +142,8 @@ async def transcribe(
         "content": result.content,
         "language": result.language,
         "language_probability": result.language_probability,
+        "device": result.device,
+        "compute_type": result.compute_type,
         "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
     }
 
@@ -286,6 +288,8 @@ async def multi_transcribe(
             "content": result.content,
             "language": result.language,
             "language_probability": result.language_probability,
+            "device": result.device,
+            "compute_type": result.compute_type,
             "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
         }
     finally:

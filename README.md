@@ -10,7 +10,18 @@
 |------|------|
 | **声音复刻** | 上传音频样本，AI 复刻说话人音色与情感韵律，支持 CosyVoice 和 MiMo 两种引擎 |
 | **文字转语音** | 输入文字即可生成自然语音，支持多引擎（CosyVoice / MiMo / Edge-TTS）、多语种、语速与音调调节 |
-| **语音转字幕** | 音频/视频智能转写为高精度字幕，支持多说话人识别与时间轴对齐 |
+| **语音转字幕** | 音频/视频智能转写为高精度字幕，支持 GPU 加速、智能行拆分、LLM 校准与双语翻译 |
+
+### 语音转字幕详情
+
+| 功能 | 说明 |
+|------|------|
+| **GPU 自动检测** | 自动检测 CUDA GPU，有则用 `cuda+float16` 加速，否则回退 `cpu+int8` |
+| **智能行拆分** | 超长字幕按标点贪心拆分，每条约 15 字，时间码按字数比例分配 |
+| **LLM 校准** | 提供原始文稿，LLM 对比识别结果，只修正错别字，不改变内容意思 |
+| **本地预筛** | 智能模式下先本地比对过滤，只送疑似错误行给 LLM，节省 90%+ token |
+| **双语字幕** | 一键翻译为英/日/韩/法/德/西双语字幕，支持下载双语 SRT |
+| **SSML 编辑器** | 分类标签栏、模板库、结构树、属性校验，专业级 SSML 编辑体验 |
 
 ## 声音复刻引擎
 
@@ -42,7 +53,8 @@
 - 千问 CosyVoice API（声音克隆与 TTS）
 - MiMo-V2.5-TTS API（预置音色 / 音色设计 / 音色复刻）
 - Edge-TTS（离线 TTS 备选）
-- Faster-Whisper（语音转文字）
+- Faster-Whisper（语音转文字，支持 CUDA GPU 加速）
+- MiMo-v2.5-pro（LLM 字幕校准与双语翻译）
 - 七牛云 OSS（可选的外部存储）
 
 ## 快速开始
@@ -104,7 +116,6 @@ npm run dev
 docker-compose up --build
 ```
 
-
 ## 配置项
 
 核心环境变量（`backend/.env`）：
@@ -113,8 +124,11 @@ docker-compose up --build
 |------|------|--------|
 | `QWEN_API_KEY` | 千问 API 密钥 | 必填（CosyVoice 功能） |
 | `QWEN_MODEL` | 使用的模型 | `cosyvoice-v3.5-plus` |
-| `MIMO_API_KEY` | MiMo TTS API 密钥 | 可选（MiMo 功能） |
+| `MIMO_API_KEY` | MiMo TTS API 密钥 | 可选（MiMo + LLM 校准） |
 | `MIMO_BASE_URL` | MiMo TTS API 地址 | `https://api.xiaomimimo.com/v1` |
+| `LLM_API_KEY` | LLM 校准专用密钥 | 留空则复用 `MIMO_API_KEY` |
+| `LLM_BASE_URL` | LLM API 地址 | 留空则复用 `MIMO_BASE_URL` |
+| `LLM_MODEL` | LLM 校准模型 | `mimo-v2.5-pro` |
 | `DATABASE_URL` | 数据库连接 | `sqlite:///./voice_clone.db` |
 | `LOG_LEVEL` | 日志级别 | `INFO` |
 
@@ -130,6 +144,7 @@ docker-compose up --build
 | POST | `/api/clone/create-clone-mimo` | MiMo 标记复刻 |
 | GET | `/api/clone/list` | 获取声音列表 |
 | DELETE | `/api/clone/{id}` | 删除声音 |
+| POST | `/api/clone/sync-from-qwen` | 手动同步 Qwen 声音（仅 CosyVoice） |
 
 ### TTS 合成 (`/api/tts`)
 
@@ -147,6 +162,23 @@ docker-compose up --build
 | POST | `/api/mimo-tts/voicedesign` | 文本描述设计音色合成 |
 | POST | `/api/mimo-tts/voiceclone` | 已有声音复刻合成 |
 | POST | `/api/mimo-tts/voiceclone-direct` | Base64 音频直接复刻合成 |
+
+### 语音转字幕 (`/api/speech-to-text`)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/speech-to-text/transcribe` | 单文件语音识别（GPU 自动加速） |
+| POST | `/api/speech-to-text/multi-transcribe` | 多音频合并识别 |
+| GET | `/api/speech-to-text/history` | 识别历史 |
+| GET | `/api/speech-to-text/download/{id}` | 下载 SRT 文件 |
+
+### 字幕 LLM 校准 (`/api/subtitle-llm`)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/subtitle-llm/correct` | LLM 字幕校准（smart/full 两种模式） |
+| POST | `/api/subtitle-llm/translate` | 双语字幕翻译 |
+| GET | `/api/subtitle-llm/config` | 获取当前 LLM 配置 |
 
 ## License
 

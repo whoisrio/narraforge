@@ -207,6 +207,8 @@ export interface TranscribeResult {
   content: string;
   language: string;
   language_probability: number;
+  device?: string;
+  compute_type?: string;
   download_url: string;
 }
 
@@ -260,3 +262,44 @@ export const speechToTextApi = {
 };
 
 export default api;
+
+// Subtitle LLM API (校准 + 翻译)
+export interface CorrectionSuggestion {
+  index: number;
+  original: string;
+  suggested: string;
+  reason: string;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface BilingualSegment {
+  index: number;
+  time_line: string;
+  original: string;
+  translated: string;
+}
+
+export const subtitleLlmApi = {
+  /** LLM 字幕校准 — 对比原始文稿，找出错别字 */
+  correct: async (srtContent: string, originalDocument: string, language = 'zh', mode = 'smart'): Promise<{ suggestions: CorrectionSuggestion[]; model: string | null }> => {
+    const { data } = await api.post<{ suggestions: CorrectionSuggestion[]; model: string | null }>(
+      '/subtitle-llm/correct',
+      { srt_content: srtContent, original_document: originalDocument, language, mode },
+    );
+    return data;
+  },
+
+  /** 双语字幕翻译 */
+  translate: async (
+    srtContent: string,
+    targetLanguage = 'English',
+    sourceLanguage = 'Chinese',
+  ): Promise<{ segments: BilingualSegment[]; bilingual_srt: string; target_language: string }> => {
+    const { data } = await api.post('/subtitle-llm/translate', {
+      srt_content: srtContent,
+      target_language: targetLanguage,
+      source_language: sourceLanguage,
+    });
+    return data;
+  },
+};
