@@ -33,6 +33,9 @@ class FunASRResult:
 class FunASRService:
     """FunASR 本地语音转字幕服务"""
 
+    # 模型缓存：避免每次 transcribe 都重新加载
+    _model_cache: dict[str, any] = {}  # type: ignore[type-arg]
+
     # FunASR 支持的模型组合
     MODEL_PRESETS = {
         'paraformer-zh': {
@@ -134,18 +137,26 @@ class FunASRService:
 
         presets = self.MODEL_PRESETS if enable_vad else self.MODEL_PRESETS_NO_VAD
         preset = presets.get(model_name, presets['paraformer-zh'])
-        vad_info = f", vad={preset['vad_model']}" if preset.get('vad_model') else ", vad=off"
-        _logger.info(f'FunASR 加载模型: {model_name}, device={device}{vad_info}')
 
-        model_kwargs = {
-            'model': preset['model'],
-            'punc_model': preset['punc_model'],
-            'device': device,
-        }
-        if preset.get('vad_model'):
-            model_kwargs['vad_model'] = preset['vad_model']
+        # 用缓存 key 复用已加载的模型
+        cache_key = f"{model_name}_{enable_vad}_{device}"
+        if cache_key in self._model_cache:
+            model = self._model_cache[cache_key]
+            _logger.info(f'FunASR 复用缓存模型: {cache_key}')
+        else:
+            vad_info = f", vad={preset['vad_model']}" if preset.get('vad_model') else ", vad=off"
+            _logger.info(f'FunASR 加载模型: {model_name}, device={device}{vad_info}')
 
-        model = AutoModel(**model_kwargs)
+            model_kwargs = {
+                'model': preset['model'],
+                'punc_model': preset['punc_model'],
+                'device': device,
+            }
+            if preset.get('vad_model'):
+                model_kwargs['vad_model'] = preset['vad_model']
+
+            model = AutoModel(**model_kwargs)
+            self._model_cache[cache_key] = model
 
         _logger.info(f'FunASR 开始识别: {input_file}')
         results = model.generate(input=input_file, batch_size_s=300)
