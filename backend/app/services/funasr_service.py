@@ -209,6 +209,9 @@ class FunASRService:
         """
         根据标点符号将文本拆分成段落，利用字级别时间戳分配时间。
 
+        FunASR 的 timestamp 数量可能少于文本字符数（VAD 截断或模型省略），
+        超出 timestamp 范围的字符使用最后一个已知时间戳的 end 值。
+
         Args:
             text: 完整识别文本
             timestamps: FunASR 返回的字级别时间戳 [[start_ms, end_ms], ...]
@@ -219,8 +222,8 @@ class FunASRService:
         if not timestamps:
             return [(text, 0.0, 0.0)]
 
-        # 按标点拆分的位置
         punct_pattern = re.compile(r'[，。；！？、,;!?]')
+        last_end_ms = timestamps[-1][1]  # 用于超出范围时的兜底
 
         segments = []
         current_text = []
@@ -230,11 +233,11 @@ class FunASRService:
         for i, ch in enumerate(text):
             current_text.append(ch)
 
-            # 获取当前字符的时间戳
+            # 获取当前字符的时间戳，超出范围则用最后一个
             if char_idx < len(timestamps):
                 end_ms = timestamps[char_idx][1]
             else:
-                end_ms = timestamps[-1][1] if timestamps else 0
+                end_ms = last_end_ms
 
             # 如果是标点或者是最后一个字符，切分一段
             if punct_pattern.match(ch) or i == len(text) - 1:
@@ -242,6 +245,9 @@ class FunASRService:
                 if seg_text:
                     start_sec = current_start_ms / 1000.0
                     end_sec = end_ms / 1000.0
+                    # 确保 end > start（至少 0.1s）
+                    if end_sec <= start_sec:
+                        end_sec = start_sec + 0.1
                     segments.append((seg_text, start_sec, end_sec))
                 current_text = []
                 if i < len(text) - 1:
@@ -249,17 +255,21 @@ class FunASRService:
                     next_idx = char_idx + 1
                     if next_idx < len(timestamps):
                         current_start_ms = timestamps[next_idx][0]
+                    else:
+                        # timestamps 用完了，从上一段的实际 end 开始
+                        current_start_ms = int(end_sec * 1000)
 
-            # 只计中文字符对应的时间戳索引
-            if ord(ch) > 127 or ch.isalnum():
+            # 计数所有有意义的字符（与 FunASR 的 timestamp 索引一致）
+            # FunASR 对中英文字符和标点都生成 timestamp，只跳过空格
+            if ch != ' ':
                 char_idx += 1
 
         # 处理残留
         remaining = ''.join(current_text).strip()
         if remaining:
             if timestamps:
-                start_sec = timestamps[max(0, char_idx - 1)][0] / 1000.0
-                end_sec = timestamps[-1][1] / 1000.0
+                start_sec = timestamps[max(0, min(char_idx, len(timestamps) - 1))][0] / 1000.0
+                end_sec = last_end_ms / 1000.0
             else:
                 start_sec = 0.0
                 end_sec = 0.0
