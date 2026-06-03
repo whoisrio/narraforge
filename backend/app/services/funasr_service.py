@@ -7,6 +7,7 @@
 import logging
 import os
 import re
+import threading
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -35,6 +36,8 @@ class FunASRService:
 
     # 模型缓存：避免每次 transcribe 都重新加载
     _model_cache: dict[str, any] = {}  # type: ignore[type-arg]
+    # 推理锁：PyTorch 模型非线程安全，同一时间只允许一个推理
+    _inference_lock = threading.Lock()
 
     # FunASR 支持的模型组合
     MODEL_PRESETS = {
@@ -159,7 +162,8 @@ class FunASRService:
             self._model_cache[cache_key] = model
 
         _logger.info(f'FunASR 开始识别: {input_file}')
-        results = model.generate(input=input_file, batch_size_s=300)
+        with self._inference_lock:
+            results = model.generate(input=input_file, batch_size_s=300)
 
         # 解析 FunASR 结果，提取带时间戳的片段
         srt_entries: list[tuple[str, float, float]] = []
