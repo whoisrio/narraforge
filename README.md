@@ -1,6 +1,6 @@
 # Voice Studio
 
-基于 **Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper** 的 AI 音频工作站，将声音克隆、文字转语音、语音转字幕融为一体。
+基于 **Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper · FunASR** 的 AI 音频工作站，将声音克隆、文字转语音、语音转字幕融为一体。
 
 ![Voice Studio 首页](frontend/src/assets/frontpage-2.png)
 
@@ -16,12 +16,27 @@
 
 | 功能 | 说明 |
 |------|------|
-| **GPU 自动检测** | 自动检测 CUDA GPU，有则用 `cuda+float16` 加速，否则回退 `cpu+int8` |
+| **双引擎 ASR** | Whisper（多语言）和 FunASR（中文优化）可选，前端一键切换 |
+| **FunASR Paraformer** | 阿里达摩院中文 ASR 模型，CPU 推理 RTF~0.03（比实时快 30x），自带标点恢复 |
+| **GPU 自动检测** | Whisper 自动检测 CUDA GPU；FunASR 自动检测 CUDA/MPS/CPU |
+| **VAD 可选** | FunASR 模式下可开关语音活动检测（FSMN-VAD），短音频可关闭提速 |
 | **智能行拆分** | 超长字幕按标点贪心拆分，每条约 15 字，时间码按字数比例分配 |
 | **LLM 校准** | 提供原始文稿，LLM 对比识别结果，只修正错别字，不改变内容意思 |
 | **本地预筛** | 智能模式下先本地比对过滤，只送疑似错误行给 LLM，节省 90%+ token |
 | **双语字幕** | 一键翻译为英/日/韩/法/德/西双语字幕，支持下载双语 SRT |
 | **SSML 编辑器** | 分类标签栏、模板库、结构树、属性校验，专业级 SSML 编辑体验 |
+
+### ASR 引擎对比
+
+| | Whisper (Faster-Whisper) | FunASR (Paraformer-ZH) |
+|--|-------------------------|----------------------|
+| 语言支持 | 100+ 语言 | 中文专优 |
+| 模型大小 | tiny ~ large-v3 | ~944MB |
+| CPU 速度 | RTF~0.1 | RTF~0.03 |
+| GPU 加速 | CUDA (float16) | CUDA / MPS |
+| VAD | 无（模型内置分段） | FSMN-VAD（可选） |
+| 标点恢复 | 模型内置 | CT-Transformer |
+| 模型来源 | Hugging Face | ModelScope |
 
 ## 声音复刻引擎
 
@@ -54,6 +69,7 @@
 - MiMo-V2.5-TTS API（预置音色 / 音色设计 / 音色复刻）
 - Edge-TTS（离线 TTS 备选）
 - Faster-Whisper（语音转文字，支持 CUDA GPU 加速）
+- FunASR Paraformer（中文语音转文字，CPU 推理比 Whisper 快 3x，自带 VAD + 标点恢复）
 - MiMo-v2.5-pro（LLM 字幕校准与双语翻译）
 - 七牛云 OSS（可选的外部存储）
 
@@ -65,6 +81,9 @@
 - Python ≥ 3.12
 - 千问 API Key（[获取地址](https://dashscope.console.aliyun.com/)）
 - MiMo API Key（可选，[获取地址](https://xiaomimimo.com)）
+
+> **FunASR 本地模型**：首次使用会自动从 ModelScope 下载（~2GB），后续使用本地缓存。
+> macOS 使用 CPU+MPS 加速，Linux GPU 服务器使用 CUDA。
 
 ### 1. 配置后端
 
@@ -131,6 +150,8 @@ docker-compose up --build
 | `LLM_MODEL` | LLM 校准模型 | `mimo-v2.5-pro` |
 | `DATABASE_URL` | 数据库连接 | `sqlite:///./voice_clone.db` |
 | `LOG_LEVEL` | 日志级别 | `INFO` |
+| `FUNASR_MODEL` | FunASR 模型 | `paraformer-zh` |
+| `FUNASR_DEVICE` | FunASR 推理设备 | 留空自动检测 (cuda > mps > cpu) |
 
 ## API 端点
 
@@ -167,10 +188,19 @@ docker-compose up --build
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/speech-to-text/transcribe` | 单文件语音识别（GPU 自动加速） |
-| POST | `/api/speech-to-text/multi-transcribe` | 多音频合并识别 |
+| POST | `/api/speech-to-text/transcribe` | 单文件语音识别（支持 `engine` 和 `enable_vad` 参数） |
+| POST | `/api/speech-to-text/multi-transcribe` | 多音频合并识别（同上） |
 | GET | `/api/speech-to-text/history` | 识别历史 |
 | GET | `/api/speech-to-text/download/{id}` | 下载 SRT 文件 |
+
+#### 转写参数
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `engine` | string | `whisper` | 识别引擎：`whisper` 或 `funasr` |
+| `model_size` | string | `large-v3` / `paraformer-zh` | 模型大小（根据引擎自动切换选项） |
+| `beam_size` | int | 5 | Whisper beam search 大小（仅 Whisper） |
+| `enable_vad` | bool | `true` | 是否启用 VAD（仅 FunASR） |
 
 ### 字幕 LLM 校准 (`/api/subtitle-llm`)
 
