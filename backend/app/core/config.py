@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     mimo_api_key: str = ""
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
 
+    # FunASR 本地语音识别
+    funasr_model: str = "paraformer-zh"  # paraformer-zh / paraformer-zh-streaming
+    funasr_device: str = ""  # 留空自动检测 (cuda > mps > cpu)
+
     # LLM 字幕校准/翻译（默认复用 MiMo 配置）
     llm_api_key: str = ""           # 留空则自动回退到 mimo_api_key
     llm_base_url: str = ""          # 留空则自动回退到 mimo_base_url

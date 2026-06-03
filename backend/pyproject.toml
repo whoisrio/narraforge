@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Voice studio backend"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,6 +17,18 @@ dependencies = [
     "edge-tts>=7.0.0",
     "faster-whisper>=1.2.1",
     "qiniu>=7.17.0",
+    "funasr>=1.0.0",
+    "torch>=2.0.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cpu", marker = "sys_platform != 'darwin'" },
 ]
 
 [project.optional-dependencies]

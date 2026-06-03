@@ -15,11 +15,13 @@ from app.core.database import get_db
 from app.core.system_config_service import is_frontend_storage
 from app.models.transcription_record import TranscriptionRecord
 from app.services.voice_to_srt_service import VoiceToSrt
+from app.services.funasr_service import FunASRService
 
 router = APIRouter()
 
 ALLOWED_EXTENSIONS = {"wav", "mp3"}
 WHISPER_MODEL_SIZES = {"tiny", "base", "small", "medium", "large-v3"}
+FUNASR_MODELS = {"paraformer-zh", "paraformer-zh-streaming"}
 HISTORY_LIMIT = 10
 
 
@@ -75,8 +77,10 @@ def _enforce_history_limit(user_id: str, db: Session):
 @router.post("/transcribe")
 async def transcribe(
     file: UploadFile = File(...),
+    engine: str = Form("whisper"),
     model_size: str = Form("large-v3"),
     beam_size: int = Form(5),
+    enable_vad: bool = Form(True),
     db: Session = Depends(get_db),
 ):
     file_ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
@@ -86,10 +90,20 @@ async def transcribe(
             detail=f"Unsupported file format: {file_ext}. Allowed: {', '.join(sorted(ALLOWED_EXTENSIONS))}",
         )
 
-    if model_size not in WHISPER_MODEL_SIZES:
+    if engine == "whisper" and model_size not in WHISPER_MODEL_SIZES:
         raise HTTPException(
             status_code=400,
             detail=f"Invalid model_size: {model_size}. Allowed: {', '.join(sorted(WHISPER_MODEL_SIZES))}",
+        )
+    if engine == "funasr" and model_size not in FUNASR_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid FunASR model: {model_size}. Allowed: {', '.join(sorted(FUNASR_MODELS))}",
+        )
+    if engine not in ("whisper", "funasr"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid engine: {engine}. Allowed: whisper, funasr",
         )
 
     # Save uploaded file to temp location
@@ -104,12 +118,22 @@ async def transcribe(
 
     try:
         service = VoiceToSrt()
-        result = service.voicetosrt(
-            input_file=tmp_path,
-            file_id=file_id,
-            model_size=model_size,
-            beam_size=beam_size,
-        )
+        if engine == "funasr":
+            funasr_service = FunASRService()
+            result = funasr_service.transcribe(
+                input_file=tmp_path,
+                file_id=file_id,
+                model_name=model_size,
+                enable_vad=enable_vad,
+                device=settings.funasr_device or None,
+            )
+        else:
+            result = service.voicetosrt(
+                input_file=tmp_path,
+                file_id=file_id,
+                model_size=model_size,
+                beam_size=beam_size,
+            )
 
         if is_frontend_storage(db):
             # 前端存储模式：不持久化音频和记录，直接返回 SRT 内容
@@ -144,6 +168,7 @@ async def transcribe(
         "language_probability": result.language_probability,
         "device": result.device,
         "compute_type": result.compute_type,
+        "engine": engine,
         "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
     }
 
@@ -222,8 +247,10 @@ def _merge_audio_files(input_paths: List[str], output_path: str) -> None:
 @router.post("/multi-transcribe")
 async def multi_transcribe(
     files: List[UploadFile] = File(...),
+    engine: str = Form("whisper"),
     model_size: str = Form("large-v3"),
     beam_size: int = Form(5),
+    enable_vad: bool = Form(True),
     db: Session = Depends(get_db),
 ):
     """
@@ -232,8 +259,12 @@ async def multi_transcribe(
     """
     if not files:
         raise HTTPException(status_code=400, detail="At least one audio file is required")
-    if model_size not in WHISPER_MODEL_SIZES:
+    if engine == "whisper" and model_size not in WHISPER_MODEL_SIZES:
         raise HTTPException(status_code=400, detail=f"Invalid model size: {model_size}")
+    if engine == "funasr" and model_size not in FUNASR_MODELS:
+        raise HTTPException(status_code=400, detail=f"Invalid FunASR model: {model_size}")
+    if engine not in ("whisper", "funasr"):
+        raise HTTPException(status_code=400, detail=f"Invalid engine: {engine}")
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="multi_stt_"))
     try:
@@ -256,12 +287,22 @@ async def multi_transcribe(
         # 转写合并后的音频
         file_id = str(uuid.uuid4())
         service = VoiceToSrt()
-        result = service.voicetosrt(
-            input_file=merged_path,
-            file_id=file_id,
-            model_size=model_size,
-            beam_size=beam_size,
-        )
+        if engine == "funasr":
+            funasr_service = FunASRService()
+            result = funasr_service.transcribe(
+                input_file=merged_path,
+                file_id=file_id,
+                model_name=model_size,
+                enable_vad=enable_vad,
+                device=settings.funasr_device or None,
+            )
+        else:
+            result = service.voicetosrt(
+                input_file=merged_path,
+                file_id=file_id,
+                model_size=model_size,
+                beam_size=beam_size,
+            )
 
         if is_frontend_storage(db):
             # 前端存储模式：不持久化
@@ -290,6 +331,7 @@ async def multi_transcribe(
             "language_probability": result.language_probability,
             "device": result.device,
             "compute_type": result.compute_type,
+            "engine": engine,
             "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
         }
     finally:

@@ -37,19 +37,31 @@ import { TranscriptionHistory } from '../components/SpeechToText';
 import { MultiAudioSelector } from '../components/SpeechToText';
 import styles from './SpeechToText.module.css';
 
-const MODEL_OPTIONS = [
-  { value: 'tiny', label: 'Tiny (fastest, least accurate)' },
+const ENGINE_OPTIONS = [
+  { value: 'whisper', label: 'Whisper (多语言)' },
+  { value: 'funasr', label: 'FunASR (中文优化)' },
+];
+
+const WHISPER_MODEL_OPTIONS = [
+  { value: 'tiny', label: 'Tiny (最快)' },
   { value: 'base', label: 'Base' },
   { value: 'small', label: 'Small' },
   { value: 'medium', label: 'Medium' },
-  { value: 'large-v3', label: 'Large-v3 (slowest, most accurate)' },
+  { value: 'large-v3', label: 'Large-v3 (最准)' },
+];
+
+const FUNASR_MODEL_OPTIONS = [
+  { value: 'paraformer-zh', label: 'Paraformer-ZH (中文)' },
+  { value: 'paraformer-zh-streaming', label: 'Paraformer-ZH Streaming' },
 ];
 
 export function SpeechToText() {
   const { mode: storageMode } = useStorageMode();
   const [file, setFile] = useState<File | null>(null);
+  const [engine, setEngine] = useState('whisper');
   const [modelSize, setModelSize] = useState('large-v3');
   const [beamSize, setBeamSize] = useState(5);
+  const [enableVad, setEnableVad] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [result, setResult] = useState<TranscribeResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,12 +120,20 @@ export function SpeechToText() {
     [handleFileSelect],
   );
 
+  // 切换引擎时自动选择对应默认模型
+  const handleEngineChange = (newEngine: string) => {
+    setEngine(newEngine);
+    if (newEngine === 'whisper') setModelSize('large-v3');
+    else setModelSize('paraformer-zh');
+  };
+
   const handleTranscribe = async () => {
     if (!file) return;
     setProcessing(true);
     setError(null);
     try {
-      const res = await speechToTextApi.transcribe(file, modelSize, beamSize);
+      const res = await speechToTextApi.transcribe(file, modelSize, beamSize, engine, enableVad);
+      // enableVad only relevant for funasr
       setResult(res);
 
       // 前端存储模式：将识别结果存入 IndexedDB
@@ -305,7 +325,7 @@ export function SpeechToText() {
     setProcessing(true);
     setError(null);
     try {
-      const res = await speechToTextApi.multiTranscribe(files, modelSize, beamSize);
+      const res = await speechToTextApi.multiTranscribe(files, modelSize, beamSize, engine, enableVad);
       setResult(res);
 
       // 前端存储模式：存入 IndexedDB
@@ -335,7 +355,7 @@ export function SpeechToText() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>语音转字幕</h1>
-        <p>上传音频文件，使用 Whisper 模型识别语音并生成 SRT 字幕</p>
+        <p>上传音频文件，使用 Whisper 或 FunASR 识别语音并生成 SRT 字幕</p>
       </div>
 
       <div className={styles.content}>
@@ -385,19 +405,35 @@ export function SpeechToText() {
 
             <div className={styles.params}>
               <Select
+                label="识别引擎"
+                options={ENGINE_OPTIONS}
+                value={engine}
+                onChange={(e) => handleEngineChange(e.target.value)}
+              />
+              <Select
                 label="模型大小"
-                options={MODEL_OPTIONS}
+                options={engine === 'whisper' ? WHISPER_MODEL_OPTIONS : FUNASR_MODEL_OPTIONS}
                 value={modelSize}
                 onChange={(e) => setModelSize(e.target.value)}
               />
-              <Slider
+              {engine === 'whisper' && <Slider
                 label="Beam Size"
                 value={beamSize}
                 onChange={setBeamSize}
                 min={1}
                 max={10}
                 step={1}
-              />
+              />}
+              {engine === 'funasr' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14 }}>
+                  <input
+                    type="checkbox"
+                    checked={enableVad}
+                    onChange={(e) => setEnableVad(e.target.checked)}
+                  />
+                  启用 VAD (语音活动检测)
+                </label>
+              )}
             </div>
 
             <div className={styles.actionRow}>

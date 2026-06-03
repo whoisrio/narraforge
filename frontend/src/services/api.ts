@@ -209,6 +209,7 @@ export interface TranscribeResult {
   language_probability: number;
   device?: string;
   compute_type?: string;
+  engine?: string;
   download_url: string;
 }
 
@@ -228,11 +229,15 @@ export const speechToTextApi = {
     file: File,
     modelSize: string = 'large-v3',
     beamSize: number = 5,
+    engine: string = 'whisper',
+    enableVad: boolean = true,
   ): Promise<TranscribeResult> => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('model_size', modelSize);
     formData.append('beam_size', String(beamSize));
+    formData.append('engine', engine);
+    formData.append('enable_vad', String(enableVad));
     const { data } = await api.post<TranscribeResult>('/speech-to-text/transcribe', formData);
     return data;
   },
@@ -251,11 +256,15 @@ export const speechToTextApi = {
     files: File[],
     modelSize: string = 'large-v3',
     beamSize: number = 5,
+    engine: string = 'whisper',
+    enableVad: boolean = true,
   ): Promise<TranscribeResult> => {
     const formData = new FormData();
     files.forEach((f) => formData.append('files', f));
     formData.append('model_size', modelSize);
     formData.append('beam_size', String(beamSize));
+    formData.append('engine', engine);
+    formData.append('enable_vad', String(enableVad));
     const { data } = await api.post<TranscribeResult>('/speech-to-text/multi-transcribe', formData);
     return data;
   },
