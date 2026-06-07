@@ -15,3 +15,8 @@
 .cancelBtn { background: #333; color: #ccc; border: 1px solid #555; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
 .exportBtn { background: #2a6; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
 .exportBtn:disabled { opacity: 0.5; }
+.error {
+  background: rgba(229, 57, 53, 0.15); border: 1px solid #e53935;
+  color: #e53935; padding: 8px 12px; border-radius: 4px;
+  font-size: 12px; margin-bottom: 12px;
+}

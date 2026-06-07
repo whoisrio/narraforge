@@ -29,6 +29,7 @@ export function ExportDialog({ open, segments, defaultName, onClose }: ExportDia
   const [options, setOptions] = useState<ExportOption[]>(['wav', 'json']);
   const [targetLang, setTargetLang] = useState('English');
   const [exporting, setExporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const toggleOpt = useCallback((opt: ExportOption) => {
     setOptions(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]);
@@ -103,7 +104,8 @@ export function ExportDialog({ open, segments, defaultName, onClose }: ExportDia
           const result = await subtitleLlmApi.translate(srt, targetLang, 'Chinese');
           downloadBlob(new Blob([result.bilingual_srt], { type: 'text/plain' }), `${sanitized}.bilingual.srt`);
         } catch {
-          alert('双语 SRT 翻译失败，其他文件已导出。');
+          setError('双语 SRT 翻译失败，其他文件已下载。');
+          setTimeout(() => setError(null), 5000);
         }
       }
     } finally {
@@ -134,6 +136,7 @@ export function ExportDialog({ open, segments, defaultName, onClose }: ExportDia
             </select>
           </div>
         )}
+        {error && <div className={styles.error}>{error}</div>}
         <div className={styles.buttons}>
           <button className={styles.cancelBtn} onClick={onClose}>取消</button>
           <button className={styles.exportBtn} onClick={doExport} disabled={exporting}>

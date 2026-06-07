@@ -15,6 +15,12 @@ export function SegmentedTTS() {
   const { project } = state;
   const [exportOpen, setExportOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+
+  const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const editingSegment = project.segments.find(s => s.id === project.selected_segment_id) ?? null;
 
@@ -164,7 +170,7 @@ export function SegmentedTTS() {
         dispatch({ type: 'UPDATE_PARAMS', id: s.id, params: { enable_ssml: true } });
       }
     } catch {
-      alert('SSML 标注失败，请检查 LLM 配置');
+      showToast('SSML 标注失败，请检查 LLM 配置', 'error');
     }
   }, [project.segments, dispatch]);
 
@@ -279,6 +285,11 @@ export function SegmentedTTS() {
         defaultName={project.name}
         onClose={() => setExportOpen(false)}
       />
+      {toast && (
+        <div className={`${styles.toast} ${styles[`toast_${toast.type}`]}`}>
+          {toast.message}
+        </div>
+      )}
     </div>
   );
 }
