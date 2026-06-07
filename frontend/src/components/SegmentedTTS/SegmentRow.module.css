@@ -1,0 +1,96 @@
+/* Row base */
+.row {
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+}
+.row:hover { border-color: #555; }
+.selected { border-color: #4a90e2 !important; background: #1a2a3a; }
+
+/* Status shared */
+.status_idle { border-color: #444; background: #181818; }
+.status_queued { border-color: #4a90e2; }
+.status_pending { border-color: #2196f3; background: #0d2135; }
+.status_ready { border-color: #2a6; }
+.status_failed { border-color: #e53935; background: #2d1414; }
+
+/* Animations */
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+@keyframes flow {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 60px; }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+@keyframes flashGreen {
+  0% { background: rgba(34, 170, 102, 0.3); }
+  100% { background: transparent; }
+}
+
+.status_queued .rowMain::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: #4a90e2;
+  border-radius: 3px 0 0 3px;
+  animation: breathe 2s ease-in-out infinite;
+}
+.status_pending .rowMain::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #2196f3 30%, #64b5f6 70%, #2196f3);
+  background-size: 3px 60px;
+  border-radius: 3px 0 0 3px;
+  animation: flow 1.5s linear infinite;
+}
+.status_ready.selected { animation: flashGreen 0.8s ease-out; }
+.status_failed.selected { animation: shake 0.25s ease-in-out; }
+
+/* Horizontal layout */
+.horizontalBlock {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 80px; height: 64px; border: 1px solid #333; border-radius: 6px;
+  margin-right: 4px; cursor: pointer; flex-shrink: 0; font-size: 11px; text-align: center;
+  transition: border-color 0.15s;
+}
+.horizontalBlock.status_pending { animation: breathe 1.5s ease-in-out infinite; }
+.horizontalBlock.status_failed { animation: shake 0.25s ease-in-out; }
+.horizIndex { color: #888; }
+.horizDuration { font-weight: 600; color: #ddd; }
+.horizText { color: #666; overflow: hidden; white-space: nowrap; }
+
+/* Row internals */
+.rowMain { display: flex; align-items: center; gap: 10px; }
+.index { color: #666; font-family: monospace; font-size: 12px; width: 32px; }
+.text { flex: 1; color: #ddd; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.longWarning { margin-left: 6px; color: #f5a623; font-size: 14px; cursor: help; }
+.duration { font-size: 14px; font-weight: 600; color: #aaa; width: 48px; text-align: right; }
+.rowMeta { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.metaInfo { font-size: 11px; color: #777; }
+.actions { display: flex; gap: 4px; }
+.btn {
+  background: none; border: 1px solid #444; color: #ccc;
+  padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; line-height: 1.5;
+}
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn:hover:not(:disabled) { background: #333; border-color: #666; }
+.insertZone {
+  text-align: center; font-size: 11px; color: transparent; padding: 2px 0;
+  transition: color 0.15s; cursor: pointer;
+}
+.row:hover .insertZone { color: #4a90e2; }
+.insertZone:hover { background: rgba(74, 144, 226, 0.08); }

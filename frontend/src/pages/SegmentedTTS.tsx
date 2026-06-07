@@ -54,6 +54,7 @@ export function SegmentedTTS() {
         onEdit={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
         onRegenerate={() => {}}
         onUndo={() => {}}
+        onAnnotateSSML={() => {}}
       />
       <SegmentEditDrawer
         segment={editingSegment}
