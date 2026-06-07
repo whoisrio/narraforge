@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -309,6 +309,64 @@ export const subtitleLlmApi = {
       target_language: targetLanguage,
       source_language: sourceLanguage,
     });
+    return data;
+  },
+};
+
+// Model Config API (模型提供商配置)
+export const modelConfigApi = {
+  /** 获取所有模型提供商配置 */
+  getAll: async (): Promise<ModelConfigs> => {
+    const { data } = await api.get<ModelConfigs>('/model-config');
+    return data;
+  },
+
+  /** 获取 RSA 公钥 (前端加密传输敏感字段用) */
+  getPublicKey: async (): Promise<string> => {
+    const { data } = await api.get<{ public_key: string }>('/model-config/public-key');
+    return data.public_key;
+  },
+
+  /**
+   * 更新指定提供商的配置。
+   * 敏感字段（sensitive=true）会自动用 RSA 公钥加密后再传输。
+   */
+  update: async (
+    provider: string,
+    fields: Record<string, string>,
+    sensitiveFieldKeys: Set<string>,
+  ): Promise<{ message: string; provider: string; updated_fields: string[] }> => {
+    const encrypted: Record<string, string> = {};
+
+    // 找出需要加密的敏感字段
+    const needEncrypt = Object.keys(fields).filter(
+      k => sensitiveFieldKeys.has(k) && fields[k] && fields[k] !== '********',
+    );
+
+    if (needEncrypt.length > 0) {
+      // 获取 RSA 公钥并加密
+      const JSEncrypt = (await import('jsencrypt')).default;
+      const publicKey = await modelConfigApi.getPublicKey();
+      const encryptor = new JSEncrypt();
+      encryptor.setPublicKey(publicKey);
+
+      for (const key of Object.keys(fields)) {
+        const val = fields[key];
+        if (needEncrypt.includes(key)) {
+          const encryptedVal = encryptor.encrypt(val);
+          if (!encryptedVal) {
+            throw new Error(`RSA encryption failed for field: ${key}`);
+          }
+          encrypted[key] = `RSA:${encryptedVal}`;
+        } else {
+          encrypted[key] = val;
+        }
+      }
+    } else {
+      Object.assign(encrypted, fields);
+    }
+
+    const { data } = await api.put(`/model-config/${provider}`, { fields: encrypted });
     return data;
   },
 };

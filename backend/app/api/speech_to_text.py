@@ -120,12 +120,20 @@ async def transcribe(
         service = VoiceToSrt()
         if engine == "funasr":
             funasr_service = FunASRService()
+            # 读取界面配置的 device（优先），降级到 .env
+            funasr_device = settings.funasr_device or None
+            try:
+                from app.core.model_config_service import get_effective_config
+                funasr_config = get_effective_config(db, "funasr")
+                funasr_device = funasr_config.get("device") or funasr_device
+            except Exception:
+                pass
             result = funasr_service.transcribe(
                 input_file=tmp_path,
                 file_id=file_id,
                 model_name=model_size,
                 enable_vad=enable_vad,
-                device=settings.funasr_device or None,
+                device=funasr_device or None,
             )
         else:
             result = service.voicetosrt(
@@ -289,12 +297,20 @@ async def multi_transcribe(
         service = VoiceToSrt()
         if engine == "funasr":
             funasr_service = FunASRService()
+            # 读取界面配置的 device（优先），降级到 .env
+            funasr_device = settings.funasr_device or None
+            try:
+                from app.core.model_config_service import get_effective_config
+                funasr_config = get_effective_config(db, "funasr")
+                funasr_device = funasr_config.get("device") or funasr_device
+            except Exception:
+                pass
             result = funasr_service.transcribe(
                 input_file=merged_path,
                 file_id=file_id,
                 model_name=model_size,
                 enable_vad=enable_vad,
-                device=settings.funasr_device or None,
+                device=funasr_device or None,
             )
         else:
             result = service.voicetosrt(

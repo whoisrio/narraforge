@@ -134,7 +134,7 @@ async def list_mimo_voices():
 async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(get_db)):
     """使用预置音色进行语音合成"""
     try:
-        service = await get_mimo_tts_service()
+        service = await get_mimo_tts_service(db)
         audio_bytes = await service.synthesize_preset(
             text=request.text,
             voice=request.voice,
@@ -161,7 +161,7 @@ async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(ge
 async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session = Depends(get_db)):
     """使用文本描述设计音色进行语音合成"""
     try:
-        service = await get_mimo_tts_service()
+        service = await get_mimo_tts_service(db)
         audio_bytes = await service.synthesize_voice_design(
             text=request.text,
             voice_description=request.voice_description,
@@ -201,7 +201,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
         if voice.external_audio_url:
             tmp_path = None
             try:
-                service = await get_mimo_tts_service()
+                service = await get_mimo_tts_service(db)
                 # 下载外部音频
                 import urllib.request as req
                 import tempfile
@@ -233,7 +233,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
             raise HTTPException(status_code=404, detail="音频文件不存在")
 
     try:
-        service = await get_mimo_tts_service()
+        service = await get_mimo_tts_service(db)
         audio_bytes = await service.clone_from_file(
             text=request.text,
             audio_path=voice.audio_path,
@@ -265,7 +265,7 @@ async def synthesize_voice_clone_direct(
 ):
     """直接使用 Base64 音频数据进行音色复刻合成"""
     try:
-        service = await get_mimo_tts_service()
+        service = await get_mimo_tts_service(db)
         audio_bytes = await service.synthesize_voice_clone(
             text=request.text,
             audio_base64=request.audio_base64,

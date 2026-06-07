@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     bucket_name: str = ""
     bucket_domain: str = ""
 
+    # 配置加密密钥（Fernet 对称加密，首次启动自动生成）
+    config_encryption_key: str = ""
+
     # 日志配置
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
     log_format: str = "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"

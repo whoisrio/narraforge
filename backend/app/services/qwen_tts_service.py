@@ -46,9 +46,10 @@ class QwenTTSService:
     COSYVOICE_PREFIX = "cosyvoice"
     TTS_PREFIX = "qwen-tts"
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None, public_base_url: Optional[str] = None):
         self.api_key = api_key or settings.qwen_api_key
         self.model = model or settings.qwen_model
+        self.public_base_url = public_base_url or settings.public_base_url
         if not self.api_key:
             raise ValueError("QWEN_API_KEY is not configured")
         if not self.model:
@@ -801,8 +802,8 @@ class QwenTTSService:
         else:
             # 从文件路径中提取 voice_id（文件名）
             voice_id_from_path = os.path.splitext(os.path.basename(reference_audio_path))[0]
-            # 尝试从 PUBLIC_BASE_URL 构建
-            public_base_url = getattr(settings, 'public_base_url', None) or os.environ.get("PUBLIC_BASE_URL")
+            # 尝试从 self.public_base_url 构建（界面配置优先，降级到 .env）
+            public_base_url = self.public_base_url or os.environ.get("PUBLIC_BASE_URL")
             if public_base_url:
                 audio_url = f"{public_base_url.rstrip('/')}/api/clone/audio/{voice_id_from_path}"
                 logger.info(f"Using audio URL from PUBLIC_BASE_URL: {audio_url}")
@@ -1053,20 +1054,55 @@ class QwenTTSService:
         service.delete_voice(voice_id=voice_id)
         logger.info(f"Voice deleted from Qwen. Request ID: {service.get_last_request_id()}")
 
-# 全局服务实例
+# 全局服务实例 + 缓存的配置指纹（配置变更时重建单例）
 _tts_service: Optional[QwenTTSService] = None
+_tts_config_fingerprint: Optional[str] = None
 
 
-async def get_tts_service() -> QwenTTSService:
-    """获取 TTS 服务实例"""
-    global _tts_service
-    if _tts_service is None:
-        _tts_service = QwenTTSService()
+def _make_tts_fingerprint(api_key: str, model: str, public_base_url: str) -> str:
+    return f"{api_key}:{model}:{public_base_url}"
+
+
+async def get_tts_service(db=None) -> QwenTTSService:
+    """获取 TTS 服务实例。
+
+    当传入 db (Session) 时，优先从界面配置读取 api_key/model/public_base_url；
+    未传入 db 或界面未配置时，回退到 .env 默认值。
+    配置变更时自动重建单例。
+    """
+    global _tts_service, _tts_config_fingerprint
+
+    # 读取有效配置：界面优先，.env 降级
+    api_key = settings.qwen_api_key
+    model = settings.qwen_model
+    public_base_url = settings.public_base_url
+    if db is not None:
+        try:
+            from app.core.model_config_service import get_effective_config
+            config = get_effective_config(db, "qwen_tts")
+            api_key = config.get("api_key") or api_key
+            model = config.get("model") or model
+        except Exception:
+            pass  # 降级到 settings
+    if db is not None:
+        try:
+            from app.core.model_config_service import get_effective_config
+            app_config = get_effective_config(db, "app")
+            public_base_url = app_config.get("public_base_url") or public_base_url
+        except Exception:
+            pass  # 降级到 settings
+
+    fp = _make_tts_fingerprint(api_key, model, public_base_url)
+    if _tts_service is not None and _tts_config_fingerprint == fp:
+        return _tts_service
+
+    _tts_service = QwenTTSService(api_key=api_key, model=model, public_base_url=public_base_url)
+    _tts_config_fingerprint = fp
     return _tts_service
 
 
 async def close_tts_service():
     """关闭 TTS 服务"""
-    global _tts_service
-    if _tts_service is not None:
-        _tts_service = None
+    global _tts_service, _tts_config_fingerprint
+    _tts_service = None
+    _tts_config_fingerprint = None

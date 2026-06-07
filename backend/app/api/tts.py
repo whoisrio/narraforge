@@ -90,7 +90,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         raise HTTPException(status_code=400, detail="voice_id is required")
 
     try:
-        tts_service = await get_tts_service()
+        tts_service = await get_tts_service(db)
 
         logger.info(f"Synthesizing with cloned voice: {request.voice_id}")
         # clone_voice 现在直接下载并落盘到 settings.clone_voices_dir，
@@ -293,7 +293,7 @@ async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_d
     results = []
 
     try:
-        tts_service = await get_tts_service()
+        tts_service = await get_tts_service(db)
 
         for segment in request.segments:
             # clone_voice 现在返回落盘后的绝对路径

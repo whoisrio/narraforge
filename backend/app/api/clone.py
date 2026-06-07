@@ -265,14 +265,14 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
     if not voice.external_audio_url:
         if not os.path.exists(voice.audio_path):
             raise HTTPException(status_code=404, detail="Audio file not found")
-        if not is_qiniu_configured():
+        if not is_qiniu_configured(db):
             raise HTTPException(
                 status_code=500,
                 detail="Qiniu not configured; cannot generate public URL for cloning",
             )
         try:
             key = os.path.basename(voice.audio_path)
-            qiniu_url = upload_to_qiniu(voice.audio_path, key)
+            qiniu_url = upload_to_qiniu(voice.audio_path, key, db=db)
             voice.external_audio_url = qiniu_url
             db.commit()
             db.refresh(voice)
@@ -283,7 +283,7 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
     logger.info(f"Using external audio URL for cloning: {audio_path_for_clone}")
 
     try:
-        tts_service = await get_tts_service()
+        tts_service = await get_tts_service(db)
 
         # 调用千问声音克隆 API 进行注册
         # register_cloned_voice 会自动检测 audio_path 是否为 URL
@@ -386,7 +386,7 @@ def list_voices(db: Session = Depends(get_db)):
 @router.get("/list-from-qwen")
 async def list_voices_from_qwen():
     """从千问 API 获取已克隆的声音列表"""
-    tts_service = await get_tts_service()
+    tts_service = await get_tts_service(db)
     voices = await tts_service.list_cloned_voices()
     return {"voices": voices}
 
@@ -394,7 +394,7 @@ async def list_voices_from_qwen():
 @router.post("/sync-from-qwen")
 async def sync_voices_from_qwen(db: Session = Depends(get_db)):
     """从千问 API 同步已克隆的声音到本地数据库"""
-    tts_service = await get_tts_service()
+    tts_service = await get_tts_service(db)
 
     try:
         # 获取 Qwen 上的所有已克隆声音
@@ -543,7 +543,7 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
     # Qwen 声音需要删除云端音色；MiMo 声音无云端数据，跳过
     if voice.clone_engine != "mimo" and voice.qwen_voice_id:
         try:
-            tts_service = await get_tts_service()
+            tts_service = await get_tts_service(db)
             await tts_service.delete_cloned_voice(voice.qwen_voice_id)
         except Exception as e:
             logger.error(f"Failed to delete voice from Qwen: {e}")

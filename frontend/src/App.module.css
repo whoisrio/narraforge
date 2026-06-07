@@ -102,6 +102,16 @@
   flex-shrink: 0;
 }
 
+/* ---- Tab Divider (separates tools from settings) ---- */
+.tabDivider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border);
+  margin: 0 4px;
+  align-self: center;
+  flex-shrink: 0;
+}
+
 /* ---- Header Actions ---- */
 .headerActions {
   display: flex;

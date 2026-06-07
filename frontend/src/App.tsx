@@ -3,15 +3,16 @@ import Landing from './pages/Landing';
 import { VoiceClone } from './pages/VoiceClone';
 import { TTSSynthesis } from './pages/TTSSynthesis';
 import { SpeechToText } from './pages/SpeechToText';
+import { ModelConfig } from './pages/ModelConfig';
 import { configApi } from './services/api';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/useVoiceRefresh';
 import { ThemeProvider, useTheme } from './hooks/useTheme';
 import styles from './App.module.css';
 
-/** 页面状态：主页 或 三个工具页 */
+/** 页面状态：主页 或 三个工具页 + 设置 */
 type Page = 'home';
-type Tab = 'voice-clone' | 'tts-synthesis' | 'speech-to-text';
+type Tab = 'voice-clone' | 'tts-synthesis' | 'speech-to-text' | 'model-config';
 type View = Page | Tab;
 
 /** 导航栏 + 主题切换 */
@@ -78,6 +79,18 @@ function AppHeader({
             <path d="M12 4v16"/>
           </svg>
           语音转字幕
+        </button>
+        <span className={styles.tabDivider} />
+        <button
+          data-testid="tab-model-config"
+          className={`${styles.tab} ${activeTab === 'model-config' ? styles.active : ''}`}
+          onClick={() => onTabClick('model-config')}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          模型配置
         </button>
       </nav>
 
@@ -197,20 +210,23 @@ function AppContent() {
         {isHome && <Landing onNavigate={handleNavigate} />}
 
         {!isHome && (
-          <VoiceRefreshProvider>
-            <main className={styles.main}>
-              <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none' }}>
-                <VoiceClone />
-              </div>
-              <div style={{ display: activeTab === 'tts-synthesis' ? 'block' : 'none' }}>
-                <TTSSynthesis />
-              </div>
-              <div style={{ display: activeTab === 'speech-to-text' ? 'block' : 'none' }}>
-                <SpeechToText />
-              </div>
-            </main>
-          </VoiceRefreshProvider>
-        )}
+            <VoiceRefreshProvider>
+              <main className={styles.main}>
+                <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none' }}>
+                  <VoiceClone />
+                </div>
+                <div style={{ display: activeTab === 'tts-synthesis' ? 'block' : 'none' }}>
+                  <TTSSynthesis />
+                </div>
+                <div style={{ display: activeTab === 'speech-to-text' ? 'block' : 'none' }}>
+                  <SpeechToText />
+                </div>
+                <div style={{ display: activeTab === 'model-config' ? 'block' : 'none' }}>
+                  <ModelConfig />
+                </div>
+              </main>
+            </VoiceRefreshProvider>
+          )}
       </div>
     </StorageModeContext.Provider>
   );

@@ -62,14 +62,33 @@ def _extract_json_array(raw: str) -> str | None:
     return None
 
 
-def _get_llm_config() -> tuple[str, str, str]:
-    """返回 (api_key, base_url, model)，LLM_ 未配置时回退到 MIMO_。"""
+def _get_llm_config(db=None) -> tuple[str, str, str]:
+    """返回 (api_key, base_url, model)，界面配置优先，LLM_ 未配置时回退到 MIMO_。
+
+    当传入 db (Session) 时，优先从界面配置读取；
+    未传入 db 或界面未配置时，回退到 .env 默认值。
+    """
+    # 基础值：从 .env settings
     api_key = settings.llm_api_key or settings.mimo_api_key
     base_url = (settings.llm_base_url or settings.mimo_base_url).rstrip("/")
     model = settings.llm_model
+
+    # 界面配置优先
+    if db is not None:
+        try:
+            from app.core.model_config_service import get_effective_config
+            config = get_effective_config(db, "llm")
+            # LLM 的 api_key 有 fallback_settings 到 mimo_api_key，
+            # get_effective_config 已处理了 fallback，无需再手动 fallback
+            api_key = config.get("api_key") or api_key
+            base_url = (config.get("base_url") or base_url).rstrip("/")
+            model = config.get("model") or model
+        except Exception:
+            pass  # 降级到 settings
+
     if not api_key:
         raise ValueError(
-            "LLM API Key 未配置。请在 .env 中设置 LLM_API_KEY 或 MIMO_API_KEY"
+            "LLM API Key 未配置。请在界面或 .env 中设置 LLM_API_KEY 或 MIMO_API_KEY"
         )
     return api_key, base_url, model
 
@@ -109,12 +128,13 @@ class BilingualResult:
 
 
 def _call_llm(messages: list[dict], model: str | None = None,
-              temperature: float = 0.3, max_tokens: int = 8192) -> str:
+              temperature: float = 0.3, max_tokens: int = 8192, db=None) -> str:
     """调用 LLM Chat API 并返回 assistant 消息内容。
 
     自动适配 MiMo (api-key header) 和 Qwen/OpenAI (Bearer) 认证。
+    当传入 db 时，优先从界面配置读取连接参数。
     """
-    api_key, base_url, default_model = _get_llm_config()
+    api_key, base_url, default_model = _get_llm_config(db=db)
     model = model or default_model
 
     chat_url = f"{base_url}/chat/completions"
@@ -281,6 +301,7 @@ def correct_subtitles(
     language: str = "zh",
     model: str | None = None,
     mode: str = "smart",
+    db=None,
 ) -> CorrectionResult:
     """对比原始文档和 ASR 字幕，找出识别错误（错别字）并返回修改建议。
 
@@ -351,7 +372,7 @@ def correct_subtitles(
         {"role": "user", "content": user_content},
     ]
 
-    raw = _call_llm(messages, model=model, temperature=0.1)
+    raw = _call_llm(messages, model=model, temperature=0.1, db=db)
     # 提取 JSON：兼容 markdown 代码块、前后杂文
     json_str = _extract_json_array(raw)
     if not json_str:
@@ -402,7 +423,7 @@ def correct_subtitles(
 # ---------------------------------------------------------------------------
 def translate_subtitles(srt_content: str, target_language: str = "English",
                         source_language: str = "Chinese",
-                        model: str | None = None) -> BilingualResult:
+                        model: str | None = None, db=None) -> BilingualResult:
     """将 SRT 字幕翻译为目标语言，返回双语字幕结构。"""
     blocks = _parse_srt_blocks(srt_content)
     if not blocks:
@@ -437,7 +458,7 @@ def translate_subtitles(srt_content: str, target_language: str = "English",
             {"role": "user", "content": text_blob},
         ]
 
-        raw = _call_llm(messages, model=model)
+        raw = _call_llm(messages, model=model, db=db)
         json_str = _extract_json_array(raw)
         if not json_str:
             logger.warning(f"翻译 LLM 返回非 JSON ({len(raw)}字): {raw[:300]}")

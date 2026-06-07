@@ -295,16 +295,43 @@ class MiMoTTSService:
 # ------------------------------------------------------------------
 
 _mimo_tts_service: Optional[MiMoTTSService] = None
+_mimo_tts_config_fingerprint: Optional[str] = None
 
 
-async def get_mimo_tts_service() -> MiMoTTSService:
-    """获取 MiMo TTS 服务单例"""
-    global _mimo_tts_service
-    if _mimo_tts_service is None:
-        if not settings.mimo_api_key:
-            raise RuntimeError("MIMO_API_KEY is not configured")
-        _mimo_tts_service = MiMoTTSService(
-            api_key=settings.mimo_api_key,
-            base_url=settings.mimo_base_url,
-        )
+def _make_mimo_fingerprint(api_key: str, base_url: str) -> str:
+    return f"{api_key}:{base_url}"
+
+
+async def get_mimo_tts_service(db=None) -> MiMoTTSService:
+    """获取 MiMo TTS 服务单例。
+
+    当传入 db (Session) 时，优先从界面配置读取 api_key/base_url；
+    未传入 db 或界面未配置时，回退到 .env 默认值。
+    配置变更时自动重建单例。
+    """
+    global _mimo_tts_service, _mimo_tts_config_fingerprint
+
+    api_key = settings.mimo_api_key
+    base_url = settings.mimo_base_url
+    if db is not None:
+        try:
+            from app.core.model_config_service import get_effective_config
+            config = get_effective_config(db, "mimo_tts")
+            api_key = config.get("api_key") or api_key
+            base_url = config.get("base_url") or base_url
+        except Exception:
+            pass  # 降级到 settings
+
+    if not api_key:
+        raise RuntimeError("MIMO_API_KEY is not configured (neither in UI nor .env)")
+
+    fp = _make_mimo_fingerprint(api_key, base_url)
+    if _mimo_tts_service is not None and _mimo_tts_config_fingerprint == fp:
+        return _mimo_tts_service
+
+    _mimo_tts_service = MiMoTTSService(
+        api_key=api_key,
+        base_url=base_url,
+    )
+    _mimo_tts_config_fingerprint = fp
     return _mimo_tts_service

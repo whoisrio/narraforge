@@ -92,7 +92,7 @@ def health():
 
 
 # Import and include routers
-from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm
+from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm, model_config
 
 app.include_router(clone.router, prefix="/api/clone", tags=["voice-clone"])
 app.include_router(tts.router, prefix="/api/tts", tags=["tts"])
@@ -100,3 +100,4 @@ app.include_router(config.router, prefix="/api/config", tags=["config"])
 app.include_router(speech_to_text.router, prefix="/api/speech-to-text", tags=["speech-to-text"])
 app.include_router(mimo_tts.router, prefix="/api/mimo-tts", tags=["mimo-tts"])
 app.include_router(subtitle_llm.router, prefix="/api/subtitle-llm", tags=["subtitle-llm"])
+app.include_router(model_config.router, prefix="/api/model-config", tags=["model-config"])

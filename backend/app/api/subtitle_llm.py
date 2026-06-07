@@ -1,8 +1,9 @@
 """字幕 LLM 服务 API — 校准 + 双语翻译"""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
 from typing import Optional
+from sqlalchemy.orm import Session
 
 from app.services.llm_subtitle_service import (
     correct_subtitles,
@@ -10,6 +11,7 @@ from app.services.llm_subtitle_service import (
     build_bilingual_srt,
 )
 from app.core.config import settings
+from app.core.database import get_db
 
 router = APIRouter()
 
@@ -59,7 +61,7 @@ class TranslationResponse(BaseModel):
 # ---- Endpoints ----
 
 @router.post("/correct", response_model=CorrectionResponse)
-async def subtitle_correct(req: CorrectionRequest):
+async def subtitle_correct(req: CorrectionRequest, db: Session = Depends(get_db)):
     """LLM 字幕校准 — 对比原始文稿，找出 ASR 识别的错别字，返回修改建议。
 
     只改错别字，不改变内容意思，不破坏时间轴。
@@ -74,6 +76,7 @@ async def subtitle_correct(req: CorrectionRequest):
             original_document=req.original_document,
             language=req.language,
             mode=req.mode,
+            db=db,
         )
         return CorrectionResponse(
             suggestions=[
@@ -97,7 +100,7 @@ async def subtitle_correct(req: CorrectionRequest):
 
 
 @router.post("/translate", response_model=TranslationResponse)
-async def subtitle_translate(req: TranslationRequest):
+async def subtitle_translate(req: TranslationRequest, db: Session = Depends(get_db)):
     """双语字幕翻译 — 将 SRT 字幕翻译为目标语言，返回双语结果。"""
     if not req.srt_content.strip():
         raise HTTPException(status_code=400, detail="SRT 内容不能为空")
@@ -106,6 +109,7 @@ async def subtitle_translate(req: TranslationRequest):
             srt_content=req.srt_content,
             target_language=req.target_language,
             source_language=req.source_language,
+            db=db,
         )
         bilingual_srt = build_bilingual_srt(result)
         return TranslationResponse(
@@ -131,16 +135,16 @@ async def subtitle_translate(req: TranslationRequest):
 
 
 @router.get("/config")
-async def get_llm_config():
+async def get_llm_config(db: Session = Depends(get_db)):
     """返回当前 LLM 配置（不泄露 API Key）。"""
-    _, base_url, model = "", "", settings.llm_model
+    api_key, base_url, model = "", "", settings.llm_model
     try:
         from app.services.llm_subtitle_service import _get_llm_config
-        _, base_url, model = _get_llm_config()
+        api_key, base_url, model = _get_llm_config(db=db)
     except Exception:
         pass
     return {
         "model": model,
         "base_url": base_url,
-        "has_api_key": bool(settings.llm_api_key or settings.mimo_api_key),
+        "has_api_key": bool(api_key),
     }

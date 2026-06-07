@@ -145,3 +145,42 @@ export interface STTLocalRecord {
   model_size: string;
   created_at: string;
 }
+
+// 模型配置相关类型
+
+/** 单个配置字段的元信息 */
+export interface ModelConfigFieldSchema {
+  label: string;
+  type: 'text' | 'password';
+  sensitive: boolean;
+  description: string;
+  has_fallback: boolean;
+}
+
+/** 单个提供商的 schema */
+export interface ModelConfigProviderSchema {
+  label: string;
+  icon: string;
+  fields: Record<string, ModelConfigFieldSchema>;
+}
+
+/** 单个配置字段的值信息（GET 接口返回） */
+export interface ModelConfigFieldValue {
+  label: string;
+  type: 'text' | 'password';
+  sensitive: boolean;
+  description: string;
+  value: string;           // 界面设置的值（敏感字段为 "********"）
+  has_env_default: boolean; // .env 中是否有默认值
+  has_value: boolean;       // 最终是否有可用值（界面 or .env）
+}
+
+/** 单个提供商的配置（GET 接口返回） */
+export interface ModelConfigProvider {
+  label: string;
+  icon: string;
+  fields: Record<string, ModelConfigFieldValue>;
+}
+
+/** 所有提供商的配置映射 */
+export type ModelConfigs = Record<string, ModelConfigProvider>;
