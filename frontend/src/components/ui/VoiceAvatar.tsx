@@ -4,8 +4,10 @@ interface VoiceAvatarProps {
   name: string;
   size?: number;
   gender?: string;
-  /** 显示在头像下方的标签（如 "Edge-TTS · Xiaoxiao"） */
+  /** 第一行：音色名称 */
   label?: string;
+  /** 第二行：模型名称 */
+  sublabel?: string;
   className?: string;
 }
 
@@ -13,7 +15,7 @@ interface VoiceAvatarProps {
  * 音色头像组件
  * 使用本地 PNG 头像，圆形裁剪，可选标签
  */
-export function VoiceAvatar({ name, size = 40, gender, label, className }: VoiceAvatarProps) {
+export function VoiceAvatar({ name, size = 40, gender, label, sublabel, className }: VoiceAvatarProps) {
   const src = getVoiceAvatarSrc(name, gender);
 
   const avatar = (
@@ -35,7 +37,7 @@ export function VoiceAvatar({ name, size = 40, gender, label, className }: Voice
     />
   );
 
-  if (!label) return avatar;
+  if (!label && !sublabel) return avatar;
 
   return (
     <div
@@ -44,23 +46,41 @@ export function VoiceAvatar({ name, size = 40, gender, label, className }: Voice
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 4,
+        gap: 3,
+        maxWidth: size * 1.8,
       }}
     >
       {avatar}
-      <span style={{
-        fontSize: Math.max(9, size * 0.25),
-        fontWeight: 500,
-        color: 'var(--color-text-muted)',
-        whiteSpace: 'nowrap',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        maxWidth: size * 2,
-        textAlign: 'center',
-        lineHeight: 1.2,
-      }}>
-        {label}
-      </span>
+      {label && (
+        <span style={{
+          fontSize: Math.max(10, size * 0.24),
+          fontWeight: 600,
+          color: 'var(--color-text-primary)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '100%',
+          textAlign: 'center',
+          lineHeight: 1.2,
+        }}>
+          {label}
+        </span>
+      )}
+      {sublabel && (
+        <span style={{
+          fontSize: Math.max(9, size * 0.2),
+          fontWeight: 400,
+          color: 'var(--color-text-muted)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          maxWidth: '100%',
+          textAlign: 'center',
+          lineHeight: 1.2,
+        }}>
+          {sublabel}
+        </span>
+      )}
     </div>
   );
 }

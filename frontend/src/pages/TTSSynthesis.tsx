@@ -273,13 +273,20 @@ export function TTSSynthesis() {
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
       // Auto-trim leading/trailing silence
-      const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(resp.audio_base64);
-      if (trimmedMs > 0) console.log(`Trimmed ${trimmedMs}ms silence from segment`);
-      const bytes = atob(trimmedBase64);
+      let audioBase64 = resp.audio_base64;
+      let fmt = resp.audio_format || 'mp3';
+      try {
+        const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(resp.audio_base64);
+        if (trimmedMs > 0) {
+          audioBase64 = trimmedBase64;
+          fmt = 'wav'; // trim outputs WAV
+          console.log(`Trimmed ${trimmedMs}ms silence from segment`);
+        }
+      } catch (trimErr) { console.warn('Silence trim skipped:', trimErr); }
+      const bytes = atob(audioBase64);
       const arr = new Uint8Array(bytes.length);
       for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-      const fmt = resp.audio_format || 'mp3';
-      const blob = new Blob([arr], { type: fmt === 'mp3' ? 'audio/mpeg' : `audio/${fmt}` });
+      const blob = new Blob([arr], { type: fmt === 'wav' ? 'audio/wav' : 'audio/mpeg' });
       const ac = new AudioContext();
       const ab = await ac.decodeAudioData(await blob.arrayBuffer());
       const duration = ab.duration;
@@ -294,7 +301,7 @@ export function TTSSynthesis() {
     } catch (e: any) {
       dispatch({ type: 'GENERATE_FAIL', id, error: e?.message ?? '生成失败' });
     }
-  }, [project.segments, dispatch, buildCurrentParams]);
+  }, [project.segments, dispatch, buildCurrentParams, loadHistory, showToast]);
 
   const handleRegenerateAll = useCallback(async () => {
     if (generating) return;

@@ -126,6 +126,9 @@ export function SegmentRow({
   const { engine: displayEngine, voice: voiceDisplayName } = resolveVoiceDisplay();
 
   // Resolve gender for avatar selection
+  // Resolve voice object for gender lookup
+  const voiceObj = voices.find(v => (v.qwen_voice_id || v.id) === segment.params.voice_id);
+
   const resolveGender = (): string => {
     const desc = (voiceObj?.description || voiceObj?.name || '').toLowerCase();
     if (desc.includes('女') || desc.includes('female')) return 'female';
@@ -185,8 +188,9 @@ export function SegmentRow({
       onKeyDown={(e) => { if (e.key === 'Enter') onSelect(segment.id); }}
     >
       <div className={styles.avatarCol}>
-        <VoiceAvatar name={voiceDisplayName} size={40} gender={voiceGender}
-          label={`${displayEngine} · ${voiceDisplayName}`} />
+<VoiceAvatar name={voiceDisplayName} size={48} gender={voiceGender}
+          label={voiceDisplayName}
+          sublabel={displayEngine} />
         {isSelected && <span className={styles.editingBadge}>编辑中</span>}
       </div>
 
