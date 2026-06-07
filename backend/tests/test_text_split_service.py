@@ -57,3 +57,48 @@ def test_rule_split_empty_text_returns_empty_list():
     from app.services.text_split_service import rule_split
     assert rule_split("", ["，", "。"]) == []
     assert rule_split("   ", ["，", "。"]) == []
+
+
+# ------- llm_split -------
+
+
+def test_llm_split_returns_segments(monkeypatch):
+    from app.services import text_split_service
+    fake_resp = '[{"text": "你好，", "reason": "招呼"}, {"text": "再见。", "reason": "告别"}]'
+    monkeypatch.setattr(text_split_service, "call_llm", lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "test-model"))
+
+    result = text_split_service.llm_split("你好，再见。")
+    assert result.model == "test-model"
+    assert [s["text"] for s in result.segments] == ["你好，", "再见。"]
+    assert result.segments[0]["reason"] == "招呼"
+
+
+def test_llm_split_handles_markdown_wrapped_json(monkeypatch):
+    from app.services import text_split_service
+    fake_resp = '```json\n[{"text": "段1", "reason": "x"}]\n```'
+    monkeypatch.setattr(text_split_service, "call_llm", lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "m"))
+
+    result = text_split_service.llm_split("段1")
+    assert [s["text"] for s in result.segments] == ["段1"]
+
+
+def test_llm_split_raises_on_unparseable(monkeypatch):
+    from app.services import text_split_service
+    monkeypatch.setattr(text_split_service, "call_llm", lambda *a, **kw: "完全不是 JSON")
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "m"))
+
+    with pytest.raises(ValueError, match="解析"):
+        text_split_service.llm_split("一段文本")
+
+
+def test_llm_split_raises_on_empty_text():
+    from app.services.text_split_service import llm_split
+    with pytest.raises(ValueError, match="文本"):
+        llm_split("")
+    with pytest.raises(ValueError, match="文本"):
+        llm_split("   ")
