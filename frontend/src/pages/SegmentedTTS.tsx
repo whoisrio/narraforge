@@ -258,15 +258,15 @@ export function SegmentedTTS() {
               value={editingSegment.text}
               onChange={(e) => dispatch({ type: 'UPDATE_TEXT', id: editingSegment.id, text: e.target.value })}
               rows={2}
-              style={{ width: '100%', background: '#111', border: '1px solid #333', color: '#ddd', padding: 8, borderRadius: 4 }}
+              className={styles.inlineEditorTextarea}
             />
-            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+            <div className={styles.inlineEditorActions}>
               <button onClick={() => handleRegenerate(editingSegment.id)}
-                style={{ background: '#2a6', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer' }}>
+                className={styles.inlineEditorBtnPrimary}>
                 ↻ 重新生成
               </button>
               <button onClick={() => dispatch({ type: 'SELECT_SEGMENT', id: undefined })}
-                style={{ background: '#333', color: '#ccc', border: '1px solid #555', padding: '6px 14px', borderRadius: 4, cursor: 'pointer' }}>
+                className={styles.inlineEditorBtnSecondary}>
                 关闭
               </button>
             </div>
