@@ -1,9 +1,10 @@
 import type { TTSLocalRecord, STTLocalRecord } from '../types';
 
 const DB_NAME = 'voice_clone_studio';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const TTS_STORE = 'tts_results';
 const STT_STORE = 'stt_results';
+const SEGMENTED_PROJECTS_STORE = 'segmented_projects';
 
 /** 打开/创建 IndexedDB 数据库 */
 function openDB(): Promise<IDBDatabase> {
@@ -17,11 +18,19 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STT_STORE)) {
         db.createObjectStore(STT_STORE, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(SEGMENTED_PROJECTS_STORE)) {
+        db.createObjectStore(SEGMENTED_PROJECTS_STORE, { keyPath: 'id' });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
+
+// Re-exported for segmentedProjectDB.ts to share the same opener.
+export function _openDB() { return openDB(); }
+export const _SEGMENTED_PROJECTS_STORE = SEGMENTED_PROJECTS_STORE;
+export const _TTS_STORE = TTS_STORE;
 
 function storePut(db: IDBDatabase, storeName: string, value: unknown): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -73,9 +82,10 @@ export async function saveTTSResult(record: TTSLocalRecord): Promise<void> {
 export async function getTTSHistory(): Promise<TTSLocalRecord[]> {
   const db = await openDB();
   const results = await storeGetAll<TTSLocalRecord>(db, TTS_STORE);
-  return results.sort(
-    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-  );
+  // 过滤掉来自分段编辑器的碎片音频，保持 TTSSynthesis 历史干净
+  return results
+    .filter((r) => r.source !== 'segmented_tts')
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
 /** 删除单条 TTS 合成记录 */
