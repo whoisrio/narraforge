@@ -1,0 +1,26 @@
+.panel {
+  background: #1f1f1f; border-radius: 10px; padding: 16px; margin-bottom: 16px;
+}
+.textarea {
+  width: 100%; background: #111; border: 1px solid #333; color: #ddd;
+  border-radius: 6px; padding: 10px; font-size: 14px; font-family: inherit;
+  resize: vertical; outline: none;
+}
+.textarea:focus { border-color: #4a90e2; }
+.controls { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.delimiters { display: flex; gap: 6px; }
+.checkLabel { font-size: 12px; color: #aaa; cursor: pointer; display: flex; align-items: center; gap: 2px; }
+.modeSwitch { display: flex; gap: 0; }
+.modeBtn {
+  background: #333; border: 1px solid #555; color: #aaa;
+  padding: 4px 12px; font-size: 12px; cursor: pointer;
+}
+.modeBtn:first-child { border-radius: 4px 0 0 4px; }
+.modeBtn:last-child { border-radius: 0 4px 4px 0; }
+.modeBtn.active { background: #4a90e2; color: white; border-color: #4a90e2; }
+.splitBtn {
+  background: #2a6; color: white; border: none;
+  padding: 6px 16px; border-radius: 4px; font-size: 12px; cursor: pointer;
+}
+.splitBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+.charCount { font-size: 11px; color: #666; margin-left: auto; }

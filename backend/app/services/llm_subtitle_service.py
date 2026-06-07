@@ -10,87 +10,17 @@ LLM 字幕服务 — 校准 + 双语翻译
 import json
 import logging
 import re
-import urllib.request
-import urllib.error
-import ssl
 from dataclasses import dataclass
 
-from app.core.config import settings
+# Re-exports from llm_client (migrated 2026-06-06). Aliased to private names
+# to keep all existing call sites in this file working unchanged.
+from app.services.llm_client import (
+    extract_json_array as _extract_json_array,
+    get_llm_config as _get_llm_config,
+    call_llm as _call_llm,
+)
 
 logger = logging.getLogger(__name__)
-
-
-def _extract_json_array(raw: str) -> str | None:
-    """从 LLM 返回中提取 JSON 数组字符串。
-
-    兼容：
-    - 纯 JSON: [{"index": 1, ...}]
-    - markdown 代码块: ```json\n[...]\n```
-    - 前后带杂文: 这是结果：[...] 希望对你有帮助
-    - reasoning 模型可能在 content 里带思考过程
-    """
-    if not raw or not raw.strip():
-        return None
-
-    text = raw.strip()
-
-    # 1. 尝试从 markdown 代码块提取
-    md_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', text, re.DOTALL)
-    if md_match:
-        return md_match.group(1)
-
-    # 2. 提取最外层 [...]（贪婪匹配最长的）
-    arr_match = re.search(r'\[.*\]', text, re.DOTALL)
-    if arr_match:
-        candidate = arr_match.group()
-        # 验证是合法 JSON
-        try:
-            parsed = json.loads(candidate)
-            if isinstance(parsed, list):
-                return candidate
-        except json.JSONDecodeError:
-            pass
-
-    # 3. 全文尝试直接解析
-    try:
-        parsed = json.loads(text)
-        if isinstance(parsed, list):
-            return text
-    except json.JSONDecodeError:
-        pass
-
-    return None
-
-
-def _get_llm_config(db=None) -> tuple[str, str, str]:
-    """返回 (api_key, base_url, model)，界面配置优先，LLM_ 未配置时回退到 MIMO_。
-
-    当传入 db (Session) 时，优先从界面配置读取；
-    未传入 db 或界面未配置时，回退到 .env 默认值。
-    """
-    # 基础值：从 .env settings
-    api_key = settings.llm_api_key or settings.mimo_api_key
-    base_url = (settings.llm_base_url or settings.mimo_base_url).rstrip("/")
-    model = settings.llm_model
-
-    # 界面配置优先
-    if db is not None:
-        try:
-            from app.core.model_config_service import get_effective_config
-            config = get_effective_config(db, "llm")
-            # LLM 的 api_key 有 fallback_settings 到 mimo_api_key，
-            # get_effective_config 已处理了 fallback，无需再手动 fallback
-            api_key = config.get("api_key") or api_key
-            base_url = (config.get("base_url") or base_url).rstrip("/")
-            model = config.get("model") or model
-        except Exception:
-            pass  # 降级到 settings
-
-    if not api_key:
-        raise ValueError(
-            "LLM API Key 未配置。请在界面或 .env 中设置 LLM_API_KEY 或 MIMO_API_KEY"
-        )
-    return api_key, base_url, model
 
 
 @dataclass
@@ -125,64 +55,6 @@ class BilingualResult:
     segments: list[BilingualSegment]
     target_language: str
     model: str | None
-
-
-def _call_llm(messages: list[dict], model: str | None = None,
-              temperature: float = 0.3, max_tokens: int = 8192, db=None) -> str:
-    """调用 LLM Chat API 并返回 assistant 消息内容。
-
-    自动适配 MiMo (api-key header) 和 Qwen/OpenAI (Bearer) 认证。
-    当传入 db 时，优先从界面配置读取连接参数。
-    """
-    api_key, base_url, default_model = _get_llm_config(db=db)
-    model = model or default_model
-
-    chat_url = f"{base_url}/chat/completions"
-
-    payload = json.dumps({
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-    }).encode("utf-8")
-
-    # 根据 base_url 判断认证方式
-    if "xiaomimimo" in base_url:
-        headers = {"api-key": api_key, "Content-Type": "application/json"}
-    else:
-        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    req = urllib.request.Request(chat_url, data=payload, headers=headers)
-    ctx = ssl.create_default_context()
-
-    logger.info(f"LLM 调用: {model} @ {base_url}")
-    try:
-        with urllib.request.urlopen(req, context=ctx, timeout=300) as resp:
-            result = json.loads(resp.read().decode("utf-8"))
-        msg = result["choices"][0]["message"]
-        content = msg.get("content") or ""
-        reasoning = msg.get("reasoning_content") or ""
-        usage = result.get("usage", {})
-
-        if not content.strip():
-            logger.warning(
-                f"LLM 返回空 content。usage={usage}, "
-                f"reasoning_len={len(reasoning)}, finish={result['choices'][0].get('finish_reason')}"
-            )
-            # 如果有 reasoning 但无 content，说明 token 耗尽
-            if reasoning:
-                raise RuntimeError(
-                    f"模型推理耗尽 token（reasoning={usage.get('completion_tokens_details', {}).get('reasoning_tokens', '?')}），"
-                    f"未产生输出。请减少字幕条数或缩短原始文稿。"
-                )
-        return content
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        logger.error(f"LLM API error {e.code}: {body}")
-        raise RuntimeError(f"LLM API 调用失败 ({e.code}): {body[:200]}")
-    except Exception as e:
-        logger.error(f"LLM API 异常: {e}")
-        raise
 
 
 def _parse_srt_blocks(srt_content: str) -> list[dict]:

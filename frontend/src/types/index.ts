@@ -132,6 +132,7 @@ export interface TTSLocalRecord {
   instruction: string;
   language: string;
   created_at: string;
+  source?: string;  // 'segmented_tts' 表示来自分段编辑器
 }
 
 // 前端 IndexedDB 本地存储的 STT 记录
@@ -184,3 +185,77 @@ export interface ModelConfigProvider {
 
 /** 所有提供商的配置映射 */
 export type ModelConfigs = Record<string, ModelConfigProvider>;
+
+// ---------------------------------------------------------------------------
+// Segmented TTS Editor types
+// ---------------------------------------------------------------------------
+
+export interface SegmentEngineParams {
+  engine: 'cosyvoice' | 'edge_tts' | 'mimo_tts';
+
+  // CosyVoice
+  voice_id?: string;
+  instruction?: string;
+  speed?: number;
+  volume?: number;
+  pitch?: number;
+  language?: string;
+  enable_ssml?: boolean;
+  enable_markdown_filter?: boolean;
+
+  // Edge-TTS
+  edge_voice?: string;
+  edge_rate?: string;     // '+0%' style
+  edge_volume?: string;
+
+  // MiMo-TTS
+  mimo_mode?: 'preset' | 'voiceclone';
+  mimo_preset_voice?: string;
+  mimo_clone_voice_id?: string;
+  mimo_instruction?: string;
+}
+
+export type SegmentStatus = 'idle' | 'queued' | 'pending' | 'ready' | 'failed';
+
+export interface Segment {
+  id: string;
+  text: string;
+  ssml?: string;
+  params: SegmentEngineParams;
+  status: SegmentStatus;
+  error?: string;
+  current_audio_id?: string;
+  previous_audio_id?: string;
+  duration_sec?: number;
+  ssml_annotated_by_llm?: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SegmentedProject {
+  schema_version: 1;
+  id: string;
+  name: string;
+  segments: Segment[];
+  selected_segment_id?: string;
+  default_params: SegmentEngineParams;
+  split_config: {
+    delimiters: string[];
+    mode: 'rule' | 'llm';
+  };
+  layout: 'vertical' | 'horizontal';
+  created_at: string;
+  updated_at: string;
+}
+
+// Text split API types
+export interface LLMSplitSegmentItem {
+  text: string;
+  reason: string;
+}
+
+export interface SSMLAnnotationItem {
+  text: string;
+  ssml: string;
+  rationale: string;
+}

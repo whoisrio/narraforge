@@ -4,6 +4,7 @@ import { VoiceClone } from './pages/VoiceClone';
 import { TTSSynthesis } from './pages/TTSSynthesis';
 import { SpeechToText } from './pages/SpeechToText';
 import { ModelConfig } from './pages/ModelConfig';
+import { SegmentedTTS } from './pages/SegmentedTTS';
 import { configApi } from './services/api';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/useVoiceRefresh';
@@ -12,7 +13,7 @@ import styles from './App.module.css';
 
 /** 页面状态：主页 或 三个工具页 + 设置 */
 type Page = 'home';
-type Tab = 'voice-clone' | 'tts-synthesis' | 'speech-to-text' | 'model-config';
+type Tab = 'voice-clone' | 'tts-synthesis' | 'speech-to-text' | 'model-config' | 'segmented-tts';
 type View = Page | Tab;
 
 /** 导航栏 + 主题切换 */
@@ -91,6 +92,20 @@ function AppHeader({
             <circle cx="12" cy="12" r="3"/>
           </svg>
           模型配置
+        </button>
+        <button
+          data-testid="tab-segmented-tts"
+          className={`${styles.tab} ${activeTab === 'segmented-tts' ? styles.active : ''}`}
+          onClick={() => onTabClick('segmented-tts')}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" x2="8" y1="13" y2="13"/>
+            <line x1="16" x2="8" y1="17" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+          分段编辑
         </button>
       </nav>
 
@@ -223,6 +238,9 @@ function AppContent() {
                 </div>
                 <div style={{ display: activeTab === 'model-config' ? 'block' : 'none' }}>
                   <ModelConfig />
+                </div>
+                <div style={{ display: activeTab === 'segmented-tts' ? 'block' : 'none' }}>
+                  <SegmentedTTS />
                 </div>
               </main>
             </VoiceRefreshProvider>

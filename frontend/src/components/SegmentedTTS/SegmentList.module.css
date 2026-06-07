@@ -1,0 +1,16 @@
+.verticalContainer { padding: 8px 0; }
+.horizontalContainer {
+  display: flex; gap: 4px; padding: 8px; overflow-x: auto;
+  min-height: 80px; align-items: center;
+}
+.appendBtn {
+  display: block; width: 100%; padding: 10px; margin-top: 4px;
+  background: none; border: 1px dashed #444; color: #666;
+  border-radius: 8px; cursor: pointer; font-size: 13px;
+}
+.appendBtn:hover { border-color: #4a90e2; color: #4a90e2; }
+.appendBtnHoriz {
+  flex-shrink: 0; width: 32px; height: 64px;
+  background: none; border: 1px dashed #444; color: #666;
+  border-radius: 6px; cursor: pointer; font-size: 16px;
+}
