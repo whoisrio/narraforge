@@ -51,40 +51,153 @@ export function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
-/** 拼接多个 AudioBuffer，升采样到 targetSampleRate，返回 Float32Array */
+/**
+ * 检测音频开头/结尾的静音长度（采样数）
+ * threshold: 低于此振幅视为静音（默认 0.01 ≈ -40dB）
+ * minSilenceMs: 最小静音时长，低于此不裁剪（保留自然停顿）
+ */
+function detectSilenceBoundary(
+  samples: Float32Array,
+  sampleRate: number,
+  fromEnd: boolean,
+  threshold: number = 0.01,
+  minSilenceMs: number = 50,
+): number {
+  const minSamples = Math.floor(sampleRate * minSilenceMs / 1000);
+  let silenceEnd = 0;
+
+  if (fromEnd) {
+    // 从尾部往前扫
+    for (let i = samples.length - 1; i >= 0; i--) {
+      if (Math.abs(samples[i]) > threshold) break;
+      silenceEnd = samples.length - i;
+    }
+  } else {
+    // 从头部往后扫
+    for (let i = 0; i < samples.length; i++) {
+      if (Math.abs(samples[i]) > threshold) break;
+      silenceEnd = i + 1;
+    }
+  }
+
+  // 只裁剪超过最小阈值的静音
+  return silenceEnd >= minSamples ? silenceEnd : 0;
+}
+
+/**
+ * 裁剪单个 AudioBuffer 的首尾静音，返回裁剪后的 Float32Array
+ */
+function trimBufferSilence(
+  buf: AudioBuffer,
+  targetSampleRate: number,
+  threshold: number = 0.01,
+): { samples: Float32Array; trimmedStart: number; trimmedEnd: number } {
+  // 先转 mono + 重采样
+  const factor = targetSampleRate / buf.sampleRate;
+  const channels = buf.numberOfChannels;
+  const mono = channels > 1
+    ? new Float32Array(buf.length).map((_, i) => {
+        let sum = 0;
+        for (let ch = 0; ch < channels; ch++) sum += buf.getChannelData(ch)[i];
+        return sum / channels;
+      })
+    : buf.getChannelData(0);
+
+  const newLen = Math.floor(mono.length * factor);
+  const resampled = new Float32Array(newLen);
+  for (let i = 0; i < newLen; i++) {
+    const srcIdx = i / factor;
+    const lo = Math.floor(srcIdx);
+    const hi = Math.min(lo + 1, mono.length - 1);
+    const frac = srcIdx - lo;
+    resampled[i] = mono[lo] * (1 - frac) + mono[hi] * frac;
+  }
+
+  const leadSamples = detectSilenceBoundary(resampled, targetSampleRate, false, threshold);
+  const trailSamples = detectSilenceBoundary(resampled, targetSampleRate, true, threshold);
+
+  const trimmed = resampled.slice(leadSamples, resampled.length - trailSamples);
+  return { samples: trimmed, trimmedStart: leadSamples, trimmedEnd: trailSamples };
+}
+
+/** 拼接参数 */
+export interface ConcatOptions {
+  /** 是否裁剪首尾静音（默认 true） */
+  trimSilence?: boolean;
+  /** 静音阈值振幅（默认 0.01 ≈ -40dB） */
+  silenceThreshold?: number;
+  /** 段落间保留的停顿时长（ms，默认 120） */
+  gapMs?: number;
+}
+
+/**
+ * 拼接多个 AudioBuffer：
+ * 1. 裁剪每段首尾静音（可选）
+ * 2. 段落间插入固定间隔（默认 120ms）
+ * 3. 升采样到 targetSampleRate
+ */
 export function concatAudioBuffers(
   buffers: AudioBuffer[],
   targetSampleRate: number,
+  options: ConcatOptions = {},
 ): Float32Array {
-  let totalLen = 0;
-  for (const b of buffers) {
-    const factor = targetSampleRate / b.sampleRate;
-    totalLen += Math.floor(b.length * factor);
+  const {
+    trimSilence = true,
+    silenceThreshold = 0.01,
+    gapMs = 120,
+  } = options;
+
+  const gapSamples = Math.floor(targetSampleRate * gapMs / 1000);
+  const silencePad = new Float32Array(gapSamples); // 全零 = 静音间隔
+
+  // 处理每段音频
+  const processed: Float32Array[] = [];
+  for (let i = 0; i < buffers.length; i++) {
+    if (trimSilence) {
+      const { samples } = trimBufferSilence(buffers[i], targetSampleRate, silenceThreshold);
+      processed.push(samples);
+    } else {
+      // 不裁剪，只做重采样
+      const buf = buffers[i];
+      const factor = targetSampleRate / buf.sampleRate;
+      const channels = buf.numberOfChannels;
+      const mono = channels > 1
+        ? new Float32Array(buf.length).map((_, j) => {
+            let sum = 0;
+            for (let ch = 0; ch < channels; ch++) sum += buf.getChannelData(ch)[j];
+            return sum / channels;
+          })
+        : buf.getChannelData(0);
+      const newLen = Math.floor(mono.length * factor);
+      const resampled = new Float32Array(newLen);
+      for (let j = 0; j < newLen; j++) {
+        const srcIdx = j / factor;
+        const lo = Math.floor(srcIdx);
+        const hi = Math.min(lo + 1, mono.length - 1);
+        const frac = srcIdx - lo;
+        resampled[j] = mono[lo] * (1 - frac) + mono[hi] * frac;
+      }
+      processed.push(resampled);
+    }
   }
 
+  // 计算总长度
+  let totalLen = 0;
+  for (let i = 0; i < processed.length; i++) {
+    totalLen += processed[i].length;
+    if (i < processed.length - 1) totalLen += gapSamples; // 段间间隔
+  }
+
+  // 拼接
   const out = new Float32Array(totalLen);
   let offset = 0;
-
-  for (const buf of buffers) {
-    const factor = targetSampleRate / buf.sampleRate;
-    const channels = buf.numberOfChannels;
-    const mono = channels > 1
-      ? new Float32Array(buf.length).map((_, i) => {
-          let sum = 0;
-          for (let ch = 0; ch < channels; ch++) sum += buf.getChannelData(ch)[i];
-          return sum / channels;
-        })
-      : buf.getChannelData(0);
-
-    const newLen = Math.floor(mono.length * factor);
-    for (let i = 0; i < newLen; i++) {
-      const srcIdx = i / factor;
-      const lo = Math.floor(srcIdx);
-      const hi = Math.min(lo + 1, mono.length - 1);
-      const frac = srcIdx - lo;
-      out[offset + i] = mono[lo] * (1 - frac) + mono[hi] * frac;
+  for (let i = 0; i < processed.length; i++) {
+    out.set(processed[i], offset);
+    offset += processed[i].length;
+    if (i < processed.length - 1) {
+      out.set(silencePad, offset);
+      offset += gapSamples;
     }
-    offset += newLen;
   }
 
   return out;

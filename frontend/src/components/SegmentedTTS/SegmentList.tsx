@@ -8,6 +8,7 @@ interface SegmentListProps {
   layout: 'vertical' | 'horizontal';
   selectedId?: string;
   playingId?: string;
+  isPaused?: boolean;
   voices: VoiceProfile[];
   globalVoiceId?: string;
   globalVoiceName?: string;
@@ -20,6 +21,7 @@ interface SegmentListProps {
   onEdit: (id: string) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
+  onTrimSilence?: (id: string) => void;
   onUndo: (id: string) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
@@ -31,14 +33,14 @@ interface SegmentListProps {
 }
 
 export function SegmentList(props: SegmentListProps) {
-  const { segments, layout, selectedId, playingId, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, onAppend, onEdit, onPlay } = props;
+  const { segments, layout, selectedId, playingId, isPaused, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, onAppend, onEdit, onPlay } = props;
 
   const rowProps = (seg: Segment, i: number) => ({
     segment: seg, index: i + 1, isSelected: seg.id === selectedId,
-    isPlaying: seg.id === playingId, voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
+    isPlaying: seg.id === playingId, isPaused: !!(isPaused && seg.id === playingId), voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
-    onRegenerate: props.onRegenerate, onPlay: onPlay, onUndo: props.onUndo,
+    onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
     onAnnotateSSML: props.onAnnotateSSML, onDuplicate: props.onDuplicate,
   });
 

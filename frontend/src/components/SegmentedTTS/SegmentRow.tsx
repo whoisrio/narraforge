@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Segment, EmotionType, VoiceProfile } from '../../types';
+import { VoiceAvatar } from '../ui/VoiceAvatar';
 import styles from './SegmentRow.module.css';
 
 interface SegmentRowProps {
@@ -7,6 +8,7 @@ interface SegmentRowProps {
   index: number;
   isSelected: boolean;
   isPlaying: boolean;
+  isPaused: boolean;
   voices: VoiceProfile[];
   globalVoiceId?: string;
   globalVoiceName?: string;
@@ -18,6 +20,7 @@ interface SegmentRowProps {
   onEdit: (id: string) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
+  onTrimSilence?: (id: string) => void;
   onUndo: (id: string) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
@@ -47,8 +50,8 @@ function getWaveform(id: string): number[] {
 }
 
 export function SegmentRow({
-  segment, index, isSelected, isPlaying, voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
-  layout, onSelect, onDelete, onEdit, onRegenerate, onPlay, onUndo,
+  segment, index, isSelected, isPlaying, isPaused, voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
+  layout, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onUndo,
 }: SegmentRowProps) {
   const [charIdx, setCharIdx] = useState(-1);
   const timerRef = useRef<number | null>(null);
@@ -122,6 +125,22 @@ export function SegmentRow({
   };
   const { engine: displayEngine, voice: voiceDisplayName } = resolveVoiceDisplay();
 
+  // Resolve gender for avatar selection
+  const resolveGender = (): string => {
+    const desc = (voiceObj?.description || voiceObj?.name || '').toLowerCase();
+    if (desc.includes('女') || desc.includes('female')) return 'female';
+    if (desc.includes('男') || desc.includes('male')) return 'male';
+    // For Edge-TTS, check the edge_voice name
+    if (segment.params.engine === 'edge_tts') {
+      const ev = segment.params.edge_voice || '';
+      // Common female Edge-TTS voice names
+      if (/xiaoxiao|xiaoyi|xiaomeng|xiaomo|xiaorui|xiaoyan|jenny|aria|jane|sara|lisa/i.test(ev)) return 'female';
+      return 'male';
+    }
+    return 'male'; // default
+  };
+  const voiceGender = resolveGender();
+
   // For stale detection: compare generated voice with current global
   const currentGlobalVoice = segment.params.engine === 'edge_tts'
     ? (globalEdgeVoice || '')
@@ -165,8 +184,11 @@ export function SegmentRow({
       onClick={() => onSelect(segment.id)} role="button" tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter') onSelect(segment.id); }}
     >
-      <div className={styles.colorBar} />
-      {isSelected && <span className={styles.editingBadge}>编辑中</span>}
+      <div className={styles.avatarCol}>
+        <VoiceAvatar name={voiceDisplayName} size={40} gender={voiceGender}
+          label={`${displayEngine} · ${voiceDisplayName}`} />
+        {isSelected && <span className={styles.editingBadge}>编辑中</span>}
+      </div>
 
       <div className={styles.body}>
         {/* Main: index + centered text + duration */}
@@ -198,15 +220,9 @@ export function SegmentRow({
             {segment.emotion && (
               <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{EMOTION_LABELS[emotion]}</span>
             )}
-            {/* Engine + voice info */}
-            <span className={styles.voiceInfo}>
-              {displayEngine}
-              {' · '}
-              {hasOverride
-                ? <><b>{voiceDisplayName}</b> <span className={styles.ovDot}>●</span></>
-                : <>{voiceDisplayName}</>
-              }
-            </span>
+            {hasOverride && (
+              <span className={styles.overrideBadge}>🔊 覆盖</span>
+            )}
             {isReady && !isStale && <span className={styles.readyMark}>✓</span>}
             {isFailed && <span className={styles.failMark}>✕ {segment.error || ''}</span>}
             {isIdle && <span className={styles.idleText}>待生成</span>}
@@ -222,9 +238,9 @@ export function SegmentRow({
             )}
             {isGenerating && <span className={styles.genBadge}>⏳</span>}
             {isReady && (
-              <button className={styles.actPlay} title="播放"
+              <button className={styles.actPlay} title={isPlaying && !isPaused ? '暂停' : '播放'}
                 onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
-                {isPlaying ? '⏸' : '▶'}
+                {isPlaying && !isPaused ? '⏸' : '▶'}
               </button>
             )}
             <button className={styles.actBtn} title="编辑"
@@ -232,6 +248,10 @@ export function SegmentRow({
             {isReady && (
               <button className={styles.actBtn} title="重新生成"
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>↻</button>
+            )}
+            {isReady && onTrimSilence && (
+              <button className={styles.actBtn} title="裁剪静音"
+                onClick={(e) => { e.stopPropagation(); onTrimSilence(segment.id); }}>✂</button>
             )}
             <button className={styles.actBtnDanger} title="删除" disabled={isGenerating}
               onClick={(e) => { e.stopPropagation(); onDelete(segment.id); }}>✕</button>

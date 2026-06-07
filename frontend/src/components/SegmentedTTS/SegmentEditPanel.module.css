@@ -238,6 +238,46 @@
   color: var(--color-text-muted);
 }
 
+.engineRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--color-border-light);
+  margin-bottom: 4px;
+}
+
+.enginePills {
+  display: flex;
+  gap: 3px;
+  background: var(--color-surface);
+  padding: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.enginePill {
+  padding: 4px 12px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+
+.enginePill:hover {
+  color: var(--color-text-secondary);
+}
+
+.enginePillActive {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 1px 4px var(--glow-primary);
+}
+
 .paramsGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;

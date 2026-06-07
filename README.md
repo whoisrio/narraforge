@@ -4,6 +4,22 @@
 
 ![Voice Studio 首页](frontend/src/assets/frontpage-2.png)
 
+## 截图
+
+### 文字转语音 — 单段合成
+<!-- 截图：全局控制台(音色+参数) + 文本输入 + 生成按钮 -->
+![单段合成](docs/screenshots/tts-single.png)
+
+### 文字转语音 — 分段编辑器
+<!-- 截图：完整分段编辑界面，含感情色彩卡片、头像、工具栏 -->
+![分段编辑器](docs/screenshots/tts-segmented.png)
+
+### 分段编辑 — 编辑面板
+<!-- 截图：展开的段落编辑面板，含参数覆盖、引擎切换、音色选择 -->
+![编辑面板](docs/screenshots/tts-edit-panel.png)
+
+> 截图待补充：运行 `npm run dev` 后手动截取放入 `docs/screenshots/` 目录
+
 ## 功能
 
 | 模块 | 说明 |

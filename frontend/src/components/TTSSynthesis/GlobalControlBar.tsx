@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ttsApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
+import { VoiceAvatar } from '../ui/VoiceAvatar';
 import type { VoiceProfile } from '../../types';
 import styles from './GlobalControlBar.module.css';
 
@@ -63,9 +64,7 @@ export function GlobalControlBar({
         <span className={styles.label}>全局音色</span>
         <div className={styles.voiceSelectWrap} ref={dropdownRef}>
           <button className={styles.voiceSelect} onClick={() => setShowVoiceDropdown(!showVoiceDropdown)}>
-            <span className={styles.voiceAvatar}>
-              {(selectedVoice?.description || selectedVoice?.name || '?')[0]}
-            </span>
+            <VoiceAvatar name={selectedVoice?.description || selectedVoice?.name || '?'} size={28} />
             <span className={styles.voiceName}>
               {selectedVoice?.description || selectedVoice?.name || '请选择声音'}
             </span>
@@ -85,9 +84,7 @@ export function GlobalControlBar({
                     className={`${styles.dropdownItem} ${isSelected ? styles.dropdownItemSelected : ''}`}
                     onClick={() => handleVoicePick(voiceKey)}
                   >
-                    <span className={styles.dropdownAvatar}>
-                      {(v.description || v.name)[0]}
-                    </span>
+                    <VoiceAvatar name={v.description || v.name} size={32} />
                     <div className={styles.dropdownInfo}>
                       <span className={styles.dropdownName}>{v.description || v.name}</span>
                       <span className={styles.dropdownMeta}>克隆</span>

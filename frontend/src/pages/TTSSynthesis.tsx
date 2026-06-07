@@ -11,6 +11,7 @@ import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { segmentedReducer, createInitialProject, type Action } from '../hooks/useSegmentedProject';
 import { textSplitApi, ttsApi, mimoTtsApi } from '../services/api';
 import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
+import { trimBase64AudioSilence } from '../services/audioTrim';
 import { saveProject, getProject, listProjects } from '../services/segmentedProjectDB';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
@@ -57,6 +58,17 @@ export function TTSSynthesis() {
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
+  const [isPaused, setIsPaused] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) { audioRef.current.pause(); audioRef.current = null; }
+      if (blobUrlRef.current) { URL.revokeObjectURL(blobUrlRef.current); blobUrlRef.current = null; }
+    };
+  }, []);
 
   // Load last project from IndexedDB on mount
   useEffect(() => {
@@ -260,7 +272,10 @@ export function TTSSynthesis() {
         resp = await ttsApi.synthesize({ text: textToSend, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
-      const bytes = atob(resp.audio_base64);
+      // Auto-trim leading/trailing silence
+      const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(resp.audio_base64);
+      if (trimmedMs > 0) console.log(`Trimmed ${trimmedMs}ms silence from segment`);
+      const bytes = atob(trimmedBase64);
       const arr = new Uint8Array(bytes.length);
       for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
       const fmt = resp.audio_format || 'mp3';
@@ -307,19 +322,45 @@ export function TTSSynthesis() {
   }, [project.segments, dispatch, showToast]);
 
   const handlePlaySegment = useCallback(async (id: string) => {
+    // If clicking the same segment that's active → toggle pause/resume
+    if (playingId === id && audioRef.current) {
+      if (audioRef.current.paused) {
+        audioRef.current.play();
+        setIsPaused(false);
+      } else {
+        audioRef.current.pause();
+        setIsPaused(true);
+      }
+      return;
+    }
+
+    // Stop any currently playing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+
     const seg = project.segments.find(s => s.id === id);
     if (!seg?.current_audio_id) return;
-    setPlayingId(id);
+
     try {
       const blob = await getTTSAudioBlob(seg.current_audio_id);
       if (!blob) return;
       const url = URL.createObjectURL(blob);
+      blobUrlRef.current = url;
       const audio = new Audio(url);
-      audio.onended = () => { setPlayingId(undefined); URL.revokeObjectURL(url); };
-      audio.onerror = () => { setPlayingId(undefined); URL.revokeObjectURL(url); };
+      audioRef.current = audio;
+      audio.onended = () => { setPlayingId(undefined); setIsPaused(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
+      audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
+      setPlayingId(id);
+      setIsPaused(false);
       await audio.play();
-    } catch { setPlayingId(undefined); }
-  }, [project.segments]);
+    } catch { setPlayingId(undefined); setIsPaused(false); }
+  }, [project.segments, playingId]);
 
   const handlePlayAll = useCallback(async () => {
     const readySegs = project.segments.filter(s => s.status === 'ready' && s.current_audio_id);
@@ -340,6 +381,40 @@ export function TTSSynthesis() {
     }
     setPlayingId(undefined);
   }, [project.segments]);
+
+  const handleTrimSilence = useCallback(async (id: string) => {
+    const seg = project.segments.find(s => s.id === id);
+    if (!seg?.current_audio_id) return;
+    try {
+      const blob = await getTTSAudioBlob(seg.current_audio_id);
+      if (!blob) return;
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve) => {
+        reader.onload = () => resolve((reader.result as string).split(',')[1]);
+        reader.readAsDataURL(blob);
+      });
+      const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(base64);
+      if (trimmedMs <= 0) { showToast('无多余静音'); return; }
+
+      // Decode trimmed to get new duration
+      const byteStr = atob(trimmedBase64);
+      const arr = new Uint8Array(byteStr.length);
+      for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+      const trimmedBlob = new Blob([arr], { type: 'audio/wav' });
+      const ac = new AudioContext();
+      const ab = await ac.decodeAudioData(await trimmedBlob.arrayBuffer());
+      const newDuration = ab.duration;
+      ac.close();
+
+      // Save trimmed audio, delete old
+      const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      await saveTTSResult({ id: newId, text: seg.text, voice_id: seg.params.voice_id || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: seg.params.speed ?? 1, volume: seg.params.volume ?? 80, pitch: seg.params.pitch ?? 1, instruction: seg.params.instruction || '', language: seg.params.language || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
+      try { await deleteTTSResult(seg.current_audio_id); } catch {}
+      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, generated_voice_id: seg.generated_voice_id });
+      showToast(`裁剪了 ${trimmedMs}ms 静音`);
+      loadHistory();
+    } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
+  }, [project.segments, dispatch, showToast, loadHistory]);
 
   const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
 
@@ -502,6 +577,7 @@ export function TTSSynthesis() {
               layout={project.layout}
               selectedId={project.selected_segment_id}
               playingId={playingId}
+              isPaused={isPaused}
               voices={voices}
               globalVoiceId={selectedVoiceId}
               globalVoiceName={selectedVoice?.description || selectedVoice?.name}
@@ -514,6 +590,7 @@ export function TTSSynthesis() {
               onEdit={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
               onRegenerate={handleRegenerate}
               onPlay={handlePlaySegment}
+              onTrimSilence={handleTrimSilence}
               onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
               onDuplicate={(id) => {
                 const seg = project.segments.find(s => s.id === id);
