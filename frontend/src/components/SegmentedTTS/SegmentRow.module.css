@@ -88,6 +88,10 @@
 }
 .btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .btn:hover:not(:disabled) { background: #333; border-color: #666; }
+.menuSelect {
+  background: none; border: 1px solid #444; color: #ccc;
+  padding: 2px 4px; border-radius: 4px; font-size: 12px; cursor: pointer;
+}
 .insertZone {
   text-align: center; font-size: 11px; color: transparent; padding: 2px 0;
   transition: color 0.15s; cursor: pointer;

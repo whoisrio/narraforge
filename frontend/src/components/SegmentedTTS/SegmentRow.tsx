@@ -83,13 +83,26 @@ export function SegmentRow({
             onClick={(e) => { e.stopPropagation(); onEdit(segment.id); }} title="编辑">✎</button>
           {hasUndo && <button className={styles.btn}
             onClick={(e) => { e.stopPropagation(); onUndo(segment.id); }} title="撤回">↻</button>}
-          {onAnnotateSSML && segment.params.engine === 'cosyvoice' && (
-            <button className={styles.btn}
-              onClick={(e) => { e.stopPropagation(); onAnnotateSSML(segment.id); }} title="智能标注 SSML">✨</button>
-          )}
           <button className={styles.btn} disabled={isGenerating}
             title={isGenerating ? '生成中无法删除' : '删除'}
             onClick={(e) => { e.stopPropagation(); onDelete(segment.id); }}>✕</button>
+          <select
+            className={styles.menuSelect}
+            value=""
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              e.stopPropagation();
+              if (e.target.value === 'annotate' && onAnnotateSSML) onAnnotateSSML(segment.id);
+              if (e.target.value === 'duplicate') {
+                // Placeholder for future
+              }
+              e.currentTarget.value = '';
+            }}
+          >
+            <option value="">⋮</option>
+            {segment.params.engine === 'cosyvoice' && <option value="annotate">✨ 智能标注 SSML</option>}
+            <option value="duplicate">复制段</option>
+          </select>
         </div>
       </div>
       <div className={styles.insertZone} onClick={(e) => { e.stopPropagation(); onInsertAfter(segment.id); }}>
