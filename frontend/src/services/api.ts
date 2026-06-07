@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -367,6 +367,33 @@ export const modelConfigApi = {
     }
 
     const { data } = await api.put(`/model-config/${provider}`, { fields: encrypted });
+    return data;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Text Split API (for segmented TTS editor)
+// ---------------------------------------------------------------------------
+
+export const textSplitApi = {
+  ruleSplit: async (text: string, delimiters: string[]): Promise<string[]> => {
+    const { data } = await api.post<{ segments: string[] }>('/text-split/rule', { text, delimiters });
+    return data.segments;
+  },
+
+  llmSplit: async (text: string, delimiters?: string[]): Promise<{ segments: LLMSplitSegmentItem[]; model: string | null }> => {
+    const { data } = await api.post<{ segments: LLMSplitSegmentItem[]; model: string | null }>(
+      '/text-split/llm',
+      { text, delimiters },
+    );
+    return data;
+  },
+
+  ssmlAnnotate: async (texts: string[], styleHint?: string): Promise<{ annotations: SSMLAnnotationItem[]; model: string | null }> => {
+    const { data } = await api.post<{ annotations: SSMLAnnotationItem[]; model: string | null }>(
+      '/text-split/ssml-annotate',
+      { texts, style_hint: styleHint || '' },
+    );
     return data;
   },
 };
