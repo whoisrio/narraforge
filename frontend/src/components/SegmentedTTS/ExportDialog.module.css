@@ -1,0 +1,17 @@
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; }
+.dialog { background: #1f1f1f; border: 1px solid #333; border-radius: 10px;
+  padding: 24px; min-width: 360px; }
+.dialog h3 { color: #eee; margin: 0 0 16px; }
+.field { margin-bottom: 12px; }
+.field label { display: block; color: #888; font-size: 12px; margin-bottom: 4px; }
+.field input { background: #111; border: 1px solid #444; color: #ddd;
+  padding: 6px 10px; border-radius: 4px; width: 100%; }
+.options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.options label { font-size: 13px; color: #ccc; display: flex; align-items: center; gap: 6px; }
+.langRow { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+.langRow select { background: #111; border: 1px solid #444; color: #ddd; padding: 4px 8px; border-radius: 4px; }
+.buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.cancelBtn { background: #333; color: #ccc; border: 1px solid #555; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
+.exportBtn { background: #2a6; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
+.exportBtn:disabled { opacity: 0.5; }
