@@ -15,6 +15,7 @@ interface SegmentListProps {
   onRegenerate: (id: string) => void;
   onUndo: (id: string) => void;
   onAnnotateSSML?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }
 
 export function SegmentList(props: SegmentListProps) {

@@ -233,6 +233,12 @@ export function SegmentedTTS() {
         onRegenerate={handleRegenerateOne}
         onUndo={handleUndo}
         onAnnotateSSML={handleAnnotateSSMLOne}
+        onDuplicate={(id) => {
+          const seg = project.segments.find(s => s.id === id);
+          if (seg) {
+            dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text });
+          }
+        }}
       />
       {project.layout === 'vertical' ? (
         <SegmentEditDrawer

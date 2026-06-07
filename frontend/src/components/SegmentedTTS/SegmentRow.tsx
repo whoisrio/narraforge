@@ -14,6 +14,7 @@ interface SegmentRowProps {
   onRegenerate: (id: string) => void;
   onUndo: (id: string) => void;
   onAnnotateSSML?: (id: string) => void;
+  onDuplicate?: (id: string) => void;
 }
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -24,7 +25,7 @@ const ENGINE_LABELS: Record<string, string> = {
 
 export function SegmentRow({
   segment, isSelected, layout, onSelect, onDelete,
-  onInsertAfter, onEdit, onRegenerate, onUndo, onAnnotateSSML,
+  onInsertAfter, onEdit, onRegenerate, onUndo, onAnnotateSSML, onDuplicate,
 }: SegmentRowProps) {
   const animValue = useCountUp(segment.duration_sec ?? 0, 400, segment.status === 'ready' && segment.duration_sec !== undefined);
   const displayDuration = segment.status === 'ready'
@@ -93,9 +94,7 @@ export function SegmentRow({
             onChange={(e) => {
               e.stopPropagation();
               if (e.target.value === 'annotate' && onAnnotateSSML) onAnnotateSSML(segment.id);
-              if (e.target.value === 'duplicate') {
-                // Placeholder for future
-              }
+              if (e.target.value === 'duplicate' && onDuplicate) onDuplicate(segment.id);
               e.currentTarget.value = '';
             }}
           >
