@@ -4,30 +4,32 @@ import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { SegmentEditDrawer } from '../components/SegmentedTTS/SegmentEditDrawer';
 import { ProjectToolbar } from '../components/SegmentedTTS/ProjectToolbar';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
-import { segmentedReducer, createInitialProject, type Action } from '../hooks/useSegmentedProject';
+import { useSegmentedProject, segmentedReducer, createInitialProject, type Action } from '../hooks/useSegmentedProject';
+import { textSplitApi } from '../services/api';
 import type { SegmentedProject } from '../types';
 import styles from './SegmentedTTS.module.css';
 
-// Lightweight state management (no useReducer for now — we use useState + dispatch wrapper)
-function useProjectState() {
-  const [project, setProject] = useState<SegmentedProject>(createInitialProject);
-
-  const dispatch = (action: Action) => {
-    setProject(prev => {
-      const result = segmentedReducer({ project: prev }, action);
-      return result.project;
-    });
-  };
-
-  return { project, dispatch };
-}
-
 export function SegmentedTTS() {
-  const { project, dispatch } = useProjectState();
+  const [state, dispatch] = useSegmentedProject();
+  const { project } = state;
   const [exportOpen, setExportOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const editingSegment = project.segments.find(s => s.id === project.selected_segment_id) ?? null;
+
+  const handleSplit = (texts: string[]) => {
+    dispatch({ type: 'APPLY_SPLIT', texts });
+  };
+
+  const handleLLMSplit = async (text: string) => {
+    const result = await textSplitApi.llmSplit(text);
+    const texts = result.segments.map(s => s.text);
+    dispatch({ type: 'APPLY_SPLIT', texts });
+  };
+
+  const handleSplitConfigChange = (config: SegmentedProject['split_config']) => {
+    dispatch({ type: 'SET_SPLIT_CONFIG', config });
+  };
 
   return (
     <div className={styles.container}>
@@ -41,6 +43,12 @@ export function SegmentedTTS() {
         onGenerateAll={() => { /* placeholder for T20 */ }}
         onAnnotateAll={() => { /* placeholder for T21 */ }}
         onExport={() => setExportOpen(true)}
+      />
+      <TextInputPanel
+        splitConfig={project.split_config}
+        onSplitConfigChange={handleSplitConfigChange}
+        onSplit={handleSplit}
+        onLLMSplit={handleLLMSplit}
       />
       <SegmentList
         segments={project.segments}
