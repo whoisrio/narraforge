@@ -28,22 +28,25 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(28, 25, 23, 0.4)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    zIndex: 'var(--z-modal-backdrop)',
     padding: 'var(--spacing-lg)',
   };
 
   const modalStyle: React.CSSProperties = {
     backgroundColor: 'var(--color-surface)',
     borderRadius: 'var(--radius-lg)',
-    boxShadow: 'var(--shadow-lg)',
+    boxShadow: 'var(--shadow-xl)',
     maxWidth: '90%',
     width: '100%',
     maxHeight: '90vh',
     overflow: 'auto',
+    zIndex: 'var(--z-modal)',
   };
 
   const headerStyle: React.CSSProperties = {

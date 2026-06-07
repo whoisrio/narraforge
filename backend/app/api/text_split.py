@@ -40,6 +40,7 @@ class LLMSplitRequest(BaseModel):
 class LLMSplitSegmentItem(BaseModel):
     text: str
     reason: str
+    emotion: str = "neutral"
 
 
 class LLMSplitResponse(BaseModel):

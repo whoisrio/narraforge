@@ -8,7 +8,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   children: React.ReactNode;
 }
 
-const spinnerStyleId = 'dark-studio-pro-spinner-style';
+const spinnerStyleId = 'vs-spinner-style';
 
 function ensureSpinnerStyle() {
   if (typeof document === 'undefined') return;
@@ -16,7 +16,7 @@ function ensureSpinnerStyle() {
   const style = document.createElement('style');
   style.id = spinnerStyleId;
   style.textContent = `
-    @keyframes dsp-spin {
+    @keyframes vs-spin {
       to { transform: rotate(360deg); }
     }
   `;
@@ -40,8 +40,8 @@ export const Button: React.FC<ButtonProps> = ({
   }, []);
 
   const buttonStyle: React.CSSProperties = {
-    transition: 'background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal), opacity var(--transition-normal), box-shadow var(--transition-normal), transform 0.1s ease',
-    cursor: 'pointer',
+    transition: 'all 200ms ease',
+    cursor: disabled || loading ? 'not-allowed' : 'pointer',
     border: '1px solid transparent',
     fontFamily: 'inherit',
     display: 'inline-flex',
@@ -52,14 +52,16 @@ export const Button: React.FC<ButtonProps> = ({
     pointerEvents: disabled || loading ? 'none' : 'auto',
     width: fullWidth ? '100%' : 'auto',
     borderRadius: 'var(--radius-full)',
+    position: 'relative',
+    overflow: 'hidden',
   };
 
   const getVariantStyles = (): React.CSSProperties => {
     const variantStyles: Record<string, React.CSSProperties> = {
       primary: {
-        backgroundColor: 'var(--color-primary)',
-        color: 'var(--color-text-on-primary, white)',
-        boxShadow: '0 0 16px var(--glow-primary)',
+        background: 'var(--color-primary-gradient)',
+        color: 'var(--color-text-on-primary)',
+        boxShadow: '0 2px 8px var(--glow-primary)',
       },
       secondary: {
         backgroundColor: 'transparent',
@@ -68,17 +70,17 @@ export const Button: React.FC<ButtonProps> = ({
       },
       danger: {
         backgroundColor: 'var(--color-danger)',
-        color: 'var(--color-text-on-primary, white)',
+        color: 'var(--color-text-on-primary)',
       },
       ghost: {
         backgroundColor: 'var(--color-surface-hover)',
         color: 'var(--color-text-primary)',
-        border: '1px solid var(--color-border-light)',
+        border: '1px solid var(--color-border)',
         borderRadius: 'var(--radius-md)',
       },
       cta: {
         backgroundColor: 'var(--color-cta)',
-        color: 'var(--color-text-on-primary, white)',
+        color: 'var(--color-text-on-primary)',
       },
     };
     return variantStyles[variant] || {};
@@ -88,7 +90,7 @@ export const Button: React.FC<ButtonProps> = ({
     const sizes: Record<string, React.CSSProperties> = {
       sm: { padding: 'var(--spacing-xs) var(--spacing-md)', fontSize: 'var(--font-size-sm)' },
       md: { padding: '11px 22px', fontSize: 'var(--font-size-base)' },
-      lg: { padding: '14px 28px', fontSize: 'var(--font-size-lg)', fontWeight: 300 },
+      lg: { padding: '14px 28px', fontSize: 'var(--font-size-lg)', fontWeight: 500 },
     };
     return sizes[size] || {};
   };
@@ -97,10 +99,13 @@ export const Button: React.FC<ButtonProps> = ({
     const btn = buttonRef.current;
     if (!btn || disabled || loading) return;
     if (variant === 'primary') {
-      btn.style.backgroundColor = 'var(--color-primary-light)';
-      btn.style.boxShadow = '0 0 24px var(--glow-primary-strong)';
+      btn.style.boxShadow = '0 4px 16px var(--glow-primary-strong)';
+      btn.style.transform = 'scale(1.02)';
     } else if (variant === 'cta') {
       btn.style.backgroundColor = 'var(--color-cta-hover)';
+      btn.style.transform = 'scale(1.02)';
+    } else if (variant === 'ghost') {
+      btn.style.backgroundColor = 'var(--color-surface-active)';
     }
   };
 
@@ -108,10 +113,13 @@ export const Button: React.FC<ButtonProps> = ({
     const btn = buttonRef.current;
     if (!btn) return;
     if (variant === 'primary') {
-      btn.style.backgroundColor = 'var(--color-primary)';
-      btn.style.boxShadow = '0 0 16px var(--glow-primary)';
+      btn.style.boxShadow = '0 2px 8px var(--glow-primary)';
+      btn.style.transform = 'scale(1)';
     } else if (variant === 'cta') {
       btn.style.backgroundColor = 'var(--color-cta)';
+      btn.style.transform = 'scale(1)';
+    } else if (variant === 'ghost') {
+      btn.style.backgroundColor = 'var(--color-surface-hover)';
     }
   };
 
@@ -122,7 +130,7 @@ export const Button: React.FC<ButtonProps> = ({
     border: '2px solid currentColor',
     borderTopColor: 'transparent',
     borderRadius: '50%',
-    animation: 'dsp-spin 0.6s linear infinite',
+    animation: 'vs-spin 0.6s linear infinite',
     marginRight: 'var(--spacing-xs)',
     verticalAlign: 'middle',
   };

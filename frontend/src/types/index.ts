@@ -217,6 +217,9 @@ export interface SegmentEngineParams {
 
 export type SegmentStatus = 'idle' | 'queued' | 'pending' | 'ready' | 'failed';
 
+/** Emotion types returned by LLM analysis */
+export type EmotionType = 'happy' | 'sad' | 'angry' | 'calm' | 'neutral' | 'excited';
+
 export interface Segment {
   id: string;
   text: string;
@@ -228,6 +231,12 @@ export interface Segment {
   previous_audio_id?: string;
   duration_sec?: number;
   ssml_annotated_by_llm?: boolean;
+  /** Emotion label from LLM analysis */
+  emotion?: EmotionType;
+  /** Which params have been explicitly overridden (vs inherited from global) */
+  overrides?: ('voice' | 'speed' | 'volume' | 'pitch' | 'instruction' | 'language')[];
+  /** The voice_id that was actually used when audio was generated (for stale detection) */
+  generated_voice_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -252,6 +261,7 @@ export interface SegmentedProject {
 export interface LLMSplitSegmentItem {
   text: string;
   reason: string;
+  emotion: string;
 }
 
 export interface SSMLAnnotationItem {

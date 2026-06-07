@@ -6,23 +6,18 @@ interface LandingProps {
   onNavigate: (tab: 'voice-clone' | 'tts-synthesis' | 'speech-to-text' | 'model-config') => void;
 }
 
-/**
- * 主页 — 编辑式排版，参考 Apple 产品页语言
- * 克制装饰，让内容和留白说话
- */
 export default function Landing({ onNavigate }: LandingProps) {
-  const [visible, setVisible] = useState(false);
+  const [heroVisible, setHeroVisible] = useState(false);
 
-  // Hero 区块在挂载后渐入
   useEffect(() => {
-    const id = requestAnimationFrame(() => setVisible(true));
+    const id = requestAnimationFrame(() => setHeroVisible(true));
     return () => cancelAnimationFrame(id);
   }, []);
 
   return (
     <div className={styles.page}>
       {/* ── Hero ── */}
-      <section className={`${styles.hero} ${visible ? styles.heroVisible : ''}`}>
+      <section className={`${styles.hero} ${heroVisible ? styles.heroVisible : ''}`}>
         <div className={styles.heroImage}>
           <img src={heroImage} alt="" />
         </div>
@@ -32,59 +27,71 @@ export default function Landing({ onNavigate }: LandingProps) {
           ))}
         </div>
         <div className={styles.heroCopy}>
-          <h1 className={styles.heroTitle}>
-            Voice Studio
-          </h1>
+          <h1 className={styles.heroTitle}>Voice Studio</h1>
           <p className={styles.heroLead}>
             基于 Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper 模型，将音色设计、文字转语音、语音转字幕融为一体的 AI 音频工作站
           </p>
           <div className={styles.heroActions}>
-            <button
-              className={styles.btnPill}
-              onClick={() => onNavigate('voice-clone')}
-            >
+            <button className={styles.btnPill} onClick={() => onNavigate('voice-clone')}>
               开始使用
             </button>
           </div>
         </div>
       </section>
 
-      {/* ── Feature 1: Voice Design ── */}
-      <FeatureTile
-        number="01"
-        title="音色设计"
-        subtitle="Voice Design"
-        body="上传一段 30 秒的音频样本，AI 即可精准复刻说话人的音色、语调与情感韵律。支持 CosyVoice 云端注册与 MiMo 即时复刻两种引擎，克隆后的声音可用于任意文本的语音合成。"
-        action="体验音色设计"
-        onAction={() => onNavigate('voice-clone')}
-        theme="white"
-      />
-
-      {/* ── Feature 2: TTS ── */}
-      <FeatureTile
-        number="02"
-        title="文字转语音"
-        subtitle="Text to Speech"
-        body="输入文字，即刻生成自然流畅的语音。支持 CosyVoice、MiMo TTS、Edge-TTS 三引擎切换，多语种、语速音调调节，满足播客、配音、无障碍朗读等多样化场景。"
-        action="体验文字转语音"
-        onAction={() => onNavigate('tts-synthesis')}
-        theme="parchment"
-      />
-
-      {/* ── Feature 3: Speech to Text ── */}
-      <FeatureTile
-        number="03"
-        title="语音转字幕"
-        subtitle="Speech to Text"
-        body="将音频或视频文件智能转写为高精度字幕，支持多说话人自动识别与时间轴对齐，大幅提升视频后期效率。"
-        action="体验语音转字幕"
-        onAction={() => onNavigate('speech-to-text')}
-        theme="white"
-      />
+      {/* ── Feature Cards ── */}
+      <section className={styles.featuresSection}>
+        <div className={styles.featuresGrid}>
+          <FeatureCard
+            icon={
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+            }
+            label="Voice Design"
+            title="音色设计"
+            body="上传一段 30 秒的音频样本，AI 即可精准复刻说话人的音色、语调与情感韵律。支持 CosyVoice 与 MiMo 双引擎。"
+            action="体验音色设计"
+            onAction={() => onNavigate('voice-clone')}
+          />
+          <FeatureCard
+            icon={
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15V6"/>
+                <path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/>
+                <path d="M12 12H3"/>
+                <path d="M16 6H3"/>
+                <path d="M12 18H3"/>
+              </svg>
+            }
+            label="Text to Speech"
+            title="文字转语音"
+            body="输入文字，即刻生成自然流畅的语音。三引擎切换，多语种支持，满足播客、配音等多样化场景。"
+            action="体验文字转语音"
+            onAction={() => onNavigate('tts-synthesis')}
+          />
+          <FeatureCard
+            icon={
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 7V4h16v3"/>
+                <path d="M9 20h6"/>
+                <path d="M12 4v16"/>
+              </svg>
+            }
+            label="Speech to Text"
+            title="语音转字幕"
+            body="将音频或视频智能转写为高精度字幕，支持多说话人识别与时间轴对齐，大幅提升后期效率。"
+            action="体验语音转字幕"
+            onAction={() => onNavigate('speech-to-text')}
+          />
+        </div>
+      </section>
 
       {/* ── Footer ── */}
       <footer className={styles.footer}>
-        <span>Voice Studio</span>
+        <span className={styles.footerBrand}>Voice Studio</span>
         <span>Powered by iamrio</span>
         <span>© 2026</span>
       </footer>
@@ -92,23 +99,21 @@ export default function Landing({ onNavigate }: LandingProps) {
   );
 }
 
-/** 单个功能瓷砖区块 */
-function FeatureTile({
-  number,
+/** 单个功能卡片 */
+function FeatureCard({
+  icon,
+  label,
   title,
-  subtitle,
   body,
   action,
   onAction,
-  theme,
 }: {
-  number: string;
+  icon: React.ReactNode;
+  label: string;
   title: string;
-  subtitle: string;
   body: string;
   action: string;
   onAction: () => void;
-  theme: 'white' | 'parchment';
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
@@ -130,19 +135,18 @@ function FeatureTile({
   }, []);
 
   return (
-    <section
+    <div
       ref={ref}
-      className={`${styles.tile} ${styles[`tile${theme}`]} ${inView ? styles.tileVisible : ''}`}
+      className={`${styles.featureCard} ${inView ? styles.featureCardVisible : ''}`}
+      onClick={onAction}
     >
-      <div className={styles.tileInner}>
-        <span className={styles.tileNum}>{number}</span>
-        <span className={styles.tileLabel}>{subtitle}</span>
-        <h2 className={styles.tileTitle}>{title}</h2>
-        <p className={styles.tileBody}>{body}</p>
-        <button className={styles.btnPill} onClick={onAction}>
-          {action}
-        </button>
-      </div>
-    </section>
+      <div className={styles.featureIcon}>{icon}</div>
+      <span className={styles.featureLabel}>{label}</span>
+      <h2 className={styles.featureTitle}>{title}</h2>
+      <p className={styles.featureBody}>{body}</p>
+      <button className={styles.btnPillSecondary} onClick={(e) => { e.stopPropagation(); onAction(); }}>
+        {action}
+      </button>
+    </div>
   );
 }

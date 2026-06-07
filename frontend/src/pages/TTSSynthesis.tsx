@@ -1,7 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { VoiceSelector } from '../components/TTSSynthesis/VoiceSelector';
-import { ParameterControls } from '../components/TTSSynthesis/ParameterControls';
-import { EdgeTTSParameterControls } from '../components/TTSSynthesis/EdgeTTSParameterControls';
+import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { AudioPlayer } from '../components/TTSSynthesis/AudioPlayer';
 import { SynthesisHistory } from '../components/TTSSynthesis/SynthesisHistory';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
@@ -9,75 +7,31 @@ import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSP
 import { SSMLToolbar } from '../components/TTSSynthesis/SSMLToolbar';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
-import { SegmentEditDrawer } from '../components/SegmentedTTS/SegmentEditDrawer';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
-import { segmentedReducer, createInitialProject } from '../hooks/useSegmentedProject';
+import { segmentedReducer, createInitialProject, type Action } from '../hooks/useSegmentedProject';
 import { textSplitApi, ttsApi, mimoTtsApi } from '../services/api';
 import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
+import { saveProject, getProject, listProjects } from '../services/segmentedProjectDB';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile, SegmentedProject, SegmentEngineParams, Action } from '../types';
+import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile, SegmentedProject, SegmentEngineParams } from '../types';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts';
 type Mode = 'single' | 'segmented';
 
-/** Edge-TTS 参数值转格式化字符串 */
 function toEdgeFormat(value: number) {
   return value >= 0 ? `+${value}%` : `${value}%`;
-}
-
-/** 构建当前引擎/voice/params 对应的 SegmentEngineParams */
-function buildSegmentEngineParams(
-  engine: Engine,
-  selectedVoiceId: string,
-  params: Partial<TTSRequest>,
-  edgeVoice: string, edgeRate: number, edgeVolume: number,
-  mimoMode: MiMoMode, mimoPresetVoice: string, mimoCloneVoiceId: string, mimoInstruction: string,
-): SegmentEngineParams {
-  if (engine === 'edge_tts') {
-    return {
-      engine: 'edge_tts',
-      edge_voice: edgeVoice,
-      edge_rate: toEdgeFormat(edgeRate),
-      edge_volume: toEdgeFormat(edgeVolume),
-    };
-  }
-  if (engine === 'mimo_tts') {
-    return {
-      engine: 'mimo_tts',
-      mimo_mode: mimoMode,
-      mimo_preset_voice: mimoPresetVoice,
-      mimo_clone_voice_id: mimoCloneVoiceId,
-      mimo_instruction: mimoInstruction,
-    };
-  }
-  return {
-    engine: 'cosyvoice',
-    voice_id: selectedVoiceId,
-    instruction: params.instruction || '',
-    speed: params.speed ?? 1.0,
-    volume: params.volume ?? 80,
-    pitch: params.pitch ?? 1.0,
-    language: params.language || 'Chinese',
-    enable_ssml: params.enable_ssml ?? false,
-    enable_markdown_filter: params.enable_markdown_filter ?? false,
-  };
 }
 
 export function TTSSynthesis() {
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
   const [mode, setMode] = useState<Mode>('single');
-  const [engine, setEngine] = useState<Engine>('cosyvoice');
+  const [engine, setEngine] = useState<Engine>('edge_tts');
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
-  const [params, setParams] = useState<Partial<TTSRequest>>({
-    language: 'Chinese',
-    speed: 1.0,
-    volume: 80,
-    pitch: 1.0,
-  });
+  const [params, setParams] = useState<Partial<TTSRequest>>({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
 
   // Edge-TTS state
   const [edgeVoice, setEdgeVoice] = useState('');
@@ -98,9 +52,43 @@ export function TTSSynthesis() {
 
   // Segmented mode state
   const [project, setProject] = useState<SegmentedProject>(createInitialProject);
+  const [projectList, setProjectList] = useState<SegmentedProject[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+  const [playingId, setPlayingId] = useState<string | undefined>();
+
+  // Load last project from IndexedDB on mount
+  useEffect(() => {
+    listProjects().then(list => {
+      setProjectList(list);
+      if (list.length > 0) {
+        const last = list[0];
+        setProject(last);
+        // Restore voice/params from project
+        if (last.segments.length > 0) {
+          const firstSeg = last.segments[0];
+          if (firstSeg.params.engine) setEngine(firstSeg.params.engine as Engine);
+        }
+      }
+    }).catch(() => {});
+  }, []);
+
+  // Auto-save project to IndexedDB (debounced)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (project.segments.length === 0 && project.name === '新项目') return; // skip empty default
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await saveProject(project);
+        // Refresh project list
+        const list = await listProjects();
+        setProjectList(list);
+      } catch (e) { console.warn('Auto-save failed:', e); }
+    }, 1000);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [project]);
 
   const dispatch = useCallback((action: Action) => {
     setProject(prev => segmentedReducer({ project: prev }, action).project);
@@ -111,27 +99,18 @@ export function TTSSynthesis() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // 建立 voice_id → description 映射
   const voiceDescriptionMap = useMemo(() => {
     const map = new Map<string, string>();
-    voices.forEach(v => {
-      if (v.description && v.qwen_voice_id) {
-        map.set(v.qwen_voice_id, v.description);
-      }
-    });
+    voices.forEach(v => { if (v.description && v.qwen_voice_id) map.set(v.qwen_voice_id, v.description); });
     return map;
   }, [voices]);
 
-  useEffect(() => {
-    ttsApi.getVoices().then(setVoices).catch(() => {});
-  }, [refreshCounter]);
+  useEffect(() => { ttsApi.getVoices().then(setVoices).catch(() => {}); }, [refreshCounter]);
 
   const storageModeRef = useRef(storageMode);
   storageModeRef.current = storageMode;
-
   const voiceDescriptionMapRef = useRef(voiceDescriptionMap);
   voiceDescriptionMapRef.current = voiceDescriptionMap;
-
   const enrichVoiceName = useCallback((voiceId: string, voiceName: string) => {
     return voiceDescriptionMapRef.current.get(voiceId) || voiceName;
   }, []);
@@ -152,13 +131,7 @@ export function TTSSynthesis() {
         const mapped: TTSResultRecord[] = localRecords.map((r) => {
           const blobUrl = r.audioBlob ? URL.createObjectURL(r.audioBlob) : '';
           if (blobUrl) blobUrlsRef.current.push(blobUrl);
-          return {
-            id: r.id, text: r.text, voice_id: r.voice_id,
-            voice_name: enrichVoiceName(r.voice_id, r.voice_name),
-            audio_url: blobUrl, audio_format: r.audio_format,
-            speed: r.speed, volume: r.volume, pitch: r.pitch,
-            instruction: r.instruction, language: r.language, created_at: r.created_at,
-          };
+          return { id: r.id, text: r.text, voice_id: r.voice_id, voice_name: enrichVoiceName(r.voice_id, r.voice_name), audio_url: blobUrl, audio_format: r.audio_format, speed: r.speed, volume: r.volume, pitch: r.pitch, instruction: r.instruction, language: r.language, created_at: r.created_at };
         });
         setHistory(mapped);
       } else {
@@ -166,30 +139,19 @@ export function TTSSynthesis() {
         if (storageModeRef.current !== modeAtStart) return;
         setHistory(data.map(r => ({ ...r, voice_name: enrichVoiceName(r.voice_id, r.voice_name) })));
       }
-    } catch (error) {
-      console.error('Failed to load history:', error);
-    }
+    } catch (error) { console.error('Failed to load history:', error); }
   }, [enrichVoiceName, revokeBlobUrls]);
 
   useEffect(() => { loadHistory(); }, [storageMode, loadHistory]);
   useEffect(() => { return () => { revokeBlobUrls(); }; }, [revokeBlobUrls]);
 
-  const saveFrontendResult = useCallback(async (
-    resp: TTSResult, audioFormat: string, voiceName: string,
-    voiceId: string, instructionText: string, language: string,
-  ) => {
+  const saveFrontendResult = useCallback(async (resp: TTSResult, audioFormat: string, voiceName: string, voiceId: string, instructionText: string, language: string) => {
     if (storageMode !== 'frontend' || !resp.audio_base64) return;
     const byteStr = atob(resp.audio_base64);
     const byteNums = new Uint8Array(byteStr.length);
     for (let i = 0; i < byteStr.length; i++) byteNums[i] = byteStr.charCodeAt(i);
     const mimeType = audioFormat === 'mp3' ? 'audio/mpeg' : `audio/${audioFormat}`;
-    await saveTTSResult({
-      id: resp.audio_id, text: resp.text, voice_id: voiceId || '',
-      voice_name: voiceName || '', audioBlob: new Blob([byteNums], { type: mimeType }),
-      audio_format: audioFormat, speed: resp.params?.speed ?? 1.0,
-      volume: resp.params?.volume ?? 80, pitch: resp.params?.pitch ?? 1.0,
-      instruction: instructionText, language, created_at: new Date().toISOString(),
-    });
+    await saveTTSResult({ id: resp.audio_id, text: resp.text, voice_id: voiceId || '', voice_name: voiceName || '', audioBlob: new Blob([byteNums], { type: mimeType }), audio_format: audioFormat, speed: resp.params?.speed ?? 1.0, volume: resp.params?.volume ?? 80, pitch: resp.params?.pitch ?? 1.0, instruction: instructionText, language, created_at: new Date().toISOString() });
   }, [storageMode]);
 
   const handleSynthesize = useCallback(async () => {
@@ -222,16 +184,13 @@ export function TTSSynthesis() {
         setResult(resp);
       }
       loadHistory();
-    } catch (error) {
-      console.error('TTS synthesis failed:', error);
-      alert('生成语音失败，请重试');
-    } finally { setIsLoading(false); }
+    } catch (error) { console.error('TTS synthesis failed:', error); alert('生成语音失败，请重试'); }
+    finally { setIsLoading(false); }
   }, [text, engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, params, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, loadHistory, storageMode, voices, saveFrontendResult]);
 
   const handleDeleteResult = useCallback(async (id: string) => {
     try {
-      if (storageMode === 'frontend') { await deleteTTSResult(id); }
-      else { await ttsApi.deleteResult(id); }
+      if (storageMode === 'frontend') { await deleteTTSResult(id); } else { await ttsApi.deleteResult(id); }
       setHistory(prev => prev.filter(r => r.id !== id));
     } catch (error) { console.error('Failed to delete result:', error); alert('删除失败'); }
   }, [storageMode]);
@@ -254,27 +213,51 @@ export function TTSSynthesis() {
 
   // ---- Segmented mode handlers ----
 
-  const currentSegmentParams = useMemo(() =>
-    buildSegmentEngineParams(engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction),
-    [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction]
-  );
+  /** Build SegmentEngineParams from current global state */
+  const buildCurrentParams = useCallback((): SegmentEngineParams => {
+    if (engine === 'edge_tts') {
+      return { engine: 'edge_tts', edge_voice: edgeVoice, edge_rate: toEdgeFormat(edgeRate), edge_volume: toEdgeFormat(edgeVolume) };
+    }
+    if (engine === 'mimo_tts') {
+      return { engine: 'mimo_tts', mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice, mimo_clone_voice_id: mimoCloneVoiceId, mimo_instruction: mimoInstruction };
+    }
+    return {
+      engine: 'cosyvoice', voice_id: selectedVoiceId,
+      instruction: params.instruction || '', speed: params.speed ?? 1.0, volume: params.volume ?? 80,
+      pitch: params.pitch ?? 1.0, language: params.language || 'Chinese',
+      enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false,
+    };
+  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction]);
 
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = project.segments.find(s => s.id === id);
     if (!seg) return;
     dispatch({ type: 'GENERATE_START', id });
     try {
-      const p = seg.params;
-      const textToSend = (p.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
+      const sp = seg.params;
+      const overrides = seg.overrides || [];
+      const gp = buildCurrentParams();
+
+      // Merge: use segment override if explicit, otherwise global
+      const voiceId = overrides.includes('voice') ? sp.voice_id : (sp.voice_id || gp.voice_id);
+      const speed = overrides.includes('speed') ? sp.speed : (sp.speed ?? (gp as any).speed ?? 1.0);
+      const volume = overrides.includes('volume') ? sp.volume : (sp.volume ?? (gp as any).volume ?? 80);
+      const pitch = overrides.includes('pitch') ? sp.pitch : (sp.pitch ?? (gp as any).pitch ?? 1.0);
+      const instruction = overrides.includes('instruction') ? sp.instruction : (sp.instruction || (gp as any).instruction || '');
+      const language = overrides.includes('language') ? sp.language : (sp.language || (gp as any).language || 'Chinese');
+
+      const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
       let resp: TTSResult;
-      if (p.engine === 'edge_tts') {
-        resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: p.edge_voice ?? '', edge_rate: p.edge_rate ?? '+0%', edge_volume: p.edge_volume ?? '+0%', format: 'mp3' });
-      } else if (p.engine === 'mimo_tts') {
-        resp = p.mimo_mode === 'preset'
-          ? await mimoTtsApi.synthesizePreset({ text: textToSend, voice: p.mimo_preset_voice ?? '', instruction: p.mimo_instruction ?? '', format: 'wav' })
-          : await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: p.mimo_clone_voice_id ?? '', instruction: p.mimo_instruction ?? '', format: 'wav' });
+
+      if (sp.engine === 'edge_tts') {
+        const ev = overrides.includes('voice') ? sp.edge_voice : (sp.edge_voice || (gp as any).edge_voice || '');
+        resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: ev, edge_rate: sp.edge_rate ?? '+0%', edge_volume: sp.edge_volume ?? '+0%', format: 'mp3' });
+      } else if (sp.engine === 'mimo_tts') {
+        resp = sp.mimo_mode === 'preset'
+          ? await mimoTtsApi.synthesizePreset({ text: textToSend, voice: sp.mimo_preset_voice ?? '', instruction: sp.mimo_instruction ?? '', format: 'wav' })
+          : await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: sp.mimo_clone_voice_id ?? '', instruction: sp.mimo_instruction ?? '', format: 'wav' });
       } else {
-        resp = await ttsApi.synthesize({ text: textToSend, voice_id: p.voice_id ?? '', language: p.language ?? 'Chinese', speed: p.speed ?? 1.0, volume: p.volume ?? 80, pitch: p.pitch ?? 1.0, instruction: p.instruction ?? '', enable_ssml: p.enable_ssml ?? false, enable_markdown_filter: p.enable_markdown_filter ?? false, format: 'mp3' });
+        resp = await ttsApi.synthesize({ text: textToSend, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
       const bytes = atob(resp.audio_base64);
@@ -287,13 +270,16 @@ export function TTSSynthesis() {
       const duration = ab.duration;
       ac.close();
       const audioId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      await saveTTSResult({ id: audioId, text: seg.text, voice_id: p.voice_id ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: p.speed ?? 1, volume: p.volume ?? 80, pitch: p.pitch ?? 1, instruction: p.instruction ?? '', language: p.language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
+      await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
-      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration });
+      // Save the actual voice identifier used (engine-specific)
+      const usedVoiceId = sp.engine === 'edge_tts' ? (overrides.includes('voice') ? sp.edge_voice : (sp.edge_voice || (gp as any).edge_voice || '')) : voiceId;
+      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId });
+      loadHistory(); // refresh history so generated audio appears in list
     } catch (e: any) {
       dispatch({ type: 'GENERATE_FAIL', id, error: e?.message ?? '生成失败' });
     }
-  }, [project.segments, dispatch]);
+  }, [project.segments, dispatch, buildCurrentParams]);
 
   const handleRegenerateAll = useCallback(async () => {
     if (generating) return;
@@ -304,7 +290,7 @@ export function TTSSynthesis() {
     const next = async () => { while (i < toGenerate.length) { const seg = toGenerate[i++]; await handleRegenerate(seg.id); } };
     await Promise.all(Array.from({ length: 3 }, () => next()));
     setGenerating(false);
-    showToast(`生成完成`);
+    showToast('生成完成');
   }, [generating, project.segments, dispatch, handleRegenerate, showToast]);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
@@ -323,14 +309,39 @@ export function TTSSynthesis() {
   const handlePlaySegment = useCallback(async (id: string) => {
     const seg = project.segments.find(s => s.id === id);
     if (!seg?.current_audio_id) return;
-    const blob = await getTTSAudioBlob(seg.current_audio_id);
-    if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    audio.play().finally(() => URL.revokeObjectURL(url));
+    setPlayingId(id);
+    try {
+      const blob = await getTTSAudioBlob(seg.current_audio_id);
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => { setPlayingId(undefined); URL.revokeObjectURL(url); };
+      audio.onerror = () => { setPlayingId(undefined); URL.revokeObjectURL(url); };
+      await audio.play();
+    } catch { setPlayingId(undefined); }
   }, [project.segments]);
 
-  const editingSegment = project.segments.find(s => s.id === project.selected_segment_id) ?? null;
+  const handlePlayAll = useCallback(async () => {
+    const readySegs = project.segments.filter(s => s.status === 'ready' && s.current_audio_id);
+    if (readySegs.length === 0) return;
+    for (const seg of readySegs) {
+      setPlayingId(seg.id);
+      try {
+        const blob = await getTTSAudioBlob(seg.current_audio_id!);
+        if (!blob) continue;
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        await new Promise<void>((resolve) => {
+          audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.play().catch(() => resolve());
+        });
+      } catch { /* skip */ }
+    }
+    setPlayingId(undefined);
+  }, [project.segments]);
+
+  const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
 
   const canSynthesize = engine === 'edge_tts'
     ? !!text.trim() && !!edgeVoice
@@ -342,90 +353,117 @@ export function TTSSynthesis() {
     <div className={styles.container}>
       <div className={styles.header}>
         <h1>文字转语音</h1>
-        <p>使用克隆的声音生成语音</p>
+        <p>使用克隆的声音或预置音色生成高质量语音</p>
       </div>
 
-      {/* Mode Switch */}
+      {/* PRIMARY: Mode Switch (high hierarchy) */}
       <div className={styles.modeSwitch}>
-        <button
-          className={`${styles.modeOption} ${mode === 'single' ? styles.active : ''}`}
-          onClick={() => setMode('single')}
-        >
-          单段合成
+        <button className={`${styles.modeOption} ${mode === 'single' ? styles.active : ''}`} onClick={() => setMode('single')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 8h8M8 12h6"/></svg>
+          <div><div>单段合成</div><div className={styles.modeDesc}>输入文本快速生成</div></div>
         </button>
-        <button
-          className={`${styles.modeOption} ${mode === 'segmented' ? styles.active : ''}`}
-          onClick={() => setMode('segmented')}
-        >
-          分段编辑
+        <button className={`${styles.modeOption} ${mode === 'segmented' ? styles.active : ''}`} onClick={() => setMode('segmented')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          <div><div>分段编辑</div><div className={styles.modeDesc}>时间轴编辑器</div></div>
         </button>
       </div>
 
-      {/* Engine Selector */}
+      {/* SECONDARY: Engine Switch */}
       <div className={styles.engineSwitch}>
-        <button className={`${styles.engineOption} ${engine === 'cosyvoice' ? styles.active : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
         <button className={`${styles.engineOption} ${engine === 'edge_tts' ? styles.active : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
+        <button className={`${styles.engineOption} ${engine === 'cosyvoice' ? styles.active : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
         <button className={`${styles.engineOption} ${engine === 'mimo_tts' ? styles.active : ''}`} onClick={() => setEngine('mimo_tts')}>MiMo-TTS</button>
       </div>
 
-      {mode === 'single' ? (
-        /* ========== 单段合成模式 ========== */
-        <div className={styles.content}>
-          <div className={styles.leftColumn}>
-            <div className={styles.textSection}>
-              <textarea ref={textareaRef} className={styles.textarea} placeholder="输入要合成的文字..." value={text} onChange={(e) => setText(e.target.value)} rows={8} />
-              {engine === 'cosyvoice' && params.enable_ssml && (
-                <SSMLToolbar text={text} onTextChange={setText} textareaRef={textareaRef} enabled={!!params.enable_ssml} />
-              )}
-              <div className={styles.textInfo}>
-                <span>{text.length} 字符</span>
-                <button onClick={() => setText('')} disabled={!text} className={styles.clearButton}>清空</button>
-              </div>
+      {/* ====== SINGLE MODE ====== */}
+      {mode === 'single' && (
+        <div className={styles.singleContent}>
+          {/* Control Bar ABOVE text */}
+          {engine === 'cosyvoice' ? (
+            <GlobalControlBar
+              selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+              speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
+              onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
+              onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
+              onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
+              onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+            />
+          ) : engine === 'edge_tts' ? (
+            <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
+          ) : (
+            <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
+          )}
+
+          {/* Text Input */}
+          <div className={styles.textSection}>
+            <textarea ref={textareaRef} className={styles.textarea} placeholder="输入要合成的文字..." value={text} onChange={(e) => setText(e.target.value)} rows={6} />
+            {engine === 'cosyvoice' && params.enable_ssml && (
+              <SSMLToolbar text={text} onTextChange={setText} textareaRef={textareaRef} enabled={!!params.enable_ssml} />
+            )}
+            <div className={styles.textInfo}>
+              <span>{text.length} 字符</span>
+              <button onClick={() => setText('')} disabled={!text} className={styles.clearButton}>清空</button>
             </div>
-            {engine === 'cosyvoice' ? (
-              <VoiceSelector selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId} />
-            ) : engine === 'edge_tts' ? (
-              <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} />
-            ) : (
-              <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
-            )}
-          </div>
-          <div className={styles.rightColumn}>
-            {engine === 'cosyvoice' ? (
-              <ParameterControls params={params} onParamChange={setParams} />
-            ) : engine === 'edge_tts' ? (
-              <EdgeTTSParameterControls rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
-            ) : null}
-            <button onClick={handleSynthesize} disabled={isLoading || !canSynthesize} className={styles.generateButton}>
-              {isLoading ? '生成中...' : '生成语音'}
-            </button>
-            <AudioPlayer result={result} isLoading={isLoading} />
-            <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} />
-          </div>
-        </div>
-      ) : (
-        /* ========== 分段编辑模式 ========== */
-        <div className={styles.segmentedContent}>
-          {/* Voice Selector + Params（共享引擎选择） */}
-          <div className={styles.segmentedVoiceSection}>
-            {engine === 'cosyvoice' ? (
-              <VoiceSelector selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId} />
-            ) : engine === 'edge_tts' ? (
-              <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} />
-            ) : (
-              <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
-            )}
-            {engine === 'cosyvoice' && (
-              <ParameterControls params={params} onParamChange={setParams} />
-            )}
-            {engine === 'edge_tts' && (
-              <EdgeTTSParameterControls rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
-            )}
           </div>
 
-          {/* 分段编辑器 */}
+          {/* Generate */}
+          <div className={styles.generateSection}>
+            <button onClick={handleSynthesize} disabled={isLoading || !canSynthesize} className={styles.generateButton}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              {isLoading ? '生成中...' : '生成语音'}
+            </button>
+          </div>
+
+          <AudioPlayer result={result} isLoading={isLoading} />
+          <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} />
+        </div>
+      )}
+
+      {/* ====== SEGMENTED MODE ====== */}
+      {mode === 'segmented' && (
+        <div className={styles.segmentedContent}>
+          {/* Global Control Bar */}
+          {engine === 'cosyvoice' ? (
+            <GlobalControlBar
+              selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+              speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
+              onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
+              onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
+              onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
+              onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+            />
+          ) : engine === 'edge_tts' ? (
+            <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
+          ) : (
+            <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
+          )}
+
+          {/* Segmented Editor */}
           <div className={styles.segmentedEditor}>
             <div className={styles.segmentedToolbar}>
+              {/* Project management */}
+              <select
+                className={styles.projectSelect}
+                value={project.id}
+                onChange={(e) => {
+                  const pid = e.target.value;
+                  if (pid === '__new__') {
+                    const np = createInitialProject();
+                    setProject(np);
+                    dispatch({ type: 'LOAD_PROJECT', project: np });
+                  } else {
+                    const p = projectList.find(x => x.id === pid);
+                    if (p) { setProject(p); dispatch({ type: 'LOAD_PROJECT', project: p }); }
+                  }
+                }}
+              >
+                {projectList.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.segments.length}段)
+                  </option>
+                ))}
+                <option value="__new__">+ 新建项目</option>
+              </select>
               <input className={styles.segmentedNameInput} value={project.name} onChange={(e) => dispatch({ type: 'RENAME_PROJECT', name: e.target.value })} />
               <span className={styles.segmentedStats}>
                 {project.segments.length} 段 · {project.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
@@ -435,23 +473,27 @@ export function TTSSynthesis() {
                 <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
                   {generating ? '生成中...' : '⚡ 全部生成'}
                 </button>
+                <button className={styles.segmentedActionBtn} onClick={handlePlayAll} disabled={!!playingId}>
+                  {playingId ? '播放中...' : '▶ 全部播放'}
+                </button>
                 {engine === 'cosyvoice' && (
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
                 )}
                 <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
-                <button className={styles.segmentedActionBtn} onClick={() => dispatch({ type: 'SET_LAYOUT', layout: project.layout === 'vertical' ? 'horizontal' : 'vertical' })}>
-                  {project.layout === 'vertical' ? '⇄ 横向' : '⇅ 纵向'}
-                </button>
               </div>
             </div>
 
             <TextInputPanel
               splitConfig={project.split_config}
               onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
-              onSplit={(texts) => dispatch({ type: 'APPLY_SPLIT', texts })}
+              onSplit={(texts) => {
+                dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
+                dispatch({ type: 'APPLY_SPLIT', items: texts.map(t => ({ text: t })) });
+              }}
               onLLMSplit={async (text) => {
+                dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
                 const result = await textSplitApi.llmSplit(text, project.split_config.delimiters);
-                dispatch({ type: 'APPLY_SPLIT', texts: result.segments.map(s => s.text) });
+                dispatch({ type: 'APPLY_SPLIT', items: result.segments.map(s => ({ text: s.text, emotion: s.emotion })) });
               }}
             />
 
@@ -459,51 +501,36 @@ export function TTSSynthesis() {
               segments={project.segments}
               layout={project.layout}
               selectedId={project.selected_segment_id}
-              onSelect={(id) => { dispatch({ type: 'SELECT_SEGMENT', id }); if (id) handlePlaySegment(id); }}
+              playingId={playingId}
+              voices={voices}
+              globalVoiceId={selectedVoiceId}
+              globalVoiceName={selectedVoice?.description || selectedVoice?.name}
+              globalEdgeVoice={edgeVoice}
+              onSelect={(id) => { dispatch({ type: 'SELECT_SEGMENT', id }); }}
               onDelete={(id) => dispatch({ type: 'DELETE_SEGMENT', id })}
               onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId })}
               onAppend={() => dispatch({ type: 'APPEND_SEGMENT' })}
               onReorder={(from, to) => dispatch({ type: 'REORDER', fromIndex: from, toIndex: to })}
               onEdit={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
               onRegenerate={handleRegenerate}
+              onPlay={handlePlaySegment}
               onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
               onDuplicate={(id) => {
                 const seg = project.segments.find(s => s.id === id);
                 if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text });
               }}
               onAnnotateSSML={(id) => handleAnnotateSSML([id])}
+              onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
+              onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
+              onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
+              onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
             />
 
-            {project.layout === 'vertical' ? (
-              <SegmentEditDrawer
-                segment={editingSegment}
-                onClose={() => dispatch({ type: 'SELECT_SEGMENT', id: undefined })}
-                onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
-                onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
-                onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
-                onRegenerate={handleRegenerate}
-                onAnnotateSSML={(id) => handleAnnotateSSML([id])}
-              />
-            ) : (
-              editingSegment && (
-                <div className={styles.inlineEditor}>
-                  <h4>编辑 #{editingSegment.id.slice(-3)}</h4>
-                  <textarea
-                    className={styles.inlineEditorTextarea}
-                    value={editingSegment.text}
-                    onChange={(e) => dispatch({ type: 'UPDATE_TEXT', id: editingSegment.id, text: e.target.value })}
-                    rows={2}
-                  />
-                  <div className={styles.inlineEditorActions}>
-                    <button className={styles.inlineEditorBtnPrimary} onClick={() => handleRegenerate(editingSegment.id)}>↻ 重新生成</button>
-                    <button className={styles.inlineEditorBtnSecondary} onClick={() => dispatch({ type: 'SELECT_SEGMENT', id: undefined })}>关闭</button>
-                  </div>
-                </div>
-              )
-            )}
-          </div>
+            {/* Audio History for segmented mode */}
+            <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} />
 
-          <ExportDialog open={exportOpen} segments={project.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
+            <ExportDialog open={exportOpen} segments={project.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
+          </div>
         </div>
       )}
 

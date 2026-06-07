@@ -29,9 +29,9 @@
 .providerCard {
   background: var(--color-surface);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-border-light);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
   overflow: hidden;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .providerHeader {
@@ -81,18 +81,18 @@
 }
 
 .statusBadge.configured {
-  background: rgba(16, 185, 129, 0.12);
-  color: #10b981;
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
 }
 
 .statusBadge.envDefault {
-  background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  color: var(--color-warning);
 }
 
 .statusBadge.notConfigured {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+  color: var(--color-danger);
 }
 
 .expandIcon {
@@ -195,8 +195,8 @@
 }
 
 .saveButton.primary {
-  background: var(--color-primary);
-  color: #ffffff;
+  background: var(--color-primary-gradient);
+  color: var(--color-text-on-primary);
 }
 
 .saveButton.primary:hover:not(:disabled) {
@@ -228,12 +228,12 @@
 }
 
 .toast.success {
-  background: rgba(16, 185, 129, 0.95);
+  background: var(--color-success);
   color: #fff;
 }
 
 .toast.error {
-  background: rgba(239, 68, 68, 0.95);
+  background: var(--color-danger);
   color: #fff;
 }
 

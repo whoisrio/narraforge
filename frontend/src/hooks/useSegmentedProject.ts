@@ -32,7 +32,7 @@ export type Action =
   | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: SegmentedProject['split_config'] }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
-  | { type: 'APPLY_SPLIT'; texts: string[] }
+  | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
   | { type: 'INSERT_SEGMENT'; afterId: string; text?: string }
   | { type: 'DELETE_SEGMENT'; id: string }
@@ -40,10 +40,11 @@ export type Action =
   | { type: 'UPDATE_SSML'; id: string; ssml: string; by_llm?: boolean }
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
   | { type: 'UPDATE_PARAMS'; id: string; params: Partial<SegmentEngineParams> }
+  | { type: 'UPDATE_EMOTION'; id: string; emotion: string }
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
-  | { type: 'GENERATE_SUCCESS'; id: string; audio_id: string; duration_sec: number }
+  | { type: 'GENERATE_SUCCESS'; id: string; audio_id: string; duration_sec: number; generated_voice_id?: string }
   | { type: 'GENERATE_FAIL'; id: string; error: string }
   | { type: 'UNDO_REGENERATE'; id: string }
   | { type: 'SELECT_SEGMENT'; id: string | undefined };
@@ -71,7 +72,11 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'SET_LAYOUT':
       return { project: { ...p, layout: action.layout, updated_at: new Date().toISOString() } };
     case 'APPLY_SPLIT': {
-      const newSegs = action.texts.map(t => makeSegment(t, p.default_params));
+      const newSegs = action.items.map(item => {
+        const seg = makeSegment(item.text, p.default_params);
+        if (item.emotion) seg.emotion = item.emotion as any;
+        return seg;
+      });
       return { project: { ...p, segments: newSegs, selected_segment_id: undefined, updated_at: new Date().toISOString() } };
     }
     case 'APPEND_SEGMENT': {
@@ -115,6 +120,12 @@ export function segmentedReducer(state: State, action: Action): State {
       if (seg) { seg.params = { ...seg.params, ...action.params }; seg.updated_at = new Date().toISOString(); }
       return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
     }
+    case 'UPDATE_EMOTION': {
+      const s = segs();
+      const seg = s.find(x => x.id === action.id);
+      if (seg) { seg.emotion = action.emotion as any; seg.updated_at = new Date().toISOString(); }
+      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+    }
     case 'REORDER': {
       const s = segs();
       const [removed] = s.splice(action.fromIndex, 1);
@@ -135,7 +146,7 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'GENERATE_SUCCESS': {
       const s = segs();
       const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = action.audio_id; seg.duration_sec = action.duration_sec; seg.status = 'ready'; seg.error = undefined; seg.updated_at = new Date().toISOString(); }
+      if (seg) { seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = action.audio_id; seg.duration_sec = action.duration_sec; seg.status = 'ready'; seg.error = undefined; seg.generated_voice_id = action.generated_voice_id; seg.updated_at = new Date().toISOString(); }
       return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
     }
     case 'GENERATE_FAIL': {

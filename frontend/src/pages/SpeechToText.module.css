@@ -36,8 +36,8 @@
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
-  border: 1px solid var(--color-border-light);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
 }
 
 .card h2 {
@@ -62,7 +62,7 @@
 }
 
 .uploadZone.hasFile {
-  border-color: var(--color-success, #10b981);
+  border-color: var(--color-success);
   border-style: solid;
 }
 

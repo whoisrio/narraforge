@@ -1,33 +1,58 @@
-/* Global CSS Variables — Voice Studio Design System */
+/* ============================================
+   Voice Studio — Design Token System
+   Warm Stone / Amber Palette
+   ============================================ */
 
 :root {
-  /* Colors */
-  --color-primary: #6366f1;
-  --color-primary-light: #818cf8;
-  --color-primary-dark: #4f46e5;
-  --color-success: #22c55e;
-  --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --color-danger: #ef4444;
+  /* ---- Primary Palette — Warm Amber ---- */
+  --color-primary: #c47a3a;
+  --color-primary-light: #d4944e;
+  --color-primary-dark: #b0692d;
+  --color-primary-gradient: linear-gradient(135deg, #c47a3a, #d4944e);
 
-  /* Background & Surface */
-  --color-background: #f8fafc;
+  /* ---- Accent / CTA ---- */
+  --color-cta: #c47a3a;
+  --color-cta-hover: #b0692d;
+
+  /* ---- Semantic Colors ---- */
+  --color-success: #2a9d8f;
+  --color-warning: #d4944e;
+  --color-error: #c0392b;
+  --color-danger: #c0392b;
+  --color-info: #3b82c4;
+
+  /* ---- Background & Surface ---- */
+  --color-background: #f8f7f4;
   --color-surface: #ffffff;
-  --color-surface-hover: #f1f5f9;
-  --color-surface-active: #e2e8f0;
+  --color-surface-hover: #f3f2ee;
+  --color-surface-active: #e8e5de;
+  --color-surface-elevated: #ffffff;
 
-  /* Text */
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-disabled: #cbd5e1;
+  /* ---- Text ---- */
+  --color-text-primary: #1a1814;
+  --color-text-secondary: #6b6560;
+  --color-text-muted: #9e978e;
+  --color-text-disabled: #d8d4cc;
   --color-text-on-primary: #ffffff;
 
-  /* Borders */
-  --color-border: #e2e8f0;
-  --color-border-light: #f1f5f9;
-  --color-border-focus: #6366f1;
+  /* ---- Borders ---- */
+  --color-border: #e8e5de;
+  --color-border-light: #efeee9;
+  --color-border-focus: #c47a3a;
 
-  /* Spacing */
+  /* ---- Glow Effects ---- */
+  --glow-primary: rgba(196, 122, 58, 0.15);
+  --glow-primary-strong: rgba(196, 122, 58, 0.3);
+
+  /* ---- Shadows ---- */
+  --shadow-sm: 0 1px 2px rgba(26, 24, 20, 0.04);
+  --shadow-md: 0 2px 4px rgba(26, 24, 20, 0.06), 0 1px 2px rgba(26, 24, 20, 0.04);
+  --shadow-lg: 0 4px 12px rgba(26, 24, 20, 0.08), 0 2px 4px rgba(26, 24, 20, 0.04);
+  --shadow-xl: 0 12px 24px rgba(26, 24, 20, 0.1), 0 4px 8px rgba(26, 24, 20, 0.04);
+  --shadow-card: 0 1px 3px rgba(26, 24, 20, 0.06), 0 1px 2px rgba(26, 24, 20, 0.04);
+  --shadow-card-hover: 0 8px 24px rgba(26, 24, 20, 0.08), 0 2px 6px rgba(26, 24, 20, 0.04);
+
+  /* ---- Spacing Scale ---- */
   --spacing-xs: 4px;
   --spacing-sm: 8px;
   --spacing-md: 16px;
@@ -36,33 +61,42 @@
   --spacing-2xl: 48px;
   --spacing-3xl: 64px;
 
-  /* Typography */
+  /* ---- Typography ---- */
+  --font-family-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-family-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+
   --font-size-xs: 12px;
   --font-size-sm: 14px;
   --font-size-base: 15px;
   --font-size-lg: 17px;
   --font-size-xl: 20px;
   --font-size-2xl: 24px;
-  --font-size-3xl: 32px;
+  --font-size-3xl: 28px;
+  --font-size-4xl: 36px;
 
-  --font-weight-regular: 400;
+  --font-weight-normal: 400;
   --font-weight-medium: 500;
   --font-weight-semibold: 600;
   --font-weight-bold: 700;
 
-  /* Border Radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
+  --line-height-tight: 1.1;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.7;
+
+  /* ---- Border Radius ---- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
   --radius-full: 9999px;
 
-  /* Transitions */
+  /* ---- Transitions ---- */
   --transition-fast: 150ms ease;
   --transition-normal: 200ms ease;
   --transition-slow: 300ms ease;
 
-  /* Z-Index Scale */
+  /* ---- Z-Index Scale ---- */
   --z-dropdown: 100;
   --z-sticky: 200;
   --z-fixed: 300;
@@ -70,29 +104,28 @@
   --z-modal: 500;
   --z-popover: 600;
   --z-tooltip: 700;
-}
 
-/* Dark mode */
-[data-theme="dark"] {
-  --color-primary: #818cf8;
-  --color-primary-light: #a5b4fc;
-  --color-primary-dark: #6366f1;
-  --color-success: #4ade80;
-  --color-warning: #fbbf24;
-  --color-error: #f87171;
-  --color-danger: #f87171;
+  /* ---- Component Tokens ---- */
+  --header-height: 56px;
+  --nav-width: 240px;
 
-  --color-background: #0f0f23;
-  --color-surface: #1a1a2e;
-  --color-surface-hover: #22223a;
-  --color-surface-active: #2a2a42;
-
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-text-disabled: #475569;
-  --color-text-on-primary: #ffffff;
-
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-light: rgba(255, 255, 255, 0.04);
-  --color-border-focus: #818cf8;
+  /* ---- Emotion Colors ---- */
+  --emo-happy: #e8a838;
+  --emo-happy-bg: #fef7e6;
+  --emo-happy-border: #f0d080;
+  --emo-sad: #6b8db5;
+  --emo-sad-bg: #edf2f8;
+  --emo-sad-border: #a8c0d8;
+  --emo-angry: #c45a4a;
+  --emo-angry-bg: #fceae7;
+  --emo-angry-border: #e09080;
+  --emo-calm: #7ba68a;
+  --emo-calm-bg: #eef5f0;
+  --emo-calm-border: #a8ccb5;
+  --emo-neutral: #9e978e;
+  --emo-neutral-bg: #f5f4f0;
+  --emo-neutral-border: #d8d4cc;
+  --emo-excited: #d46a2c;
+  --emo-excited-bg: #fdf0e8;
+  --emo-excited-border: #e8a878;
 }

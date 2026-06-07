@@ -52,7 +52,7 @@
 }
 .footerRight { margin-left: auto; display: flex; gap: var(--spacing-sm); }
 .regenerateBtn {
-  background: var(--color-primary); color: var(--color-text-on-primary); border: none;
+  background: var(--color-primary-gradient); color: var(--color-text-on-primary); border: none;
   padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer;
   font-size: var(--font-size-xs);
   transition: background var(--transition-fast);

@@ -1,32 +1,32 @@
-/* App Component Styles — Dark Studio Pro */
+/* ============================================
+   App Shell — Floating Header Design
+   ============================================ */
 
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   background: var(--color-background);
-  transition: background-color 0.3s ease;
 }
 
-/* ---- Header / Navigation ---- */
+/* ---- Floating Header ---- */
 .header {
-  position: sticky;
-  top: 0;
-  z-index: var(--z-sticky);
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  right: 12px;
+  z-index: var(--z-fixed);
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
   height: var(--header-height);
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: blur(20px);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
-[data-theme="dark"] .header {
-  background: rgba(15, 15, 35, 0.85);
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
 }
 
 /* ---- Back Button + Logo ---- */
@@ -53,13 +53,10 @@
   font-weight: 700;
   font-size: var(--font-size-base);
   letter-spacing: -0.02em;
-  color: var(--color-text-primary);
-}
-
-[data-theme="dark"] .logoText {
-  background: linear-gradient(135deg, var(--color-text-primary), var(--color-primary));
+  background: var(--color-primary-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 /* ---- Tab Navigation ---- */
@@ -79,7 +76,7 @@
   border: none;
   background: none;
   color: var(--color-text-muted);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: var(--font-size-sm);
   font-weight: 500;
@@ -93,16 +90,16 @@
 }
 
 .tab.active {
-  background: var(--color-primary);
-  color: #ffffff;
-  box-shadow: 0 0 16px var(--glow-primary);
+  background: var(--color-primary-gradient);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 2px 8px var(--glow-primary);
 }
 
 .tab svg {
   flex-shrink: 0;
 }
 
-/* ---- Tab Divider (separates tools from settings) ---- */
+/* ---- Tab Divider ---- */
 .tabDivider {
   width: 1px;
   height: 20px;
@@ -117,26 +114,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-/* ---- Theme Toggle ---- */
-.themeToggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-hover);
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  border: none;
-  transition: all var(--transition-normal);
-}
-
-.themeToggle:hover {
-  background: var(--color-surface-active);
-  color: var(--color-primary);
 }
 
 /* ---- Settings ---- */
@@ -173,7 +150,7 @@
   padding: var(--spacing-md);
   min-width: 200px;
   z-index: var(--z-popover);
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-xl);
 }
 
 .settingsItem {
@@ -196,7 +173,6 @@
   padding: 8px 10px;
   font-size: var(--font-size-sm);
   cursor: pointer;
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .settingsItem select option {
@@ -207,7 +183,7 @@
 /* ---- Main Content ---- */
 .main {
   flex: 1;
-  padding: var(--spacing-2xl);
+  padding: calc(var(--header-height) + 32px) var(--spacing-2xl) var(--spacing-2xl);
   max-width: 1600px;
   margin: 0 auto;
   width: 100%;
@@ -272,6 +248,9 @@
 /* ---- Responsive ---- */
 @media (max-width: 768px) {
   .header {
+    left: 8px;
+    right: 8px;
+    top: 8px;
     padding: 0 12px;
   }
 
@@ -286,6 +265,6 @@
   }
 
   .main {
-    padding: var(--spacing-lg);
+    padding: calc(var(--header-height) + 24px) var(--spacing-lg) var(--spacing-lg);
   }
 }

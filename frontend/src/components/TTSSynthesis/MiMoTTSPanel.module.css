@@ -35,8 +35,8 @@
 }
 
 .modeTab.active {
-  background: var(--color-primary);
-  color: #fff;
+  background: var(--color-primary-gradient);
+  color: var(--color-text-on-primary);
 }
 
 /* 公共表单样式 */

@@ -7,7 +7,7 @@ import { ModelConfig } from './pages/ModelConfig';
 import { configApi } from './services/api';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/useVoiceRefresh';
-import { ThemeProvider, useTheme } from './hooks/useTheme';
+import { ThemeProvider } from './hooks/useTheme';
 import styles from './App.module.css';
 
 /** 页面状态：主页 或 三个工具页 + 设置 */
@@ -25,7 +25,6 @@ function AppHeader({
   onTabClick: (tab: Tab) => void;
   onBack: () => void;
 }) {
-  const { theme, toggleTheme } = useTheme();
   const [showSettings, setShowSettings] = useState(false);
 
   return (
@@ -95,30 +94,6 @@ function AppHeader({
       </nav>
 
       <div className={styles.headerActions}>
-        <button
-          className={styles.themeToggle}
-          onClick={toggleTheme}
-          title={theme === 'dark' ? '切换亮色模式' : '切换暗色模式'}
-        >
-          {theme === 'dark' ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="4"/>
-              <path d="M12 2v2"/>
-              <path d="M12 20v2"/>
-              <path d="m4.93 4.93 1.41 1.41"/>
-              <path d="m17.66 17.66 1.41 1.41"/>
-              <path d="M2 12h2"/>
-              <path d="M20 12h2"/>
-              <path d="m6.34 17.66-1.41 1.41"/>
-              <path d="m19.07 4.93-1.41 1.41"/>
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
-            </svg>
-          )}
-        </button>
-
         <div className={styles.settingsArea}>
           <button
             className={styles.settingsButton}

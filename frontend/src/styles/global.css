@@ -1,9 +1,10 @@
-/* Global styles for Voice Studio — Dark Studio Pro */
+/* ============================================
+   Voice Studio — Global Styles
+   ============================================ */
 
-/* Import variables */
 @import './variables.css';
 
-/* CSS Reset - minimal */
+/* ---- Reset ---- */
 *,
 *::before,
 *::after {
@@ -19,27 +20,26 @@ html {
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-family-body);
   font-size: var(--font-size-base);
   line-height: var(--line-height-normal);
   color: var(--color-text-primary);
   background-color: var(--color-background);
   min-height: 100vh;
   letter-spacing: -0.01em;
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Focus styles for accessibility */
+/* ---- Focus ---- */
 *:focus-visible {
   outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
 }
 
-/* Remove default button styles */
+/* ---- Buttons ---- */
 button {
   font-family: inherit;
   font-size: inherit;
@@ -58,16 +58,28 @@ button:active:not(:disabled) {
   transform: scale(0.97);
 }
 
-/* Remove default input styles */
+/* ---- Form Elements ---- */
 input,
 textarea,
 select {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
+  background-color: var(--color-surface);
 }
 
-/* Link styles */
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-text-muted);
+  opacity: 1;
+}
+
+select option {
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+/* ---- Links ---- */
 a {
   color: var(--color-primary);
   text-decoration: none;
@@ -77,27 +89,7 @@ a:hover {
   text-decoration: underline;
 }
 
-/* Placeholder styles for all inputs */
-input::placeholder,
-textarea::placeholder {
-  color: var(--color-text-muted);
-  opacity: 1;
-}
-
-/* Ensure all form elements respect theme colors */
-input,
-textarea,
-select {
-  background-color: var(--color-surface);
-  color: var(--color-text-primary);
-}
-
-select option {
-  background-color: var(--color-surface);
-  color: var(--color-text-primary);
-}
-
-/* Utility classes */
+/* ---- Utility Classes ---- */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -110,7 +102,14 @@ select option {
   border: 0;
 }
 
-/* Scrollbar styles */
+.gradient-text {
+  background: var(--color-primary-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ---- Scrollbar ---- */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -121,16 +120,15 @@ select option {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-text-muted);
+  background: var(--color-border);
   border-radius: var(--radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-secondary);
+  background: var(--color-text-muted);
 }
 
-/* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-text-muted) transparent;
+  scrollbar-color: var(--color-border) transparent;
 }
