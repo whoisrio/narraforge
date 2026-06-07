@@ -22,4 +22,6 @@ class TTSResultRecord(Base):
     pitch = Column(Float, default=1.0)  # 音调比率 0.5-2.0
     instruction = Column(String, default="音调偏高，语速中等，充满活力和感染力，适合广告配音")
     language = Column(String, default="Chinese")
+    # 来源标记: None/"" = TTSSynthesis 历史；"segmented_tts" = 编辑器
+    source = Column(String, nullable=True, default=None)
     created_at = Column(DateTime, default=datetime.utcnow)
