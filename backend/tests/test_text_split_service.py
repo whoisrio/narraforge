@@ -102,3 +102,95 @@ def test_llm_split_raises_on_empty_text():
         llm_split("")
     with pytest.raises(ValueError, match="文本"):
         llm_split("   ")
+
+
+# ------- ssml_annotate -------
+
+
+def test_ssml_annotate_basic(monkeypatch):
+    from app.services import text_split_service
+    fake_resp = (
+        '[{"text": "你好世界", '
+        '"ssml": "<speak>你好<break time=\\"200ms\\"/>世界</speak>", '
+        '"rationale": "在停顿点加 break"}]'
+    )
+    monkeypatch.setattr(text_split_service, "call_llm", lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "m"))
+
+    result = text_split_service.ssml_annotate(["你好世界"])
+    assert len(result.annotations) == 1
+    assert result.annotations[0]["ssml"] == '<speak>你好<break time="200ms"/>世界</speak>'
+    assert result.annotations[0]["rationale"] == "在停顿点加 break"
+
+
+def test_ssml_annotate_strips_non_whitelist_tags(monkeypatch):
+    """非白名单标签 (<unknown>) 应被剥除，保留纯文本。"""
+    from app.services import text_split_service
+    fake_resp = (
+        '[{"text": "你好", '
+        '"ssml": "<speak><unknown>你好</unknown></speak>", '
+        '"rationale": "x"}]'
+    )
+    monkeypatch.setattr(text_split_service, "call_llm", lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "m"))
+
+    result = text_split_service.ssml_annotate(["你好"])
+    # <unknown> 剥除后 = "<speak>你好</speak>"
+    assert result.annotations[0]["ssml"] == "<speak>你好</speak>"
+
+
+def test_ssml_annotate_falls_back_when_text_modified(monkeypatch):
+    """LLM 修改了原文 → 退化为 <speak>原文</speak>。"""
+    from app.services import text_split_service
+    fake_resp = (
+        '[{"text": "你好", '
+        '"ssml": "<speak>你好啊朋友</speak>", '
+        '"rationale": "x"}]'
+    )
+    monkeypatch.setattr(text_split_service, "call_llm", lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "m"))
+
+    result = text_split_service.ssml_annotate(["你好"])
+    assert result.annotations[0]["ssml"] == "<speak>你好</speak>"
+
+
+def test_ssml_annotate_style_hint_in_prompt(monkeypatch):
+    """style_hint 必须传到 prompt 里。"""
+    from app.services import text_split_service
+    captured = {}
+
+    def fake_call(messages, **kw):
+        captured["prompt"] = messages[0]["content"]
+        return '[{"text": "x", "ssml": "<speak>x</speak>", "rationale": ""}]'
+
+    monkeypatch.setattr(text_split_service, "call_llm", fake_call)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "m"))
+
+    text_split_service.ssml_annotate(["x"], style_hint="播音腔")
+    assert "播音腔" in captured["prompt"]
+
+
+def test_ssml_annotate_empty_texts_raises():
+    from app.services.text_split_service import ssml_annotate
+    with pytest.raises(ValueError, match="texts"):
+        ssml_annotate([])
+
+
+def test_ssml_annotate_allows_whitelisted_tags(monkeypatch):
+    from app.services import text_split_service
+    fake_resp = (
+        '[{"text": "你好", '
+        '"ssml": "<speak><prosody rate=\\"slow\\"><emphasis level=\\"strong\\">你好</emphasis></prosody></speak>", '
+        '"rationale": "x"}]'
+    )
+    monkeypatch.setattr(text_split_service, "call_llm", lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "m"))
+
+    result = text_split_service.ssml_annotate(["你好"])
+    assert "<prosody" in result.annotations[0]["ssml"]
+    assert "<emphasis" in result.annotations[0]["ssml"]

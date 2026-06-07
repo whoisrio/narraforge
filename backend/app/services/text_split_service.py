@@ -112,3 +112,104 @@ def llm_split(text: str, delimiters: list[str] | None = None, db=None) -> SplitR
         raise ValueError("LLM 返回了空的拆分结果")
 
     return SplitResult(segments=segments, model=model)
+
+
+# ---------------------------------------------------------------------------
+# ssml_annotate
+# ---------------------------------------------------------------------------
+
+@dataclass
+class SSMLAnnotateResult:
+    annotations: list[dict]   # [{"text", "ssml", "rationale"}]
+    model: str | None
+
+
+# 允许的 SSML 标签。其他标签会被剥除。
+_SSML_ALLOWED_TAGS = {"speak", "break", "prosody", "emphasis"}
+
+# 匹配 XML 标签（含属性）：<tag>, </tag>, <tag attr="x">, <tag/>
+_TAG_RE = re.compile(r'<(/?)([a-zA-Z][a-zA-Z0-9]*)(\s[^>]*)?(/?)>')
+
+
+def _strip_non_whitelist_tags(ssml: str) -> str:
+    """删除所有不在白名单中的标签（保留其内部文字）。"""
+    def repl(m: re.Match) -> str:
+        tag_name = m.group(2).lower()
+        return m.group(0) if tag_name in _SSML_ALLOWED_TAGS else ""
+    return _TAG_RE.sub(repl, ssml)
+
+
+def _ssml_to_plain(ssml: str) -> str:
+    """剥掉所有 SSML 标签后剩下的纯文字（用于与原文做 diff）。"""
+    return _TAG_RE.sub("", ssml)
+
+
+_SSML_PROMPT_TEMPLATE = """你是 SSML 标注助手。请为下面的若干段中文文本添加 SSML 标签，
+让语音合成更自然、有节奏。
+
+要求：
+- 严格保留原文一字不改，仅在合适位置插入标签
+- 仅允许使用以下标签：<speak>, <break time="...ms"/>, <prosody rate/pitch/volume>, <emphasis level="...">
+- 每段必须用 <speak>...</speak> 包裹
+- 风格提示：{style_hint}
+- 输出 JSON 数组：[{{"text": "原文", "ssml": "<speak>...</speak>", "rationale": "简短解释"}}]
+- 不要包含 markdown 或额外说明
+
+待标注文本：
+{numbered_texts}
+"""
+
+
+def ssml_annotate(texts: list[str], style_hint: str = "", db=None) -> SSMLAnnotateResult:
+    """调 LLM 为每段加 SSML 标签。带白名单与原文一致性校验。"""
+    if not texts:
+        raise ValueError("texts 不能为空")
+
+    _, _, model = get_llm_config(db=db)
+
+    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    prompt = _SSML_PROMPT_TEMPLATE.format(
+        style_hint=style_hint or "（无）",
+        numbered_texts=numbered,
+    )
+    raw = call_llm(
+        [{"role": "user", "content": prompt}],
+        temperature=0.4, max_tokens=8192, db=db, timeout=60,
+    )
+
+    json_str = extract_json_array(raw)
+    if json_str is None:
+        logger.error(f"SSML annotate: 无法解析 JSON: {raw[:200]}")
+        raise ValueError(f"LLM 返回内容无法解析为 JSON: {raw[:100]}")
+
+    try:
+        parsed = json.loads(json_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"JSON 解析失败: {e}")
+
+    # LLM 可能漏返回某些段；按原文顺序对齐
+    annotations: list[dict] = []
+    for i, original in enumerate(texts):
+        item = parsed[i] if i < len(parsed) and isinstance(parsed[i], dict) else {}
+        raw_ssml = str(item.get("ssml") or "").strip()
+        rationale = str(item.get("rationale") or "")
+
+        if not raw_ssml:
+            # LLM 没给 ssml，退化
+            annotations.append({"text": original, "ssml": f"<speak>{original}</speak>", "rationale": rationale})
+            continue
+
+        # 1. 剥除非白名单标签
+        cleaned = _strip_non_whitelist_tags(raw_ssml)
+        # 2. diff 校验：剥所有标签后的纯文本必须 == 原文（忽略首尾空白）
+        plain = _ssml_to_plain(cleaned).strip()
+        if plain != original.strip():
+            logger.warning(f"SSML annotate: 段{i+1} 文字与原文不一致，退化。plain={plain!r} original={original!r}")
+            cleaned = f"<speak>{original}</speak>"
+        # 3. 确保 <speak> 包裹
+        if not cleaned.startswith("<speak"):
+            cleaned = f"<speak>{cleaned}</speak>"
+
+        annotations.append({"text": original, "ssml": cleaned, "rationale": rationale})
+
+    return SSMLAnnotateResult(annotations=annotations, model=model)
