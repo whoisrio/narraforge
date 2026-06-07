@@ -18,7 +18,9 @@
       "Bash(npm run *)",
       "Bash(python -m pytest tests/test_api_speech_to_text.py -v)",
       "Bash(uv pip *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(git -C /Users/rio/repos/myprjs/voiceclone/.claude/worktrees/segmented-tts-editor stash)",
+      "Bash(git -C /Users/rio/repos/myprjs/voiceclone/.claude/worktrees/segmented-tts-editor rebase master)"
     ]
   },
   "hooks": {

@@ -3,7 +3,7 @@ import heroImage from '../assets/frontpage-2.png';
 import styles from './Landing.module.css';
 
 interface LandingProps {
-  onNavigate: (tab: 'voice-clone' | 'tts-synthesis' | 'speech-to-text' | 'model-config' | 'segmented-tts') => void;
+  onNavigate: (tab: 'voice-clone' | 'tts-synthesis' | 'speech-to-text' | 'model-config') => void;
 }
 
 /**

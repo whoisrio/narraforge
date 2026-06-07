@@ -1,22 +1,55 @@
-.overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 1000;
-  display: flex; align-items: center; justify-content: center; }
-.dialog { background: #1f1f1f; border: 1px solid #333; border-radius: 10px;
-  padding: 24px; min-width: 360px; }
-.dialog h3 { color: #eee; margin: 0 0 16px; }
-.field { margin-bottom: 12px; }
-.field label { display: block; color: #888; font-size: 12px; margin-bottom: 4px; }
-.field input { background: #111; border: 1px solid #444; color: #ddd;
-  padding: 6px 10px; border-radius: 4px; width: 100%; }
-.options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
-.options label { font-size: 13px; color: #ccc; display: flex; align-items: center; gap: 6px; }
-.langRow { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
-.langRow select { background: #111; border: 1px solid #444; color: #ddd; padding: 4px 8px; border-radius: 4px; }
-.buttons { display: flex; justify-content: flex-end; gap: 8px; }
-.cancelBtn { background: #333; color: #ccc; border: 1px solid #555; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
-.exportBtn { background: #2a6; color: white; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; }
-.exportBtn:disabled { opacity: 0.5; }
+.overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5);
+  z-index: 1000; display: flex; align-items: center; justify-content: center;
+}
+.dialog {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); padding: var(--spacing-lg); min-width: 360px;
+}
+.dialog h3 { color: var(--color-text-primary); margin: 0 0 var(--spacing-md); }
+.field { margin-bottom: var(--spacing-md); }
+.field label {
+  display: block; color: var(--color-text-muted);
+  font-size: var(--font-size-xs); margin-bottom: 4px;
+}
+.field input {
+  background: var(--color-background); border: 1px solid var(--color-border);
+  color: var(--color-text-primary); padding: 6px 10px;
+  border-radius: var(--radius-sm); width: 100%;
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+.field input:focus {
+  outline: none; border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--glow-primary);
+}
+.options { display: flex; flex-direction: column; gap: var(--spacing-sm); margin-bottom: var(--spacing-md); }
+.options label {
+  font-size: var(--font-size-sm); color: var(--color-text-secondary);
+  display: flex; align-items: center; gap: 6px;
+}
+.langRow { display: flex; gap: var(--spacing-sm); align-items: center; margin-bottom: var(--spacing-md); }
+.langRow select {
+  background: var(--color-background); border: 1px solid var(--color-border);
+  color: var(--color-text-primary); padding: 4px 8px; border-radius: var(--radius-sm);
+}
+.buttons { display: flex; justify-content: flex-end; gap: var(--spacing-sm); }
+.cancelBtn {
+  background: var(--color-surface-hover); color: var(--color-text-secondary);
+  border: 1px solid var(--color-border); padding: 6px 14px;
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.cancelBtn:hover { background: var(--color-surface-active); }
+.exportBtn {
+  background: var(--color-primary); color: var(--color-text-on-primary); border: none;
+  padding: 6px 14px; border-radius: var(--radius-sm); cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.exportBtn:hover { background: var(--color-primary-dark); }
+.exportBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 .error {
-  background: rgba(229, 57, 53, 0.15); border: 1px solid #e53935;
-  color: #e53935; padding: 8px 12px; border-radius: 4px;
-  font-size: 12px; margin-bottom: 12px;
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  border: 1px solid var(--color-error); color: var(--color-error);
+  padding: var(--spacing-sm) var(--spacing-md); border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs); margin-bottom: var(--spacing-md);
 }
