@@ -234,15 +234,39 @@ export function SegmentedTTS() {
         onUndo={handleUndo}
         onAnnotateSSML={handleAnnotateSSMLOne}
       />
-      <SegmentEditDrawer
-        segment={editingSegment}
-        onClose={() => dispatch({ type: 'SELECT_SEGMENT', id: undefined })}
-        onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
-        onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
-        onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
-        onRegenerate={handleRegenerateOne}
-        onAnnotateSSML={handleAnnotateSSMLOne}
-      />
+      {project.layout === 'vertical' ? (
+        <SegmentEditDrawer
+          segment={editingSegment}
+          onClose={() => dispatch({ type: 'SELECT_SEGMENT', id: undefined })}
+          onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
+          onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
+          onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
+          onRegenerate={handleRegenerateOne}
+          onAnnotateSSML={handleAnnotateSSMLOne}
+        />
+      ) : (
+        editingSegment && (
+          <div className={styles.inlineEditor}>
+            <h4>编辑 #{editingSegment.id.slice(-3)}</h4>
+            <textarea
+              value={editingSegment.text}
+              onChange={(e) => dispatch({ type: 'UPDATE_TEXT', id: editingSegment.id, text: e.target.value })}
+              rows={2}
+              style={{ width: '100%', background: '#111', border: '1px solid #333', color: '#ddd', padding: 8, borderRadius: 4 }}
+            />
+            <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+              <button onClick={() => handleRegenerate(editingSegment.id)}
+                style={{ background: '#2a6', color: 'white', border: 'none', padding: '6px 14px', borderRadius: 4, cursor: 'pointer' }}>
+                ↻ 重新生成
+              </button>
+              <button onClick={() => dispatch({ type: 'SELECT_SEGMENT', id: undefined })}
+                style={{ background: '#333', color: '#ccc', border: '1px solid #555', padding: '6px 14px', borderRadius: 4, cursor: 'pointer' }}>
+                关闭
+              </button>
+            </div>
+          </div>
+        )
+      )}
       <ExportDialog
         open={exportOpen}
         segments={project.segments}

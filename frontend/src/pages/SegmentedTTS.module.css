@@ -3,3 +3,9 @@
   max-width: 960px;
   margin: 0 auto;
 }
+
+.inlineEditor {
+  background: #1f1f1f; border: 1px solid #333; border-radius: 8px;
+  padding: 12px; margin-top: 12px;
+}
+.inlineEditor h4 { color: #ddd; margin: 0 0 8px; font-size: 13px; }
