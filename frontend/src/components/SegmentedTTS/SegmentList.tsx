@@ -14,6 +14,7 @@ interface SegmentListProps {
   globalVoiceId?: string;
   globalVoiceName?: string;
   globalEdgeVoice?: string;
+  engine?: string;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -52,7 +53,7 @@ export function SegmentList(props: SegmentListProps) {
   const rowProps = (seg: Segment, i: number) => ({
     segment: seg, index: i + 1, isSelected: seg.id === selectedId,
     isPlaying: seg.id === playingId, isPaused: !!(isPaused && seg.id === playingId),
-    compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
+    compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine: props.engine,
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,

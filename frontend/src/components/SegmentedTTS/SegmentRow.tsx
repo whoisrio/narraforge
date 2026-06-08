@@ -14,6 +14,8 @@ interface SegmentRowProps {
   globalVoiceId?: string;
   globalVoiceName?: string;
   globalEdgeVoice?: string;
+  /** Current global engine */
+  engine?: string;
   layout: 'vertical' | 'horizontal';
   /** Start time in seconds from the beginning of the sequence */
   timeStart?: number;
@@ -62,8 +64,8 @@ function getWaveform(id: string): number[] {
 }
 
 export function SegmentRow({
-  segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
-  layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onUndo, onToggleIndependentVoice,
+  segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine,
+ layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onUndo, onToggleIndependentVoice,
 }: SegmentRowProps) {
   const [charIdx, setCharIdx] = useState(-1);
   const timerRef = useRef<number | null>(null);
@@ -158,7 +160,9 @@ export function SegmentRow({
   const voiceGender = resolveGender();
 
   // For stale detection: compare generated voice with current global
-  const currentGlobalVoice = segment.params.engine === 'edge_tts'
+  // Use the engine the segment WOULD use (global if unlocked, stored if locked)
+  const effectiveEngine = hasOverride ? segment.params.engine : engine;
+  const currentGlobalVoice = effectiveEngine === 'edge_tts'
     ? (globalEdgeVoice || '')
     : (globalVoiceId || '');
   const isStale = isReady

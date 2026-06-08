@@ -397,24 +397,38 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const overrides = seg.overrides || [];
       const gp = buildCurrentParams();
 
-      // Merge: use segment override if explicit, otherwise global
-      const voiceId = overrides.includes('voice') ? sp.voice_id : (sp.voice_id || gp.voice_id);
-      const speed = overrides.includes('speed') ? sp.speed : (sp.speed ?? (gp as any).speed ?? 1.0);
-      const volume = overrides.includes('volume') ? sp.volume : (sp.volume ?? (gp as any).volume ?? 80);
-      const pitch = overrides.includes('pitch') ? sp.pitch : (sp.pitch ?? (gp as any).pitch ?? 1.0);
-      const instruction = overrides.includes('instruction') ? sp.instruction : (sp.instruction || (gp as any).instruction || '');
-      const language = overrides.includes('language') ? sp.language : (sp.language || (gp as any).language || 'Chinese');
+      // Determine effective engine: follow global unless segment has voice lock
+      const hasVoiceLock = overrides.includes('voice');
+      const effectiveEngine = hasVoiceLock ? sp.engine : (gp.engine || sp.engine);
+
+      // Merge params: override > global > segment-stored > default
+      const voiceId = hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id || '');
+      const speed = overrides.includes('speed') ? sp.speed : (gp as any).speed ?? sp.speed ?? 1.0;
+      const volume = overrides.includes('volume') ? sp.volume : (gp as any).volume ?? sp.volume ?? 80;
+      const pitch = overrides.includes('pitch') ? sp.pitch : (gp as any).pitch ?? sp.pitch ?? 1.0;
+      const instruction = overrides.includes('instruction') ? sp.instruction : ((gp as any).instruction || sp.instruction || '');
+      const language = overrides.includes('language') ? sp.language : ((gp as any).language || sp.language || 'Chinese');
+
+      // Edge-TTS effective values: follow global unless locked
+      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : ((gp as any).edge_voice || sp.edge_voice || '');
+      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : ((gp as any).edge_rate ?? sp.edge_rate ?? '+0%');
+      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : ((gp as any).edge_volume ?? sp.edge_volume ?? '+0%');
+
+      // MiMo effective values: follow global unless locked
+      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : ((gp as any).mimo_mode || sp.mimo_mode || 'preset');
+      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : ((gp as any).mimo_preset_voice || sp.mimo_preset_voice || '');
+      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : ((gp as any).mimo_clone_voice_id || sp.mimo_clone_voice_id || '');
+      const effectiveMimoInstruction = hasVoiceLock ? sp.mimo_instruction : ((gp as any).mimo_instruction || sp.mimo_instruction || '');
 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
       let resp: TTSResult;
 
-      if (sp.engine === 'edge_tts') {
-        const ev = overrides.includes('voice') ? sp.edge_voice : (sp.edge_voice || (gp as any).edge_voice || '');
-        resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: ev, edge_rate: sp.edge_rate ?? '+0%', edge_volume: sp.edge_volume ?? '+0%', format: 'mp3' });
-      } else if (sp.engine === 'mimo_tts') {
-        resp = sp.mimo_mode === 'preset'
-          ? await mimoTtsApi.synthesizePreset({ text: textToSend, voice: sp.mimo_preset_voice ?? '', instruction: sp.mimo_instruction ?? '', format: 'wav' })
-          : await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: sp.mimo_clone_voice_id ?? '', instruction: sp.mimo_instruction ?? '', format: 'wav' });
+      if (effectiveEngine === 'edge_tts') {
+        resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
+      } else if (effectiveEngine === 'mimo_tts') {
+        resp = effectiveMimoMode === 'preset'
+          ? await mimoTtsApi.synthesizePreset({ text: textToSend, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' })
+          : await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
       } else {
         resp = await ttsApi.synthesize({ text: textToSend, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
@@ -442,7 +456,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
       // Save the actual voice identifier used (engine-specific)
-      const usedVoiceId = sp.engine === 'edge_tts' ? (overrides.includes('voice') ? sp.edge_voice : (sp.edge_voice || (gp as any).edge_voice || '')) : voiceId;
+      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : voiceId);
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId });
       loadHistory(); // refresh history so generated audio appears in list
     } catch (e: any) {
@@ -867,6 +881,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
               globalVoiceId={selectedVoiceId}
               globalVoiceName={selectedVoice?.description || selectedVoice?.name}
               globalEdgeVoice={edgeVoice}
+              engine={engine}
               onSelect={(id) => { dispatch({ type: 'SELECT_SEGMENT', id }); }}
               onDelete={(id) => dispatch({ type: 'DELETE_SEGMENT', id })}
               onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId })}
