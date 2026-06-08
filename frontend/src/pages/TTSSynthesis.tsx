@@ -397,28 +397,28 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const overrides = seg.overrides || [];
       const gp = buildCurrentParams();
 
-      // Determine effective engine: follow global unless segment has voice lock
+      // Effective engine: global when unlocked, stored when locked
       const hasVoiceLock = overrides.includes('voice');
-      const effectiveEngine = hasVoiceLock ? sp.engine : (gp.engine || sp.engine);
+      const effectiveEngine = hasVoiceLock ? (sp.engine || gp.engine) : gp.engine;
 
-      // Merge params: override > global > segment-stored > default
-      const voiceId = hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id || '');
-      const speed = overrides.includes('speed') ? sp.speed : (gp as any).speed ?? sp.speed ?? 1.0;
-      const volume = overrides.includes('volume') ? sp.volume : (gp as any).volume ?? sp.volume ?? 80;
-      const pitch = overrides.includes('pitch') ? sp.pitch : (gp as any).pitch ?? sp.pitch ?? 1.0;
-      const instruction = overrides.includes('instruction') ? sp.instruction : ((gp as any).instruction || sp.instruction || '');
-      const language = overrides.includes('language') ? sp.language : ((gp as any).language || sp.language || 'Chinese');
+      // Params: locked → use stored; unlocked → use CURRENT global directly (no fallback to stored)
+      const voiceId = hasVoiceLock ? sp.voice_id : gp.voice_id;
+      const speed = overrides.includes('speed') ? sp.speed : ((gp as any).speed ?? 1.0);
+      const volume = overrides.includes('volume') ? sp.volume : ((gp as any).volume ?? 80);
+      const pitch = overrides.includes('pitch') ? sp.pitch : ((gp as any).pitch ?? 1.0);
+      const instruction = overrides.includes('instruction') ? sp.instruction : ((gp as any).instruction || '');
+      const language = overrides.includes('language') ? sp.language : ((gp as any).language || 'Chinese');
 
-      // Edge-TTS effective values: follow global unless locked
-      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : ((gp as any).edge_voice || sp.edge_voice || '');
-      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : ((gp as any).edge_rate ?? sp.edge_rate ?? '+0%');
-      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : ((gp as any).edge_volume ?? sp.edge_volume ?? '+0%');
+      // Edge-TTS: locked → stored; unlocked → current global
+      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : ((gp as any).edge_voice || '');
+      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : ((gp as any).edge_rate ?? '+0%');
+      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : ((gp as any).edge_volume ?? '+0%');
 
-      // MiMo effective values: follow global unless locked
-      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : ((gp as any).mimo_mode || sp.mimo_mode || 'preset');
-      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : ((gp as any).mimo_preset_voice || sp.mimo_preset_voice || '');
-      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : ((gp as any).mimo_clone_voice_id || sp.mimo_clone_voice_id || '');
-      const effectiveMimoInstruction = hasVoiceLock ? sp.mimo_instruction : ((gp as any).mimo_instruction || sp.mimo_instruction || '');
+      // MiMo: locked → stored; unlocked → current global
+      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : ((gp as any).mimo_mode || 'preset');
+      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : ((gp as any).mimo_preset_voice || '');
+      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : ((gp as any).mimo_clone_voice_id || '');
+      const effectiveMimoInstruction = hasVoiceLock ? sp.mimo_instruction : ((gp as any).mimo_instruction || '');
 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
       let resp: TTSResult;
