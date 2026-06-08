@@ -9,6 +9,79 @@
   gap: 10px;
 }
 
+/* Summary bar (collapsed state) */
+.summaryBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.summaryBar:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--glow-primary);
+}
+
+.summaryLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.summaryText {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summaryRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.summaryMeta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.summaryEditBtn {
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.summaryEditBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+/* Textarea wrapper with collapse button */
+.textareaWrap {
+  position: relative;
+}
+
 .textarea {
   width: 100%;
   background: var(--color-background);
@@ -16,6 +89,7 @@
   color: var(--color-text-primary);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
+  padding-right: 36px;
   font-size: var(--font-size-sm);
   font-family: inherit;
   resize: vertical;
@@ -29,11 +103,33 @@
   box-shadow: 0 0 0 2px var(--glow-primary);
 }
 
+.collapseBtn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.collapseBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 /* Action bar */
 .actionBar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .settingsToggle {
@@ -107,6 +203,28 @@
 .splitBtn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.stripMdBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.stripMdBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
 
 .charCount {

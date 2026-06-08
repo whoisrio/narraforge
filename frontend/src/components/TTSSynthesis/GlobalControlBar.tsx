@@ -16,12 +16,14 @@ interface GlobalControlBarProps {
   onVolumeChange: (v: number) => void;
   onPitchChange: (v: number) => void;
   onLanguageChange: (v: string) => void;
+  onNavigateToClone?: () => void;
 }
 
 export function GlobalControlBar({
   selectedVoiceId, onVoiceSelect,
   speed, volume, pitch, language,
   onSpeedChange, onVolumeChange, onPitchChange, onLanguageChange,
+  onNavigateToClone,
 }: GlobalControlBarProps) {
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
@@ -73,7 +75,16 @@ export function GlobalControlBar({
           {showVoiceDropdown && (
             <div className={styles.voiceDropdown}>
               {voices.length === 0 && (
-                <div className={styles.dropdownEmpty}>暂无克隆声音</div>
+                onNavigateToClone ? (
+                  <button
+                    className={styles.ctaCloneBtn}
+                    onClick={(e) => { e.stopPropagation(); onNavigateToClone(); }}
+                  >
+                    暂无音色，去复刻
+                  </button>
+                ) : (
+                  <div className={styles.dropdownEmpty}>暂无克隆声音</div>
+                )
               )}
               {voices.map(v => {
                 const voiceKey = v.qwen_voice_id || v.id;

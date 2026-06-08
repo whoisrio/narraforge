@@ -35,9 +35,20 @@ export async function deleteProject(id: string): Promise<void> {
   const project = await getProject(id);
   if (project) {
     const audioIds = new Set<string>();
-    for (const seg of project.segments) {
-      if (seg.current_audio_id) audioIds.add(seg.current_audio_id);
-      if (seg.previous_audio_id) audioIds.add(seg.previous_audio_id);
+    // v2: iterate all chapters' segments
+    const chapters = project.chapters || [];
+    for (const ch of chapters) {
+      for (const seg of (ch.segments || [])) {
+        if (seg.current_audio_id) audioIds.add(seg.current_audio_id);
+        if (seg.previous_audio_id) audioIds.add(seg.previous_audio_id);
+      }
+    }
+    // v1 fallback: top-level segments
+    if ((project as any).segments) {
+      for (const seg of (project as any).segments) {
+        if (seg.current_audio_id) audioIds.add(seg.current_audio_id);
+        if (seg.previous_audio_id) audioIds.add(seg.previous_audio_id);
+      }
     }
     for (const aid of audioIds) {
       try {

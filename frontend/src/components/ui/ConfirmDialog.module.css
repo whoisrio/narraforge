@@ -1,0 +1,142 @@
+/* =========================================
+   ConfirmDialog — Warning / Danger variants
+   ========================================= */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 24, 20, 0.45);
+  backdrop-filter: blur(2px);
+  animation: overlayIn 0.15s ease-out;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dialog {
+  width: 380px;
+  max-width: 90vw;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 48px rgba(26, 24, 20, 0.25), 0 4px 12px rgba(26, 24, 20, 0.1);
+  overflow: hidden;
+  animation: dialogIn 0.2s ease-out;
+}
+
+@keyframes dialogIn {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Header variants */
+.headerWarning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: color-mix(in srgb, #c47a3a 8%, var(--color-surface));
+  border-bottom: 2px solid color-mix(in srgb, #c47a3a 25%, var(--color-border));
+}
+
+.headerDanger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: color-mix(in srgb, var(--color-error) 6%, var(--color-surface));
+  border-bottom: 2px solid color-mix(in srgb, var(--color-error) 25%, var(--color-border));
+}
+
+.icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+/* Body */
+.body {
+  padding: 18px 20px;
+}
+
+.message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre-line;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-surface-hover);
+}
+
+.cancelBtn {
+  padding: 6px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.cancelBtn:hover {
+  border-color: var(--color-text-muted);
+  background: var(--color-surface);
+}
+
+.confirmWarning {
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: #c47a3a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.confirmWarning:hover {
+  background: #b0692d;
+}
+
+.confirmDanger {
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-error);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.confirmDanger:hover {
+  background: #a53225;
+}

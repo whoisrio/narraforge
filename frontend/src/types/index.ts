@@ -241,10 +241,35 @@ export interface Segment {
   updated_at: string;
 }
 
-export interface SegmentedProject {
-  schema_version: 1;
+/** 章节 — 每个章节有独立的模型、文本、片段 */
+export interface Chapter {
   id: string;
   name: string;
+  /** 当时选择的引擎 */
+  engine?: string;
+  /** 当时的全局 voice_id（CosyVoice） */
+  voice_id?: string;
+  /** 当时的全局 edge_voice（Edge-TTS） */
+  edge_voice?: string;
+  /** Edge-TTS rate */
+  edge_rate?: number;
+  /** Edge-TTS volume */
+  edge_volume?: number;
+  /** MiMo mode: preset | voiceclone */
+  mimo_mode?: string;
+  /** MiMo preset voice name */
+  mimo_preset_voice?: string;
+  /** MiMo instruction text */
+  mimo_instruction?: string;
+  /** MiMo clone voice profile ID */
+  mimo_clone_voice_id?: string;
+  /** CosyVoice params */
+  language?: string;
+  speed?: number;
+  volume?: number;
+  pitch?: number;
+  /** 原始输入文本（拆分前） */
+  original_text?: string;
   segments: Segment[];
   selected_segment_id?: string;
   default_params: SegmentEngineParams;
@@ -252,6 +277,16 @@ export interface SegmentedProject {
     delimiters: string[];
     mode: 'rule' | 'llm';
   };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SegmentedProject {
+  schema_version: 2;
+  id: string;
+  name: string;
+  chapters: Chapter[];
+  active_chapter_id?: string;
   layout: 'vertical' | 'horizontal';
   created_at: string;
   updated_at: string;

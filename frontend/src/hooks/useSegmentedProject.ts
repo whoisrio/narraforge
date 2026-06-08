@@ -1,4 +1,4 @@
-import type { SegmentedProject, Segment, SegmentEngineParams } from '../types';
+import type { SegmentedProject, Chapter, Segment, SegmentEngineParams } from '../types';
 
 let _idCounter = 0;
 function uid(): string {
@@ -6,18 +6,71 @@ function uid(): string {
   return `${Date.now()}-${_idCounter}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export function createInitialProject(): SegmentedProject {
+function makeChapter(name: string, engine?: string): Chapter {
   const now = new Date().toISOString();
   return {
-    schema_version: 1,
+    id: uid(),
+    name,
+    engine: engine || 'edge_tts',
+    segments: [],
+    default_params: { engine: engine || 'edge_tts' } as SegmentEngineParams,
+    split_config: { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+export function createInitialProject(): SegmentedProject {
+  const now = new Date().toISOString();
+  const ch = makeChapter('第一章', 'edge_tts');
+  return {
+    schema_version: 2,
     id: uid(),
     name: '新项目',
-    segments: [],
-    selected_segment_id: undefined,
-    default_params: { engine: 'cosyvoice' } as SegmentEngineParams,
-    split_config: { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    chapters: [ch],
+    active_chapter_id: ch.id,
     layout: 'vertical',
     created_at: now,
+    updated_at: now,
+  };
+}
+
+/** Migrate v1 project (no chapters) to v2 */
+export function migrateV1(raw: any): SegmentedProject {
+  if (raw.schema_version === 2 && raw.chapters) return raw as SegmentedProject;
+  const now = new Date().toISOString();
+  const ch: Chapter = {
+    id: uid(),
+    name: '第一章',
+    engine: raw.engine,
+    voice_id: raw.voice_id,
+    edge_voice: raw.edge_voice,
+    edge_rate: raw.edge_rate,
+    edge_volume: raw.edge_volume,
+    mimo_mode: raw.mimo_mode,
+    mimo_preset_voice: raw.mimo_preset_voice,
+    mimo_instruction: raw.mimo_instruction,
+    mimo_clone_voice_id: raw.mimo_clone_voice_id,
+    language: raw.language,
+    speed: raw.speed,
+    volume: raw.volume,
+    pitch: raw.pitch,
+    original_text: raw.original_text,
+    segments: raw.segments || [],
+    selected_segment_id: raw.selected_segment_id,
+    default_params: raw.default_params || { engine: 'edge_tts' } as SegmentEngineParams,
+    split_config: raw.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    created_at: raw.created_at || now,
+    updated_at: raw.updated_at || now,
+  };
+  return {
+    schema_version: 2,
+    id: raw.id,
+    name: raw.name || '未命名项目',
+    chapters: [ch],
+    active_chapter_id: ch.id,
+    layout: raw.layout || 'vertical',
+    created_at: raw.created_at || now,
     updated_at: now,
   };
 }
@@ -26,12 +79,43 @@ function cloneSegments(segs: Segment[]): Segment[] {
   return segs.map(s => ({ ...s }));
 }
 
+// ---- Helpers for active chapter ----
+
+function getActiveChapter(p: SegmentedProject): Chapter | undefined {
+  return p.chapters.find(c => c.id === p.active_chapter_id) || p.chapters[0];
+}
+
+function updateChapter(p: SegmentedProject, chapterId: string, updater: (ch: Chapter) => Chapter): SegmentedProject {
+  const now = new Date().toISOString();
+  return {
+    ...p,
+    chapters: p.chapters.map(c => c.id === chapterId ? updater(c) : c),
+    updated_at: now,
+  };
+}
+
+function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): SegmentedProject {
+  const ch = getActiveChapter(p);
+  if (!ch) return p;
+  return updateChapter(p, ch.id, updater);
+}
+
+// ---- Actions ----
+
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
-  | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
-  | { type: 'SET_SPLIT_CONFIG'; config: SegmentedProject['split_config'] }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
+  // Chapter management
+  | { type: 'ADD_CHAPTER'; name: string }
+  | { type: 'DELETE_CHAPTER'; id: string }
+  | { type: 'SELECT_CHAPTER'; id: string }
+  | { type: 'RENAME_CHAPTER'; id: string; name: string }
+  // Per-chapter settings
+  | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
+  | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
+  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'language' | 'speed' | 'volume' | 'pitch'>> }
+  // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
   | { type: 'INSERT_SEGMENT'; afterId: string; text?: string }
@@ -47,6 +131,7 @@ export type Action =
   | { type: 'GENERATE_SUCCESS'; id: string; audio_id: string; duration_sec: number; generated_voice_id?: string }
   | { type: 'GENERATE_FAIL'; id: string; error: string }
   | { type: 'UNDO_REGENERATE'; id: string }
+  | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string }
   | { type: 'SELECT_SEGMENT'; id: string | undefined };
 
 export interface State { project: SegmentedProject }
@@ -58,111 +143,183 @@ function makeSegment(text: string, params: SegmentEngineParams): Segment {
 
 export function segmentedReducer(state: State, action: Action): State {
   const p = state.project;
-  const segs = () => cloneSegments(p.segments);
 
   switch (action.type) {
-    case 'LOAD_PROJECT':
-      return { project: { ...action.project } };
+    case 'LOAD_PROJECT': {
+      const migrated = migrateV1(action.project);
+      return { project: migrated };
+    }
     case 'RENAME_PROJECT':
       return { project: { ...p, name: action.name, updated_at: new Date().toISOString() } };
-    case 'SET_DEFAULT_PARAMS':
-      return { project: { ...p, default_params: action.params, updated_at: new Date().toISOString() } };
-    case 'SET_SPLIT_CONFIG':
-      return { project: { ...p, split_config: action.config, updated_at: new Date().toISOString() } };
     case 'SET_LAYOUT':
       return { project: { ...p, layout: action.layout, updated_at: new Date().toISOString() } };
+
+    // ---- Chapter management ----
+    case 'ADD_CHAPTER': {
+      const ch = makeChapter(action.name);
+      return { project: { ...p, chapters: [...p.chapters, ch], active_chapter_id: ch.id, updated_at: new Date().toISOString() } };
+    }
+    case 'DELETE_CHAPTER': {
+      if (p.chapters.length <= 1) return state; // don't delete last chapter
+      const remaining = p.chapters.filter(c => c.id !== action.id);
+      const newActive = p.active_chapter_id === action.id ? remaining[0].id : p.active_chapter_id;
+      return { project: { ...p, chapters: remaining, active_chapter_id: newActive, updated_at: new Date().toISOString() } };
+    }
+    case 'SELECT_CHAPTER':
+      return { project: { ...p, active_chapter_id: action.id } };
+    case 'RENAME_CHAPTER':
+      return { project: updateChapter(p, action.id, ch => ({ ...ch, name: action.name, updated_at: new Date().toISOString() })) };
+
+    // ---- Per-chapter settings ----
+    case 'SET_DEFAULT_PARAMS':
+      return { project: updateActive(p, ch => ({ ...ch, default_params: action.params, updated_at: new Date().toISOString() })) };
+    case 'SET_SPLIT_CONFIG':
+      return { project: updateActive(p, ch => ({ ...ch, split_config: action.config, updated_at: new Date().toISOString() })) };
+    case 'SET_CHAPTER_META':
+      return { project: updateActive(p, ch => ({ ...ch, ...action.meta, updated_at: new Date().toISOString() })) };
+
+    // ---- Segment operations (active chapter) ----
     case 'APPLY_SPLIT': {
-      const newSegs = action.items.map(item => {
-        const seg = makeSegment(item.text, p.default_params);
-        if (item.emotion) seg.emotion = item.emotion as any;
-        return seg;
-      });
-      return { project: { ...p, segments: newSegs, selected_segment_id: undefined, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const newSegs = action.items.map(item => {
+          const seg = makeSegment(item.text, ch.default_params);
+          if (item.emotion) seg.emotion = item.emotion as any;
+          return seg;
+        });
+        return { ...ch, segments: newSegs, selected_segment_id: undefined, updated_at: new Date().toISOString() };
+      })};
     }
     case 'APPEND_SEGMENT': {
-      const s = segs();
-      s.push(makeSegment(action.text ?? '', p.default_params));
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        s.push(makeSegment(action.text ?? '', ch.default_params));
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'INSERT_SEGMENT': {
-      const s = segs();
-      const idx = s.findIndex(x => x.id === action.afterId);
-      if (idx >= 0) s.splice(idx + 1, 0, makeSegment(action.text ?? '', p.default_params));
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const idx = s.findIndex(x => x.id === action.afterId);
+        if (idx >= 0) s.splice(idx + 1, 0, makeSegment(action.text ?? '', ch.default_params));
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'DELETE_SEGMENT': {
-      const s = segs().filter(x => x.id !== action.id);
-      return { project: { ...p, segments: s, selected_segment_id: p.selected_segment_id === action.id ? undefined : p.selected_segment_id, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = ch.segments.filter(x => x.id !== action.id);
+        return { ...ch, segments: s, selected_segment_id: ch.selected_segment_id === action.id ? undefined : ch.selected_segment_id, updated_at: new Date().toISOString() };
+      })};
     }
     case 'UPDATE_TEXT': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.text = action.text; seg.updated_at = new Date().toISOString(); }
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.text = action.text; seg.updated_at = new Date().toISOString(); }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'UPDATE_SSML': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.ssml = action.ssml; if (action.by_llm) seg.ssml_annotated_by_llm = true; seg.updated_at = new Date().toISOString(); }
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.ssml = action.ssml; if (action.by_llm) seg.ssml_annotated_by_llm = true; seg.updated_at = new Date().toISOString(); }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'BATCH_SET_SSML': {
-      const s = segs();
-      for (const u of action.updates) {
-        const seg = s.find(x => x.id === u.id);
-        if (seg) { seg.ssml = u.ssml; if (action.by_llm) seg.ssml_annotated_by_llm = true; seg.updated_at = new Date().toISOString(); }
-      }
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        for (const u of action.updates) {
+          const seg = s.find(x => x.id === u.id);
+          if (seg) { seg.ssml = u.ssml; if (action.by_llm) seg.ssml_annotated_by_llm = true; seg.updated_at = new Date().toISOString(); }
+        }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'UPDATE_PARAMS': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.params = { ...seg.params, ...action.params }; seg.updated_at = new Date().toISOString(); }
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.params = { ...seg.params, ...action.params }; seg.updated_at = new Date().toISOString(); }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'UPDATE_EMOTION': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.emotion = action.emotion as any; seg.updated_at = new Date().toISOString(); }
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.emotion = action.emotion as any; seg.updated_at = new Date().toISOString(); }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'REORDER': {
-      const s = segs();
-      const [removed] = s.splice(action.fromIndex, 1);
-      s.splice(action.toIndex, 0, removed);
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const [removed] = s.splice(action.fromIndex, 1);
+        s.splice(action.toIndex, 0, removed);
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'MARK_QUEUED': {
-      const s = segs();
-      for (const id of action.ids) { const seg = s.find(x => x.id === id); if (seg && seg.status === 'idle') seg.status = 'queued'; }
-      return { project: { ...p, segments: s } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        for (const id of action.ids) { const seg = s.find(x => x.id === id); if (seg && seg.status === 'idle') seg.status = 'queued'; }
+        return { ...ch, segments: s };
+      })};
     }
     case 'GENERATE_START': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.status = 'pending'; seg.error = undefined; }
-      return { project: { ...p, segments: s } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.status = 'pending'; seg.error = undefined; }
+        return { ...ch, segments: s };
+      })};
     }
     case 'GENERATE_SUCCESS': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = action.audio_id; seg.duration_sec = action.duration_sec; seg.status = 'ready'; seg.error = undefined; seg.generated_voice_id = action.generated_voice_id; seg.updated_at = new Date().toISOString(); }
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = action.audio_id; seg.duration_sec = action.duration_sec; seg.status = 'ready'; seg.error = undefined; seg.generated_voice_id = action.generated_voice_id; seg.updated_at = new Date().toISOString(); }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
     case 'GENERATE_FAIL': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg) { seg.status = 'failed'; seg.error = action.error; }
-      return { project: { ...p, segments: s } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.status = 'failed'; seg.error = action.error; }
+        return { ...ch, segments: s };
+      })};
     }
     case 'UNDO_REGENERATE': {
-      const s = segs();
-      const seg = s.find(x => x.id === action.id);
-      if (seg && seg.previous_audio_id) { const tmp = seg.current_audio_id; seg.current_audio_id = seg.previous_audio_id; seg.previous_audio_id = tmp; seg.updated_at = new Date().toISOString(); }
-      return { project: { ...p, segments: s, updated_at: new Date().toISOString() } };
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg && seg.previous_audio_id) { const tmp = seg.current_audio_id; seg.current_audio_id = seg.previous_audio_id; seg.previous_audio_id = tmp; seg.updated_at = new Date().toISOString(); }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
     }
-    case 'SELECT_SEGMENT':
-      return { project: { ...p, selected_segment_id: action.id } };
+    case 'TOGGLE_INDEPENDENT_VOICE': {
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) {
+          const overrides = [...(seg.overrides || [])];
+          const idx = overrides.indexOf('voice');
+          if (idx >= 0) {
+            overrides.splice(idx, 1); // remove voice override → follow global
+          } else {
+            overrides.push('voice'); // add voice override → independent
+          }
+          seg.overrides = overrides;
+          seg.updated_at = new Date().toISOString();
+        }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
+    }
+    case 'SELECT_SEGMENT': {
+      return { project: updateActive(p, ch => ({ ...ch, selected_segment_id: action.id })) };
+    }
     default:
       return state;
   }
@@ -173,6 +330,8 @@ export function segmentedReducer(state: State, action: Action): State {
 // -----------------------------------------------------------------------
 import { useReducer, useEffect } from 'react';
 import { getProject } from '../services/segmentedProjectDB';
+
+export { getActiveChapter };
 
 export function useSegmentedProject(projectId: string | null = null) {
   const [state, dispatch] = useReducer(

@@ -133,6 +133,26 @@
   color: var(--color-text-muted);
 }
 
+.ctaCloneBtn {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px dashed var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+  color: var(--color-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.ctaCloneBtn:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  border-style: solid;
+}
+
 /* Divider */
 .divider {
   width: 1px;

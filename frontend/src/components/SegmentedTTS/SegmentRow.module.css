@@ -61,6 +61,17 @@
   border-right: 1px solid var(--color-border-light);
 }
 
+/* Time range — subtitle-style, above waveform */
+.timeRange {
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-family-mono);
+  color: var(--color-primary);
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+  margin-bottom: -2px;
+}
+
 /* Full card emotion backgrounds */
 .emoHappy { background: #fef9ef; border-color: #f0d080; }
 .emoSad { background: #f2f6fb; border-color: #a8c0d8; }
@@ -243,6 +254,225 @@
 }
 .actBtnDanger:hover:not(:disabled) { border-color: var(--color-error); color: var(--color-error); background: var(--danger-light); }
 .actBtnDanger:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* ---- Compact mode ---- */
+.compactCard {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.compactCard:hover {
+  background: var(--color-surface-hover);
+}
+
+.compactCard.selected {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.compactCard.playing {
+  background: color-mix(in srgb, var(--color-success) 6%, var(--color-surface));
+}
+
+.compactEmo {
+  width: 4px;
+  height: 24px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.emoHappy .compactEmo { background: #e8a838; }
+.emoSad .compactEmo { background: #6b8db5; }
+.emoAngry .compactEmo { background: #c45a4a; }
+.emoCalm .compactEmo { background: #7ba68a; }
+.emoNeutral .compactEmo { background: var(--color-border); }
+.emoExcited .compactEmo { background: #d46a2c; }
+
+.compactIdx {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+  min-width: 22px;
+  flex-shrink: 0;
+}
+
+.compactTime {
+  font-size: 10px;
+  font-weight: 500;
+  font-family: var(--font-family-mono);
+  color: var(--color-text-muted);
+  min-width: 90px;
+  flex-shrink: 0;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.compactVoice {
+  display: flex;
+  flex-direction: column;
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.compactVoiceName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compactVoiceEngine {
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.compactText {
+  flex: 1;
+  font-size: 13px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.compactDur {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 30px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.compactGenBtn,
+.compactPlayBtn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.compactGenBtn {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.compactGenBtn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+}
+
+.compactGenBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.compactPlayBtn {
+  background: var(--color-success);
+  color: white;
+}
+
+.compactPlayBtn:hover {
+  background: #238b7e;
+  transform: scale(1.1);
+}
+
+/* Compact stale indicator */
+.compactStale {
+  font-size: 12px;
+  color: #c47a3a;
+  flex-shrink: 0;
+  cursor: help;
+  animation: stalePulse 2s ease-in-out infinite;
+}
+
+@keyframes stalePulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Compact voice lock toggle */
+.compactVoiceLock {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.5;
+  transition: all 0.15s;
+}
+
+.compactVoiceLock:hover {
+  opacity: 1;
+  background: var(--color-surface-hover);
+}
+
+.compactVoiceLockActive {
+  opacity: 1;
+}
+
+/* Expanded mode independent voice toggle */
+.indVoiceToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #c47a3a;
+  background: color-mix(in srgb, #c47a3a 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, #c47a3a 30%, var(--color-border));
+  border-radius: var(--radius-full);
+  padding: 1px 7px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.indVoiceToggle:hover {
+  background: color-mix(in srgb, #c47a3a 20%, var(--color-surface));
+}
+
+.indVoiceToggleOff {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  background: var(--color-surface-hover);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-full);
+  padding: 1px 7px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.indVoiceToggleOff:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
 
 /* ---- Horizontal layout ---- */
 .hBlock {

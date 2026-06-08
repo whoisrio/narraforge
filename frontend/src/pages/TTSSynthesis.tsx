@@ -8,14 +8,15 @@ import { SSMLToolbar } from '../components/TTSSynthesis/SSMLToolbar';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
-import { segmentedReducer, createInitialProject, type Action } from '../hooks/useSegmentedProject';
+import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
 import { textSplitApi, ttsApi, mimoTtsApi } from '../services/api';
 import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
-import { saveProject, getProject, listProjects } from '../services/segmentedProjectDB';
+import { saveProject, getProject, listProjects, deleteProject } from '../services/segmentedProjectDB';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile, SegmentedProject, SegmentEngineParams } from '../types';
+import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams } from '../types';
+import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts';
@@ -25,7 +26,7 @@ function toEdgeFormat(value: number) {
   return value >= 0 ? `+${value}%` : `${value}%`;
 }
 
-export function TTSSynthesis() {
+export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => void }) {
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
   const [mode, setMode] = useState<Mode>('single');
@@ -58,7 +59,17 @@ export function TTSSynthesis() {
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
+  const [compactMode, setCompactMode] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean; title: string; message: string;
+    variant?: 'warning' | 'danger';
+    confirmLabel?: string;
+    onConfirm: () => void;
+  }>({ open: false, title: '', message: '', onConfirm: () => {} });
+
+  // Derived: active chapter
+  const activeChapter = useMemo(() => getActiveChapter(project)!, [project]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
 
@@ -75,12 +86,25 @@ export function TTSSynthesis() {
     listProjects().then(list => {
       setProjectList(list);
       if (list.length > 0) {
-        const last = list[0];
-        setProject(last);
-        // Restore voice/params from project
-        if (last.segments.length > 0) {
-          const firstSeg = last.segments[0];
-          if (firstSeg.params.engine) setEngine(firstSeg.params.engine as Engine);
+        const migrated = migrateV1(list[0]);
+        setProject(migrated);
+        dispatch({ type: 'LOAD_PROJECT', project: migrated });
+        // Restore engine/voice from active chapter
+        const ch = getActiveChapter(migrated);
+        if (ch) {
+          if (ch.engine) setEngine(ch.engine as Engine);
+          if (ch.voice_id) setSelectedVoiceId(ch.voice_id);
+          if (ch.edge_voice) setEdgeVoice(ch.edge_voice);
+          if (ch.edge_rate != null) setEdgeRate(ch.edge_rate);
+          if (ch.edge_volume != null) setEdgeVolume(ch.edge_volume);
+          if (ch.mimo_mode) setMimoMode(ch.mimo_mode as MiMoMode);
+          if (ch.mimo_preset_voice) setMimoPresetVoice(ch.mimo_preset_voice);
+          if (ch.mimo_instruction) setMimoInstruction(ch.mimo_instruction);
+          if (ch.mimo_clone_voice_id) setMimoCloneVoiceId(ch.mimo_clone_voice_id);
+          if (ch.language) setParams(prev => ({ ...prev, language: ch.language }));
+          if (ch.speed != null) setParams(prev => ({ ...prev, speed: ch.speed }));
+          if (ch.volume != null) setParams(prev => ({ ...prev, volume: ch.volume }));
+          if (ch.pitch != null) setParams(prev => ({ ...prev, pitch: ch.pitch }));
         }
       }
     }).catch(() => {});
@@ -89,7 +113,7 @@ export function TTSSynthesis() {
   // Auto-save project to IndexedDB (debounced)
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (project.segments.length === 0 && project.name === '新项目') return; // skip empty default
+    if (project.chapters.length === 1 && !project.chapters[0].original_text && project.chapters[0].segments.length === 0 && project.name === '新项目') return; // skip empty default
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       try {
@@ -105,6 +129,21 @@ export function TTSSynthesis() {
   const dispatch = useCallback((action: Action) => {
     setProject(prev => segmentedReducer({ project: prev }, action).project);
   }, []);
+
+  // Sync global settings to active chapter whenever they change
+  useEffect(() => {
+    dispatch({
+      type: 'SET_CHAPTER_META',
+      meta: {
+        engine, voice_id: selectedVoiceId, edge_voice: edgeVoice,
+        edge_rate: edgeRate, edge_volume: edgeVolume,
+        mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice,
+        mimo_instruction: mimoInstruction, mimo_clone_voice_id: mimoCloneVoiceId,
+        language: params.language, speed: params.speed,
+        volume: params.volume, pitch: params.pitch,
+      },
+    });
+  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, params.language, params.speed, params.volume, params.pitch, dispatch]);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
     setToast({ message, type });
@@ -223,6 +262,76 @@ export function TTSSynthesis() {
     }
   }, [storageMode]);
 
+  // ---- Chapter management ----
+
+  /** Restore global state from a chapter's saved settings */
+  const restoreChapterSettings = useCallback((ch: Chapter) => {
+    if (ch.engine) setEngine(ch.engine as Engine); else setEngine('edge_tts');
+    setSelectedVoiceId(ch.voice_id || '');
+    setEdgeVoice(ch.edge_voice || '');
+    setEdgeRate(ch.edge_rate ?? 0);
+    setEdgeVolume(ch.edge_volume ?? 0);
+    setMimoMode((ch.mimo_mode as MiMoMode) || 'preset');
+    setMimoPresetVoice(ch.mimo_preset_voice || '冰糖');
+    setMimoInstruction(ch.mimo_instruction || '');
+    setMimoCloneVoiceId(ch.mimo_clone_voice_id || '');
+    setParams({ language: ch.language || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
+  }, []);
+
+  const handleSelectChapter = useCallback((chapterId: string) => {
+    dispatch({ type: 'SELECT_CHAPTER', id: chapterId });
+    // After dispatch, the project state will have the new active chapter
+    // We need to get the chapter from the current project state
+    const ch = project.chapters.find(c => c.id === chapterId);
+    if (ch) restoreChapterSettings(ch);
+  }, [project.chapters, dispatch, restoreChapterSettings]);
+
+  const handleAddChapter = useCallback(() => {
+    const name = `第${project.chapters.length + 1}章`;
+    dispatch({ type: 'ADD_CHAPTER', name });
+    // Reset global state for new chapter (inherits from defaults)
+    setEngine('edge_tts');
+    setSelectedVoiceId('');
+    setEdgeVoice('');
+    setEdgeRate(0);
+    setEdgeVolume(0);
+    setMimoMode('preset');
+    setMimoPresetVoice('冰糖');
+    setMimoInstruction('');
+    setMimoCloneVoiceId('');
+    setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
+  }, [project.chapters.length, dispatch]);
+
+  const doDeleteChapter = useCallback(async (chapterId: string) => {
+    const ch = project.chapters.find(c => c.id === chapterId);
+    if (ch) {
+      for (const seg of ch.segments) {
+        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
+        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+      }
+    }
+    dispatch({ type: 'DELETE_CHAPTER', id: chapterId });
+    const remaining = project.chapters.filter(c => c.id !== chapterId);
+    if (remaining.length > 0) {
+      const newActive = project.active_chapter_id === chapterId ? remaining[0] : remaining.find(c => c.id === project.active_chapter_id) || remaining[0];
+      restoreChapterSettings(newActive);
+    }
+    showToast(`已删除 ${ch?.name || '章节'}`);
+  }, [project.chapters, project.active_chapter_id, dispatch, restoreChapterSettings, showToast]);
+
+  const handleDeleteChapter = useCallback((chapterId: string) => {
+    if (project.chapters.length <= 1) return;
+    const ch = project.chapters.find(c => c.id === chapterId);
+    const segCount = ch?.segments.length || 0;
+    const audioCount = ch?.segments.filter(s => s.current_audio_id).length || 0;
+    setConfirmDialog({
+      open: true, title: '删除章节',
+      message: `确定删除「${ch?.name || '此章节'}」？\n包含 ${segCount} 个片段${audioCount > 0 ? `、${audioCount} 段音频` : ''}，将一并删除。`,
+      variant: 'warning', confirmLabel: '删除',
+      onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDeleteChapter(chapterId); },
+    });
+  }, [project.chapters, doDeleteChapter]);
+
   // ---- Segmented mode handlers ----
 
   /** Build SegmentEngineParams from current global state */
@@ -241,8 +350,46 @@ export function TTSSynthesis() {
     };
   }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction]);
 
+  const doDeleteProject = useCallback(async () => {
+    try {
+      await deleteProject(project.id);
+      const list = await listProjects();
+      setProjectList(list);
+      if (list.length > 0) {
+        const migrated = migrateV1(list[0]);
+        setProject(migrated);
+        dispatch({ type: 'LOAD_PROJECT', project: migrated });
+        const ch = getActiveChapter(migrated);
+        if (ch) restoreChapterSettings(ch);
+      } else {
+        const np = createInitialProject();
+        setProject(np);
+        dispatch({ type: 'LOAD_PROJECT', project: np });
+        setEngine('edge_tts'); setSelectedVoiceId(''); setEdgeVoice('');
+        setEdgeRate(0); setEdgeVolume(0);
+        setMimoMode('preset'); setMimoPresetVoice('冰糖');
+        setMimoInstruction(''); setMimoCloneVoiceId('');
+        setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
+      }
+      showToast('项目已删除');
+    } catch (e) { console.error('Delete project failed:', e); showToast('删除失败', 'error'); }
+  }, [project, dispatch, restoreChapterSettings, showToast]);
+
+  const handleDeleteProject = useCallback(() => {
+    setConfirmDialog({
+      open: true, title: '删除项目',
+      message: `确定删除项目「${project.name}」？\n此操作不可撤销，所有章节和音频将一并删除。`,
+      variant: 'danger', confirmLabel: '删除',
+      onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDeleteProject(); },
+    });
+  }, [project.name, doDeleteProject]);
+
+  const handleToggleIndependentVoice = useCallback((id: string) => {
+    dispatch({ type: 'TOGGLE_INDEPENDENT_VOICE', id });
+  }, [dispatch]);
+
   const handleRegenerate = useCallback(async (id: string) => {
-    const seg = project.segments.find(s => s.id === id);
+    const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
     dispatch({ type: 'GENERATE_START', id });
     try {
@@ -301,23 +448,88 @@ export function TTSSynthesis() {
     } catch (e: any) {
       dispatch({ type: 'GENERATE_FAIL', id, error: e?.message ?? '生成失败' });
     }
-  }, [project.segments, dispatch, buildCurrentParams, loadHistory, showToast]);
+  }, [activeChapter.segments, dispatch, buildCurrentParams, loadHistory, showToast]);
 
   const handleRegenerateAll = useCallback(async () => {
     if (generating) return;
+
+    // Segments to regenerate: idle, failed, OR ready but NOT voice-locked
+    const toRegenerate = activeChapter.segments.filter(s => {
+      if (s.status === 'idle' || s.status === 'failed') return true;
+      if (s.status === 'ready') {
+        const hasVoiceLock = s.overrides?.includes('voice');
+        return !hasVoiceLock; // regenerate ready segments that follow global voice
+      }
+      return false; // skip 'pending'/'queued'
+    });
+
+    if (toRegenerate.length === 0) {
+      showToast('没有需要重新生成的片段');
+      return;
+    }
+
+    const existingAudio = toRegenerate.filter(s => s.current_audio_id);
+
+    // Show confirmation
+    const lockedCount = activeChapter.segments.filter(s => s.status === 'ready' && s.overrides?.includes('voice')).length;
+    const lines = [
+      `将重新生成 ${toRegenerate.length} 个片段。`,
+    ];
+    if (existingAudio.length > 0) {
+      lines.push(`其中 ${existingAudio.length} 个已有音频将被删除后重新生成。`);
+    }
+    if (lockedCount > 0) {
+      lines.push(`已锁定独立音色的 ${lockedCount} 个片段将保持不变。`);
+    }
+
+    setConfirmDialog({
+      open: true,
+      title: '全部重新生成',
+      message: lines.join('\n'),
+      variant: 'warning',
+      confirmLabel: '重新生成',
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        await doRegenerateAll(toRegenerate);
+      },
+    });
+  }, [generating, activeChapter.segments, showToast]);
+
+  const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments) => {
     setGenerating(true);
-    const toGenerate = project.segments.filter(s => s.status === 'idle' || s.status === 'failed');
-    dispatch({ type: 'MARK_QUEUED', ids: toGenerate.map(s => s.id) });
-    let i = 0;
-    const next = async () => { while (i < toGenerate.length) { const seg = toGenerate[i++]; await handleRegenerate(seg.id); } };
-    await Promise.all(Array.from({ length: 3 }, () => next()));
-    setGenerating(false);
-    showToast('生成完成');
-  }, [generating, project.segments, dispatch, handleRegenerate, showToast]);
+    try {
+      // Step 1: Delete existing audio for segments that have it
+      for (const seg of toRegenerate) {
+        if (seg.current_audio_id) {
+          try { await deleteTTSResult(seg.current_audio_id); } catch {}
+          dispatch({ type: 'GENERATE_SUCCESS', id: seg.id, audio_id: '', duration_sec: 0 });
+        }
+      }
+
+      // Step 2: Mark all as queued
+      dispatch({ type: 'MARK_QUEUED', ids: toRegenerate.map(s => s.id) });
+
+      // Step 3: Generate in parallel (3 workers)
+      let i = 0;
+      const next = async () => {
+        while (i < toRegenerate.length) {
+          const seg = toRegenerate[i++];
+          await handleRegenerate(seg.id);
+        }
+      };
+      await Promise.all(Array.from({ length: 3 }, () => next()));
+      showToast('全部生成完成');
+    } catch (e) {
+      console.error('Regenerate all failed:', e);
+      showToast('部分生成失败', 'error');
+    } finally {
+      setGenerating(false);
+    }
+  }, [dispatch, handleRegenerate, showToast]);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
-    const ids = idsArg ?? project.segments.filter(s => s.params.engine === 'cosyvoice').map(s => s.id);
-    const targetSegs = project.segments.filter(s => ids.includes(s.id));
+    const ids = idsArg ?? activeChapter.segments.filter(s => s.params.engine === 'cosyvoice').map(s => s.id);
+    const targetSegs = activeChapter.segments.filter(s => ids.includes(s.id));
     if (!targetSegs.length) return;
     try {
       const result = await textSplitApi.ssmlAnnotate(targetSegs.map(s => s.text));
@@ -326,7 +538,7 @@ export function TTSSynthesis() {
       for (const s of targetSegs) { dispatch({ type: 'UPDATE_PARAMS', id: s.id, params: { enable_ssml: true } }); }
       showToast(`已为 ${targetSegs.length} 段标注 SSML`);
     } catch { showToast('SSML 标注失败，请检查 LLM 配置', 'error'); }
-  }, [project.segments, dispatch, showToast]);
+  }, [activeChapter.segments, dispatch, showToast]);
 
   const handlePlaySegment = useCallback(async (id: string) => {
     // If clicking the same segment that's active → toggle pause/resume
@@ -351,7 +563,7 @@ export function TTSSynthesis() {
       blobUrlRef.current = null;
     }
 
-    const seg = project.segments.find(s => s.id === id);
+    const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg?.current_audio_id) return;
 
     try {
@@ -367,10 +579,10 @@ export function TTSSynthesis() {
       setIsPaused(false);
       await audio.play();
     } catch { setPlayingId(undefined); setIsPaused(false); }
-  }, [project.segments, playingId]);
+  }, [activeChapter.segments, playingId]);
 
   const handlePlayAll = useCallback(async () => {
-    const readySegs = project.segments.filter(s => s.status === 'ready' && s.current_audio_id);
+    const readySegs = activeChapter.segments.filter(s => s.status === 'ready' && s.current_audio_id);
     if (readySegs.length === 0) return;
     for (const seg of readySegs) {
       setPlayingId(seg.id);
@@ -387,10 +599,10 @@ export function TTSSynthesis() {
       } catch { /* skip */ }
     }
     setPlayingId(undefined);
-  }, [project.segments]);
+  }, [activeChapter.segments]);
 
   const handleTrimSilence = useCallback(async (id: string) => {
-    const seg = project.segments.find(s => s.id === id);
+    const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg?.current_audio_id) return;
     try {
       const blob = await getTTSAudioBlob(seg.current_audio_id);
@@ -421,7 +633,7 @@ export function TTSSynthesis() {
       showToast(`裁剪了 ${trimmedMs}ms 静音`);
       loadHistory();
     } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
-  }, [project.segments, dispatch, showToast, loadHistory]);
+  }, [activeChapter.segments, dispatch, showToast, loadHistory]);
 
   const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
 
@@ -433,28 +645,20 @@ export function TTSSynthesis() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h1>文字转语音</h1>
-        <p>使用克隆的声音或预置音色生成高质量语音</p>
-      </div>
-
-      {/* PRIMARY: Mode Switch (high hierarchy) */}
-      <div className={styles.modeSwitch}>
-        <button className={`${styles.modeOption} ${mode === 'single' ? styles.active : ''}`} onClick={() => setMode('single')}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 8h8M8 12h6"/></svg>
-          <div><div>单段合成</div><div className={styles.modeDesc}>输入文本快速生成</div></div>
-        </button>
-        <button className={`${styles.modeOption} ${mode === 'segmented' ? styles.active : ''}`} onClick={() => setMode('segmented')}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-          <div><div>分段编辑</div><div className={styles.modeDesc}>时间轴编辑器</div></div>
-        </button>
-      </div>
-
-      {/* SECONDARY: Engine Switch */}
-      <div className={styles.engineSwitch}>
-        <button className={`${styles.engineOption} ${engine === 'edge_tts' ? styles.active : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
-        <button className={`${styles.engineOption} ${engine === 'cosyvoice' ? styles.active : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
-        <button className={`${styles.engineOption} ${engine === 'mimo_tts' ? styles.active : ''}`} onClick={() => setEngine('mimo_tts')}>MiMo-TTS</button>
+      {/* Compact unified toolbar: title + mode + engine */}
+      <div className={styles.toolbar}>
+        <span className={styles.toolbarTitle}>文字转语音</span>
+        <div className={styles.toolbarDivider} />
+        <div className={styles.toolbarGroup}>
+          <button className={`${styles.toolbarTab} ${mode === 'single' ? styles.toolbarTabActive : ''}`} onClick={() => setMode('single')}>单段</button>
+          <button className={`${styles.toolbarTab} ${mode === 'segmented' ? styles.toolbarTabActive : ''}`} onClick={() => setMode('segmented')}>分段</button>
+        </div>
+        <div className={styles.toolbarDivider} />
+        <div className={styles.toolbarGroup}>
+          <button className={`${styles.toolbarPill} ${engine === 'edge_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
+          <button className={`${styles.toolbarPill} ${engine === 'cosyvoice' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
+          <button className={`${styles.toolbarPill} ${engine === 'mimo_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('mimo_tts')}>MiMo</button>
+        </div>
       </div>
 
       {/* ====== SINGLE MODE ====== */}
@@ -504,7 +708,102 @@ export function TTSSynthesis() {
       {/* ====== SEGMENTED MODE ====== */}
       {mode === 'segmented' && (
         <div className={styles.segmentedContent}>
-          {/* Global Control Bar */}
+          {/* a. Project selector — at the very top */}
+          <div className={styles.segmentedToolbar}>
+            {/* Project management */}
+            <select
+              className={styles.projectSelect}
+              value={project.id}
+              onChange={async (e) => {
+                const pid = e.target.value;
+                if (pid === '__new__') {
+                  const np = createInitialProject();
+                  setProject(np);
+                  dispatch({ type: 'LOAD_PROJECT', project: np });
+                  // Reset all global state
+                  setEngine('edge_tts');
+                  setSelectedVoiceId('');
+                  setEdgeVoice('');
+                  setEdgeRate(0);
+                  setEdgeVolume(0);
+                  setMimoMode('preset');
+                  setMimoPresetVoice('冰糖');
+                  setMimoInstruction('');
+                  setMimoCloneVoiceId('');
+                  setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
+                } else {
+                  // Load latest from IndexedDB to ensure we have fresh data
+                  const p = await getProject(pid);
+                  if (p) {
+                    const migrated = migrateV1(p);
+                    dispatch({ type: 'LOAD_PROJECT', project: migrated });
+                    setProject(migrated);
+                    const ch = getActiveChapter(migrated);
+                    if (ch) {
+                      if (ch.engine) setEngine(ch.engine as Engine);
+                      if (ch.voice_id) setSelectedVoiceId(ch.voice_id);
+                      if (ch.edge_voice) setEdgeVoice(ch.edge_voice);
+                      if (ch.edge_rate != null) setEdgeRate(ch.edge_rate);
+                      if (ch.edge_volume != null) setEdgeVolume(ch.edge_volume);
+                      if (ch.mimo_mode) setMimoMode(ch.mimo_mode as MiMoMode);
+                      if (ch.mimo_preset_voice) setMimoPresetVoice(ch.mimo_preset_voice);
+                      if (ch.mimo_instruction) setMimoInstruction(ch.mimo_instruction);
+                      if (ch.mimo_clone_voice_id) setMimoCloneVoiceId(ch.mimo_clone_voice_id);
+                      if (ch.language) setParams(prev => ({ ...prev, language: ch.language }));
+                      if (ch.speed != null) setParams(prev => ({ ...prev, speed: ch.speed }));
+                      if (ch.volume != null) setParams(prev => ({ ...prev, volume: ch.volume }));
+                      if (ch.pitch != null) setParams(prev => ({ ...prev, pitch: ch.pitch }));
+                    }
+                  }
+                }
+              }}
+            >
+              {projectList.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+              <option value="__new__">+ 新建项目</option>
+            </select>
+            <input className={styles.segmentedNameInput} value={project.name} onChange={(e) => dispatch({ type: 'RENAME_PROJECT', name: e.target.value })} />
+            {/* Chapter selector */}
+            <div className={styles.chapterGroup}>
+              <select
+                className={styles.chapterSelect}
+                value={project.active_chapter_id || ''}
+                onChange={(e) => handleSelectChapter(e.target.value)}
+              >
+                {project.chapters.map(ch => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.name} ({ch.segments.length}段)
+                  </option>
+                ))}
+              </select>
+              <button className={styles.chapterBtn} onClick={handleAddChapter} title="新建章节">+</button>
+              {project.chapters.length > 1 && (
+                <button className={styles.chapterBtnDanger} onClick={() => handleDeleteChapter(project.active_chapter_id || '')} title="删除当前章节">✕</button>
+              )}
+            </div>
+            <span className={styles.segmentedStats}>
+              {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
+              {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
+            </span>
+            <div className={styles.segmentedActions}>
+              <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
+                {generating ? '生成中...' : '⚡ 全部生成'}
+              </button>
+              <button className={styles.segmentedActionBtn} onClick={handlePlayAll} disabled={!!playingId}>
+                {playingId ? '播放中...' : '▶ 全部播放'}
+              </button>
+              {engine === 'cosyvoice' && (
+                <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
+              )}
+              <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
+              <button className={styles.segmentedActionBtnDanger} onClick={handleDeleteProject}>🗑 删除</button>
+            </div>
+          </div>
+
+          {/* b. Global control bar (engine + voice + params) with voice clone CTA */}
           {engine === 'cosyvoice' ? (
             <GlobalControlBar
               selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
@@ -513,6 +812,7 @@ export function TTSSynthesis() {
               onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
               onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
               onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+              onNavigateToClone={onNavigateToClone}
             />
           ) : engine === 'edge_tts' ? (
             <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
@@ -520,71 +820,49 @@ export function TTSSynthesis() {
             <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
           )}
 
-          {/* Segmented Editor */}
+          {/* c. Original text input area — collapsible */}
+          <TextInputPanel
+            splitConfig={activeChapter.split_config}
+            onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
+            onSplit={(texts, originalText) => {
+              dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
+              dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
+              dispatch({ type: 'APPLY_SPLIT', items: texts.map(t => ({ text: t })) });
+            }}
+            onLLMSplit={async (text) => {
+              dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
+              dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: text, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
+              const result = await textSplitApi.llmSplit(text, activeChapter.split_config.delimiters);
+              dispatch({ type: 'APPLY_SPLIT', items: result.segments.map(s => ({ text: s.text, emotion: s.emotion })) });
+            }}
+            segmentTexts={activeChapter.segments.map(s => s.text)}
+            segmentCount={activeChapter.segments.length}
+          />
+
+          {/* Segmented Editor (toggle + segment list) */}
           <div className={styles.segmentedEditor}>
-            <div className={styles.segmentedToolbar}>
-              {/* Project management */}
-              <select
-                className={styles.projectSelect}
-                value={project.id}
-                onChange={(e) => {
-                  const pid = e.target.value;
-                  if (pid === '__new__') {
-                    const np = createInitialProject();
-                    setProject(np);
-                    dispatch({ type: 'LOAD_PROJECT', project: np });
-                  } else {
-                    const p = projectList.find(x => x.id === pid);
-                    if (p) { setProject(p); dispatch({ type: 'LOAD_PROJECT', project: p }); }
-                  }
-                }}
-              >
-                {projectList.map(p => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.segments.length}段)
-                  </option>
-                ))}
-                <option value="__new__">+ 新建项目</option>
-              </select>
-              <input className={styles.segmentedNameInput} value={project.name} onChange={(e) => dispatch({ type: 'RENAME_PROJECT', name: e.target.value })} />
-              <span className={styles.segmentedStats}>
-                {project.segments.length} 段 · {project.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
-                {project.segments.filter(s => s.status === 'ready').length > 0 && ` · ${project.segments.filter(s => s.status === 'ready').length}/${project.segments.length} 已生成`}
-              </span>
-              <div className={styles.segmentedActions}>
-                <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
-                  {generating ? '生成中...' : '⚡ 全部生成'}
-                </button>
-                <button className={styles.segmentedActionBtn} onClick={handlePlayAll} disabled={!!playingId}>
-                  {playingId ? '播放中...' : '▶ 全部播放'}
-                </button>
-                {engine === 'cosyvoice' && (
-                  <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
-                )}
-                <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
-              </div>
+            {/* d. Compact mode toggle */}
+            <div className={styles.viewToggle}>
+              <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
+                onClick={() => setCompactMode(false)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg>
+                展开
+              </button>
+              <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
+                onClick={() => setCompactMode(true)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                紧凑
+              </button>
             </div>
 
-            <TextInputPanel
-              splitConfig={project.split_config}
-              onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
-              onSplit={(texts) => {
-                dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
-                dispatch({ type: 'APPLY_SPLIT', items: texts.map(t => ({ text: t })) });
-              }}
-              onLLMSplit={async (text) => {
-                dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
-                const result = await textSplitApi.llmSplit(text, project.split_config.delimiters);
-                dispatch({ type: 'APPLY_SPLIT', items: result.segments.map(s => ({ text: s.text, emotion: s.emotion })) });
-              }}
-            />
-
+            {/* e. Segment list */}
             <SegmentList
-              segments={project.segments}
+              segments={activeChapter.segments}
               layout={project.layout}
-              selectedId={project.selected_segment_id}
+              selectedId={activeChapter.selected_segment_id}
               playingId={playingId}
               isPaused={isPaused}
+              compact={compactMode}
               voices={voices}
               globalVoiceId={selectedVoiceId}
               globalVoiceName={selectedVoice?.description || selectedVoice?.name}
@@ -600,7 +878,7 @@ export function TTSSynthesis() {
               onTrimSilence={handleTrimSilence}
               onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
               onDuplicate={(id) => {
-                const seg = project.segments.find(s => s.id === id);
+                const seg = activeChapter.segments.find(s => s.id === id);
                 if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text });
               }}
               onAnnotateSSML={(id) => handleAnnotateSSML([id])}
@@ -608,15 +886,26 @@ export function TTSSynthesis() {
               onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
               onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
               onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
+              onToggleIndependentVoice={handleToggleIndependentVoice}
             />
 
             {/* Audio History for segmented mode */}
             <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} />
 
-            <ExportDialog open={exportOpen} segments={project.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
+            <ExportDialog open={exportOpen} segments={activeChapter.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        confirmLabel={confirmDialog.confirmLabel}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
+      />
 
       {toast && (
         <div className={`${styles.toast} ${toast.type === 'error' ? styles.toast_error : styles.toast_success}`}>

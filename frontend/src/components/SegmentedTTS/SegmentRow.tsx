@@ -9,11 +9,16 @@ interface SegmentRowProps {
   isSelected: boolean;
   isPlaying: boolean;
   isPaused: boolean;
+  compact?: boolean;
   voices: VoiceProfile[];
   globalVoiceId?: string;
   globalVoiceName?: string;
   globalEdgeVoice?: string;
   layout: 'vertical' | 'horizontal';
+  /** Start time in seconds from the beginning of the sequence */
+  timeStart?: number;
+  /** End time in seconds (start + this segment's duration) */
+  timeEnd?: number;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter?: (afterId: string) => void;
@@ -24,6 +29,13 @@ interface SegmentRowProps {
   onUndo: (id: string) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
+  onToggleIndependentVoice?: (id: string) => void;
+}
+
+function fmtTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, '0')}:${s < 10 ? '0' : ''}${s.toFixed(1)}`;
 }
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -50,8 +62,8 @@ function getWaveform(id: string): number[] {
 }
 
 export function SegmentRow({
-  segment, index, isSelected, isPlaying, isPaused, voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
-  layout, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onUndo,
+  segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice,
+  layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onUndo, onToggleIndependentVoice,
 }: SegmentRowProps) {
   const [charIdx, setCharIdx] = useState(-1);
   const timerRef = useRef<number | null>(null);
@@ -84,6 +96,7 @@ export function SegmentRow({
   const emotion = segment.emotion || 'neutral';
   const emoCamel = emotion.charAt(0).toUpperCase() + emotion.slice(1); // happy -> Happy
   const hasOverride = segment.overrides?.includes('voice');
+  const useIndependentVoice = hasOverride;
   const idx = String(index).padStart(2, '0');
   const waveform = getWaveform(segment.id);
 
@@ -164,7 +177,9 @@ export function SegmentRow({
         onClick={() => onSelect(segment.id)} title={segment.text}
         role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(segment.id); }}>
         <span className={styles.hIdx}>#{idx}</span>
-        <span className={styles.hDur}>{dur || '—'}</span>
+        <span className={styles.hDur}>
+          {timeStart != null ? `${fmtTime(timeStart)}${timeEnd != null ? `–${fmtTime(timeEnd)}` : '–…'}` : (dur || '—')}
+        </span>
         <span className={styles.hTxt}>{segment.text.slice(0, 8)}{segment.text.length > 8 ? '…' : ''}</span>
       </div>
     );
@@ -181,6 +196,56 @@ export function SegmentRow({
     );
   };
 
+  // ---- Compact mode: single row ----
+  if (compact) {
+    return (
+      <div
+        className={`${styles.compactCard} ${styles[`emo${emoCamel}`] || ''} ${isSelected ? styles.selected : ''} ${isPlaying ? styles.playing : ''}`}
+        onClick={() => onSelect(segment.id)} role="button" tabIndex={0}
+        onKeyDown={(e) => { if (e.key === 'Enter') onSelect(segment.id); }}
+      >
+        <div className={styles.compactEmo} />
+        <span className={styles.compactIdx}>#{idx}</span>
+        {timeStart != null && (
+          <span className={styles.compactTime}>
+            {fmtTime(timeStart)}{timeEnd != null ? `–${fmtTime(timeEnd)}` : '–…'}
+          </span>
+        )}
+        <div className={styles.compactVoice}>
+          <span className={styles.compactVoiceName}>{voiceDisplayName}</span>
+          <span className={styles.compactVoiceEngine}>{displayEngine}</span>
+        </div>
+        <span className={styles.compactText}>{segment.text}</span>
+        <span className={styles.compactDur}>{dur}</span>
+        {(isIdle || isFailed) && (
+          <button className={styles.compactGenBtn} disabled={isGenerating}
+            onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>
+            {isGenerating ? '⏳' : '▶'}
+          </button>
+        )}
+        {isReady && isStale && (
+          <span className={styles.compactStale} title="音色已变更，建议重新生成">⚠</span>
+        )}
+        {isReady && (
+          <button
+            className={`${styles.compactVoiceLock} ${useIndependentVoice ? styles.compactVoiceLockActive : ''}`}
+            title={useIndependentVoice ? '独立音色（点击跟随全局）' : '跟随全局（点击锁定独立音色）'}
+            onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
+          >
+            {useIndependentVoice ? '🔒' : '🔗'}
+          </button>
+        )}
+        {isReady && (
+          <button className={styles.compactPlayBtn} title={isPlaying && !isPaused ? '暂停' : '播放'}
+            onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
+            {isPlaying && !isPaused ? '⏸' : '▶'}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // ---- Expanded mode ----
   return (
     <div
       className={`${styles.card} ${styles[`emo${emoCamel}`] || ''} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected ? styles.selected : ''} ${isPlaying ? styles.playing : ''} ${isStale ? styles.stale : ''}`}
@@ -211,6 +276,13 @@ export function SegmentRow({
           </div>
         )}
 
+        {/* Time range — subtitle-style timestamp */}
+        {timeStart != null && (
+          <div className={styles.timeRange}>
+            {fmtTime(timeStart)}{timeEnd != null ? ` – ${fmtTime(timeEnd)}` : ' – …'}
+          </div>
+        )}
+
         {/* Decorative waveform */}
         {isReady && segment.current_audio_id && (
           <div className={styles.waveDecor}>
@@ -225,7 +297,22 @@ export function SegmentRow({
               <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{EMOTION_LABELS[emotion]}</span>
             )}
             {hasOverride && (
-              <span className={styles.overrideBadge}>🔊 覆盖</span>
+              <button
+                className={styles.indVoiceToggle}
+                title="点击取消独立音色，跟随全局"
+                onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
+              >
+                🔒 独立音色
+              </button>
+            )}
+            {!hasOverride && isReady && (
+              <button
+                className={styles.indVoiceToggleOff}
+                title="点击锁定为独立音色，不再跟随全局"
+                onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
+              >
+                🔗 跟随全局
+              </button>
             )}
             {isReady && !isStale && <span className={styles.readyMark}>✓</span>}
             {isFailed && <span className={styles.failMark}>✕ {segment.error || ''}</span>}
