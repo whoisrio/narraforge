@@ -702,10 +702,14 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             <GlobalControlBar
               selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
               speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
+              instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
               onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
               onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
               onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
               onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+              onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
+              onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
+              onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
             />
           ) : engine === 'edge_tts' ? (
             <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
@@ -841,10 +845,14 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             <GlobalControlBar
               selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
               speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
+              instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
               onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
               onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
               onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
               onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+              onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
+              onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
+              onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
               onNavigateToClone={onNavigateToClone}
             />
           ) : engine === 'edge_tts' ? (

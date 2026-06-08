@@ -251,6 +251,77 @@
   flex-shrink: 0;
 }
 
+/* Advanced params toggle */
+.advancedToggle {
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.advancedToggle:hover {
+  color: var(--color-primary);
+}
+
+/* Advanced params row */
+.advancedRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+.advancedSection {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.instructionInput {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  width: 140px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+.instructionInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+.toggleChip {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding: 2px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.toggleChip:hover {
+  border-color: var(--color-primary);
+}
+
+.toggleChipOn {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
 @media (max-width: 768px) {
   .bar {
     gap: 12px;

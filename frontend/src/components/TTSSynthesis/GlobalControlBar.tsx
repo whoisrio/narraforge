@@ -12,21 +12,30 @@ interface GlobalControlBarProps {
   volume: number;
   pitch: number;
   language: string;
+  instruction?: string;
+  enableSsml?: boolean;
+  enableMarkdownFilter?: boolean;
   onSpeedChange: (v: number) => void;
   onVolumeChange: (v: number) => void;
   onPitchChange: (v: number) => void;
   onLanguageChange: (v: string) => void;
+  onInstructionChange?: (v: string) => void;
+  onSsmlToggle?: () => void;
+  onMarkdownFilterToggle?: () => void;
   onNavigateToClone?: () => void;
 }
 
 export function GlobalControlBar({
   selectedVoiceId, onVoiceSelect,
   speed, volume, pitch, language,
+  instruction, enableSsml, enableMarkdownFilter,
   onSpeedChange, onVolumeChange, onPitchChange, onLanguageChange,
+  onInstructionChange, onSsmlToggle, onMarkdownFilterToggle,
   onNavigateToClone,
 }: GlobalControlBarProps) {
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { refreshCounter } = useVoiceRefresh();
 
@@ -173,10 +182,56 @@ export function GlobalControlBar({
         </select>
       </div>
 
+      {/* Advanced params toggle */}
+      {(onInstructionChange || onSsmlToggle || onMarkdownFilterToggle) && (
+        <>
+          <div className={styles.divider} />
+          <button className={styles.advancedToggle} onClick={() => setShowAdvanced(!showAdvanced)}>
+            {showAdvanced ? '收起' : '更多'}
+          </button>
+        </>
+      )}
+
+      {/* Hint */}
       <div className={styles.hint}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
         仅影响新段落
       </div>
+
+      {/* Advanced params row */}
+      {showAdvanced && (
+        <div className={styles.advancedRow}>
+          {onInstructionChange && (
+            <div className={styles.advancedSection}>
+              <span className={styles.paramLabel}>复刻指令</span>
+              <input
+                type="text"
+                className={styles.instructionInput}
+                value={instruction || ''}
+                maxLength={50}
+                placeholder="输入复刻指令..."
+                onChange={e => onInstructionChange(e.target.value)}
+              />
+            </div>
+          )}
+          {onSsmlToggle && (
+            <button
+              className={`${styles.toggleChip} ${enableSsml ? styles.toggleChipOn : ''}`}
+              onClick={onSsmlToggle}
+            >
+              SSML {enableSsml ? '开' : '关'}
+            </button>
+          )}
+          {onMarkdownFilterToggle && (
+            <button
+              className={`${styles.toggleChip} ${enableMarkdownFilter ? styles.toggleChipOn : ''}`}
+              onClick={onMarkdownFilterToggle}
+            >
+              MD过滤 {enableMarkdownFilter ? '开' : '关'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
