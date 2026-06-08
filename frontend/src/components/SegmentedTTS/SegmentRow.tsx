@@ -159,17 +159,25 @@ export function SegmentRow({
   };
   const voiceGender = resolveGender();
 
-  // For stale detection: compare generated voice with current global
+  // For stale detection: compare BOTH engine and voice with current global
   // Use the engine the segment WOULD use (global if unlocked, stored if locked)
   const effectiveEngine = hasOverride ? segment.params.engine : engine;
+  const generatedEngine = segment.params.engine;
+
+  // Engine changed → stale (unless locked)
+  const engineChanged = !hasOverride && !!generatedEngine && generatedEngine !== effectiveEngine;
+
+  // Voice changed within the same engine → stale
   const currentGlobalVoice = effectiveEngine === 'edge_tts'
     ? (globalEdgeVoice || '')
     : (globalVoiceId || '');
-  const isStale = isReady
-    && !hasOverride
+  const voiceChanged = !hasOverride
+    && !engineChanged
     && !!segment.generated_voice_id
     && !!currentGlobalVoice
     && segment.generated_voice_id !== currentGlobalVoice;
+
+  const isStale = isReady && (engineChanged || voiceChanged);
 
   const dur = isReady && segment.duration_sec
     ? segment.duration_sec.toFixed(1) + 's'
@@ -276,7 +284,7 @@ export function SegmentRow({
         {/* Stale warning */}
         {isStale && (
           <div className={styles.staleWarn}>
-            ⚠ 音色已变更（当前全局: {globalVoiceName}），此段音频使用的是旧音色，建议重新生成
+            ⚠ {engineChanged ? '模型已切换' : '音色已变更'}（当前全局: {ENGINE_LABELS[effectiveEngine] || effectiveEngine}{currentGlobalVoice ? ` · ${globalVoiceName || currentGlobalVoice}` : ''}），建议重新生成
           </div>
         )}
 
