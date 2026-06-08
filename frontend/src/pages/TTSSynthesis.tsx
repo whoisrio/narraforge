@@ -72,6 +72,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const activeChapter = useMemo(() => getActiveChapter(project)!, [project]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
+  // Ref to always have the latest handleRegenerate (avoids stale closure in confirm dialog)
+  const handleRegenerateRef = useRef<(id: string) => Promise<void>>(() => Promise.resolve());
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -483,6 +485,9 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     }
   }, [activeChapter.segments, dispatch, buildCurrentParams, loadHistory, showToast]);
 
+  // Keep ref in sync
+  handleRegenerateRef.current = handleRegenerate;
+
   const handleRegenerateAll = useCallback(async () => {
     if (generating) return;
 
@@ -543,11 +548,12 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       dispatch({ type: 'MARK_QUEUED', ids: toRegenerate.map(s => s.id) });
 
       // Step 3: Generate in parallel (3 workers)
+      // Use ref to always get the LATEST handleRegenerate (not stale closure)
       let i = 0;
       const next = async () => {
         while (i < toRegenerate.length) {
           const seg = toRegenerate[i++];
-          await handleRegenerate(seg.id);
+          await handleRegenerateRef.current(seg.id);
         }
       };
       await Promise.all(Array.from({ length: 3 }, () => next()));
@@ -558,7 +564,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     } finally {
       setGenerating(false);
     }
-  }, [dispatch, handleRegenerate, showToast]);
+  }, [dispatch, showToast]);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
     const ids = idsArg ?? activeChapter.segments.filter(s => s.params.engine === 'cosyvoice').map(s => s.id);
