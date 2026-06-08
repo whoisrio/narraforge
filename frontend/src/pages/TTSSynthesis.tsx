@@ -457,7 +457,26 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
       // Save the actual voice identifier used (engine-specific)
       const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : voiceId);
-      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId });
+      // Build updated params to persist the actually-used engine/voice into the segment
+      const updatedParams: Partial<import('../types').SegmentEngineParams> = { engine: effectiveEngine as any };
+      if (effectiveEngine === 'edge_tts') {
+        updatedParams.edge_voice = effectiveEdgeVoice;
+        updatedParams.edge_rate = effectiveEdgeRate;
+        updatedParams.edge_volume = effectiveEdgeVolume;
+      } else if (effectiveEngine === 'mimo_tts') {
+        updatedParams.mimo_mode = effectiveMimoMode;
+        updatedParams.mimo_preset_voice = effectiveMimoPreset;
+        updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
+        updatedParams.mimo_instruction = effectiveMimoInstruction;
+      } else {
+        updatedParams.voice_id = voiceId;
+        updatedParams.speed = speed;
+        updatedParams.volume = volume;
+        updatedParams.pitch = pitch;
+        updatedParams.language = language;
+        updatedParams.instruction = instruction;
+      }
+      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams });
       loadHistory(); // refresh history so generated audio appears in list
     } catch (e: any) {
       dispatch({ type: 'GENERATE_FAIL', id, error: e?.message ?? '生成失败' });
@@ -516,8 +535,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       for (const seg of toRegenerate) {
         if (seg.current_audio_id) {
           try { await deleteTTSResult(seg.current_audio_id); } catch {}
-          dispatch({ type: 'GENERATE_SUCCESS', id: seg.id, audio_id: '', duration_sec: 0 });
         }
+        dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id });
       }
 
       // Step 2: Mark all as queued

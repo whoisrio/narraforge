@@ -128,9 +128,10 @@ export type Action =
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
-  | { type: 'GENERATE_SUCCESS'; id: string; audio_id: string; duration_sec: number; generated_voice_id?: string }
+  | { type: 'GENERATE_SUCCESS'; id: string; audio_id: string; duration_sec: number; generated_voice_id?: string; updated_params?: Partial<import('../types').SegmentEngineParams> }
   | { type: 'GENERATE_FAIL'; id: string; error: string }
   | { type: 'UNDO_REGENERATE'; id: string }
+  | { type: 'CLEAR_SEGMENT_AUDIO'; id: string }
   | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string }
   | { type: 'SELECT_SEGMENT'; id: string | undefined };
 
@@ -279,7 +280,19 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
-        if (seg) { seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = action.audio_id; seg.duration_sec = action.duration_sec; seg.status = 'ready'; seg.error = undefined; seg.generated_voice_id = action.generated_voice_id; seg.updated_at = new Date().toISOString(); }
+        if (seg) {
+          seg.previous_audio_id = seg.current_audio_id;
+          seg.current_audio_id = action.audio_id;
+          seg.duration_sec = action.duration_sec;
+          seg.status = 'ready';
+          seg.error = undefined;
+          seg.generated_voice_id = action.generated_voice_id;
+          seg.updated_at = new Date().toISOString();
+          // Update segment params with actually-used engine/voice
+          if (action.updated_params) {
+            seg.params = { ...seg.params, ...action.updated_params };
+          }
+        }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }
@@ -297,6 +310,14 @@ export function segmentedReducer(state: State, action: Action): State {
         const seg = s.find(x => x.id === action.id);
         if (seg && seg.previous_audio_id) { const tmp = seg.current_audio_id; seg.current_audio_id = seg.previous_audio_id; seg.previous_audio_id = tmp; seg.updated_at = new Date().toISOString(); }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
+    }
+    case 'CLEAR_SEGMENT_AUDIO': {
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) { seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = undefined; seg.duration_sec = undefined; seg.status = 'idle'; seg.generated_voice_id = undefined; }
+        return { ...ch, segments: s };
       })};
     }
     case 'TOGGLE_INDEPENDENT_VOICE': {
