@@ -401,13 +401,13 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const hasVoiceLock = overrides.includes('voice');
       const effectiveEngine = hasVoiceLock ? (sp.engine || gp.engine) : gp.engine;
 
-      // Params: locked → use stored; unlocked → use CURRENT global directly (no fallback to stored)
-      const voiceId = hasVoiceLock ? sp.voice_id : gp.voice_id;
+      // Params: locked → use stored; unlocked → use CURRENT global, fallback to stored for CosyVoice-specific fields
+      const voiceId = hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id);
       const speed = overrides.includes('speed') ? sp.speed : ((gp as any).speed ?? 1.0);
       const volume = overrides.includes('volume') ? sp.volume : ((gp as any).volume ?? 80);
       const pitch = overrides.includes('pitch') ? sp.pitch : ((gp as any).pitch ?? 1.0);
-      const instruction = overrides.includes('instruction') ? sp.instruction : ((gp as any).instruction || '');
-      const language = overrides.includes('language') ? sp.language : ((gp as any).language || 'Chinese');
+      const instruction = overrides.includes('instruction') ? sp.instruction : ((gp as any).instruction || sp.instruction || '');
+      const language = overrides.includes('language') ? sp.language : ((gp as any).language || sp.language || 'Chinese');
 
       // Edge-TTS: locked → stored; unlocked → current global
       const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : ((gp as any).edge_voice || '');
