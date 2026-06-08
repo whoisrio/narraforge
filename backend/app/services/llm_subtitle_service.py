@@ -7,17 +7,21 @@ LLM 字幕服务 — 校准 + 双语翻译
 - 自动适配 MiMo (api-key) 和 Qwen (Bearer) 认证方式
 """
 
-import json
 import logging
 import re
 from dataclasses import dataclass
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 # Re-exports from llm_client (migrated 2026-06-06). Aliased to private names
 # to keep all existing call sites in this file working unchanged.
 from app.services.llm_client import (
+    LLMValidationError,
+    call_llm as _call_llm,
+    call_llm_structured as _call_llm_structured,
     extract_json_array as _extract_json_array,
     get_llm_config as _get_llm_config,
-    call_llm as _call_llm,
 )
 
 logger = logging.getLogger(__name__)
@@ -55,6 +59,47 @@ class BilingualResult:
     segments: list[BilingualSegment]
     target_language: str
     model: str | None
+
+
+Confidence = Literal["high", "medium", "low"]
+
+
+class _CorrectionItem(BaseModel):
+    """LLM 返回的单条校准建议（schema 用）。"""
+    index: int
+    original: str = ""
+    suggested: str = ""
+    reason: str = ""
+    confidence: Confidence = "medium"
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def _normalize_confidence(cls, v):
+        # confidence 可能是 string("high") 或 int(100)，统一为 string
+        if isinstance(v, (int, float)):
+            if v >= 80:
+                return "high"
+            if v >= 50:
+                return "medium"
+            return "low"
+        if isinstance(v, str):
+            low = v.strip().lower()
+            if low in ("high", "medium", "low"):
+                return low
+        return "medium"
+
+
+class _CorrectionResponse(BaseModel):
+    suggestions: list[_CorrectionItem] = Field(default_factory=list)
+
+
+class _TranslationItem(BaseModel):
+    index: int
+    translated: str = ""
+
+
+class _TranslationResponse(BaseModel):
+    segments: list[_TranslationItem] = Field(default_factory=list)
 
 
 def _parse_srt_blocks(srt_content: str) -> list[dict]:
@@ -224,14 +269,13 @@ def correct_subtitles(
         "- 绝对不能添加、删除或重排内容\n"
         "- 如果 ASR 字幕的文字和原始文稿意思一致，只是措辞略有不同，不要修改\n"
         "- 只关注明显的识别错误\n\n"
-        "输出格式：JSON 数组，每个元素：\n"
+        "输出 JSON 对象 {\"suggestions\": [...]}，每个 suggestion 包含：\n"
         '  "index": SRT序号(int)\n'
         '  "original": ASR原文（该条字幕的完整文本）\n'
         '  "suggested": 修改后的完整文本（只改错字，其余保持不变）\n'
         '  "reason": 错误说明（如"期中→期终，同音字错误"，15字以内）\n'
-        '  "confidence": "high"/"medium"/"low"\n\n'
-        "如果所有字幕都正确，返回空数组 []。\n"
-        "只返回 JSON 数组，不要其他文字。"
+        '  "confidence": "high" / "medium" / "low"\n\n'
+        "如果所有字幕都正确，返回 {\"suggestions\": []}。"
     )
 
     user_content = (
@@ -244,47 +288,33 @@ def correct_subtitles(
         {"role": "user", "content": user_content},
     ]
 
-    raw = _call_llm(messages, model=model, temperature=0.1, db=db)
-    # 提取 JSON：兼容 markdown 代码块、前后杂文
-    json_str = _extract_json_array(raw)
-    if not json_str:
-        logger.warning(f"LLM 返回非 JSON 内容 ({len(raw)}字): {raw[:300]}")
-        return CorrectionResult(suggestions=[], model=model)
-
     try:
-        items = json.loads(json_str)
-    except json.JSONDecodeError:
-        logger.warning(f"LLM 返回 JSON 解析失败: {json_str[:300]}")
+        response = _call_llm_structured(
+            messages,
+            schema=_CorrectionResponse,
+            model=model,
+            temperature=0.1,
+            db=db,
+        )
+    except LLMValidationError as e:
+        logger.warning(f"LLM 校准返回无法解析: {e}; last_raw[:300]={e.last_raw[:300]!r}")
         return CorrectionResult(suggestions=[], model=model)
 
+    valid_indexes = {b["index"] for b in blocks}
     suggestions = []
-    for item in items:
-        idx = item.get("index", 0)
+    for item in response.suggestions:
         # 校验：suggested 和 original 必须不同
-        orig = item.get("original", "")
-        sugg = item.get("suggested", "")
-        if orig == sugg:
+        if item.original == item.suggested:
             continue
         # 校验：index 必须在合法范围内
-        if not any(b["index"] == idx for b in blocks):
+        if item.index not in valid_indexes:
             continue
-        # confidence 可能是 string("high") 或 int(100)，统一为 string
-        raw_conf = item.get("confidence", "medium")
-        if isinstance(raw_conf, (int, float)):
-            if raw_conf >= 80:
-                conf = "high"
-            elif raw_conf >= 50:
-                conf = "medium"
-            else:
-                conf = "low"
-        else:
-            conf = str(raw_conf).lower()
         suggestions.append(CorrectionSuggestion(
-            index=idx,
-            original=orig,
-            suggested=sugg,
-            reason=item.get("reason", ""),
-            confidence=conf,
+            index=item.index,
+            original=item.original,
+            suggested=item.suggested,
+            reason=item.reason,
+            confidence=item.confidence,
         ))
 
     return CorrectionResult(suggestions=suggestions, model=model)
@@ -319,10 +349,9 @@ def translate_subtitles(srt_content: str, target_language: str = "English",
             "1. 保持每条字幕的序号 [N] 对应关系\n"
             "2. 翻译自然流畅，适合字幕显示\n"
             "3. 每条翻译保持简洁，控制在合理长度\n\n"
-            "输出 JSON 数组，每个元素：\n"
+            "输出 JSON 对象 {\"segments\": [...]}，每个 segment 包含：\n"
             '  "index": 序号(int)\n'
-            '  "translated": 翻译后的文本\n\n'
-            "只返回 JSON。"
+            '  "translated": 翻译后的文本'
         )
 
         messages = [
@@ -330,31 +359,22 @@ def translate_subtitles(srt_content: str, target_language: str = "English",
             {"role": "user", "content": text_blob},
         ]
 
-        raw = _call_llm(messages, model=model, db=db)
-        json_str = _extract_json_array(raw)
-        if not json_str:
-            logger.warning(f"翻译 LLM 返回非 JSON ({len(raw)}字): {raw[:300]}")
-            # fallback: 填充原文
-            for b in batch:
-                all_segments.append(BilingualSegment(
-                    index=b["index"], time_line=b["time_line"],
-                    original=b["text"], translated=b["text"],
-                ))
-            continue
-
         try:
-            trans_items = json.loads(json_str)
-        except json.JSONDecodeError:
-            for b in batch:
-                all_segments.append(BilingualSegment(
-                    index=b["index"], time_line=b["time_line"],
-                    original=b["text"], translated=b["text"],
-                ))
-            continue
+            response = _call_llm_structured(
+                messages,
+                schema=_TranslationResponse,
+                model=model,
+                db=db,
+            )
+            trans_map = {item.index: item.translated for item in response.segments}
+        except LLMValidationError as e:
+            logger.warning(
+                f"翻译 LLM 返回无法解析: {e}; last_raw[:300]={e.last_raw[:300]!r}"
+            )
+            trans_map = {}
 
-        trans_map = {item["index"]: item["translated"] for item in trans_items}
         for b in batch:
-            translated = trans_map.get(b["index"], b["text"])
+            translated = trans_map.get(b["index"]) or b["text"]
             all_segments.append(BilingualSegment(
                 index=b["index"], time_line=b["time_line"],
                 original=b["text"], translated=translated,
