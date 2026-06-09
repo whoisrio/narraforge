@@ -30,6 +30,7 @@ class Settings(BaseSettings):
     voices_dir: Path = uploads_dir / "voices"
     videos_dir: Path = uploads_dir / "videos"
     srt_output_dir: Path = uploads_dir / "srt"
+    segmented_dir: Path = uploads_dir / "segmented"
     output_dir: Path = base_dir / "output"
     clone_voices_dir: Path = output_dir / "clone_voices"
     logs_dir: Path = base_dir / "logs"
@@ -95,6 +96,7 @@ class Settings(BaseSettings):
         self.voices_dir.mkdir(parents=True, exist_ok=True)
         self.videos_dir.mkdir(parents=True, exist_ok=True)
         self.srt_output_dir.mkdir(parents=True, exist_ok=True)
+        self.segmented_dir.mkdir(parents=True, exist_ok=True)
         self.clone_voices_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
