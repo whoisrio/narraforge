@@ -461,6 +461,31 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     });
   }, [activeChapter.segments, dispatch]);
 
+  /** Re-split: clean up existing segment audio before applying new split */
+  const doApplySplit = useCallback((items: { text: string; emotion?: string }[], originalText: string) => {
+    const oldAudioIds = activeChapter.segments
+      .flatMap(s => [s.current_audio_id, s.previous_audio_id])
+      .filter((id): id is string => !!id);
+
+    const apply = async () => {
+      for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch {} }
+      dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
+      dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
+      dispatch({ type: 'APPLY_SPLIT', items });
+    };
+
+    if (oldAudioIds.length > 0) {
+      setConfirmDialog({
+        open: true, title: '重新拆分',
+        message: `重新拆分将删除当前 ${activeChapter.segments.length} 段中已生成的 ${oldAudioIds.length} 段音频，是否继续？`,
+        variant: 'warning', confirmLabel: '继续',
+        onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); apply(); },
+      });
+    } else {
+      apply();
+    }
+  }, [activeChapter.segments, dispatch, buildCurrentParams, selectedVoiceId, edgeVoice, engine]);
+
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
@@ -859,7 +884,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           </div>
 
           <AudioPlayer result={result} isLoading={isLoading} />
-          <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} />
+          <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} onConfirm={setConfirmDialog} />
         </div>
       )}
 
@@ -987,15 +1012,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             splitConfig={activeChapter.split_config}
             onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
             onSplit={(texts, originalText) => {
-              dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
-              dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
-              dispatch({ type: 'APPLY_SPLIT', items: texts.map(t => ({ text: t })) });
+              doApplySplit(texts.map(t => ({ text: t })), originalText);
             }}
             onLLMSplit={async (text) => {
-              dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
-              dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: text, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
               const result = await textSplitApi.llmSplit(text, activeChapter.split_config.delimiters);
-              dispatch({ type: 'APPLY_SPLIT', items: result.segments.map(s => ({ text: s.text, emotion: s.emotion })) });
+              doApplySplit(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), text);
             }}
             segmentTexts={activeChapter.segments.map(s => s.text)}
             segmentCount={activeChapter.segments.length}
@@ -1063,9 +1084,6 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
               onMerge={handleMerge}
               onSplit={handleSplit}
             />
-
-            {/* Audio History for segmented mode */}
-            <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} />
 
             <ExportDialog open={exportOpen} segments={activeChapter.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
           </div>
