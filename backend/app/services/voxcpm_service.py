@@ -316,7 +316,7 @@ class VoxCPMService:
             text = generate_kwargs.get("text", "")
             if ref_path:
                 import random as _random
-                seed = hash(f"{ref_path}:{text}") % (2**31)
+                seed = hash(f"{ref_path}") % (2**31)
                 _random.seed(seed)
                 try:
                     import torch
@@ -325,7 +325,8 @@ class VoxCPMService:
                         torch.cuda.manual_seed_all(seed)
                 except ImportError:
                     pass
-
+            
+            logger.info(f'\nkwargs: {generate_kwargs}')
             wav = self.model.generate(**generate_kwargs)
             elapsed = round(time.time() - start_time, 2)
 
