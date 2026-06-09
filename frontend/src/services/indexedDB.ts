@@ -1,10 +1,11 @@
 import type { TTSLocalRecord, STTLocalRecord } from '../types';
 
 const DB_NAME = 'voice_clone_studio';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const TTS_STORE = 'tts_results';
 const STT_STORE = 'stt_results';
 const SEGMENTED_PROJECTS_STORE = 'segmented_projects';
+const DRAFTS_STORE = 'project_drafts';
 
 /** 打开/创建 IndexedDB 数据库 */
 function openDB(): Promise<IDBDatabase> {
@@ -21,6 +22,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(SEGMENTED_PROJECTS_STORE)) {
         db.createObjectStore(SEGMENTED_PROJECTS_STORE, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(DRAFTS_STORE)) {
+        db.createObjectStore(DRAFTS_STORE, { keyPath: 'project_id' });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -30,6 +34,7 @@ function openDB(): Promise<IDBDatabase> {
 // Re-exported for segmentedProjectDB.ts to share the same opener.
 export function _openDB() { return openDB(); }
 export const _SEGMENTED_PROJECTS_STORE = SEGMENTED_PROJECTS_STORE;
+export const _DRAFTS_STORE = DRAFTS_STORE;
 export const _TTS_STORE = TTS_STORE;
 
 function storePut(db: IDBDatabase, storeName: string, value: unknown): Promise<void> {
