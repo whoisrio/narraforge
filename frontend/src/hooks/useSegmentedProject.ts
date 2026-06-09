@@ -411,7 +411,7 @@ export function segmentedReducer(state: State, action: Action): State {
 // Hook wrapper
 // -----------------------------------------------------------------------
 import { useReducer, useEffect } from 'react';
-import { getProject } from '../services/segmentedProjectDB';
+import { segmentedProjectDB } from '../services/segmentedProjectDB';
 
 export { getActiveChapter };
 
@@ -423,7 +423,7 @@ export function useSegmentedProject(projectId: string | null = null) {
 
   useEffect(() => {
     if (projectId) {
-      getProject(projectId).then((p) => {
+      segmentedProjectDB.getProject(projectId).then((p) => {
         if (p) dispatch({ type: 'LOAD_PROJECT', project: p });
       }).catch(e => console.warn('Load project failed:', e));
     }

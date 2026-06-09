@@ -13,7 +13,12 @@ import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, ty
 import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi } from '../services/api';
 import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
-import { saveProject, getProject, listProjects, deleteProject } from '../services/segmentedProjectDB';
+import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
+import { backendStorage } from '../services/backendSegmentedProjectStorage';
+import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
+import { getDraft, deleteDraft } from '../services/segmentedDraftStore';
+import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
+import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams } from '../types';
@@ -109,36 +114,53 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     };
   }, []);
 
-  // Load last project from IndexedDB on mount
+  // Load last project on mount, possibly surfacing migration prompt
   useEffect(() => {
-    listProjects().then(list => {
+    (async () => {
+      const list = await projectStorage.listProjects();
       setProjectList(list);
       if (list.length > 0) {
-        const migrated = migrateV1(list[0]);
+        const latest = list[0];
+        let full = await projectStorage.getProject(latest.id);
+        if (!full) full = latest as SegmentedProject;
+        const localDraft = await getDraft(full.id);
+        if (localDraft && localDraft.base_updated_at && localDraft.base_updated_at < full.updated_at && localDraft.dirty) {
+          setConflictPrompt({ backend: full, draft: localDraft });
+          return;
+        }
+        const migrated = migrateV1(full);
         setProject(migrated);
         dispatch({ type: 'LOAD_PROJECT', project: migrated });
-        // Restore engine/voice from active chapter
         const ch = getActiveChapter(migrated);
         if (ch) restoreChapterSettings(ch);
+        await draftSync.adoptBackendVersion(migrated);
       }
-    }).catch(() => {});
-  }, []);
+      if (storageMode === 'backend') {
+        const localProjects = await indexedDBStorage.listProjects();
+        if (localProjects.length > 0) {
+          setLocalCount(localProjects.length);
+          setShowMigration(true);
+        }
+      }
+    })().catch((e) => console.warn('Project load failed:', e));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageMode]);
 
-  // Auto-save project to IndexedDB (debounced)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Auto-save: debounce PUT in backend mode; IndexedDB direct in frontend mode
   useEffect(() => {
-    if (project.chapters.length === 1 && !project.chapters[0].original_text && project.chapters[0].segments.length === 0 && project.name === '新项目') return; // skip empty default
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(async () => {
-      try {
-        await saveProject(project);
-        // Refresh project list
-        const list = await listProjects();
-        setProjectList(list);
-      } catch (e) { console.warn('Auto-save failed:', e); }
-    }, 1000);
-    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [project]);
+    if (project.chapters.length === 1 && !project.chapters[0].original_text && project.chapters[0].segments.length === 0 && project.name === '新项目') return;
+    if (storageMode === 'backend') {
+      void draftSync.markDirty(project);
+    } else {
+      const t = setTimeout(async () => {
+        try {
+          await indexedDBStorage.saveProject(project);
+        } catch (e) { console.warn('Auto-save failed:', e); }
+      }, 1000);
+      return () => clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, storageMode]);
 
   const dispatch = useCallback((action: Action) => {
     setProject(prev => segmentedReducer({ project: prev }, action).project);
@@ -179,6 +201,12 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const enrichVoiceName = useCallback((voiceId: string, voiceName: string) => {
     return voiceDescriptionMapRef.current.get(voiceId) || voiceName;
   }, []);
+
+  const projectStorage: SegmentedProjectStorage = storageMode === 'backend' ? backendStorage : indexedDBStorage;
+  const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
+  const [showMigration, setShowMigration] = useState(false);
+  const [localCount, setLocalCount] = useState(0);
+  const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: any } | null>(null);
 
   const blobUrlsRef = useRef<string[]>([]);
   const revokeBlobUrls = useCallback(() => {
@@ -393,8 +421,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
   const doDeleteProject = useCallback(async () => {
     try {
-      await deleteProject(project.id);
-      const list = await listProjects();
+      await projectStorage.deleteProject(project.id);
+      if (storageMode === 'backend') {
+        await deleteDraft(project.id);
+      }
+      const list = await projectStorage.listProjects();
       setProjectList(list);
       if (list.length > 0) {
         const migrated = migrateV1(list[0]);
@@ -986,8 +1017,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                   setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
                   setPanelOpen(true);
                 } else {
-                  // Load latest from IndexedDB to ensure we have fresh data
-                  const p = await getProject(pid);
+                  // Load latest from storage to ensure we have fresh data
+                  const p = await projectStorage.getProject(pid);
                   if (p) {
                     const migrated = migrateV1(p);
                     dispatch({ type: 'LOAD_PROJECT', project: migrated });
@@ -1184,6 +1215,33 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         <div className={`${styles.toast} ${toast.type === 'error' ? styles.toast_error : styles.toast_success}`}>
           {toast.message}
         </div>
+      )}
+      {showMigration && (
+        <MigrationPrompt
+          localCount={localCount}
+          onComplete={() => {
+            setShowMigration(false);
+            void projectStorage.listProjects().then(setProjectList);
+          }}
+          onDismiss={() => setShowMigration(false)}
+        />
+      )}
+      {conflict && (
+        <ConflictPrompt
+          backend={conflict.backend}
+          draft={conflict.draft}
+          onUseBackend={async () => {
+            await draftSync.adoptBackendVersion(conflict.backend);
+            setProject(conflict.backend);
+            dispatch({ type: 'LOAD_PROJECT', project: conflict.backend });
+            setConflictPrompt(null);
+          }}
+          onUseDraft={async () => {
+            setProject(conflict.draft.draft);
+            dispatch({ type: 'LOAD_PROJECT', project: conflict.draft.draft });
+            setConflictPrompt(null);
+          }}
+        />
       )}
     </div>
   );
