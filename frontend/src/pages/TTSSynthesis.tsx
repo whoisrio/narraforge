@@ -17,6 +17,7 @@ import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts';
@@ -60,7 +61,9 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [compactMode, setCompactMode] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [isPaused, setIsPaused] = useState(false);
+  const [playAllActive, setPlayAllActive] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
     open: boolean; title: string; message: string;
     variant?: 'warning' | 'danger';
@@ -70,8 +73,22 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
   // Derived: active chapter
   const activeChapter = useMemo(() => getActiveChapter(project)!, [project]);
+  // Sum total duration of all chapters BEFORE the active one (used as time offset)
+  const chapterStartOffset = useMemo(() => {
+    const activeIdx = project.chapters.findIndex(c => c.id === activeChapter.id);
+    if (activeIdx <= 0) return 0;
+    let total = 0;
+    for (let i = 0; i < activeIdx; i++) {
+      for (const seg of project.chapters[i].segments) {
+        if (seg.status === 'ready' && seg.duration_sec) total += seg.duration_sec;
+      }
+    }
+    return total;
+  }, [project.chapters, activeChapter.id]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
+  // Ref to abort play-all sequence
+  const playAllAbortRef = useRef(false);
   // Ref to always have the latest handleRegenerate (avoids stale closure in confirm dialog)
   const handleRegenerateRef = useRef<(id: string) => Promise<void>>(() => Promise.resolve());
 
@@ -93,21 +110,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         dispatch({ type: 'LOAD_PROJECT', project: migrated });
         // Restore engine/voice from active chapter
         const ch = getActiveChapter(migrated);
-        if (ch) {
-          if (ch.engine) setEngine(ch.engine as Engine);
-          if (ch.voice_id) setSelectedVoiceId(ch.voice_id);
-          if (ch.edge_voice) setEdgeVoice(ch.edge_voice);
-          if (ch.edge_rate != null) setEdgeRate(ch.edge_rate);
-          if (ch.edge_volume != null) setEdgeVolume(ch.edge_volume);
-          if (ch.mimo_mode) setMimoMode(ch.mimo_mode as MiMoMode);
-          if (ch.mimo_preset_voice) setMimoPresetVoice(ch.mimo_preset_voice);
-          if (ch.mimo_instruction) setMimoInstruction(ch.mimo_instruction);
-          if (ch.mimo_clone_voice_id) setMimoCloneVoiceId(ch.mimo_clone_voice_id);
-          if (ch.language) setParams(prev => ({ ...prev, language: ch.language }));
-          if (ch.speed != null) setParams(prev => ({ ...prev, speed: ch.speed }));
-          if (ch.volume != null) setParams(prev => ({ ...prev, volume: ch.volume }));
-          if (ch.pitch != null) setParams(prev => ({ ...prev, pitch: ch.pitch }));
-        }
+        if (ch) restoreChapterSettings(ch);
       }
     }).catch(() => {});
   }, []);
@@ -142,10 +145,10 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice,
         mimo_instruction: mimoInstruction, mimo_clone_voice_id: mimoCloneVoiceId,
         language: params.language, speed: params.speed,
-        volume: params.volume, pitch: params.pitch,
+        volume: params.volume, pitch: params.pitch, panel_open: panelOpen,
       },
     });
-  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, params.language, params.speed, params.volume, params.pitch, dispatch]);
+  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
     setToast({ message, type });
@@ -278,6 +281,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setMimoInstruction(ch.mimo_instruction || '');
     setMimoCloneVoiceId(ch.mimo_clone_voice_id || '');
     setParams({ language: ch.language || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
+    setPanelOpen(ch.panel_open ?? true);
   }, []);
 
   const handleSelectChapter = useCallback((chapterId: string) => {
@@ -302,6 +306,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setMimoInstruction('');
     setMimoCloneVoiceId('');
     setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
+    setPanelOpen(true);
   }, [project.chapters.length, dispatch]);
 
   const doDeleteChapter = useCallback(async (chapterId: string) => {
@@ -372,6 +377,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         setMimoMode('preset'); setMimoPresetVoice('冰糖');
         setMimoInstruction(''); setMimoCloneVoiceId('');
         setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
+        setPanelOpen(true);
       }
       showToast('项目已删除');
     } catch (e) { console.error('Delete project failed:', e); showToast('删除失败', 'error'); }
@@ -389,6 +395,71 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const handleToggleIndependentVoice = useCallback((id: string) => {
     dispatch({ type: 'TOGGLE_INDEPENDENT_VOICE', id });
   }, [dispatch]);
+
+  const handleMerge = useCallback((id: string, direction: 'up' | 'down') => {
+    const segs = activeChapter.segments;
+    const srcIdx = segs.findIndex(s => s.id === id);
+    if (srcIdx < 0) return;
+    // Normalize: always merge "prev + next" → keepIdx is the segment that survives
+    const keepIdx = direction === 'down' ? srcIdx : srcIdx - 1;
+    if (keepIdx < 0 || keepIdx >= segs.length - 1) return;
+    const cur = segs[keepIdx];
+    const nxt = segs[keepIdx + 1];
+    const hasAudio = !!(cur.current_audio_id || nxt.current_audio_id);
+    const doMerge = async () => {
+      if (cur.current_audio_id) { try { await deleteTTSResult(cur.current_audio_id); } catch {} }
+      if (nxt.current_audio_id) { try { await deleteTTSResult(nxt.current_audio_id); } catch {} }
+      dispatch({ type: 'MERGE_SEGMENTS', id, direction });
+    };
+    if (hasAudio) {
+      setConfirmDialog({
+        open: true, title: '合并分段',
+        message: `${direction === 'down' ? '向下' : '向上'}合并将删除两段的已生成音频，是否继续？`,
+        variant: 'warning', confirmLabel: '继续',
+        onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doMerge(); },
+      });
+    } else {
+      doMerge();
+    }
+  }, [activeChapter.segments, dispatch]);
+
+  const handleSplit = useCallback((id: string, position: number) => {
+    const seg = activeChapter.segments.find(s => s.id === id);
+    if (!seg) return;
+    const hasAudio = !!seg.current_audio_id;
+    const doSplit = async () => {
+      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
+      dispatch({ type: 'SPLIT_SEGMENT', id, position });
+    };
+    if (hasAudio) {
+      setConfirmDialog({
+        open: true, title: '拆分分段',
+        message: '拆分将删除该段的已生成音频，是否继续？',
+        variant: 'warning', confirmLabel: '继续',
+        onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doSplit(); },
+      });
+    } else {
+      doSplit();
+    }
+  }, [activeChapter.segments, dispatch]);
+
+  const handleDeleteSegment = useCallback((id: string) => {
+    const seg = activeChapter.segments.find(s => s.id === id);
+    if (!seg) return;
+    const doDelete = async () => {
+      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
+      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+      dispatch({ type: 'DELETE_SEGMENT', id });
+    };
+    const preview = seg.text.length > 20 ? seg.text.slice(0, 20) + '…' : seg.text;
+    const audioWarn = seg.current_audio_id ? '\n已生成的音频也将一并删除。' : '';
+    setConfirmDialog({
+      open: true, title: '删除分段',
+      message: `确定删除该分段？\n「${preview}」${audioWarn}`,
+      variant: 'danger', confirmLabel: '删除',
+      onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDelete(); },
+    });
+  }, [activeChapter.segments, dispatch]);
 
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -579,6 +650,24 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     } catch { showToast('SSML 标注失败，请检查 LLM 配置', 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
 
+  /** Stop whatever is currently playing (single or play-all) and reset state */
+  const stopCurrentAudio = useCallback(() => {
+    playAllAbortRef.current = true;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current = null;
+    }
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
+    setPlayingId(undefined);
+    setIsPaused(false);
+    setPlayAllActive(false);
+  }, []);
+
   const handlePlaySegment = useCallback(async (id: string) => {
     // If clicking the same segment that's active → toggle pause/resume
     if (playingId === id && audioRef.current) {
@@ -592,15 +681,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       return;
     }
 
-    // Stop any currently playing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
-    if (blobUrlRef.current) {
-      URL.revokeObjectURL(blobUrlRef.current);
-      blobUrlRef.current = null;
-    }
+    // Stop any currently playing audio (also interrupts play-all)
+    stopCurrentAudio();
 
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg?.current_audio_id) return;
@@ -612,33 +694,66 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       blobUrlRef.current = url;
       const audio = new Audio(url);
       audioRef.current = audio;
-      audio.onended = () => { setPlayingId(undefined); setIsPaused(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
-      audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
+      audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
+      audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
       setPlayingId(id);
       setIsPaused(false);
+      setPlayAllActive(false);
       await audio.play();
-    } catch { setPlayingId(undefined); setIsPaused(false); }
-  }, [activeChapter.segments, playingId]);
+    } catch { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); }
+  }, [activeChapter.segments, playingId, stopCurrentAudio]);
 
   const handlePlayAll = useCallback(async () => {
     const readySegs = activeChapter.segments.filter(s => s.status === 'ready' && s.current_audio_id);
     if (readySegs.length === 0) return;
+
+    // Restart abort flag
+    playAllAbortRef.current = false;
+    setPlayAllActive(true);
+
     for (const seg of readySegs) {
+      if (playAllAbortRef.current) break;
+
+      // Stop previous audio in sequence
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.onended = null;
+        audioRef.current.onerror = null;
+        audioRef.current = null;
+      }
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
+
       setPlayingId(seg.id);
+      setIsPaused(false);
+
       try {
         const blob = await getTTSAudioBlob(seg.current_audio_id!);
-        if (!blob) continue;
+        if (!blob || playAllAbortRef.current) continue;
         const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
         const audio = new Audio(url);
+        audioRef.current = audio;
+
         await new Promise<void>((resolve) => {
-          audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-          audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+          audio.onended = () => { URL.revokeObjectURL(url); blobUrlRef.current = null; audioRef.current = null; resolve(); };
+          audio.onerror = () => { URL.revokeObjectURL(url); blobUrlRef.current = null; audioRef.current = null; resolve(); };
           audio.play().catch(() => resolve());
         });
       } catch { /* skip */ }
     }
+
+    // Clean up after sequence completes
     setPlayingId(undefined);
+    setIsPaused(false);
+    setPlayAllActive(false);
   }, [activeChapter.segments]);
+
+  const handleStopAll = useCallback(() => {
+    stopCurrentAudio();
+  }, [stopCurrentAudio]);
 
   const handleTrimSilence = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -774,6 +889,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                   setMimoInstruction('');
                   setMimoCloneVoiceId('');
                   setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
+                  setPanelOpen(true);
                 } else {
                   // Load latest from IndexedDB to ensure we have fresh data
                   const p = await getProject(pid);
@@ -782,21 +898,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                     dispatch({ type: 'LOAD_PROJECT', project: migrated });
                     setProject(migrated);
                     const ch = getActiveChapter(migrated);
-                    if (ch) {
-                      if (ch.engine) setEngine(ch.engine as Engine);
-                      if (ch.voice_id) setSelectedVoiceId(ch.voice_id);
-                      if (ch.edge_voice) setEdgeVoice(ch.edge_voice);
-                      if (ch.edge_rate != null) setEdgeRate(ch.edge_rate);
-                      if (ch.edge_volume != null) setEdgeVolume(ch.edge_volume);
-                      if (ch.mimo_mode) setMimoMode(ch.mimo_mode as MiMoMode);
-                      if (ch.mimo_preset_voice) setMimoPresetVoice(ch.mimo_preset_voice);
-                      if (ch.mimo_instruction) setMimoInstruction(ch.mimo_instruction);
-                      if (ch.mimo_clone_voice_id) setMimoCloneVoiceId(ch.mimo_clone_voice_id);
-                      if (ch.language) setParams(prev => ({ ...prev, language: ch.language }));
-                      if (ch.speed != null) setParams(prev => ({ ...prev, speed: ch.speed }));
-                      if (ch.volume != null) setParams(prev => ({ ...prev, volume: ch.volume }));
-                      if (ch.pitch != null) setParams(prev => ({ ...prev, pitch: ch.pitch }));
-                    }
+                    if (ch) restoreChapterSettings(ch);
                   }
                 }
               }}
@@ -835,8 +937,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
               <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
                 {generating ? '生成中...' : '⚡ 全部生成'}
               </button>
-              <button className={styles.segmentedActionBtn} onClick={handlePlayAll} disabled={!!playingId}>
-                {playingId ? '播放中...' : '▶ 全部播放'}
+              <button className={styles.segmentedActionBtn} onClick={playAllActive ? handleStopAll : handlePlayAll} disabled={!!playingId && !playAllActive}>
+                {playAllActive ? '■ 停止' : '▶ 全部播放'}
               </button>
               {engine === 'cosyvoice' && (
                 <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
@@ -847,6 +949,18 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           </div>
 
           {/* b. Global control bar (engine + voice + params) with voice clone CTA */}
+          <CollapsiblePanel
+            title={{cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo'}[engine] || engine}
+            summary={
+              engine === 'cosyvoice'
+                ? (selectedVoice?.description || selectedVoice?.name || '未选择')
+                : engine === 'edge_tts'
+                  ? (edgeVoice ? edgeVoice.split('-').pop()?.replace(/Neural$|V\d+$/i, '') || edgeVoice : '未选择')
+                  : (mimoMode === 'voiceclone' ? '自定义音色' : mimoPresetVoice || '未选择')
+            }
+            open={panelOpen}
+            onToggle={() => setPanelOpen(!panelOpen)}
+          >
           {engine === 'cosyvoice' ? (
             <GlobalControlBar
               selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
@@ -866,6 +980,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           ) : (
             <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
           )}
+          </CollapsiblePanel>
 
           {/* c. Original text input area — collapsible */}
           <TextInputPanel
@@ -890,15 +1005,15 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           <div className={styles.segmentedEditor}>
             {/* d. Compact mode toggle */}
             <div className={styles.viewToggle}>
-              <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
-                onClick={() => setCompactMode(false)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg>
-                展开
-              </button>
               <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
                 onClick={() => setCompactMode(true)}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
                 紧凑
+              </button>
+              <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
+                onClick={() => setCompactMode(false)}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg>
+                展开
               </button>
             </div>
 
@@ -915,12 +1030,22 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
               globalVoiceName={selectedVoice?.description || selectedVoice?.name}
               globalEdgeVoice={edgeVoice}
               engine={engine}
-              onSelect={(id) => { dispatch({ type: 'SELECT_SEGMENT', id }); }}
-              onDelete={(id) => dispatch({ type: 'DELETE_SEGMENT', id })}
+              globalMimoMode={mimoMode}
+              globalMimoPresetVoice={mimoPresetVoice}
+              globalMimoCloneVoiceId={mimoCloneVoiceId}
+              chapterStartOffset={chapterStartOffset}
+              onSelect={(id) => {
+                const currentSelected = activeChapter.selected_segment_id;
+                dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
+              }}
+              onDelete={handleDeleteSegment}
               onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId })}
               onAppend={() => dispatch({ type: 'APPEND_SEGMENT' })}
               onReorder={(from, to) => dispatch({ type: 'REORDER', fromIndex: from, toIndex: to })}
-              onEdit={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
+              onEdit={(id) => {
+                const currentSelected = activeChapter.selected_segment_id;
+                dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
+              }}
               onRegenerate={handleRegenerate}
               onPlay={handlePlaySegment}
               onTrimSilence={handleTrimSilence}
@@ -935,6 +1060,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
               onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
               onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
               onToggleIndependentVoice={handleToggleIndependentVoice}
+              onMerge={handleMerge}
+              onSplit={handleSplit}
             />
 
             {/* Audio History for segmented mode */}

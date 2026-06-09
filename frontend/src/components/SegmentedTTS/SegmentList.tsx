@@ -15,6 +15,11 @@ interface SegmentListProps {
   globalVoiceName?: string;
   globalEdgeVoice?: string;
   engine?: string;
+  globalMimoMode?: string;
+  globalMimoPresetVoice?: string;
+  globalMimoCloneVoiceId?: string;
+  /** Cumulative time offset from previous chapters (seconds) */
+  chapterStartOffset?: number;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -32,14 +37,16 @@ interface SegmentListProps {
   onUpdateParams?: (id: string, params: Partial<SegmentEngineParams>) => void;
   onUpdateEmotion?: (id: string, emotion: string) => void;
   onToggleIndependentVoice?: (id: string) => void;
+  onMerge?: (id: string, direction: 'up' | 'down') => void;
+  onSplit?: (id: string, position: number) => void;
 }
 
 export function SegmentList(props: SegmentListProps) {
-  const { segments, layout, selectedId, playingId, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, onAppend, onEdit, onPlay } = props;
+  const { segments, layout, selectedId, playingId, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId, onAppend, onEdit, onPlay } = props;
 
-  // Compute cumulative time ranges for each segment
+  // Compute cumulative time ranges for each segment (starting from chapter offset)
   const timeRanges: { start: number; end?: number }[] = [];
-  let cumulative = 0;
+  let cumulative = props.chapterStartOffset ?? 0;
   for (const seg of segments) {
     const start = cumulative;
     if (seg.duration_sec && seg.status === 'ready') {
@@ -54,12 +61,14 @@ export function SegmentList(props: SegmentListProps) {
     segment: seg, index: i + 1, isSelected: seg.id === selectedId,
     isPlaying: seg.id === playingId, isPaused: !!(isPaused && seg.id === playingId),
     compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine: props.engine,
+    globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
     onAnnotateSSML: props.onAnnotateSSML, onDuplicate: props.onDuplicate,
     onToggleIndependentVoice: props.onToggleIndependentVoice,
+    onMerge: props.onMerge, isLast: i === segments.length - 1,
   });
 
   if (layout === 'horizontal') {
@@ -94,6 +103,7 @@ export function SegmentList(props: SegmentListProps) {
                   onUpdateEmotion={props.onUpdateEmotion}
                   onRegenerate={props.onRegenerate}
                   onAnnotateSSML={(id) => props.onAnnotateSSML?.(id)}
+                  onSplit={props.onSplit}
                 />
               </div>
             )}

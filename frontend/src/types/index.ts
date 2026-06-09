@@ -268,6 +268,8 @@ export interface Chapter {
   speed?: number;
   volume?: number;
   pitch?: number;
+  /** 是否展开参数面板 */
+  panel_open?: boolean;
   /** 原始输入文本（拆分前） */
   original_text?: string;
   segments: Segment[];

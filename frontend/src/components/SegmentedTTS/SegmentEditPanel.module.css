@@ -115,6 +115,30 @@
   color: var(--color-primary);
 }
 
+/* Split bar */
+.splitBar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.splitBtn {
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-hover);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+
+.splitBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+}
+
 /* Compact action bar */
 .compactActions {
   display: flex;

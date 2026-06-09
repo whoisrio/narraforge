@@ -287,6 +287,12 @@
   flex-shrink: 0;
 }
 
+/* Avatar wrap (compact mode) */
+.compactAvatarWrap {
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
 .emoHappy .compactEmo { background: #e8a838; }
 .emoSad .compactEmo { background: #6b8db5; }
 .emoAngry .compactEmo { background: #c45a4a; }
@@ -392,6 +398,35 @@
 .compactPlayBtn:hover {
   background: #238b7e;
   transform: scale(1.1);
+}
+
+/* Compact delete button */
+.compactDelBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: all var(--transition-fast);
+}
+
+.compactDelBtn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--color-error) 8%, var(--color-surface));
+}
+
+.compactDelBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
 }
 
 /* Compact stale indicator */

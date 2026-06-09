@@ -1,0 +1,101 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Trigger button — expanded mode (matches .actBtn in SegmentRow) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
+}
+
+/* Compact mode trigger */
+.btnCompact {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+  opacity: 0.6;
+}
+
+.btnCompact:hover {
+  opacity: 1;
+  color: var(--color-primary);
+  background: var(--color-surface-hover);
+}
+
+/* Dropdown menu */
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 120px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: var(--z-popover);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  text-align: left;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.item:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+}
+
+.icon {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.item:hover .icon {
+  color: var(--color-primary);
+}

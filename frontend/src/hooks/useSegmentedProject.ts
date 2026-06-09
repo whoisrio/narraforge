@@ -114,7 +114,7 @@ export type Action =
   // Per-chapter settings
   | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
-  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'language' | 'speed' | 'volume' | 'pitch'>> }
+  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
@@ -133,6 +133,8 @@ export type Action =
   | { type: 'UNDO_REGENERATE'; id: string }
   | { type: 'CLEAR_SEGMENT_AUDIO'; id: string }
   | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string }
+  | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down' }
+  | { type: 'SPLIT_SEGMENT'; id: string; position: number }
   | { type: 'SELECT_SEGMENT'; id: string | undefined };
 
 export interface State { project: SegmentedProject }
@@ -335,6 +337,65 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.overrides = overrides;
           seg.updated_at = new Date().toISOString();
         }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
+    }
+    case 'MERGE_SEGMENTS': {
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const direction = action.direction ?? 'down';
+        const srcIdx = s.findIndex(x => x.id === action.id);
+        if (srcIdx < 0) return ch;
+        // Normalize to "keep prev segment, merge next" by adjusting the target index
+        const keepIdx = direction === 'down' ? srcIdx : srcIdx - 1;
+        if (keepIdx < 0 || keepIdx >= s.length - 1) return ch;
+        const cur = s[keepIdx];
+        const nxt = s[keepIdx + 1];
+        // Merge text (no space — Chinese doesn't need it)
+        cur.text = cur.text + nxt.text;
+        cur.ssml = undefined;
+        cur.ssml_annotated_by_llm = undefined;
+        // Clear audio since text changed
+        cur.current_audio_id = undefined;
+        cur.previous_audio_id = undefined;
+        cur.duration_sec = undefined;
+        cur.generated_voice_id = undefined;
+        cur.status = 'idle';
+        cur.error = undefined;
+        cur.updated_at = new Date().toISOString();
+        // Remove next segment
+        s.splice(keepIdx + 1, 1);
+        // If selected segment was removed, select the kept one
+        const sel = ch.selected_segment_id === nxt.id ? cur.id : ch.selected_segment_id;
+        return { ...ch, segments: s, selected_segment_id: sel, updated_at: new Date().toISOString() };
+      })};
+    }
+    case 'SPLIT_SEGMENT': {
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const idx = s.findIndex(x => x.id === action.id);
+        if (idx < 0) return ch;
+        const seg = s[idx];
+        const pos = Math.max(0, Math.min(action.position, seg.text.length));
+        if (pos === 0 || pos === seg.text.length) return ch;
+        const textBefore = seg.text.slice(0, pos);
+        const textAfter = seg.text.slice(pos);
+        // Update current segment with first half
+        seg.text = textBefore;
+        seg.ssml = undefined;
+        seg.ssml_annotated_by_llm = undefined;
+        seg.current_audio_id = undefined;
+        seg.previous_audio_id = undefined;
+        seg.duration_sec = undefined;
+        seg.generated_voice_id = undefined;
+        seg.status = 'idle';
+        seg.error = undefined;
+        seg.updated_at = new Date().toISOString();
+        // Create new segment for second half
+        const newSeg = makeSegment(textAfter, seg.params);
+        if (seg.emotion) newSeg.emotion = seg.emotion;
+        if (seg.overrides) newSeg.overrides = [...seg.overrides];
+        s.splice(idx + 1, 0, newSeg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }

@@ -20,6 +20,7 @@ interface SegmentEditPanelProps {
   onUpdateEmotion?: (id: string, emotion: string) => void;
   onRegenerate: (id: string) => void;
   onAnnotateSSML: (id: string) => void;
+  onSplit?: (id: string, position: number) => void;
 }
 
 const ALL_EMOTIONS: { key: string; label: string; color: string; bg: string }[] = [
@@ -35,7 +36,7 @@ const MIMO_PRESET_VOICES = ['冰糖', '星辰', '雪梨', '琥珀', '青云', '�
 
 export function SegmentEditPanel({
   segment, globalVoiceName, onClose, onUpdateText,
-  onUpdateParams, onUpdateOverrides, onUpdateEmotion, onRegenerate, onAnnotateSSML,
+  onUpdateParams, onUpdateOverrides, onUpdateEmotion, onRegenerate, onAnnotateSSML, onSplit,
 }: SegmentEditPanelProps) {
   const [localText, setLocalText] = useState(segment?.text ?? '');
   const [showParams, setShowParams] = useState(false);
@@ -52,6 +53,14 @@ export function SegmentEditPanel({
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
   }, [segment?.id]);
+
+  // Sync localText when the segment's text changes externally (e.g., after split)
+  useEffect(() => {
+    if (segment && segment.text !== localText) {
+      setLocalText(segment.text);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segment?.text]);
 
   // Load voices
   useEffect(() => {
@@ -148,6 +157,20 @@ export function SegmentEditPanel({
         {/* Text */}
         <textarea ref={textareaRef} className={styles.textarea} value={localText}
           onChange={e => handleTextChange(e.target.value)} />
+
+        {/* Split at cursor */}
+        {onSplit && localText.length > 1 && (
+          <div className={styles.splitBar}>
+            <button className={styles.splitBtn} onClick={() => {
+              const pos = textareaRef.current?.selectionStart ?? localText.length;
+              if (pos > 0 && pos < localText.length) {
+                onSplit(segment.id, pos);
+              }
+            }}>
+              ✂ 在光标处拆分
+            </button>
+          </div>
+        )}
 
         {/* SSML (CosyVoice only) */}
         {isCosyVoice && (
