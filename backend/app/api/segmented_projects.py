@@ -117,7 +117,9 @@ def get_segment_audio(
         raise HTTPException(status_code=404, detail="audio_not_found")
     # Note: current_audio_path is stored relative to settings.segmented_dir (root),
     # not project_dir, per the convention established in Task 7.
-    abs_path = settings.segmented_dir / seg.current_audio_path
+    abs_path = (settings.segmented_dir / seg.current_audio_path).resolve()
+    if not abs_path.is_relative_to(settings.segmented_dir.resolve()):
+        raise HTTPException(status_code=400, detail="invalid_audio_path")
     if not abs_path.exists():
         seg.audio_missing = True
         db.commit()
