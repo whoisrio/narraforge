@@ -84,3 +84,9 @@ rm voice_clone.db
 2. Use production database (PostgreSQL recommended)
 3. Configure reverse proxy (nginx)
 4. Set up proper CORS origins
+## ffmpeg 安装
+
+分段编辑器后端模式需要 ffmpeg 转码音频：
+
+- macOS: `brew install ffmpeg`
+- Ubuntu: `apt-get install -y ffmpeg`

@@ -429,3 +429,13 @@ interface SegmentEngineParams {
 | LLM | `/api/subtitle-llm/correct` | POST | Subtitle correction |
 | LLM | `/api/subtitle-llm/translate` | POST | Bilingual translation |
 | Config | `/api/model-config` | GET/PUT | Model configuration |
+
+## 分段项目后端存储
+
+当 `storageMode = backend` 时，分段项目、章节、段落、参数、生成快照与音频全部由后端管理：
+
+- 数据库三张表：`segmented_projects` / `segmented_project_chapters` / `segmented_project_segments`
+- 每个项目一个目录 `uploads/segmented/{project_id}/`，存放 `original.txt`、章节文本、分片 `mp3`、`manifest.json`
+- 后端为权威来源；IndexedDB 只作为草稿缓存，记录 `base_updated_at` 做冲突检测
+- 切换到后端模式时若本地 IndexedDB 仍有项目，提示一键迁移
+- 音频由 ffmpeg 转码为 mp3

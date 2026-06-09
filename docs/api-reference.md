@@ -343,3 +343,15 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 - `422` — 请求体验证失败
 - `500` — 服务器内部错误
 - `502` — 外部服务调用失败（如 LLM API）
+
+### 分段项目
+
+- `GET    /api/segmented-projects` — 列出所有项目（轻量）
+- `POST   /api/segmented-projects` — 创建项目（完整对象）
+- `GET    /api/segmented-projects/{id}` — 获取完整项目（chapters + segments）
+- `PUT    /api/segmented-projects/{id}` — 全量替换（reconcile）
+- `DELETE /api/segmented-projects/{id}` — 删除项目 + 资产目录
+- `POST   /api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` — 生成分片音频
+- `GET    /api/segmented-projects/{id}/audio/{cid}/{sid}` — 读取分片 mp3
+- `POST   /api/segmented-projects/{id}/chapters/{cid}/split` — 文本分段（preview_only 或 replace_chapter_segments）
+- `POST   /api/segmented-projects/migrate` — 批量迁移 IndexedDB 项目

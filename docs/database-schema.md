@@ -210,3 +210,52 @@ The `segmented_project_segments.project_id` foreign key column will be indexed a
 - Timestamps use `datetime.utcnow` and are not timezone-aware.
 - The `SegmentedProject` and `SegmentedProjectSegment` models are reserved for v2 backend mode and are not imported or created at runtime in v1.
 - `tts_results.instruction` has a Chinese-language default value describing an energetic advertising voiceover style.
+
+## segmented_projects
+
+| Column | Type | Notes |
+|---|---|---|
+| id | TEXT PK | |
+| name | TEXT NOT NULL | |
+| schema_version | INTEGER NOT NULL DEFAULT 2 | |
+| layout | TEXT NOT NULL DEFAULT 'vertical' | |
+| active_chapter_id | TEXT NULLABLE | |
+| original_text | TEXT NULLABLE | |
+| created_at / updated_at | DATETIME | |
+
+## segmented_project_chapters
+
+| Column | Type |
+|---|---|
+| id | TEXT PK |
+| project_id | TEXT FK → segmented_projects.id ON DELETE CASCADE |
+| position | INTEGER NOT NULL |
+| name | TEXT NOT NULL |
+| engine | TEXT NULLABLE |
+| default_params | JSON NOT NULL DEFAULT {} |
+| split_config | JSON NOT NULL DEFAULT {} |
+| original_text | TEXT NULLABLE |
+| created_at / updated_at | DATETIME |
+
+## segmented_project_segments
+
+| Column | Type |
+|---|---|
+| id | TEXT PK |
+| chapter_id | TEXT FK → segmented_project_chapters.id ON DELETE CASCADE |
+| project_id | TEXT FK → segmented_projects.id ON DELETE CASCADE |
+| position | INTEGER NOT NULL |
+| text | TEXT NOT NULL DEFAULT '' |
+| ssml | TEXT NULLABLE |
+| emotion | TEXT NULLABLE |
+| params | JSON NOT NULL DEFAULT {} |
+| locked_params | JSON NOT NULL DEFAULT [] |
+| generated_params | JSON NULLABLE |
+| current_audio_path | TEXT NULLABLE |
+| previous_audio_path | TEXT NULLABLE |
+| audio_format | TEXT NOT NULL DEFAULT 'mp3' |
+| duration_sec | FLOAT NULLABLE |
+| audio_missing | BOOLEAN NOT NULL DEFAULT FALSE |
+| generated_at | DATETIME NULLABLE |
+| ssml_annotated_by_llm | BOOLEAN NOT NULL DEFAULT FALSE |
+| created_at / updated_at | DATETIME |
