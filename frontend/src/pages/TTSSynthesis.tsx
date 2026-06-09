@@ -841,13 +841,18 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     if (!seg?.current_audio_id && !seg?.current_audio_path) return;
 
     try {
-      // Backend mode: use HTTP URL to segmented audio endpoint
+      // Backend mode: fetch audio as blob, then play via blob URL
       if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
         const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-        const audio = new Audio(url);
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`Audio fetch HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = blobUrl;
+        const audio = new Audio(blobUrl);
         audioRef.current = audio;
-        audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; };
-        audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; };
+        audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; };
+        audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; };
         setPlayingId(id);
         setIsPaused(false);
         setPlayAllActive(false);
