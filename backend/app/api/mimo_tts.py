@@ -36,6 +36,10 @@ class MiMoPresetRequest(BaseModel):
     voice: str = Field(default="冰糖", description="预置音色ID，如 冰糖、Mia、Chloe 等")
     instruction: str = Field(default="", description="风格指令（自然语言或音频标签）")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
+    # Segmented editor integration (optional)
+    segmented_project_id: str | None = None
+    segmented_chapter_id: str | None = None
+    segmented_segment_id: str | None = None
 
 class MiMoVoiceDesignRequest(BaseModel):
     """文本设计音色合成请求"""
@@ -69,6 +73,9 @@ async def _save_and_respond(
     voice_label: str,
     instruction: str,
     db: Session,
+    segmented_project_id: str | None = None,
+    segmented_chapter_id: str | None = None,
+    segmented_segment_id: str | None = None,
 ):
     """根据存储模式保存音频并返回响应"""
     audio_id = str(uuid.uuid4())
@@ -92,6 +99,44 @@ async def _save_and_respond(
     audio_path = settings.clone_voices_dir / f"mimo_{audio_id}.{ext}"
     with open(audio_path, "wb") as f:
         f.write(audio_bytes)
+
+    # Segmented editor: route to per-project asset directory
+    if segmented_project_id and segmented_chapter_id and segmented_segment_id:
+        from app.services import segmented_project_service as svc
+        from app.core import segmented_assets as assets
+        from datetime import datetime
+        seg = svc.get_segment_row(
+            db, segmented_project_id, segmented_chapter_id, segmented_segment_id,
+        )
+        if seg is not None:
+            target_mp3 = assets.segment_audio_path(
+                segmented_project_id, segmented_chapter_id, segmented_segment_id, "mp3",
+            )
+            target_mp3.parent.mkdir(parents=True, exist_ok=True)
+            with open(audio_path, "rb") as f:
+                target_mp3.write_bytes(f.read())
+            rel = target_mp3.relative_to(settings.segmented_dir).as_posix()
+            seg.current_audio_path = rel
+            seg.audio_format = "mp3"
+            seg.generated_params = {
+                "engine": "mimo_tts", "voice_id": voice_label,
+                "instruction": instruction,
+            }
+            seg.generated_at = datetime.utcnow()
+            seg.updated_at = datetime.utcnow()
+            seg.chapter.updated_at = datetime.utcnow()
+            seg.chapter.project.updated_at = datetime.utcnow()
+            db.commit()
+            try:
+                os.remove(audio_path)
+            except OSError:
+                pass
+            return {
+                "audio_id": audio_id,
+                "audio_url": f"/api/segmented-projects/{segmented_project_id}/audio/{segmented_chapter_id}/{segmented_segment_id}",
+                "text": text,
+                "params": {"voice_id": voice_label, "instruction": instruction},
+            }
 
     record = TTSResultRecord(
         id=audio_id,
@@ -148,6 +193,9 @@ async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(ge
             voice_label=request.voice,
             instruction=request.instruction,
             db=db,
+            segmented_project_id=request.segmented_project_id,
+            segmented_chapter_id=request.segmented_chapter_id,
+            segmented_segment_id=request.segmented_segment_id,
         )
     except RuntimeError as e:
         logger.error(f"MiMo preset TTS failed: {e}")
