@@ -903,14 +903,19 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       setIsPaused(false);
 
       try {
-        // Backend mode: use HTTP URL directly
+        // Backend mode: fetch audio as blob, then play
         if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
           const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-          const audio = new Audio(url);
+          const resp = await fetch(url);
+          if (!resp.ok || playAllAbortRef.current) continue;
+          const blob = await resp.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          blobUrlRef.current = blobUrl;
+          const audio = new Audio(blobUrl);
           audioRef.current = audio;
           await new Promise<void>((resolve) => {
-            audio.onended = () => { audioRef.current = null; resolve(); };
-            audio.onerror = () => { audioRef.current = null; resolve(); };
+            audio.onended = () => { URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; audioRef.current = null; resolve(); };
+            audio.onerror = () => { URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; audioRef.current = null; resolve(); };
             audio.play().catch(() => resolve());
           });
           continue;
