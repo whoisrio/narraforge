@@ -92,7 +92,9 @@ export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRat
             <span className={styles.label}>语速</span>
             <div className={styles.sliderWrap}>
               <input type="range" min={-50} max={50} step={5} value={rate ?? 0}
-                className={styles.range} onChange={e => onRateChange(parseInt(e.target.value))} />
+                className={styles.range}
+                style={{ '--fill-pct': `${(((rate ?? 0) + 50) / 100) * 100}%` } as React.CSSProperties}
+                onChange={e => onRateChange(parseInt(e.target.value))} />
             </div>
             <span className={styles.paramValue}>{rate ?? 0}%</span>
           </div>
@@ -104,7 +106,9 @@ export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRat
             <span className={styles.label}>音量</span>
             <div className={styles.sliderWrap}>
               <input type="range" min={-50} max={50} step={5} value={volume ?? 0}
-                className={styles.range} onChange={e => onVolumeChange(parseInt(e.target.value))} />
+                className={styles.range}
+                style={{ '--fill-pct': `${(((volume ?? 0) + 50) / 100) * 100}%` } as React.CSSProperties}
+                onChange={e => onVolumeChange(parseInt(e.target.value))} />
             </div>
             <span className={styles.paramValue}>{volume ?? 0}%</span>
           </div>

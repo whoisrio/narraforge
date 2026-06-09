@@ -55,33 +55,37 @@
 
 /* 顶层功能区切换 */
 .sectionTabs {
-  display: flex;
-  gap: var(--spacing-sm);
+  display: inline-flex;
+  gap: 0;
+  background: var(--color-surface-hover);
+  padding: 3px;
+  border-radius: var(--radius-sm);
   margin-bottom: var(--spacing-xl);
 }
 
 .sectionTab {
-  padding: 10px 24px;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-base);
-  font-weight: 500;
+  padding: 6px 18px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   font-family: inherit;
+  letter-spacing: -0.01em;
 }
 
 .sectionTab:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  color: var(--color-text-secondary);
+  background: var(--color-surface-active);
 }
 
 .sectionTab.active {
-  background: var(--color-primary-gradient);
+  background: var(--color-primary);
   color: var(--color-text-on-primary);
-  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px var(--glow-primary-strong);
 }
 
 /* 音色设计占位区 */

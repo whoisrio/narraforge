@@ -51,7 +51,7 @@
   transform: translateX(-50%);
   width: 800px;
   height: 600px;
-  background: radial-gradient(ellipse at center, rgba(124, 58, 237, 0.08) 0%, rgba(168, 85, 247, 0.04) 40%, transparent 70%);
+  background: radial-gradient(ellipse at center, rgba(196, 122, 58, 0.10) 0%, rgba(212, 148, 78, 0.05) 40%, transparent 70%);
   pointer-events: none;
   z-index: 0;
   animation: glowPulse 6s ease-in-out infinite;
@@ -263,7 +263,7 @@
 }
 
 .btnPillSecondary:hover {
-  background: rgba(124, 58, 237, 0.06);
+  background: rgba(196, 122, 58, 0.08);
 }
 
 /* ---- Footer ---- */

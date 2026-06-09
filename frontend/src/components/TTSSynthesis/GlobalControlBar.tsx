@@ -128,6 +128,7 @@ export function GlobalControlBar({
             <input
               type="range" min={0.5} max={2.0} step={0.1} value={speed}
               className={styles.range}
+              style={{ '--fill-pct': `${((speed - 0.5) / 1.5) * 100}%` } as React.CSSProperties}
               onChange={e => onSpeedChange(parseFloat(e.target.value))}
             />
           </div>
@@ -143,6 +144,7 @@ export function GlobalControlBar({
             <input
               type="range" min={0} max={100} step={1} value={volume}
               className={styles.range}
+              style={{ '--fill-pct': `${volume}%` } as React.CSSProperties}
               onChange={e => onVolumeChange(parseInt(e.target.value))}
             />
           </div>
@@ -158,6 +160,7 @@ export function GlobalControlBar({
             <input
               type="range" min={0.5} max={2.0} step={0.1} value={pitch}
               className={styles.range}
+              style={{ '--fill-pct': `${((pitch - 0.5) / 1.5) * 100}%` } as React.CSSProperties}
               onChange={e => onPitchChange(parseFloat(e.target.value))}
             />
           </div>
