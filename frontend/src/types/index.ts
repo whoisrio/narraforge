@@ -258,6 +258,13 @@ export interface Segment {
   error?: string;
   current_audio_id?: string;
   previous_audio_id?: string;
+  /** Backend-relative path to the audio file under the project asset directory (backend mode). */
+  current_audio_path?: string;
+  previous_audio_path?: string;
+  /** Generated audio format (mp3 / wav). */
+  audio_format?: string;
+  /** Effective params used to generate the current audio (for stale detection). */
+  generated_params?: Record<string, unknown>;
   duration_sec?: number;
   ssml_annotated_by_llm?: boolean;
   /** Emotion label from LLM analysis */
