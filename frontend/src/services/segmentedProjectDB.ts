@@ -18,45 +18,43 @@ function tx<T>(
   }));
 }
 
-export async function saveProject(project: SegmentedProject): Promise<void> {
-  await tx(_SEGMENTED_PROJECTS_STORE, 'readwrite', (s) => s.put(project));
-}
-
-export async function getProject(id: string): Promise<SegmentedProject | undefined> {
-  return tx<SegmentedProject | undefined>(_SEGMENTED_PROJECTS_STORE, 'readonly', (s) => s.get(id));
-}
-
-export async function listProjects(): Promise<SegmentedProject[]> {
-  const all = await tx<SegmentedProject[]>(_SEGMENTED_PROJECTS_STORE, 'readonly', (s) => s.getAll());
-  return all.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-}
-
-export async function deleteProject(id: string): Promise<void> {
-  const project = await getProject(id);
-  if (project) {
-    const audioIds = new Set<string>();
-    // v2: iterate all chapters' segments
-    const chapters = project.chapters || [];
-    for (const ch of chapters) {
-      for (const seg of (ch.segments || [])) {
-        if (seg.current_audio_id) audioIds.add(seg.current_audio_id);
-        if (seg.previous_audio_id) audioIds.add(seg.previous_audio_id);
-      }
-    }
-    // v1 fallback: top-level segments
-    if ((project as any).segments) {
-      for (const seg of (project as any).segments) {
-        if (seg.current_audio_id) audioIds.add(seg.current_audio_id);
-        if (seg.previous_audio_id) audioIds.add(seg.previous_audio_id);
-      }
-    }
-    for (const aid of audioIds) {
-      try {
-        await deleteTTSResult(aid);
-      } catch (e) {
-        console.warn(`Failed to clean orphan audio ${aid}:`, e);
-      }
+async function collectAudioIds(project: SegmentedProject): Promise<Set<string>> {
+  const ids = new Set<string>();
+  for (const ch of project.chapters || []) {
+    for (const seg of ch.segments || []) {
+      if (seg.current_audio_id) ids.add(seg.current_audio_id);
+      if (seg.previous_audio_id) ids.add(seg.previous_audio_id);
     }
   }
-  await tx(_SEGMENTED_PROJECTS_STORE, 'readwrite', (s) => s.delete(id));
+  // v1 fallback: top-level segments
+  if ((project as any).segments) {
+    for (const seg of (project as any).segments) {
+      if (seg.current_audio_id) ids.add(seg.current_audio_id);
+      if (seg.previous_audio_id) ids.add(seg.previous_audio_id);
+    }
+  }
+  return ids;
 }
+
+export const segmentedProjectDB = {
+  async saveProject(project: SegmentedProject): Promise<void> {
+    await tx(_SEGMENTED_PROJECTS_STORE, 'readwrite', (s) => s.put(project));
+  },
+  async getProject(id: string): Promise<SegmentedProject | undefined> {
+    return tx<SegmentedProject | undefined>(_SEGMENTED_PROJECTS_STORE, 'readonly', (s) => s.get(id));
+  },
+  async listProjects(): Promise<SegmentedProject[]> {
+    const all = await tx<SegmentedProject[]>(_SEGMENTED_PROJECTS_STORE, 'readonly', (s) => s.getAll());
+    return all.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+  },
+  async deleteProject(id: string): Promise<void> {
+    const project = await this.getProject(id);
+    if (project) {
+      const audioIds = await collectAudioIds(project);
+      for (const aid of audioIds) {
+        try { await deleteTTSResult(aid); } catch (e) { console.warn(`Failed to clean orphan audio ${aid}:`, e); }
+      }
+    }
+    await tx(_SEGMENTED_PROJECTS_STORE, 'readwrite', (s) => s.delete(id));
+  },
+};

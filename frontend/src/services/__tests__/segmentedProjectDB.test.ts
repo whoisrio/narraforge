@@ -1,11 +1,6 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect } from 'vitest';
-import {
-  saveProject,
-  getProject,
-  listProjects,
-  deleteProject,
-} from '../segmentedProjectDB';
+import { segmentedProjectDB } from '../segmentedProjectDB';
 import { saveTTSResult, getTTSAudioBlob } from '../indexedDB';
 import type { SegmentedProject } from '../../types';
 
@@ -28,16 +23,16 @@ function makeProject(overrides: Partial<SegmentedProject> = {}): SegmentedProjec
 describe('segmentedProjectDB', () => {
   it('saves and retrieves a project', async () => {
     const p = makeProject({ id: 'a', name: 'Hello' });
-    await saveProject(p);
-    const got = await getProject('a');
+    await segmentedProjectDB.saveProject(p);
+    const got = await segmentedProjectDB.getProject('a');
     expect(got?.name).toBe('Hello');
   });
 
   it('lists projects sorted by updated_at desc', async () => {
-    await saveProject(makeProject({ id: 'list_1', updated_at: '2026-01-01T00:00:00Z' }));
-    await saveProject(makeProject({ id: 'list_2', updated_at: '2026-06-01T00:00:00Z' }));
-    await saveProject(makeProject({ id: 'list_3', updated_at: '2026-03-01T00:00:00Z' }));
-    const list = await listProjects();
+    await segmentedProjectDB.saveProject(makeProject({ id: 'list_1', updated_at: '2026-01-01T00:00:00Z' }));
+    await segmentedProjectDB.saveProject(makeProject({ id: 'list_2', updated_at: '2026-06-01T00:00:00Z' }));
+    await segmentedProjectDB.saveProject(makeProject({ id: 'list_3', updated_at: '2026-03-01T00:00:00Z' }));
+    const list = await segmentedProjectDB.listProjects();
     const ids = list.map(p => p.id);
     expect(ids.indexOf('list_2')).toBeLessThan(ids.indexOf('list_3'));
     expect(ids.indexOf('list_3')).toBeLessThan(ids.indexOf('list_1'));
@@ -59,7 +54,7 @@ describe('segmentedProjectDB', () => {
     });
 
     const now = new Date().toISOString();
-    await saveProject(makeProject({
+    await segmentedProjectDB.saveProject(makeProject({
       id: 'pa',
       segments: [
         { id: 's1', text: 'a', params: { engine: 'cosyvoice' }, status: 'ready',
@@ -68,13 +63,13 @@ describe('segmentedProjectDB', () => {
       ],
     }));
 
-    await deleteProject('pa');
+    await segmentedProjectDB.deleteProject('pa');
 
     expect(await getTTSAudioBlob('audio_a')).toBeNull();
     expect(await getTTSAudioBlob('audio_b')).toBeNull();
   });
 
   it('deleting a non-existent project does not throw', async () => {
-    await expect(deleteProject('nope')).resolves.toBeUndefined();
+    await expect(segmentedProjectDB.deleteProject('nope')).resolves.toBeUndefined();
   });
 });
