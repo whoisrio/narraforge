@@ -9,8 +9,8 @@ interface AudioPreviewProps {
   voiceId?: string;
   /** URL 模式下用于预览播放的音频地址 */
   audioUrl?: string;
-  /** 复刻引擎：qwen（千问CosyVoice）或 mimo（MiMo TTS） */
-  engine?: 'qwen' | 'mimo';
+  /** 复刻引擎：qwen（千问CosyVoice）、mimo（MiMo TTS）或 voxcpm（本地GPU） */
+  engine?: 'qwen' | 'mimo' | 'voxcpm';
   onCloneSuccess: () => void;
   onCancel: () => void;
 }
@@ -55,6 +55,8 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
       // 根据引擎选择不同的克隆 API
       if (engine === 'mimo') {
         await voiceApi.createCloneMiMo(targetVoiceId);
+      } else if (engine === 'voxcpm') {
+        await voiceApi.createCloneVoxCPM(targetVoiceId);
       } else {
         await voiceApi.createClone(targetVoiceId);
       }
@@ -75,7 +77,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
           console.error('Rollback failed:', rollbackErr);
         }
       }
-      setError(engine === 'mimo' ? 'MiMo 复刻失败，请重试' : '克隆失败，请重试');
+      setError(engine === 'mimo' ? 'MiMo 复刻失败，请重试' : engine === 'voxcpm' ? 'VoxCPM 标记失败，请重试' : '克隆失败，请重试');
       setStep('idle');
     } finally {
       setIsCloning(false);
@@ -93,7 +95,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
     onCancel();
   };
 
-  const engineLabel = engine === 'mimo' ? 'MiMo-TTS' : 'CosyVoice';
+  const engineLabel = engine === 'mimo' ? 'MiMo-TTS' : engine === 'voxcpm' ? 'VoxCPM' : 'CosyVoice';
 
   return (
     <div className={styles.container}>

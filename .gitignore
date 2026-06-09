@@ -65,7 +65,8 @@ backend/.env
 backend/__pycache__/
 backend/*.py[cod]
 backend/*$py.class
-
+backend/pretrained_models
+backend/uploads
 # ai tools
 .claude
 .agents

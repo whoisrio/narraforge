@@ -86,6 +86,7 @@ export function SegmentEditPanel({
   const isCosyVoice = segment.params.engine === 'cosyvoice';
   const isEdgeTTS = segment.params.engine === 'edge_tts';
   const isMiMo = segment.params.engine === 'mimo_tts';
+  const isVoxCPM = segment.params.engine === 'voxcpm';
   const hasOverrides = segment.overrides && segment.overrides.length > 0;
 
   // Build override summary
@@ -95,6 +96,9 @@ export function SegmentEditPanel({
       overrideSummary.push(`音色: ${segment.params.edge_voice || '自定义'}`);
     } else if (isMiMo) {
       overrideSummary.push(`音色: ${segment.params.mimo_preset_voice || '自定义'}`);
+    } else if (isVoxCPM) {
+      const v = voices.find(v => v.id === segment.params.voice_id);
+      overrideSummary.push(`音色: ${v?.description || v?.name || '自定义'}`);
     } else {
       const v = voices.find(v => (v.qwen_voice_id || v.id) === segment.params.voice_id);
       overrideSummary.push(`音色: ${v?.description || v?.name || '自定义'}`);
@@ -111,6 +115,7 @@ export function SegmentEditPanel({
       // Reset voice when switching engine
       if (value === 'edge_tts') { params.edge_voice = ''; }
       else if (value === 'mimo_tts') { params.mimo_preset_voice = '冰糖'; }
+      else if (value === 'voxcpm') { params.voxcpm_mode = 'tts'; }
       else { params.voice_id = ''; }
     }
     else if (field === 'speed') params.speed = value;
@@ -228,10 +233,10 @@ export function SegmentEditPanel({
             <div className={styles.engineRow}>
               <span className={styles.paramLabel}>模型</span>
               <div className={styles.enginePills}>
-                {(['cosyvoice', 'edge_tts', 'mimo_tts'] as const).map(eng => (
+                {(['cosyvoice', 'edge_tts', 'mimo_tts', 'voxcpm'] as const).map(eng => (
                   <button key={eng} className={`${styles.enginePill} ${segment.params.engine === eng ? styles.enginePillActive : ''}`}
                     onClick={() => handleParamChange('engine', eng)}>
-                    {eng === 'cosyvoice' ? 'CosyVoice' : eng === 'edge_tts' ? 'Edge-TTS' : 'MiMo'}
+                    {eng === 'cosyvoice' ? 'CosyVoice' : eng === 'edge_tts' ? 'Edge-TTS' : eng === 'mimo_tts' ? 'MiMo' : 'VoxCPM'}
                   </button>
                 ))}
               </div>
@@ -274,6 +279,16 @@ export function SegmentEditPanel({
                     <option value="">🌐 跟随全局</option>
                     {MIMO_PRESET_VOICES.map(name => (
                       <option key={name} value={name}>⭐ {name}</option>
+                    ))}
+                  </select>
+                )}
+
+                {isVoxCPM && (
+                  <select className={styles.paramSelect} value={segment.params.voice_id || ''}
+                    onChange={e => handleParamChange('voice_id', e.target.value)}>
+                    <option value="">🌐 跟随全局</option>
+                    {voices.map(v => (
+                      <option key={v.id} value={v.id}>⭐ {v.description || v.name}</option>
                     ))}
                   </select>
                 )}

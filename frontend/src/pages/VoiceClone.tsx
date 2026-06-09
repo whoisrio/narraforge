@@ -9,7 +9,7 @@ import type { VoiceProfile } from '../types';
 import styles from './VoiceClone.module.css';
 
 /** 克隆引擎类型 */
-type CloneEngine = 'qwen' | 'mimo';
+type CloneEngine = 'qwen' | 'mimo' | 'voxcpm';
 
 /** 克隆流程的三个步骤 */
 type CloneStep = 'choose-method' | 'input' | 'preview-clone';
@@ -56,6 +56,8 @@ export function VoiceClone() {
       <p className={styles.methodSelectorHint}>
         {engine === 'mimo'
           ? '录制或上传音频，MiMo 会即时复刻音色'
+          : engine === 'voxcpm'
+          ? '录制或上传音频，VoxCPM 会在本地 GPU 上克隆音色'
           : '请选择一种方式提供声音样本'}
       </p>
 
@@ -78,7 +80,7 @@ export function VoiceClone() {
           <span className={styles.methodDesc}>上传 MP3、WAV、WebM 音频文件</span>
         </button>
 
-        {/* MiMo 不需要公网地址，它直接读取本地音频转 base64 */}
+        {/* MiMo 和 VoxCPM 不需要公网地址，它们直接读取本地音频 */}
         {engine === 'qwen' && (
           <button
             className={styles.methodCard}
@@ -174,6 +176,12 @@ export function VoiceClone() {
         >
           MiMo-TTS
         </button>
+        <button
+          className={`${styles.engineOption} ${designEngine === 'voxcpm' ? styles.active : ''}`}
+          onClick={() => setDesignEngine('voxcpm')}
+        >
+          VoxCPM (本地)
+        </button>
       </div>
 
       <div className={styles.placeholderSection}>
@@ -191,6 +199,33 @@ export function VoiceClone() {
                   <div className={styles.featureTitle}>文本描述定制</div>
                   <div className={styles.featureDesc}>用自然语言描述想要的音色特征，MiMo 即时生成</div>
                 </div>
+              </div>
+            </>
+          ) : designEngine === 'voxcpm' ? (
+            <>
+              <div className={styles.placeholderFeature}>
+                <span className={styles.featureIcon}>🎨</span>
+                <div>
+                  <div className={styles.featureTitle}>Voice Design</div>
+                  <div className={styles.featureDesc}>用自然语言描述音色特征（性别、年龄、语调、情感），VoxCPM 本地生成全新音色，无需参考音频</div>
+                </div>
+              </div>
+              <div className={styles.placeholderFeature}>
+                <span className={styles.featureIcon}>🌍</span>
+                <div>
+                  <div className={styles.featureTitle}>30 语言支持</div>
+                  <div className={styles.featureDesc}>支持中英日韩法德西等 30 种语言，含粤语、四川话等方言</div>
+                </div>
+              </div>
+              <div className={styles.placeholderFeature}>
+                <span className={styles.featureIcon}>⚡</span>
+                <div>
+                  <div className={styles.featureTitle}>本地 GPU 推理</div>
+                  <div className={styles.featureDesc}>模型运行在本地 GPU，无需 API Key，无调用费用</div>
+                </div>
+              </div>
+              <div style={{ marginTop: 12, padding: '8px 12px', background: '#eff6ff', borderRadius: 8, fontSize: 13, color: '#3b82f6' }}>
+                💡 请在「文字转语音」页面选择 VoxCPM 引擎 → Voice Design 模式体验
               </div>
             </>
           ) : (
@@ -259,6 +294,12 @@ export function VoiceClone() {
                     onClick={() => setEngine('mimo')}
                   >
                     MiMo-TTS
+                  </button>
+                  <button
+                    className={`${styles.engineOption} ${engine === 'voxcpm' ? styles.active : ''}`}
+                    onClick={() => setEngine('voxcpm')}
+                  >
+                    VoxCPM (本地)
                   </button>
                 </div>
 

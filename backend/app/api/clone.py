@@ -362,6 +362,47 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
         raise HTTPException(status_code=500, detail=f"MiMo voice clone failed: {str(e)}")
 
 
+@router.post("/create-clone-voxcpm")
+async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(get_db)):
+    """
+    VoxCPM 声音复刻 - 仅保存音频并标记为 VoxCPM 复刻，无需云端注册。
+
+    VoxCPM 是本地 GPU 推理模型，克隆时直接读取本地参考音频文件路径，
+    不需要注册到云端。此接口只是将上传的音频标记为「VoxCPM 复刻」，
+    后续在 TTS 合成时自动读取音频文件路径传给 VoxCPM 模型。
+    """
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+
+    if not voice.audio_path or not os.path.exists(voice.audio_path):
+        raise HTTPException(status_code=404, detail="Audio file not found")
+
+    try:
+        voice.is_cloned = True
+        voice.cloned_at = datetime.utcnow()
+        voice.clone_engine = "voxcpm"
+
+        if request.name:
+            voice.name = request.name
+
+        db.commit()
+        db.refresh(voice)
+
+        return {
+            "id": voice.id,
+            "name": voice.name,
+            "clone_engine": "voxcpm",
+            "is_cloned": voice.is_cloned,
+            "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
+            "audio_url": f"/api/clone/audio/{voice.id}",
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"VoxCPM voice clone failed: {str(e)}")
+
+
 @router.get("/list")
 def list_voices(db: Session = Depends(get_db)):
     """获取声音列表"""

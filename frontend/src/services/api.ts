@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -45,6 +45,15 @@ export const voiceApi = {
   /** MiMo 声音复刻 - 仅标记为 MiMo 复刻，无需云端注册 */
   createCloneMiMo: async (voiceId: string, name?: string): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone-mimo', {
+      voice_id: voiceId,
+      name,
+    });
+    return data;
+  },
+
+  /** VoxCPM 声音复刻 - 仅标记为 VoxCPM 复刻，本地 GPU 推理无需云端注册 */
+  createCloneVoxCPM: async (voiceId: string, name?: string): Promise<VoiceProfile> => {
+    const { data } = await api.post<VoiceProfile>('/clone/create-clone-voxcpm', {
       voice_id: voiceId,
       name,
     });
@@ -394,6 +403,77 @@ export const textSplitApi = {
       '/text-split/ssml-annotate',
       { texts, style_hint: styleHint || '' },
     );
+    return data;
+  },
+};
+
+// ============ VoxCPM 本地 GPU TTS ============
+
+export const voxcpmApi = {
+  /** 获取模型状态 */
+  getStatus: async (): Promise<VoxCPMStatus> => {
+    const { data } = await api.get<VoxCPMStatus>('/voxcpm/status');
+    return data;
+  },
+
+  /** 加载模型到 GPU */
+  loadModel: async (params?: { model_path?: string; device?: string }): Promise<VoxCPMStatus> => {
+    const { data } = await api.post<VoxCPMStatus>('/voxcpm/load', params || {});
+    return data;
+  },
+
+  /** 释放 GPU 显存 */
+  unloadModel: async (): Promise<{ success: boolean; freed_mb: number }> => {
+    const { data } = await api.post('/voxcpm/unload');
+    return data;
+  },
+
+  /** 纯文本 TTS */
+  tts: async (params: {
+    text: string;
+    cfg_value?: number;
+    inference_timesteps?: number;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/voxcpm/tts', params);
+    return data;
+  },
+
+  /** Voice Design — 文本描述生成音色 */
+  design: async (params: {
+    voice_description: string;
+    text?: string;
+    cfg_value?: number;
+    inference_timesteps?: number;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/voxcpm/design', params);
+    return data;
+  },
+
+  /** Controllable Clone — 参考音频克隆 */
+  clone: async (params: {
+    text: string;
+    voice_id: string;
+    style_control?: string;
+    cfg_value?: number;
+    inference_timesteps?: number;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/voxcpm/clone', params);
+    return data;
+  },
+
+  /** Ultimate Clone — 最高保真克隆 */
+  ultimateClone: async (params: {
+    text: string;
+    voice_id: string;
+    prompt_text: string;
+    cfg_value?: number;
+    inference_timesteps?: number;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/voxcpm/ultimate-clone', params);
     return data;
   },
 };

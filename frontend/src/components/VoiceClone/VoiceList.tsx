@@ -6,7 +6,7 @@ import { Button, Modal, Input, Select, Loading, EmptyState, Card, Alert } from '
 
 interface VoiceListProps {
   /** 当前选择的复刻引擎，控制 UI 呈现 */
-  engine?: 'qwen' | 'mimo';
+  engine?: 'qwen' | 'mimo' | 'voxcpm';
   onRefresh?: () => void;
 }
 
@@ -43,6 +43,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       const cloned = all.filter(v => {
         if (!v.is_cloned) return false;
         if (engine === 'mimo') return v.clone_engine === 'mimo';
+        if (engine === 'voxcpm') return v.clone_engine === 'voxcpm';
         // CosyVoice: 显示 qwen 引擎的，以及没有 clone_engine 标记的旧数据（兼容）
         return v.clone_engine === 'qwen' || (!v.clone_engine && v.qwen_voice_id);
       });
@@ -273,7 +274,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
     <div>
       <div style={headerStyle}>
         <h3 style={h3Style}>
-          🎤 {engine === 'mimo' ? 'MiMo 复刻声音' : 'CosyVoice 克隆声音'}
+          🎤 {engine === 'mimo' ? 'MiMo 复刻声音' : engine === 'voxcpm' ? 'VoxCPM 克隆声音' : 'CosyVoice 克隆声音'}
         </h3>
         <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
           {/* Sync from Qwen 仅在 CosyVoice 模式下显示 */}

@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     bucket_name: str = ""
     bucket_domain: str = ""
 
+    # VoxCPM 本地 GPU 模型
+    voxcpm_model_path: str = "openbmb/VoxCPM2"   # HuggingFace 模型ID 或本地权重目录
+    voxcpm_device: str = "auto"                    # auto / cuda / cuda:0 / cpu
+    voxcpm_dtype: str = "auto"                     # auto / float16 / bfloat16
+    voxcpm_load_on_start: bool = False             # 启动时自动加载模型
+    voxcpm_inference_timesteps: int = 10           # 去噪步数（越高质量越好，越慢）
+    voxcpm_cfg_value: float = 2.0                  # Classifier-Free Guidance 强度
+
     # 配置加密密钥（Fernet 对称加密，首次启动自动生成）
     config_encryption_key: str = ""
 

@@ -148,6 +148,43 @@ PROVIDER_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
             "description": "CosyVoice 声音注册需要的公网可访问 URL",
         },
     },
+    "voxcpm": {
+        "model_path": {
+            "label": "模型路径",
+            "type": "text",
+            "sensitive": False,
+            "default_from_settings": "voxcpm_model_path",
+            "description": "HuggingFace 模型 ID 或本地权重目录（如 openbmb/VoxCPM2）",
+        },
+        "device": {
+            "label": "推理设备",
+            "type": "text",
+            "sensitive": False,
+            "default_from_settings": "voxcpm_device",
+            "description": "auto / cuda / cuda:0 / cpu",
+        },
+        "dtype": {
+            "label": "推理精度",
+            "type": "text",
+            "sensitive": False,
+            "default_from_settings": "voxcpm_dtype",
+            "description": "auto / float16 / bfloat16",
+        },
+        "inference_timesteps": {
+            "label": "去噪步数",
+            "type": "text",
+            "sensitive": False,
+            "default_from_settings": "voxcpm_inference_timesteps",
+            "description": "越高质量越好，越慢。推荐 10",
+        },
+        "cfg_value": {
+            "label": "CFG 强度",
+            "type": "text",
+            "sensitive": False,
+            "default_from_settings": "voxcpm_cfg_value",
+            "description": "Classifier-Free Guidance 强度，推荐 2.0",
+        },
+    },
 }
 
 # 提供商的显示信息
@@ -158,6 +195,7 @@ PROVIDER_INFO: dict[str, dict[str, str]] = {
     "funasr": {"label": "FunASR 语音识别", "icon": "🎤"},
     "oss": {"label": "七牛云对象存储", "icon": "☁️"},
     "app": {"label": "应用设置", "icon": "⚙️"},
+    "voxcpm": {"label": "VoxCPM 本地 TTS", "icon": "🎯"},
 }
 
 

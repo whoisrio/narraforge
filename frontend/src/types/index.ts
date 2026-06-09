@@ -6,7 +6,7 @@ export interface VoiceProfile {
   description?: string;  // 用户自定义的声音描述
   qwen_voice_id?: string;
   role?: string;
-  clone_engine?: 'qwen' | 'mimo';  // 复刻引擎来源
+  clone_engine?: 'qwen' | 'mimo' | 'voxcpm';  // 复刻引擎来源
   is_cloned?: boolean;
   cloned_at?: string;
   created_at: string;
@@ -38,7 +38,8 @@ export interface MiMoPresetVoice {
 // TTS Request params
 export interface TTSRequest {
   text: string;
-  engine?: 'cosyvoice' | 'edge_tts' | 'mimo_preset' | 'mimo_voicedesign' | 'mimo_voiceclone';
+  engine?: 'cosyvoice' | 'edge_tts' | 'mimo_preset' | 'mimo_voicedesign' | 'mimo_voiceclone'
+    | 'voxcpm_tts' | 'voxcpm_design' | 'voxcpm_clone' | 'voxcpm_ultimate';
   voice_id: string;
   language?: 'Chinese' | 'English' | 'Japanese' | 'Korean';
   speed?: number; // 0.5 - 2.0
@@ -57,6 +58,26 @@ export interface TTSRequest {
   mimo_voice_description?: string;  // 音色描述文本（voicedesign模式）
   mimo_audio_base64?: string;    // 克隆音频base64（voiceclone模式）
   mimo_mime_type?: string;       // 克隆音频MIME类型
+  // VoxCPM params
+  voxcpm_mode?: 'tts' | 'design' | 'clone' | 'ultimate';
+  voxcpm_voice_description?: string;  // Voice Design 音色描述
+  voxcpm_style_control?: string;      // Clone 风格控制
+  voxcpm_prompt_text?: string;        // Ultimate 转录文本
+  voxcpm_cfg_value?: number;
+  voxcpm_inference_timesteps?: number;
+}
+
+// VoxCPM 模型状态
+export interface VoxCPMStatus {
+  loaded: boolean;
+  loading: boolean;
+  device: string;
+  model_path: string;
+  sample_rate: number;
+  vram_used_mb: number;
+  gpu_total_mb: number;
+  gpu_free_mb: number;
+  load_time_sec: number;
 }
 
 // TTS Result
@@ -191,7 +212,7 @@ export type ModelConfigs = Record<string, ModelConfigProvider>;
 // ---------------------------------------------------------------------------
 
 export interface SegmentEngineParams {
-  engine: 'cosyvoice' | 'edge_tts' | 'mimo_tts';
+  engine: 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
 
   // CosyVoice
   voice_id?: string;
@@ -213,6 +234,14 @@ export interface SegmentEngineParams {
   mimo_preset_voice?: string;
   mimo_clone_voice_id?: string;
   mimo_instruction?: string;
+
+  // VoxCPM
+  voxcpm_mode?: 'tts' | 'design' | 'clone' | 'ultimate';
+  voxcpm_voice_description?: string;
+  voxcpm_style_control?: string;
+  voxcpm_prompt_text?: string;
+  voxcpm_cfg_value?: number;
+  voxcpm_inference_timesteps?: number;
 }
 
 export type SegmentStatus = 'idle' | 'queued' | 'pending' | 'ready' | 'failed';
