@@ -252,7 +252,7 @@
   color: var(--color-text-muted); border-radius: var(--radius-sm);
   cursor: pointer; font-size: 12px; transition: all var(--transition-fast);
 }
-.actBtnDanger:hover:not(:disabled) { border-color: var(--color-error); color: var(--color-error); background: var(--danger-light); }
+.actBtnDanger:hover:not(:disabled) { border-color: var(--color-error); color: var(--color-error); background: var(--color-danger-light); }
 .actBtnDanger:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* ---- Compact mode ---- */

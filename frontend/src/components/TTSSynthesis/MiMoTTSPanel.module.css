@@ -1,7 +1,7 @@
 .container {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--spacing-md);
 }
 
 /* 子模式切换标签 */
@@ -9,19 +9,20 @@
   display: flex;
   gap: 0;
   border: 1px solid var(--color-border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
 .modeTab {
   flex: 1;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.8125rem;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-sm);
   font-weight: 500;
   background: var(--color-surface);
   color: var(--color-text-muted);
   border: none;
   cursor: pointer;
+  font-family: inherit;
   transition: background-color 0.2s, color 0.2s;
 }
 
@@ -43,11 +44,11 @@
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--spacing-xs);
 }
 
 .field label {
-  font-size: 0.8125rem;
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   font-weight: 500;
 }
@@ -55,13 +56,14 @@
 .select,
 .textarea {
   width: 100%;
-  padding: 0.625rem 0.75rem;
+  padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--color-border);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   color: var(--color-text-primary);
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+  font-family: inherit;
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
 }
 
 .select:focus,
@@ -79,13 +81,12 @@
 .textarea {
   min-height: 80px;
   resize: vertical;
-  font-family: inherit;
   line-height: 1.5;
 }
 
 /* 音色描述提示 */
 .hint {
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   line-height: 1.5;
   opacity: 0.8;
@@ -95,13 +96,13 @@
 .voiceGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 0.5rem;
+  gap: var(--spacing-sm);
 }
 
 .voiceCard {
-  padding: 0.625rem 0.75rem;
+  padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--color-border);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   cursor: pointer;
   transition: border-color 0.2s, background-color 0.2s;
@@ -119,16 +120,16 @@
 }
 
 .voiceName {
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-text-primary);
 }
 
 .voiceMeta {
   display: flex;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+  font-size: var(--font-size-xs);
   color: var(--color-text-muted);
 }
 
@@ -136,12 +137,12 @@
 .loading,
 .error,
 .empty {
-  padding: 0.75rem;
-  font-size: 0.875rem;
+  padding: var(--spacing-sm);
+  font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   text-align: center;
   border: 1px dashed var(--color-border);
-  border-radius: 0.375rem;
+  border-radius: var(--radius-sm);
 }
 
 .error {
@@ -154,23 +155,23 @@
 .cloneVoiceList {
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: var(--spacing-xs);
   max-height: 200px;
   overflow-y: auto;
   border: 1px solid var(--color-border);
-  border-radius: 0.375rem;
-  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+  padding: var(--spacing-sm);
 }
 
 .cloneVoiceItem {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s;
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
 }
 
 .cloneVoiceItem:hover {
@@ -188,15 +189,15 @@
 
 .cloneVoiceDesc {
   color: var(--color-text-muted);
-  font-size: 0.75rem;
+  font-size: var(--font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .sectionTitle {
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--color-text-primary);
-  margin-bottom: 0.25rem;
+  margin-bottom: var(--spacing-xs);
 }
