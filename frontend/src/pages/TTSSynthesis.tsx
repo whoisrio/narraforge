@@ -594,6 +594,44 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
       let resp: TTSResult;
 
+      // Backend mode: write to per-project asset directory via the new segmented endpoint
+      if (storageMode === 'backend' && project?.id) {
+        const requestParams: Record<string, unknown> = { engine: effectiveEngine };
+        if (effectiveEngine === 'edge_tts') {
+          requestParams.edge_voice = effectiveEdgeVoice;
+          requestParams.edge_rate = effectiveEdgeRate;
+          requestParams.edge_volume = effectiveEdgeVolume;
+        } else if (effectiveEngine === 'mimo_tts') {
+          requestParams.mimo_mode = effectiveMimoMode;
+          requestParams.mimo_preset_voice = effectiveMimoPreset;
+          requestParams.mimo_clone_voice_id = effectiveMimoCloneId;
+          requestParams.mimo_instruction = effectiveMimoInstruction;
+        } else {
+          requestParams.voice_id = voiceId;
+          requestParams.speed = speed;
+          requestParams.volume = volume;
+          requestParams.pitch = pitch;
+          requestParams.language = language;
+          requestParams.instruction = instruction;
+        }
+        const { segmentedProjectApi } = await import('../services/api');
+        const updated = await segmentedProjectApi.synthesizeSegment(
+          project.id, activeChapter.id, seg.id, {
+            params: requestParams,
+            text: textToSend,
+            ssml: (sp.enable_ssml && seg.ssml) ? seg.ssml : undefined,
+            keep_previous: true,
+          },
+        );
+        // Apply backend state to reducer (text, generated_params, current_audio_path, etc.)
+        dispatch({ type: 'LOAD_PROJECT', project: updated });
+        // Clear legacy IndexedDB audio_id if it existed (segment now uses backend path)
+        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
+        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+        loadHistory();
+        return;
+      }
+
       if (effectiveEngine === 'edge_tts') {
         resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
       } else if (effectiveEngine === 'mimo_tts') {
@@ -800,10 +838,23 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     stopCurrentAudio();
 
     const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg?.current_audio_id) return;
+    if (!seg?.current_audio_id && !seg?.current_audio_path) return;
 
     try {
-      const blob = await getTTSAudioBlob(seg.current_audio_id);
+      // Backend mode: use HTTP URL to segmented audio endpoint
+      if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
+        const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; };
+        audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; };
+        setPlayingId(id);
+        setIsPaused(false);
+        setPlayAllActive(false);
+        await audio.play();
+        return;
+      }
+      const blob = await getTTSAudioBlob(seg.current_audio_id!);
       if (!blob) return;
       const url = URL.createObjectURL(blob);
       blobUrlRef.current = url;
@@ -816,10 +867,12 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       setPlayAllActive(false);
       await audio.play();
     } catch { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); }
-  }, [activeChapter.segments, playingId, stopCurrentAudio]);
+  }, [activeChapter.segments, playingId, stopCurrentAudio, storageMode, project, activeChapter]);
 
   const handlePlayAll = useCallback(async () => {
-    const readySegs = activeChapter.segments.filter(s => s.status === 'ready' && s.current_audio_id);
+    const readySegs = activeChapter.segments.filter(s =>
+      s.status === 'ready' && (s.current_audio_id || s.current_audio_path),
+    );
     if (readySegs.length === 0) return;
 
     // Restart abort flag
@@ -845,6 +898,18 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       setIsPaused(false);
 
       try {
+        // Backend mode: use HTTP URL directly
+        if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
+          const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
+          const audio = new Audio(url);
+          audioRef.current = audio;
+          await new Promise<void>((resolve) => {
+            audio.onended = () => { audioRef.current = null; resolve(); };
+            audio.onerror = () => { audioRef.current = null; resolve(); };
+            audio.play().catch(() => resolve());
+          });
+          continue;
+        }
         const blob = await getTTSAudioBlob(seg.current_audio_id!);
         if (!blob || playAllAbortRef.current) continue;
         const url = URL.createObjectURL(blob);
@@ -864,7 +929,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setPlayingId(undefined);
     setIsPaused(false);
     setPlayAllActive(false);
-  }, [activeChapter.segments]);
+  }, [activeChapter.segments, storageMode, project, activeChapter]);
 
   const handleStopAll = useCallback(() => {
     stopCurrentAudio();

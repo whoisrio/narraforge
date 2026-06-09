@@ -406,26 +406,33 @@ export const textSplitApi = {
     return data;
   },
 };
+export const segmentedProjectApi = {
+  synthesizeSegment: async (
+    projectId: string,
+    chapterId: string,
+    segmentId: string,
+    body: {
+      params?: Record<string, unknown>;
+      text?: string;
+      ssml?: string;
+      keep_previous?: boolean;
+    },
+  ): Promise<import('../types').SegmentedProject> => {
+    const { data } = await api.post<import('../types').SegmentedProject>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/segments/${segmentId}/synthesize`,
+      body,
+    );
+    return data;
+  },
+  getProject: async (id: string): Promise<import('../types').SegmentedProject> => {
+    const { data } = await api.get<import('../types').SegmentedProject>(`/segmented-projects/${id}`);
+    return data;
+  },
+};
 
 // ============ VoxCPM 本地 GPU TTS ============
 
 export const voxcpmApi = {
-  /** 获取模型状态 */
-  getStatus: async (): Promise<VoxCPMStatus> => {
-    const { data } = await api.get<VoxCPMStatus>('/voxcpm/status');
-    return data;
-  },
-
-  /** 加载模型到 GPU */
-  loadModel: async (params?: { model_path?: string; device?: string }): Promise<VoxCPMStatus> => {
-    const { data } = await api.post<VoxCPMStatus>('/voxcpm/load', params || {});
-    return data;
-  },
-
-  /** 释放 GPU 显存 */
-  unloadModel: async (): Promise<{ success: boolean; freed_mb: number }> => {
-    const { data } = await api.post('/voxcpm/unload');
-    return data;
   },
 
   /** 纯文本 TTS */
