@@ -21,7 +21,7 @@ def _resolve_env_refs(value: str) -> str:
 
 class Settings(BaseSettings):
     # App
-    app_name: str = "Voice Clone Studio"
+    app_name: str = "NarraForge"
     debug: bool = True
 
     # Paths

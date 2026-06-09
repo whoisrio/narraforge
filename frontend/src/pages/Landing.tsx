@@ -27,9 +27,9 @@ export default function Landing({ onNavigate }: LandingProps) {
           ))}
         </div>
         <div className={styles.heroCopy}>
-          <h1 className={styles.heroTitle}>Voice Studio</h1>
+          <h1 className={styles.heroTitle}>NarraForge</h1>
           <p className={styles.heroLead}>
-            基于 Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper 模型，将音色设计、文字转语音、语音转字幕融为一体的 AI 音频工作站
+            基于 Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper 模型，将音色设计、文字转语音、语音转字幕融为一体的 AI 叙事工坊
           </p>
           <div className={styles.heroActions}>
             <button className={styles.btnPill} onClick={() => onNavigate('voice-clone')}>
@@ -91,7 +91,7 @@ export default function Landing({ onNavigate }: LandingProps) {
 
       {/* ── Footer ── */}
       <footer className={styles.footer}>
-        <span className={styles.footerBrand}>Voice Studio</span>
+        <span className={styles.footerBrand}>NarraForge</span>
         <span>Powered by iamrio</span>
         <span>© 2026</span>
       </footer>

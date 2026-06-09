@@ -4,7 +4,7 @@ This file provides guidance to AI coding assistants when working with code in th
 
 ## Project Overview
 
-Voice Studio — AI 音频工作站，集成声音克隆、文字转语音、语音转字幕三大模块。
+NarraForge — AI 叙事工坊，集成声音克隆、文字转语音、语音转字幕三大模块，未来扩展至基于分段叙事单元驱动的 Remotion 动画生成。
 
 ## Documentation
 

@@ -1,8 +1,8 @@
-# Voice Studio
+# NarraForge
 
-基于 **Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper · FunASR** 的 AI 音频工作站，将声音克隆、文字转语音、语音转字幕融为一体。
+基于 **Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper · FunASR** 的 AI 叙事工坊，将声音克隆、文字转语音、语音转字幕融为一体。
 
-![Voice Studio 首页](frontend/src/assets/frontpage-2.png)
+![NarraForge 首页](frontend/src/assets/frontpage-2.png)
 
 ## 截图
 

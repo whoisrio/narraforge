@@ -1,7 +1,7 @@
 [project]
 name = "backend"
 version = "0.1.0"
-description = "Voice studio backend"
+description = "NarraForge backend"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
