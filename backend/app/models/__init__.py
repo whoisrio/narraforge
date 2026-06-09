@@ -3,6 +3,11 @@ from app.models.tts_config import TTSConfig, ModelProvider, Emotion
 from app.models.tts_result import TTSResultRecord
 from app.models.transcription_record import TranscriptionRecord
 from app.models.system_config import SystemConfig
+from app.models.segmented_project import (
+    SegmentedProject,
+    SegmentedProjectChapter,
+    SegmentedProjectSegment,
+)
 
 __all__ = [
     "VoiceProfile",
@@ -12,4 +17,7 @@ __all__ = [
     "TTSResultRecord",
     "TranscriptionRecord",
     "SystemConfig",
+    "SegmentedProject",
+    "SegmentedProjectChapter",
+    "SegmentedProjectSegment",
 ]
