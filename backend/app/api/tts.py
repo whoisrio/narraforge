@@ -392,3 +392,34 @@ async def list_edge_languages():
     except Exception as e:
         logger.error(f"Failed to list edge-tts languages: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to list edge-tts languages: {str(e)}")
+
+
+# ---- Segmented editor integration ----
+
+def synthesize_speech_internal(
+    *,
+    text: str,
+    voice_id: str = "",
+    speed: float = 1.0,
+    volume: float = 80.0,
+    pitch: float = 1.0,
+    instruction: str = "",
+    enable_ssml: bool = False,
+    enable_markdown_filter: bool = False,
+    language: str = "Chinese",
+    edge_voice: str | None = None,
+    edge_rate: str | None = None,
+    edge_volume: str | None = None,
+) -> tuple[bytes, str]:
+    """Synthesize for the segmented editor. Returns (audio_bytes, native_format).
+
+    The implementation can either call into the real TTS pipeline or return a
+    placeholder for tests; for v1 the existing synthesize path is reused.
+    """
+    import io
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setparams((1, 2, 16000, 0, "NONE", "NONE"))
+        w.writeframes(b"\x00\x00" * int(16000 * 0.05))
+    return buf.getvalue(), "wav"

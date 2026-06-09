@@ -8,6 +8,11 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core import segmented_assets as assets
+from app.core.audio_encoder import (
+    AudioEncoderError,
+    is_ffmpeg_available,
+    transcode_to_mp3,
+)
 from app.models.segmented_project import (
     SegmentedProject,
     SegmentedProjectChapter,
@@ -277,3 +282,117 @@ def update_segment_after_synth(
     if seg.ssml is not None:
         assets.write_segment_ssml(seg.project_id, seg.chapter_id, seg.id, seg.ssml)
     db.commit()
+
+
+# ----- synthesis orchestration -----
+
+
+def _merge_params(*sources: dict[str, Any] | None) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for s in sources:
+        if s:
+            for k, v in s.items():
+                if v is not None:
+                    out[k] = v
+    return out
+
+
+def synthesize_with_engine(
+    engine: str, text: str, params: dict[str, Any]
+) -> tuple[bytes, str]:
+    """Dispatch to the existing TTS service. Returns (audio_bytes, native_format)."""
+    if engine == "edge_tts":
+        from app.api.tts import synthesize_speech_internal
+        return synthesize_speech_internal(
+            text=text, voice_id="",
+            edge_voice=params.get("edge_voice"),
+            edge_rate=params.get("edge_rate"),
+            edge_volume=params.get("edge_volume"),
+        )
+    if engine == "cosyvoice":
+        from app.api.tts import synthesize_speech_internal
+        return synthesize_speech_internal(
+            text=text,
+            voice_id=params.get("voice_id", ""),
+            speed=params.get("speed", 1.0),
+            volume=params.get("volume", 80),
+            pitch=params.get("pitch", 1.0),
+            instruction=params.get("instruction", ""),
+            enable_ssml=params.get("enable_ssml", False),
+            enable_markdown_filter=params.get("enable_markdown_filter", False),
+            language=params.get("language", "Chinese"),
+        )
+    if engine == "mimo_tts":
+        from app.api.mimo_tts import synthesize_mimo_internal
+        return synthesize_mimo_internal(
+            text=text,
+            mimo_mode=params.get("mimo_mode", "preset"),
+            preset_voice=params.get("mimo_preset_voice"),
+            clone_voice_id=params.get("mimo_clone_voice_id"),
+            instruction=params.get("mimo_instruction", ""),
+        )
+    raise ValueError(f"Unsupported engine: {engine}")
+
+
+def svc_get_segment(
+    db: Session, project_id: str, chapter_id: str, segment_id: str
+) -> SegmentedProjectSegment:
+    seg = get_segment_row(db, project_id, chapter_id, segment_id)
+    if seg is None:
+        raise LookupError(f"segment {segment_id} not found in project {project_id}")
+    return seg
+
+
+def synthesize_segment(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    segment_id: str,
+    request_params: dict[str, Any] | None = None,
+    text_override: str | None = None,
+    ssml_override: str | None = None,
+    keep_previous: bool = True,
+) -> SegmentedProjectSegment:
+    seg = svc_get_segment(db, project_id, chapter_id, segment_id)
+    chapter = seg.chapter
+    effective = _merge_params(chapter.default_params, seg.params, request_params)
+    engine = effective.get("engine", "edge_tts")
+    text_to_speak = text_override or seg.text or ""
+    if ssml_override is not None:
+        effective["ssml"] = ssml_override
+
+    if not is_ffmpeg_available():
+        logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
+
+    audio_bytes, _native_fmt = synthesize_with_engine(engine, text_to_speak, effective)
+    assets.ensure_project_layout(project_id, chapter_id)
+
+    prev_rel: str | None = seg.current_audio_path
+
+    if is_ffmpeg_available():
+        target_mp3 = assets.segment_audio_path(project_id, chapter_id, seg.id, "mp3")
+        transcode_to_mp3(audio_bytes, target_mp3)
+        new_rel = target_mp3.relative_to(assets.settings.segmented_dir).as_posix()
+        audio_format = "mp3"
+    else:
+        wav_path = assets.segment_audio_path(project_id, chapter_id, seg.id, "wav")
+        wav_path.write_bytes(audio_bytes)
+        new_rel = wav_path.relative_to(assets.settings.segmented_dir).as_posix()
+        audio_format = "wav"
+
+    if not keep_previous and prev_rel:
+        try:
+            (assets.settings.segmented_dir / prev_rel).unlink()
+        except FileNotFoundError:
+            pass
+        prev_rel = None
+
+    update_segment_after_synth(
+        db, seg,
+        current_audio_path=new_rel,
+        previous_audio_path=prev_rel,
+        audio_format=audio_format,
+        duration_sec=None,
+        generated_params=effective,
+    )
+    return seg

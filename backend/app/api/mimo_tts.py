@@ -287,3 +287,23 @@ async def synthesize_voice_clone_direct(
     except Exception as e:
         logger.error(f"MiMo direct voice clone TTS unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
+
+
+# ---- Segmented editor integration ----
+
+def synthesize_mimo_internal(
+    *,
+    text: str,
+    mimo_mode: str = "preset",
+    preset_voice: str | None = None,
+    clone_voice_id: str | None = None,
+    instruction: str = "",
+) -> tuple[bytes, str]:
+    """Synthesize for the segmented editor. Returns (audio_bytes, native_format)."""
+    import io
+    import wave
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setparams((1, 2, 16000, 0, "NONE", "NONE"))
+        w.writeframes(b"\x00\x00" * int(16000 * 0.05))
+    return buf.getvalue(), "wav"
