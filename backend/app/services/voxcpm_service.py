@@ -290,8 +290,8 @@ class VoxCPMService:
             generate_kwargs["prompt_wav_path"] = reference_audio_path
             generate_kwargs["prompt_text"] = prompt_text
             generate_kwargs["reference_wav_path"] = reference_audio_path  # 提高相似度
-            if style_control:
-                text = f"({style_control}){text}"
+            # if style_control:
+            #     text = f"({style_control}){text}"
         # mode == "tts": 不需要额外参数
 
         generate_kwargs["text"] = text
