@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class SegmentIn(BaseModel):
     id: str
-    position: int
+    position: int | None = None
     text: str = ""
     ssml: str | None = None
     emotion: str | None = None
@@ -27,7 +27,7 @@ class SegmentIn(BaseModel):
 
 class ChapterIn(BaseModel):
     id: str
-    position: int
+    position: int | None = None
     name: str
     engine: str | None = None
     default_params: dict[str, Any] = Field(default_factory=dict)
@@ -36,6 +36,20 @@ class ChapterIn(BaseModel):
     created_at: str | None = None
     updated_at: str | None = None
     segments: list[SegmentIn] = Field(default_factory=list)
+    # Frontend chapter-level settings — persisted into default_params by the service layer
+    voice_id: str | None = None
+    edge_voice: str | None = None
+    edge_rate: int | None = None
+    edge_volume: int | None = None
+    mimo_mode: str | None = None
+    mimo_preset_voice: str | None = None
+    mimo_instruction: str | None = None
+    mimo_clone_voice_id: str | None = None
+    language: str | None = None
+    speed: float | None = None
+    volume: int | None = None
+    pitch: float | None = None
+    panel_open: bool | None = None
 
 
 class ProjectIn(BaseModel):

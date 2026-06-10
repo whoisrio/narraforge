@@ -36,8 +36,47 @@ export function createInitialProject(): SegmentedProject {
 }
 
 /** Migrate v1 project (no chapters) to v2 */
+/** Enrich a raw backend project/chapter/segment object with missing frontend-only fields. */
+function enrichSegment(raw: any, defaultParams: SegmentEngineParams): Segment {
+  const now = new Date().toISOString();
+  const hasAudio = !!(raw.current_audio_path || raw.current_audio_id);
+  return {
+    id: raw.id,
+    text: raw.text ?? '',
+    ssml: raw.ssml,
+    params: { ...defaultParams, ...raw.params },
+    status: raw.status ?? (hasAudio ? 'ready' : 'idle'),
+    error: raw.error,
+    current_audio_id: raw.current_audio_id,
+    previous_audio_id: raw.previous_audio_id,
+    current_audio_path: raw.current_audio_path,
+    previous_audio_path: raw.previous_audio_path,
+    audio_format: raw.audio_format ?? 'mp3',
+    generated_params: raw.generated_params,
+    duration_sec: raw.duration_sec,
+    ssml_annotated_by_llm: raw.ssml_annotated_by_llm,
+    emotion: raw.emotion,
+    overrides: raw.overrides ?? raw.locked_params?.map((k: string) => k) ?? [],
+    generated_voice_id: raw.generated_voice_id,
+    created_at: raw.created_at || now,
+    updated_at: raw.updated_at || now,
+  };
+}
+
 export function migrateV1(raw: any): SegmentedProject {
-  if (raw.schema_version === 2 && raw.chapters) return raw as SegmentedProject;
+  if (raw.schema_version === 2 && raw.chapters) {
+    // Enrich segments with frontend-only fields that the backend doesn't return
+    const chapters: Chapter[] = raw.chapters.map((ch: any) => {
+      const defaultParams = ch.default_params || { engine: 'edge_tts' } as SegmentEngineParams;
+      return {
+        ...ch,
+        default_params: defaultParams,
+        split_config: ch.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+        segments: (ch.segments || []).map((s: any) => enrichSegment(s, defaultParams)),
+      };
+    });
+    return { ...raw, chapters } as SegmentedProject;
+  }
   const now = new Date().toISOString();
   const ch: Chapter = {
     id: uid(),
@@ -128,7 +167,7 @@ export type Action =
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
-  | { type: 'GENERATE_SUCCESS'; id: string; audio_id: string; duration_sec: number; generated_voice_id?: string; updated_params?: Partial<import('../types').SegmentEngineParams> }
+  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').SegmentEngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown> }
   | { type: 'GENERATE_FAIL'; id: string; error: string }
   | { type: 'UNDO_REGENERATE'; id: string }
   | { type: 'CLEAR_SEGMENT_AUDIO'; id: string }
@@ -283,9 +322,21 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
         if (seg) {
-          seg.previous_audio_id = seg.current_audio_id;
-          seg.current_audio_id = action.audio_id;
-          seg.duration_sec = action.duration_sec;
+          // Frontend mode: audio stored in IndexedDB via audio_id
+          if (action.audio_id) {
+            seg.previous_audio_id = seg.current_audio_id;
+            seg.current_audio_id = action.audio_id;
+          }
+          // Backend mode: audio stored on filesystem via audio_path
+          if (action.current_audio_path !== undefined) {
+            seg.previous_audio_path = seg.current_audio_path;
+            seg.current_audio_path = action.current_audio_path;
+          }
+          if (action.previous_audio_path !== undefined) {
+            seg.previous_audio_path = action.previous_audio_path;
+          }
+          if (action.audio_format) seg.audio_format = action.audio_format;
+          seg.duration_sec = action.duration_sec ?? seg.duration_sec;
           seg.status = 'ready';
           seg.error = undefined;
           seg.generated_voice_id = action.generated_voice_id;
@@ -293,6 +344,9 @@ export function segmentedReducer(state: State, action: Action): State {
           // Update segment params with actually-used engine/voice
           if (action.updated_params) {
             seg.params = { ...seg.params, ...action.updated_params };
+          }
+          if (action.generated_params) {
+            seg.generated_params = action.generated_params;
           }
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
@@ -310,7 +364,12 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
-        if (seg && seg.previous_audio_id) { const tmp = seg.current_audio_id; seg.current_audio_id = seg.previous_audio_id; seg.previous_audio_id = tmp; seg.updated_at = new Date().toISOString(); }
+        if (!seg) return ch;
+        // Frontend mode: swap IndexedDB audio_id
+        if (seg.previous_audio_id) { const tmp = seg.current_audio_id; seg.current_audio_id = seg.previous_audio_id; seg.previous_audio_id = tmp; }
+        // Backend mode: swap filesystem audio_path
+        if (seg.previous_audio_path) { const tmp = seg.current_audio_path; seg.current_audio_path = seg.previous_audio_path; seg.previous_audio_path = tmp; }
+        seg.updated_at = new Date().toISOString();
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }
@@ -318,7 +377,11 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
-        if (seg) { seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = undefined; seg.duration_sec = undefined; seg.status = 'idle'; seg.generated_voice_id = undefined; }
+        if (seg) {
+          seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = undefined;
+          seg.previous_audio_path = seg.current_audio_path; seg.current_audio_path = undefined;
+          seg.duration_sec = undefined; seg.status = 'idle'; seg.generated_voice_id = undefined;
+        }
         return { ...ch, segments: s };
       })};
     }

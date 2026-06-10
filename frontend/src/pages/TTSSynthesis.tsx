@@ -592,6 +592,35 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const effectiveVoxcpmPrompt = hasVoiceLock ? (sp.voxcpm_prompt_text || '') : ((gp as any).voxcpm_prompt_text || '');
 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
+
+      // Voice identifier & params snapshot — shared by both backend and frontend paths
+      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
+      const updatedParams: Partial<import('../types').SegmentEngineParams> = { engine: effectiveEngine as any };
+      if (effectiveEngine === 'edge_tts') {
+        updatedParams.edge_voice = effectiveEdgeVoice;
+        updatedParams.edge_rate = effectiveEdgeRate;
+        updatedParams.edge_volume = effectiveEdgeVolume;
+      } else if (effectiveEngine === 'mimo_tts') {
+        updatedParams.mimo_mode = effectiveMimoMode;
+        updatedParams.mimo_preset_voice = effectiveMimoPreset;
+        updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
+        updatedParams.mimo_instruction = effectiveMimoInstruction;
+      } else if (effectiveEngine === 'voxcpm') {
+        updatedParams.voxcpm_mode = effectiveVoxcpmMode as any;
+        updatedParams.voxcpm_cfg_value = effectiveVoxcpmCfg;
+        updatedParams.voxcpm_inference_timesteps = effectiveVoxcpmTimesteps;
+        updatedParams.voxcpm_voice_description = effectiveVoxcpmDesc;
+        updatedParams.voxcpm_style_control = effectiveVoxcpmStyle;
+        updatedParams.voxcpm_prompt_text = effectiveVoxcpmPrompt;
+      } else {
+        updatedParams.voice_id = voiceId;
+        updatedParams.speed = speed;
+        updatedParams.volume = volume;
+        updatedParams.pitch = pitch;
+        updatedParams.language = language;
+        updatedParams.instruction = instruction;
+      }
+
       let resp: TTSResult;
 
       // Backend mode: write to per-project asset directory via the new segmented endpoint
@@ -623,11 +652,25 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             keep_previous: true,
           },
         );
-        // Apply backend state to reducer (text, generated_params, current_audio_path, etc.)
-        dispatch({ type: 'LOAD_PROJECT', project: updated });
+        // Extract the regenerated segment from the backend response
+        const updatedSeg = updated.chapters
+          ?.flatMap((c: any) => c.segments ?? [])
+          ?.find((s: any) => s.id === seg.id);
         // Clear legacy IndexedDB audio_id if it existed (segment now uses backend path)
         if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
         if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+        // Surgically update only the regenerated segment — preserve all other segments' frontend state
+        const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : voiceId);
+        dispatch({
+          type: 'GENERATE_SUCCESS',
+          id,
+          generated_voice_id: usedVoiceId,
+          updated_params: updatedParams,
+          current_audio_path: updatedSeg?.current_audio_path,
+          previous_audio_path: updatedSeg?.previous_audio_path,
+          audio_format: updatedSeg?.audio_format ?? 'mp3',
+          generated_params: updatedSeg?.generated_params,
+        });
         loadHistory();
         return;
       }
@@ -674,34 +717,6 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const audioId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
-      // Save the actual voice identifier used (engine-specific)
-      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
-      // Build updated params to persist the actually-used engine/voice into the segment
-      const updatedParams: Partial<import('../types').SegmentEngineParams> = { engine: effectiveEngine as any };
-      if (effectiveEngine === 'edge_tts') {
-        updatedParams.edge_voice = effectiveEdgeVoice;
-        updatedParams.edge_rate = effectiveEdgeRate;
-        updatedParams.edge_volume = effectiveEdgeVolume;
-      } else if (effectiveEngine === 'mimo_tts') {
-        updatedParams.mimo_mode = effectiveMimoMode;
-        updatedParams.mimo_preset_voice = effectiveMimoPreset;
-        updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
-        updatedParams.mimo_instruction = effectiveMimoInstruction;
-      } else if (effectiveEngine === 'voxcpm') {
-        updatedParams.voxcpm_mode = effectiveVoxcpmMode as any;
-        updatedParams.voxcpm_cfg_value = effectiveVoxcpmCfg;
-        updatedParams.voxcpm_inference_timesteps = effectiveVoxcpmTimesteps;
-        updatedParams.voxcpm_voice_description = effectiveVoxcpmDesc;
-        updatedParams.voxcpm_style_control = effectiveVoxcpmStyle;
-        updatedParams.voxcpm_prompt_text = effectiveVoxcpmPrompt;
-      } else {
-        updatedParams.voice_id = voiceId;
-        updatedParams.speed = speed;
-        updatedParams.volume = volume;
-        updatedParams.pitch = pitch;
-        updatedParams.language = language;
-        updatedParams.instruction = instruction;
-      }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams });
       loadHistory(); // refresh history so generated audio appears in list
     } catch (e: any) {

@@ -67,9 +67,38 @@ def project_to_summary(p: SegmentedProject) -> ProjectSummary:
     )
 
 
+# Keys stored inside default_params that correspond to frontend chapter-level settings
+_CHAPTER_META_KEYS = (
+    "voice_id", "edge_voice", "edge_rate", "edge_volume",
+    "mimo_mode", "mimo_preset_voice", "mimo_instruction", "mimo_clone_voice_id",
+    "language", "speed", "volume", "pitch", "panel_open",
+)
+
+
+def _extract_chapter_meta(default_params: dict[str, Any]) -> dict[str, Any]:
+    """Pull frontend chapter-level settings out of default_params into top-level fields."""
+    out: dict[str, Any] = {}
+    for k in _CHAPTER_META_KEYS:
+        if k in default_params:
+            out[k] = default_params[k]
+    return out
+
+
+def _merge_chapter_meta_to_params(ch_in: ChapterIn) -> dict[str, Any]:
+    """Merge frontend chapter-level fields into default_params for storage."""
+    dp = dict(ch_in.default_params or {})
+    for k in _CHAPTER_META_KEYS:
+        v = getattr(ch_in, k, None)
+        if v is not None:
+            dp[k] = v
+    return dp
+
+
 def project_to_detail(p: SegmentedProject) -> ProjectDetail:
     chapters = []
     for ch in p.chapters:
+        dp = dict(ch.default_params or {})
+        meta = _extract_chapter_meta(dp)
         segs = [
             SegmentIn(
                 id=s.id, position=s.position, text=s.text, ssml=s.ssml,
@@ -92,12 +121,13 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
             ChapterIn(
                 id=ch.id, position=ch.position, name=ch.name,
                 engine=ch.engine,
-                default_params=ch.default_params or {},
+                default_params=dp,
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
                 created_at=_to_iso(ch.created_at),
                 updated_at=_to_iso(ch.updated_at),
                 segments=segs,
+                **meta,
             )
         )
     return ProjectDetail(
@@ -173,15 +203,15 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     # Chapters
     existing_chapters = {c.id: c for c in p.chapters}
     keep_chapter_ids: set[str] = set()
-    for ch_in in project.chapters:
+    for ch_idx, ch_in in enumerate(project.chapters):
         ch = existing_chapters.get(ch_in.id)
         if ch is None:
             ch = SegmentedProjectChapter(id=ch_in.id, project_id=p.id)
             db.add(ch)
-        ch.position = ch_in.position
+        ch.position = ch_in.position if ch_in.position is not None else ch_idx
         ch.name = ch_in.name
         ch.engine = ch_in.engine
-        ch.default_params = ch_in.default_params or {}
+        ch.default_params = _merge_chapter_meta_to_params(ch_in)
         ch.split_config = ch_in.split_config or {}
         ch.original_text = ch_in.original_text
         if ch_in.created_at:
@@ -192,14 +222,14 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         # Segments
         existing_segments = {s.id: s for s in ch.segments}
         keep_segment_ids: set[str] = set()
-        for s_in in ch_in.segments:
+        for seg_idx, s_in in enumerate(ch_in.segments):
             seg = existing_segments.get(s_in.id)
             if seg is None:
                 seg = SegmentedProjectSegment(
                     id=s_in.id, chapter_id=ch.id, project_id=p.id,
                 )
                 db.add(seg)
-            seg.position = s_in.position
+            seg.position = s_in.position if s_in.position is not None else seg_idx
             seg.text = s_in.text or ""
             seg.ssml = s_in.ssml
             seg.emotion = s_in.emotion

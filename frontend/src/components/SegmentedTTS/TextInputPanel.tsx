@@ -19,7 +19,7 @@ const DELIMITER_OPTIONS = ['，', '。', '！', '？', '；', '、'];
 
 export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLLMSplit, segmentTexts, segmentCount }: TextInputPanelProps) {
   const [text, setText] = useState('');
-  const [mode, setMode] = useState<'rule' | 'llm'>(splitConfig.mode);
+  const mode = splitConfig.mode;
   const [isSplitting, setIsSplitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -129,9 +129,9 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
 
         <div className={styles.modeSwitch}>
           <button className={`${styles.modeBtn} ${mode === 'rule' ? styles.active : ''}`}
-            onClick={() => setMode('rule')}>规则</button>
+            onClick={() => onSplitConfigChange({ ...splitConfig, mode: 'rule' })}>规则</button>
           <button className={`${styles.modeBtn} ${mode === 'llm' ? styles.active : ''}`}
-            onClick={() => setMode('llm')}>智能</button>
+            onClick={() => onSplitConfigChange({ ...splitConfig, mode: 'llm' })}>智能</button>
         </div>
 
         {hasMarkdown && (
