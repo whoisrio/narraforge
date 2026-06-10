@@ -37,7 +37,7 @@ function AppHeader({
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
           <path d="M11 4L6 9L11 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
-        <span className={styles.logoText}>Voice Studio</span>
+        <span className={styles.logoText}>Narra Forge</span>
       </button>
 
       <nav className={styles.tabs}>
