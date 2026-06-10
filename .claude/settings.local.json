@@ -20,7 +20,8 @@
       "Bash(uv pip *)",
       "Bash(npx tsc *)",
       "Bash(git -C /Users/rio/repos/myprjs/voiceclone/.claude/worktrees/segmented-tts-editor stash)",
-      "Bash(git -C /Users/rio/repos/myprjs/voiceclone/.claude/worktrees/segmented-tts-editor rebase master)"
+      "Bash(git -C /Users/rio/repos/myprjs/voiceclone/.claude/worktrees/segmented-tts-editor rebase master)",
+      "Bash(uv run *)"
     ]
   },
   "hooks": {

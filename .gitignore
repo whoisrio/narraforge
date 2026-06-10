@@ -68,7 +68,8 @@ backend/*$py.class
 backend/pretrained_models
 backend/uploads
 # ai tools
-.claude
-.agents
+.claude/skills/
+.claude/worktrees/
+.agents/skills/
 .trae
 .superpowers
