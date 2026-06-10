@@ -31,7 +31,17 @@ export const backendStorage: SegmentedProjectStorage = {
     return data;
   },
   async saveProject(project: SegmentedProject, _opts?: SaveOptions) {
-    await api.put(`/segmented-projects/${project.id}`, project);
+    const payload = {
+      ...project,
+      chapters: project.chapters.map((chapter) => ({
+        ...chapter,
+        segments: chapter.segments.map((segment) => ({
+          ...segment,
+          locked_params: segment.overrides ?? [],
+        })),
+      })),
+    };
+    await api.put(`/segmented-projects/${project.id}`, payload);
   },
   async deleteProject(id: string) {
     await api.delete(`/segmented-projects/${id}`);

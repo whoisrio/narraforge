@@ -33,6 +33,24 @@ describe('backendStorage', () => {
     expect(fakeApi.put).toHaveBeenCalledWith('/segmented-projects/p1', project);
   });
 
+  it('saveProject maps frontend overrides to backend locked_params', async () => {
+    fakeApi.put.mockResolvedValueOnce({ data: null });
+    const project = {
+      id: 'p1', name: 'n', schema_version: 2 as const, layout: 'vertical' as const,
+      active_chapter_id: 'ch1', created_at: 't', updated_at: 't',
+      chapters: [{
+        id: 'ch1', name: '第一章', default_params: { engine: 'cosyvoice' }, split_config: {},
+        segments: [{
+          id: 's1', text: '片段', params: { engine: 'cosyvoice' }, status: 'idle',
+          overrides: ['voice'], created_at: 't', updated_at: 't',
+        }], created_at: 't', updated_at: 't',
+      }],
+    };
+    await backendStorage.saveProject(project as any);
+    const payload = fakeApi.put.mock.calls[0][1];
+    expect(payload.chapters[0].segments[0].locked_params).toEqual(['voice']);
+  });
+
   it('deleteProject calls DELETE /segmented-projects/{id}', async () => {
     fakeApi.delete.mockResolvedValueOnce({ data: null });
     await backendStorage.deleteProject('p1');

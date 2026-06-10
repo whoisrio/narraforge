@@ -110,6 +110,30 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments[0].text).toBe('new');
   });
 
+  it('UPDATE_PARAMS locks voice when setting a segment-specific voice', () => {
+    const s: Segment = {
+      id: 's1', text: 'x', params: { engine: 'cosyvoice', voice_id: 'global-voice' },
+      status: 'idle', created_at: '', updated_at: '',
+    };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
+      type: 'UPDATE_PARAMS', id: 's1', params: { voice_id: 'segment-voice' },
+    });
+    const seg = ac(next.project).segments[0];
+    expect(seg.params.voice_id).toBe('segment-voice');
+    expect(seg.overrides).toContain('voice');
+  });
+
+  it('UPDATE_PARAMS unlocks voice when resetting a segment voice to follow global', () => {
+    const s: Segment = {
+      id: 's1', text: 'x', params: { engine: 'cosyvoice', voice_id: 'segment-voice' },
+      status: 'idle', overrides: ['voice'], created_at: '', updated_at: '',
+    };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
+      type: 'UPDATE_PARAMS', id: 's1', params: { voice_id: '' },
+    });
+    expect(ac(next.project).segments[0].overrides).not.toContain('voice');
+  });
+
   it('BATCH_SET_SSML sets ssml for multiple segments', () => {
     const s1: Segment = { id: 'a', text: 'a', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' };
     const s2: Segment = { id: 'b', text: 'b', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' };

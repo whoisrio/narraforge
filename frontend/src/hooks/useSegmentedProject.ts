@@ -282,7 +282,29 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
-        if (seg) { seg.params = { ...seg.params, ...action.params }; seg.updated_at = new Date().toISOString(); }
+        if (seg) {
+          seg.params = { ...seg.params, ...action.params };
+          const overrides = [...(seg.overrides || [])];
+          const addOverride = (field: NonNullable<Segment['overrides']>[number]) => {
+            if (!overrides.includes(field)) overrides.push(field);
+          };
+          const removeOverride = (field: NonNullable<Segment['overrides']>[number]) => {
+            const idx = overrides.indexOf(field);
+            if (idx >= 0) overrides.splice(idx, 1);
+          };
+          const voiceParam = action.params.voice_id ?? action.params.edge_voice ?? action.params.mimo_preset_voice;
+          if (voiceParam !== undefined) {
+            if (voiceParam) addOverride('voice');
+            else removeOverride('voice');
+          }
+          if (action.params.speed !== undefined) addOverride('speed');
+          if (action.params.volume !== undefined) addOverride('volume');
+          if (action.params.pitch !== undefined) addOverride('pitch');
+          if (action.params.instruction !== undefined) addOverride('instruction');
+          if (action.params.language !== undefined) addOverride('language');
+          seg.overrides = overrides;
+          seg.updated_at = new Date().toISOString();
+        }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }

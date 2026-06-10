@@ -27,11 +27,22 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Edit",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/protect-files.sh"
+            "command": "bash /Users/rio/repos/myprjs/narraforge/.claude/hooks/block-dangerous.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/rio/repos/myprjs/narraforge/.claude/hooks/protect-files.sh",
+            "timeout": 10
           }
         ]
       }
