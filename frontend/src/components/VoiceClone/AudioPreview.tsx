@@ -22,6 +22,8 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
   const [error, setError] = useState('');
   /** 暂存 upload 返回的 voice_id，用于 clone 或回滚（仅文件模式） */
   const [uploadedVoiceId, setUploadedVoiceId] = useState<string | null>(null);
+  /** VoxCPM 模式下的参考音频转录文本 */
+  const [promptText, setPromptText] = useState('');
 
   /** 文件模式下用于播放的本地 blob URL */
   const blobUrl = file ? URL.createObjectURL(file) : null;
@@ -43,7 +45,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
       } else if (file) {
         // 文件模式：先上传再克隆（现有逻辑）
         setStep('uploading');
-        const uploadResult = await voiceApi.upload(file);
+        const uploadResult = await voiceApi.upload(file, engine === 'voxcpm' ? promptText : undefined);
         targetVoiceId = uploadResult.id;
         setUploadedVoiceId(targetVoiceId);
         setStep('cloning');
@@ -96,6 +98,8 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
   };
 
   const engineLabel = engine === 'mimo' ? 'MiMo-TTS' : engine === 'voxcpm' ? 'VoxCPM' : 'CosyVoice';
+  /** VoxCPM 模式下，prompt_text 为空时禁用克隆按钮 */
+  const canClone = engine === 'voxcpm' ? promptText.trim().length > 0 : true;
 
   return (
     <div className={styles.container}>
@@ -122,13 +126,30 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
         <audio className={styles.audioPlayer} src={playUrl} controls />
       )}
 
+      {/* VoxCPM 模式：填写参考音频转录 */}
+      {engine === 'voxcpm' && (
+        <div className={styles.promptSection}>
+          <label className={styles.promptLabel}>参考音频转录</label>
+          <textarea
+            className={styles.promptTextarea}
+            value={promptText}
+            onChange={e => setPromptText(e.target.value)}
+            placeholder="输入参考音频中说话人说的完整文字（用于 VoxCPM Ultimate Clone 高保真克隆）"
+            rows={3}
+          />
+          <span className={styles.promptHint}>
+            填写后声音保存时会一并存储，后续合成自动使用
+          </span>
+        </div>
+      )}
+
       {error && <div className={styles.error}>{error}</div>}
 
       <div className={styles.actions}>
         <button
           className={styles.cloneButton}
           onClick={handleClone}
-          disabled={isCloning}
+          disabled={isCloning || !canClone}
         >
           {isCloning
             ? (step === 'uploading' ? '上传中...' : `${engineLabel} 复刻中...`)

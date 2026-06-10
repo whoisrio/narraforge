@@ -111,6 +111,15 @@ export function VoxCPMPanel({
     loadVoices();
   }, [mode]);
 
+  // 选中声音变化时，自动加载其 prompt_text（ultimate 模式）
+  useEffect(() => {
+    if (mode !== 'ultimate' || !selectedVoiceId) return;
+    const voice = voices.find(v => v.id === selectedVoiceId);
+    if (voice?.prompt_text) {
+      onPromptTextChange(voice.prompt_text);
+    }
+  }, [selectedVoiceId, voices, mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 加载/卸载模型
   const handleLoad = async () => {
     setActionLoading(true);

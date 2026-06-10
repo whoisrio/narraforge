@@ -4,6 +4,7 @@ export interface VoiceProfile {
   name: string;
   audio_url: string;
   description?: string;  // 用户自定义的声音描述
+  prompt_text?: string;  // 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
   qwen_voice_id?: string;
   role?: string;
   clone_engine?: 'qwen' | 'mimo' | 'voxcpm';  // 复刻引擎来源

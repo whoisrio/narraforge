@@ -74,7 +74,7 @@ class VoxCPMUltimateCloneRequest(BaseModel):
     """Ultimate Clone 请求 — 最高保真克隆"""
     text: str = Field(..., min_length=1, description="待合成的文本")
     voice_id: str = Field(..., description="本地数据库中已上传的声音ID")
-    prompt_text: str = Field(..., description="参考音频的完整转录文本")
+    prompt_text: Optional[str] = Field(None, description="参考音频的完整转录文本（可选，未提供时自动从 VoiceProfile 读取）")
     cfg_value: float = Field(default=2.0, ge=1.0, le=5.0)
     inference_timesteps: int = Field(default=10, ge=1, le=50)
     format: str = Field(default="wav")
@@ -343,12 +343,22 @@ async def ultimate_clone(
     audio_path = _resolve_voice_audio_path(request.voice_id, db)
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
 
+    # prompt_text 优先使用请求中提供的，否则从 VoiceProfile 读取
+    prompt_text = request.prompt_text
+    if not prompt_text and voice:
+        prompt_text = voice.prompt_text
+    if not prompt_text:
+        raise HTTPException(
+            status_code=400,
+            detail="ultimate 模式需要 prompt_text，请在请求中提供或在声音录入时填写"
+        )
+
     try:
         wav_bytes = await service.synthesize(
             text=request.text,
             mode="ultimate",
             reference_audio_path=audio_path,
-            prompt_text=request.prompt_text,
+            prompt_text=prompt_text,
             cfg_value=request.cfg_value,
             inference_timesteps=request.inference_timesteps,
         )

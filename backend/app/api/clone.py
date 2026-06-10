@@ -1,6 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
 import uuid
@@ -81,16 +81,22 @@ class UploadFromUrlRequest(BaseModel):
     audio_url: str
     name: str = None
     role: str = "custom"
+    prompt_text: Optional[str] = None
 
 
 class UpdateDescriptionRequest(BaseModel):
     description: str = ""
+    prompt_text: Optional[str] = None
 
 
 # ============ Routes ============
 
 @router.post("/upload")
-async def upload_voice(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_voice(
+    file: UploadFile = File(...),
+    prompt_text: str = Form(None),
+    db: Session = Depends(get_db),
+):
     """上传音频文件 - 支持 WebM/MP3/WAV/OGG，WebM 会自动转换为 MP3"""
     # 支持的输入格式
     allowed_extensions = ["mp3", "wav", "ogg", "webm"]
@@ -148,6 +154,7 @@ async def upload_voice(file: UploadFile = File(...), db: Session = Depends(get_d
         name=file.filename or "Unnamed Voice",
         audio_path=str(file_path),
         role="custom",
+        prompt_text=prompt_text or None,
     )
     db.add(voice)
     db.commit()
@@ -158,6 +165,7 @@ async def upload_voice(file: UploadFile = File(...), db: Session = Depends(get_d
         "name": voice.name,
         "audio_url": f"/api/clone/audio/{voice.id}",
         "is_cloned": voice.is_cloned,
+        "prompt_text": voice.prompt_text,
     }
 
 
@@ -240,6 +248,7 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
         audio_path=str(final_audio_path),
         role="custom",
         external_audio_url=audio_url,  # 保存原始 URL
+        prompt_text=request.prompt_text or None,
     )
     db.add(voice)
     db.commit()
@@ -419,6 +428,7 @@ def list_voices(db: Session = Depends(get_db)):
             "is_cloned": v.is_cloned,
             "cloned_at": v.cloned_at.isoformat() if v.cloned_at else None,
             "created_at": v.created_at.isoformat(),
+            "prompt_text": v.prompt_text,
         }
         for v in voices
     ]
@@ -511,10 +521,10 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
 @router.patch("/{voice_id}/description")
 def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, db: Session = Depends(get_db)):
     """
-    更新声音的描述信息
+    更新声音的描述信息和/或 prompt_text
 
     为什么需要专用接口而不是通用 PATCH：
-    - 当前只有 description 一个可编辑字段，专用接口职责单一
+    - 当前只有 description 和 prompt_text 两个可编辑字段，专用接口职责单一
     - 避免通用 PATCH 引入修改 voice_id/name 等敏感字段的安全隐患
     """
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
@@ -534,12 +544,18 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
             raise HTTPException(status_code=409, detail="该描述已用于其他声音，请使用不同的描述")
 
     voice.description = new_description
+
+    # 更新 prompt_text（如果提供了的话）
+    if request.prompt_text is not None:
+        voice.prompt_text = request.prompt_text.strip() or None
+
     db.commit()
     db.refresh(voice)
 
     return {
         "id": voice.id,
         "description": voice.description,
+        "prompt_text": voice.prompt_text,
     }
 
 

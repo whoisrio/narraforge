@@ -7,18 +7,20 @@ const api = axios.create({
 
 // Voice Clone API
 export const voiceApi = {
-  upload: async (file: File): Promise<VoiceProfile> => {
+  upload: async (file: File, promptText?: string): Promise<VoiceProfile> => {
     const formData = new FormData();
     formData.append('file', file);
+    if (promptText) formData.append('prompt_text', promptText);
     const { data } = await api.post<VoiceProfile>('/clone/upload', formData);
     return data;
   },
 
   /** 从公网 URL 下载音频并创建声音记录，后端会校验 URL 可访问性并下载到 uploads 目录 */
-  uploadFromUrl: async (audioUrl: string, name?: string): Promise<VoiceProfile> => {
+  uploadFromUrl: async (audioUrl: string, name?: string, promptText?: string): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/upload-from-url', {
       audio_url: audioUrl,
       name,
+      prompt_text: promptText,
     });
     return data;
   },
@@ -71,8 +73,13 @@ export const voiceApi = {
   },
 
   // 更新声音描述
-  updateDescription: async (id: string, description: string): Promise<void> => {
-    await api.patch(`/clone/${id}/description`, { description });
+  updateDescription: async (id: string, description: string, promptText?: string): Promise<void> => {
+    await api.patch(`/clone/${id}/description`, { description, prompt_text: promptText });
+  },
+
+  // 更新声音的 prompt_text
+  updatePromptText: async (id: string, promptText: string): Promise<void> => {
+    await api.patch(`/clone/${id}/description`, { description: '', prompt_text: promptText });
   },
 };
 
@@ -491,7 +498,7 @@ export const voxcpmApi = {
   ultimateClone: async (params: {
     text: string;
     voice_id: string;
-    prompt_text: string;
+    prompt_text?: string;
     cfg_value?: number;
     inference_timesteps?: number;
     format?: string;
