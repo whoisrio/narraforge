@@ -332,7 +332,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setMimoPresetVoice(ch.mimo_preset_voice || '冰糖');
     setMimoInstruction(ch.mimo_instruction || '');
     setMimoCloneVoiceId(ch.mimo_clone_voice_id || '');
-    setParams({ language: ch.language || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
+    setParams({ language: (ch.language as any) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
     setPanelOpen(ch.panel_open ?? true);
   }, []);
 
@@ -402,7 +402,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       return { engine: 'mimo_tts', mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice, mimo_clone_voice_id: mimoCloneVoiceId, mimo_instruction: mimoInstruction };
     }
     if (engine === 'voxcpm') {
-      const params = {
+      const params: SegmentEngineParams = {
         engine: 'voxcpm', voice_id: selectedVoiceId, voxcpm_mode: voxcpmMode,
         voxcpm_voice_description: voxcpmVoiceDescription, voxcpm_style_control: voxcpmStyleControl,
         voxcpm_prompt_text: voxcpmPromptText, voxcpm_cfg_value: voxcpmCfgValue,

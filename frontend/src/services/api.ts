@@ -433,6 +433,22 @@ export const segmentedProjectApi = {
 // ============ VoxCPM 本地 GPU TTS ============
 
 export const voxcpmApi = {
+  /** 获取模型状态 */
+  getStatus: async (): Promise<VoxCPMStatus> => {
+    const { data } = await api.get<VoxCPMStatus>('/voxcpm/status');
+    return data;
+  },
+
+  /** 加载模型到 GPU */
+  loadModel: async (params?: { model_path?: string; device?: string }): Promise<VoxCPMStatus> => {
+    const { data } = await api.post<VoxCPMStatus>('/voxcpm/load', params || {});
+    return data;
+  },
+
+  /** 释放 GPU 显存 */
+  unloadModel: async (): Promise<{ success: boolean; freed_mb: number }> => {
+    const { data } = await api.post('/voxcpm/unload');
+    return data;
   },
 
   /** 纯文本 TTS */

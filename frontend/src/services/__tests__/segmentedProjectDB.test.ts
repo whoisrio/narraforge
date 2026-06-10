@@ -7,12 +7,15 @@ import type { SegmentedProject } from '../../types';
 function makeProject(overrides: Partial<SegmentedProject> = {}): SegmentedProject {
   const now = new Date().toISOString();
   return {
-    schema_version: 1,
+    schema_version: 2,
     id: 'p1',
     name: 'Test',
-    segments: [],
-    default_params: { engine: 'cosyvoice' },
-    split_config: { delimiters: ['，', '。'], mode: 'rule' },
+    chapters: [{
+      id: 'ch1', name: '第一章', engine: 'cosyvoice',
+      default_params: { engine: 'cosyvoice' },
+      split_config: { delimiters: ['，', '。'], mode: 'rule' },
+      segments: [], created_at: now, updated_at: now,
+    }],
     layout: 'vertical',
     created_at: now,
     updated_at: now,
@@ -56,11 +59,16 @@ describe('segmentedProjectDB', () => {
     const now = new Date().toISOString();
     await segmentedProjectDB.saveProject(makeProject({
       id: 'pa',
-      segments: [
-        { id: 's1', text: 'a', params: { engine: 'cosyvoice' }, status: 'ready',
-          current_audio_id: 'audio_a', previous_audio_id: 'audio_b',
-          created_at: now, updated_at: now },
-      ],
+      chapters: [{
+        id: 'ch1', name: '第一章', engine: 'cosyvoice',
+        default_params: { engine: 'cosyvoice' },
+        split_config: { delimiters: ['，', '。'], mode: 'rule' },
+        segments: [
+          { id: 's1', text: 'a', params: { engine: 'cosyvoice' }, status: 'ready',
+            current_audio_id: 'audio_a', previous_audio_id: 'audio_b',
+            created_at: now, updated_at: now },
+        ], created_at: now, updated_at: now,
+      }],
     }));
 
     await segmentedProjectDB.deleteProject('pa');

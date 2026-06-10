@@ -75,7 +75,7 @@ function getWaveform(id: string): number[] {
 export function SegmentRow({
   segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine,
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
- layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onUndo, onToggleIndependentVoice,
+ layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onUndo: _onUndo, onToggleIndependentVoice,
  onMerge, isLast,
 }: SegmentRowProps) {
   const [charIdx, setCharIdx] = useState(-1);

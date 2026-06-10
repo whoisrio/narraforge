@@ -11,9 +11,10 @@ interface ProjectToolbarProps {
 }
 
 export function ProjectToolbar({ project, onRename, onExport, onLayoutToggle, onGenerateAll, onAnnotateAll }: ProjectToolbarProps) {
-  const numSegments = project.segments.length;
-  const totalDuration = project.segments.reduce((acc, s) => acc + (s.duration_sec ?? 0), 0);
-  const readyCount = project.segments.filter(s => s.status === 'ready').length;
+  const allSegments = project.chapters.flatMap(c => c.segments);
+  const numSegments = allSegments.length;
+  const totalDuration = allSegments.reduce((acc: number, s) => acc + (s.duration_sec ?? 0), 0);
+  const readyCount = allSegments.filter((s) => s.status === 'ready').length;
 
   return (
     <div className={styles.toolbar}>

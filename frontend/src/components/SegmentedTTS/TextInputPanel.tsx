@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { textSplitApi } from '../../services/api';
 import { stripMarkdownForTTS } from '../../utils/stripMarkdownForTTS';
-import type { SegmentedProject } from '../../types';
+import type { Chapter } from '../../types';
 import styles from './TextInputPanel.module.css';
 
 interface TextInputPanelProps {
-  splitConfig: SegmentedProject['split_config'];
-  onSplitConfigChange: (config: SegmentedProject['split_config']) => void;
+  splitConfig: Chapter['split_config'];
+  onSplitConfigChange: (config: Chapter['split_config']) => void;
   onSplit: (texts: string[], originalText: string) => void;
   onLLMSplit: (text: string) => Promise<void>;
   /** 当前所有段落的文本（用于同步显示） */
@@ -66,7 +66,7 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
 
   const toggleDelimiter = (d: string) => {
     const next = splitConfig.delimiters.includes(d)
-      ? splitConfig.delimiters.filter(x => x !== d)
+      ? splitConfig.delimiters.filter((x: string) => x !== d)
       : [...splitConfig.delimiters, d];
     onSplitConfigChange({ ...splitConfig, delimiters: next });
   };

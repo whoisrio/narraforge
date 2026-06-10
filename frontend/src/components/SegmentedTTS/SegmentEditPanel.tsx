@@ -42,7 +42,7 @@ export function SegmentEditPanel({
   const [showParams, setShowParams] = useState(false);
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>([]);
-  const [edgeLang, setEdgeLang] = useState('Chinese');
+  const [edgeLang] = useState('Chinese');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { refreshCounter } = useVoiceRefresh();
 
