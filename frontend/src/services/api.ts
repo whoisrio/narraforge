@@ -499,6 +499,7 @@ export const voxcpmApi = {
     text: string;
     voice_id: string;
     prompt_text?: string;
+    style_control?: string;
     cfg_value?: number;
     inference_timesteps?: number;
     format?: string;

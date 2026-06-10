@@ -280,7 +280,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         } else if (voxcpmMode === 'clone') {
           resp = await voxcpmApi.clone({ text, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
         } else if (voxcpmMode === 'ultimate') {
-          resp = await voxcpmApi.ultimateClone({ text, voice_id: selectedVoiceId, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
+          resp = await voxcpmApi.ultimateClone({ text, voice_id: selectedVoiceId, prompt_text: voxcpmPromptText, style_control: voxcpmStyleControl, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
         } else {
           resp = await voxcpmApi.tts({ text, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
         }
@@ -687,7 +687,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         } else if (effectiveVoxcpmMode === 'clone') {
           resp = await voxcpmApi.clone({ text: textToSend, voice_id: voiceId ?? '', style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else if (effectiveVoxcpmMode === 'ultimate') {
-          resp = await voxcpmApi.ultimateClone({ text: textToSend, voice_id: voiceId ?? '', prompt_text: effectiveVoxcpmPrompt, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.ultimateClone({ text: textToSend, voice_id: voiceId ?? '', prompt_text: effectiveVoxcpmPrompt, style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else {
           resp = await voxcpmApi.tts({ text: textToSend, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         }

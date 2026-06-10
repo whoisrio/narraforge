@@ -250,7 +250,7 @@ class VoxCPMService:
             mode: 合成模式 (tts / design / clone / ultimate)
             reference_audio_path: 参考音频文件路径（clone/ultimate 模式）
             prompt_text: 参考音频的转录文本（ultimate 模式）
-            style_control: 风格控制描述（clone 模式可选）
+            style_control: 风格控制描述（clone/ultimate 模式可选）
             cfg_value: CFG 强度覆盖
             inference_timesteps: 去噪步数覆盖
 
@@ -290,6 +290,8 @@ class VoxCPMService:
             generate_kwargs["prompt_wav_path"] = reference_audio_path
             generate_kwargs["prompt_text"] = prompt_text
             generate_kwargs["reference_wav_path"] = reference_audio_path  # 提高相似度
+            if style_control:
+                text = f"({style_control}){text}"
         # mode == "tts": 不需要额外参数
 
         generate_kwargs["text"] = text

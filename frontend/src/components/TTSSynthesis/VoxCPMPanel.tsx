@@ -278,16 +278,28 @@ export function VoxCPMPanel({
                 ))}
               </select>
               {voicesLoading && <span className={styles.hint}>加载中...</span>}
-              <span className={styles.hint}>已加载 {voices.length} 个声音 | 当前: {selectedVoiceId || '未选择'}</span>
+              {promptText && (
+                <div className={styles.promptReadOnly}>
+                  <span className={styles.promptReadOnlyLabel}>文本：</span>
+                  <span className={styles.promptReadOnlyText}>{promptText}</span>
+                </div>
+              )}
+              {selectedVoiceId && !promptText && (
+                <span className={styles.hint} style={{ color: 'var(--color-danger, #ef4444)' }}>
+                  ⚠ 该声音未填写参考音频文本，Ultimate Clone 无法使用
+                </span>
+              )}
+              <span className={styles.hint}>已加载 {voices.length} 个声音</span>
             </div>
             <div className={styles.fieldGroup}>
-              <label className={styles.label}>参考音频转录</label>
-              <textarea
-                className={styles.textarea}
-                value={promptText}
-                onChange={e => onPromptTextChange(e.target.value)}
-                placeholder="输入参考音频的完整文字转录..."
-                rows={3}
+              <label className={styles.label}>
+                风格控制 <span className={styles.optional}>（可选）</span>
+              </label>
+              <input
+                className={styles.input}
+                value={styleControl}
+                onChange={e => onStyleControlChange(e.target.value)}
+                placeholder="如：语速稍快，欢快的语气..."
               />
             </div>
           </>

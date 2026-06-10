@@ -75,6 +75,7 @@ class VoxCPMUltimateCloneRequest(BaseModel):
     text: str = Field(..., min_length=1, description="待合成的文本")
     voice_id: str = Field(..., description="本地数据库中已上传的声音ID")
     prompt_text: Optional[str] = Field(None, description="参考音频的完整转录文本（可选，未提供时自动从 VoiceProfile 读取）")
+    style_control: str = Field(default="", description="风格控制描述（如：语速稍快，欢快语气）")
     cfg_value: float = Field(default=2.0, ge=1.0, le=5.0)
     inference_timesteps: int = Field(default=10, ge=1, le=50)
     format: str = Field(default="wav")
@@ -359,6 +360,7 @@ async def ultimate_clone(
             mode="ultimate",
             reference_audio_path=audio_path,
             prompt_text=prompt_text,
+            style_control=request.style_control or None,
             cfg_value=request.cfg_value,
             inference_timesteps=request.inference_timesteps,
         )

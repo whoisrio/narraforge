@@ -261,8 +261,8 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
     fontSize: '10px',
     fontWeight: 600,
     textTransform: 'uppercase',
-    background: eng === 'mimo' ? 'var(--color-primary-light, #e3f2fd)' : 'var(--color-success-light, #e8f5e9)',
-    color: eng === 'mimo' ? 'var(--color-primary, #1976d2)' : 'var(--color-success, #2e7d32)',
+    background: eng === 'mimo' ? 'var(--color-primary-light, #e3f2fd)' : eng === 'voxcpm' ? '#fff3e0' : 'var(--color-success-light, #e8f5e9)',
+    color: eng === 'mimo' ? 'var(--color-primary, #1976d2)' : eng === 'voxcpm' ? '#e65100' : 'var(--color-success, #2e7d32)',
     marginLeft: '6px',
   });
 
@@ -362,7 +362,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                         </div>
                         {voice.clone_engine && (
                           <span style={engineBadgeStyle(voice.clone_engine)}>
-                            {voice.clone_engine === 'mimo' ? 'MiMo' : 'Qwen'}
+                            {voice.clone_engine === 'mimo' ? 'MiMo' : voice.clone_engine === 'voxcpm' ? 'VoxCPM' : 'Qwen'}
                           </span>
                         )}
                         <span
@@ -386,6 +386,11 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                         'Not cloned yet'
                       )}
                     </div>
+                    {voice.prompt_text && (
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary, #6b7280)', marginTop: '2px', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        转录：{voice.prompt_text}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={actionButtonsStyle}>

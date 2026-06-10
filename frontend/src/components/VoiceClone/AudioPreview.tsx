@@ -22,7 +22,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
   const [error, setError] = useState('');
   /** 暂存 upload 返回的 voice_id，用于 clone 或回滚（仅文件模式） */
   const [uploadedVoiceId, setUploadedVoiceId] = useState<string | null>(null);
-  /** VoxCPM 模式下的参考音频转录文本 */
+  /** VoxCPM 模式下的参考音频文本 */
   const [promptText, setPromptText] = useState('');
 
   /** 文件模式下用于播放的本地 blob URL */
@@ -126,10 +126,10 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
         <audio className={styles.audioPlayer} src={playUrl} controls />
       )}
 
-      {/* VoxCPM 模式：填写参考音频转录 */}
+      {/* VoxCPM 模式：填写参考音频文本 */}
       {engine === 'voxcpm' && (
         <div className={styles.promptSection}>
-          <label className={styles.promptLabel}>参考音频转录</label>
+          <label className={styles.promptLabel}>参考音频文本</label>
           <textarea
             className={styles.promptTextarea}
             value={promptText}
