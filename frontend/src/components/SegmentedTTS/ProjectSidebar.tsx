@@ -44,82 +44,111 @@ export function ProjectSidebar({
   onCreateProject,
   onDeleteProject,
 }: ProjectSidebarProps) {
+  const scratchpad = projects.find(project => project.id === scratchpadId);
+  const regularProjects = projects.filter(project => project.id !== scratchpadId);
+
+  const renderProject = (project: SegmentedProject, kind: 'scratchpad' | 'project') => {
+    const isScratchpad = kind === 'scratchpad';
+    const isActive = project.id === activeProjectId;
+    const stats = getProjectStats(project);
+
+    return (
+      <div
+        key={project.id}
+        className={`${styles.projectItem} ${isActive ? styles.projectItemActive : ''}`}
+        title={collapsed ? project.name : undefined}
+      >
+        <button
+          type="button"
+          className={styles.projectSelectButton}
+          onClick={() => onSelectProject(project.id)}
+        >
+          <span className={styles.projectIcon}>{isScratchpad ? '草' : '稿'}</span>
+          {!collapsed && (
+            <span className={styles.projectBody}>
+              <span className={styles.projectTopline}>
+                <span className={styles.projectName}>{project.name}</span>
+                {isScratchpad && <span className={styles.pinBadge}>默认</span>}
+              </span>
+              <span className={styles.projectMeta}>
+                {stats.segments} 段 · {stats.ready}/{stats.segments} 已生成 · {formatDuration(stats.duration)}
+              </span>
+            </span>
+          )}
+        </button>
+        {!collapsed && !isScratchpad && (
+          <button
+            type="button"
+            className={styles.deleteButton}
+            title="删除项目"
+            aria-label={`删除项目 ${project.name}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDeleteProject(project.id);
+            }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ''}`}>
       <div className={styles.header}>
         {!collapsed && (
-          <div>
-            <div className={styles.eyebrow}>项目库</div>
-            <h2 className={styles.title}>配音工作台</h2>
+          <div className={styles.titleBlock}>
+            <div className={styles.eyebrow}>Projects</div>
+            <h2 className={styles.title}>项目</h2>
           </div>
         )}
-        <button
-          type="button"
-          className={styles.collapseButton}
-          onClick={onToggleCollapse}
-          aria-label={collapsed ? '展开项目侧栏' : '收起项目侧栏'}
-          title={collapsed ? '展开项目侧栏' : '收起项目侧栏'}
-        >
-          {collapsed ? '›' : '‹'}
-        </button>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={onCreateProject}
+            aria-label="新建项目"
+            title="新建项目"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? '展开项目侧栏' : '收起项目侧栏'}
+            title={collapsed ? '展开项目侧栏' : '收起项目侧栏'}
+          >
+            {collapsed ? '›' : '‹'}
+          </button>
+        </div>
       </div>
 
-      <button
-        type="button"
-        className={styles.newProjectButton}
-        onClick={onCreateProject}
-        title="新建项目"
-      >
-        <span className={styles.newProjectIcon}>+</span>
-        {!collapsed && <span>新建项目</span>}
-      </button>
-
       <div className={styles.projectList}>
-        {projects.map((project) => {
-          const isScratchpad = project.id === scratchpadId;
-          const isActive = project.id === activeProjectId;
-          const stats = getProjectStats(project);
+        {scratchpad && (
+          <div className={styles.section}>
+            {!collapsed && <div className={styles.sectionLabel}>草稿</div>}
+            {renderProject(scratchpad, 'scratchpad')}
+          </div>
+        )}
 
-          return (
-            <div
-              key={project.id}
-              className={`${styles.projectItem} ${isActive ? styles.projectItemActive : ''}`}
-              title={collapsed ? project.name : undefined}
-            >
-              <button
-                type="button"
-                className={styles.projectSelectButton}
-                onClick={() => onSelectProject(project.id)}
-              >
-                <span className={styles.projectIcon}>{isScratchpad ? '✦' : '文'}</span>
-                {!collapsed && (
-                  <span className={styles.projectBody}>
-                    <span className={styles.projectTopline}>
-                      <span className={styles.projectName}>{project.name}</span>
-                    </span>
-                    <span className={styles.projectMeta}>
-                      {stats.segments} 段 · {stats.ready}/{stats.segments} 已生成 · {formatDuration(stats.duration)}
-                    </span>
-                  </span>
-                )}
-              </button>
-              {!collapsed && !isScratchpad && (
-                <button
-                  type="button"
-                  className={styles.deleteButton}
-                  title="删除项目"
-                  aria-label={`删除项目 ${project.name}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onDeleteProject(project.id);
-                  }}
-                >
-                  ×
-                </button>
-              )}
+        <div className={styles.section}>
+          {!collapsed && (
+            <div className={styles.sectionLabelRow}>
+              <span className={styles.sectionLabel}>项目</span>
+              <span className={styles.projectCount}>{regularProjects.length}</span>
             </div>
-          );
-        })}
+          )}
+          {regularProjects.length > 0 ? (
+            regularProjects.map(project => renderProject(project, 'project'))
+          ) : !collapsed ? (
+            <button type="button" className={styles.emptyState} onClick={onCreateProject}>
+              <span>还没有正式项目</span>
+              <strong>创建一个项目 →</strong>
+            </button>
+          ) : null}
+        </div>
       </div>
     </aside>
   );

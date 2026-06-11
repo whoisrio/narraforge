@@ -235,11 +235,15 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             seg.emotion = s_in.emotion
             seg.params = s_in.params or {}
             seg.locked_params = s_in.locked_params or []
-            seg.generated_params = s_in.generated_params
-            seg.current_audio_path = s_in.current_audio_path
-            seg.previous_audio_path = s_in.previous_audio_path
-            seg.audio_format = s_in.audio_format or "mp3"
-            seg.duration_sec = s_in.duration_sec
+            if s_in.generated_params is not None:
+                seg.generated_params = s_in.generated_params
+            if s_in.current_audio_path is not None:
+                seg.current_audio_path = s_in.current_audio_path
+            if s_in.previous_audio_path is not None:
+                seg.previous_audio_path = s_in.previous_audio_path
+            seg.audio_format = s_in.audio_format or seg.audio_format or "mp3"
+            if s_in.duration_sec is not None:
+                seg.duration_sec = s_in.duration_sec
             seg.audio_missing = bool(s_in.audio_missing)
             seg.generated_at = _parse_iso(s_in.generated_at)
             seg.ssml_annotated_by_llm = bool(s_in.ssml_annotated_by_llm)
