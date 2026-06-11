@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -438,4 +439,78 @@ def synthesize_segment(
         duration_sec=duration_sec,
         generated_params=effective,
     )
-    return seg
+
+
+# Files below this size (bytes) are treated as "definitely not real speech".
+# The old synthesize_speech_internal stub produced exactly 2205-byte MP3s;
+# any real TTS output (Edge TTS, CosyVoice) is at least ~5KB for a single
+# short sentence, so 5KB is a conservative threshold that won't false-positive
+# on legitimate small clips.
+_SILENT_FILE_THRESHOLD_BYTES = 5_000
+
+
+def mark_silent_segments_as_missing(
+    db: Session,
+    *,
+    base_dir: Path | None = None,
+    min_size_bytes: int = _SILENT_FILE_THRESHOLD_BYTES,
+) -> dict[str, int]:
+    """Scan every segment with a backend audio file and flag suspiciously
+    small files as ``audio_missing=True``.
+
+    Idempotent: segments already marked are left alone. The audio file on
+    disk is NOT deleted — the user may still want to inspect or recover it.
+
+    Returns a dict with ``scanned``, ``marked``, ``already_missing``,
+    ``file_missing`` counts so callers can log progress and tests can assert.
+    """
+    from app.core.config import settings
+    from app.models.segmented_project import SegmentedProjectSegment
+
+    base = Path(base_dir) if base_dir else Path(settings.segmented_dir)
+
+    scanned = marked = already_missing = file_missing = 0
+
+    segs = (
+        db.query(SegmentedProjectSegment)
+        .filter(SegmentedProjectSegment.current_audio_path.isnot(None))
+        .all()
+    )
+
+    for seg in segs:
+        scanned += 1
+        if seg.audio_missing:
+            already_missing += 1
+            continue
+
+        rel = seg.current_audio_path
+        # current_audio_path is stored relative to settings.segmented_dir
+        # (see synthesize_segment / save_project).
+        abs_path = base / rel if not Path(rel).is_absolute() else Path(rel)
+        if not abs_path.exists():
+            seg.audio_missing = True
+            marked += 1
+            file_missing += 1
+            continue
+
+        try:
+            size = abs_path.stat().st_size
+        except OSError:
+            seg.audio_missing = True
+            marked += 1
+            file_missing += 1
+            continue
+
+        if size < min_size_bytes:
+            seg.audio_missing = True
+            marked += 1
+
+    if marked:
+        db.commit()
+
+    return {
+        "scanned": scanned,
+        "marked": marked,
+        "already_missing": already_missing,
+        "file_missing": file_missing,
+    }
