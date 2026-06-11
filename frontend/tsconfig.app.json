@@ -22,7 +22,8 @@
     "noUnusedParameters": true,
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "exclude": ["**/*.test.ts", "**/*.test.tsx", "**/__tests__"]
   },
   "include": ["src"]
 }
