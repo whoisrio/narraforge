@@ -4,13 +4,15 @@
 
 ## P0：项目制语音工作台
 
-- [ ] 删除单段模式
-- [ ] 默认进入草稿项目 `__scratchpad__`
-- [ ] 项目管理改为可收缩侧栏
-- [ ] 项目/章节/分段 UI 收敛
-- [ ] 清理旧的 `SynthesisHistory` / `TTSResult` 链路
+- [x] 删除单段模式
+- [x] 默认进入草稿项目 `__scratchpad__`
+- [x] 项目管理改为可收缩侧栏
+- [x] 项目/章节/分段 UI 收敛
+- [x] 清理旧的 `SynthesisHistory` / `TTSResult` 链路
+- [x] 后端 audio_path 保留 + TTS 真实引擎 + duration 探测
+- [x] 前端播放错误 toast（不再静默 catch）
 
-## P1：配置引导 / 模型能力中心
+## P1：配置引导 / 模型能力中心（推迟到 P2 之后补完整版，P2 内会内嵌必要的检测）
 
 - [ ] 首次使用向导
 - [ ] 外部模型 API 配置
