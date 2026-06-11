@@ -1,17 +1,15 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
-import { AudioPlayer } from '../components/TTSSynthesis/AudioPlayer';
-import { SynthesisHistory } from '../components/TTSSynthesis/SynthesisHistory';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
 import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSPanel';
 import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMPanel';
-import { SSMLToolbar } from '../components/TTSSynthesis/SSMLToolbar';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
+import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
 import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi } from '../services/api';
-import { saveTTSResult, getTTSHistory, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
+import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
@@ -21,24 +19,44 @@ import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, TTSResultRecord, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
-type Mode = 'single' | 'segmented';
+
+const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
 
 function toEdgeFormat(value: number) {
   return value >= 0 ? `+${value}%` : `${value}%`;
 }
 
+
+function createScratchpadProject(): SegmentedProject {
+  const project = createInitialProject();
+  const now = new Date().toISOString();
+  return {
+    ...project,
+    id: SCRATCHPAD_PROJECT_ID,
+    name: '草稿项目',
+    created_at: project.created_at || now,
+    updated_at: project.updated_at || now,
+  };
+}
+
+function sortProjectsWithScratchpad(projects: SegmentedProject[]) {
+  return [...projects].sort((a, b) => {
+    if (a.id === SCRATCHPAD_PROJECT_ID) return -1;
+    if (b.id === SCRATCHPAD_PROJECT_ID) return 1;
+    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
+  });
+}
+
 export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => void }) {
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
-  const [mode, setMode] = useState<Mode>('single');
   const [engine, setEngine] = useState<Engine>('edge_tts');
-  const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [params, setParams] = useState<Partial<TTSRequest>>({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
 
@@ -61,14 +79,10 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [voxcpmCfgValue, setVoxcpmCfgValue] = useState(2.0);
   const [voxcpmInferenceTimesteps, setVoxcpmInferenceTimesteps] = useState(10);
 
-  const [result, setResult] = useState<TTSResult | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [history, setHistory] = useState<TTSResultRecord[]>([]);
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Segmented mode state
-  const [project, setProject] = useState<SegmentedProject>(createInitialProject);
+  // Project workbench state
+  const [project, setProject] = useState<SegmentedProject>(createScratchpadProject);
   const [projectList, setProjectList] = useState<SegmentedProject[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -76,6 +90,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [compactMode, setCompactMode] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
+  const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
   const [isPaused, setIsPaused] = useState(false);
   const [playAllActive, setPlayAllActive] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -114,31 +129,54 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     };
   }, []);
 
-  // Load last project on mount, possibly surfacing migration prompt
+  useEffect(() => {
+    localStorage.setItem('narraforge.projectSidebarCollapsed', String(projectSidebarCollapsed));
+  }, [projectSidebarCollapsed]);
+
+  // Load scratchpad project on mount, possibly surfacing migration prompt
   useEffect(() => {
     (async () => {
-      const list = await projectStorage.listProjects();
+      const rawList = await projectStorage.listProjects();
+      let scratchpad = rawList.find(p => p.id === SCRATCHPAD_PROJECT_ID);
+
+      if (!scratchpad) {
+        scratchpad = createScratchpadProject();
+        await projectStorage.saveProject(scratchpad, { mode: 'immediate' });
+      }
+
+      const list = sortProjectsWithScratchpad([
+        scratchpad,
+        ...rawList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID),
+      ]);
       setProjectList(list);
-      if (list.length > 0) {
-        const latest = list[0];
-        let full = await projectStorage.getProject(latest.id);
-        if (!full) full = latest as SegmentedProject;
-        const localDraft = await getDraft(full.id);
-        if (localDraft && localDraft.base_updated_at && localDraft.base_updated_at < full.updated_at && localDraft.dirty) {
-          setConflictPrompt({ backend: full, draft: localDraft });
+
+      let full = await projectStorage.getProject(SCRATCHPAD_PROJECT_ID);
+      if (!full) full = scratchpad;
+      const localDraft = await getDraft(full.id);
+      if (localDraft && localDraft.base_updated_at && localDraft.base_updated_at < full.updated_at && localDraft.dirty) {
+        if (full.id === SCRATCHPAD_PROJECT_ID) {
+          const migratedDraft = migrateV1(localDraft.draft);
+          setProject(migratedDraft);
+          dispatch({ type: 'LOAD_PROJECT', project: migratedDraft });
+          const ch = getActiveChapter(migratedDraft);
+          if (ch) restoreChapterSettings(ch);
           return;
         }
-        const migrated = migrateV1(full);
-        setProject(migrated);
-        dispatch({ type: 'LOAD_PROJECT', project: migrated });
-        const ch = getActiveChapter(migrated);
-        if (ch) restoreChapterSettings(ch);
-        await draftSync.adoptBackendVersion(migrated);
+        setConflictPrompt({ backend: full, draft: localDraft });
+        return;
       }
+      const migrated = migrateV1(full);
+      setProject(migrated);
+      dispatch({ type: 'LOAD_PROJECT', project: migrated });
+      const ch = getActiveChapter(migrated);
+      if (ch) restoreChapterSettings(ch);
+      await draftSync.adoptBackendVersion(migrated);
+
       if (storageMode === 'backend') {
         const localProjects = await indexedDBStorage.listProjects();
-        if (localProjects.length > 0) {
-          setLocalCount(localProjects.length);
+        const migratableCount = localProjects.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length;
+        if (migratableCount > 0) {
+          setLocalCount(migratableCount);
           setShowMigration(true);
         }
       }
@@ -148,7 +186,6 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
   // Auto-save: debounce PUT in backend mode; IndexedDB direct in frontend mode
   useEffect(() => {
-    if (project.chapters.length === 1 && !project.chapters[0].original_text && project.chapters[0].segments.length === 0 && project.name === '新项目') return;
     if (storageMode === 'backend') {
       void draftSync.markDirty(project);
     } else {
@@ -186,138 +223,13 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  const voiceDescriptionMap = useMemo(() => {
-    const map = new Map<string, string>();
-    voices.forEach(v => { if (v.description && v.qwen_voice_id) map.set(v.qwen_voice_id, v.description); });
-    return map;
-  }, [voices]);
-
   useEffect(() => { ttsApi.getVoices().then(setVoices).catch(() => {}); }, [refreshCounter]);
-
-  const storageModeRef = useRef(storageMode);
-  storageModeRef.current = storageMode;
-  const voiceDescriptionMapRef = useRef(voiceDescriptionMap);
-  voiceDescriptionMapRef.current = voiceDescriptionMap;
-  const enrichVoiceName = useCallback((voiceId: string, voiceName: string) => {
-    return voiceDescriptionMapRef.current.get(voiceId) || voiceName;
-  }, []);
 
   const projectStorage: SegmentedProjectStorage = storageMode === 'backend' ? backendStorage : indexedDBStorage;
   const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
   const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: any } | null>(null);
-
-  const blobUrlsRef = useRef<string[]>([]);
-  const revokeBlobUrls = useCallback(() => {
-    blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
-    blobUrlsRef.current = [];
-  }, []);
-
-  const loadHistory = useCallback(async () => {
-    const modeAtStart = storageModeRef.current;
-    try {
-      if (modeAtStart === 'frontend') {
-        const localRecords = await getTTSHistory();
-        if (storageModeRef.current !== modeAtStart) return;
-        revokeBlobUrls();
-        const mapped: TTSResultRecord[] = localRecords.map((r) => {
-          const blobUrl = r.audioBlob ? URL.createObjectURL(r.audioBlob) : '';
-          if (blobUrl) blobUrlsRef.current.push(blobUrl);
-          return { id: r.id, text: r.text, voice_id: r.voice_id, voice_name: enrichVoiceName(r.voice_id, r.voice_name), audio_url: blobUrl, audio_format: r.audio_format, speed: r.speed, volume: r.volume, pitch: r.pitch, instruction: r.instruction, language: r.language, created_at: r.created_at };
-        });
-        setHistory(mapped);
-      } else {
-        const data = await ttsApi.getHistory();
-        if (storageModeRef.current !== modeAtStart) return;
-        setHistory(data.map(r => ({ ...r, voice_name: enrichVoiceName(r.voice_id, r.voice_name) })));
-      }
-    } catch (error) { console.error('Failed to load history:', error); }
-  }, [enrichVoiceName, revokeBlobUrls]);
-
-  useEffect(() => { loadHistory(); }, [storageMode, loadHistory]);
-  useEffect(() => { return () => { revokeBlobUrls(); }; }, [revokeBlobUrls]);
-
-  const saveFrontendResult = useCallback(async (resp: TTSResult, audioFormat: string, voiceName: string, voiceId: string, instructionText: string, language: string) => {
-    if (storageMode !== 'frontend' || !resp.audio_base64) return;
-    const byteStr = atob(resp.audio_base64);
-    const byteNums = new Uint8Array(byteStr.length);
-    for (let i = 0; i < byteStr.length; i++) byteNums[i] = byteStr.charCodeAt(i);
-    const mimeType = audioFormat === 'mp3' ? 'audio/mpeg' : `audio/${audioFormat}`;
-    await saveTTSResult({ id: resp.audio_id, text: resp.text, voice_id: voiceId || '', voice_name: voiceName || '', audioBlob: new Blob([byteNums], { type: mimeType }), audio_format: audioFormat, speed: resp.params?.speed ?? 1.0, volume: resp.params?.volume ?? 80, pitch: resp.params?.pitch ?? 1.0, instruction: instructionText, language, created_at: new Date().toISOString() });
-  }, [storageMode]);
-
-  const handleSynthesize = useCallback(async () => {
-    console.log('[handleSynthesize] engine=', engine, 'selectedVoiceId=', selectedVoiceId, 'voxcpmMode=', voxcpmMode);
-    if (!text.trim()) { alert('请输入要合成的文本'); return; }
-    if (engine === 'cosyvoice' && !selectedVoiceId) { alert('请选择一个声音'); return; }
-    if (engine === 'edge_tts' && !edgeVoice) { alert('请选择一个音色'); return; }
-    if (engine === 'mimo_tts' && mimoMode === 'preset' && !mimoPresetVoice) { alert('请选择一个预置音色'); return; }
-    if (engine === 'mimo_tts' && mimoMode === 'voiceclone' && !mimoCloneVoiceId) { alert('请选择一个声音用于复刻'); return; }
-
-    try {
-      setIsLoading(true); setResult(null);
-      if (engine === 'mimo_tts') {
-        let resp: TTSResult;
-        if (mimoMode === 'preset') {
-          resp = await mimoTtsApi.synthesizePreset({ text, voice: mimoPresetVoice, instruction: mimoInstruction, format: 'wav' });
-          await saveFrontendResult(resp, 'wav', mimoPresetVoice, mimoPresetVoice, mimoInstruction, 'Chinese');
-        } else {
-          resp = await mimoTtsApi.synthesizeVoiceClone({ text, voice_id: mimoCloneVoiceId, instruction: mimoInstruction, format: 'wav' });
-          const cloneVoice = voices.find(v => v.id === mimoCloneVoiceId);
-          await saveFrontendResult(resp, 'wav', cloneVoice?.name || '音色复刻', mimoCloneVoiceId, mimoInstruction, 'Chinese');
-        }
-        setResult(resp);
-      } else if (engine === 'edge_tts') {
-        const resp = await ttsApi.synthesize({ text, engine: 'edge_tts', voice_id: '', edge_voice: edgeVoice, edge_rate: toEdgeFormat(edgeRate), edge_volume: toEdgeFormat(edgeVolume), format: 'mp3' });
-        await saveFrontendResult(resp, 'mp3', edgeVoice, edgeVoice, '', 'Chinese');
-        setResult(resp);
-      } else if (engine === 'voxcpm') {
-        console.log('[VoxCPM] synthesize called:', { voxcpmMode, selectedVoiceId, text: text.slice(0, 30) });
-        let resp: TTSResult;
-        if (voxcpmMode === 'design') {
-          resp = await voxcpmApi.design({ voice_description: voxcpmVoiceDescription, text: text || undefined, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
-        } else if (voxcpmMode === 'clone') {
-          resp = await voxcpmApi.clone({ text, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
-        } else if (voxcpmMode === 'ultimate') {
-          resp = await voxcpmApi.ultimateClone({ text, voice_id: selectedVoiceId, prompt_text: voxcpmPromptText, style_control: voxcpmStyleControl, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
-        } else {
-          resp = await voxcpmApi.tts({ text, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, format: 'wav' });
-        }
-        await saveFrontendResult(resp, 'wav', `VoxCPM ${voxcpmMode}`, selectedVoiceId || '', voxcpmVoiceDescription, '');
-        setResult(resp);
-      } else {
-        const resp = await ttsApi.synthesize({ text, voice_id: selectedVoiceId, language: params.language || 'Chinese', speed: params.speed ?? 1.0, volume: params.volume ?? 80, pitch: params.pitch ?? 1.0, instruction: params.instruction || '', enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false, format: 'mp3' });
-        await saveFrontendResult(resp, resp.audio_format || 'mp3', resp.voice_name || selectedVoiceId, resp.voice_id || selectedVoiceId, resp.params?.instruction || '', resp.params?.language || 'Chinese');
-        setResult(resp);
-      }
-      loadHistory();
-    } catch (error) { console.error('TTS synthesis failed:', error); alert('生成语音失败，请重试'); }
-    finally { setIsLoading(false); }
-  }, [text, engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, params, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, loadHistory, storageMode, voices, saveFrontendResult, voxcpmMode, voxcpmVoiceDescription, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps]);
-
-  const handleDeleteResult = useCallback(async (id: string) => {
-    try {
-      if (storageMode === 'frontend') { await deleteTTSResult(id); } else { await ttsApi.deleteResult(id); }
-      setHistory(prev => prev.filter(r => r.id !== id));
-    } catch (error) { console.error('Failed to delete result:', error); alert('删除失败'); }
-  }, [storageMode]);
-
-  const handlePlayResult = useCallback(async (record: TTSResultRecord) => {
-    if (storageMode === 'frontend') {
-      const blob = await getTTSAudioBlob(record.id);
-      if (blob) {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const base64 = (reader.result as string).split(',')[1];
-          setResult({ audio_id: record.id, audio_base64: base64, audio_format: record.audio_format || 'mp3', text: record.text, params: { voice_id: record.voice_id, speed: record.speed, volume: record.volume, pitch: record.pitch, language: record.language, instruction: record.instruction } });
-        };
-        reader.readAsDataURL(blob);
-      }
-    } else {
-      setResult({ audio_id: record.id, audio_url: record.audio_url, text: record.text, params: { voice_id: record.voice_id, speed: record.speed, volume: record.volume, pitch: record.pitch, language: record.language, instruction: record.instruction } });
-    }
-  }, [storageMode]);
 
   // ---- Chapter management ----
 
@@ -419,43 +331,90 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     };
   }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmVoiceDescription, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps]);
 
-  const doDeleteProject = useCallback(async () => {
+  const resetGlobalSettings = useCallback(() => {
+    setEngine('edge_tts');
+    setSelectedVoiceId('');
+    setEdgeVoice('');
+    setEdgeRate(0);
+    setEdgeVolume(0);
+    setMimoMode('preset');
+    setMimoPresetVoice('冰糖');
+    setMimoInstruction('');
+    setMimoCloneVoiceId('');
+    setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
+    setPanelOpen(true);
+  }, []);
+
+  const loadProjectById = useCallback(async (projectId: string) => {
+    const p = await projectStorage.getProject(projectId);
+    if (!p) return;
+    const migrated = migrateV1(p);
+    dispatch({ type: 'LOAD_PROJECT', project: migrated });
+    setProject(migrated);
+    const ch = getActiveChapter(migrated);
+    if (ch) restoreChapterSettings(ch);
+    if (storageMode === 'backend') {
+      await draftSync.adoptBackendVersion(migrated);
+    }
+  }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
+
+  const handleCreateProject = useCallback(async () => {
+    const np = createInitialProject();
+    np.name = `新项目 ${projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1}`;
+    await projectStorage.saveProject(np, { mode: 'immediate' });
+    const list = sortProjectsWithScratchpad(await projectStorage.listProjects());
+    setProjectList(list);
+    setProject(np);
+    dispatch({ type: 'LOAD_PROJECT', project: np });
+    resetGlobalSettings();
+  }, [projectList, projectStorage, dispatch, resetGlobalSettings]);
+
+  const doDeleteProject = useCallback(async (projectId: string) => {
+    if (projectId === SCRATCHPAD_PROJECT_ID) {
+      showToast('草稿项目不可删除', 'error');
+      return;
+    }
+
     try {
-      await projectStorage.deleteProject(project.id);
+      await projectStorage.deleteProject(projectId);
       if (storageMode === 'backend') {
-        await deleteDraft(project.id);
+        await deleteDraft(projectId);
       }
-      const list = await projectStorage.listProjects();
+
+      const list = sortProjectsWithScratchpad(await projectStorage.listProjects());
       setProjectList(list);
-      if (list.length > 0) {
-        const migrated = migrateV1(list[0]);
-        setProject(migrated);
-        dispatch({ type: 'LOAD_PROJECT', project: migrated });
-        const ch = getActiveChapter(migrated);
-        if (ch) restoreChapterSettings(ch);
-      } else {
-        const np = createInitialProject();
-        setProject(np);
-        dispatch({ type: 'LOAD_PROJECT', project: np });
-        setEngine('edge_tts'); setSelectedVoiceId(''); setEdgeVoice('');
-        setEdgeRate(0); setEdgeVolume(0);
-        setMimoMode('preset'); setMimoPresetVoice('冰糖');
-        setMimoInstruction(''); setMimoCloneVoiceId('');
-        setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
-        setPanelOpen(true);
+
+      if (project.id === projectId) {
+        const nextProject = list.find(p => p.id === SCRATCHPAD_PROJECT_ID) || list[0];
+        if (nextProject) {
+          await loadProjectById(nextProject.id);
+        } else {
+          const scratchpad = createScratchpadProject();
+          await projectStorage.saveProject(scratchpad, { mode: 'immediate' });
+          setProjectList([scratchpad]);
+          setProject(scratchpad);
+          dispatch({ type: 'LOAD_PROJECT', project: scratchpad });
+          resetGlobalSettings();
+        }
       }
       showToast('项目已删除');
     } catch (e) { console.error('Delete project failed:', e); showToast('删除失败', 'error'); }
-  }, [project, dispatch, restoreChapterSettings, showToast]);
+  }, [project.id, projectStorage, storageMode, loadProjectById, dispatch, resetGlobalSettings, showToast]);
 
-  const handleDeleteProject = useCallback(() => {
+  const handleDeleteProject = useCallback((projectId = project.id) => {
+    if (projectId === SCRATCHPAD_PROJECT_ID) {
+      showToast('草稿项目不可删除', 'error');
+      return;
+    }
+    const target = projectList.find(p => p.id === projectId) || project;
     setConfirmDialog({
       open: true, title: '删除项目',
-      message: `确定删除项目「${project.name}」？\n此操作不可撤销，所有章节和音频将一并删除。`,
+      message: `确定删除项目「${target.name}」？
+此操作不可撤销，所有章节和音频将一并删除。`,
       variant: 'danger', confirmLabel: '删除',
-      onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDeleteProject(); },
+      onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); void doDeleteProject(projectId); },
     });
-  }, [project.name, doDeleteProject]);
+  }, [project.id, project, projectList, doDeleteProject, showToast]);
 
   const handleToggleIndependentVoice = useCallback((id: string) => {
     dispatch({ type: 'TOGGLE_INDEPENDENT_VOICE', id });
@@ -671,7 +630,6 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           audio_format: updatedSeg?.audio_format ?? 'mp3',
           generated_params: updatedSeg?.generated_params,
         });
-        loadHistory();
         return;
       }
 
@@ -718,11 +676,10 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams });
-      loadHistory(); // refresh history so generated audio appears in list
     } catch (e: any) {
       dispatch({ type: 'GENERATE_FAIL', id, error: e?.message ?? '生成失败' });
     }
-  }, [activeChapter.segments, dispatch, buildCurrentParams, loadHistory, showToast]);
+  }, [activeChapter.segments, dispatch, buildCurrentParams, showToast]);
 
   // Keep ref in sync
   handleRegenerateRef.current = handleRegenerate;
@@ -990,306 +947,208 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       try { await deleteTTSResult(seg.current_audio_id); } catch {}
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, generated_voice_id: seg.generated_voice_id });
       showToast(`裁剪了 ${trimmedMs}ms 静音`);
-      loadHistory();
     } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
-  }, [activeChapter.segments, dispatch, showToast, loadHistory]);
+  }, [activeChapter.segments, dispatch, showToast]);
 
   const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
-
-  const canSynthesize = engine === 'edge_tts'
-    ? !!text.trim() && !!edgeVoice
-    : engine === 'mimo_tts'
-      ? !!text.trim() && ((mimoMode === 'preset' && !!mimoPresetVoice) || (mimoMode === 'voiceclone' && !!mimoCloneVoiceId))
-      : !!text.trim() && !!selectedVoiceId;
+  const isScratchpadProject = project.id === SCRATCHPAD_PROJECT_ID;
 
   return (
     <div className={styles.container}>
-      {/* Compact unified toolbar: title + mode + engine */}
-      <div className={styles.toolbar}>
-        <span className={styles.toolbarTitle}>文字转语音</span>
-        <div className={styles.toolbarDivider} />
-        <div className={styles.toolbarGroup}>
-          <button className={`${styles.toolbarTab} ${mode === 'single' ? styles.toolbarTabActive : ''}`} onClick={() => setMode('single')}>单段</button>
-          <button className={`${styles.toolbarTab} ${mode === 'segmented' ? styles.toolbarTabActive : ''}`} onClick={() => setMode('segmented')}>分段</button>
-        </div>
-        <div className={styles.toolbarDivider} />
-        <div className={styles.toolbarGroup}>
-          <button className={`${styles.toolbarPill} ${engine === 'edge_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
-          <button className={`${styles.toolbarPill} ${engine === 'cosyvoice' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
-          <button className={`${styles.toolbarPill} ${engine === 'mimo_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('mimo_tts')}>MiMo</button>
-          <button className={`${styles.toolbarPill} ${engine === 'voxcpm' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('voxcpm')}>VoxCPM</button>
+      <div className={styles.workbenchLayout}>
+        <ProjectSidebar
+          projects={projectList}
+          activeProjectId={project.id}
+          collapsed={projectSidebarCollapsed}
+          scratchpadId={SCRATCHPAD_PROJECT_ID}
+          onToggleCollapse={() => setProjectSidebarCollapsed(value => !value)}
+          onSelectProject={(projectId) => { void loadProjectById(projectId); }}
+          onCreateProject={() => { void handleCreateProject(); }}
+          onDeleteProject={handleDeleteProject}
+        />
+
+        <div className={styles.workbenchMain}>
+          <div className={styles.toolbar}>
+            <div className={styles.projectTitleCluster}>
+              <span className={styles.toolbarTitle}>分段配音工作台</span>
+              <span className={styles.projectSubtitle}>{isScratchpadProject ? '草稿项目 · 快速试稿' : '项目制 · 章节分段'}</span>
+            </div>
+            <div className={styles.toolbarDivider} />
+            <div className={styles.toolbarGroup}>
+              <button className={`${styles.toolbarPill} ${engine === 'edge_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
+              <button className={`${styles.toolbarPill} ${engine === 'cosyvoice' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
+              <button className={`${styles.toolbarPill} ${engine === 'mimo_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('mimo_tts')}>MiMo</button>
+              <button className={`${styles.toolbarPill} ${engine === 'voxcpm' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('voxcpm')}>VoxCPM</button>
+            </div>
+          </div>
+
+          <div className={styles.segmentedContent}>
+            <div className={styles.segmentedToolbar}>
+              <input
+                className={styles.segmentedNameInput}
+                value={project.name}
+                disabled={isScratchpadProject}
+                onChange={(e) => dispatch({ type: 'RENAME_PROJECT', name: e.target.value })}
+              />
+              {isScratchpadProject && <span className={styles.scratchpadBadge}>默认草稿</span>}
+              <div className={styles.chapterGroup}>
+                <select
+                  className={styles.chapterSelect}
+                  value={project.active_chapter_id || ''}
+                  onChange={(e) => handleSelectChapter(e.target.value)}
+                >
+                  {project.chapters.map(ch => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.name} ({ch.segments.length}段)
+                    </option>
+                  ))}
+                </select>
+                <button className={styles.chapterBtn} onClick={handleAddChapter} title="新建章节">+</button>
+                {project.chapters.length > 1 && (
+                  <button className={styles.chapterBtnDanger} onClick={() => handleDeleteChapter(project.active_chapter_id || '')} title="删除当前章节">✕</button>
+                )}
+              </div>
+              <span className={styles.segmentedStats}>
+                {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
+                {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
+              </span>
+              <div className={styles.segmentedActions}>
+                <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
+                  {generating ? '生成中...' : '⚡ 全部生成'}
+                </button>
+                <button className={styles.segmentedActionBtn} onClick={playAllActive ? handleStopAll : handlePlayAll} disabled={!!playingId && !playAllActive}>
+                  {playAllActive ? '■ 停止' : '▶ 全部播放'}
+                </button>
+                {engine === 'cosyvoice' && (
+                  <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
+                )}
+                <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
+                {!isScratchpadProject && <button className={styles.segmentedActionBtnDanger} onClick={() => handleDeleteProject(project.id)}>🗑 删除</button>}
+              </div>
+            </div>
+
+            <CollapsiblePanel
+              title={({cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM'} as Record<Engine, string>)[engine] || engine}
+              summary={
+                engine === 'cosyvoice'
+                  ? (selectedVoice?.description || selectedVoice?.name || '未选择')
+                  : engine === 'edge_tts'
+                    ? (edgeVoice ? edgeVoice.split('-').pop()?.replace(/Neural$|V\d+$/i, '') || edgeVoice : '未选择')
+                    : (mimoMode === 'voiceclone' ? '自定义音色' : mimoPresetVoice || '未选择')
+              }
+              open={panelOpen}
+              onToggle={() => setPanelOpen(!panelOpen)}
+            >
+            {engine === 'cosyvoice' ? (
+              <GlobalControlBar
+                selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+                speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
+                instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
+                onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
+                onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
+                onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
+                onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+                onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
+                onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
+                onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
+                onNavigateToClone={onNavigateToClone}
+              />
+            ) : engine === 'edge_tts' ? (
+              <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
+            ) : engine === 'mimo_tts' ? (
+              <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
+            ) : (
+              <VoxCPMPanel
+                mode={voxcpmMode} onModeChange={setVoxcpmMode}
+                voiceDescription={voxcpmVoiceDescription} onVoiceDescriptionChange={setVoxcpmVoiceDescription}
+                styleControl={voxcpmStyleControl} onStyleControlChange={setVoxcpmStyleControl}
+                promptText={voxcpmPromptText} onPromptTextChange={setVoxcpmPromptText}
+                selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+                cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
+                inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
+              />
+            )}
+            </CollapsiblePanel>
+
+            <TextInputPanel
+              splitConfig={activeChapter.split_config}
+              onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
+              onSplit={(texts, originalText) => {
+                doApplySplit(texts.map(t => ({ text: t })), originalText);
+              }}
+              onLLMSplit={async (text) => {
+                const result = await textSplitApi.llmSplit(text, activeChapter.split_config.delimiters);
+                doApplySplit(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), text);
+              }}
+              segmentTexts={activeChapter.segments.map(s => s.text)}
+              segmentCount={activeChapter.segments.length}
+            />
+
+            <div className={styles.segmentedEditor}>
+              <div className={styles.viewToggle}>
+                <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
+                  onClick={() => setCompactMode(true)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+                  紧凑
+                </button>
+                <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
+                  onClick={() => setCompactMode(false)}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg>
+                  展开
+                </button>
+              </div>
+
+              <SegmentList
+                segments={activeChapter.segments}
+                layout={project.layout}
+                selectedId={activeChapter.selected_segment_id}
+                playingId={playingId}
+                isPaused={isPaused}
+                compact={compactMode}
+                voices={voices}
+                globalVoiceId={selectedVoiceId}
+                globalVoiceName={selectedVoice?.description || selectedVoice?.name}
+                globalEdgeVoice={edgeVoice}
+                engine={engine}
+                globalMimoMode={mimoMode}
+                globalMimoPresetVoice={mimoPresetVoice}
+                globalMimoCloneVoiceId={mimoCloneVoiceId}
+                chapterStartOffset={chapterStartOffset}
+                onSelect={(id) => {
+                  const currentSelected = activeChapter.selected_segment_id;
+                  dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
+                }}
+                onDelete={handleDeleteSegment}
+                onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId })}
+                onAppend={() => dispatch({ type: 'APPEND_SEGMENT' })}
+                onReorder={(from, to) => dispatch({ type: 'REORDER', fromIndex: from, toIndex: to })}
+                onEdit={(id) => {
+                  const currentSelected = activeChapter.selected_segment_id;
+                  dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
+                }}
+                onRegenerate={handleRegenerate}
+                onPlay={handlePlaySegment}
+                onTrimSilence={handleTrimSilence}
+                onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
+                onDuplicate={(id) => {
+                  const seg = activeChapter.segments.find(s => s.id === id);
+                  if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text });
+                }}
+                onAnnotateSSML={(id) => handleAnnotateSSML([id])}
+                onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
+                onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
+                onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
+                onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
+                onToggleIndependentVoice={handleToggleIndependentVoice}
+                onMerge={handleMerge}
+                onSplit={handleSplit}
+              />
+
+              <ExportDialog open={exportOpen} segments={activeChapter.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* ====== SINGLE MODE ====== */}
-      {mode === 'single' && (
-        <div className={styles.singleContent}>
-          {/* Control Bar ABOVE text */}
-          {engine === 'cosyvoice' ? (
-            <GlobalControlBar
-              selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
-              speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
-              instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
-              onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
-              onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
-              onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
-              onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
-              onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
-              onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
-              onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
-            />
-          ) : engine === 'edge_tts' ? (
-            <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
-          ) : engine === 'mimo_tts' ? (
-            <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
-          ) : (
-            <VoxCPMPanel
-              mode={voxcpmMode} onModeChange={setVoxcpmMode}
-              voiceDescription={voxcpmVoiceDescription} onVoiceDescriptionChange={setVoxcpmVoiceDescription}
-              styleControl={voxcpmStyleControl} onStyleControlChange={setVoxcpmStyleControl}
-              promptText={voxcpmPromptText} onPromptTextChange={setVoxcpmPromptText}
-              selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
-              cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
-              inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
-            />
-          )}
-
-          {/* Text Input */}
-          <div className={styles.textSection}>
-            <textarea ref={textareaRef} className={styles.textarea} placeholder="输入要合成的文字..." value={text} onChange={(e) => setText(e.target.value)} rows={6} />
-            {engine === 'cosyvoice' && params.enable_ssml && (
-              <SSMLToolbar text={text} onTextChange={setText} textareaRef={textareaRef} enabled={!!params.enable_ssml} />
-            )}
-            <div className={styles.textInfo}>
-              <span>{text.length} 字符</span>
-              <button onClick={() => setText('')} disabled={!text} className={styles.clearButton}>清空</button>
-            </div>
-          </div>
-
-          {/* Generate */}
-          <div className={styles.generateSection}>
-            <button onClick={handleSynthesize} disabled={isLoading || !canSynthesize} className={styles.generateButton}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              {isLoading ? '生成中...' : '生成语音'}
-            </button>
-          </div>
-
-          <AudioPlayer result={result} isLoading={isLoading} />
-          <SynthesisHistory results={history} onDelete={handleDeleteResult} onPlay={handlePlayResult} onConfirm={setConfirmDialog} />
-        </div>
-      )}
-
-      {/* ====== SEGMENTED MODE ====== */}
-      {mode === 'segmented' && (
-        <div className={styles.segmentedContent}>
-          {/* a. Project selector — at the very top */}
-          <div className={styles.segmentedToolbar}>
-            {/* Project management */}
-            <select
-              className={styles.projectSelect}
-              value={project.id}
-              onChange={async (e) => {
-                const pid = e.target.value;
-                if (pid === '__new__') {
-                  const np = createInitialProject();
-                  setProject(np);
-                  dispatch({ type: 'LOAD_PROJECT', project: np });
-                  // Reset all global state
-                  setEngine('edge_tts');
-                  setSelectedVoiceId('');
-                  setEdgeVoice('');
-                  setEdgeRate(0);
-                  setEdgeVolume(0);
-                  setMimoMode('preset');
-                  setMimoPresetVoice('冰糖');
-                  setMimoInstruction('');
-                  setMimoCloneVoiceId('');
-                  setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
-                  setPanelOpen(true);
-                } else {
-                  // Load latest from storage to ensure we have fresh data
-                  const p = await projectStorage.getProject(pid);
-                  if (p) {
-                    const migrated = migrateV1(p);
-                    dispatch({ type: 'LOAD_PROJECT', project: migrated });
-                    setProject(migrated);
-                    const ch = getActiveChapter(migrated);
-                    if (ch) restoreChapterSettings(ch);
-                  }
-                }
-              }}
-            >
-              {projectList.map(p => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-              <option value="__new__">+ 新建项目</option>
-            </select>
-            <input className={styles.segmentedNameInput} value={project.name} onChange={(e) => dispatch({ type: 'RENAME_PROJECT', name: e.target.value })} />
-            {/* Chapter selector */}
-            <div className={styles.chapterGroup}>
-              <select
-                className={styles.chapterSelect}
-                value={project.active_chapter_id || ''}
-                onChange={(e) => handleSelectChapter(e.target.value)}
-              >
-                {project.chapters.map(ch => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.name} ({ch.segments.length}段)
-                  </option>
-                ))}
-              </select>
-              <button className={styles.chapterBtn} onClick={handleAddChapter} title="新建章节">+</button>
-              {project.chapters.length > 1 && (
-                <button className={styles.chapterBtnDanger} onClick={() => handleDeleteChapter(project.active_chapter_id || '')} title="删除当前章节">✕</button>
-              )}
-            </div>
-            <span className={styles.segmentedStats}>
-              {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
-              {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
-            </span>
-            <div className={styles.segmentedActions}>
-              <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
-                {generating ? '生成中...' : '⚡ 全部生成'}
-              </button>
-              <button className={styles.segmentedActionBtn} onClick={playAllActive ? handleStopAll : handlePlayAll} disabled={!!playingId && !playAllActive}>
-                {playAllActive ? '■ 停止' : '▶ 全部播放'}
-              </button>
-              {engine === 'cosyvoice' && (
-                <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
-              )}
-              <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
-              <button className={styles.segmentedActionBtnDanger} onClick={handleDeleteProject}>🗑 删除</button>
-            </div>
-          </div>
-
-          {/* b. Global control bar (engine + voice + params) with voice clone CTA */}
-          <CollapsiblePanel
-            title={({cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM'} as Record<Engine, string>)[engine] || engine}
-            summary={
-              engine === 'cosyvoice'
-                ? (selectedVoice?.description || selectedVoice?.name || '未选择')
-                : engine === 'edge_tts'
-                  ? (edgeVoice ? edgeVoice.split('-').pop()?.replace(/Neural$|V\d+$/i, '') || edgeVoice : '未选择')
-                  : (mimoMode === 'voiceclone' ? '自定义音色' : mimoPresetVoice || '未选择')
-            }
-            open={panelOpen}
-            onToggle={() => setPanelOpen(!panelOpen)}
-          >
-          {engine === 'cosyvoice' ? (
-            <GlobalControlBar
-              selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
-              speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
-              instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
-              onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
-              onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
-              onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
-              onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
-              onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
-              onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
-              onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
-              onNavigateToClone={onNavigateToClone}
-            />
-          ) : engine === 'edge_tts' ? (
-            <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
-          ) : engine === 'mimo_tts' ? (
-            <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
-          ) : (
-            <VoxCPMPanel
-              mode={voxcpmMode} onModeChange={setVoxcpmMode}
-              voiceDescription={voxcpmVoiceDescription} onVoiceDescriptionChange={setVoxcpmVoiceDescription}
-              styleControl={voxcpmStyleControl} onStyleControlChange={setVoxcpmStyleControl}
-              promptText={voxcpmPromptText} onPromptTextChange={setVoxcpmPromptText}
-              selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
-              cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
-              inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
-            />
-          )}
-          </CollapsiblePanel>
-
-          {/* c. Original text input area — collapsible */}
-          <TextInputPanel
-            splitConfig={activeChapter.split_config}
-            onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
-            onSplit={(texts, originalText) => {
-              doApplySplit(texts.map(t => ({ text: t })), originalText);
-            }}
-            onLLMSplit={async (text) => {
-              const result = await textSplitApi.llmSplit(text, activeChapter.split_config.delimiters);
-              doApplySplit(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), text);
-            }}
-            segmentTexts={activeChapter.segments.map(s => s.text)}
-            segmentCount={activeChapter.segments.length}
-          />
-
-          {/* Segmented Editor (toggle + segment list) */}
-          <div className={styles.segmentedEditor}>
-            {/* d. Compact mode toggle */}
-            <div className={styles.viewToggle}>
-              <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
-                onClick={() => setCompactMode(true)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-                紧凑
-              </button>
-              <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
-                onClick={() => setCompactMode(false)}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg>
-                展开
-              </button>
-            </div>
-
-            {/* e. Segment list */}
-            <SegmentList
-              segments={activeChapter.segments}
-              layout={project.layout}
-              selectedId={activeChapter.selected_segment_id}
-              playingId={playingId}
-              isPaused={isPaused}
-              compact={compactMode}
-              voices={voices}
-              globalVoiceId={selectedVoiceId}
-              globalVoiceName={selectedVoice?.description || selectedVoice?.name}
-              globalEdgeVoice={edgeVoice}
-              engine={engine}
-              globalMimoMode={mimoMode}
-              globalMimoPresetVoice={mimoPresetVoice}
-              globalMimoCloneVoiceId={mimoCloneVoiceId}
-              chapterStartOffset={chapterStartOffset}
-              onSelect={(id) => {
-                const currentSelected = activeChapter.selected_segment_id;
-                dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
-              }}
-              onDelete={handleDeleteSegment}
-              onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId })}
-              onAppend={() => dispatch({ type: 'APPEND_SEGMENT' })}
-              onReorder={(from, to) => dispatch({ type: 'REORDER', fromIndex: from, toIndex: to })}
-              onEdit={(id) => {
-                const currentSelected = activeChapter.selected_segment_id;
-                dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
-              }}
-              onRegenerate={handleRegenerate}
-              onPlay={handlePlaySegment}
-              onTrimSilence={handleTrimSilence}
-              onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
-              onDuplicate={(id) => {
-                const seg = activeChapter.segments.find(s => s.id === id);
-                if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text });
-              }}
-              onAnnotateSSML={(id) => handleAnnotateSSML([id])}
-              onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
-              onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
-              onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
-              onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
-              onToggleIndependentVoice={handleToggleIndependentVoice}
-              onMerge={handleMerge}
-              onSplit={handleSplit}
-            />
-
-            <ExportDialog open={exportOpen} segments={activeChapter.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
-          </div>
-        </div>
-      )}
 
       <ConfirmDialog
         open={confirmDialog.open}
