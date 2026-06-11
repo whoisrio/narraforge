@@ -810,41 +810,93 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     stopCurrentAudio();
 
     const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg?.current_audio_id && !seg?.current_audio_path) return;
+    if (!seg?.current_audio_id && !seg?.current_audio_path) {
+      showToast('该段尚未生成音频', 'error');
+      return;
+    }
+
+    const logPlayError = (ctx: string, e: unknown) => {
+      // Never silently swallow — log + toast so users can diagnose
+      console.error(`[PlaySegment:${ctx}]`, e, {
+        segId: seg?.id,
+        chapterId: activeChapter?.id,
+        projectId: project?.id,
+        storageMode,
+        current_audio_id: seg?.current_audio_id,
+        current_audio_path: seg?.current_audio_path,
+      });
+      const msg = (e as any)?.message ?? String(e);
+      showToast(`播放失败 (${ctx}): ${msg}`, 'error');
+    };
 
     try {
       // Backend mode: fetch audio as blob, then play via blob URL
       if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
         const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
         const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`Audio fetch HTTP ${resp.status}`);
+        if (!resp.ok) {
+          // Try to extract backend error detail (FastAPI's `detail` field)
+          let detail = `HTTP ${resp.status}`;
+          try {
+            const body = await resp.clone().json();
+            if (body?.detail) detail = `${resp.status} ${body.detail}`;
+          } catch {
+            try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch {}
+          }
+          throw new Error(detail);
+        }
         const blob = await resp.blob();
+        if (blob.size < 100) throw new Error(`音频为空 (${blob.size}B)，可能后端文件损坏`);
         const blobUrl = URL.createObjectURL(blob);
         blobUrlRef.current = blobUrl;
         const audio = new Audio(blobUrl);
         audioRef.current = audio;
         audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; };
-        audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; };
+        audio.onerror = (ev) => {
+          const errCode = audio.error?.code;
+          const errMsg = audio.error?.message ?? 'unknown';
+          logPlayError('audio.onerror', new Error(`code=${errCode} msg=${errMsg}`));
+          setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(blobUrl); blobUrlRef.current = null;
+        };
         setPlayingId(id);
         setIsPaused(false);
         setPlayAllActive(false);
         await audio.play();
         return;
       }
+      // Path mismatch: segment has backend audio_path but storage mode is frontend.
+      // This happens when the user generated audio in backend mode then switched modes.
+      if (seg.current_audio_path && !seg.current_audio_id) {
+        showToast('该段音频在后端，请切换到后端存储模式播放', 'error');
+        return;
+      }
       const blob = await getTTSAudioBlob(seg.current_audio_id!);
-      if (!blob) return;
+      if (!blob) {
+        showToast('本地音频文件不存在或已被清理，请重新生成', 'error');
+        return;
+      }
       const url = URL.createObjectURL(blob);
       blobUrlRef.current = url;
       const audio = new Audio(url);
       audioRef.current = audio;
       audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
-      audio.onerror = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
+      audio.onerror = (ev) => {
+        const errCode = audio.error?.code;
+        const errMsg = audio.error?.message ?? 'unknown';
+        logPlayError('audio.onerror', new Error(`code=${errCode} msg=${errMsg}`));
+        setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null;
+      };
       setPlayingId(id);
       setIsPaused(false);
       setPlayAllActive(false);
       await audio.play();
-    } catch { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); }
-  }, [activeChapter.segments, playingId, stopCurrentAudio, storageMode, project, activeChapter]);
+    } catch (e) {
+      logPlayError('play-handler', e);
+      setPlayingId(undefined);
+      setIsPaused(false);
+      setPlayAllActive(false);
+    }
+  }, [activeChapter.segments, playingId, stopCurrentAudio, storageMode, project, activeChapter, showToast]);
 
   const handlePlayAll = useCallback(async () => {
     const readySegs = activeChapter.segments.filter(s =>
@@ -879,7 +931,13 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
           const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
           const resp = await fetch(url);
-          if (!resp.ok || playAllAbortRef.current) continue;
+          if (!resp.ok) {
+            let detail = `HTTP ${resp.status}`;
+            try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch {}
+            console.error(`[PlayAll:backend HTTP ${resp.status}]`, detail);
+            continue;
+          }
+          if (playAllAbortRef.current) continue;
           const blob = await resp.blob();
           const blobUrl = URL.createObjectURL(blob);
           blobUrlRef.current = blobUrl;
@@ -887,8 +945,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           audioRef.current = audio;
           await new Promise<void>((resolve) => {
             audio.onended = () => { URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; audioRef.current = null; resolve(); };
-            audio.onerror = () => { URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; audioRef.current = null; resolve(); };
-            audio.play().catch(() => resolve());
+            audio.onerror = () => { console.error('[PlayAll:audio.onerror backend]', audio.error); URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; audioRef.current = null; resolve(); };
+            audio.play().catch((e) => { console.error('[PlayAll:play() rejected backend]', e); resolve(); });
           });
           continue;
         }
@@ -901,10 +959,10 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
         await new Promise<void>((resolve) => {
           audio.onended = () => { URL.revokeObjectURL(url); blobUrlRef.current = null; audioRef.current = null; resolve(); };
-          audio.onerror = () => { URL.revokeObjectURL(url); blobUrlRef.current = null; audioRef.current = null; resolve(); };
-          audio.play().catch(() => resolve());
+          audio.onerror = () => { console.error('[PlayAll:audio.onerror]', audio.error); URL.revokeObjectURL(url); blobUrlRef.current = null; audioRef.current = null; resolve(); };
+          audio.play().catch((e) => { console.error('[PlayAll:play() rejected]', e); resolve(); });
         });
-      } catch { /* skip */ }
+      } catch (e) { console.error('[PlayAll:handler]', e); /* skip */ }
     }
 
     // Clean up after sequence completes
