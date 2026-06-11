@@ -61,3 +61,50 @@ def transcode_to_mp3(
                 pass
     logger.debug("Transcoded %d bytes wav -> %s", len(wav_bytes), output_path)
     return output_path
+
+
+def probe_audio_duration(audio_path: Path) -> float | None:
+    """Return the audio duration in seconds, or None if unavailable.
+
+    Tries ffprobe first (most accurate), then falls back to ffmpeg's
+    stderr 'Duration:' line. Returns None when neither tool is available
+    or parsing fails. Never raises.
+    """
+    audio_path = Path(audio_path)
+    if not audio_path.exists():
+        return None
+
+    # 1) ffprobe (preferred) — `ffprobe -v error -show_entries format=duration ...`
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe:
+        try:
+            r = subprocess.run(
+                [ffprobe, "-v", "error", "-show_entries", "format=duration",
+                 "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path)],
+                capture_output=True, text=True, timeout=10,
+            )
+            if r.returncode == 0:
+                txt = (r.stdout or "").strip()
+                if txt:
+                    return float(txt)
+        except (ValueError, subprocess.SubprocessError):
+            pass
+
+    # 2) Fallback — ffmpeg -i parsing the "Duration: HH:MM:SS.xx" line
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        try:
+            r = subprocess.run(
+                [ffmpeg, "-i", str(audio_path)],
+                capture_output=True, text=True, timeout=10,
+            )
+            # ffmpeg prints "Duration: 00:00:12.34" to stderr even on success
+            for line in (r.stderr or "").splitlines():
+                if line.strip().startswith("Duration:"):
+                    parts = line.split("Duration:", 1)[1].split(",")[0].strip()
+                    h, m, s = parts.split(":")
+                    return int(h) * 3600 + int(m) * 60 + float(s)
+        except (ValueError, subprocess.SubprocessError):
+            pass
+
+    return None

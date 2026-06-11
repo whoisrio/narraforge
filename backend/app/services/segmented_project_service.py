@@ -11,6 +11,7 @@ from app.core import segmented_assets as assets
 from app.core.audio_encoder import (
     AudioEncoderError,
     is_ffmpeg_available,
+    probe_audio_duration,
     transcode_to_mp3,
 )
 from app.models.segmented_project import (
@@ -408,11 +409,19 @@ def synthesize_segment(
         transcode_to_mp3(audio_bytes, target_mp3)
         new_rel = target_mp3.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "mp3"
+        # Probe the actual duration we just wrote. Never raise — None is fine
+        # (frontend falls back to a rough estimate from text length).
+        try:
+            duration_sec = probe_audio_duration(target_mp3)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("probe_audio_duration failed for %s: %s", new_rel, e)
+            duration_sec = None
     else:
         wav_path = assets.segment_audio_path(project_id, chapter_id, seg.id, "wav")
         wav_path.write_bytes(audio_bytes)
         new_rel = wav_path.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "wav"
+        duration_sec = None
 
     if not keep_previous and prev_rel:
         try:
@@ -426,7 +435,7 @@ def synthesize_segment(
         current_audio_path=new_rel,
         previous_audio_path=prev_rel,
         audio_format=audio_format,
-        duration_sec=None,
+        duration_sec=duration_sec,
         generated_params=effective,
     )
     return seg
