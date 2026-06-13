@@ -1,4 +1,4 @@
-import type { SegmentedProject } from '../../types';
+import type { SegmentedProject, SourceDocument } from '../../types';
 import styles from './ProjectSidebar.module.css';
 
 interface ProjectSidebarProps {
@@ -6,10 +6,14 @@ interface ProjectSidebarProps {
   activeProjectId: string;
   collapsed: boolean;
   scratchpadId: string;
+  /** P2 v2: 当前项目的源文件列表 (项目级) */
+  activeSources?: SourceDocument[];
   onToggleCollapse: () => void;
   onSelectProject: (projectId: string) => void;
   onCreateProject: () => void;
   onDeleteProject: (projectId: string) => void;
+  onAddSource?: () => void;
+  onGenerateNarration?: () => void;
 }
 
 function getProjectStats(project: SegmentedProject) {
@@ -34,15 +38,25 @@ function formatDuration(seconds: number) {
   return `${minutes}m ${rest}s`;
 }
 
+function formatAudioBadge(seconds: number) {
+  // 短音频用 mm:ss (如 "4:32"), 与项目元信息区分
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 export function ProjectSidebar({
   projects,
   activeProjectId,
   collapsed,
   scratchpadId,
+  activeSources = [],
   onToggleCollapse,
   onSelectProject,
   onCreateProject,
   onDeleteProject,
+  onAddSource,
+  onGenerateNarration,
 }: ProjectSidebarProps) {
   const scratchpad = projects.find(project => project.id === scratchpadId);
   const regularProjects = projects.filter(project => project.id !== scratchpadId);
@@ -149,6 +163,45 @@ export function ProjectSidebar({
             </button>
           ) : null}
         </div>
+
+        {/* P2 v2: 当前项目的源 (项目级资产, 缩起时不显示) */}
+        {!collapsed && (
+          <div className={styles.section}>
+            <div className={styles.sectionLabelRow}>
+              <span className={styles.sectionLabel}>源</span>
+              <span className={styles.projectCount}>{activeSources.length}</span>
+            </div>
+            {activeSources.length > 0 ? (
+              <div className={styles.sourceList}>
+                {activeSources.map(src => (
+                  <div key={src.id} className={styles.sourceItem} title={src.title}>
+                    <span className={styles.sourceIcon}>
+                      {src.source_type === 'paste' ? '📄' : src.source_type === 'audio' ? '🎵' : '🔗'}
+                    </span>
+                    <span className={styles.sourceTitle}>{src.title}</span>
+                    <span className={styles.sourceBadge}>
+                      {src.source_type === 'audio' && src.duration_sec
+                        ? formatAudioBadge(src.duration_sec)
+                        : src.source_type === 'paste' && src.pasted_text
+                          ? `${src.pasted_text.length}字`
+                          : src.source_type}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <button type="button" className={styles.emptyState} onClick={onAddSource}>
+                <span>暂无源</span>
+                <strong>添加第一个源 →</strong>
+              </button>
+            )}
+            {activeSources.length > 0 && onGenerateNarration && (
+              <button type="button" className={styles.narrateBtn} onClick={onGenerateNarration}>
+                🧠 基于 {activeSources.length} 个源生成旁白
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -91,6 +91,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [compactMode, setCompactMode] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
+  const isScratchpadProject = project.id === SCRATCHPAD_PROJECT_ID;
+
   const [isPaused, setIsPaused] = useState(false);
   const [playAllActive, setPlayAllActive] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -1009,7 +1011,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   }, [activeChapter.segments, dispatch, showToast]);
 
   const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
-  const isScratchpadProject = project.id === SCRATCHPAD_PROJECT_ID;
+  // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
 
   return (
     <div className={styles.container}>

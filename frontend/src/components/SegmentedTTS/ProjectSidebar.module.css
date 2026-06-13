@@ -314,6 +314,79 @@
   background: var(--color-surface-hover);
 }
 
+/* ===== P2 v2: Source list (项目级源) ===== */
+.sourceList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sourceItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  transition: background-color 0.15s ease;
+  cursor: default;
+}
+
+.sourceItem:hover {
+  background: var(--color-surface-hover);
+}
+
+.sourceIcon {
+  flex-shrink: 0;
+  font-size: 14px;
+  width: 20px;
+  text-align: center;
+}
+
+.sourceTitle {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sourceBadge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-surface-inset);
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.narrateBtn {
+  margin-top: 8px;
+  padding: 7px 10px;
+  background: var(--color-surface);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.narrateBtn:hover {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
 @media (max-width: 900px) {
   .sidebar,
   .sidebarCollapsed {
