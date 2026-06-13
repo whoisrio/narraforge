@@ -1,14 +1,15 @@
 """文本拆分与 SSML 标注服务。
 
-三个能力：
+四个能力：
 - rule_split: 纯本地，按用户指定的标点切分
 - llm_split: 调 LLM 按语义切分
 - ssml_annotate: 调 LLM 为段落自动添加 SSML 标签
+- markdown_detect: 扫描 markdown 找出所有 H1-H6 候选标题, 用户挑粒度
 """
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -16,6 +17,231 @@ from pydantic import BaseModel, Field
 from app.services.llm_client import call_llm_structured
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# markdown_detect (P2 v3+)
+# ---------------------------------------------------------------------------
+
+# 匹配 H1-H6 标题行: 行首 1-6 个 # 后接空格 + 标题
+# 注意: 在 fenced code block 内的 # 不算
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+# 中文 "第 N 章" 模式 (一二三四五六七八九十百千0-9 + 章), 允许中间有空格
+CHINESE_CHAPTER_RE = re.compile(
+    r"^第\s*[一二三四五六七八九十百千0-9]+\s*章"
+)
+# fenced code block 起止
+FENCE_RE = re.compile(r"^```")
+
+
+def markdown_detect(
+    text: str,
+    min_chars: int = 80,
+    front_matter_mode: str = "prepend_to_first",
+) -> dict:
+    """扫描 markdown 找出所有 H1-H6 候选标题, 平铺章节列表.
+
+    返回:
+      {
+        "doc_title": str | None,          # 来自 H1, 或 None
+        "candidates": [                   # 全部 H1-H6 标题
+          {"level": int, "raw": str, "title": str, "char_pos": int, "preview": str},
+          ...
+        ],
+        "chapters": [                     # 默认推荐 (按 H2 + 短章合并)
+          {"index": int, "title": str, "level": int, "start_char": int, "end_char": int, "char_count": int, "preview": str},
+          ...
+        ],
+        "total_chars": int,
+      }
+    """
+    if not text or not text.strip():
+        return {"doc_title": None, "candidates": [], "chapters": [], "total_chars": 0}
+
+    lines = text.splitlines(keepends=True)
+    n = len(lines)
+    line_offsets: list[int] = [0]
+    for ln in lines:
+        line_offsets.append(line_offsets[-1] + len(ln))
+
+    # 找所有标题 (跳过 fenced code block 内部)
+    candidates: list[dict] = []
+    in_fence = False
+    for i, line in enumerate(lines):
+        stripped = line.rstrip("\n")
+        if FENCE_RE.match(stripped):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        m = HEADING_RE.match(stripped)
+        if m:
+            level = len(m.group(1))
+            raw = m.group(2).strip()
+            candidates.append({
+                "level": level,
+                "raw": raw,
+                "title": raw,
+                "char_pos": line_offsets[i],
+                "is_chinese_chapter": bool(CHINESE_CHAPTER_RE.match(raw)),
+            })
+
+    # doc_title = 第一个 H1
+    doc_title: str | None = None
+    filtered: list[dict] = []
+    for c in candidates:
+        if c["level"] == 1:
+            # 第一个 H1 作 doc_title, 后续 H1 仍不进 candidates (H1 不当章节边界)
+            if doc_title is None:
+                doc_title = c["title"]
+            continue
+        filtered.append(c)
+
+    # 给每个候选加 preview (后 200 字)
+    for c in filtered:
+        start = c["char_pos"]
+        end_pos = next((x["char_pos"] for x in filtered if x["char_pos"] > start), len(text))
+        preview = text[start:end_pos].strip()
+        # 去掉标题行本身
+        first_nl = preview.find("\n")
+        if first_nl != -1:
+            preview = preview[first_nl + 1:].strip()
+        c["preview"] = preview[:200]
+
+    # 默认推荐: 按 H2 切, 短章合并
+    recommended = _build_chapters(
+        text, filtered,
+        min_chars=min_chars,
+        front_matter_mode=front_matter_mode,
+        default_level=2,
+    )
+
+    return {
+        "doc_title": doc_title,
+        "candidates": filtered,
+        "chapters": recommended,
+        "total_chars": len(text),
+    }
+
+
+def _build_chapters(
+    text: str,
+    candidates: list[dict],
+    min_chars: int,
+    front_matter_mode: str,
+    default_level: int,
+) -> list[dict]:
+    """从候选构建 flat 章节列表.
+
+    规则:
+    1. 选 level=default_level 的候选作为边界
+    2. 短于 min_chars 的章节合并到下一章
+    3. front matter (首个标题前的内容) 按 mode 处理
+    """
+    boundaries = [c for c in candidates if c["level"] == default_level]
+    if not boundaries:
+        # fallback: 用所有候选
+        boundaries = candidates
+    if not boundaries:
+        # 无任何标题: 整篇当 1 章
+        return [{
+            "index": 0,
+            "title": "全文",
+            "level": 0,
+            "start_char": 0,
+            "end_char": len(text),
+            "char_count": len(text),
+            "preview": text[:200],
+        }]
+
+    # 算每个 boundary 的 start_char / end_char
+    raw_chapters: list[dict] = []
+    for idx, c in enumerate(boundaries):
+        start = c["char_pos"]
+        end = boundaries[idx + 1]["char_pos"] if idx + 1 < len(boundaries) else len(text)
+        raw_chapters.append({
+            "title": c["title"],
+            "level": c["level"],
+            "start_char": start,
+            "end_char": end,
+            "char_count": end - start,
+        })
+
+    # front matter 处理
+    first_start = raw_chapters[0]["start_char"]
+    if first_start > 0:
+        fm_text = text[:first_start].strip()
+        if fm_text:
+            if front_matter_mode == "prepend_to_first":
+                raw_chapters[0]["start_char"] = 0
+                raw_chapters[0]["char_count"] = raw_chapters[0]["end_char"]
+                raw_chapters[0]["title"] = f"{raw_chapters[0]['title']} (含引言)"
+            elif front_matter_mode == "own_chapter":
+                raw_chapters.insert(0, {
+                    "title": "引言",
+                    "level": 0,
+                    "start_char": 0,
+                    "end_char": first_start,
+                    "char_count": first_start,
+                })
+            # skip 模式: 直接扔掉
+
+    # 短章合并: 短于 min_chars 的合并到下一章
+    merged: list[dict] = []
+    for ch in reversed(raw_chapters):  # 从后往前, 短章往后合
+        if ch["char_count"] < min_chars and merged:
+            # 合并到 merged[0] (它的下一章)
+            merged[0]["start_char"] = ch["start_char"]
+            merged[0]["char_count"] = merged[0]["end_char"] - ch["start_char"]
+            merged[0]["title"] = ch["title"] + " · " + merged[0]["title"]
+        else:
+            merged.insert(0, ch)
+
+    # 加 index + preview
+    for i, ch in enumerate(merged):
+        ch["index"] = i
+        body = text[ch["start_char"]:ch["end_char"]]
+        first_nl = body.find("\n")
+        preview = body[first_nl + 1:].strip() if first_nl != -1 else body.strip()
+        ch["preview"] = preview[:200]
+
+    return merged
+
+
+def markdown_split(
+    text: str,
+    levels: list[int],
+    min_chars: int = 80,
+    front_matter_mode: str = "prepend_to_first",
+) -> list[dict]:
+    """按用户指定的 levels 列表切分 (不只默认 H2).
+
+    levels: 例如 [1, 2] 表示 H1 和 H2 都当章节边界. H1 仍作 doc_title (不当章节).
+    """
+    full = markdown_detect(text, min_chars=min_chars, front_matter_mode=front_matter_mode)
+    if not full["candidates"]:
+        return full["chapters"]
+
+    # H1 不参与切分 (只作 doc_title). markdown_detect 已过滤掉 H1.
+    # 但用户传 [1, 2] 时, 我们要保留 H2+ 当切分.
+    filtered: list[dict] = []
+    for c in full["candidates"]:
+        if c["level"] in levels and c["level"] != 1:  # H1 排除
+            filtered.append(c)
+
+    if not filtered:
+        # 所有候选都被排除 (例如只有 H1), 整篇当 1 章
+        return full["chapters"]
+
+    # 选最低 level 作主分割 (构建章节用)
+    primary_level = min(c["level"] for c in filtered)
+
+    return _build_chapters(
+        text, filtered,
+        min_chars=min_chars,
+        front_matter_mode=front_matter_mode,
+        default_level=primary_level,
+    )
 
 
 # ---------------------------------------------------------------------------

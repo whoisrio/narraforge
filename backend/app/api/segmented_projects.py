@@ -14,6 +14,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.segmented_assets import project_dir
 from app.schemas.segmented_project import (
+    AnimationSpecItem,
+    ApplyAnimationSpecRequest,
+    ApplyAnimationSpecResult,
     MigrateAudioItem,
     MigrateRequest,
     MigrateResponse,
@@ -101,6 +104,34 @@ def synthesize_segment(
     detail = svc.get_project_detail(db, project_id)
     assert detail is not None
     return detail
+
+
+# ----- P2 v3: Animation spec 批量应用 -----
+
+@router.post(
+    "/segmented-projects/{project_id}/apply-animation-spec",
+    response_model=ApplyAnimationSpecResult,
+)
+def apply_animation_spec_endpoint(
+    project_id: str,
+    body: ApplyAnimationSpecRequest,
+    db: Session = Depends(get_db),
+):
+    """skill 一次性 POST 全部 segment spec, 后端原子更新.
+
+    字段合并: 传什么覆盖什么, 未传保留旧值. 缺失 segment_id 报告在 missing_segment_ids.
+    """
+    items = [it.model_dump() for it in body.segments]
+    try:
+        result = svc.apply_animation_spec(
+            db,
+            project_id=project_id,
+            theme=body.theme,
+            items=items,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return ApplyAnimationSpecResult(**result)
 
 
 @router.get(

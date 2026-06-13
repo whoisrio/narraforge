@@ -1,6 +1,7 @@
 """Business logic for segmented project CRUD and asset mirroring."""
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -53,6 +54,23 @@ def _parse_iso(value: str | None) -> datetime | None:
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
+
+
+def _parse_animation_spec(raw: str | None) -> dict[str, Any] | None:
+    """P2 v3: 解析 segments.animation_spec_json 字符串为 dict. None / 解析失败 → None."""
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _dump_animation_spec(spec: dict[str, Any] | None) -> str | None:
+    """P2 v3: 序列化 dict 为 JSON 字符串. None → None."""
+    if spec is None:
+        return None
+    return json.dumps(spec, ensure_ascii=False)
 
 
 # ----- serialization -----
@@ -114,6 +132,8 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 audio_missing=bool(s.audio_missing),
                 generated_at=_to_iso(s.generated_at),
                 ssml_annotated_by_llm=bool(s.ssml_annotated_by_llm),
+                # P2 v3: 解析 JSON 字符串回 dict (None 表示未设置)
+                animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
                 updated_at=_to_iso(s.updated_at),
             )
@@ -126,6 +146,12 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 default_params=dp,
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
+                # P2 v2: 旁白文档关联
+                narration_document_id=ch.narration_document_id,
+                narration_version=ch.narration_version,
+                narration_slice_start=ch.narration_slice_start,
+                narration_slice_end=ch.narration_slice_end,
+                narration_synced_at=_to_iso(ch.narration_synced_at),
                 created_at=_to_iso(ch.created_at),
                 updated_at=_to_iso(ch.updated_at),
                 segments=segs,
@@ -136,6 +162,9 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         id=p.id, name=p.name, schema_version=p.schema_version,
         layout=p.layout, active_chapter_id=p.active_chapter_id,
         original_text=p.original_text,
+        # Pyright 误判 Column[] 类型; 实际运行时值是 str | None
+        active_narration_version=getattr(p, "active_narration_version", None),
+        animation_theme=getattr(p, "animation_theme", None),
         created_at=_to_iso(p.created_at),
         updated_at=_to_iso(p.updated_at),
         chapters=chapters,
@@ -198,6 +227,10 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     p.layout = project.layout
     p.active_chapter_id = project.active_chapter_id
     p.original_text = project.original_text
+    # P2 v2: 旁白文档当前活跃版本
+    setattr(p, "active_narration_version", project.active_narration_version)
+    # P2 v3: 整体动画主题
+    setattr(p, "animation_theme", project.animation_theme)
     if project.created_at:
         p.created_at = _parse_iso(project.created_at)
     p.updated_at = datetime.utcnow()
@@ -216,6 +249,12 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.default_params = _merge_chapter_meta_to_params(ch_in)
         ch.split_config = ch_in.split_config or {}
         ch.original_text = ch_in.original_text
+        # P2 v2: 旁白文档关联 (绕过 Pyright 对 Column[] 类型的过度严格检查)
+        setattr(ch, "narration_document_id", ch_in.narration_document_id)
+        setattr(ch, "narration_version", ch_in.narration_version)
+        setattr(ch, "narration_slice_start", ch_in.narration_slice_start)
+        setattr(ch, "narration_slice_end", ch_in.narration_slice_end)
+        setattr(ch, "narration_synced_at", _parse_iso(ch_in.narration_synced_at))
         if ch_in.created_at:
             ch.created_at = _parse_iso(ch_in.created_at)
         ch.updated_at = datetime.utcnow()
@@ -249,6 +288,10 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             seg.audio_missing = bool(s_in.audio_missing)
             seg.generated_at = _parse_iso(s_in.generated_at)
             seg.ssml_annotated_by_llm = bool(s_in.ssml_annotated_by_llm)
+            # P2 v3: 动画规格. None 表示"未指定", 保留旧值 (避免误清).
+            # 显式清除请调 DELETE /api/.../segments/{id}/animation
+            if s_in.animation_spec is not None:
+                setattr(seg, "animation_spec_json", _dump_animation_spec(s_in.animation_spec))
             if s_in.created_at:
                 seg.created_at = _parse_iso(s_in.created_at)
             seg.updated_at = datetime.utcnow()
@@ -287,10 +330,75 @@ def delete_project(db: Session, project_id: str) -> bool:
     p = db.query(SegmentedProject).filter_by(id=project_id).first()
     if p is None:
         return False
+    # P2 v2: 显式清理源 (FK CASCADE 在 SQLite 默认未启用, 不能依赖)
+    from app.models.narration import SourceDocument, NarrationDocument
+    db.query(SourceDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
+    db.query(NarrationDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.delete(p)
     db.commit()
     assets.remove_project_dir(project_id)
     return True
+
+
+def apply_animation_spec(
+    db: Session,
+    project_id: str,
+    theme: str | None,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """P2 v3: 批量应用动画规格.
+
+    items: list of {segment_id, visual_concept, layout, mood, phases, animations, elements, emphasis, asset_refs, notes}
+    返回 {theme_updated, segments_updated, segments_skipped, missing_segment_ids}
+    """
+    p = db.query(SegmentedProject).filter_by(id=project_id).first()
+    if p is None:
+        raise LookupError(f"project_not_found: {project_id}")
+
+    # 建 segment_id -> row 索引
+    seg_index: dict[str, SegmentedProjectSegment] = {}
+    for ch in p.chapters:
+        for s in ch.segments:
+            seg_index[s.id] = s
+
+    theme_updated = False
+    if theme is not None:
+        setattr(p, "animation_theme", theme)
+        theme_updated = True
+
+    updated = 0
+    missing: list[str] = []
+    for it in items:
+        seg_id = it.get("segment_id")
+        if not seg_id:
+            continue
+        seg = seg_index.get(seg_id)
+        if seg is None:
+            missing.append(seg_id)
+            continue
+        # 合并: 只覆盖传入的非空字段, 保留未传的
+        existing_raw = getattr(seg, "animation_spec_json", None)
+        existing = _parse_animation_spec(existing_raw) or {}
+        merged = dict(existing)
+        for key in (
+            "visual_concept", "layout", "mood",
+            "phases", "animations", "elements",
+            "emphasis", "asset_refs", "notes",
+        ):
+            v = it.get(key)
+            if v is not None:
+                merged[key] = v
+        merged["generated_at"] = datetime.utcnow().isoformat()
+        setattr(seg, "animation_spec_json", _dump_animation_spec(merged))
+        updated += 1
+
+    db.commit()
+    return {
+        "theme_updated": theme_updated,
+        "segments_updated": updated,
+        "segments_skipped": len(missing),
+        "missing_segment_ids": missing,
+    }
 
 
 def update_segment_after_synth(
