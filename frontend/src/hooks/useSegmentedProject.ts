@@ -6,15 +6,29 @@ function uid(): string {
   return `${Date.now()}-${_idCounter}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function makeChapter(name: string, engine?: string): Chapter {
+function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
   const now = new Date().toISOString();
+  const defaultParams = inheritFrom?.default_params || { engine: 'edge_tts' };
   return {
     id: uid(),
     name,
-    engine: engine || 'edge_tts',
+    engine: defaultParams.engine,
+    voice_id: defaultParams.voice_id,
+    edge_voice: defaultParams.edge_voice,
+    edge_rate: typeof defaultParams.edge_rate === 'string' ? parseFloat(defaultParams.edge_rate) : defaultParams.edge_rate ?? 0,
+    edge_volume: typeof defaultParams.edge_volume === 'string' ? parseFloat(defaultParams.edge_volume) : defaultParams.edge_volume ?? 0,
+    mimo_mode: defaultParams.mimo_mode,
+    mimo_preset_voice: defaultParams.mimo_preset_voice,
+    mimo_instruction: defaultParams.mimo_instruction,
+    mimo_clone_voice_id: defaultParams.mimo_clone_voice_id,
+    language: defaultParams.language,
+    speed: defaultParams.speed,
+    volume: defaultParams.volume,
+    pitch: defaultParams.pitch,
     segments: [],
-    default_params: { engine: engine || 'edge_tts' } as SegmentEngineParams,
-    split_config: { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    default_params: defaultParams as SegmentEngineParams,
+    split_config: inheritFrom?.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    panel_open: inheritFrom?.panel_open ?? true,
     created_at: now,
     updated_at: now,
   };
@@ -22,7 +36,7 @@ function makeChapter(name: string, engine?: string): Chapter {
 
 export function createInitialProject(): SegmentedProject {
   const now = new Date().toISOString();
-  const ch = makeChapter('第一章', 'edge_tts');
+  const ch = makeChapter('第一章');
   return {
     schema_version: 2,
     id: uid(),
@@ -30,6 +44,7 @@ export function createInitialProject(): SegmentedProject {
     chapters: [ch],
     active_chapter_id: ch.id,
     layout: 'vertical',
+    remotion_project_path: null,
     created_at: now,
     updated_at: now,
   };
@@ -72,6 +87,7 @@ export function migrateV1(raw: any): SegmentedProject {
         ...ch,
         default_params: defaultParams,
         split_config: ch.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+        design_title: ch.design_title ?? ch.name,
         segments: (ch.segments || []).map((s: any) => enrichSegment(s, defaultParams)),
       };
     });
@@ -109,6 +125,7 @@ export function migrateV1(raw: any): SegmentedProject {
     chapters: [ch],
     active_chapter_id: ch.id,
     layout: raw.layout || 'vertical',
+    remotion_project_path: raw.remotion_project_path ?? null,
     created_at: raw.created_at || now,
     updated_at: now,
   };
@@ -144,6 +161,7 @@ function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): S
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
+  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path'>> }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
   | { type: 'ADD_CHAPTER'; name: string }
@@ -153,7 +171,7 @@ export type Action =
   // Per-chapter settings
   | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
-  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
+  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
@@ -193,12 +211,16 @@ export function segmentedReducer(state: State, action: Action): State {
     }
     case 'RENAME_PROJECT':
       return { project: { ...p, name: action.name, updated_at: new Date().toISOString() } };
+    case 'SET_PROJECT_META':
+      return { project: { ...p, ...action.meta, updated_at: new Date().toISOString() } };
     case 'SET_LAYOUT':
       return { project: { ...p, layout: action.layout, updated_at: new Date().toISOString() } };
 
     // ---- Chapter management ----
     case 'ADD_CHAPTER': {
-      const ch = makeChapter(action.name);
+      // New chapter inherits all settings from the currently active chapter
+      const activeCh = p.chapters.find(c => c.id === p.active_chapter_id);
+      const ch = makeChapter(action.name, activeCh);
       return { project: { ...p, chapters: [...p.chapters, ch], active_chapter_id: ch.id, updated_at: new Date().toISOString() } };
     }
     case 'DELETE_CHAPTER': {

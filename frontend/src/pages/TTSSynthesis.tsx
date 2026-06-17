@@ -85,6 +85,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [project, setProject] = useState<SegmentedProject>(createScratchpadProject);
   const [projectList, setProjectList] = useState<SegmentedProject[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
+  const [srtDurationMode, setSrtDurationMode] = useState<'chapter' | 'global'>('chapter');
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
@@ -116,6 +117,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     }
     return total;
   }, [project.chapters, activeChapter.id]);
+  // Effective offset for display: 0 for chapter-relative, chapterStartOffset for global
+  const effectiveTimeOffset = srtDurationMode === 'global' ? chapterStartOffset : 0;
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const blobUrlRef = useRef<string | null>(null);
   // Ref to abort play-all sequence
@@ -261,18 +264,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const handleAddChapter = useCallback(() => {
     const name = `第${project.chapters.length + 1}章`;
     dispatch({ type: 'ADD_CHAPTER', name });
-    // Reset global state for new chapter (inherits from defaults)
-    setEngine('edge_tts');
-    setSelectedVoiceId('');
-    setEdgeVoice('');
-    setEdgeRate(0);
-    setEdgeVolume(0);
-    setMimoMode('preset');
-    setMimoPresetVoice('冰糖');
-    setMimoInstruction('');
-    setMimoCloneVoiceId('');
-    setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
-    setPanelOpen(true);
+    // New chapter inherits settings from previous active chapter, so no need to reset global state
   }, [project.chapters.length, dispatch]);
 
   const doDeleteChapter = useCallback(async (chapterId: string) => {
@@ -1051,6 +1043,16 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 onChange={(e) => dispatch({ type: 'RENAME_PROJECT', name: e.target.value })}
               />
               {isScratchpadProject && <span className={styles.scratchpadBadge}>默认草稿</span>}
+              <label className={styles.inlineMetaField} title="关联 Remotion 项目路径；导出文件优先写入 public/audio，目录不存在则写入项目根目录">
+                <span>Remotion</span>
+                <input
+                  value={project.remotion_project_path ?? ''}
+                  disabled={isScratchpadProject}
+                  placeholder="/path/to/remotion-project"
+                  onChange={(e) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: e.target.value || null } })}
+                />
+              </label>
+              {project.remotion_project_path && <span className={styles.exportHint}>导出→Remotion</span>}
               <div className={styles.chapterGroup}>
                 <select
                   className={styles.chapterSelect}
@@ -1072,6 +1074,18 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
                 {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
               </span>
+              <div className={styles.toolbarGroup}>
+                <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>章节时间</button>
+                <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>全局时间</button>
+              </div>
+              <label className={styles.inlineMetaField} title="视觉设计/Remotion 场景标题，可与朗读章节名不同">
+                <span>设计标题</span>
+                <input
+                  value={activeChapter.design_title ?? activeChapter.name}
+                  placeholder={activeChapter.name}
+                  onChange={(e) => dispatch({ type: 'SET_CHAPTER_META', meta: { design_title: e.target.value } })}
+                />
+              </label>
               <div className={styles.segmentedActions}>
                 <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
                   {generating ? '生成中...' : '⚡ 全部生成'}
@@ -1173,7 +1187,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 globalMimoMode={mimoMode}
                 globalMimoPresetVoice={mimoPresetVoice}
                 globalMimoCloneVoiceId={mimoCloneVoiceId}
-                chapterStartOffset={chapterStartOffset}
+                chapterStartOffset={effectiveTimeOffset}
                 onSelect={(id) => {
                   const currentSelected = activeChapter.selected_segment_id;
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
@@ -1204,7 +1218,17 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 onSplit={handleSplit}
               />
 
-              <ExportDialog open={exportOpen} segments={activeChapter.segments} defaultName={project.name} onClose={() => setExportOpen(false)} />
+              <ExportDialog
+                open={exportOpen}
+                projectId={project.id}
+                chapterId={activeChapter.id}
+                segments={activeChapter.segments}
+                chapterDesignTitle={activeChapter.design_title || activeChapter.name}
+                remotionProjectPath={project.remotion_project_path}
+                defaultName={activeChapter.design_title || activeChapter.name}
+                globalStartOffset={chapterStartOffset}
+                onClose={() => setExportOpen(false)}
+              />
             </div>
           </div>
         </div>
