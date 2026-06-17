@@ -62,6 +62,10 @@ def test_synthesize_segment_with_edge_tts(db_session, tmp_path, monkeypatch):
     assert result_seg.generated_params["engine"] == "edge_tts"
     seg_row = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
     assert seg_row.audio_format == "mp3"
+    # Regression: duration_sec must be probed from the actual file, not hardcoded None.
+    # Frontend uses it to compute total project length and validate "ready" segments.
+    assert seg_row.duration_sec is not None
+    assert seg_row.duration_sec > 0
 
 
 def test_synthesize_segment_keeps_previous(db_session, tmp_path, monkeypatch):

@@ -1,8 +1,10 @@
 """Business logic for segmented project CRUD and asset mirroring."""
 from __future__ import annotations
 
+import json
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -11,6 +13,7 @@ from app.core import segmented_assets as assets
 from app.core.audio_encoder import (
     AudioEncoderError,
     is_ffmpeg_available,
+    probe_audio_duration,
     transcode_to_mp3,
 )
 from app.models.segmented_project import (
@@ -51,6 +54,23 @@ def _parse_iso(value: str | None) -> datetime | None:
     if dt.tzinfo is not None:
         dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
     return dt
+
+
+def _parse_animation_spec(raw: str | None) -> dict[str, Any] | None:
+    """P2 v3: 解析 segments.animation_spec_json 字符串为 dict. None / 解析失败 → None."""
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _dump_animation_spec(spec: dict[str, Any] | None) -> str | None:
+    """P2 v3: 序列化 dict 为 JSON 字符串. None → None."""
+    if spec is None:
+        return None
+    return json.dumps(spec, ensure_ascii=False)
 
 
 # ----- serialization -----
@@ -112,6 +132,8 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 audio_missing=bool(s.audio_missing),
                 generated_at=_to_iso(s.generated_at),
                 ssml_annotated_by_llm=bool(s.ssml_annotated_by_llm),
+                # P2 v3: 解析 JSON 字符串回 dict (None 表示未设置)
+                animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
                 updated_at=_to_iso(s.updated_at),
             )
@@ -124,6 +146,12 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 default_params=dp,
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
+                # P2 v2: 旁白文档关联
+                narration_document_id=ch.narration_document_id,
+                narration_version=ch.narration_version,
+                narration_slice_start=ch.narration_slice_start,
+                narration_slice_end=ch.narration_slice_end,
+                narration_synced_at=_to_iso(ch.narration_synced_at),
                 created_at=_to_iso(ch.created_at),
                 updated_at=_to_iso(ch.updated_at),
                 segments=segs,
@@ -134,6 +162,9 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         id=p.id, name=p.name, schema_version=p.schema_version,
         layout=p.layout, active_chapter_id=p.active_chapter_id,
         original_text=p.original_text,
+        # Pyright 误判 Column[] 类型; 实际运行时值是 str | None
+        active_narration_version=getattr(p, "active_narration_version", None),
+        animation_theme=getattr(p, "animation_theme", None),
         created_at=_to_iso(p.created_at),
         updated_at=_to_iso(p.updated_at),
         chapters=chapters,
@@ -196,6 +227,10 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     p.layout = project.layout
     p.active_chapter_id = project.active_chapter_id
     p.original_text = project.original_text
+    # P2 v2: 旁白文档当前活跃版本
+    setattr(p, "active_narration_version", project.active_narration_version)
+    # P2 v3: 整体动画主题
+    setattr(p, "animation_theme", project.animation_theme)
     if project.created_at:
         p.created_at = _parse_iso(project.created_at)
     p.updated_at = datetime.utcnow()
@@ -214,6 +249,12 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.default_params = _merge_chapter_meta_to_params(ch_in)
         ch.split_config = ch_in.split_config or {}
         ch.original_text = ch_in.original_text
+        # P2 v2: 旁白文档关联 (绕过 Pyright 对 Column[] 类型的过度严格检查)
+        setattr(ch, "narration_document_id", ch_in.narration_document_id)
+        setattr(ch, "narration_version", ch_in.narration_version)
+        setattr(ch, "narration_slice_start", ch_in.narration_slice_start)
+        setattr(ch, "narration_slice_end", ch_in.narration_slice_end)
+        setattr(ch, "narration_synced_at", _parse_iso(ch_in.narration_synced_at))
         if ch_in.created_at:
             ch.created_at = _parse_iso(ch_in.created_at)
         ch.updated_at = datetime.utcnow()
@@ -235,14 +276,22 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             seg.emotion = s_in.emotion
             seg.params = s_in.params or {}
             seg.locked_params = s_in.locked_params or []
-            seg.generated_params = s_in.generated_params
-            seg.current_audio_path = s_in.current_audio_path
-            seg.previous_audio_path = s_in.previous_audio_path
-            seg.audio_format = s_in.audio_format or "mp3"
-            seg.duration_sec = s_in.duration_sec
+            if s_in.generated_params is not None:
+                seg.generated_params = s_in.generated_params
+            if s_in.current_audio_path is not None:
+                seg.current_audio_path = s_in.current_audio_path
+            if s_in.previous_audio_path is not None:
+                seg.previous_audio_path = s_in.previous_audio_path
+            seg.audio_format = s_in.audio_format or seg.audio_format or "mp3"
+            if s_in.duration_sec is not None:
+                seg.duration_sec = s_in.duration_sec
             seg.audio_missing = bool(s_in.audio_missing)
             seg.generated_at = _parse_iso(s_in.generated_at)
             seg.ssml_annotated_by_llm = bool(s_in.ssml_annotated_by_llm)
+            # P2 v3: 动画规格. None 表示"未指定", 保留旧值 (避免误清).
+            # 显式清除请调 DELETE /api/.../segments/{id}/animation
+            if s_in.animation_spec is not None:
+                setattr(seg, "animation_spec_json", _dump_animation_spec(s_in.animation_spec))
             if s_in.created_at:
                 seg.created_at = _parse_iso(s_in.created_at)
             seg.updated_at = datetime.utcnow()
@@ -281,10 +330,75 @@ def delete_project(db: Session, project_id: str) -> bool:
     p = db.query(SegmentedProject).filter_by(id=project_id).first()
     if p is None:
         return False
+    # P2 v2: 显式清理源 (FK CASCADE 在 SQLite 默认未启用, 不能依赖)
+    from app.models.narration import SourceDocument, NarrationDocument
+    db.query(SourceDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
+    db.query(NarrationDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.delete(p)
     db.commit()
     assets.remove_project_dir(project_id)
     return True
+
+
+def apply_animation_spec(
+    db: Session,
+    project_id: str,
+    theme: str | None,
+    items: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """P2 v3: 批量应用动画规格.
+
+    items: list of {segment_id, visual_concept, layout, mood, phases, animations, elements, emphasis, asset_refs, notes}
+    返回 {theme_updated, segments_updated, segments_skipped, missing_segment_ids}
+    """
+    p = db.query(SegmentedProject).filter_by(id=project_id).first()
+    if p is None:
+        raise LookupError(f"project_not_found: {project_id}")
+
+    # 建 segment_id -> row 索引
+    seg_index: dict[str, SegmentedProjectSegment] = {}
+    for ch in p.chapters:
+        for s in ch.segments:
+            seg_index[s.id] = s
+
+    theme_updated = False
+    if theme is not None:
+        setattr(p, "animation_theme", theme)
+        theme_updated = True
+
+    updated = 0
+    missing: list[str] = []
+    for it in items:
+        seg_id = it.get("segment_id")
+        if not seg_id:
+            continue
+        seg = seg_index.get(seg_id)
+        if seg is None:
+            missing.append(seg_id)
+            continue
+        # 合并: 只覆盖传入的非空字段, 保留未传的
+        existing_raw = getattr(seg, "animation_spec_json", None)
+        existing = _parse_animation_spec(existing_raw) or {}
+        merged = dict(existing)
+        for key in (
+            "visual_concept", "layout", "mood",
+            "phases", "animations", "elements",
+            "emphasis", "asset_refs", "notes",
+        ):
+            v = it.get(key)
+            if v is not None:
+                merged[key] = v
+        merged["generated_at"] = datetime.utcnow().isoformat()
+        setattr(seg, "animation_spec_json", _dump_animation_spec(merged))
+        updated += 1
+
+    db.commit()
+    return {
+        "theme_updated": theme_updated,
+        "segments_updated": updated,
+        "segments_skipped": len(missing),
+        "missing_segment_ids": missing,
+    }
 
 
 def update_segment_after_synth(
@@ -404,11 +518,19 @@ def synthesize_segment(
         transcode_to_mp3(audio_bytes, target_mp3)
         new_rel = target_mp3.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "mp3"
+        # Probe the actual duration we just wrote. Never raise — None is fine
+        # (frontend falls back to a rough estimate from text length).
+        try:
+            duration_sec = probe_audio_duration(target_mp3)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("probe_audio_duration failed for %s: %s", new_rel, e)
+            duration_sec = None
     else:
         wav_path = assets.segment_audio_path(project_id, chapter_id, seg.id, "wav")
         wav_path.write_bytes(audio_bytes)
         new_rel = wav_path.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "wav"
+        duration_sec = None
 
     if not keep_previous and prev_rel:
         try:
@@ -422,7 +544,81 @@ def synthesize_segment(
         current_audio_path=new_rel,
         previous_audio_path=prev_rel,
         audio_format=audio_format,
-        duration_sec=None,
+        duration_sec=duration_sec,
         generated_params=effective,
     )
-    return seg
+
+
+# Files below this size (bytes) are treated as "definitely not real speech".
+# The old synthesize_speech_internal stub produced exactly 2205-byte MP3s;
+# any real TTS output (Edge TTS, CosyVoice) is at least ~5KB for a single
+# short sentence, so 5KB is a conservative threshold that won't false-positive
+# on legitimate small clips.
+_SILENT_FILE_THRESHOLD_BYTES = 5_000
+
+
+def mark_silent_segments_as_missing(
+    db: Session,
+    *,
+    base_dir: Path | None = None,
+    min_size_bytes: int = _SILENT_FILE_THRESHOLD_BYTES,
+) -> dict[str, int]:
+    """Scan every segment with a backend audio file and flag suspiciously
+    small files as ``audio_missing=True``.
+
+    Idempotent: segments already marked are left alone. The audio file on
+    disk is NOT deleted — the user may still want to inspect or recover it.
+
+    Returns a dict with ``scanned``, ``marked``, ``already_missing``,
+    ``file_missing`` counts so callers can log progress and tests can assert.
+    """
+    from app.core.config import settings
+    from app.models.segmented_project import SegmentedProjectSegment
+
+    base = Path(base_dir) if base_dir else Path(settings.segmented_dir)
+
+    scanned = marked = already_missing = file_missing = 0
+
+    segs = (
+        db.query(SegmentedProjectSegment)
+        .filter(SegmentedProjectSegment.current_audio_path.isnot(None))
+        .all()
+    )
+
+    for seg in segs:
+        scanned += 1
+        if seg.audio_missing:
+            already_missing += 1
+            continue
+
+        rel = seg.current_audio_path
+        # current_audio_path is stored relative to settings.segmented_dir
+        # (see synthesize_segment / save_project).
+        abs_path = base / rel if not Path(rel).is_absolute() else Path(rel)
+        if not abs_path.exists():
+            seg.audio_missing = True
+            marked += 1
+            file_missing += 1
+            continue
+
+        try:
+            size = abs_path.stat().st_size
+        except OSError:
+            seg.audio_missing = True
+            marked += 1
+            file_missing += 1
+            continue
+
+        if size < min_size_bytes:
+            seg.audio_missing = True
+            marked += 1
+
+    if marked:
+        db.commit()
+
+    return {
+        "scanned": scanned,
+        "marked": marked,
+        "already_missing": already_missing,
+        "file_missing": file_missing,
+    }

@@ -467,13 +467,65 @@ def synthesize_speech_internal(
 ) -> tuple[bytes, str]:
     """Synthesize for the segmented editor. Returns (audio_bytes, native_format).
 
-    The implementation can either call into the real TTS pipeline or return a
-    placeholder for tests; for v1 the existing synthesize path is reused.
+    Bridges the async TTS services into the segmented editor's sync path.
+    Real engine implementations — NOT placeholders. The previous version of
+    this function returned 50ms of silence for every call, which silently
+    produced 2KB empty MP3s and stored them as "audio" in the DB. That's why
+    segments saved to the backend "couldn't be played" — there was never any
+    real speech content in the file in the first place.
     """
-    import io
-    import wave
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setparams((1, 2, 16000, 0, "NONE", "NONE"))
-        w.writeframes(b"\x00\x00" * int(16000 * 0.05))
-    return buf.getvalue(), "wav"
+    import asyncio
+
+    if edge_voice:
+        # Edge TTS (no auth, online) — returns (mp3_bytes, "mp3") directly.
+        from app.services.edge_tts_service import get_edge_tts_service
+        edge_service = get_edge_tts_service()
+        coro = edge_service.synthesize(
+            text=text,
+            voice=edge_voice,
+            rate=edge_rate or "+0%",
+            volume=edge_volume or "+0%",
+        )
+        return _run_async(coro)  # already (bytes, "mp3")
+
+    if voice_id:
+        # CosyVoice / Qwen TTS — needs QWEN_API_KEY, returns wav bytes.
+        from app.services.qwen_tts_service import get_tts_service
+
+        async def _synthesize() -> bytes:
+            tts_service = await get_tts_service(db=None)
+            return await tts_service.synthesize_speech(
+                voice_id=voice_id,
+                text=text,
+                instruction=instruction,
+                speed=speed,
+                volume=volume,
+                pitch=pitch,
+                format="wav",
+                sample_rate=16000,
+                enable_ssml=enable_ssml,
+                enable_markdown_filter=enable_markdown_filter,
+            )
+
+        return _run_async(_synthesize()), "wav"
+
+    raise ValueError(
+        "synthesize_speech_internal: must supply edge_voice or voice_id"
+    )
+
+
+def _run_async(coro):
+    """Run an awaitable to completion from a sync context, handling the case
+    where a FastAPI worker is already inside an event loop (in which case
+    asyncio.run would raise RuntimeError)."""
+    import asyncio
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    # Already in a loop — create an isolated one so we don't block the caller.
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()

@@ -1,6 +1,7 @@
 """分段语音项目 —— 后端模式持久化模型
 
 v1: 项目 → 章节 → 段落 三层结构, schema_version=2
+v2 (P2): 章节可关联到旁白文档 (narration_document_id), original_text 来自旁白切片
 """
 from sqlalchemy import (
     Column,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     Float,
     ForeignKey,
+    Text,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -27,6 +29,10 @@ class SegmentedProject(Base):
     layout = Column(String, nullable=False, default="vertical")
     active_chapter_id = Column(String, nullable=True)
     original_text = Column(String, nullable=True)
+    # P2 v2: 旁白文档当前活跃版本 (e.g. 'v2.1')
+    active_narration_version = Column(String, nullable=True)
+    # P2 v3: 整体动画主题 (e.g. 'dark-botanical', 'tech-blueprint', 'warm-paper')
+    animation_theme = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -57,6 +63,16 @@ class SegmentedProjectChapter(Base):
     default_params = Column(JSON, nullable=False, default=dict)
     split_config = Column(JSON, nullable=False, default=dict)
     original_text = Column(String, nullable=True)
+    # P2 v2: 旁白文档关联
+    narration_document_id = Column(
+        String,
+        ForeignKey("narration_documents.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    narration_version = Column(String, nullable=True)        # e.g. 'v2.1'
+    narration_slice_start = Column(Integer, nullable=True)   # char offset in body_markdown
+    narration_slice_end = Column(Integer, nullable=True)
+    narration_synced_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -101,6 +117,8 @@ class SegmentedProjectSegment(Base):
     audio_missing = Column(Boolean, nullable=False, default=False)
     generated_at = Column(DateTime, nullable=True)
     ssml_annotated_by_llm = Column(Boolean, nullable=False, default=False)
+    # P2 v3: 完整动画规格 JSON (visual_concept / layout / phases / animations / emphasis ...)
+    animation_spec_json = Column(Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -327,8 +327,55 @@ export interface SegmentedProject {
   chapters: Chapter[];
   active_chapter_id?: string;
   layout: 'vertical' | 'horizontal';
+  // P2 v2: 旁白文档当前活跃版本 (e.g. 'v2.1')
+  active_narration_version?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+// ===== P2 v2: Source & Narration =====
+
+export interface SourceDocument {
+  id: string;
+  project_id: string;
+  source_type: 'paste' | 'audio' | 'path';
+  title: string;
+  file_path?: string | null;
+  pasted_text?: string | null;
+  audio_path?: string | null;
+  file_size?: number | null;
+  duration_sec?: number | null;
+  created_at: string;
+}
+
+export interface ChapterSlice {
+  chapter_index: number;
+  title: string;
+  start_char: number;
+  end_char: number;
+}
+
+export interface NarrationDocument {
+  id: string;
+  project_id: string;
+  version: string;  // 'v1' | 'v2' | 'v2.1'
+  version_kind: 'full' | 'partial';
+  body_markdown: string;
+  word_count: number;
+  source_ids: string[];
+  prompt_hint?: string | null;
+  settings: Record<string, unknown>;
+  chapter_slices: ChapterSlice[];
+  generated_at: string;
+}
+
+export interface NarrationListItem {
+  id: string;
+  version: string;
+  version_kind: 'full' | 'partial';
+  word_count: number;
+  source_ids: string[];
+  generated_at: string;
 }
 
 // Text split API types

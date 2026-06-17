@@ -66,6 +66,32 @@ def test_save_project_removes_orphan_segments(db_session, tmp_path, monkeypatch)
     assert segs == []
 
 
+def test_save_project_preserves_existing_backend_audio_when_payload_omits_path(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
+    seg.current_audio_path = "p1/chapters/c-p1/audio/s-p1.mp3"
+    seg.previous_audio_path = "p1/chapters/c-p1/audio/s-p1-old.mp3"
+    seg.audio_format = "mp3"
+    seg.duration_sec = 1.23
+    seg.generated_params = {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"}
+    db_session.commit()
+
+    stale_frontend_payload = _seed_project()
+    save_project(db_session, stale_frontend_payload)
+    db_session.commit()
+
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
+    assert seg.current_audio_path == "p1/chapters/c-p1/audio/s-p1.mp3"
+    assert seg.previous_audio_path == "p1/chapters/c-p1/audio/s-p1-old.mp3"
+    assert seg.audio_format == "mp3"
+    assert seg.duration_sec == 1.23
+    assert seg.generated_params == {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"}
+
+
 def test_save_project_removes_orphan_chapters(db_session, tmp_path, monkeypatch):
     from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
