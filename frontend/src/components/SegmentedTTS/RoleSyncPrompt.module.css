@@ -1,0 +1,21 @@
+.root,
+.deleted {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(196, 122, 58, 0.28);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: rgba(196, 122, 58, 0.08);
+  color: #7a4a1f;
+  font-size: 12px;
+}
+
+.root button {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 8px;
+  background: #c47a3a;
+  color: white;
+  cursor: pointer;
+}

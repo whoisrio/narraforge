@@ -19,9 +19,10 @@ import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams, Role } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
+import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -92,6 +93,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [panelOpen, setPanelOpen] = useState(true);
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
@@ -1129,6 +1132,9 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
                 )}
                 <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
+                <button className={styles.segmentedActionBtn} onClick={() => setRoleLibraryOpen(true)}>
+                  🎭 角色库{roles.length > 0 ? ` (${roles.length})` : ''}
+                </button>
                 {!isScratchpadProject && <button className={styles.segmentedActionBtnDanger} onClick={() => handleDeleteProject(project.id)}>🗑 删除</button>}
               </div>
             </div>
@@ -1308,6 +1314,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           }}
         />
       )}
+      <RoleLibraryPanel
+        open={roleLibraryOpen}
+        onClose={() => setRoleLibraryOpen(false)}
+        onRolesChanged={setRoles}
+      />
     </div>
   );
 }

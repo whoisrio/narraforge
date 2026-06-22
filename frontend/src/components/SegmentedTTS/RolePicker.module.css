@@ -1,0 +1,33 @@
+.root {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+}
+
+.select {
+  flex: 1;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--surface-color);
+  color: var(--text-primary);
+}
+
+.manageButton {
+  border: 1px solid rgba(196, 122, 58, 0.35);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: rgba(196, 122, 58, 0.08);
+  color: #9a5a21;
+  cursor: pointer;
+}
