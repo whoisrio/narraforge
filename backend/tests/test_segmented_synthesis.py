@@ -121,3 +121,60 @@ def test_mimo_internal_uses_real_service(monkeypatch):
 
     assert audio_format == "wav"
     assert audio_bytes == expected
+
+
+def test_synthesize_segment_records_role_and_prosody_inputs(db_session, tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    from app.core import config
+    from app.schemas.segmented_project import ProjectIn
+    from app.services.segmented_project_service import get_project_detail, save_project, synthesize_segment
+
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = ProjectIn(
+        id="p-gen-role",
+        name="Role Gen",
+        schema_version=2,
+        layout="vertical",
+        chapters=[{
+            "id": "c1",
+            "position": 0,
+            "name": "第一章",
+            "engine": "edge_tts",
+            "default_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+            "split_config": {"delimiters": ["。"], "mode": "rule"},
+            "segments": [{
+                "id": "s1",
+                "position": 0,
+                "text": "你好",
+                "params": {"engine": "edge_tts"},
+                "role_id": "role-linxia",
+                "role_snapshot": {
+                    "id": "role-linxia",
+                    "name": "林夏",
+                    "default_engine_params": {
+                        "engine": "edge_tts",
+                        "edge_voice": "zh-CN-XiaoxiaoNeural",
+                    },
+                },
+                "segment_kind": "dialogue",
+                "prosody_marks": [{"id": "mark-1", "start": 0, "end": 1, "style_tags": ["slow"]}],
+            }],
+        }],
+    )
+    save_project(db_session, payload)
+    db_session.commit()
+
+    wav_bytes = b"RIFF\x00\x00\x00\x00WAVEfmt "
+    with patch("app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
+        "app.services.segmented_project_service.synthesize_with_engine",
+        return_value=(wav_bytes, "wav"),
+    ):
+        synthesize_segment(db_session, "p-gen-role", "c1", "s1")
+
+    detail = get_project_detail(db_session, "p-gen-role")
+    assert detail is not None
+    generated = detail.chapters[0].segments[0].generated_params
+    assert generated["role_id"] == "role-linxia"
+    assert generated["role_snapshot"]["name"] == "林夏"
+    assert generated["prosody_marks"][0]["id"] == "mark-1"

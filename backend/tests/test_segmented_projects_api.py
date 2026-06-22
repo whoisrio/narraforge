@@ -93,3 +93,52 @@ def test_migrate_endpoint_creates_projects(client, tmp_path, monkeypatch):
     assert r.json()["results"][0]["status"] == "ok"
     r = client.get("/api/segmented-projects")
     assert {p["id"] for p in r.json()} == {"p-mig"}
+
+
+def test_project_round_trips_role_and_prosody_fields(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p-role")
+    payload["default_narrator_role_id"] = "role-narrator"
+    payload["default_narrator_snapshot"] = {
+        "id": "role-narrator",
+        "name": "旁白",
+        "default_engine": "edge_tts",
+        "default_voice": "zh-CN-YunjianNeural",
+        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-YunjianNeural"},
+    }
+    payload["chapters"][0]["segments"][0].update({
+        "role_id": "role-linxia",
+        "role_snapshot": {
+            "id": "role-linxia",
+            "name": "林夏",
+            "default_engine": "edge_tts",
+            "default_voice": "zh-CN-XiaoxiaoNeural",
+            "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+        },
+        "segment_kind": "dialogue",
+        "prosody_marks": [
+            {
+                "id": "mark-1",
+                "start": 0,
+                "end": 2,
+                "emotion": "sad",
+                "style_tags": ["low_voice", "slow"],
+                "instruction": "压低声音",
+                "intensity": 0.7,
+            }
+        ],
+    })
+
+    created = client.post("/api/segmented-projects", json=payload)
+    assert created.status_code == 201, created.text
+
+    fetched = client.get("/api/segmented-projects/p-role")
+    assert fetched.status_code == 200
+    body = fetched.json()
+    assert body["default_narrator_role_id"] == "role-narrator"
+    assert body["default_narrator_snapshot"]["name"] == "旁白"
+    segment = body["chapters"][0]["segments"][0]
+    assert segment["role_id"] == "role-linxia"
+    assert segment["role_snapshot"]["name"] == "林夏"
+    assert segment["segment_kind"] == "dialogue"
+    assert segment["prosody_marks"][0]["style_tags"] == ["low_voice", "slow"]

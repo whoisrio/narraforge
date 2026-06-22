@@ -141,3 +141,39 @@ def test_delete_project_removes_rows_and_dir(db_session, tmp_path, monkeypatch):
 def test_to_iso_handles_naive_and_aware():
     assert _to_iso(datetime(2026, 6, 9, 12, 0, 0)) == "2026-06-09T12:00:00"
     assert _to_iso(datetime(2026, 6, 9, 12, 0, 0, tzinfo=timezone.utc)) == "2026-06-09T12:00:00+00:00"
+
+
+def test_save_project_persists_role_snapshot_and_prosody_marks(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+
+    project = _seed_project("p-role")
+    project.default_narrator_role_id = "role-narrator"
+    project.default_narrator_snapshot = {
+        "id": "role-narrator",
+        "name": "旁白",
+        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-YunjianNeural"},
+    }
+    project.chapters[0].segments[0].role_id = "role-linxia"
+    project.chapters[0].segments[0].role_snapshot = {
+        "id": "role-linxia",
+        "name": "林夏",
+        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+    }
+    project.chapters[0].segments[0].segment_kind = "dialogue"
+    project.chapters[0].segments[0].prosody_marks = [
+        {"id": "mark-1", "start": 0, "end": 2, "style_tags": ["low_voice"]}
+    ]
+
+    save_project(db_session, project)
+    db_session.commit()
+
+    detail = get_project_detail(db_session, "p-role")
+    assert detail is not None
+    assert detail.default_narrator_role_id == "role-narrator"
+    assert detail.default_narrator_snapshot["name"] == "旁白"
+    segment = detail.chapters[0].segments[0]
+    assert segment.role_id == "role-linxia"
+    assert segment.role_snapshot["name"] == "林夏"
+    assert segment.segment_kind == "dialogue"
+    assert segment.prosody_marks[0]["id"] == "mark-1"
