@@ -1,4 +1,4 @@
-import type { SegmentedProject, Chapter, Segment, SegmentEngineParams } from '../types';
+import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, ProsodyMark, RoleSnapshot, SegmentKind } from '../types';
 
 let _idCounter = 0;
 function uid(): string {
@@ -79,6 +79,10 @@ function enrichSegment(raw: any, defaultParams: SegmentEngineParams): Segment {
     emotion: raw.emotion,
     overrides: raw.overrides ?? raw.locked_params?.map((k: string) => k) ?? [],
     generated_voice_id: raw.generated_voice_id,
+    role_id: raw.role_id ?? null,
+    role_snapshot: raw.role_snapshot ?? null,
+    segment_kind: raw.segment_kind ?? 'narration',
+    prosody_marks: raw.prosody_marks ?? [],
     created_at: raw.created_at || now,
     updated_at: raw.updated_at || now,
   };
@@ -97,7 +101,12 @@ export function migrateV1(raw: any): SegmentedProject {
         segments: (ch.segments || []).map((s: any) => enrichSegment(s, defaultParams)),
       };
     });
-    return { ...raw, chapters } as SegmentedProject;
+    return {
+      ...raw,
+      default_narrator_role_id: raw.default_narrator_role_id ?? null,
+      default_narrator_snapshot: raw.default_narrator_snapshot ?? null,
+      chapters,
+    } as SegmentedProject;
   }
   const now = new Date().toISOString();
   const ch: Chapter = {
@@ -138,6 +147,8 @@ export function migrateV1(raw: any): SegmentedProject {
     active_chapter_id: ch.id,
     layout: raw.layout || 'vertical',
     remotion_project_path: raw.remotion_project_path ?? null,
+    default_narrator_role_id: raw.default_narrator_role_id ?? null,
+    default_narrator_snapshot: raw.default_narrator_snapshot ?? null,
     created_at: raw.created_at || now,
     updated_at: now,
   };
@@ -194,6 +205,10 @@ export type Action =
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
   | { type: 'UPDATE_PARAMS'; id: string; params: Partial<SegmentEngineParams> }
   | { type: 'UPDATE_EMOTION'; id: string; emotion: string }
+  | { type: 'SET_PROJECT_NARRATOR'; roleId: string | null; roleSnapshot: RoleSnapshot | null }
+  | { type: 'SET_SEGMENT_ROLE'; id: string; roleId: string | null; roleSnapshot: RoleSnapshot | null }
+  | { type: 'SET_SEGMENT_KIND'; id: string; segmentKind: SegmentKind }
+  | { type: 'UPDATE_PROSODY_MARKS'; id: string; prosodyMarks: ProsodyMark[] }
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
@@ -208,9 +223,33 @@ export type Action =
 
 export interface State { project: SegmentedProject }
 
-function makeSegment(text: string, params: SegmentEngineParams): Segment {
+function makeSegment(text: string, params: SegmentEngineParams, segmentKind: SegmentKind = 'narration'): Segment {
   const now = new Date().toISOString();
-  return { id: uid(), text, params: { ...params }, status: 'idle', created_at: now, updated_at: now };
+  return {
+    id: uid(),
+    text,
+    params: { ...params },
+    status: 'idle',
+    segment_kind: segmentKind,
+    prosody_marks: [],
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function updateSegment(
+  p: SegmentedProject,
+  segmentId: string,
+  updater: (segment: Segment) => Segment,
+): SegmentedProject {
+  return updateActive(p, ch => ({
+    ...ch,
+    segments: ch.segments.map(segment => {
+      const normalized: Segment = { ...segment, prosody_marks: segment.prosody_marks ?? [] };
+      return segment.id === segmentId ? updater(normalized) : normalized;
+    }),
+    updated_at: new Date().toISOString(),
+  }));
 }
 
 export function segmentedReducer(state: State, action: Action): State {
@@ -354,6 +393,40 @@ export function segmentedReducer(state: State, action: Action): State {
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }
+    case 'SET_PROJECT_NARRATOR':
+      return {
+        project: {
+          ...p,
+          default_narrator_role_id: action.roleId,
+          default_narrator_snapshot: action.roleSnapshot,
+          updated_at: new Date().toISOString(),
+        },
+      };
+    case 'SET_SEGMENT_ROLE':
+      return {
+        project: updateSegment(p, action.id, seg => ({
+          ...seg,
+          role_id: action.roleId,
+          role_snapshot: action.roleSnapshot,
+          updated_at: new Date().toISOString(),
+        })),
+      };
+    case 'SET_SEGMENT_KIND':
+      return {
+        project: updateSegment(p, action.id, seg => ({
+          ...seg,
+          segment_kind: action.segmentKind,
+          updated_at: new Date().toISOString(),
+        })),
+      };
+    case 'UPDATE_PROSODY_MARKS':
+      return {
+        project: updateSegment(p, action.id, seg => ({
+          ...seg,
+          prosody_marks: action.prosodyMarks.map(mark => ({ ...mark, style_tags: [...mark.style_tags] })),
+          updated_at: new Date().toISOString(),
+        })),
+      };
     case 'REORDER': {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
