@@ -61,9 +61,10 @@ def test_raw_url_returns_audio():
     )
 
 
+@pytest.mark.external
 @pytest.mark.skipif(
-    not settings.qwen_api_key or settings.qwen_api_key in ("", "1"),
-    reason="QWEN_API_KEY 未配置",
+    os.getenv("RUN_EXTERNAL_QWEN_TESTS") != "1" or not settings.qwen_api_key or settings.qwen_api_key in ("", "1"),
+    reason="需要显式设置 RUN_EXTERNAL_QWEN_TESTS=1 且配置 QWEN_API_KEY 才运行真实 Qwen 外部调用",
 )
 def test_qwen_clone_with_raw_github_url():
     """
@@ -106,9 +107,10 @@ def test_qwen_clone_with_raw_github_url():
     assert final_status == "OK", f"超时未就绪，最后状态={final_status}"
 
 
+@pytest.mark.external
 @pytest.mark.skipif(
-    not settings.qwen_api_key or settings.qwen_api_key in ("", "1"),
-    reason="QWEN_API_KEY 未配置",
+    os.getenv("RUN_EXTERNAL_QWEN_TESTS") != "1" or not settings.qwen_api_key or settings.qwen_api_key in ("", "1"),
+    reason="需要显式设置 RUN_EXTERNAL_QWEN_TESTS=1 且配置 QWEN_API_KEY 才运行真实 Qwen 外部调用",
 )
 def test_qwen_clone_with_blob_url_should_fail():
     """

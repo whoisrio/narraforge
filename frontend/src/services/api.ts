@@ -435,6 +435,16 @@ export const segmentedProjectApi = {
     const { data } = await api.get<import('../types').SegmentedProject>(`/segmented-projects/${id}`);
     return data;
   },
+  getChapterAudioExportUrl: (projectId: string, chapterId: string): string => (
+    `/api/segmented-projects/${projectId}/chapters/${chapterId}/export-audio`
+  ),
+  exportTextFileToRemotion: async (projectId: string, filename: string, content: string): Promise<{ path: string }> => {
+    const { data } = await api.post<{ path: string }>(
+      `/segmented-projects/${projectId}/export-text-file-to-remotion`,
+      { filename, content },
+    );
+    return data;
+  },
 };
 
 // ============ VoxCPM 本地 GPU TTS ============

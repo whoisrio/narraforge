@@ -69,6 +69,12 @@ backend/*.py[cod]
 backend/*$py.class
 backend/pretrained_models
 backend/uploads
+# E2E artifacts
+test-results/
+playwright-report/
+.artifacts/e2e/
+*.trace.zip
+
 # ai tools
 .claude/skills/
 .claude/worktrees/

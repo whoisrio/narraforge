@@ -78,6 +78,7 @@ def engine():
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
+    engine.dispose()
 
 
 @pytest.fixture
@@ -87,11 +88,13 @@ def db_session(engine) -> Generator[Session, None, None]:
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
 
-    yield session
-
-    session.close()
-    transaction.rollback()
-    connection.close()
+    try:
+        yield session
+    finally:
+        session.close()
+        if transaction.is_active:
+            transaction.rollback()
+        connection.close()
 
 
 @pytest.fixture

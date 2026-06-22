@@ -1,19 +1,25 @@
 import io
+import math
+import struct
 import wave
 from unittest.mock import patch
 
-from app.core import segmented_assets as assets
 from app.models.segmented_project import SegmentedProjectSegment
 from app.schemas.segmented_project import ProjectIn
 from app.services import segmented_project_service as svc
 
 
-def _silent_wav_bytes(duration_ms: int = 50) -> bytes:
+def _silent_wav_bytes(duration_ms: int = 500) -> bytes:
     buf = io.BytesIO()
+    sample_rate = 16000
     with wave.open(buf, "wb") as w:
-        w.setparams((1, 2, 16000, 0, "NONE", "NONE"))
-        frames = int(16000 * duration_ms / 1000)
-        w.writeframes(b"\x00\x00" * frames)
+        w.setparams((1, 2, sample_rate, 0, "NONE", "NONE"))
+        frames = int(sample_rate * duration_ms / 1000)
+        samples = [
+            struct.pack("<h", int(12000 * math.sin(2 * math.pi * 440 * i / sample_rate)))
+            for i in range(frames)
+        ]
+        w.writeframes(b"".join(samples))
     return buf.getvalue()
 
 
@@ -85,3 +91,33 @@ def test_synthesize_segment_keeps_previous(db_session, tmp_path, monkeypatch):
     assert seg_row.current_audio_path is not None
     assert seg_row.previous_audio_path is not None
     assert (tmp_path / seg_row.previous_audio_path).exists()
+
+
+def test_mimo_internal_uses_real_service(monkeypatch):
+    """MiMo segmented synthesis must use the MiMo service, not write a tiny placeholder wav."""
+    from app.api import mimo_tts
+
+    expected = _silent_wav_bytes(duration_ms=300)
+
+    class FakeMiMoService:
+        async def synthesize_preset(self, text, voice, instruction, format):
+            assert text == "hello"
+            assert voice == "白桦"
+            assert instruction == "声音沙哑"
+            assert format == "wav"
+            return expected
+
+    async def fake_get_mimo_tts_service(db=None):
+        return FakeMiMoService()
+
+    monkeypatch.setattr(mimo_tts, "get_mimo_tts_service", fake_get_mimo_tts_service)
+
+    audio_bytes, audio_format = mimo_tts.synthesize_mimo_internal(
+        text="hello",
+        mimo_mode="preset",
+        preset_voice="白桦",
+        instruction="声音沙哑",
+    )
+
+    assert audio_format == "wav"
+    assert audio_bytes == expected

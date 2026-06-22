@@ -1,6 +1,5 @@
-from sqlalchemy import create_engine, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, inspect, text
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
 
@@ -39,16 +38,28 @@ _P2_V2_ALTER_STMTS = (
 _P2_V3_ALTER_STMTS = (
     # project 级: 整体动画主题
     "ALTER TABLE segmented_projects ADD COLUMN animation_theme VARCHAR",
+    # project 级: 默认关联 Remotion 项目路径
+    "ALTER TABLE segmented_projects ADD COLUMN remotion_project_path VARCHAR",
+    # chapter 级: 给 Remotion/视觉设计使用的章节标题
+    "ALTER TABLE segmented_project_chapters ADD COLUMN design_title VARCHAR",
     # segment 级: 完整动画规格 (JSON 字符串)
     "ALTER TABLE segmented_project_segments ADD COLUMN animation_spec_json TEXT",
 )
 
 
 def _run_alter_or_skip(conn, stmt: str) -> bool:
-    """执行 ALTER TABLE. 列已存在时 (sqlite: 'duplicate column name') 跳过.
+    """执行 ALTER TABLE. 列已存在时跳过.
 
     Returns True if executed, False if skipped.
     """
+    parts = stmt.split()
+    if len(parts) >= 6 and parts[0].upper() == "ALTER" and parts[1].upper() == "TABLE":
+        table_name = parts[2]
+        column_name = parts[5]
+        existing_columns = {c["name"] for c in inspect(conn).get_columns(table_name)}
+        if column_name in existing_columns:
+            return False
+
     try:
         conn.execute(text(stmt))
         return True

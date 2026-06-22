@@ -1,0 +1,138 @@
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+}
+
+.select,
+.nameInput,
+.textarea {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-family: inherit;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.select:focus,
+.nameInput:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--glow-primary);
+}
+
+.select {
+  min-width: 150px;
+  flex: 1;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.textarea {
+  min-height: 58px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.textarea::placeholder,
+.nameInput::placeholder {
+  color: var(--color-text-muted);
+}
+
+.manageBtn,
+.actionBtn,
+.deleteBtn {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.manageBtn:hover,
+.actionBtn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7%, var(--color-surface));
+}
+
+.deleteBtn {
+  color: var(--color-danger);
+}
+
+.deleteBtn:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  background: color-mix(in srgb, var(--color-danger) 7%, var(--color-surface));
+}
+
+.actionBtn:disabled,
+.deleteBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.manager {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 3%, var(--color-surface));
+}
+
+.nameInput {
+  min-width: 140px;
+  flex: 1;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.dense {
+  gap: 6px;
+}
+
+.dense .textarea {
+  min-height: 36px;
+  resize: vertical;
+}
+
+@media (max-width: 720px) {
+  .topRow,
+  .manager {
+    align-items: stretch;
+  }
+
+  .topRow {
+    flex-wrap: wrap;
+  }
+
+  .select {
+    min-width: 180px;
+  }
+}

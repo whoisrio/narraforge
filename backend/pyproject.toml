@@ -57,3 +57,13 @@ dev = [
     "isort>=5.13.2",
     "mypy>=1.8.0"
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = ["--ignore=tests/manual"]
+norecursedirs = ["manual"]
+markers = [
+    "integration: integration tests",
+    "external: tests that call external services",
+]

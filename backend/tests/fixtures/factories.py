@@ -11,6 +11,7 @@ from factory.alchemy import SQLAlchemyModelFactory
 from app.core.database import SessionLocal
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_config import TTSConfig
+from app.core.time_utils import utcnow
 
 
 class VoiceProfileFactory(SQLAlchemyModelFactory):
@@ -30,7 +31,7 @@ class VoiceProfileFactory(SQLAlchemyModelFactory):
     is_cloned = False
     qwen_voice_id = None
     cloned_at = None
-    created_at = factory.LazyFunction(datetime.utcnow)
+    created_at = factory.LazyFunction(utcnow)
 
     @classmethod
     def create_cloned(cls, **kwargs) -> VoiceProfile:
@@ -38,7 +39,7 @@ class VoiceProfileFactory(SQLAlchemyModelFactory):
         return cls.create(
             is_cloned=True,
             qwen_voice_id=f"cloned_{uuid.uuid4().hex}",
-            cloned_at=datetime.utcnow(),
+            cloned_at=utcnow(),
             **kwargs
         )
 
@@ -58,7 +59,7 @@ class TTSConfigFactory(SQLAlchemyModelFactory):
     volume = 80
     pitch = 0
     emotion = "neutral"
-    created_at = factory.LazyFunction(datetime.utcnow)
+    created_at = factory.LazyFunction(utcnow)
 
 
 # 测试数据生成器

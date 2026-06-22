@@ -3,6 +3,7 @@ from datetime import datetime
 import uuid
 
 from app.core.database import Base
+from app.core.time_utils import utcnow
 
 
 class TTSResultRecord(Base):
@@ -24,4 +25,4 @@ class TTSResultRecord(Base):
     language = Column(String, default="Chinese")
     # 来源标记: None/"" = TTSSynthesis 历史；"segmented_tts" = 编辑器
     source = Column(String, nullable=True, default=None)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)

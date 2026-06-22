@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>NarraForge — P2 旁白文档架构 Demo (V3)</title>
+<style>
+  :root {
+    --color-primary: #c47a3a;
+    --color-primary-light: #d4944e;
+    --color-primary-dark: #b0692d;
+    --color-success: #2a9d8f;
+    --color-warning: #d4944e;
+    --color-error: #c0392b;
+    --color-danger: #c0392b;
+    --color-info: #3b82c4;
+    --color-background: #f8f7f4;
+    --color-surface: #ffffff;
+    --color-surface-hover: #f3f2ee;
+    --color-surface-active: #e8e5de;
+    --color-surface-inset: #edecea;
+    --color-text-primary: #1a1814;
+    --color-text-secondary: #6b6560;
+    --color-text-muted: #9e978e;
+    --color-text-disabled: #d8d4cc;
+    --color-text-on-primary: #ffffff;
+    --color-border: #e8e5de;
+    --color-border-light: #efeee9;
+    --glow-primary: rgba(196, 122, 58, 0.15);
+    --glow-primary-strong: rgba(196, 122, 58, 0.3);
+    --shadow-xs: 0 1px 2px rgba(26, 24, 20, 0.02);
+    --shadow-sm: 0 1px 2px rgba(26, 24, 20, 0.04);
+    --shadow-md: 0 2px 4px rgba(26, 24, 20, 0.06), 0 1px 2px rgba(26, 24, 20, 0.04);
+    --shadow-lg: 0 4px 12px rgba(26, 24, 20, 0.08), 0 2px 4px rgba(26, 24, 20, 0.04);
+    --shadow-xl: 0 12px 24px rgba(26, 24, 20, 0.1), 0 4px 8px rgba(26, 24, 20, 0.04);
+    --font-size-xs: 12px;
+    --font-size-sm: 14px;
+    --font-size-base: 15px;
+    --font-size-lg: 17px;
+    --font-size-xl: 20px;
+    --font-size-2xl: 24px;
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-full: 9999px;
+    --emo-calm: #7ba68a;
+    --emo-calm-bg: #eef5f0;
+    --emo-calm-border: #a8ccb5;
+    --emo-neutral: #9e978e;
+    --emo-neutral-bg: #f5f4f0;
+    --emo-neutral-border: #d8d4cc;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: var(--color-background);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base);
+    line-height: 1.5;
+  }
+
+  .demo-chrome {
+    background: linear-gradient(135deg, #1a1814, #2a2620);
+    color: #f3f2ee;
+    padding: 18px 32px;
+    border-bottom: 2px solid var(--color-primary);
+  }
+  .demo-chrome h1 {
+    font-size: var(--font-size-xl);
+    font-weight: 600;
+    color: var(--color-primary-light);
+  }
+  .demo-chrome .subtitle {
+    font-size: var(--font-size-sm);
+    color: #b5b0a8;
+    margin-top: 4px;
+  }
+  .demo-chrome .arch {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(196,122,58,0.10);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: #e8e5de;
+    line-height: 1.6;
+  }
+  .demo-chrome .arch code {
+    background: rgba(0,0,0,0.3);
+    padding: 1px 6px;
+    border-radius: 4px;
+    color: var(--color-primary-light);
+    font-family: 'SF Mono', Monaco, monospace;
+  }
+  .demo-chrome .legend {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    font-size: var(--font-size-xs);
+    flex-wrap: wrap;
+  }
+  .demo-chrome .legend a {
+    color: var(--color-primary-light);
+    text-decoration: none;
+    padding: 4px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+  .demo-chrome .legend a:hover { background: rgba(196,122,58,0.15); }
+
+  .demo-section {
+    padding: 32px;
+    max-width: 1380px;
+    margin: 0 auto;
+  }
+  .demo-section h2 {
+    font-size: var(--font-size-lg);
+    color: var(--color-text-primary);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .demo-section h2 .badge {
+    font-size: var(--font-size-xs);
+    padding: 3px 10px;
+    background: var(--color-primary);
+    color: white;
+    border-radius: var(--radius-full);
+    font-weight: 500;
+  }
+  .demo-section .desc {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    margin-bottom: 18px;
+    line-height: 1.6;
+  }
+  .demo-section .desc code {
+    background: var(--color-surface-inset);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: 'SF Mono', Monaco, monospace;
+    font-size: 12px;
+  }
+  .demo-divider { height: 1px; background: var(--color-border); margin: 0; }
+
+  /* ===== App shell ===== */
+  .app-shell {
+    background: var(--color-background);
+    min-height: 720px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    grid-template-rows: 56px 1fr;
+  }
+  .app-header {
+    grid-column: 1 / -1;
+    background: rgba(255,255,255,0.95);
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+  }
+  .app-logo {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-primary);
+    letter-spacing: 0.3px;
+  }
+  .app-header .breadcrumb {
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+  }
+  .app-header .spacer { flex: 1; }
+  .app-header .storage-mode {
+    display: inline-flex;
+    background: var(--color-surface-hover);
+    padding: 2px;
+    border-radius: var(--radius-sm);
+  }
+  .app-header .storage-mode button {
+    background: transparent;
+    border: none;
+    padding: 4px 12px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    border-radius: 6px;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .app-header .storage-mode button.active {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-xs);
+    font-weight: 500;
+  }
+
+  .app-sidebar {
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    overflow-y: auto;
+    padding: 12px 8px;
+  }
+
+  .sidebar-section {
+    margin-bottom: 14px;
+  }
+  .sidebar-section .label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 10px 8px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .sidebar-section .label .add {
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .sidebar-section .label .add:hover { color: var(--color-primary); background: var(--color-surface-hover); }
+  .sidebar-section .label .count {
+    background: var(--color-surface-inset);
+    color: var(--color-text-muted);
+    padding: 1px 7px;
+    border-radius: var(--radius-full);
+    font-size: 10px;
+  }
+
+  .project-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 2px;
+    cursor: pointer;
+  }
+  .project-item:hover { background: var(--color-surface-hover); }
+  .project-item.active {
+    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+    border-left: 3px solid var(--color-primary);
+    padding-left: 9px;
+  }
+  .project-icon {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    background: var(--color-surface-inset);
+    color: var(--color-text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .project-item.active .project-icon {
+    background: var(--color-primary);
+    color: white;
+  }
+  .project-body { flex: 1; min-width: 0; }
+  .project-name {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+  }
+  .project-meta {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .pin-badge {
+    background: var(--color-surface-inset);
+    color: var(--color-text-secondary);
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    margin-left: 6px;
+  }
+
+  .new-project-btn {
+    width: 100%;
+    margin: 4px 0 8px;
+    padding: 7px 12px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+  }
+  .new-project-btn:hover { background: var(--color-primary-dark); }
+
+  /* Source list inside sidebar */
+  .source-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 2px;
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+  }
+  .source-item:hover { background: var(--color-surface-hover); }
+  .source-item.selected { background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface)); }
+  .source-item .icon {
+    font-size: 14px;
+    flex-shrink: 0;
+    width: 18px;
+    text-align: center;
+  }
+  .source-item .title {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .source-item .badge {
+    font-size: 10px;
+    background: var(--color-surface-inset);
+    color: var(--color-text-muted);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .source-item.selected .badge {
+    background: var(--color-primary);
+    color: white;
+  }
+
+  .source-add-zone {
+    margin: 4px 0;
+    padding: 8px 10px;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    text-align: center;
+    cursor: pointer;
+  }
+  .source-add-zone:hover { color: var(--color-primary); border-color: var(--color-primary); }
+
+  .narrate-btn {
+    width: 100%;
+    margin-top: 6px;
+    padding: 8px 12px;
+    background: var(--color-surface);
+    color: var(--color-primary);
+    border: 1px solid var(--color-primary);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .narrate-btn:hover { background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface)); }
+
+  /* ===== Main editor area ===== */
+  .app-main {
+    overflow-y: auto;
+    padding: 20px 24px;
+    background: var(--color-background);
+  }
+
+  /* Narration banner */
+  .narr-banner {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-light);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .narr-banner .narr-icon {
+    font-size: 22px;
+  }
+  .narr-banner .narr-body { flex: 1; min-width: 0; }
+  .narr-banner .narr-title {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .narr-banner .narr-meta {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .narr-banner .narr-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .narr-banner .narr-actions button {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .narr-banner .narr-actions button:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+  .narr-banner .narr-actions button.primary {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+  .narr-banner .narr-actions button.primary:hover { background: var(--color-primary-dark); }
+
+  /* Chapter tabs */
+  .chapter-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .chapter-tab {
+    background: transparent;
+    border: none;
+    padding: 10px 14px;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    font-family: inherit;
+    border-bottom: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .chapter-tab:hover { color: var(--color-text-primary); }
+  .chapter-tab.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+    font-weight: 500;
+  }
+  .chapter-tab .count {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    background: var(--color-surface-inset);
+    padding: 1px 6px;
+    border-radius: var(--radius-full);
+    font-variant-numeric: tabular-nums;
+  }
+  .chapter-tab.active .count {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+    color: var(--color-primary);
+  }
+  .chapter-tab-add {
+    margin-left: auto;
+    color: var(--color-text-muted);
+    padding: 7px 10px;
+    background: transparent;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .chapter-tab-add:hover { color: var(--color-primary); border-color: var(--color-primary); }
+
+  /* TextInputPanel - simplified in V3 */
+  .text-panel {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    border: 1px solid var(--color-border-light);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 18px;
+  }
+  .text-panel .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border-light);
+  }
+  .text-panel .panel-header .crumb {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .text-panel .panel-header .crumb .sep { color: var(--color-text-disabled); }
+  .text-panel .panel-header .crumb .chapter-name { color: var(--color-primary); font-weight: 500; }
+  .text-panel .panel-header .spacer { flex: 1; }
+  .text-panel .panel-header .toast {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .text-panel .panel-header .toast .pulse {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-success);
+  }
+
+  .textarea {
+    width: 100%;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+    line-height: 1.7;
+  }
+  .textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--glow-primary);
+  }
+
+  .action-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .mode-switch {
+    display: flex;
+    background: var(--color-surface-hover);
+    padding: 2px;
+    border-radius: var(--radius-sm);
+  }
+  .mode-btn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    padding: 4px 12px;
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    font-family: inherit;
+    border-radius: 6px;
+  }
+  .mode-btn.active {
+    background: var(--color-surface);
+    color: var(--color-text-primary);
+    box-shadow: var(--shadow-xs);
+    font-weight: 500;
+  }
+  .settings-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .settings-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .split-btn {
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    padding: 5px 18px;
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .split-btn:hover { background: var(--color-primary-dark); }
+  .char-count {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Segment list */
+  .segment-list { display: flex; flex-direction: column; gap: 6px; }
+  .segment {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .seg-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--color-surface-inset);
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-size-xs);
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .seg-text {
+    flex: 1;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    line-height: 1.5;
+  }
+  .seg-emotion {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-weight: 500;
+    border: 1px solid;
+  }
+  .seg-emotion.calm { color: var(--emo-calm); background: var(--emo-calm-bg); border-color: var(--emo-calm-border); }
+  .seg-emotion.neutral { color: var(--emo-neutral); background: var(--emo-neutral-bg); border-color: var(--emo-neutral-border); }
+  .seg-play {
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+  .seg-play.played { background: var(--color-success); }
+  .seg-play:disabled { background: var(--color-text-disabled); cursor: not-allowed; }
+
+  /* ===== Narration full view ===== */
+  .narr-view {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 24px 32px;
+    max-width: 820px;
+    box-shadow: var(--shadow-sm);
+    font-size: 15px;
+    line-height: 1.85;
+    color: var(--color-text-primary);
+  }
+  .narr-view h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: 700;
+    margin: 0 0 18px 0;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--color-primary);
+  }
+  .narr-view h2 {
+    font-size: var(--font-size-lg);
+    font-weight: 600;
+    color: var(--color-primary);
+    margin: 24px 0 10px 0;
+    padding: 6px 10px;
+    background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+    border-left: 3px solid var(--color-primary);
+    border-radius: 4px;
+  }
+  .narr-view p {
+    margin-bottom: 12px;
+    color: var(--color-text-primary);
+  }
+  .narr-view .chapter-block {
+    margin-bottom: 24px;
+    padding: 14px 16px;
+    background: var(--color-surface-hover);
+    border-radius: var(--radius-sm);
+  }
+  .narr-view .chapter-block.active {
+    background: color-mix(in srgb, var(--color-primary) 5%, var(--color-surface-hover));
+    border-left: 3px solid var(--color-primary);
+  }
+
+  /* ===== Modal: Generate narration ===== */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(26,24,20,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 500;
+  }
+  .modal {
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xl);
+    width: 560px;
+    max-width: 92vw;
+    padding: 26px 30px;
+  }
+  .modal h3 {
+    font-size: var(--font-size-lg);
+    margin-bottom: 6px;
+    color: var(--color-text-primary);
+  }
+  .modal .modal-desc {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+    margin-bottom: 18px;
+    line-height: 1.6;
+  }
+  .form-group { margin-bottom: 14px; }
+  .form-label {
+    font-size: var(--font-size-xs);
+    font-weight: 500;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .form-input, .form-textarea {
+    width: 100%;
+    background: var(--color-background);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-primary);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: var(--font-size-sm);
+    font-family: inherit;
+    outline: none;
+  }
+  .form-input:focus, .form-textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--glow-primary);
+  }
+  .form-textarea { resize: vertical; line-height: 1.6; min-height: 80px; }
+  .source-chips {
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+    border: 1px solid var(--color-primary);
+    color: var(--color-primary);
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .source-chip .x {
+    cursor: pointer;
+    opacity: 0.6;
+    font-size: 14px;
+    line-height: 1;
+  }
+  .source-chip .x:hover { opacity: 1; }
+  .form-row { display: flex; gap: 10px; }
+  .form-row .form-group { flex: 1; }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border-light);
+  }
+  .btn {
+    padding: 7px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-sm);
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+  .btn.primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+  .btn.primary:hover { background: var(--color-primary-dark); }
+
+  /* Note */
+  .note {
+    background: color-mix(in srgb, var(--color-info) 8%, var(--color-surface));
+    border-left: 3px solid var(--color-info);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    margin-top: 14px;
+    font-size: var(--font-size-xs);
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+  }
+  .note strong { color: var(--color-text-primary); }
+  .note ul { margin: 6px 0 0 18px; }
+
+  /* Flow arrows */
+  .flow {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    overflow-x: auto;
+  }
+  .flow .stage {
+    flex: 1;
+    min-width: 130px;
+    background: var(--color-background);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    border: 1px solid var(--color-border-light);
+  }
+  .flow .stage-icon { font-size: 18px; margin-bottom: 4px; }
+  .flow .stage-title {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-primary);
+    font-weight: 500;
+    margin-bottom: 2px;
+  }
+  .flow .stage-desc {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+  }
+  .flow .arrow {
+    display: flex;
+    align-items: center;
+    color: var(--color-text-disabled);
+    font-size: 18px;
+    padding: 0 2px;
+  }
+  .flow .stage.highlight {
+    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+    border-color: var(--color-primary);
+  }
+
+  /* Section variant: empty state */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--color-text-muted);
+    background: var(--color-surface);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+  }
+  .empty-state .icon { font-size: 36px; margin-bottom: 10px; }
+  .empty-state .title {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    margin-bottom: 4px;
+  }
+  .empty-state .desc {
+    font-size: var(--font-size-sm);
+    margin-bottom: 16px;
+  }
+  .empty-state .btn {
+    display: inline-block;
+  }
+</style>
+</head>
+<body>
+
+<div class="demo-chrome">
+  <h1>NarraForge — P2 旁白文档架构 Demo (V3)</h1>
+  <div class="subtitle">源文件项目级全局 · LLM 中间产物（旁白文档）· 章节从旁白文档切片 · 切片才是生成语音的输入</div>
+  <div class="arch">
+    <strong>数据流：</strong>
+    <code>项目 N 个源（文本/音频）</code> →
+    <code>LLM 合成（口播化）</code> →
+    <code>旁白文档（项目级一份）</code> →
+    <code>章节切片（markdown 章节化）</code> →
+    <code>Chapter.original_text</code> →
+    <code>拆分 / 语音</code>
+  </div>
+  <div class="legend">
+    <a href="#section-flow">① 数据流总览</a>
+    <a href="#section-sidebar">② 侧栏：项目 + 源</a>
+    <a href="#section-no-narr">③ 章节无旁白</a>
+    <a href="#section-chapter">④ 章节编辑器（已切片）</a>
+    <a href="#section-narrate">⑤ 生成旁白 workflow</a>
+    <a href="#section-narr-view">⑥ 旁白文档全屏</a>
+    <a href="#section-regen">⑦ 章节再生成</a>
+  </div>
+</div>
+
+<!-- ========== Section 1: Flow ========== -->
+<div class="demo-section" id="section-flow">
+  <h2>① 数据流总览 <span class="badge">架构 V3</span></h2>
+  <div class="desc">
+    源文件是项目级资产（不是章节级）。LLM 一次处理全部选中源 → 输出整篇旁白文档（markdown，含章节标题）→
+    按 H2 标题切到各章节的 <code>original_text</code> 字段 → 拆分 / 合成语音。
+  </div>
+
+  <div class="flow">
+    <div class="stage">
+      <div class="stage-icon">📚</div>
+      <div class="stage-title">项目源</div>
+      <div class="stage-desc">项目级 N 个源（文本/音频/路径）<br>· 全部在 ProjectSidebar<br>· LLM 输入池</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage highlight">
+      <div class="stage-icon">🧠</div>
+      <div class="stage-title">LLM 合成</div>
+      <div class="stage-desc">读取选中源 · 口播化润色<br>· 按 # H2 切分章节<br>· 输出 markdown 整稿</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage highlight">
+      <div class="stage-icon">📜</div>
+      <div class="stage-title">旁白文档</div>
+      <div class="stage-desc">项目级一份<br>· 多个版本（v1/v2/...）<br>· 标记每个章节的起止 char_range</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <div class="stage-icon">📑</div>
+      <div class="stage-title">章节切片</div>
+      <div class="stage-desc">按 H2 自动切到<br>chapter.original_text<br>· 可继续手工编辑</div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="stage">
+      <div class="stage-icon">🎙️</div>
+      <div class="stage-title">语音</div>
+      <div class="stage-desc">规则/智能拆分<br>· TTS 合成<br>· 章节级</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>关键变化（相对 V2）：</strong>
+    <ul>
+      <li>移除"每个章节有 current_source_id" — 源统一挂在项目侧栏</li>
+      <li>新增 <code>narration_documents</code> 表（项目级，可版本化）— LLM 中间产物</li>
+      <li>章节从旁白文档按 H2 切片得到 — 一次合成所有章节</li>
+      <li>TextInputPanel 顶部不再放 source tabs — 简化</li>
+    </ul>
+  </div>
+</div>
+
+<div class="demo-divider"></div>
+
+<!-- ========== Section 2: Sidebar ========== -->
+<div class="demo-section" id="section-sidebar">
+  <h2>② 侧栏：项目 + 项目级源 <span class="badge">主入口</span></h2>
+  <div class="desc">
+    ProjectSidebar 拆成两个 section：上方是"项目列表"（已有），下方是"当前项目的源"。
+    源列表支持多选（决定 LLM 用哪些源）· 点击源旁的勾选中 · 底部 [🔄 生成旁白文档] 启动 workflow。
+  </div>
+
+  <div style="max-width: 320px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 12px 8px; box-shadow: var(--shadow-sm);">
+    <div class="sidebar-section">
+      <div class="label">
+        <span>项目</span>
+        <span class="add" title="新建项目">+</span>
+      </div>
+      <button class="new-project-btn"><span>+</span> 新建项目</button>
+      <div class="project-item">
+        <div class="project-icon">草</div>
+        <div class="project-body">
+          <span class="project-name">📌 草稿台 <span class="pin-badge">默认</span></span>
+          <span class="project-meta">3 段 · 2/3 · 18.2s</span>
+        </div>
+      </div>
+      <div class="project-item active">
+        <div class="project-icon">D</div>
+        <div class="project-body">
+          <span class="project-name">DeepSeek 战略拆解</span>
+          <span class="project-meta">12 段 · 12/12 · 4m 18s</span>
+        </div>
+      </div>
+      <div class="project-item">
+        <div class="project-icon">Y</div>
+        <div class="project-body">
+          <span class="project-name">YMTC 长江存储</span>
+          <span class="project-meta">8 段 · 5/8 · 2m 41s</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="height: 1px; background: var(--color-border-light); margin: 4px 8px 12px;"></div>
+
+    <div class="sidebar-section">
+      <div class="label">
+        <span>DeepSeek 战略拆解 · 源</span>
+        <span class="count">3</span>
+      </div>
+
+      <div class="source-item selected">
+        <span class="icon">📄</span>
+        <span class="title">notes.md</span>
+        <span class="badge">320字</span>
+      </div>
+      <div class="source-item selected">
+        <span class="icon">🎵</span>
+        <span class="title">interview_ceo.mp3</span>
+        <span class="badge">4:32</span>
+      </div>
+      <div class="source-item">
+        <span class="icon">🔗</span>
+        <span class="title">参考论文.pdf</span>
+        <span class="badge">链接</span>
+      </div>
+
+      <div class="source-add-zone">+ 添加源（粘贴 / 音频 / 路径）</div>
+
+      <button class="narrate-btn">🧠 基于 2 个源生成旁白</button>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>设计要点：</strong>
+    <ul>
+      <li>源的多选框 / 整体开关 → 决定"生成旁白"时喂给 LLM 哪些源</li>
+      <li>源的类型 icon 一致（📄文本 / 🎵音频 / 🔗路径）— 来自 TextInputPanel 现有 3-tab 概念</li>
+      <li>[🧠 生成旁白] 按钮始终在底部 — 一键启动 workflow（见 ⑤）</li>
+      <li>切项目时，源 section 自动切换到新项目的源</li>
+    </ul>
+  </div>
+</div>
+
+<div class="demo-divider"></div>
+
+<!-- ========== Section 3: Empty state ========== -->
+<div class="demo-section" id="section-no-narr">
+  <h2>③ 章节无旁白：引导去生成 <span class="badge">新项目起点</span></h2>
+  <div class="desc">
+    新建项目 → 还没有源也没有旁白 → 主区显示引导卡片，让用户先去侧栏添加源 → 生成旁白。
+  </div>
+
+  <div class="app-shell" style="min-height: 480px;">
+    <div class="app-header">
+      <span class="app-logo">🔥 NarraForge</span>
+      <span class="breadcrumb">/ 新建项目（未命名）</span>
+      <span class="spacer"></span>
+      <div class="storage-mode"><button>本地</button><button class="active">后端</button></div>
+    </div>
+    <div class="app-sidebar">
+      <div class="sidebar-section">
+        <div class="label"><span>项目</span></div>
+        <div class="project-item">
+          <div class="project-icon">草</div>
+          <div class="project-body">
+            <span class="project-name">📌 草稿台</span>
+            <span class="project-meta">3 段 · 2/3</span>
+          </div>
+        </div>
+        <div class="project-item active">
+          <div class="project-icon">N</div>
+          <div class="project-body">
+            <span class="project-name">新建项目（未命名）</span>
+            <span class="project-meta">0 段 · 0/0</span>
+          </div>
+        </div>
+      </div>
+      <div style="height: 1px; background: var(--color-border-light); margin: 4px 8px 12px;"></div>
+      <div class="sidebar-section">
+        <div class="label">
+          <span>未命名项目 · 源</span>
+          <span class="count">0</span>
+        </div>
+        <div class="source-add-zone">+ 添加第一个源</div>
+      </div>
+    </div>
+
+    <div class="app-main">
+      <div class="empty-state">
+        <div class="icon">📚</div>
+        <div class="title">开始一个新项目</div>
+        <div class="desc">先在左侧添加原始素材（文本 / 音频 / 链接），<br>再由 LLM 生成适合朗读的旁白文档，最后拆分合成语音。</div>
+        <button class="btn primary">+ 添加第一个源</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="demo-divider"></div>
+
+<!-- ========== Section 4: Chapter editor with narration ========== -->
+<div class="demo-section" id="section-chapter">
+  <h2>④ 章节编辑器：旁白已生成 · 章节已切片 <span class="badge">工作常态</span></h2>
+  <div class="desc">
+    顶部 banner 显示"旁白文档 v2 · 3 章节 · 全文 1.2k 字 · 生成于 10:23"，可一键 [👁 看全文] / [🔄 重新生成]。
+    TextInputPanel 头部面包屑 "旁白文档 › 第 1 章 · 战略起源" — 让用户清楚自己在哪一段。
+  </div>
+
+  <div class="app-shell" style="min-height: 760px;">
+    <div class="app-header">
+      <span class="app-logo">🔥 NarraForge</span>
+      <span class="breadcrumb">/ DeepSeek 战略拆解 / 第 1 章</span>
+      <span class="spacer"></span>
+      <div class="storage-mode"><button>本地</button><button class="active">后端</button></div>
+    </div>
+    <div class="app-sidebar">
+      <div class="sidebar-section">
+        <div class="label"><span>项目</span></div>
+        <div class="project-item">
+          <div class="project-icon">草</div>
+          <div class="project-body">
+            <span class="project-name">📌 草稿台</span>
+            <span class="project-meta">3 段 · 2/3</span>
+          </div>
+        </div>
+        <div class="project-item active">
+          <div class="project-icon">D</div>
+          <div class="project-body">
+            <span class="project-name">DeepSeek 战略拆解</span>
+            <span class="project-meta">12 段 · 12/12</span>
+          </div>
+        </div>
+      </div>
+      <div style="height: 1px; background: var(--color-border-light); margin: 4px 8px 12px;"></div>
+      <div class="sidebar-section">
+        <div class="label">
+          <span>DeepSeek 战略拆解 · 源</span>
+          <span class="count">2</span>
+        </div>
+        <div class="source-item selected">
+          <span class="icon">📄</span>
+          <span class="title">notes.md</span>
+          <span class="badge">320字</span>
+        </div>
+        <div class="source-item selected">
+          <span class="icon">🎵</span>
+          <span class="title">interview_ceo.mp3</span>
+          <span class="badge">4:32</span>
+        </div>
+        <div class="source-add-zone">+ 添加源</div>
+        <button class="narrate-btn">🧠 重新生成旁白</button>
+      </div>
+    </div>
+
+    <div class="app-main">
+      <!-- Narration banner -->
+      <div class="narr-banner">
+        <div class="narr-icon">📜</div>
+        <div class="narr-body">
+          <div class="narr-title">旁白文档 v2</div>
+          <div class="narr-meta">基于 notes.md (320字) + interview_ceo.mp3 (4:32) · LLM 合成 · 3 章节 · 全文 1,247 字 · 生成于 10:23 · 智能拆分 (MiMo)</div>
+        </div>
+        <div class="narr-actions">
+          <button>👁 看全文</button>
+          <button>📋 复制</button>
+          <button class="primary">🔄 重新生成</button>
+        </div>
+      </div>
+
+      <!-- Chapter tabs -->
+      <div class="chapter-tabs">
+        <button class="chapter-tab active">第 1 章 · 战略起源 <span class="count">3</span></button>
+        <button class="chapter-tab">第 2 章 · 技术路线 <span class="count">5</span></button>
+        <button class="chapter-tab">第 3 章 · 产业映射 <span class="count">4</span></button>
+        <button class="chapter-tab-add">+ 章节</button>
+      </div>
+
+      <!-- TextInputPanel (simplified) -->
+      <div class="text-panel">
+        <div class="panel-header">
+          <div class="crumb">
+            <span>📜 旁白 v2</span>
+            <span class="sep">›</span>
+            <span class="chapter-name">第 1 章 · 战略起源</span>
+          </div>
+          <div class="spacer"></div>
+          <div class="toast">
+            <span class="pulse"></span>
+            <span>已同步旁白文档</span>
+          </div>
+        </div>
+        <textarea class="textarea" rows="6">2026 年开年，AI 产业进入深水区。DeepSeek 以极致成本训练出 R1 模型，把整个行业的护城河重新画了一遍。
+
+但真正的护城河，从来不是模型本身，而是算力供应链。
+
+本章我们拆解 DeepSeek 战略背后的三个支点：第一是 MLA 多头潜在注意力机制，砍掉 KV 缓存 90% 占用；第二是 DualPath 双路径架构；第三是 MoE 混合专家的精修路线。
+
+[后续段落省略]</textarea>
+        <div class="action-bar">
+          <button class="settings-btn">⚙ 拆分设置</button>
+          <div class="mode-switch">
+            <button class="mode-btn">规则</button>
+            <button class="mode-btn active">智能</button>
+          </div>
+          <button class="split-btn">重新拆分</button>
+          <span class="char-count">320 字</span>
+        </div>
+      </div>
+
+      <!-- Segments -->
+      <div class="segment-list">
+        <div class="segment">
+          <div class="seg-num">1</div>
+          <div class="seg-text">2026 年开年，AI 产业进入深水区。DeepSeek 以极致成本训练出 R1 模型，把整个行业的护城河重新画了一遍。</div>
+          <span class="seg-emotion calm">calm</span>
+          <button class="seg-play played">▶</button>
+        </div>
+        <div class="segment">
+          <div class="seg-num">2</div>
+          <div class="seg-text">但真正的护城河，从来不是模型本身，而是算力供应链。</div>
+          <span class="seg-emotion neutral">neutral</span>
+          <button class="seg-play played">▶</button>
+        </div>
+        <div class="segment">
+          <div class="seg-num">3</div>
+          <div class="seg-text">本章我们拆解 DeepSeek 战略背后的三个支点：第一是 MLA 多头潜在注意力机制，砍掉 KV 缓存 90% 占用；第二是 DualPath 双路径架构；第三是 MoE 混合专家的精修路线。</div>
+          <span class="seg-emotion calm">calm</span>
+          <button class="seg-play" disabled>●</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>设计要点：</strong>
+    <ul>
+      <li>顶部 banner 把"旁白文档"变成一等公民 — 用户随时能看到整稿状态</li>
+      <li>[👁 看全文] 跳到全屏旁白视图（见 ⑥），让用户能通读整稿后再继续编辑章节</li>
+      <li>[🔄 重新生成] 启动 workflow（见 ⑤），会生成 v3</li>
+      <li>TextInputPanel 头部面包屑告诉用户：当前编辑的是旁白文档的哪个章节切片</li>
+    </ul>
+  </div>
+</div>
+
+<div class="demo-divider"></div>
+
+<!-- ========== Section 5: Generate narration modal ========== -->
+<div class="demo-section" id="section-narrate">
+  <h2>⑤ 生成旁白 workflow（弹窗）<span class="badge">LLM 触发器</span></h2>
+  <div class="desc">
+    用户点 [🧠 基于 N 个源生成旁白] 触发的弹窗。可选源、设定 prompt 风格、目标章节数、语气基调。
+    点击"生成" → 后端跑 LLM → 写入 narration_documents → 自动按 H2 切到各章节 original_text。
+  </div>
+
+  <div style="position: relative; min-height: 580px; background: var(--color-surface-hover); border-radius: var(--radius-lg); padding: 30px; border: 1px solid var(--color-border);">
+    <div class="modal-backdrop" style="background: rgba(26,24,20,0.4);">
+      <div class="modal">
+        <h3>🧠 生成旁白文档</h3>
+        <div class="modal-desc">
+          从选中源合成一份适合朗读的口播稿，并自动按 # 二级标题切到各章节。
+        </div>
+
+        <div class="form-group">
+          <div class="form-label">📚 选中的源（2/3）</div>
+          <div class="source-chips">
+            <span class="source-chip">📄 notes.md <span class="x">×</span></span>
+            <span class="source-chip">🎵 interview_ceo.mp3 <span class="x">×</span></span>
+          </div>
+          <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 6px;">
+            💡 切选源会影响生成内容。参考论文.pdf 未被选中
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="form-label">📝 补充提示（可选）</div>
+          <textarea class="form-textarea" placeholder="例如：保持轻松风格、多用反问、避免专业术语堆砌...">语气保持冷静专业，少用数字罗列，多用对比和反问。</textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <div class="form-label">🎯 目标章节数</div>
+            <input class="form-input" type="text" value="3" />
+          </div>
+          <div class="form-group">
+            <div class="form-label">📏 全文长度</div>
+            <input class="form-input" type="text" value="1000-1500 字" />
+          </div>
+          <div class="form-group">
+            <div class="form-label">🌐 语言</div>
+            <input class="form-input" type="text" value="中文（简体）" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div class="form-label">🤖 LLM 引擎</div>
+          <input class="form-input" type="text" value="MiMo (默认)" />
+        </div>
+
+        <div class="note" style="margin-top: 0;">
+          <strong>注意：</strong>生成新旁白文档 v3 会取代 v2，但章节的"已生成语音"不受影响（语音基于切片，新切片重新生成后会标记章节为待重新拆分）。
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn">取消</button>
+          <button class="btn primary">🧠 生成 v3</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="demo-divider"></div>
+
+<!-- ========== Section 6: Full narration view ========== -->
+<div class="demo-section" id="section-narr-view">
+  <h2>⑥ 旁白文档全屏视图 <span class="badge">整稿阅读</span></h2>
+  <div class="desc">
+    点 [👁 看全文] 跳到全屏视图。整篇旁白文档 markdown 渲染，每章节可点击跳回编辑器。
+    顶部显示"v2 · 3 章节 · 1,247 字 · 已自动按 H2 切片"。
+  </div>
+
+  <div style="background: var(--color-background); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: 30px; min-height: 700px;">
+    <div class="narr-banner" style="margin-bottom: 20px;">
+      <div class="narr-icon">📜</div>
+      <div class="narr-body">
+        <div class="narr-title">旁白文档 v2 · DeepSeek 战略拆解</div>
+        <div class="narr-meta">3 章节 · 1,247 字 · 自动按 H2 切片 · 生成于 10:23</div>
+      </div>
+      <div class="narr-actions">
+        <button>📋 复制 markdown</button>
+        <button>⬇ 导出</button>
+        <button class="primary">← 返回编辑器</button>
+      </div>
+    </div>
+
+    <div class="narr-view">
+      <h1>DeepSeek 战略拆解 · 旁白稿</h1>
+
+      <div class="chapter-block active">
+        <h2>第 1 章 · 战略起源</h2>
+        <p>2026 年开年，AI 产业进入深水区。DeepSeek 以极致成本训练出 R1 模型，把整个行业的护城河重新画了一遍。</p>
+        <p>但真正的护城河，从来不是模型本身，而是算力供应链。</p>
+        <p>本章我们拆解 DeepSeek 战略背后的三个支点：第一是 MLA 多头潜在注意力机制，砍掉 KV 缓存 90% 占用；第二是 DualPath 双路径架构；第三是 MoE 混合专家的精修路线。</p>
+      </div>
+
+      <div class="chapter-block">
+        <h2>第 2 章 · 技术路线</h2>
+        <p>先说 MLA。传统 Transformer 的 KV 缓存会随着序列长度线性增长，导致长文本推理时显存爆炸。MLA 用低秩投影把 KV 压缩到一个潜在空间，缓存体积骤降。</p>
+        <p>再说 DualPath。DeepSeek 创新性地把训练和推理拆成两条路径：训练时用稠密参数保证质量，推理时用稀疏激活保证速度。</p>
+        <p>最后是 MoE。256 个专家，每次只激活 8 个，靠路由机制决定 token 去哪。</p>
+      </div>
+
+      <div class="chapter-block">
+        <h2>第 3 章 · 产业映射</h2>
+        <p>技术再强，最终要落到产业。对标 Nvidia 是昇腾，对标 TSMC 是中芯国际，对标 ASML 是新凯来，对标 Samsung 是长江存储。</p>
+        <p>这条国产替代链路的逻辑不是错位竞争，而是在政企信创市场里做出完全够用、价格又比海外品牌低 30% 的产品。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="demo-divider"></div>
+
+<!-- ========== Section 7: Regen chapter from source ========== -->
+<div class="demo-section" id="section-regen">
+  <h2>⑦ 章节再生成：基于源重新合成单章 <span class="badge">粒度更细</span></h2>
+  <div class="desc">
+    旁白文档是项目级的，但用户可能想"只重写第 1 章"。侧栏可点章节右侧的 [🔄] 单独触发该章节再生成。
+    旁白文档版本号会跟着变（v2.1, v2.2...），但底层源不变。
+  </div>
+
+  <div style="max-width: 720px;">
+    <div class="text-panel">
+      <div class="panel-header">
+        <div class="crumb">
+          <span>📜 旁白 v2.1</span>
+          <span class="sep">›</span>
+          <span class="chapter-name">第 1 章 · 战略起源</span>
+        </div>
+        <div class="spacer"></div>
+        <div class="toast">
+          <span class="pulse" style="background: var(--color-warning);"></span>
+          <span>v2 → v2.1 · 仅第 1 章已重写</span>
+        </div>
+      </div>
+      <textarea class="textarea" rows="5">2026 年的 AI 战场，DeepSeek 干了一件让华尔街侧目的事：用不到 OpenAI 十分之一的成本，训练出性能对标 R1 的模型。
+
+但这家公司的野心远不止 R1。它的真正战略，是把整个国产算力链路从底层"通水"。
+
+本章我们看三个支点：MLA 注意力压缩、DualPath 双路径、MoE 精修路线——这三个技术名词背后，是 DeepSeek 对"如何用最少算力办最多事"这个问题的回答。</textarea>
+      <div class="action-bar">
+        <button class="settings-btn">⚙ 拆分设置</button>
+        <div class="mode-switch">
+          <button class="mode-btn">规则</button>
+          <button class="mode-btn active">智能</button>
+        </div>
+        <button class="split-btn">重新拆分</button>
+        <span class="char-count">286 字 · 改动 +18 / -42</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>设计要点：</strong>
+    <ul>
+      <li>章节级再生成 — 用户不必每次重做整稿</li>
+      <li>旁白版本号 <code>v2.1</code> (semver-like) — 整稿重生成 = 大版本，章节重写 = 小版本</li>
+      <li>章节状态有"已同步旁白 v2.1"标记 — 让用户知道当前切片是哪个版本</li>
+      <li>TextInputPanel 字数栏显示"改动 ± N 字" — 给用户修改体感</li>
+    </ul>
+  </div>
+</div>
+
+<div style="text-align: center; padding: 40px; color: var(--color-text-muted); font-size: var(--font-size-sm);">
+  ✓ V3 Demo 结束 · 源项目级 · 旁白文档一等公民 · 章节切片化 · 严格 amber 配色 + var(--*) token · 无紫无 blur
+</div>
+
+</body>
+</html>

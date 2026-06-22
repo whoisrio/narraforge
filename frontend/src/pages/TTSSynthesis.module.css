@@ -206,6 +206,52 @@
   max-width: 150px;
 }
 
+.inlineMetaField {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-inset);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+}
+
+.inlineMetaField input {
+  width: min(280px, 28vw);
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 500;
+}
+
+.inlineMetaField input:focus {
+  color: var(--color-primary-dark);
+}
+
+.inlineMetaField input:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.exportHint {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-full);
+  background: rgba(196, 122, 58, 0.1);
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .chapterBtn,
 .chapterBtnDanger {
   width: 26px;

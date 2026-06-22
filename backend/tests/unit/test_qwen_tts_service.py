@@ -73,64 +73,50 @@ class TestQwenTTSService:
                 result = await service.synthesize_speech(
                     text="Hello, world!",
                     voice_id="xiaoyun",
+                    instruction="clear narration",
                     speed=1.0,
                     volume=80,
-                    pitch=0,
+                    pitch=1.0,
                     format="wav",
                     sample_rate=16000,
                 )
 
                 assert result == mock_audio_data
                 mock_sync.assert_called_once_with(
-                    "Hello, world!", "xiaoyun", 1.0, 80, 0, "wav", 16000
+                    "xiaoyun", "Hello, world!", "clear narration", 1.0, 80, 1.0, "wav", 16000, False, False
                 )
 
     @pytest.mark.asyncio
-    async def test_synthesize_speech_with_defaults(self):
-        """测试使用默认参数的语音合成"""
-        with patch("app.services.qwen_tts_service.settings") as mock_settings:
-            mock_settings.qwen_api_key = "test_api_key"
+    async def test_synthesize_speech_requires_voice_and_instruction(self):
+        """当前 Qwen/CosyVoice 合成必须显式提供 voice_id 和 instruction。"""
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3")
 
-            service = QwenTTSService()
-
-            with patch.object(service, "_synthesize_speech_sync") as mock_sync:
-                mock_sync.return_value = b"audio_data"
-
-                result = await service.synthesize_speech(
-                    text="Test text"
-                )
-
-                mock_sync.assert_called_once_with(
-                    "Test text", "xiaoyun", 1.0, 80, 0, "wav", 16000
-                )
+        with pytest.raises(TypeError):
+            await service.synthesize_speech(text="Test text")
 
     @pytest.mark.asyncio
-    async def test_clone_voice_success(self):
-        """测试声音克隆成功"""
-        with patch("app.services.qwen_tts_service.settings") as mock_settings:
-            mock_settings.qwen_api_key = "test_api_key"
+    async def test_synthesize_speech_dispatches_to_sync_impl(self):
+        """测试声音合成会派发到当前同步实现。"""
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3")
 
-            service = QwenTTSService()
+        with patch.object(service, "_synthesize_speech_sync") as mock_sync:
+            mock_sync.return_value = "/tmp/cloned_audio.wav"
 
-            mock_audio_data = b"cloned_audio_data"
+            result = await service.synthesize_speech(
+                voice_id="cloned_voice_123",
+                text="Hello from cloned voice!",
+                instruction="clear narration",
+                speed=1.2,
+                volume=90,
+                pitch=1.0,
+                format="mp3",
+                sample_rate=22050,
+            )
 
-            with patch.object(service, "_clone_voice_sync") as mock_sync:
-                mock_sync.return_value = mock_audio_data
-
-                result = await service.clone_voice(
-                    voice_id="cloned_voice_123",
-                    text="Hello from cloned voice!",
-                    speed=1.2,
-                    volume=90,
-                    pitch=2,
-                    format="mp3",
-                    sample_rate=22050,
-                )
-
-                assert result == mock_audio_data
-                mock_sync.assert_called_once_with(
-                    "cloned_voice_123", "Hello from cloned voice!", 1.2, 90, 2, "mp3", 22050
-                )
+            assert result == "/tmp/cloned_audio.wav"
+            mock_sync.assert_called_once_with(
+                "cloned_voice_123", "Hello from cloned voice!", "clear narration", 1.2, 90, 1.0, "mp3", 22050, False, False
+            )
 
     @pytest.mark.asyncio
     async def test_register_cloned_voice_success(self):
@@ -335,13 +321,10 @@ class TestQwenTTSService:
                 }
             }
 
-            with patch("urllib.request.urlopen") as mock_urlopen:
-                mock_response = Mock()
-                mock_response.read.return_value = bytes(
-                    '{"code": "Success", "output": {"voices": [{"voice_id": "voice_001", "preferred_name": "clone001", "status": "OK"}, {"voice_id": "voice_002", "preferred_name": "clone002", "status": "OK"}]}}',
-                    "utf-8"
-                )
-                mock_urlopen.return_value.__enter__.return_value = mock_response
+            with patch("app.services.qwen_tts_service.VoiceEnrollmentService") as mock_cls:
+                mock_service = Mock()
+                mock_service.list_voices.return_value = mock_response_data["output"]["voices"]
+                mock_cls.return_value = mock_service
 
                 result = service._list_cloned_voices_sync()
 
@@ -356,13 +339,10 @@ class TestQwenTTSService:
 
             service = QwenTTSService()
 
-            with patch("urllib.request.urlopen") as mock_urlopen:
-                mock_response = Mock()
-                mock_response.read.return_value = bytes(
-                    '{"code": "Success", "output": {"voices": []}}',
-                    "utf-8"
-                )
-                mock_urlopen.return_value.__enter__.return_value = mock_response
+            with patch("app.services.qwen_tts_service.VoiceEnrollmentService") as mock_cls:
+                mock_service = Mock()
+                mock_service.list_voices.return_value = []
+                mock_cls.return_value = mock_service
 
                 result = service._list_cloned_voices_sync()
 
@@ -375,13 +355,10 @@ class TestQwenTTSService:
 
             service = QwenTTSService()
 
-            with patch("urllib.request.urlopen") as mock_urlopen:
-                mock_response = Mock()
-                mock_response.read.return_value = bytes(
-                    '{"code": "Success", "output": {}}',
-                    "utf-8"
-                )
-                mock_urlopen.return_value.__enter__.return_value = mock_response
+            with patch("app.services.qwen_tts_service.VoiceEnrollmentService") as mock_cls:
+                mock_service = Mock()
+                mock_service.list_voices.return_value = []
+                mock_cls.return_value = mock_service
 
                 result = service._list_cloned_voices_sync()
 

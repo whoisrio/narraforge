@@ -1,6 +1,6 @@
 import os
 import re
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from pathlib import Path
 
 # 匹配 ${ENV_VAR} 或 ${ENV_VAR:-default} 格式
@@ -20,6 +20,8 @@ def _resolve_env_refs(value: str) -> str:
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     # App
     app_name: str = "NarraForge"
     debug: bool = True
@@ -84,9 +86,6 @@ class Settings(BaseSettings):
     log_file_max_bytes: int = 10 * 1024 * 1024  # 10MB
     log_backup_count: int = 7  # 保留 7 个备份
 
-    class Config:
-        env_file = ".env"
-
     def __init__(self, **kwargs):
         # 预处理 .env 值中的环境变量引用
         env_values = self._load_env_with_refs()
@@ -103,7 +102,12 @@ class Settings(BaseSettings):
     @classmethod
     def _load_env_with_refs(cls) -> dict:
         """读取 .env 文件并解析 ${ENV_VAR} 引用"""
-        env_file = Path(cls.Config.env_file)
+        configured_env_file = cls.model_config.get("env_file") or ".env"
+        if isinstance(configured_env_file, (list, tuple)):
+            configured_env_file = configured_env_file[0] if configured_env_file else ".env"
+        if not isinstance(configured_env_file, (str, Path)):
+            configured_env_file = ".env"
+        env_file = Path(configured_env_file)
         if not env_file.exists():
             return {}
 

@@ -35,6 +35,7 @@ class ChapterIn(BaseModel):
     default_params: dict[str, Any] = Field(default_factory=dict)
     split_config: dict[str, Any] = Field(default_factory=dict)
     original_text: str | None = None
+    design_title: str | None = None
     # P2 v2: 旁白文档关联 (可选, 旧数据为 None)
     narration_document_id: str | None = None
     narration_version: str | None = None
@@ -71,6 +72,7 @@ class ProjectIn(BaseModel):
     active_narration_version: str | None = None
     # P2 v3: 整体动画主题 (e.g. 'dark-botanical', 'tech-blueprint', 'warm-paper')
     animation_theme: str | None = None
+    remotion_project_path: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
     chapters: list[ChapterIn] = Field(default_factory=list)
@@ -89,6 +91,7 @@ class ProjectSummary(BaseModel):
     schema_version: int
     layout: str
     active_chapter_id: str | None
+    remotion_project_path: str | None = None
     created_at: str
     updated_at: str
 
@@ -102,6 +105,11 @@ class SynthesizeSegmentRequest(BaseModel):
     text: str | None = None
     ssml: str | None = None
     keep_previous: bool = True
+
+
+class ExportTextFileRequest(BaseModel):
+    filename: str
+    content: str
 
 
 class SplitRequest(BaseModel):

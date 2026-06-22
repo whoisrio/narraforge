@@ -16,6 +16,7 @@ from app.core.system_config_service import is_frontend_storage
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_result import TTSResultRecord
 from app.services.qwen_tts_service import get_tts_service, QwenTTSService
+from app.core.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -180,10 +181,10 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                         "speed": request.speed, "volume": request.volume,
                         "pitch": request.pitch, "instruction": request.instruction,
                     }
-                    seg.generated_at = datetime.utcnow()
-                    seg.updated_at = datetime.utcnow()
-                    seg.chapter.updated_at = datetime.utcnow()
-                    seg.chapter.project.updated_at = datetime.utcnow()
+                    seg.generated_at = utcnow()
+                    seg.updated_at = utcnow()
+                    seg.chapter.updated_at = utcnow()
+                    seg.chapter.project.updated_at = utcnow()
                     db.commit()
                     try:
                         os.remove(audio_path)
@@ -464,6 +465,7 @@ def synthesize_speech_internal(
     edge_voice: str | None = None,
     edge_rate: str | None = None,
     edge_volume: str | None = None,
+    db: Session | None = None,
 ) -> tuple[bytes, str]:
     """Synthesize for the segmented editor. Returns (audio_bytes, native_format).
 
@@ -493,8 +495,8 @@ def synthesize_speech_internal(
         from app.services.qwen_tts_service import get_tts_service
 
         async def _synthesize() -> bytes:
-            tts_service = await get_tts_service(db=None)
-            return await tts_service.synthesize_speech(
+            tts_service = await get_tts_service(db=db)
+            result = await tts_service.synthesize_speech(
                 voice_id=voice_id,
                 text=text,
                 instruction=instruction,
@@ -506,6 +508,9 @@ def synthesize_speech_internal(
                 enable_ssml=enable_ssml,
                 enable_markdown_filter=enable_markdown_filter,
             )
+            if isinstance(result, (str, os.PathLike)):
+                return Path(result).read_bytes()
+            return result
 
         return _run_async(_synthesize()), "wav"
 

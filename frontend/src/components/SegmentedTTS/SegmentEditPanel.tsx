@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Segment, SegmentEngineParams, EmotionType, VoiceProfile } from '../../types';
 import { ttsApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
+import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import styles from './SegmentEditPanel.module.css';
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
@@ -124,13 +125,18 @@ export function SegmentEditPanel({
     else if (field === 'voice_id') params.voice_id = value;
     else if (field === 'edge_voice') params.edge_voice = value;
     else if (field === 'mimo_preset_voice') params.mimo_preset_voice = value;
+    else if (field === 'mimo_clone_voice_id') params.mimo_clone_voice_id = value;
+    else if (field === 'mimo_instruction') params.mimo_instruction = value;
+    else if (field === 'voxcpm_style_control') params.voxcpm_style_control = value;
     else if (field === 'language') params.language = value;
     else if (field === 'instruction') params.instruction = value;
     onUpdateParams(segment.id, params);
 
     // Track overrides (skip engine switch)
     if (field !== 'engine') {
-      const overrideField = field === 'voice_id' || field === 'edge_voice' || field === 'mimo_preset_voice' ? 'voice' : field as any;
+      const overrideField = field === 'voice_id' || field === 'edge_voice' || field === 'mimo_preset_voice' || field === 'mimo_clone_voice_id'
+        ? 'voice'
+        : (field === 'mimo_instruction' || field === 'voxcpm_style_control' ? 'instruction' : field as any);
       if (onUpdateOverrides && !segment.overrides?.includes(overrideField)) {
         onUpdateOverrides(segment.id, [...(segment.overrides || []), overrideField]);
       }
@@ -352,16 +358,21 @@ export function SegmentEditPanel({
                 </div>
               )}
 
-              {/* Instruction (CosyVoice/MiMo) */}
-              {(isCosyVoice || isMiMo) && (
+              {/* Instruction (CosyVoice/MiMo/VoxCPM) */}
+              {(isCosyVoice || isMiMo || isVoxCPM) && (
                 <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                   <div className={styles.paramLabel}>
                     {segment.overrides?.includes('instruction') && <span className={styles.overrideDot} />}
-                    复刻指令
+                    风格指令
                     {segment.overrides?.includes('instruction') && <button className={styles.resetBtn} onClick={() => handleResetOverride('instruction')}>重置</button>}
                   </div>
-                  <input className={styles.paramInput} value={segment.params.instruction || ''}
-                    placeholder="跟随全局指令..." onChange={e => handleParamChange('instruction', e.target.value)} />
+                  <StyleInstructionPicker
+                    value={isMiMo ? (segment.params.mimo_instruction || '') : isVoxCPM ? (segment.params.voxcpm_style_control || '') : (segment.params.instruction || '')}
+                    onChange={value => handleParamChange(isMiMo ? 'mimo_instruction' : isVoxCPM ? 'voxcpm_style_control' : 'instruction', value)}
+                    label=""
+                    placeholder="跟随全局风格指令，或选择预设/直接输入..."
+                    dense
+                  />
                 </div>
               )}
             </div>

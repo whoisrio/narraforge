@@ -1,166 +1,133 @@
 """TTS API 集成测试"""
-import os
-import pytest
-from unittest.mock import patch, AsyncMock
+import threading
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
-from app.core.config import settings
+from app.core.system_config_service import set_storage_mode
+from app.models.voice_profile import VoiceProfile
+
+
+def _write_audio_file(tmp_path: Path, name: str = "audio.wav") -> str:
+    path = tmp_path / name
+    path.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
+    return str(path)
 
 
 class TestTTSAPI:
 
-    def test_synthesize_speech_success(self, client: TestClient, mock_tts_service):
-        mock_tts_service.synthesize_speech.return_value = b"synthesized_audio_data"
+    def test_synthesize_speech_success_frontend_storage(self, client: TestClient, mock_tts_service, tmp_path):
+        audio_path = _write_audio_file(tmp_path, "success.wav")
+        mock_tts_service.synthesize_speech.return_value = audio_path
 
         request_data = {
             "text": "Hello, this is a test for TTS synthesis.",
+            "voice_id": "cosyvoice-v3-test",
+            "instruction": "clear narration",
             "speed": 1.2,
             "volume": 85,
-            "pitch": 1,
-            "emotion": "happy",
-            "voice_id": "xiaoyun"
+            "pitch": 1.0,
         }
 
         response = client.post("/api/tts/synthesize", json=request_data)
         assert response.status_code == 200
         data = response.json()
 
-        assert "audio_id" in data
-        assert "audio_url" in data
-        assert data["text"] == "Hello, this is a test for TTS synthesis."
+        assert data["audio_id"] == "success"
+        assert "audio_base64" in data
+        assert data["audio_format"] == "wav"
+        assert data["text"] == request_data["text"]
         assert data["params"]["speed"] == 1.2
         assert data["params"]["volume"] == 85
-        assert data["params"]["pitch"] == 1
-        assert data["params"]["emotion"] == "happy"
-        assert data["params"]["voice_id"] == "xiaoyun"
+        assert data["params"]["pitch"] == 1.0
+        assert data["params"]["voice_id"] == "cosyvoice-v3-test"
 
         mock_tts_service.synthesize_speech.assert_called_once_with(
-            text="Hello, this is a test for TTS synthesis.",
-            voice_id="xiaoyun",
+            voice_id="cosyvoice-v3-test",
+            text=request_data["text"],
             speed=1.2,
             volume=85,
-            pitch=1,
+            pitch=1.0,
             format="wav",
-            sample_rate=16000
+            sample_rate=16000,
+            instruction="clear narration",
+            enable_ssml=False,
+            enable_markdown_filter=False,
         )
+        assert not Path(audio_path).exists()
 
-    def test_synthesize_speech_with_defaults(self, client: TestClient, mock_tts_service):
-        mock_tts_service.synthesize_speech.return_value = b"audio_data"
+    def test_synthesize_speech_requires_voice_id(self, client: TestClient, mock_tts_service):
+        response = client.post("/api/tts/synthesize", json={"text": "Test with defaults"})
+        assert response.status_code == 400
+        assert "voice_id" in response.json()["detail"]
 
-        request_data = {"text": "Test with defaults"}
+    def test_synthesize_speech_with_custom_voice(self, client: TestClient, mock_tts_service, tmp_path):
+        mock_tts_service.synthesize_speech.return_value = _write_audio_file(tmp_path, "custom.wav")
 
-        response = client.post("/api/tts/synthesize", json=request_data)
-        assert response.status_code == 200
-        data = response.json()
-
-        assert data["text"] == "Test with defaults"
-        assert data["params"]["speed"] == 1.0
-        assert data["params"]["volume"] == 80
-        assert data["params"]["pitch"] == 0
-        assert data["params"]["emotion"] == "neutral"
-        assert data["params"]["voice_id"] == "xiaoyun"
-
-        mock_tts_service.synthesize_speech.assert_called_once_with(
-            text="Test with defaults",
-            voice_id="xiaoyun",
-            speed=1.0,
-            volume=80,
-            pitch=0,
-            format="wav",
-            sample_rate=16000
-        )
-
-    def test_synthesize_speech_with_custom_voice(self, client: TestClient, mock_tts_service):
-        mock_tts_service.synthesize_speech.return_value = b"audio_data"
-
-        request_data = {
+        response = client.post("/api/tts/synthesize", json={
             "text": "Test with custom voice",
-            "voice_id": "xiaogang"
-        }
-
-        response = client.post("/api/tts/synthesize", json=request_data)
+            "voice_id": "xiaogang",
+        })
         assert response.status_code == 200
         data = response.json()
-
         assert data["params"]["voice_id"] == "xiaogang"
 
-        mock_tts_service.synthesize_speech.assert_called_once_with(
-            text="Test with custom voice",
-            voice_id="xiaogang",
-            speed=1.0,
-            volume=80,
-            pitch=0,
-            format="wav",
-            sample_rate=16000
-        )
+    def test_synthesize_speech_backend_storage_returns_audio_url(self, client: TestClient, db_session, mock_tts_service, tmp_path):
+        set_storage_mode(db_session, "backend")
+        db_session.commit()
+        audio_path = _write_audio_file(tmp_path, "backend.wav")
+        mock_tts_service.synthesize_speech.return_value = audio_path
 
-    def test_synthesize_speech_with_cloned_voice(self, client: TestClient, mock_tts_service):
-        """测试使用克隆声音的语音合成"""
-        mock_tts_service.clone_voice.return_value = b"cloned_audio_data"
-
-        request_data = {
-            "text": "Test with cloned voice",
-            "voice_id": "cosyvoice-clone-v2-testvoice"
-        }
-
-        response = client.post("/api/tts/synthesize", json=request_data)
+        response = client.post("/api/tts/synthesize", json={
+            "text": "Backend storage",
+            "voice_id": "cosyvoice-v3-test",
+        })
         assert response.status_code == 200
         data = response.json()
-
-        assert data["params"]["voice_id"] == "cosyvoice-clone-v2-testvoice"
-        assert data["params"]["is_cloned_voice"] is True
-
-        mock_tts_service.clone_voice.assert_called_once_with(
-            voice_id="cosyvoice-clone-v2-testvoice",
-            text="Test with cloned voice",
-            speed=1.0,
-            volume=80,
-            pitch=0,
-            format="wav",
-            sample_rate=16000
-        )
+        assert data["audio_id"] == "backend"
+        assert data["audio_url"] == "/api/tts/audio/backend"
+        assert "audio_base64" not in data
 
     def test_synthesize_speech_tts_service_error(self, client: TestClient, mock_tts_service):
         mock_tts_service.synthesize_speech.side_effect = Exception("TTS service error")
 
-        request_data = {
+        response = client.post("/api/tts/synthesize", json={
             "text": "Test error handling",
-            "voice_id": "xiaoyun"
-        }
-
-        response = client.post("/api/tts/synthesize", json=request_data)
+            "voice_id": "xiaoyun",
+        })
         assert response.status_code == 500
         data = response.json()
         assert "detail" in data
         assert "failed" in data["detail"].lower()
 
     def test_synthesize_speech_empty_text(self, client: TestClient):
-        """空文本 - FastAPI/Pydantic 不验证空字符串，API 会正常处理"""
-        request_data = {
+        response = client.post("/api/tts/synthesize", json={
             "text": "",
-            "voice_id": "xiaoyun"
-        }
-
-        response = client.post("/api/tts/synthesize", json=request_data)
-        # 当前 API 不验证空文本，返回 500（TTS 服务会失败）
-        # 如果加了验证则应为 422
+            "voice_id": "xiaoyun",
+        })
         assert response.status_code in [400, 422, 500]
 
-    def test_get_tts_audio_success(self, client: TestClient):
-        audio_id = "test_audio_123"
+    def test_get_tts_audio_success(self, client: TestClient, db_session, tmp_path):
+        from app.models.tts_result import TTSResultRecord
+
         audio_content = b"fake audio data"
-        audio_path = settings.voices_dir / f"tts_{audio_id}.wav"
-
+        audio_path = tmp_path / "test_audio.wav"
         audio_path.write_bytes(audio_content)
+        record = TTSResultRecord(
+            id="test_audio_123",
+            text="hello",
+            voice_id="v1",
+            voice_name="Voice",
+            audio_path=str(audio_path),
+            audio_format="wav",
+        )
+        db_session.add(record)
+        db_session.commit()
 
-        try:
-            response = client.get(f"/api/tts/audio/{audio_id}")
-            assert response.status_code == 200
-            assert response.headers["content-type"] == "audio/wav"
-            assert response.content == audio_content
-        finally:
-            if audio_path.exists():
-                audio_path.unlink()
+        response = client.get("/api/tts/audio/test_audio_123")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "audio/wav"
+        assert response.content == audio_content
 
     def test_get_tts_audio_not_found(self, client: TestClient):
         response = client.get("/api/tts/audio/nonexistent_audio")
@@ -169,85 +136,63 @@ class TestTTSAPI:
         assert "detail" in data
         assert "not found" in data["detail"].lower()
 
-    def test_list_available_voices(self, client: TestClient):
+    def test_list_available_voices_empty(self, client: TestClient):
         response = client.get("/api/tts/voices")
         assert response.status_code == 200
-        data = response.json()
+        assert response.json() == {"voices": []}
 
-        assert "voices" in data
-        voices = data["voices"]
-        assert isinstance(voices, list)
-        assert len(voices) > 0
+    def test_list_available_voices_with_cloned_qwen_voice(self, client: TestClient, db_session):
+        voice = VoiceProfile(
+            id="voice-row-1",
+            name="Narrator",
+            audio_path="/tmp/narrator.wav",
+            is_cloned=True,
+            qwen_voice_id="cosyvoice-v3-narrator",
+            clone_engine="qwen",
+        )
+        db_session.add(voice)
+        db_session.commit()
 
-        for voice in voices:
-            assert "id" in voice
-            assert "name" in voice
-            assert "gender" in voice
-
-        voice_ids = [v["id"] for v in voices]
-        assert "xiaoyun" in voice_ids
-        assert "xiaoyuan" in voice_ids
-        assert "ruoxi" in voice_ids
-        assert "xiaogang" in voice_ids
-        assert "yunjian" in voice_ids
-
-    def test_list_available_voices_structure(self, client: TestClient):
         response = client.get("/api/tts/voices")
-        data = response.json()
+        assert response.status_code == 200
+        voices = response.json()["voices"]
+        assert len(voices) == 1
+        assert voices[0]["id"] == "voice-row-1"
+        assert voices[0]["qwen_voice_id"] == "cosyvoice-v3-narrator"
+        assert voices[0]["clone_engine"] == "qwen"
 
-        xiaoyun = next(v for v in data["voices"] if v["id"] == "xiaoyun")
-        assert xiaoyun["name"] == "云溪"
-        assert xiaoyun["gender"] == "female"
-
-        xiaogang = next(v for v in data["voices"] if v["id"] == "xiaogang")
-        assert xiaogang["name"] == "小刚"
-        assert xiaogang["gender"] == "male"
-
-    def test_batch_synthesize_empty_segments(self, client: TestClient):
-        """测试空段落的批量合成"""
-        request_data = {
+    def test_batch_synthesize_requires_voice_id(self, client: TestClient):
+        response = client.post("/api/tts/batch", json={
             "segments": [],
             "speed": 1.0,
-            "volume": 80
-        }
+            "volume": 80,
+        })
+        assert response.status_code == 422
 
-        response = client.post("/api/tts/batch", json=request_data)
-        assert response.status_code == 200
-        data = response.json()
-        assert "segments" in data
-        assert len(data["segments"]) == 0
-
-    def test_concurrent_synthesize_requests(self, client: TestClient, mock_tts_service):
-        """测试并发语音合成请求"""
-        import threading
-
-        mock_tts_service.synthesize_speech.return_value = b"audio_data"
+    def test_concurrent_synthesize_requests(self, client: TestClient, mock_tts_service, tmp_path):
+        paths = [_write_audio_file(tmp_path, f"audio_{i}.wav") for i in range(5)]
+        mock_tts_service.synthesize_speech.side_effect = paths
 
         results = []
         errors = []
 
         def make_request(request_num):
             try:
-                request_data = {
+                response = client.post("/api/tts/synthesize", json={
                     "text": f"Concurrent request {request_num}",
-                    "voice_id": "xiaoyun"
-                }
-                response = client.post("/api/tts/synthesize", json=request_data)
+                    "voice_id": "xiaoyun",
+                })
                 results.append((request_num, response.status_code))
             except Exception as e:
                 errors.append((request_num, str(e)))
 
-        threads = []
-        for i in range(5):
-            thread = threading.Thread(target=make_request, args=(i,))
-            threads.append(thread)
+        threads = [threading.Thread(target=make_request, args=(i,)) for i in range(5)]
+        for thread in threads:
             thread.start()
-
         for thread in threads:
             thread.join()
 
         assert len(errors) == 0
         assert len(results) == 5
-
-        for request_num, status_code in results:
+        for _, status_code in results:
             assert status_code == 200

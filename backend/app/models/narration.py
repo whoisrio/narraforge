@@ -20,6 +20,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time_utils import utcnow
 
 
 class SourceDocument(Base):
@@ -45,7 +46,7 @@ class SourceDocument(Base):
     audio_path = Column(String, nullable=True)
     file_size = Column(Integer, nullable=True)
     duration_sec = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
 
     project = relationship("SegmentedProject")
 
@@ -86,7 +87,7 @@ class NarrationDocument(Base):
     prompt_hint = Column(Text, nullable=True)
     settings_json = Column(Text, nullable=False, default="{}")  # {target_chapters, target_words, language, engine}
     chapter_slices_json = Column(Text, nullable=True)  # JSON: [{chapter_index, title, start_char, end_char}]
-    generated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    generated_at = Column(DateTime, default=utcnow, nullable=False)
 
     project = relationship("SegmentedProject")
 

@@ -7,6 +7,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { mimoTtsApi, voiceApi } from '../../services/api';
+import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { MiMoPresetVoice, VoiceProfile as CloneVoice } from '../../types';
 import styles from './MiMoTTSPanel.module.css';
 
@@ -144,13 +145,11 @@ export function MiMoTTSPanel({
           )}
           {/* 风格指令 */}
           <div className={styles.field} style={{ marginTop: '0.75rem' }}>
-            <label>风格指令（可选）</label>
-            <textarea
-              className={styles.textarea}
-              placeholder="输入风格指令，如：用温柔的语调朗读，语速偏慢..."
+            <StyleInstructionPicker
               value={instruction}
-              onChange={(e) => onInstructionChange(e.target.value)}
-              rows={2}
+              onChange={onInstructionChange}
+              label="风格指令"
+              placeholder="选择预设，或直接输入新的风格指令..."
             />
           </div>
         </div>
@@ -186,13 +185,11 @@ export function MiMoTTSPanel({
           )}
           {/* 风格指令 */}
           <div className={styles.field} style={{ marginTop: '0.75rem' }}>
-            <label>风格指令（可选）</label>
-            <textarea
-              className={styles.textarea}
-              placeholder="输入风格指令，如：用欢快的语调朗读..."
+            <StyleInstructionPicker
               value={instruction}
-              onChange={(e) => onInstructionChange(e.target.value)}
-              rows={2}
+              onChange={onInstructionChange}
+              label="风格指令"
+              placeholder="选择预设，或直接输入新的风格指令..."
             />
           </div>
         </div>

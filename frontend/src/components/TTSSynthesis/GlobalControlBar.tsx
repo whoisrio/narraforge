@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ttsApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
+import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { VoiceProfile } from '../../types';
 import styles from './GlobalControlBar.module.css';
 
@@ -205,15 +206,13 @@ export function GlobalControlBar({
       {showAdvanced && (
         <div className={styles.advancedRow}>
           {onInstructionChange && (
-            <div className={styles.advancedSection}>
-              <span className={styles.paramLabel}>复刻指令</span>
-              <input
-                type="text"
-                className={styles.instructionInput}
+            <div className={styles.advancedSectionWide}>
+              <StyleInstructionPicker
                 value={instruction || ''}
-                maxLength={50}
-                placeholder="输入复刻指令..."
-                onChange={e => onInstructionChange(e.target.value)}
+                onChange={onInstructionChange}
+                label="风格指令"
+                placeholder="选择预设，或直接输入新的风格指令..."
+                dense
               />
             </div>
           )}

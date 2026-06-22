@@ -54,16 +54,15 @@ export function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
 /**
  * 检测音频开头/结尾的静音长度（采样数）
  * threshold: 低于此振幅视为静音（默认 0.01 ≈ -40dB）
- * minSilenceMs: 最小静音时长，低于此不裁剪（保留自然停顿）
+ * keepSamples: 保留的静音采样数，裁剪后至少留这么多
  */
 function detectSilenceBoundary(
   samples: Float32Array,
   sampleRate: number,
   fromEnd: boolean,
   threshold: number = 0.01,
-  minSilenceMs: number = 50,
+  keepSamples: number = 0,
 ): number {
-  const minSamples = Math.floor(sampleRate * minSilenceMs / 1000);
   let silenceEnd = 0;
 
   if (fromEnd) {
@@ -80,8 +79,9 @@ function detectSilenceBoundary(
     }
   }
 
-  // 只裁剪超过最小阈值的静音
-  return silenceEnd >= minSamples ? silenceEnd : 0;
+  // 裁剪后保留 keepSamples 个采样的静音
+  // 实际裁剪数 = 检测到的静音 - 保留数
+  return Math.max(0, silenceEnd - keepSamples);
 }
 
 /**
@@ -91,6 +91,7 @@ function trimBufferSilence(
   buf: AudioBuffer,
   targetSampleRate: number,
   threshold: number = 0.01,
+  keepMs: number = 80,
 ): { samples: Float32Array; trimmedStart: number; trimmedEnd: number } {
   // 先转 mono + 重采样
   const factor = targetSampleRate / buf.sampleRate;
@@ -113,8 +114,9 @@ function trimBufferSilence(
     resampled[i] = mono[lo] * (1 - frac) + mono[hi] * frac;
   }
 
-  const leadSamples = detectSilenceBoundary(resampled, targetSampleRate, false, threshold);
-  const trailSamples = detectSilenceBoundary(resampled, targetSampleRate, true, threshold);
+  const keepSamples = Math.floor(targetSampleRate * keepMs / 1000);
+  const leadSamples = detectSilenceBoundary(resampled, targetSampleRate, false, threshold, keepSamples);
+  const trailSamples = detectSilenceBoundary(resampled, targetSampleRate, true, threshold, keepSamples);
 
   const trimmed = resampled.slice(leadSamples, resampled.length - trailSamples);
   return { samples: trimmed, trimmedStart: leadSamples, trimmedEnd: trailSamples };
@@ -126,14 +128,16 @@ export interface ConcatOptions {
   trimSilence?: boolean;
   /** 静音阈值振幅（默认 0.01 ≈ -40dB） */
   silenceThreshold?: number;
-  /** 段落间保留的停顿时长（ms，默认 120） */
+  /** 首尾保留的停顿时长（ms，默认 80） */
+  keepMs?: number;
+  /** 段落间额外插入的静音时长（ms，默认 0，不额外加停顿） */
   gapMs?: number;
 }
 
 /**
  * 拼接多个 AudioBuffer：
- * 1. 裁剪每段首尾静音（可选）
- * 2. 段落间插入固定间隔（默认 120ms）
+ * 1. 裁剪每段首尾静音（首段保留更多，后续段落更激进）
+ * 2. 默认不额外插入段间静音，只保留裁剪后的自然边缘
  * 3. 升采样到 targetSampleRate
  */
 export function concatAudioBuffers(
@@ -144,7 +148,8 @@ export function concatAudioBuffers(
   const {
     trimSilence = true,
     silenceThreshold = 0.01,
-    gapMs = 120,
+    keepMs = 80,
+    gapMs = 0,
   } = options;
 
   const gapSamples = Math.floor(targetSampleRate * gapMs / 1000);
@@ -154,7 +159,8 @@ export function concatAudioBuffers(
   const processed: Float32Array[] = [];
   for (let i = 0; i < buffers.length; i++) {
     if (trimSilence) {
-      const { samples } = trimBufferSilence(buffers[i], targetSampleRate, silenceThreshold);
+      // Same keep for every segment; generation-time trim is the primary path.
+      const { samples } = trimBufferSilence(buffers[i], targetSampleRate, silenceThreshold, keepMs);
       processed.push(samples);
     } else {
       // 不裁剪，只做重采样

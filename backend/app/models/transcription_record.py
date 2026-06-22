@@ -3,6 +3,7 @@ from datetime import datetime
 import uuid
 
 from app.core.database import Base
+from app.core.time_utils import utcnow
 
 
 class TranscriptionRecord(Base):
@@ -16,4 +17,4 @@ class TranscriptionRecord(Base):
     language = Column(String, nullable=True)
     language_probability = Column(Float, default=0.0)
     model_size = Column(String, default="large-v3")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)

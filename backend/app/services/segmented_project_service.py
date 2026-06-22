@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,15 +14,18 @@ from sqlalchemy.orm import Session
 from app.core import segmented_assets as assets
 from app.core.audio_encoder import (
     AudioEncoderError,
+    concat_to_mp3,
     is_ffmpeg_available,
     probe_audio_duration,
     transcode_to_mp3,
+    trim_audio_silence_bytes,
 )
 from app.models.segmented_project import (
     SegmentedProject,
     SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
+from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
     ProjectDetail,
@@ -33,6 +38,10 @@ logger = logging.getLogger(__name__)
 
 
 # ----- helpers -----
+
+
+def _ends_with_sentence_period(text: str) -> bool:
+    return re.search(r"[。．\.](?:[”\"』」》）\)]*)\s*$", (text or "").strip()) is not None
 
 def _to_iso(value: datetime | None) -> str | None:
     if value is None:
@@ -82,6 +91,7 @@ def project_to_summary(p: SegmentedProject) -> ProjectSummary:
         schema_version=p.schema_version,
         layout=p.layout,
         active_chapter_id=p.active_chapter_id,
+        remotion_project_path=getattr(p, "remotion_project_path", None),
         created_at=_to_iso(p.created_at) or "",
         updated_at=_to_iso(p.updated_at) or "",
     )
@@ -146,6 +156,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 default_params=dp,
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
+                design_title=getattr(ch, "design_title", None),
                 # P2 v2: 旁白文档关联
                 narration_document_id=ch.narration_document_id,
                 narration_version=ch.narration_version,
@@ -165,6 +176,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         # Pyright 误判 Column[] 类型; 实际运行时值是 str | None
         active_narration_version=getattr(p, "active_narration_version", None),
         animation_theme=getattr(p, "animation_theme", None),
+        remotion_project_path=getattr(p, "remotion_project_path", None),
         created_at=_to_iso(p.created_at),
         updated_at=_to_iso(p.updated_at),
         chapters=chapters,
@@ -231,9 +243,10 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     setattr(p, "active_narration_version", project.active_narration_version)
     # P2 v3: 整体动画主题
     setattr(p, "animation_theme", project.animation_theme)
+    setattr(p, "remotion_project_path", project.remotion_project_path)
     if project.created_at:
         p.created_at = _parse_iso(project.created_at)
-    p.updated_at = datetime.utcnow()
+    p.updated_at = utcnow()
 
     # Chapters
     existing_chapters = {c.id: c for c in p.chapters}
@@ -249,6 +262,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.default_params = _merge_chapter_meta_to_params(ch_in)
         ch.split_config = ch_in.split_config or {}
         ch.original_text = ch_in.original_text
+        setattr(ch, "design_title", ch_in.design_title)
         # P2 v2: 旁白文档关联 (绕过 Pyright 对 Column[] 类型的过度严格检查)
         setattr(ch, "narration_document_id", ch_in.narration_document_id)
         setattr(ch, "narration_version", ch_in.narration_version)
@@ -257,7 +271,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         setattr(ch, "narration_synced_at", _parse_iso(ch_in.narration_synced_at))
         if ch_in.created_at:
             ch.created_at = _parse_iso(ch_in.created_at)
-        ch.updated_at = datetime.utcnow()
+        ch.updated_at = utcnow()
         keep_chapter_ids.add(ch_in.id)
 
         # Segments
@@ -294,7 +308,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
                 setattr(seg, "animation_spec_json", _dump_animation_spec(s_in.animation_spec))
             if s_in.created_at:
                 seg.created_at = _parse_iso(s_in.created_at)
-            seg.updated_at = datetime.utcnow()
+            seg.updated_at = utcnow()
             keep_segment_ids.add(s_in.id)
 
         # Remove orphan segments
@@ -388,7 +402,7 @@ def apply_animation_spec(
             v = it.get(key)
             if v is not None:
                 merged[key] = v
-        merged["generated_at"] = datetime.utcnow().isoformat()
+        merged["generated_at"] = utcnow().isoformat()
         setattr(seg, "animation_spec_json", _dump_animation_spec(merged))
         updated += 1
 
@@ -416,11 +430,11 @@ def update_segment_after_synth(
     seg.audio_format = audio_format
     seg.duration_sec = duration_sec
     seg.generated_params = generated_params
-    seg.generated_at = datetime.utcnow()
+    seg.generated_at = utcnow()
     seg.audio_missing = False
-    seg.updated_at = datetime.utcnow()
-    seg.chapter.updated_at = datetime.utcnow()
-    seg.chapter.project.updated_at = datetime.utcnow()
+    seg.updated_at = utcnow()
+    seg.chapter.updated_at = utcnow()
+    seg.chapter.project.updated_at = utcnow()
     db.flush()
     assets.write_segment_text(seg.project_id, seg.chapter_id, seg.id, seg.text or "")
     if seg.ssml is not None:
@@ -442,7 +456,7 @@ def _merge_params(*sources: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def synthesize_with_engine(
-    engine: str, text: str, params: dict[str, Any]
+    engine: str, text: str, params: dict[str, Any], db: Session | None = None
 ) -> tuple[bytes, str]:
     """Dispatch to the existing TTS service. Returns (audio_bytes, native_format)."""
     if engine == "edge_tts":
@@ -465,6 +479,7 @@ def synthesize_with_engine(
             enable_ssml=params.get("enable_ssml", False),
             enable_markdown_filter=params.get("enable_markdown_filter", False),
             language=params.get("language", "Chinese"),
+            db=db,
         )
     if engine == "mimo_tts":
         from app.api.mimo_tts import synthesize_mimo_internal
@@ -474,6 +489,20 @@ def synthesize_with_engine(
             preset_voice=params.get("mimo_preset_voice"),
             clone_voice_id=params.get("mimo_clone_voice_id"),
             instruction=params.get("mimo_instruction", ""),
+            db=db,
+        )
+    if engine == "voxcpm":
+        from app.api.voxcpm import synthesize_voxcpm_internal
+        return synthesize_voxcpm_internal(
+            text=text,
+            mode=params.get("voxcpm_mode", "tts"),
+            voice_id=params.get("voice_id", ""),
+            voice_description=params.get("voxcpm_voice_description", ""),
+            style_control=params.get("voxcpm_style_control", ""),
+            prompt_text=params.get("voxcpm_prompt_text"),
+            cfg_value=params.get("voxcpm_cfg_value", 2.0),
+            inference_timesteps=params.get("voxcpm_inference_timesteps", 10),
+            db=db,
         )
     raise ValueError(f"Unsupported engine: {engine}")
 
@@ -508,13 +537,26 @@ def synthesize_segment(
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
 
-    audio_bytes, _native_fmt = synthesize_with_engine(engine, text_to_speak, effective)
+    audio_bytes, _native_fmt = synthesize_with_engine(engine, text_to_speak, effective, db=db)
     assets.ensure_project_layout(project_id, chapter_id)
 
     prev_rel: str | None = seg.current_audio_path
 
     if is_ffmpeg_available():
         target_mp3 = assets.segment_audio_path(project_id, chapter_id, seg.id, "mp3")
+        # Store already-trimmed segment audio so single playback, play-all,
+        # and export share the same source audio. Default edge keep is 80ms;
+        # sentence-period endings keep 100ms at the tail.
+        leading_keep_ms = 80
+        trailing_keep_ms = 100 if _ends_with_sentence_period(str(text_to_speak)) else 80
+        try:
+            audio_bytes = trim_audio_silence_bytes(
+                audio_bytes,
+                leading_keep_ms=leading_keep_ms,
+                trailing_keep_ms=trailing_keep_ms,
+            )
+        except AudioEncoderError as e:
+            logger.warning("silence trim skipped for segment %s: %s", seg.id, e)
         transcode_to_mp3(audio_bytes, target_mp3)
         new_rel = target_mp3.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "mp3"
@@ -547,6 +589,90 @@ def synthesize_segment(
         duration_sec=duration_sec,
         generated_params=effective,
     )
+    return seg
+
+def export_chapter_audio_mp3(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+) -> Path:
+    """Export all ready backend-stored segment audio in a chapter as one MP3."""
+    chapter = get_chapter_row(db, project_id, chapter_id)
+    if chapter is None:
+        raise LookupError("chapter_not_found")
+    if not is_ffmpeg_available():
+        raise AudioEncoderError("ffmpeg is required to export mp3")
+
+    input_paths: list[Path] = []
+    base = assets.settings.segmented_dir.resolve()
+    for seg in sorted(chapter.segments, key=lambda s: s.position):
+        if not seg.current_audio_path or seg.audio_missing:
+            continue
+        abs_path = (assets.settings.segmented_dir / seg.current_audio_path).resolve()
+        if not abs_path.is_relative_to(base):
+            raise ValueError("invalid_audio_path")
+        if abs_path.exists():
+            input_paths.append(abs_path)
+        else:
+            seg.audio_missing = True
+
+    if not input_paths:
+        db.commit()
+        raise ValueError("no_ready_audio")
+
+    db.commit()
+    export_path = _chapter_audio_export_path(chapter, project_id, chapter_id)
+    return concat_to_mp3(input_paths, export_path)
+
+
+def _safe_filename_part(value: str) -> str:
+    text = (value or "").strip() or "chapter"
+    text = re.sub(r"[/\\:*?\"<>|\s]+", "_", text)
+    return text.strip("._") or "chapter"
+
+
+def _chapter_audio_export_path(
+    chapter: SegmentedProjectChapter,
+    project_id: str,
+    chapter_id: str,
+) -> Path:
+    project = chapter.project
+    title = str(getattr(chapter, "design_title", None) or chapter.name or chapter_id)
+    filename = f"{_safe_filename_part(title)}.mp3"
+    remotion_path = getattr(project, "remotion_project_path", None)
+    if remotion_path:
+        root = Path(remotion_path).expanduser()
+        public_audio = root / "public" / "audio"
+        if public_audio.exists() and public_audio.is_dir():
+            return public_audio / filename
+        if root.exists() and root.is_dir():
+            return root / filename
+    return assets.chapter_dir(project_id, chapter_id) / "exports" / filename
+
+
+def copy_file_to_remotion_export_target(
+    db: Session,
+    project_id: str,
+    source_path: Path,
+    filename: str,
+) -> Path:
+    project = get_project_row(db, project_id)
+    if project is None:
+        raise LookupError("project_not_found")
+    remotion_path = getattr(project, "remotion_project_path", None)
+    if not remotion_path:
+        raise ValueError("remotion_project_path_not_set")
+    root = Path(remotion_path).expanduser()
+    if not root.exists() or not root.is_dir():
+        raise ValueError("remotion_project_path_invalid")
+    public_audio = root / "public" / "audio"
+    target_dir = public_audio if public_audio.exists() and public_audio.is_dir() else root
+    safe_name = _safe_filename_part(filename.rsplit(".", 1)[0])
+    suffix = Path(filename).suffix or source_path.suffix
+    target = target_dir / f"{safe_name}{suffix}"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source_path, target)
+    return target
 
 
 # Files below this size (bytes) are treated as "definitely not real speech".

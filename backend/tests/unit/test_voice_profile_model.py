@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy.exc import IntegrityError
 
 from app.models.voice_profile import VoiceProfile
+from app.core.time_utils import utcnow
 
 
 class TestVoiceProfileModel:
@@ -82,7 +83,7 @@ class TestVoiceProfileModel:
             audio_path="/tmp/test_audio.wav",
             is_cloned=True,
             qwen_voice_id="cloned_voice_123",
-            cloned_at=datetime.utcnow(),
+            cloned_at=utcnow(),
         )
         db_session.add(voice)
         db_session.commit()
@@ -121,7 +122,7 @@ class TestVoiceProfileModel:
         voice.audio_path = "/tmp/updated_audio.wav"
         voice.is_cloned = True
         voice.qwen_voice_id = "updated_clone_id"
-        voice.cloned_at = datetime.utcnow()
+        voice.cloned_at = utcnow()
         db_session.commit()
 
         # 验证更新
@@ -170,7 +171,7 @@ class TestVoiceProfileModel:
     def test_voice_profile_created_at_auto_set(self, db_session):
         """测试 created_at 自动设置"""
         import time
-        before_create = datetime.utcnow()
+        before_create = utcnow()
         time.sleep(0.01)  # 确保时间不同
 
         voice = VoiceProfile(
@@ -182,7 +183,7 @@ class TestVoiceProfileModel:
         db_session.commit()
 
         time.sleep(0.01)
-        after_create = datetime.utcnow()
+        after_create = utcnow()
 
         assert voice.created_at is not None
         assert before_create < voice.created_at < after_create
