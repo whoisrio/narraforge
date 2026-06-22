@@ -73,4 +73,43 @@ describe('segmentGenerationInputs', () => {
     });
     expect(isSegmentAudioStale(segment, defaultParams)).toBe(false);
   });
+
+  it('is NOT stale for an unchanged ready Edge-TTS segment with mixed undefined engine fields', () => {
+    // Mirrors SegmentRow's defaultParamsForStale: follow-global edge segment
+    // carries undefined voice_id / mimo_* keys that generated_params omits.
+    const segment = makeSegment({
+      params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
+      generated_params: {
+        engine: 'edge_tts',
+        edge_voice: 'zh-CN-XiaoxiaoNeural',
+      },
+    });
+    const followGlobalParams = {
+      engine: 'edge_tts',
+      edge_voice: 'zh-CN-XiaoxiaoNeural',
+      voice_id: undefined,
+      mimo_mode: undefined,
+      mimo_preset_voice: undefined,
+      mimo_clone_voice_id: undefined,
+    } as unknown as SegmentEngineParams;
+    expect(isSegmentAudioStale(segment, followGlobalParams)).toBe(false);
+  });
+
+  it('IS stale when the global edge voice changes for a follow-global segment', () => {
+    // The segment generated with Xiaoxiao but the live global edge voice is now
+    // Yunjian. defaultParams (effective/follow-global) must win over the voice
+    // stored in segment.params at generation time.
+    const segment = makeSegment({
+      params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
+      generated_params: {
+        engine: 'edge_tts',
+        edge_voice: 'zh-CN-XiaoxiaoNeural',
+      },
+    });
+    const liveGlobalParams: SegmentEngineParams = {
+      engine: 'edge_tts',
+      edge_voice: 'zh-CN-YunjianNeural',
+    };
+    expect(isSegmentAudioStale(segment, liveGlobalParams)).toBe(true);
+  });
 });
