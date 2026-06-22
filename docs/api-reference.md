@@ -355,3 +355,15 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 - `GET    /api/segmented-projects/{id}/audio/{cid}/{sid}` — 读取分片 mp3
 - `POST   /api/segmented-projects/{id}/chapters/{cid}/split` — 文本分段（preview_only 或 replace_chapter_segments）
 - `POST   /api/segmented-projects/migrate` — 批量迁移 IndexedDB 项目
+
+#### 角色 / 局部语气字段（P3）
+
+项目与分片对象新增以下可选字段，用于多角色对话与子句级语气控制：
+
+- `default_narrator_role_id`：旁白段落默认使用的全局角色 ID。
+- `default_narrator_snapshot`：保存的旁白角色音色配置快照。
+- `segment.role_id`：对话或旁白分片关联的全局角色 ID。
+- `segment.role_snapshot`：分片生成时使用的角色音色配置快照（保证可复现）。
+- `segment.segment_kind`：分片类型，`dialogue`（台词）或 `narration`（旁白）。
+- `segment.prosody_marks`：子句级局部语气标注，每项含 `start`、`end`、`emotion`、`style_tags`、`instruction`、`intensity`。
+

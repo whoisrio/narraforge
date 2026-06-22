@@ -530,6 +530,35 @@ def svc_get_segment(
     return seg
 
 
+def plan_prosody_subsegments(text: str, marks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Split text into plain and marked ranges for engines that need fallback generation."""
+    normalized = sorted(
+        [mark for mark in marks if isinstance(mark.get("start"), int) and isinstance(mark.get("end"), int)],
+        key=lambda mark: mark["start"],
+    )
+    parts: list[dict[str, Any]] = []
+    cursor = 0
+    text_length = len(text)
+    for mark in normalized:
+        start = max(0, min(mark["start"], text_length))
+        end = max(start, min(mark["end"], text_length))
+        if start > cursor:
+            parts.append({"text": text[cursor:start], "prosody": None})
+        if end > start:
+            parts.append({"text": text[start:end], "prosody": mark})
+        cursor = max(cursor, end)
+    if cursor < text_length:
+        parts.append({"text": text[cursor:], "prosody": None})
+    return [part for part in parts if part["text"]]
+
+
+def should_use_split_fallback(engine: str, prosody_marks: list[dict[str, Any]]) -> bool:
+    """Whether an engine needs the split-and-concat fallback for local prosody marks."""
+    if not prosody_marks:
+        return False
+    return engine == "edge_tts"
+
+
 def synthesize_segment(
     db: Session,
     project_id: str,
@@ -562,6 +591,12 @@ def synthesize_segment(
 
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
+
+    if should_use_split_fallback(engine, prosody_marks):
+        # First version keeps UI and metadata ready for split fallback while continuing
+        # to generate one segment audio. The dedicated concat execution can replace
+        # this branch without changing API or stored fields.
+        effective["prosody_split_plan"] = plan_prosody_subsegments(text_to_speak, prosody_marks)
 
     audio_bytes, _native_fmt = synthesize_with_engine(engine, text_to_speak, effective, db=db)
     assets.ensure_project_layout(project_id, chapter_id)

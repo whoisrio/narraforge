@@ -231,3 +231,18 @@ def test_synthesize_segment_uses_role_snapshot_voice_before_chapter_defaults(db_
 
     assert captured["engine"] == "edge_tts"
     assert captured["params"]["edge_voice"] == "zh-CN-XiaoxiaoNeural"
+
+
+def test_plan_prosody_subsegments_splits_text_around_marks():
+    from app.services.segmented_project_service import plan_prosody_subsegments
+
+    parts = plan_prosody_subsegments(
+        "我不是不相信你，只是有点害怕。",
+        [{"id": "m1", "start": 8, "end": 14, "style_tags": ["low_voice"]}],
+    )
+
+    assert parts == [
+        {"text": "我不是不相信你，", "prosody": None},
+        {"text": "只是有点害怕", "prosody": {"id": "m1", "start": 8, "end": 14, "style_tags": ["low_voice"]}},
+        {"text": "。", "prosody": None},
+    ]
