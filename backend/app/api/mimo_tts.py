@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.system_config_service import is_frontend_storage
 from app.models.tts_result import TTSResultRecord
 from app.services.mimo_tts_service import get_mimo_tts_service
+from app.core.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -122,10 +123,10 @@ async def _save_and_respond(
                 "engine": "mimo_tts", "voice_id": voice_label,
                 "instruction": instruction,
             }
-            seg.generated_at = datetime.utcnow()
-            seg.updated_at = datetime.utcnow()
-            seg.chapter.updated_at = datetime.utcnow()
-            seg.chapter.project.updated_at = datetime.utcnow()
+            seg.generated_at = utcnow()
+            seg.updated_at = utcnow()
+            seg.chapter.updated_at = utcnow()
+            seg.chapter.project.updated_at = utcnow()
             db.commit()
             try:
                 os.remove(audio_path)
@@ -346,12 +347,37 @@ def synthesize_mimo_internal(
     preset_voice: str | None = None,
     clone_voice_id: str | None = None,
     instruction: str = "",
+    db: Session | None = None,
 ) -> tuple[bytes, str]:
     """Synthesize for the segmented editor. Returns (audio_bytes, native_format)."""
-    import io
-    import wave
-    buf = io.BytesIO()
-    with wave.open(buf, "wb") as w:
-        w.setparams((1, 2, 16000, 0, "NONE", "NONE"))
-        w.writeframes(b"\x00\x00" * int(16000 * 0.05))
-    return buf.getvalue(), "wav"
+    import asyncio
+
+    async def _run() -> bytes:
+        service = await get_mimo_tts_service(db)
+        if mimo_mode == "voiceclone":
+            if not clone_voice_id:
+                raise ValueError("MiMo voiceclone mode requires clone_voice_id")
+            from app.models.voice_profile import VoiceProfile
+
+            if db is None:
+                raise ValueError("MiMo voiceclone mode requires db session")
+            voice = db.query(VoiceProfile).filter(VoiceProfile.id == clone_voice_id).first()
+            if not voice:
+                raise ValueError("声音记录不存在")
+            audio_path = getattr(voice, "audio_path", None)
+            if not audio_path or not os.path.exists(str(audio_path)):
+                raise ValueError("音频文件不存在")
+            return await service.clone_from_file(
+                text=text,
+                audio_path=str(audio_path),
+                instruction=instruction,
+                format="wav",
+            )
+        return await service.synthesize_preset(
+            text=text,
+            voice=preset_voice or "冰糖",
+            instruction=instruction,
+            format="wav",
+        )
+
+    return asyncio.run(_run()), "wav"

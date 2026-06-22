@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.time_utils import utcnow
 from app.models.narration import NarrationDocument
 from app.models.segmented_project import SegmentedProject
 from app.schemas.segmented_project import (
@@ -193,7 +194,7 @@ def generate_narration(
         ch.narration_version = version
         ch.narration_slice_start = slice_data["start_char"]
         ch.narration_slice_end = slice_data["end_char"]
-        ch.narration_synced_at = datetime.utcnow()
+        ch.narration_synced_at = utcnow()
 
     # 7. 设 project.active_narration_version
     setattr(proj, "active_narration_version", version)

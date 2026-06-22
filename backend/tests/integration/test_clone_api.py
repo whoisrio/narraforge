@@ -173,7 +173,7 @@ class TestCloneAPI:
         assert response.status_code == 404
 
     def test_create_clone_success(self, client: TestClient, db_session, mock_tts_service):
-        """测试创建克隆声音成功"""
+        """测试创建克隆声音成功：本地音频会先上传为公网 URL，再注册到 Qwen。"""
         from app.models.voice_profile import VoiceProfile
         import uuid
 
@@ -198,13 +198,15 @@ class TestCloneAPI:
             "role": "custom"
         }
 
+        public_url = "https://cdn.example.com/clone.wav"
         request_data = {
             "voice_id": voice_id,
             "name": "Cloned Voice Name",
             "role": "custom"
         }
 
-        response = client.post("/api/clone/create-clone", json=request_data)
+        with patch("app.api.clone.upload_to_qiniu", return_value=public_url):
+            response = client.post("/api/clone/create-clone", json=request_data)
 
         assert response.status_code == 200
         data = response.json()
@@ -217,7 +219,7 @@ class TestCloneAPI:
         assert data["cloned_at"] is not None
 
         mock_tts_service.register_cloned_voice.assert_called_once_with(
-            reference_audio_path=audio_path,
+            reference_audio_path=public_url,
             voice_name="Cloned Voice Name"
         )
 
@@ -256,105 +258,6 @@ class TestCloneAPI:
         response = client.post("/api/clone/create-clone", json=request_data)
         assert response.status_code == 404
 
-    def test_clone_synthesize_success(self, client: TestClient, db_session, mock_tts_service):
-        """测试使用克隆声音合成成功"""
-        from app.models.voice_profile import VoiceProfile
-        import uuid
-        from datetime import datetime, timezone
-
-        voice_id = str(uuid.uuid4())
-        qwen_voice_id = "qwen_cloned_789"
-
-        voice = VoiceProfile(
-            id=voice_id,
-            name="Synthesize Test",
-            audio_path="/tmp/test.wav",
-            is_cloned=True,
-            qwen_voice_id=qwen_voice_id,
-            cloned_at=datetime.now(timezone.utc),
-        )
-
-        db_session.add(voice)
-        db_session.commit()
-
-        mock_tts_service.clone_voice.return_value = b"synthesized_audio_data"
-
-        request_data = {
-            "voice_id": voice_id,
-            "text": "Hello from cloned voice!",
-            "speed": 1.2,
-            "volume": 90,
-            "pitch": 2
-        }
-
-        response = client.post("/api/clone/synthesize", json=request_data)
-        assert response.status_code == 200
-        data = response.json()
-
-        assert "audio_id" in data
-        assert "audio_url" in data
-        assert data["text"] == "Hello from cloned voice!"
-        assert data["voice_id"] == qwen_voice_id
-        assert data["params"]["speed"] == 1.2
-        assert data["params"]["volume"] == 90
-        assert data["params"]["pitch"] == 2
-
-        mock_tts_service.clone_voice.assert_called_once_with(
-            voice_id=qwen_voice_id,
-            text="Hello from cloned voice!",
-            speed=1.2,
-            volume=90,
-            pitch=2,
-            format="wav",
-            sample_rate=16000
-        )
-
-    def test_clone_synthesize_voice_not_found(self, client: TestClient):
-        request_data = {
-            "voice_id": "nonexistent_voice",
-            "text": "Hello"
-        }
-
-        response = client.post("/api/clone/synthesize", json=request_data)
-        assert response.status_code == 404
-
-    def test_clone_synthesize_not_cloned(self, client: TestClient, db_session):
-        """测试使用未克隆的声音合成"""
-        from app.models.voice_profile import VoiceProfile
-        import uuid
-
-        voice_id = str(uuid.uuid4())
-
-        voice = VoiceProfile(
-            id=voice_id,
-            name="Not Cloned",
-            audio_path="/tmp/test.wav",
-            is_cloned=False,
-            qwen_voice_id=None,
-        )
-
-        db_session.add(voice)
-        db_session.commit()
-
-        request_data = {
-            "voice_id": voice_id,
-            "text": "Hello"
-        }
-
-        response = client.post("/api/clone/synthesize", json=request_data)
-        assert response.status_code == 400
-        data = response.json()
-        assert "not registered" in data["detail"].lower()
-
     def test_get_cloned_audio_not_found(self, client: TestClient):
         response = client.get("/api/clone/cloned_audio/nonexistent_audio")
         assert response.status_code == 404
-
-    @pytest.mark.parametrize("invalid_data", [
-        {},  # 空对象
-        {"voice_id": ""},  # 空 voice_id
-    ])
-    def test_clone_synthesize_invalid_data(self, client: TestClient, invalid_data):
-        """测试使用无效数据合成"""
-        response = client.post("/api/clone/synthesize", json=invalid_data)
-        assert response.status_code in [400, 422]

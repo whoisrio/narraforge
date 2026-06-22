@@ -4,6 +4,7 @@ import uuid
 import enum
 
 from app.core.database import Base
+from app.core.time_utils import utcnow
 
 
 class ModelProvider(str, enum.Enum):
@@ -32,4 +33,4 @@ class TTSConfig(Base):
     pitch = Column(Float, default=1.0)  # 音调比率 0.5-2.0
     emotion = Column(SQLEnum(Emotion), default=Emotion.NEUTRAL)
     is_default = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)

@@ -28,6 +28,7 @@ from app.core.system_config_service import is_frontend_storage
 from app.models.tts_result import TTSResultRecord
 from app.models.voice_profile import VoiceProfile
 from app.services.voxcpm_service import get_voxcpm_service
+from app.core.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,7 @@ async def _save_and_respond(
         pitch=1.0,
         instruction=f"voxcpm_{engine_mode}",
         language="",
-        created_at=datetime.utcnow(),
+        created_at=utcnow(),
     )
     db.add(record)
     db.commit()
@@ -178,6 +179,83 @@ async def _save_and_respond(
 
 
 # ============ 端点 ============
+
+
+def synthesize_voxcpm_internal(
+    text: str,
+    mode: str = "tts",
+    voice_id: str = "",
+    voice_description: str = "",
+    style_control: str = "",
+    prompt_text: Optional[str] = None,
+    cfg_value: float = 2.0,
+    inference_timesteps: int = 10,
+    db: Session | None = None,
+) -> tuple[bytes, str]:
+    """Synchronous bridge used by segmented-project synthesis."""
+    import asyncio
+    from app.core.database import SessionLocal
+
+    async def _run(session: Session) -> bytes:
+        service = await get_voxcpm_service()
+        if not service.loaded:
+            load_result = await service.load_model()
+            if not load_result.get("success"):
+                raise RuntimeError(f"模型加载失败: {load_result.get('error')}")
+
+        if mode == "design":
+            if not voice_description:
+                raise ValueError("design 模式需要 voice_description")
+            return await service.synthesize(
+                text=f"({voice_description}){text}",
+                mode="design",
+                cfg_value=cfg_value,
+                inference_timesteps=inference_timesteps,
+            )
+
+        if mode == "clone":
+            audio_path = _resolve_voice_audio_path(voice_id, session)
+            return await service.synthesize(
+                text=text,
+                mode="clone",
+                reference_audio_path=audio_path,
+                style_control=style_control or None,
+                cfg_value=cfg_value,
+                inference_timesteps=inference_timesteps,
+            )
+
+        if mode == "ultimate":
+            audio_path = _resolve_voice_audio_path(voice_id, session)
+            voice = session.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
+            stored_prompt = getattr(voice, "prompt_text", None) if voice else None
+            effective_prompt = prompt_text or (stored_prompt if isinstance(stored_prompt, str) else None)
+            if not effective_prompt:
+                raise ValueError("ultimate 模式需要 prompt_text")
+            return await service.synthesize(
+                text=text,
+                mode="ultimate",
+                reference_audio_path=audio_path,
+                prompt_text=effective_prompt,
+                style_control=style_control or None,
+                cfg_value=cfg_value,
+                inference_timesteps=inference_timesteps,
+            )
+
+        return await service.synthesize(
+            text=text,
+            mode="tts",
+            cfg_value=cfg_value,
+            inference_timesteps=inference_timesteps,
+        )
+
+    if db is not None:
+        return asyncio.run(_run(db)), "wav"
+
+    session = SessionLocal()
+    try:
+        return asyncio.run(_run(session)), "wav"
+    finally:
+        session.close()
 
 
 @router.get("/status")

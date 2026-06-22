@@ -1,11 +1,8 @@
-from fastapi.testclient import TestClient
-from unittest.mock import patch, Mock
-
-from main import app
+from app.core.system_config_service import set_storage_mode
 
 
-def test_transcribe_success(client, sample_audio_file, mock_voice_to_srt):
-    """测试语音转字幕成功"""
+def test_transcribe_success_frontend_storage(client, sample_audio_file, mock_voice_to_srt):
+    """默认 frontend storage：返回内容，不落后端下载 URL。"""
     with open(sample_audio_file, "rb") as f:
         response = client.post(
             "/api/speech-to-text/transcribe",
@@ -15,16 +12,14 @@ def test_transcribe_success(client, sample_audio_file, mock_voice_to_srt):
     assert response.status_code == 200
     data = response.json()
     assert "file_id" in data
-    assert "content" in data
-    assert "filename" in data
-    assert "language" in data
-    assert "language_probability" in data
-    assert "download_url" in data
-    assert data["download_url"].startswith("/api/speech-to-text/download/")
+    assert data["content"].startswith("1\n00:00:01,000")
+    assert data["filename"] == "test_20260521_143052.srt"
+    assert data["language"] == "en"
+    assert data["language_probability"] == 0.98
+    assert data["download_url"] is None
 
 
 def test_transcribe_unsupported_format(client):
-    """测试上传不支持的文件格式"""
     response = client.post(
         "/api/speech-to-text/transcribe",
         files={"file": ("test.txt", b"hello", "text/plain")},
@@ -33,20 +28,17 @@ def test_transcribe_unsupported_format(client):
 
 
 def test_download_not_found(client):
-    """测试下载不存在的文件"""
     response = client.get("/api/speech-to-text/download/nonexistent-id")
     assert response.status_code == 404
 
 
 def test_history_empty_initially(client, mock_voice_to_srt):
-    """测试初始状态下历史记录为空"""
     response = client.get("/api/speech-to-text/history")
     assert response.status_code == 200
     assert response.json() == {"results": []}
 
 
-def test_transcribe_creates_history_record(client, mock_voice_to_srt, sample_audio_file):
-    """测试转录成功后创建历史记录"""
+def test_frontend_storage_does_not_create_history_record(client, mock_voice_to_srt, sample_audio_file):
     with open(sample_audio_file, "rb") as f:
         response = client.post(
             "/api/speech-to-text/transcribe",
@@ -54,6 +46,24 @@ def test_transcribe_creates_history_record(client, mock_voice_to_srt, sample_aud
             data={"model_size": "large-v3", "beam_size": "5"},
         )
     assert response.status_code == 200
+
+    response = client.get("/api/speech-to-text/history")
+    assert response.status_code == 200
+    assert response.json()["results"] == []
+
+
+def test_backend_storage_creates_history_record(client, db_session, mock_voice_to_srt, sample_audio_file):
+    set_storage_mode(db_session, "backend")
+    db_session.commit()
+
+    with open(sample_audio_file, "rb") as f:
+        response = client.post(
+            "/api/speech-to-text/transcribe",
+            files={"file": ("test.wav", f, "audio/wav")},
+            data={"model_size": "large-v3", "beam_size": "5"},
+        )
+    assert response.status_code == 200
+    assert response.json()["download_url"].startswith("/api/speech-to-text/download/")
 
     response = client.get("/api/speech-to-text/history")
     assert response.status_code == 200
@@ -65,8 +75,10 @@ def test_transcribe_creates_history_record(client, mock_voice_to_srt, sample_aud
     assert record["model_size"] == "large-v3"
 
 
-def test_delete_history_record(client, mock_voice_to_srt, sample_audio_file):
-    """测试删除历史记录"""
+def test_delete_history_record(client, db_session, mock_voice_to_srt, sample_audio_file):
+    set_storage_mode(db_session, "backend")
+    db_session.commit()
+
     with open(sample_audio_file, "rb") as f:
         response = client.post(
             "/api/speech-to-text/transcribe",
@@ -86,13 +98,14 @@ def test_delete_history_record(client, mock_voice_to_srt, sample_audio_file):
 
 
 def test_delete_nonexistent_record(client, mock_voice_to_srt):
-    """测试删除不存在的历史记录"""
     response = client.delete("/api/speech-to-text/history/nonexistent-id")
     assert response.status_code == 404
 
 
-def test_history_limit_enforced(client, mock_voice_to_srt, sample_audio_file):
-    """测试历史记录数量限制为10条"""
+def test_history_limit_enforced(client, db_session, mock_voice_to_srt, sample_audio_file):
+    set_storage_mode(db_session, "backend")
+    db_session.commit()
+
     for _ in range(11):
         with open(sample_audio_file, "rb") as f:
             response = client.post(

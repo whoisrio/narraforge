@@ -4,6 +4,7 @@ from datetime import datetime
 import uuid
 
 from app.core.database import Base
+from app.core.time_utils import utcnow
 
 
 class VoiceProfile(Base):
@@ -37,4 +38,4 @@ class VoiceProfile(Base):
     # 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
     prompt_text = Column(String, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)

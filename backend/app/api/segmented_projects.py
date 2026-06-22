@@ -4,12 +4,14 @@ from __future__ import annotations
 import base64
 import logging
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core import segmented_assets as assets
+from app.core.audio_encoder import AudioEncoderError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.segmented_assets import project_dir
@@ -17,6 +19,7 @@ from app.schemas.segmented_project import (
     AnimationSpecItem,
     ApplyAnimationSpecRequest,
     ApplyAnimationSpecResult,
+    ExportTextFileRequest,
     MigrateAudioItem,
     MigrateRequest,
     MigrateResponse,
@@ -30,6 +33,7 @@ from app.schemas.segmented_project import (
     SynthesizeSegmentRequest,
 )
 from app.services import segmented_project_service as svc
+from app.core.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -159,6 +163,62 @@ def get_segment_audio(
     return FileResponse(abs_path, media_type=media_type)
 
 
+@router.get(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/export-audio"
+)
+def export_chapter_audio(
+    project_id: str,
+    chapter_id: str,
+    db: Session = Depends(get_db),
+):
+    try:
+        audio_path = svc.export_chapter_audio_mp3(db, project_id, chapter_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    except AudioEncoderError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        detail = str(e) or "export_failed"
+        status = 400 if detail == "invalid_audio_path" else 409
+        raise HTTPException(status_code=status, detail=detail)
+    filename = audio_path.name
+    return FileResponse(audio_path, media_type="audio/mpeg", filename=filename)
+
+
+@router.post(
+    "/segmented-projects/{project_id}/export-text-file-to-remotion"
+)
+def export_text_file_to_remotion(
+    project_id: str,
+    body: ExportTextFileRequest,
+    db: Session = Depends(get_db),
+):
+    import tempfile
+    suffix = Path(body.filename).suffix or ".txt"
+    with tempfile.NamedTemporaryFile("w", suffix=suffix, encoding="utf-8", delete=False) as f:
+        tmp_path = Path(f.name)
+        f.write(body.content)
+    try:
+        target = svc.copy_file_to_remotion_export_target(
+            db,
+            project_id=project_id,
+            source_path=tmp_path,
+            filename=body.filename,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"copy_failed: {e}")
+    finally:
+        try:
+            tmp_path.unlink()
+        except FileNotFoundError:
+            pass
+    return {"path": str(target)}
+
+
 # ----- split -----
 
 @router.post(
@@ -198,12 +258,21 @@ def split_chapter(
         id=proj.id, name=proj.name, schema_version=proj.schema_version,
         layout=proj.layout, active_chapter_id=proj.active_chapter_id,
         original_text=proj.original_text,
+        active_narration_version=getattr(proj, "active_narration_version", None),
+        animation_theme=getattr(proj, "animation_theme", None),
+        remotion_project_path=getattr(proj, "remotion_project_path", None),
         chapters=[
             {
                 "id": c.id, "position": c.position, "name": c.name,
                 "engine": c.engine, "default_params": c.default_params or {},
                 "split_config": c.split_config or {},
                 "original_text": c.original_text,
+                "design_title": getattr(c, "design_title", None),
+                "narration_document_id": getattr(c, "narration_document_id", None),
+                "narration_version": getattr(c, "narration_version", None),
+                "narration_slice_start": getattr(c, "narration_slice_start", None),
+                "narration_slice_end": getattr(c, "narration_slice_end", None),
+                "narration_synced_at": svc._to_iso(getattr(c, "narration_synced_at", None)),
                 "segments": (
                     [
                         {
@@ -288,7 +357,7 @@ def _write_audio_blob(
     rel = target.relative_to(settings.segmented_dir).as_posix()
     seg.current_audio_path = rel
     seg.audio_format = "mp3"
-    seg.updated_at = datetime.utcnow()
-    seg.chapter.updated_at = datetime.utcnow()
-    seg.chapter.project.updated_at = datetime.utcnow()
+    seg.updated_at = utcnow()
+    seg.chapter.updated_at = utcnow()
+    seg.chapter.project.updated_at = utcnow()
     db.commit()

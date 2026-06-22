@@ -4,7 +4,6 @@ import { VoiceClone } from './pages/VoiceClone';
 import { TTSSynthesis } from './pages/TTSSynthesis';
 import { SpeechToText } from './pages/SpeechToText';
 import { ModelConfig } from './pages/ModelConfig';
-import { SourceLibrary } from './pages/SourceLibrary';
 import { configApi } from './services/api';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/useVoiceRefresh';
@@ -13,7 +12,7 @@ import styles from './App.module.css';
 
 /** 页面状态：主页 或 三个工具页 + 设置 */
 type Page = 'home';
-type Tab = 'source-library' | 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config';
+type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config';
 type View = Page | Tab;
 
 /** 导航栏 + 主题切换 */
@@ -42,19 +41,6 @@ function AppHeader({
       </button>
 
       <nav className={styles.tabs}>
-        <button
-          data-testid="tab-source-library"
-          className={`${styles.tab} ${activeTab === 'source-library' ? styles.active : ''}`}
-          onClick={() => onTabClick('source-library')}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-            <path d="M9 7h7"/>
-            <path d="M9 11h5"/>
-          </svg>
-          素材库
-        </button>
         <button
           data-testid="tab-tts-synthesis"
           className={`${styles.tab} ${activeTab === 'tts-synthesis' ? styles.active : ''}`}
@@ -152,8 +138,8 @@ function useStorageModeContext() {
 
 /** 应用主体 */
 function AppContent() {
-  const [activeView, setActiveView] = useState<View>('source-library');
-  const [activeTab, setActiveTab] = useState<Tab>('source-library');
+  const [activeView, setActiveView] = useState<View>('tts-synthesis');
+  const [activeTab, setActiveTab] = useState<Tab>('tts-synthesis');
   const [storageMode, setStorageMode] = useState<StorageMode>('frontend');
 
   useEffect(() => {
@@ -200,9 +186,6 @@ function AppContent() {
         {!isHome && (
             <VoiceRefreshProvider>
               <main className={styles.main}>
-                <div style={{ display: activeTab === 'source-library' ? 'block' : 'none' }}>
-                  <SourceLibrary />
-                </div>
                 <div style={{ display: activeTab === 'tts-synthesis' ? 'block' : 'none' }}>
                   <TTSSynthesis onNavigateToClone={() => handleTabClick('voice-clone')} />
                 </div>

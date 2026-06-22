@@ -5,10 +5,14 @@
 
 /** 裁剪参数 */
 export interface TrimOptions {
-  /** 静音阈值振幅，低于此视为静音（默认 0.01 ≈ -40dB） */
+  /** 静音阈值振幅，低于此视为静音（默认 0.003 ≈ -50dB，避免裁掉弱起声） */
   threshold?: number;
-  /** 保留的最小静音时长（ms），裁剪后仍保留这么长的自然停顿 */
+  /** 兼容旧调用：首尾都保留的静音时长（ms） */
   keepMs?: number;
+  /** 开头保留的静音时长（ms）；未设置时使用 keepMs */
+  leadingKeepMs?: number;
+  /** 结尾保留的静音时长（ms）；未设置时使用 keepMs */
+  trailingKeepMs?: number;
 }
 
 /**
@@ -19,10 +23,13 @@ export function trimAudioBufferSilence(
   buffer: AudioBuffer,
   options: TrimOptions = {},
 ): AudioBuffer {
-  const { threshold = 0.01, keepMs = 80 } = options;
+  const { threshold = 0.003, keepMs = 80 } = options;
+  const leadingKeepMs = options.leadingKeepMs ?? keepMs;
+  const trailingKeepMs = options.trailingKeepMs ?? keepMs;
   const ctx = new OfflineAudioContext(1, 1, buffer.sampleRate);
   const sr = buffer.sampleRate;
-  const keepSamples = Math.floor(sr * keepMs / 1000);
+  const leadingKeepSamples = Math.floor(sr * leadingKeepMs / 1000);
+  const trailingKeepSamples = Math.floor(sr * trailingKeepMs / 1000);
 
   // 取 mono
   const raw = buffer.numberOfChannels > 1
@@ -41,9 +48,9 @@ export function trimAudioBufferSilence(
     if (Math.abs(raw[i]) > threshold) { trailStart = i + 1; break; }
   }
 
-  // 保留 keepSamples 的自然停顿
-  const trimStart = Math.max(0, leadEnd - keepSamples);
-  const trimEnd = Math.min(raw.length, trailStart + keepSamples);
+  // 分别保留开头/结尾的自然停顿
+  const trimStart = Math.max(0, leadEnd - leadingKeepSamples);
+  const trimEnd = Math.min(raw.length, trailStart + trailingKeepSamples);
 
   if (trimStart === 0 && trimEnd === raw.length) return buffer; // 无需裁剪
 

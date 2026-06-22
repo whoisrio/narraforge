@@ -32,6 +32,9 @@ function toEdgeFormat(value: number) {
   return value >= 0 ? `+${value}%` : `${value}%`;
 }
 
+function endsWithSentencePeriod(text: string): boolean {
+  return /[。．\.](?:[”"』」》）\)]*)\s*$/.test(text.trim());
+}
 
 function createScratchpadProject(): SegmentedProject {
   const project = createInitialProject();
@@ -217,11 +220,14 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         edge_rate: edgeRate, edge_volume: edgeVolume,
         mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice,
         mimo_instruction: mimoInstruction, mimo_clone_voice_id: mimoCloneVoiceId,
+        voxcpm_mode: voxcpmMode, voxcpm_voice_description: voxcpmVoiceDescription,
+        voxcpm_style_control: voxcpmStyleControl, voxcpm_prompt_text: voxcpmPromptText,
+        voxcpm_cfg_value: voxcpmCfgValue, voxcpm_inference_timesteps: voxcpmInferenceTimesteps,
         language: params.language, speed: params.speed,
         volume: params.volume, pitch: params.pitch, panel_open: panelOpen,
       },
     });
-  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
+  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmVoiceDescription, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
     setToast({ message, type });
@@ -249,6 +255,12 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setMimoPresetVoice(ch.mimo_preset_voice || '冰糖');
     setMimoInstruction(ch.mimo_instruction || '');
     setMimoCloneVoiceId(ch.mimo_clone_voice_id || '');
+    setVoxcpmMode((ch.voxcpm_mode as VoxCPMMode) || 'tts');
+    setVoxcpmVoiceDescription(ch.voxcpm_voice_description || '');
+    setVoxcpmStyleControl(ch.voxcpm_style_control || '');
+    setVoxcpmPromptText(ch.voxcpm_prompt_text || '');
+    setVoxcpmCfgValue(ch.voxcpm_cfg_value ?? 2.0);
+    setVoxcpmInferenceTimesteps(ch.voxcpm_inference_timesteps ?? 10);
     setParams({ language: (ch.language as any) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
     setPanelOpen(ch.panel_open ?? true);
   }, []);
@@ -335,6 +347,12 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setMimoPresetVoice('冰糖');
     setMimoInstruction('');
     setMimoCloneVoiceId('');
+    setVoxcpmMode('tts');
+    setVoxcpmVoiceDescription('');
+    setVoxcpmStyleControl('');
+    setVoxcpmPromptText('');
+    setVoxcpmCfgValue(2.0);
+    setVoxcpmInferenceTimesteps(10);
     setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
     setPanelOpen(true);
   }, []);
@@ -507,6 +525,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
+    const segIdx = activeChapter.segments.findIndex(s => s.id === id);
     dispatch({ type: 'GENERATE_START', id });
     try {
       const sp = seg.params;
@@ -534,14 +553,14 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : ((gp as any).mimo_mode || 'preset');
       const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : ((gp as any).mimo_preset_voice || '');
       const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : ((gp as any).mimo_clone_voice_id || '');
-      const effectiveMimoInstruction = hasVoiceLock ? sp.mimo_instruction : ((gp as any).mimo_instruction || '');
+      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : ((gp as any).mimo_instruction || '');
 
       // VoxCPM: locked → stored; unlocked → current global
       const effectiveVoxcpmMode = hasVoiceLock ? (sp.voxcpm_mode || 'tts') : ((gp as any).voxcpm_mode || 'tts');
       const effectiveVoxcpmCfg = hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : ((gp as any).voxcpm_cfg_value ?? 2.0);
       const effectiveVoxcpmTimesteps = hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : ((gp as any).voxcpm_inference_timesteps ?? 10);
       const effectiveVoxcpmDesc = hasVoiceLock ? (sp.voxcpm_voice_description || '') : ((gp as any).voxcpm_voice_description || '');
-      const effectiveVoxcpmStyle = hasVoiceLock ? (sp.voxcpm_style_control || '') : ((gp as any).voxcpm_style_control || '');
+      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : ((gp as any).voxcpm_style_control || '');
       const effectiveVoxcpmPrompt = hasVoiceLock ? (sp.voxcpm_prompt_text || '') : ((gp as any).voxcpm_prompt_text || '');
 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
@@ -588,6 +607,14 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           requestParams.mimo_preset_voice = effectiveMimoPreset;
           requestParams.mimo_clone_voice_id = effectiveMimoCloneId;
           requestParams.mimo_instruction = effectiveMimoInstruction;
+        } else if (effectiveEngine === 'voxcpm') {
+          requestParams.voice_id = voiceId;
+          requestParams.voxcpm_mode = effectiveVoxcpmMode;
+          requestParams.voxcpm_cfg_value = effectiveVoxcpmCfg;
+          requestParams.voxcpm_inference_timesteps = effectiveVoxcpmTimesteps;
+          requestParams.voxcpm_voice_description = effectiveVoxcpmDesc;
+          requestParams.voxcpm_style_control = effectiveVoxcpmStyle;
+          requestParams.voxcpm_prompt_text = effectiveVoxcpmPrompt;
         } else {
           requestParams.voice_id = voiceId;
           requestParams.speed = speed;
@@ -622,6 +649,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           current_audio_path: updatedSeg?.current_audio_path,
           previous_audio_path: updatedSeg?.previous_audio_path,
           audio_format: updatedSeg?.audio_format ?? 'mp3',
+          duration_sec: updatedSeg?.duration_sec,
           generated_params: updatedSeg?.generated_params,
         });
         return;
@@ -647,15 +675,19 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         resp = await ttsApi.synthesize({ text: textToSend, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
-      // Auto-trim leading/trailing silence
+      // Auto-trim leading/trailing silence:
+      // - Default: keep 80ms natural edge
+      // - Sentence period ending: keep 100ms trailing edge
       let audioBase64 = resp.audio_base64;
       let fmt = resp.audio_format || 'mp3';
       try {
-        const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(resp.audio_base64);
+        const leadingKeepMs = 80;
+        const trailingKeepMs = endsWithSentencePeriod(textToSend) ? 100 : 80;
+        const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(resp.audio_base64, { leadingKeepMs, trailingKeepMs });
         if (trimmedMs > 0) {
           audioBase64 = trimmedBase64;
           fmt = 'wav'; // trim outputs WAV
-          console.log(`Trimmed ${trimmedMs}ms silence from segment`);
+          console.log(`Trimmed ${trimmedMs}ms silence from segment #${segIdx + 1} (leading=${leadingKeepMs}ms, trailing=${trailingKeepMs}ms)`);
         }
       } catch (trimErr) { console.warn('Silence trim skipped:', trimErr); }
       const bytes = atob(audioBase64);

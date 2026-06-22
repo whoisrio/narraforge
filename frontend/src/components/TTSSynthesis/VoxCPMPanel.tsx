@@ -9,6 +9,7 @@
  */
 import { useState, useEffect, useCallback } from 'react';
 import { voxcpmApi, voiceApi } from '../../services/api';
+import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { VoxCPMStatus, VoiceProfile as CloneVoice } from '../../types';
 import styles from './VoxCPMPanel.module.css';
 
@@ -244,14 +245,12 @@ export function VoxCPMPanel({
               <span className={styles.hint}>已加载 {voices.length} 个声音 | 当前: {selectedVoiceId || '未选择'}</span>
             </div>
             <div className={styles.fieldGroup}>
-              <label className={styles.label}>
-                风格控制 <span className={styles.optional}>（可选）</span>
-              </label>
-              <input
-                className={styles.input}
+              <StyleInstructionPicker
                 value={styleControl}
-                onChange={e => onStyleControlChange(e.target.value)}
-                placeholder="如：语速稍快，欢快的语气..."
+                onChange={onStyleControlChange}
+                label="风格指令"
+                placeholder="选择预设，或直接输入新的风格指令..."
+                dense
               />
             </div>
           </>
@@ -292,14 +291,12 @@ export function VoxCPMPanel({
               <span className={styles.hint}>已加载 {voices.length} 个声音</span>
             </div>
             <div className={styles.fieldGroup}>
-              <label className={styles.label}>
-                风格控制 <span className={styles.optional}>（可选）</span>
-              </label>
-              <input
-                className={styles.input}
+              <StyleInstructionPicker
                 value={styleControl}
-                onChange={e => onStyleControlChange(e.target.value)}
-                placeholder="如：语速稍快，欢快的语气..."
+                onChange={onStyleControlChange}
+                label="风格指令"
+                placeholder="选择预设，或直接输入新的风格指令..."
+                dense
               />
             </div>
           </>

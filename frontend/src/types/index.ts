@@ -300,6 +300,13 @@ export interface Chapter {
   mimo_instruction?: string;
   /** MiMo clone voice profile ID */
   mimo_clone_voice_id?: string;
+  /** VoxCPM params */
+  voxcpm_mode?: string;
+  voxcpm_voice_description?: string;
+  voxcpm_style_control?: string;
+  voxcpm_prompt_text?: string;
+  voxcpm_cfg_value?: number;
+  voxcpm_inference_timesteps?: number;
   /** CosyVoice params */
   language?: string;
   speed?: number;
@@ -309,6 +316,8 @@ export interface Chapter {
   panel_open?: boolean;
   /** 原始输入文本（拆分前） */
   original_text?: string;
+  /** 给 Remotion / 视觉设计使用的章节标题，可独立于朗读章节名 */
+  design_title?: string;
   segments: Segment[];
   selected_segment_id?: string;
   default_params: SegmentEngineParams;
@@ -329,6 +338,8 @@ export interface SegmentedProject {
   layout: 'vertical' | 'horizontal';
   // P2 v2: 旁白文档当前活跃版本 (e.g. 'v2.1')
   active_narration_version?: string | null;
+  /** 默认关联的 Remotion 项目路径；导出文件优先写入其 public/audio */
+  remotion_project_path?: string | null;
   created_at: string;
   updated_at: string;
 }

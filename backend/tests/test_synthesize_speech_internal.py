@@ -69,8 +69,6 @@ def test_cosyvoice_bridge_invokes_tts_service():
     with patch("app.services.qwen_tts_service.get_tts_service") as get_svc:
         svc = MagicMock()
         svc.synthesize_speech = AsyncMock(return_value=fake_wav)
-        get_svc.return_value = AsyncMock(return_value=svc)()
-
         # Build a coroutine that get_tts_service returns
         async def fake_get_tts_service(db=None):
             return svc
@@ -91,6 +89,32 @@ def test_cosyvoice_bridge_invokes_tts_service():
     assert result_bytes == fake_wav
     assert result_fmt == "wav"
     assert len(result_bytes) > 50, "must not be the old 50ms silence stub"
+
+
+def test_cosyvoice_bridge_reads_path_returned_by_service(tmp_path):
+    """CosyVoice service returns a downloaded audio file path; the segmented bridge must return bytes."""
+    from app.api.tts import synthesize_speech_internal
+
+    fake_wav = _wav_bytes(duration_ms=500)
+    audio_path = tmp_path / "cosyvoice.wav"
+    audio_path.write_bytes(fake_wav)
+
+    with patch("app.services.qwen_tts_service.get_tts_service") as get_svc:
+        svc = MagicMock()
+        svc.synthesize_speech = AsyncMock(return_value=str(audio_path))
+
+        async def fake_get_tts_service(db=None):
+            return svc
+        get_svc.side_effect = fake_get_tts_service
+
+        result_bytes, result_fmt = synthesize_speech_internal(
+            text="a long test sentence",
+            voice_id="my-cloned-voice-123",
+            instruction="clear narration",
+        )
+
+    assert result_bytes == fake_wav
+    assert result_fmt == "wav"
 
 
 def test_bridge_raises_when_no_voice_provided():

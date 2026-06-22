@@ -21,6 +21,12 @@ function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
     mimo_preset_voice: defaultParams.mimo_preset_voice,
     mimo_instruction: defaultParams.mimo_instruction,
     mimo_clone_voice_id: defaultParams.mimo_clone_voice_id,
+    voxcpm_mode: defaultParams.voxcpm_mode,
+    voxcpm_voice_description: defaultParams.voxcpm_voice_description,
+    voxcpm_style_control: defaultParams.voxcpm_style_control,
+    voxcpm_prompt_text: defaultParams.voxcpm_prompt_text,
+    voxcpm_cfg_value: defaultParams.voxcpm_cfg_value,
+    voxcpm_inference_timesteps: defaultParams.voxcpm_inference_timesteps,
     language: defaultParams.language,
     speed: defaultParams.speed,
     volume: defaultParams.volume,
@@ -106,6 +112,12 @@ export function migrateV1(raw: any): SegmentedProject {
     mimo_preset_voice: raw.mimo_preset_voice,
     mimo_instruction: raw.mimo_instruction,
     mimo_clone_voice_id: raw.mimo_clone_voice_id,
+    voxcpm_mode: raw.voxcpm_mode,
+    voxcpm_voice_description: raw.voxcpm_voice_description,
+    voxcpm_style_control: raw.voxcpm_style_control,
+    voxcpm_prompt_text: raw.voxcpm_prompt_text,
+    voxcpm_cfg_value: raw.voxcpm_cfg_value,
+    voxcpm_inference_timesteps: raw.voxcpm_inference_timesteps,
     language: raw.language,
     speed: raw.speed,
     volume: raw.volume,
@@ -171,7 +183,7 @@ export type Action =
   // Per-chapter settings
   | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
-  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
+  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
@@ -314,7 +326,7 @@ export function segmentedReducer(state: State, action: Action): State {
             const idx = overrides.indexOf(field);
             if (idx >= 0) overrides.splice(idx, 1);
           };
-          const voiceParam = action.params.voice_id ?? action.params.edge_voice ?? action.params.mimo_preset_voice;
+          const voiceParam = action.params.voice_id ?? action.params.edge_voice ?? action.params.mimo_preset_voice ?? action.params.mimo_clone_voice_id;
           if (voiceParam !== undefined) {
             if (voiceParam) addOverride('voice');
             else removeOverride('voice');
@@ -322,7 +334,11 @@ export function segmentedReducer(state: State, action: Action): State {
           if (action.params.speed !== undefined) addOverride('speed');
           if (action.params.volume !== undefined) addOverride('volume');
           if (action.params.pitch !== undefined) addOverride('pitch');
-          if (action.params.instruction !== undefined) addOverride('instruction');
+          const instructionParam = action.params.instruction ?? action.params.mimo_instruction ?? action.params.voxcpm_style_control;
+          if (instructionParam !== undefined) {
+            if (instructionParam) addOverride('instruction');
+            else removeOverride('instruction');
+          }
           if (action.params.language !== undefined) addOverride('language');
           seg.overrides = overrides;
           seg.updated_at = new Date().toISOString();

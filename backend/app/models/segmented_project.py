@@ -18,6 +18,7 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.core.database import Base
+from app.core.time_utils import utcnow
 
 
 class SegmentedProject(Base):
@@ -33,9 +34,11 @@ class SegmentedProject(Base):
     active_narration_version = Column(String, nullable=True)
     # P2 v3: 整体动画主题 (e.g. 'dark-botanical', 'tech-blueprint', 'warm-paper')
     animation_theme = Column(String, nullable=True)
+    # 默认关联的 Remotion 项目路径；导出音频优先写入其 public/audio 目录
+    remotion_project_path = Column(String, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     chapters = relationship(
         "SegmentedProjectChapter",
@@ -63,6 +66,7 @@ class SegmentedProjectChapter(Base):
     default_params = Column(JSON, nullable=False, default=dict)
     split_config = Column(JSON, nullable=False, default=dict)
     original_text = Column(String, nullable=True)
+    design_title = Column(String, nullable=True)
     # P2 v2: 旁白文档关联
     narration_document_id = Column(
         String,
@@ -74,8 +78,8 @@ class SegmentedProjectChapter(Base):
     narration_slice_end = Column(Integer, nullable=True)
     narration_synced_at = Column(DateTime, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     project = relationship("SegmentedProject", back_populates="chapters")
     segments = relationship(
@@ -120,8 +124,8 @@ class SegmentedProjectSegment(Base):
     # P2 v3: 完整动画规格 JSON (visual_concept / layout / phases / animations / emphasis ...)
     animation_spec_json = Column(Text, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     chapter = relationship("SegmentedProjectChapter", back_populates="segments")
 
