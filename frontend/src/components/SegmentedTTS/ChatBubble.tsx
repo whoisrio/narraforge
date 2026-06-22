@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { EmotionType, Role, Segment } from '../../types';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import styles from './ChatBubble.module.css';
@@ -11,6 +12,7 @@ interface ChatBubbleProps {
   onSelect: (id: string) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
+  onTextSelection: (segmentId: string, start: number, end: number, text: string) => void;
 }
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
@@ -31,7 +33,22 @@ function voiceLabel(segment: Segment): string {
   return '未选择音色';
 }
 
-export function ChatBubble({ segment, index, role, isSelected, isPlaying, onSelect, onRegenerate, onPlay }: ChatBubbleProps) {
+function renderMarkedText(segment: Segment): ReactNode {
+  const text = segment.text || '空台词';
+  const marks = [...(segment.prosody_marks ?? [])].sort((a, b) => a.start - b.start);
+  if (marks.length === 0) return text;
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  for (const mark of marks) {
+    if (mark.start > cursor) parts.push(<span key={`plain-${cursor}`}>{text.slice(cursor, mark.start)}</span>);
+    parts.push(<mark key={mark.id} className={styles.prosodyMark}>{text.slice(mark.start, mark.end)}</mark>);
+    cursor = Math.max(cursor, mark.end);
+  }
+  if (cursor < text.length) parts.push(<span key={`plain-${cursor}`}>{text.slice(cursor)}</span>);
+  return parts;
+}
+
+export function ChatBubble({ segment, index, role, isSelected, isPlaying, onSelect, onRegenerate, onPlay, onTextSelection }: ChatBubbleProps) {
   const roleName = role?.name ?? segment.role_snapshot?.name ?? '未命名角色';
   const emotion = (segment.emotion ?? 'neutral') as EmotionType;
   return (
@@ -48,7 +65,20 @@ export function ChatBubble({ segment, index, role, isSelected, isPlaying, onSele
           <span>#{String(index).padStart(2, '0')} · {roleName}</span>
           <span>{segment.params.engine} · {voiceLabel(segment)}</span>
         </header>
-        <p className={styles.text}>{segment.text || '空台词'}</p>
+        <p
+          className={styles.text}
+          onMouseUp={(event) => {
+            const selection = window.getSelection();
+            const selected = selection?.toString() ?? '';
+            if (!selection || selected.length === 0) return;
+            const start = segment.text.indexOf(selected);
+            if (start < 0) return;
+            event.stopPropagation();
+            onTextSelection(segment.id, start, start + selected.length, selected);
+          }}
+        >
+          {renderMarkedText(segment)}
+        </p>
         <footer className={styles.footer}>
           <span>{EMOTION_LABELS[emotion]}</span>
           <span>{segment.prosody_marks?.length ?? 0} 个局部语气</span>

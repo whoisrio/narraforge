@@ -1237,6 +1237,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                   onAppend={handleAppendByKind}
                   onRegenerate={handleRegenerate}
                   onPlay={handlePlaySegment}
+                  onUpdateProsodyMarks={(id, prosodyMarks) => dispatch({ type: 'UPDATE_PROSODY_MARKS', id, prosodyMarks })}
                 />
               ) : (
               <SegmentList

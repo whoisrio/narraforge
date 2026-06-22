@@ -43,3 +43,11 @@
 .emoCalm { background: rgba(196, 225, 207, 0.35); }
 .emoNeutral { background: rgba(255, 255, 255, 0.68); }
 .emoExcited { background: rgba(255, 216, 172, 0.42); }
+
+.prosodyMark {
+  border-radius: 5px;
+  padding: 1px 3px;
+  background: rgba(196, 122, 58, 0.2);
+  color: inherit;
+  border-bottom: 2px solid #c47a3a;
+}

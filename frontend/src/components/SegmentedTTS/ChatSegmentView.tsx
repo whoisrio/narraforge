@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import type { Role, Segment, SegmentKind } from '../../types';
 import { ChatBubble } from './ChatBubble';
 import { NarrationBlock } from './NarrationBlock';
+import { ProsodyMarkEditor } from './ProsodyMarkEditor';
 import styles from './ChatSegmentView.module.css';
 
 interface ChatSegmentViewProps {
@@ -13,6 +15,7 @@ interface ChatSegmentViewProps {
   onAppend: (kind: SegmentKind) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
+  onUpdateProsodyMarks: (id: string, marks: NonNullable<Segment['prosody_marks']>) => void;
 }
 
 export function ChatSegmentView({
@@ -25,7 +28,14 @@ export function ChatSegmentView({
   onAppend,
   onRegenerate,
   onPlay,
+  onUpdateProsodyMarks,
 }: ChatSegmentViewProps) {
+  const [selection, setSelection] = useState<{ segmentId: string; start: number; end: number; text: string } | null>(null);
+
+  const handleTextSelection = (segmentId: string, start: number, end: number, text: string) => {
+    setSelection({ segmentId, start, end, text });
+  };
+
   return (
     <div className={styles.root}>
       {!hasNarratorVoice && (
@@ -43,6 +53,7 @@ export function ChatSegmentView({
                 isSelected={segment.id === selectedId}
                 hasNarratorVoice={hasNarratorVoice}
                 onSelect={onSelect}
+                onTextSelection={handleTextSelection}
               />
             );
           }
@@ -57,10 +68,22 @@ export function ChatSegmentView({
               onSelect={onSelect}
               onRegenerate={onRegenerate}
               onPlay={onPlay}
+              onTextSelection={handleTextSelection}
             />
           );
         })}
       </div>
+      <ProsodyMarkEditor
+        selection={selection}
+        onCancel={() => setSelection(null)}
+        onSave={(mark) => {
+          if (!selection) return;
+          const segment = segments.find(item => item.id === selection.segmentId);
+          const marks = [...(segment?.prosody_marks ?? []), mark];
+          onUpdateProsodyMarks(selection.segmentId, marks);
+          setSelection(null);
+        }}
+      />
       <div className={styles.actions}>
         <button type="button" onClick={() => onAppend('dialogue')}>+ 新增台词</button>
         <button type="button" onClick={() => onAppend('narration')}>+ 新增旁白</button>
