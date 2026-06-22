@@ -9,6 +9,7 @@ from app.models.segmented_project import (
     SegmentedProjectSegment,
 )
 from app.models.narration import SourceDocument, NarrationDocument
+from app.models.role import Role
 
 __all__ = [
     "VoiceProfile",
@@ -23,4 +24,5 @@ __all__ = [
     "SegmentedProjectSegment",
     "SourceDocument",
     "NarrationDocument",
+    "Role",
 ]

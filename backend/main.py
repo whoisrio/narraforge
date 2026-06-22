@@ -92,7 +92,7 @@ def health():
 
 
 # Import and include routers
-from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm, model_config, text_split, segmented_projects, voxcpm, sources, narrations
+from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm, model_config, text_split, segmented_projects, voxcpm, sources, narrations, roles
 
 app.include_router(clone.router, prefix="/api/clone", tags=["voice-clone"])
 app.include_router(tts.router, prefix="/api/tts", tags=["tts"])
@@ -106,3 +106,4 @@ app.include_router(segmented_projects.router, prefix="/api", tags=["segmented-pr
 app.include_router(voxcpm.router, prefix="/api/voxcpm", tags=["voxcpm"])
 app.include_router(sources.router, prefix="/api", tags=["sources"])
 app.include_router(narrations.router, prefix="/api", tags=["narrations"])
+app.include_router(roles.router, prefix="/api", tags=["roles"])
