@@ -59,3 +59,11 @@
   color: inherit;
   border-bottom: 2px solid #c47a3a;
 }
+
+.stale {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #fff0e8;
+  color: #a33;
+  font-weight: 700;
+}

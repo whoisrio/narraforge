@@ -9,6 +9,7 @@ interface ChatBubbleProps {
   role?: Role;
   isSelected: boolean;
   isPlaying: boolean;
+  isStale?: boolean;
   onSelect: (id: string) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
@@ -48,7 +49,7 @@ function renderMarkedText(segment: Segment): ReactNode {
   return parts;
 }
 
-export function ChatBubble({ segment, index, role, isSelected, isPlaying, onSelect, onRegenerate, onPlay, onTextSelection }: ChatBubbleProps) {
+export function ChatBubble({ segment, index, role, isSelected, isPlaying, isStale, onSelect, onRegenerate, onPlay, onTextSelection }: ChatBubbleProps) {
   const roleName = role?.name ?? segment.role_snapshot?.name ?? '未命名角色';
   const emotion = (segment.emotion ?? 'neutral') as EmotionType;
   return (
@@ -82,6 +83,7 @@ export function ChatBubble({ segment, index, role, isSelected, isPlaying, onSele
         <footer className={styles.footer}>
           <span>{EMOTION_LABELS[emotion]}</span>
           <span>{segment.prosody_marks?.length ?? 0} 个局部语气</span>
+          {isStale && <span className={styles.stale}>需重新生成</span>}
           <button type="button" onClick={(event) => { event.stopPropagation(); onPlay(segment.id); }}>{isPlaying ? '播放中' : '播放'}</button>
           <button type="button" onClick={(event) => { event.stopPropagation(); onRegenerate(segment.id); }}>生成</button>
         </footer>

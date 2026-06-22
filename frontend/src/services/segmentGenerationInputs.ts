@@ -43,8 +43,13 @@ export function isSegmentAudioStale(segment: Segment, defaultParams: SegmentEngi
     return false;
   }
   const current = buildSegmentGenerationInputs(segment, defaultParams);
+  // Normalize defaults so legacy audio whose generated_params predates the
+  // role/prosody fields is not falsely marked stale. Missing role_id /
+  // role_snapshot default to null, matching buildSegmentGenerationInputs.
   const generated = {
     ...segment.generated_params,
+    role_id: (segment.generated_params.role_id as string | null | undefined) ?? null,
+    role_snapshot: (segment.generated_params.role_snapshot as Segment['role_snapshot']) ?? null,
     prosody_marks: (segment.generated_params.prosody_marks as unknown[] | undefined) ?? [],
     segment_kind: (segment.generated_params.segment_kind as string | undefined) ?? 'narration',
   };

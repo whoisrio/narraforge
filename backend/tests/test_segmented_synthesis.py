@@ -178,3 +178,56 @@ def test_synthesize_segment_records_role_and_prosody_inputs(db_session, tmp_path
     assert generated["role_id"] == "role-linxia"
     assert generated["role_snapshot"]["name"] == "林夏"
     assert generated["prosody_marks"][0]["id"] == "mark-1"
+
+
+def test_synthesize_segment_uses_role_snapshot_voice_before_chapter_defaults(db_session, tmp_path, monkeypatch):
+    from unittest.mock import patch
+
+    from app.core import config
+    from app.schemas.segmented_project import ProjectIn
+    from app.services.segmented_project_service import save_project, synthesize_segment
+
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    project = ProjectIn(
+        id="p-priority",
+        name="Priority",
+        schema_version=2,
+        layout="vertical",
+        chapters=[{
+            "id": "c1",
+            "position": 0,
+            "name": "第一章",
+            "engine": "edge_tts",
+            "default_params": {"engine": "edge_tts", "edge_voice": "zh-CN-YunjianNeural"},
+            "split_config": {"delimiters": ["。"], "mode": "rule"},
+            "segments": [{
+                "id": "s1",
+                "position": 0,
+                "text": "你好",
+                "params": {"engine": "edge_tts"},
+                "role_snapshot": {
+                    "id": "role-linxia",
+                    "name": "林夏",
+                    "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+                },
+            }],
+        }],
+    )
+    save_project(db_session, project)
+    db_session.commit()
+
+    captured: dict[str, object] = {}
+
+    def fake_synth(engine, text, params, db=None):
+        captured["engine"] = engine
+        captured["params"] = params
+        return b"RIFF\x00\x00\x00\x00WAVEfmt ", "wav"
+
+    with patch("app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
+        "app.services.segmented_project_service.synthesize_with_engine",
+        side_effect=fake_synth,
+    ):
+        synthesize_segment(db_session, "p-priority", "c1", "s1")
+
+    assert captured["engine"] == "edge_tts"
+    assert captured["params"]["edge_voice"] == "zh-CN-XiaoxiaoNeural"

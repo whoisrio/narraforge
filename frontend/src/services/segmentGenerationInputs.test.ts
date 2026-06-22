@@ -63,4 +63,14 @@ describe('segmentGenerationInputs', () => {
     });
     expect(isSegmentAudioStale(segment, defaultParams)).toBe(false);
   });
+
+  it('keeps legacy audio fresh when generated params predate role/prosody fields', () => {
+    const segment = makeSegment({
+      generated_params: {
+        engine: 'edge_tts',
+        edge_voice: 'zh-CN-XiaoxiaoNeural',
+      },
+    });
+    expect(isSegmentAudioStale(segment, defaultParams)).toBe(false);
+  });
 });

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Role, Segment, SegmentKind } from '../../types';
+import { isSegmentAudioStale } from '../../services/segmentGenerationInputs';
 import { ChatBubble } from './ChatBubble';
 import { NarrationBlock } from './NarrationBlock';
 import { ProsodyMarkEditor } from './ProsodyMarkEditor';
@@ -65,6 +66,7 @@ export function ChatSegmentView({
               role={roles.find(role => role.id === segment.role_id)}
               isSelected={segment.id === selectedId}
               isPlaying={segment.id === playingId}
+              isStale={isSegmentAudioStale(segment, segment.role_snapshot?.default_engine_params ?? segment.params)}
               onSelect={onSelect}
               onRegenerate={onRegenerate}
               onPlay={onPlay}
