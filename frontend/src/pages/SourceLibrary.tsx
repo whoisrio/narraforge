@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import type { SegmentedProject, SourceDocument, NarrationDocument, ChapterSlice } from '../types';
+import { useState, useMemo } from 'react';
+import type { SegmentedProject, SourceDocument, NarrationDocument } from '../types';
 import { GenerateNarrationModal } from '../components/SourceLibrary/GenerateNarrationModal';
 import { SourceUploadZone } from '../components/SourceLibrary/SourceUploadZone';
 import { NarrationFullView } from '../components/SourceLibrary/NarrationFullView';

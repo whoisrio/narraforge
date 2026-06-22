@@ -58,7 +58,6 @@ export function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
  */
 function detectSilenceBoundary(
   samples: Float32Array,
-  sampleRate: number,
   fromEnd: boolean,
   threshold: number = 0.01,
   keepSamples: number = 0,
@@ -115,8 +114,8 @@ function trimBufferSilence(
   }
 
   const keepSamples = Math.floor(targetSampleRate * keepMs / 1000);
-  const leadSamples = detectSilenceBoundary(resampled, targetSampleRate, false, threshold, keepSamples);
-  const trailSamples = detectSilenceBoundary(resampled, targetSampleRate, true, threshold, keepSamples);
+  const leadSamples = detectSilenceBoundary(resampled, false, threshold, keepSamples);
+  const trailSamples = detectSilenceBoundary(resampled, true, threshold, keepSamples);
 
   const trimmed = resampled.slice(leadSamples, resampled.length - trailSamples);
   return { samples: trimmed, trimmedStart: leadSamples, trimmedEnd: trailSamples };

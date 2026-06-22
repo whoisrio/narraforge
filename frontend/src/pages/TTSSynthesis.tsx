@@ -878,7 +878,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         const audio = new Audio(blobUrl);
         audioRef.current = audio;
         audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; };
-        audio.onerror = (ev) => {
+        audio.onerror = () => {
           const errCode = audio.error?.code;
           const errMsg = audio.error?.message ?? 'unknown';
           logPlayError('audio.onerror', new Error(`code=${errCode} msg=${errMsg}`));
@@ -906,7 +906,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const audio = new Audio(url);
       audioRef.current = audio;
       audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
-      audio.onerror = (ev) => {
+      audio.onerror = () => {
         const errCode = audio.error?.code;
         const errMsg = audio.error?.message ?? 'unknown';
         logPlayError('audio.onerror', new Error(`code=${errCode} msg=${errMsg}`));
