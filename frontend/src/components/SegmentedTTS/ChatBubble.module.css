@@ -1,0 +1,53 @@
+.root {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 760px;
+  cursor: pointer;
+}
+
+.body {
+  min-width: 0;
+  border: 1px solid rgba(196, 122, 58, 0.18);
+  border-radius: 18px 18px 18px 6px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(80, 45, 12, 0.08);
+}
+
+.selected .body {
+  border-color: #c47a3a;
+  box-shadow: 0 0 0 3px rgba(196, 122, 58, 0.16);
+}
+
+.meta,
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.text {
+  margin: 8px 0;
+  color: var(--text-primary);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.footer button {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(196, 122, 58, 0.12);
+  color: #8a4f1f;
+  cursor: pointer;
+}
+
+.emoHappy .body { background: rgba(255, 232, 166, 0.52); }
+.emoSad .body { background: rgba(202, 218, 240, 0.52); }
+.emoAngry .body { background: rgba(244, 190, 176, 0.52); }
+.emoCalm .body { background: rgba(196, 225, 207, 0.52); }
+.emoNeutral .body { background: rgba(255, 255, 255, 0.86); }
+.emoExcited .body { background: rgba(255, 216, 172, 0.58); }
