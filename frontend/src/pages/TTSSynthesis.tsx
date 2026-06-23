@@ -1296,12 +1296,7 @@ export function TTSSynthesis({
           onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
         >
         <div className={styles.workbenchMain}>
-          <div className={styles.toolbar}>
-            <div className={styles.projectTitleCluster}>
-              <span className={styles.toolbarTitle}>分段配音工作台</span>
-              <span className={styles.projectSubtitle}>{isScratchpadProject ? '草稿项目 · 快速试稿' : '项目制 · 章节分段'}</span>
-            </div>
-            <div className={styles.toolbarDivider} />
+          <div className={styles.toolbar} aria-label="Studio model selector">
             <div className={styles.toolbarGroup}>
               <button className={`${styles.toolbarPill} ${engine === 'edge_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
               <button className={`${styles.toolbarPill} ${engine === 'cosyvoice' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
@@ -1451,10 +1446,6 @@ export function TTSSynthesis({
                 </button>
               </div>
 
-              <div className={styles.viewSwitch}>
-                <button type="button" onClick={() => setSegmentViewMode('list')} aria-pressed={segmentViewMode === 'list'}>列表视图</button>
-                <button type="button" onClick={() => setSegmentViewMode('dialogue')} aria-pressed={segmentViewMode === 'dialogue'}>对话视图</button>
-              </div>
               {segmentViewMode === 'dialogue' ? (
                 <>
                   <div className={styles.roleControls}>
