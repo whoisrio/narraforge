@@ -1492,6 +1492,7 @@ export function TTSSynthesis({
                 isPaused={isPaused}
                 compact={compactMode}
                 voices={voices}
+                roles={roles}
                 globalVoiceId={selectedVoiceId}
                 globalVoiceName={selectedVoice?.description || selectedVoice?.name}
                 globalEdgeVoice={edgeVoice}
@@ -1525,6 +1526,11 @@ export function TTSSynthesis({
                 onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
                 onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
                 onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
+                onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
+                onUpdateKind={(id, kind, roleSnapshot) => {
+                  dispatch({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind });
+                  dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot });
+                }}
                 onToggleIndependentVoice={handleToggleIndependentVoice}
                 onMerge={handleMerge}
                 onSplit={handleSplit}

@@ -353,10 +353,18 @@ export function SpeechToText() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h1>语音转字幕</h1>
-        <p>上传音频文件，使用 Whisper 或 FunASR 识别语音并生成 SRT 字幕</p>
-      </div>
+      <section className={styles.hubHero}>
+        <div>
+          <span className={styles.kicker}>Subtitle Hub</span>
+          <h1>字幕识别</h1>
+          <p>多文件上传、排序拼接、统一 ASR 时间线，并导出 SRT / TXT / JSON。</p>
+        </div>
+        <div className={styles.workflowPills} aria-label="subtitle workflow">
+          <span>多文件拼接</span>
+          <span>统一 ASR Timeline</span>
+          <span>SRT / TXT / JSON</span>
+        </div>
+      </section>
 
       <div className={styles.content}>
         <div className={styles.inputSection}>

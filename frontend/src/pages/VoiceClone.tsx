@@ -254,10 +254,18 @@ export function VoiceClone() {
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h1>音色设计</h1>
-        <p>创建和管理你的专属音色</p>
-      </div>
+      <section className={styles.hero}>
+        <div>
+          <span className={styles.kicker}>Voice Design</span>
+          <h1>音色设计</h1>
+          <p>管理可复用 Voice Profile，支持克隆、设计、调参，并交给项目 Voice Role 使用。</p>
+        </div>
+        <div className={styles.heroPills} aria-label="voice design workflow">
+          <span>Voice Profile Library</span>
+          <span>Clone / Design / Tune</span>
+          <span>Project Role Ready</span>
+        </div>
+      </section>
 
       {/* 顶层功能区切换 */}
       <div className={styles.sectionTabs}>

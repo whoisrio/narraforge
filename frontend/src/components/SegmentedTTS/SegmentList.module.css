@@ -18,6 +18,56 @@
   flex-direction: column;
 }
 
+.roleStrip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px 0;
+  padding: 0 4px;
+}
+
+.kindBadge,
+.kindSwitch,
+.rolePicker {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.kindBadge {
+  padding: 3px 9px;
+  background: rgba(255, 220, 195, 0.48);
+  color: var(--color-primary-dark);
+}
+
+.kindSwitch {
+  border: 1px solid rgba(196, 122, 58, 0.2);
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-primary-dark);
+  cursor: pointer;
+}
+
+.rolePicker {
+  gap: 6px;
+  padding: 3px 8px;
+  background: rgba(249, 243, 235, 0.72);
+  color: var(--color-text-secondary);
+}
+
+.rolePicker select {
+  max-width: 132px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 11px;
+  font-weight: 850;
+  outline: none;
+}
+
 /* Accordion edit panel */
 .accordionWrapper {
   animation: accordionOpen 0.25s ease-out;
