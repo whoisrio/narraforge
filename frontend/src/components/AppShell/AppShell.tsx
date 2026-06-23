@@ -9,6 +9,7 @@ interface AppShellProps {
   locale?: Locale;
   children: ReactNode;
   rightSlot?: ReactNode;
+  hideSidebar?: boolean;
   onNavigate: (id: GlobalNavId) => void;
 }
 
@@ -24,6 +25,7 @@ export function AppShell({
   locale = 'zh-CN',
   children,
   rightSlot,
+  hideSidebar = false,
   onNavigate,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -53,6 +55,7 @@ export function AppShell({
         <div className={styles.headerActions}>{rightSlot}</div>
       </header>
 
+      {!hideSidebar && (
       <aside className={styles.sidebar} aria-label="Global navigation">
         <div className={styles.sidebarTitle}>
           <span className={styles.sidebarIcon}>✦</span>
@@ -90,8 +93,9 @@ export function AppShell({
           {!collapsed && <span>收起</span>}
         </button>
       </aside>
+      )}
 
-      <main className={styles.content}>{children}</main>
+      <main className={`${styles.content} ${hideSidebar ? styles.contentFull : ''}`}>{children}</main>
     </div>
   );
 }

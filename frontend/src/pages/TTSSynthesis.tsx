@@ -61,7 +61,15 @@ function sortProjectsWithScratchpad(projects: SegmentedProject[]) {
   });
 }
 
-export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => void }) {
+export function TTSSynthesis({
+  onNavigateToClone,
+  initialProjectId,
+  hideProjectSidebar = false,
+}: {
+  onNavigateToClone?: () => void;
+  initialProjectId?: string;
+  hideProjectSidebar?: boolean;
+}) {
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
   const [engine, setEngine] = useState<Engine>('edge_tts');
@@ -167,7 +175,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       ]);
       setProjectList(list);
 
-      let full = await projectStorage.getProject(SCRATCHPAD_PROJECT_ID);
+      let full = await projectStorage.getProject(initialProjectId ?? SCRATCHPAD_PROJECT_ID);
+      if (!full && initialProjectId) full = await projectStorage.getProject(SCRATCHPAD_PROJECT_ID);
       if (!full) full = scratchpad;
       const localDraft = await getDraft(full.id);
       if (localDraft && localDraft.base_updated_at && localDraft.base_updated_at < full.updated_at && localDraft.dirty) {
@@ -199,7 +208,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       }
     })().catch((e) => console.warn('Project load failed:', e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageMode]);
+  }, [storageMode, initialProjectId]);
 
   // Auto-save: debounce PUT in backend mode; IndexedDB direct in frontend mode
   useEffect(() => {
@@ -1061,6 +1070,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   return (
     <div className={styles.container}>
       <div className={styles.workbenchLayout}>
+        {!hideProjectSidebar && (
         <ProjectSidebar
           projects={projectList}
           activeProjectId={project.id}
@@ -1071,6 +1081,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           onCreateProject={() => { void handleCreateProject(); }}
           onDeleteProject={handleDeleteProject}
         />
+        )}
 
         <ProjectShell
           projectName={project.name}
@@ -1361,11 +1372,9 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         ) : (
           <div className={styles.projectSectionPlaceholder}>
             <span className={styles.projectSectionKicker}>Coming next</span>
-            <h2>{projectSection === 'library' ? '文本库' : projectSection === 'voices' ? '声音角色' : projectSection === 'settings' ? '项目设置' : '项目总览'}</h2>
+            <h2>{projectSection === 'voices' ? '声音角色' : projectSection === 'settings' ? '项目设置' : '项目总览'}</h2>
             <p>
-              {projectSection === 'library'
-                ? '这里将管理章节整体文本，进入 Studio 后再做分段语音合成。'
-                : projectSection === 'voices'
+              {projectSection === 'voices'
                   ? '这里将管理项目内 Voice Role，并绑定具体模型、音色和参数。'
                   : projectSection === 'settings'
                     ? '这里将配置项目默认参数、Remotion 路径和导出目标。'

@@ -230,6 +230,10 @@
   transition: padding-left var(--transition-normal);
 }
 
+.contentFull {
+  padding-left: 28px;
+}
+
 @media (max-width: 900px) {
   .headerCenter {
     display: none;
