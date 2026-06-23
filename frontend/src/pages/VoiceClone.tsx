@@ -247,7 +247,7 @@ export function VoiceClone() {
             </>
           )}
         </div>
-        <div className={styles.placeholderBadge}>即将推出</div>
+        <div className={styles.placeholderBadge}>实验工作区</div>
       </div>
     </>
   );

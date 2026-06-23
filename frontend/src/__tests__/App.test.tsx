@@ -2,9 +2,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import App from '../App';
 
+vi.mock('../services/api', () => ({
+  configApi: {
+    getStorageMode: vi.fn(() => new Promise(() => {})),
+    setStorageMode: vi.fn().mockResolvedValue({ storage_mode: 'frontend' }),
+  },
+}));
+
 vi.mock('../services/segmentedProjectStorage', () => ({
   indexedDBStorage: {
-    listProjects: vi.fn().mockResolvedValue([]),
+    listProjects: vi.fn(() => new Promise(() => {})),
     getProject: vi.fn(),
     saveProject: vi.fn(),
     deleteProject: vi.fn(),
@@ -13,7 +20,7 @@ vi.mock('../services/segmentedProjectStorage', () => ({
 
 vi.mock('../services/backendSegmentedProjectStorage', () => ({
   backendStorage: {
-    listProjects: vi.fn().mockResolvedValue([]),
+    listProjects: vi.fn(() => new Promise(() => {})),
     getProject: vi.fn(),
     saveProject: vi.fn(),
     deleteProject: vi.fn(),

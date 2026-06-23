@@ -1,55 +1,52 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { VoiceSelector } from '../../components/TTSSynthesis/VoiceSelector';
-import * as api from '../../services/api';
+import { ttsApi } from '../../services/api';
+import type { VoiceProfile } from '../../types';
 
 describe('VoiceSelector', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('should render loading state initially', () => {
+    vi.spyOn(ttsApi, 'getVoices').mockReturnValue(new Promise(() => {}));
+
     render(<VoiceSelector selectedVoiceId="" onVoiceSelect={() => {}} />);
 
     expect(screen.getByText('加载声音列表...')).toBeInTheDocument();
   });
 
-  it('should display default voices after loading', async () => {
-    const mockVoices = {
-      default: [
-        { id: 'xiaoyun', name: '云溪', gender: 'female' },
-        { id: 'xiaogang', name: '小刚', gender: 'male' },
-      ],
-      cloned: [],
-    };
+  it('should display cloned voices after loading', async () => {
+    const mockVoices: VoiceProfile[] = [
+      { id: 'xiaoyun', name: '云溪', description: '云溪', qwen_voice_id: 'qwen-xiaoyun', gender: 'female', audio_url: '/voices/xiaoyun.mp3', created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'xiaogang', name: '小刚', description: '小刚', qwen_voice_id: 'qwen-xiaogang', gender: 'male', audio_url: '/voices/xiaogang.mp3', created_at: '2026-01-01T00:00:00.000Z' },
+    ];
 
-    vi.spyOn(api, 'ttsApi', 'get').mockReturnValue({
-      getVoices: vi.fn().mockResolvedValue(mockVoices),
-    } as any);
+    vi.spyOn(ttsApi, 'getVoices').mockResolvedValue(mockVoices);
 
     render(<VoiceSelector selectedVoiceId="" onVoiceSelect={() => {}} />);
 
     await waitFor(() => {
-      expect(screen.getByText('默认声音')).toBeInTheDocument();
-      expect(screen.getByText('云溪')).toBeInTheDocument();
-      expect(screen.getByText('小刚')).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /云溪/ })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /小刚/ })).toBeInTheDocument();
     });
   });
 
-  it('should call onVoiceSelect when a voice is clicked', async () => {
-    const mockVoices = {
-      default: [{ id: 'xiaoyun', name: '云溪', gender: 'female' }],
-      cloned: [],
-    };
+  it('should call onVoiceSelect when a voice is selected', async () => {
+    const mockVoices: VoiceProfile[] = [
+      { id: 'xiaoyun', name: '云溪', description: '云溪', qwen_voice_id: 'qwen-xiaoyun', gender: 'female', audio_url: '/voices/xiaoyun.mp3', created_at: '2026-01-01T00:00:00.000Z' },
+    ];
 
-    vi.spyOn(api, 'ttsApi', 'get').mockReturnValue({
-      getVoices: vi.fn().mockResolvedValue(mockVoices),
-    } as any);
+    vi.spyOn(ttsApi, 'getVoices').mockResolvedValue(mockVoices);
 
     const onSelect = vi.fn();
 
     render(<VoiceSelector selectedVoiceId="" onVoiceSelect={onSelect} />);
 
-    await waitFor(() => screen.getByText('云溪'));
+    const select = await screen.findByTestId('voice-select');
+    fireEvent.change(select, { target: { value: 'qwen-xiaoyun' } });
 
-    fireEvent.click(screen.getByText('云溪'));
-
-    expect(onSelect).toHaveBeenCalledWith('xiaoyun', false);
+    expect(onSelect).toHaveBeenCalledWith('qwen-xiaoyun');
   });
 });
