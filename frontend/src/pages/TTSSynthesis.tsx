@@ -25,6 +25,7 @@ import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import { RolePicker } from '../components/SegmentedTTS/RolePicker';
 import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
+import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -99,6 +100,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [segmentViewMode, setSegmentViewMode] = useState<'list' | 'dialogue'>('list');
+  const [projectSection, setProjectSection] = useState<ProjectSectionId>('studio');
   const [panelOpen, setPanelOpen] = useState(true);
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
   const isScratchpadProject = project.id === SCRATCHPAD_PROJECT_ID;
@@ -1052,6 +1054,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
   const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
   // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
+  const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.duration_sec ?? 0), 0);
+  const generatedSegmentCount = activeChapter.segments.filter(segment => segment.status === 'ready').length;
 
   return (
     <div className={styles.container}>
@@ -1067,6 +1071,17 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           onDeleteProject={handleDeleteProject}
         />
 
+        <ProjectShell
+          projectName={project.name}
+          projectSubtitle={isScratchpadProject ? '快速试稿' : '项目制 · 章节分段'}
+          activeSection={projectSection}
+          chapterName={activeChapter.name}
+          segmentCount={activeChapter.segments.length}
+          generatedCount={generatedSegmentCount}
+          durationSec={activeChapterDuration}
+          onSectionChange={setProjectSection}
+        >
+        {projectSection === 'studio' ? (
         <div className={styles.workbenchMain}>
           <div className={styles.toolbar}>
             <div className={styles.projectTitleCluster}>
@@ -1326,6 +1341,22 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             </div>
           </div>
         </div>
+        ) : (
+          <div className={styles.projectSectionPlaceholder}>
+            <span className={styles.projectSectionKicker}>Coming next</span>
+            <h2>{projectSection === 'library' ? '文本库' : projectSection === 'voices' ? '声音角色' : projectSection === 'settings' ? '项目设置' : '项目总览'}</h2>
+            <p>
+              {projectSection === 'library'
+                ? '这里将管理章节整体文本，进入 Studio 后再做分段语音合成。'
+                : projectSection === 'voices'
+                  ? '这里将管理项目内 Voice Role，并绑定具体模型、音色和参数。'
+                  : projectSection === 'settings'
+                    ? '这里将配置项目默认参数、Remotion 路径和导出目标。'
+                    : '这里将展示项目状态、章节进度、最近导出和待处理事项。'}
+            </p>
+          </div>
+        )}
+        </ProjectShell>
       </div>
 
       <ConfirmDialog
