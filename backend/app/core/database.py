@@ -46,6 +46,16 @@ _P2_V3_ALTER_STMTS = (
     "ALTER TABLE segmented_project_segments ADD COLUMN animation_spec_json TEXT",
 )
 
+# P3: dialogue roles and local prosody marks.
+_P3_ROLE_PROSODY_ALTER_STMTS = (
+    "ALTER TABLE segmented_projects ADD COLUMN default_narrator_role_id VARCHAR",
+    "ALTER TABLE segmented_projects ADD COLUMN default_narrator_snapshot JSON",
+    "ALTER TABLE segmented_project_segments ADD COLUMN role_id VARCHAR",
+    "ALTER TABLE segmented_project_segments ADD COLUMN role_snapshot JSON",
+    "ALTER TABLE segmented_project_segments ADD COLUMN segment_kind VARCHAR DEFAULT 'narration'",
+    "ALTER TABLE segmented_project_segments ADD COLUMN prosody_marks JSON",
+)
+
 
 def _run_alter_or_skip(conn, stmt: str) -> bool:
     """执行 ALTER TABLE. 列已存在时跳过.
@@ -74,7 +84,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     # 跑 P2 v2 + v3 列迁移 (幂等)
     with engine.begin() as conn:
-        for stmt in _P2_V2_ALTER_STMTS + _P2_V3_ALTER_STMTS:
+        for stmt in _P2_V2_ALTER_STMTS + _P2_V3_ALTER_STMTS + _P3_ROLE_PROSODY_ALTER_STMTS:
             if _run_alter_or_skip(conn, stmt):
                 import logging
                 logging.getLogger(__name__).info(f"[migration] applied: {stmt}")

@@ -243,4 +243,74 @@ describe('segmentedReducer', () => {
     expect(next.project.schema_version).toBe(2);
     expect(next.project.chapters).toHaveLength(1);
   });
+
+  it('SET_SEGMENT_ROLE stores role id and snapshot immutably', () => {
+    const segment: Segment = {
+      id: 's1', text: 'hello', params: { engine: 'edge_tts' }, status: 'idle', created_at: '', updated_at: '',
+    };
+    const project = makeProject({}, { segments: [segment] });
+    const roleSnapshot = {
+      id: 'role-linxia',
+      name: '林夏',
+      default_engine: 'edge_tts' as const,
+      default_voice: 'zh-CN-XiaoxiaoNeural',
+      default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-XiaoxiaoNeural' },
+      favorite_styles: [],
+    };
+
+    const next = segmentedReducer({ project }, {
+      type: 'SET_SEGMENT_ROLE',
+      id: 's1',
+      roleId: 'role-linxia',
+      roleSnapshot,
+    });
+
+    expect(ac(next.project).segments[0].role_id).toBe('role-linxia');
+    expect(ac(next.project).segments[0].role_snapshot?.name).toBe('林夏');
+    expect(project.chapters[0].segments[0].role_id).toBeUndefined();
+  });
+
+  it('UPDATE_PROSODY_MARKS replaces marks on one segment only', () => {
+    const s1: Segment = { id: 's1', text: '你好世界', params: { engine: 'edge_tts' }, status: 'idle', created_at: '', updated_at: '' };
+    const s2: Segment = { id: 's2', text: '第二句', params: { engine: 'edge_tts' }, status: 'idle', created_at: '', updated_at: '' };
+    const project = makeProject({}, { segments: [s1, s2] });
+
+    const next = segmentedReducer({ project }, {
+      type: 'UPDATE_PROSODY_MARKS',
+      id: 's1',
+      prosodyMarks: [{ id: 'm1', start: 0, end: 2, style_tags: ['low_voice'] }],
+    });
+
+    expect(ac(next.project).segments[0].prosody_marks).toEqual([
+      { id: 'm1', start: 0, end: 2, style_tags: ['low_voice'] },
+    ]);
+    expect(ac(next.project).segments[1].prosody_marks).toEqual([]);
+  });
+
+  it('SET_SEGMENT_KIND sets dialogue or narration without changing text', () => {
+    const s1: Segment = { id: 's1', text: '旁白', params: { engine: 'edge_tts' }, status: 'idle', created_at: '', updated_at: '' };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s1] }) }, {
+      type: 'SET_SEGMENT_KIND', id: 's1', segmentKind: 'narration',
+    });
+    expect(ac(next.project).segments[0].segment_kind).toBe('narration');
+    expect(ac(next.project).segments[0].text).toBe('旁白');
+  });
+
+  it('SET_PROJECT_NARRATOR stores narrator role and snapshot', () => {
+    const roleSnapshot = {
+      id: 'role-narrator',
+      name: '旁白',
+      default_engine: 'edge_tts' as const,
+      default_voice: 'zh-CN-YunjianNeural',
+      default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunjianNeural' },
+      favorite_styles: [],
+    };
+    const next = segmentedReducer({ project: makeProject() }, {
+      type: 'SET_PROJECT_NARRATOR',
+      roleId: 'role-narrator',
+      roleSnapshot,
+    });
+    expect(next.project.default_narrator_role_id).toBe('role-narrator');
+    expect(next.project.default_narrator_snapshot?.name).toBe('旁白');
+  });
 });

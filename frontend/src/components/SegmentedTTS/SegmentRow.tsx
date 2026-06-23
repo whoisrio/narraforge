@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Segment, EmotionType, VoiceProfile } from '../../types';
+import { isSegmentAudioStale, isSegmentVoiceStale } from '../../services/segmentGenerationInputs';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { MergeMenu } from './MergeMenu';
 import styles from './SegmentRow.module.css';
@@ -179,28 +180,46 @@ export function SegmentRow({
   const voiceGender = resolveGender();
 
   // ---- Stale detection ----
-  // Compare generated engine/voice with the effective engine/voice (global when unlocked)
+  // Use the shared helper so role snapshots and prosody marks participate in
+  // staleness alongside engine/voice. The helper compares the segment's
+  // effective generation inputs against generated_params.
 
   const generatedEngine = segment.params.engine;
 
-  // Engine changed → stale (unless locked)
+  // Engine changed → stale (unless locked). Kept for the warning label below.
   const engineChanged = !hasOverride && !!generatedEngine && generatedEngine !== effectiveEngine;
 
-  // Resolve the current global voice identifier for comparison (per-engine)
+  // Resolve the current global voice identifier for comparison (per-engine).
   const currentGlobalVoice = effectiveEngine === 'edge_tts'
     ? (globalEdgeVoice || '')
     : effectiveEngine === 'mimo_tts'
       ? (globalMimoMode === 'voiceclone' ? (globalMimoCloneVoiceId || '') : (globalMimoPresetVoice || ''))
       : (globalVoiceId || '');
 
-  // Voice changed within the same engine → stale
-  const voiceChanged = !hasOverride
-    && !engineChanged
-    && !!segment.generated_voice_id
-    && !!currentGlobalVoice
-    && segment.generated_voice_id !== currentGlobalVoice;
-
-  const isStale = isReady && (engineChanged || voiceChanged);
+  // Effective params that this segment would generate with right now. When the
+  // segment has no independent-voice override, fold in the active global voice
+  // settings so global changes are detected as stale.
+  const defaultParamsForStale = {
+    ...segment.params,
+    engine: (effectiveEngine || segment.params.engine) as Segment['params']['engine'],
+    voice_id: !hasOverride ? globalVoiceId : segment.params.voice_id,
+    edge_voice: !hasOverride ? globalEdgeVoice : segment.params.edge_voice,
+    mimo_mode: !hasOverride ? (globalMimoMode as Segment['params']['mimo_mode']) : segment.params.mimo_mode,
+    mimo_preset_voice: !hasOverride ? globalMimoPresetVoice : segment.params.mimo_preset_voice,
+    mimo_clone_voice_id: !hasOverride ? globalMimoCloneVoiceId : segment.params.mimo_clone_voice_id,
+  };
+  const isStale = segment.generated_params
+    ? isSegmentAudioStale(segment, defaultParamsForStale)
+    // Legacy / frontend-mode audio without recorded generated_params: fall back
+    // to voice/engine comparison so a global voice change is still detected.
+    : isSegmentVoiceStale({
+        status: segment.status,
+        hasVoiceOverride: !!hasOverride,
+        generatedEngine,
+        effectiveEngine: effectiveEngine as Segment['params']['engine'],
+        generatedVoiceId: segment.generated_voice_id,
+        currentGlobalVoice,
+      });
 
   // Build a human-readable label for the current global voice (for stale warning text)
   const currentGlobalVoiceLabel = effectiveEngine === 'edge_tts'

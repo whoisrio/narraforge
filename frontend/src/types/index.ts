@@ -250,6 +250,61 @@ export type SegmentStatus = 'idle' | 'queued' | 'pending' | 'ready' | 'failed';
 /** Emotion types returned by LLM analysis */
 export type EmotionType = 'happy' | 'sad' | 'angry' | 'calm' | 'neutral' | 'excited';
 
+export type SegmentKind = 'dialogue' | 'narration';
+
+export interface FavoriteStyle {
+  id: string;
+  name: string;
+  emotion?: EmotionType;
+  style_tags: string[];
+  instruction?: string;
+  intensity?: number;
+}
+
+export interface RoleSnapshot {
+  id: string;
+  name: string;
+  avatar?: string | null;
+  description?: string | null;
+  default_engine: SegmentEngineParams['engine'];
+  default_voice?: string | null;
+  default_engine_params: SegmentEngineParams;
+  favorite_styles: FavoriteStyle[];
+}
+
+export interface Role extends RoleSnapshot {
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoleUpdate {
+  name?: string | null;
+  avatar?: string | null;
+  description?: string | null;
+  default_engine?: SegmentEngineParams['engine'];
+  default_voice?: string | null;
+  default_engine_params?: Partial<SegmentEngineParams>;
+  favorite_styles?: FavoriteStyle[];
+}
+
+export interface ProsodyMark {
+  id: string;
+  start: number;
+  end: number;
+  emotion?: EmotionType;
+  style_tags: string[];
+  instruction?: string;
+  intensity?: number;
+}
+
+export interface ProsodyCapability {
+  supportsEmotion: boolean;
+  supportsStyleTags: boolean;
+  supportsInstruction: boolean;
+  supportsSsml: boolean;
+  requiresSplitFallback: boolean;
+}
+
 export interface Segment {
   id: string;
   text: string;
@@ -270,6 +325,10 @@ export interface Segment {
   ssml_annotated_by_llm?: boolean;
   /** Emotion label from LLM analysis */
   emotion?: EmotionType;
+  role_id?: string | null;
+  role_snapshot?: RoleSnapshot | null;
+  segment_kind?: SegmentKind;
+  prosody_marks?: ProsodyMark[];
   /** Which params have been explicitly overridden (vs inherited from global) */
   overrides?: ('voice' | 'speed' | 'volume' | 'pitch' | 'instruction' | 'language')[];
   /** The voice_id that was actually used when audio was generated (for stale detection) */
@@ -340,6 +399,8 @@ export interface SegmentedProject {
   active_narration_version?: string | null;
   /** 默认关联的 Remotion 项目路径；导出文件优先写入其 public/audio */
   remotion_project_path?: string | null;
+  default_narrator_role_id?: string | null;
+  default_narrator_snapshot?: RoleSnapshot | null;
   created_at: string;
   updated_at: string;
 }

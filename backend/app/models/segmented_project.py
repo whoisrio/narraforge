@@ -36,6 +36,13 @@ class SegmentedProject(Base):
     animation_theme = Column(String, nullable=True)
     # 默认关联的 Remotion 项目路径；导出音频优先写入其 public/audio 目录
     remotion_project_path = Column(String, nullable=True)
+    # P3: 默认旁白角色 (全局角色库引用) + 快照 (可复现生成)
+    default_narrator_role_id = Column(
+        String,
+        ForeignKey("roles.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    default_narrator_snapshot = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -111,6 +118,11 @@ class SegmentedProjectSegment(Base):
     text = Column(String, nullable=False, default="")
     ssml = Column(String, nullable=True)
     emotion = Column(String, nullable=True)
+    # P3: 段落角色 (全局角色库引用) + 快照 + 类型 + 局部语气标注
+    role_id = Column(String, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
+    role_snapshot = Column(JSON, nullable=True)
+    segment_kind = Column(String, nullable=False, default="narration")
+    prosody_marks = Column(JSON, nullable=False, default=list)
     params = Column(JSON, nullable=False, default=dict)
     locked_params = Column(JSON, nullable=False, default=list)
     generated_params = Column(JSON, nullable=True)

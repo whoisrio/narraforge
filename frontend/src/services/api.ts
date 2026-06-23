@@ -447,6 +447,24 @@ export const segmentedProjectApi = {
   },
 };
 
+export const roleApi = {
+  listRoles: async (): Promise<import('../types').Role[]> => {
+    const { data } = await api.get<import('../types').Role[]>('/roles');
+    return data;
+  },
+  createRole: async (role: import('../types').RoleSnapshot): Promise<import('../types').Role> => {
+    const { data } = await api.post<import('../types').Role>('/roles', role);
+    return data;
+  },
+  updateRole: async (id: string, update: import('../types').RoleUpdate): Promise<import('../types').Role> => {
+    const { data } = await api.put<import('../types').Role>(`/roles/${id}`, update);
+    return data;
+  },
+  deleteRole: async (id: string): Promise<void> => {
+    await api.delete(`/roles/${id}`);
+  },
+};
+
 // ============ VoxCPM 本地 GPU TTS ============
 
 export const voxcpmApi = {

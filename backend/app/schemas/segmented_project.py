@@ -11,6 +11,11 @@ class SegmentIn(BaseModel):
     text: str = ""
     ssml: str | None = None
     emotion: str | None = None
+    # P3: 段落角色 (全局角色库引用) + 快照 + 类型 + 局部语气标注
+    role_id: str | None = None
+    role_snapshot: dict[str, Any] | None = None
+    segment_kind: str = "narration"
+    prosody_marks: list[dict[str, Any]] = Field(default_factory=list)
     params: dict[str, Any] = Field(default_factory=dict)
     locked_params: list[str] = Field(default_factory=list)
     generated_params: dict[str, Any] | None = None
@@ -73,6 +78,9 @@ class ProjectIn(BaseModel):
     # P2 v3: 整体动画主题 (e.g. 'dark-botanical', 'tech-blueprint', 'warm-paper')
     animation_theme: str | None = None
     remotion_project_path: str | None = None
+    # P3: 默认旁白角色 (全局角色库引用) + 快照
+    default_narrator_role_id: str | None = None
+    default_narrator_snapshot: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None
     chapters: list[ChapterIn] = Field(default_factory=list)

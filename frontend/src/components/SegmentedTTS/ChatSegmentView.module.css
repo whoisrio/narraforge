@@ -1,0 +1,36 @@
+.root {
+  display: grid;
+  gap: 14px;
+}
+
+.narratorWarning {
+  border: 1px solid rgba(196, 122, 58, 0.32);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(196, 122, 58, 0.08);
+  color: #8a4f1f;
+  font-size: 13px;
+}
+
+.flow {
+  display: grid;
+  gap: 14px;
+  border-radius: 18px;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(248, 243, 236, 0.92), rgba(255, 251, 246, 0.92));
+}
+
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.actions button {
+  border: 1px solid rgba(196, 122, 58, 0.34);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: rgba(196, 122, 58, 0.08);
+  color: #8a4f1f;
+  cursor: pointer;
+}

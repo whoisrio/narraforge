@@ -19,9 +19,12 @@ import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams, Role, SegmentKind } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
+import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
+import { RolePicker } from '../components/SegmentedTTS/RolePicker';
+import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -92,7 +95,10 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
+  const [segmentViewMode, setSegmentViewMode] = useState<'list' | 'dialogue'>('list');
   const [panelOpen, setPanelOpen] = useState(true);
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
   const isScratchpadProject = project.id === SCRATCHPAD_PROJECT_ID;
@@ -522,6 +528,16 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     }
   }, [activeChapter.segments, dispatch, buildCurrentParams, selectedVoiceId, edgeVoice, engine]);
 
+  const handleAppendByKind = useCallback((kind: SegmentKind) => {
+    setProject(prev => {
+      const appended = segmentedReducer({ project: prev }, { type: 'APPEND_SEGMENT', text: '' }).project;
+      const active = getActiveChapter(appended);
+      const latest = active?.segments[active.segments.length - 1];
+      if (!latest) return appended;
+      return segmentedReducer({ project: appended }, { type: 'SET_SEGMENT_KIND', id: latest.id, segmentKind: kind }).project;
+    });
+  }, []);
+
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
@@ -878,7 +894,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         const audio = new Audio(blobUrl);
         audioRef.current = audio;
         audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(blobUrl); blobUrlRef.current = null; };
-        audio.onerror = (ev) => {
+        audio.onerror = () => {
           const errCode = audio.error?.code;
           const errMsg = audio.error?.message ?? 'unknown';
           logPlayError('audio.onerror', new Error(`code=${errCode} msg=${errMsg}`));
@@ -906,7 +922,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       const audio = new Audio(url);
       audioRef.current = audio;
       audio.onended = () => { setPlayingId(undefined); setIsPaused(false); setPlayAllActive(false); audioRef.current = null; URL.revokeObjectURL(url); blobUrlRef.current = null; };
-      audio.onerror = (ev) => {
+      audio.onerror = () => {
         const errCode = audio.error?.code;
         const errMsg = audio.error?.message ?? 'unknown';
         logPlayError('audio.onerror', new Error(`code=${errCode} msg=${errMsg}`));
@@ -1129,6 +1145,9 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
                 )}
                 <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
+                <button className={styles.segmentedActionBtn} onClick={() => setRoleLibraryOpen(true)}>
+                  🎭 角色库{roles.length > 0 ? ` (${roles.length})` : ''}
+                </button>
                 {!isScratchpadProject && <button className={styles.segmentedActionBtnDanger} onClick={() => handleDeleteProject(project.id)}>🗑 删除</button>}
               </div>
             </div>
@@ -1204,6 +1223,48 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 </button>
               </div>
 
+              <div className={styles.viewSwitch}>
+                <button type="button" onClick={() => setSegmentViewMode('list')} aria-pressed={segmentViewMode === 'list'}>列表视图</button>
+                <button type="button" onClick={() => setSegmentViewMode('dialogue')} aria-pressed={segmentViewMode === 'dialogue'}>对话视图</button>
+              </div>
+              {segmentViewMode === 'dialogue' ? (
+                <>
+                  <div className={styles.roleControls}>
+                    <RolePicker
+                      roles={roles}
+                      label="旁白角色"
+                      value={project.default_narrator_role_id}
+                      onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
+                      onManage={() => setRoleLibraryOpen(true)}
+                    />
+                    {activeChapter.selected_segment_id && (() => {
+                      const selectedSegment = activeChapter.segments.find(s => s.id === activeChapter.selected_segment_id);
+                      if (!selectedSegment) return null;
+                      return (
+                        <RolePicker
+                          roles={roles}
+                          label="当前段角色"
+                          value={selectedSegment.role_id}
+                          onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id: selectedSegment.id, roleId, roleSnapshot })}
+                          onManage={() => setRoleLibraryOpen(true)}
+                        />
+                      );
+                    })()}
+                  </div>
+                  <ChatSegmentView
+                    segments={activeChapter.segments}
+                    roles={roles}
+                    selectedId={activeChapter.selected_segment_id}
+                    playingId={playingId}
+                    hasNarratorVoice={!!project.default_narrator_snapshot?.default_voice || !!project.default_narrator_snapshot?.default_engine_params?.edge_voice}
+                    onSelect={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
+                    onAppend={handleAppendByKind}
+                    onRegenerate={handleRegenerate}
+                    onPlay={handlePlaySegment}
+                    onUpdateProsodyMarks={(id, prosodyMarks) => dispatch({ type: 'UPDATE_PROSODY_MARKS', id, prosodyMarks })}
+                  />
+                </>
+              ) : (
               <SegmentList
                 segments={activeChapter.segments}
                 layout={project.layout}
@@ -1249,6 +1310,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 onMerge={handleMerge}
                 onSplit={handleSplit}
               />
+              )}
 
               <ExportDialog
                 open={exportOpen}
@@ -1308,6 +1370,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           }}
         />
       )}
+      <RoleLibraryPanel
+        open={roleLibraryOpen}
+        onClose={() => setRoleLibraryOpen(false)}
+        onRolesChanged={setRoles}
+      />
     </div>
   );
 }

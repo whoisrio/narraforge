@@ -133,6 +133,10 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
             SegmentIn(
                 id=s.id, position=s.position, text=s.text, ssml=s.ssml,
                 emotion=s.emotion, params=s.params or {},
+                role_id=getattr(s, "role_id", None),
+                role_snapshot=getattr(s, "role_snapshot", None),
+                segment_kind=getattr(s, "segment_kind", None) or "narration",
+                prosody_marks=getattr(s, "prosody_marks", None) or [],
                 locked_params=s.locked_params or [],
                 generated_params=s.generated_params,
                 current_audio_path=s.current_audio_path,
@@ -177,6 +181,8 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         active_narration_version=getattr(p, "active_narration_version", None),
         animation_theme=getattr(p, "animation_theme", None),
         remotion_project_path=getattr(p, "remotion_project_path", None),
+        default_narrator_role_id=getattr(p, "default_narrator_role_id", None),
+        default_narrator_snapshot=getattr(p, "default_narrator_snapshot", None),
         created_at=_to_iso(p.created_at),
         updated_at=_to_iso(p.updated_at),
         chapters=chapters,
@@ -244,6 +250,9 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     # P2 v3: 整体动画主题
     setattr(p, "animation_theme", project.animation_theme)
     setattr(p, "remotion_project_path", project.remotion_project_path)
+    # P3: 默认旁白角色 + 快照
+    setattr(p, "default_narrator_role_id", project.default_narrator_role_id)
+    setattr(p, "default_narrator_snapshot", project.default_narrator_snapshot)
     if project.created_at:
         p.created_at = _parse_iso(project.created_at)
     p.updated_at = utcnow()
@@ -288,6 +297,11 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             seg.text = s_in.text or ""
             seg.ssml = s_in.ssml
             seg.emotion = s_in.emotion
+            # P3: 段落角色 + 快照 + 类型 + 局部语气标注
+            setattr(seg, "role_id", s_in.role_id)
+            setattr(seg, "role_snapshot", s_in.role_snapshot)
+            setattr(seg, "segment_kind", s_in.segment_kind or "narration")
+            setattr(seg, "prosody_marks", s_in.prosody_marks or [])
             seg.params = s_in.params or {}
             seg.locked_params = s_in.locked_params or []
             if s_in.generated_params is not None:
@@ -516,6 +530,35 @@ def svc_get_segment(
     return seg
 
 
+def plan_prosody_subsegments(text: str, marks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Split text into plain and marked ranges for engines that need fallback generation."""
+    normalized = sorted(
+        [mark for mark in marks if isinstance(mark.get("start"), int) and isinstance(mark.get("end"), int)],
+        key=lambda mark: mark["start"],
+    )
+    parts: list[dict[str, Any]] = []
+    cursor = 0
+    text_length = len(text)
+    for mark in normalized:
+        start = max(0, min(mark["start"], text_length))
+        end = max(start, min(mark["end"], text_length))
+        if start > cursor:
+            parts.append({"text": text[cursor:start], "prosody": None})
+        if end > start:
+            parts.append({"text": text[start:end], "prosody": mark})
+        cursor = max(cursor, end)
+    if cursor < text_length:
+        parts.append({"text": text[cursor:], "prosody": None})
+    return [part for part in parts if part["text"]]
+
+
+def should_use_split_fallback(engine: str, prosody_marks: list[dict[str, Any]]) -> bool:
+    """Whether an engine needs the split-and-concat fallback for local prosody marks."""
+    if not prosody_marks:
+        return False
+    return engine == "edge_tts"
+
+
 def synthesize_segment(
     db: Session,
     project_id: str,
@@ -528,7 +571,19 @@ def synthesize_segment(
 ) -> SegmentedProjectSegment:
     seg = svc_get_segment(db, project_id, chapter_id, segment_id)
     chapter = seg.chapter
-    effective = _merge_params(chapter.default_params, seg.params, request_params)
+    # P3: 角色快照的 default_engine_params 介于章节默认与段落 params 之间 (优先级正确性见 Task 7)
+    role_snapshot = getattr(seg, "role_snapshot", None)
+    role_params = role_snapshot.get("default_engine_params") if isinstance(role_snapshot, dict) else None
+    effective = _merge_params(chapter.default_params, role_params, seg.params, request_params)
+    # P3: 把角色 / 局部语气元数据写入 generated_params (可复现 + 前端 stale 检测)
+    role_id = getattr(seg, "role_id", None)
+    prosody_marks = getattr(seg, "prosody_marks", None) or []
+    if role_id is not None:
+        effective["role_id"] = role_id
+    if role_snapshot is not None:
+        effective["role_snapshot"] = role_snapshot
+    effective["prosody_marks"] = prosody_marks
+    effective["segment_kind"] = getattr(seg, "segment_kind", None) or "narration"
     engine = effective.get("engine", "edge_tts")
     text_to_speak = text_override or seg.text or ""
     if ssml_override is not None:
@@ -536,6 +591,12 @@ def synthesize_segment(
 
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
+
+    if should_use_split_fallback(engine, prosody_marks):
+        # First version keeps UI and metadata ready for split fallback while continuing
+        # to generate one segment audio. The dedicated concat execution can replace
+        # this branch without changing API or stored fields.
+        effective["prosody_split_plan"] = plan_prosody_subsegments(text_to_speak, prosody_marks)
 
     audio_bytes, _native_fmt = synthesize_with_engine(engine, text_to_speak, effective, db=db)
     assets.ensure_project_layout(project_id, chapter_id)
