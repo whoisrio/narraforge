@@ -198,6 +198,29 @@
   line-height: 1.65;
 }
 
+.defaultVoiceHint {
+  display: inline-grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(139, 76, 13, 0.18);
+  border-radius: 16px;
+  background: rgba(139, 76, 13, 0.07);
+}
+
+.defaultVoiceHint span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.defaultVoiceHint strong {
+  color: var(--color-primary-dark);
+  font-size: 13px;
+}
+
 @media (max-width: 1100px) {
   .grid,
   .header {

@@ -48,7 +48,7 @@ describe('ProjectVoices', () => {
     expect(screen.getAllByRole('button', { name: /试听/ })).toHaveLength(2);
   });
 
-  it('prompts to create a default narrator when missing', () => {
+  it('prompts to create a usable default narrator when missing', () => {
     const onCreateDefaultNarrator = vi.fn();
 
     render(
@@ -63,9 +63,29 @@ describe('ProjectVoices', () => {
       />,
     );
 
+    expect(screen.getByText('创建后将使用')).toBeInTheDocument();
+    expect(screen.getByText(/Edge-TTS · zh-CN-YunxiNeural/)).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: /创建默认旁白/ }));
 
     expect(onCreateDefaultNarrator).toHaveBeenCalled();
+  });
+
+  it('shows the actual voice that will be used for narrator creation', () => {
+    render(
+      <ProjectVoices
+        roles={[]}
+        defaultNarratorRoleId={null}
+        defaultNarratorPreviewLabel="Edge-TTS · zh-HK-HiuGaaiNeural"
+        onSetDefaultNarrator={vi.fn()}
+        onCreateDefaultNarrator={vi.fn()}
+        onCreateCast={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText(/Edge-TTS · zh-HK-HiuGaaiNeural/)).toBeInTheDocument();
   });
 
   it('creates cast and previews roles', () => {
@@ -89,6 +109,24 @@ describe('ProjectVoices', () => {
 
     expect(onCreateCast).toHaveBeenCalled();
     expect(onPreviewRole).toHaveBeenCalledWith(expect.objectContaining({ id: 'role-guest-a' }), expect.any(String));
+  });
+
+  it('does not treat existing narrator roles as the project default until selected', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        defaultNarratorRoleId={null}
+        onSetDefaultNarrator={vi.fn()}
+        onCreateDefaultNarrator={vi.fn()}
+        onCreateCast={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('还没有默认旁白')).toBeInTheDocument();
+    expect(screen.getByText('创建后将使用')).toBeInTheDocument();
+    expect(screen.queryByText('这是一段默认旁白试听，用于确认叙述声音是否沉稳、清晰，并适合长时间解说。')).not.toBeInTheDocument();
   });
 
   it('sets default narrator from available narrator roles', () => {

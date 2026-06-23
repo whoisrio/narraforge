@@ -30,6 +30,7 @@ import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
 import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
 import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
+import { createVoiceRoleDraft, roleVoiceLabelFromParams } from '../services/voiceRoleDefaults';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -570,19 +571,11 @@ export function TTSSynthesis({
     ...assignRoleForSplitItem(item.text, voiceMode, roles, project.default_narrator_role_id),
   })), [roles, project.default_narrator_role_id]);
 
-  const createRoleDraft = useCallback((name: string, description: 'Narrator' | 'Cast'): RoleSnapshot => {
-    const roleParams = buildCurrentParams();
-    const defaultVoice = roleParams.edge_voice || roleParams.voice_id || roleParams.mimo_preset_voice || roleParams.voxcpm_voice_description || '';
-    return {
-      id: `role-${description.toLowerCase()}-${Date.now()}`,
-      name,
-      description,
-      default_engine: roleParams.engine,
-      default_voice: defaultVoice,
-      default_engine_params: roleParams,
-      favorite_styles: [],
-    };
-  }, [buildCurrentParams]);
+  const createRoleDraft = useCallback((name: string, description: 'Narrator' | 'Cast'): RoleSnapshot => createVoiceRoleDraft({
+    name,
+    roleKind: description,
+    currentParams: buildCurrentParams(),
+  }), [buildCurrentParams]);
 
   const handleCreateDefaultNarrator = useCallback(async () => {
     try {
@@ -1187,6 +1180,12 @@ export function TTSSynthesis({
   const castRoleSummaries = roles
     .filter(role => !narratorRoleSummaries.some(narrator => narrator.id === role.id))
     .map(role => ({ id: role.id, name: role.name }));
+  const narratorDraftPreview = createVoiceRoleDraft({
+    name: '默认旁白',
+    roleKind: 'Narrator',
+    currentParams: buildCurrentParams(),
+  });
+  const defaultNarratorPreviewLabel = `${({ cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM' } as Record<Engine, string>)[narratorDraftPreview.default_engine] || narratorDraftPreview.default_engine} · ${roleVoiceLabelFromParams(narratorDraftPreview.default_engine_params, narratorDraftPreview.default_voice)}`;
 
   return (
     <div className={styles.container}>
@@ -1520,6 +1519,7 @@ export function TTSSynthesis({
             onCreateCast={handleCreateCastRole}
             onPreviewRole={handlePreviewRole}
             onManageRoles={() => setRoleLibraryOpen(true)}
+            defaultNarratorPreviewLabel={defaultNarratorPreviewLabel}
           />
         ) : (
           <div className={styles.projectSectionPlaceholder}>

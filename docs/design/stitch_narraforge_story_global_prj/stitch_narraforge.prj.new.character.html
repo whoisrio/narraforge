@@ -1,0 +1,468 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NarraForge Studio | Character Engine Configuration</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-secondary-fixed": "#2c1600",
+                        "on-secondary-fixed-variant": "#683c00",
+                        "primary-fixed-dim": "#ffb77e",
+                        "primary-container": "#a96425",
+                        "on-background": "#1d1b17",
+                        "inverse-surface": "#33302c",
+                        "tertiary": "#00685d",
+                        "on-primary": "#ffffff",
+                        "on-secondary-container": "#784703",
+                        "surface-container": "#f3ede6",
+                        "surface-bright": "#fff8f1",
+                        "tertiary-fixed-dim": "#6fd8c8",
+                        "on-tertiary": "#ffffff",
+                        "outline-variant": "#d8c2b4",
+                        "tertiary-container": "#008376",
+                        "on-tertiary-fixed": "#00201c",
+                        "on-secondary": "#ffffff",
+                        "on-error": "#ffffff",
+                        "inverse-primary": "#ffb77e",
+                        "surface-container-high": "#ede7e0",
+                        "error": "#ba1a1a",
+                        "on-surface-variant": "#534439",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#1d1b17",
+                        "secondary-container": "#feb86f",
+                        "surface-variant": "#e8e1db",
+                        "surface-dim": "#dfd9d2",
+                        "outline": "#867467",
+                        "on-tertiary-container": "#f4fffb",
+                        "surface-tint": "#8e4e10",
+                        "tertiary-fixed": "#8cf5e4",
+                        "background": "#fff8f1",
+                        "surface-container-highest": "#e8e1db",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "secondary-fixed": "#ffdcbd",
+                        "secondary": "#865310",
+                        "primary-fixed": "#ffdcc3",
+                        "inverse-on-surface": "#f6f0e9",
+                        "on-primary-container": "#fffbff",
+                        "surface-container-low": "#f9f3eb",
+                        "on-tertiary-fixed-variant": "#005048",
+                        "primary": "#8b4c0d",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#feb86f",
+                        "on-error-container": "#93000a",
+                        "surface": "#fff8f1",
+                        "on-primary-fixed": "#2f1500"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "2xl": "48px",
+                        "unit": "4px",
+                        "sm": "8px",
+                        "max-width": "1600px",
+                        "xl": "32px",
+                        "xs": "4px",
+                        "md": "16px",
+                        "lg": "24px"
+                    },
+                    "fontFamily": {
+                        "body-base": ["Plus Jakarta Sans"],
+                        "label-caps": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "code-xs": ["JetBrains Mono"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-dialogue": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "body-base": ["15px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                        "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.12em", "fontWeight": "700"}],
+                        "display-lg": ["36px", {"lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                        "code-xs": ["12px", {"lineHeight": "18px", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "body-dialogue": ["17px", {"lineHeight": "29px", "letterSpacing": "-0.01em", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #d8c2b4; border-radius: 10px; }
+        
+        .paper-texture {
+            background-color: #fff8f1;
+            background-image: url("https://www.transparenttextures.com/patterns/natural-paper.png");
+        }
+
+        .vacuum-glow {
+            box-shadow: 0 0 0 4px rgba(139, 76, 13, 0.15);
+        }
+
+        .range-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: #d8c2b4;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #8b4c0d;
+            cursor: pointer;
+            border-radius: 50%;
+            transition: transform 0.2s;
+        }
+
+        .range-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-base overflow-hidden">
+<!-- Top Navigation Bar -->
+<header class="fixed top-3 left-3 right-3 rounded-xl bg-surface/92 backdrop-blur-md border border-outline-variant/30 shadow-[0_4px_12px_rgba(26,24,20,0.08)] h-16 flex justify-between items-center px-lg z-50">
+<div class="flex items-center gap-md">
+<span class="font-display-lg text-display-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">NarraForge</span>
+<div class="hidden md:flex gap-md ml-xl">
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-transform" href="#">Project Settings</a>
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-transform" href="#">Export</a>
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-transform" href="#">Preview</a>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<input class="bg-surface-container-low border-outline-variant/30 rounded-full pl-10 pr-4 py-1.5 text-sm focus:ring-primary focus:border-primary" placeholder="Search archives..." type="text">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+</div>
+<button class="material-symbols-outlined text-primary hover:scale-[1.03] transition-transform active:scale-[0.97]">notifications</button>
+<button class="material-symbols-outlined text-primary hover:scale-[1.03] transition-transform active:scale-[0.97]">cloud_done</button>
+<div class="h-8 w-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional studio headshot of a creative director in a warm, amber-lit recording studio environment. The style is cinematic and high-end, matching the NarraForge ivory and bronze aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBeiqY4FLedbrw27de8JdkdiIPv-e1sMDBEwQj5MIw8F1f0w370RLNBBmPtRFORNKD3Eo4yE-7HyTyVIJLCBh7OhOIvWF-zf70NAVdD6S8X0oHQyeX3_ROb4eTeu318xlyNRpRmPuTET2C3-d5ML90b2q54RVYxC30V1GVJvU-Ak6xdEj4Yhm9HG64GMOHW1qlcXsD5ErUUdZzJQCSlinAk2TJJVnPwAwB55Hg2jUh9wszAG1aAgmPXQ6c-SP8mVPU3dvadRbmrxA">
+</div>
+</div>
+</header>
+<!-- Side Navigation Bar -->
+<aside class="fixed left-0 top-0 h-full w-[248px] bg-surface-container-low border-r border-outline-variant/20 flex flex-col pt-24 pb-lg px-md z-40 hidden md:flex">
+<div class="flex items-center gap-md mb-xl px-sm">
+<div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container shadow-sm">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_stories</span>
+</div>
+<div>
+<p class="font-bold text-sm text-on-surface">Current Manuscript</p>
+<p class="text-xs text-on-surface-variant">Book One</p>
+</div>
+</div>
+<nav class="flex-grow space-y-1">
+<a class="flex items-center gap-md px-md py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">auto_stories</span>
+                Library
+            </a>
+<a class="flex items-center gap-md px-md py-2.5 rounded-lg text-primary font-bold border-l-4 border-primary bg-primary-container/10 transition-colors" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+                Characters
+            </a>
+<a class="flex items-center gap-md px-md py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">public</span>
+                World Building
+            </a>
+<a class="flex items-center gap-md px-md py-2.5 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+                Settings
+            </a>
+</nav>
+<button class="mt-md w-full py-2.5 bg-gradient-to-r from-primary to-secondary text-on-primary rounded-full font-bold flex items-center justify-center gap-2 hover:scale-[1.03] active:scale-[0.97] transition-all shadow-md">
+<span class="material-symbols-outlined">add</span>
+            New Chapter
+        </button>
+<div class="mt-auto pt-xl border-t border-outline-variant/20 space-y-1">
+<a class="flex items-center gap-md px-md py-2 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors text-sm" href="#">
+<span class="material-symbols-outlined text-[20px]">help</span>
+                Help
+            </a>
+<a class="flex items-center gap-md px-md py-2 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors text-sm" href="#">
+<span class="material-symbols-outlined text-[20px]">inventory_2</span>
+                Archive
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-[248px] pt-24 h-screen overflow-y-auto custom-scrollbar paper-texture">
+<div class="max-w-[1200px] mx-auto px-lg pb-2xl">
+<!-- Character Hero Header -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-lg mb-xl animate-in fade-in duration-700">
+<div class="flex items-center gap-lg">
+<div class="w-32 h-32 rounded-2xl border-4 border-surface-container-highest shadow-xl overflow-hidden relative group">
+<img class="w-full h-full object-cover" data-alt="A detailed digital painting of Elias Thorne, a sophisticated 19th-century intellectual with salt-and-pepper hair, wearing a high-collar waistcoat. The art style is refined and painterly, bathed in the soft glow of NarraForge's amber and parchment lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBrLVlc3D6UtjERQH_xeCaGMVxUpecQyv8ZIlIUETO87hOVQ-D1XQAke0Q07nlLapdnW9gAIlDU8jovMfnoAcUlQmdqKdO3cZRT2T1nL-DYZGJdTeiMWUnuTxNfD8jh7DFvEg5s3lMtoA241GioiAD2Ht_v8cP3DcsWErk_hYE5MpMmxPzulINltg-Bxm3sbiimt3ugqhczupGOW3bLtv-jgahCeIlZgTZ5UFuYjRV8Ccvm5ecHTKnpAgYiJPXJpRM919PeDujlUw">
+<div class="absolute inset-0 bg-primary/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+</div>
+<div>
+<div class="flex items-center gap-sm mb-1">
+<span class="font-label-caps text-label-caps bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20">Universal Soul</span>
+<span class="font-label-caps text-label-caps bg-secondary/10 text-secondary px-2 py-0.5 rounded border border-secondary/20">Active</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-on-surface">Elias Thorne</h1>
+<p class="text-on-surface-variant italic">Character Engine Configuration — Global Library</p>
+</div>
+</div>
+<div class="flex gap-md">
+<button class="px-lg py-2.5 rounded-full border border-outline-variant font-bold text-on-surface hover:bg-surface-container-high transition-colors active:scale-[0.97]">Discard Changes</button>
+<button class="px-lg py-2.5 rounded-full bg-gradient-to-r from-primary to-secondary text-on-primary font-bold shadow-lg hover:scale-[1.03] transition-transform active:scale-[0.97]">Save to Universal Roster</button>
+</div>
+</section>
+<!-- Configuration Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+<!-- Left Column: Engine Selection & Technical Config -->
+<div class="lg:col-span-8 space-y-lg">
+<!-- Engine Selection -->
+<div class="bg-surface/50 border border-outline-variant/30 rounded-2xl p-lg backdrop-blur-sm shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-md flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">psychology</span>
+                            TTS / Cloning Engine
+                        <button class="ml-auto text-sm font-bold text-primary flex items-center gap-1 hover:underline bg-primary/5 px-3 py-1 rounded-full border border-primary/20 transition-all hover:bg-primary/10"><span class="material-symbols-outlined text-[18px]">library_music</span>Browse System Library</button></h3>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md">
+<!-- Engine Card: Narra-Alpha -->
+<label class="relative cursor-pointer group">
+<input checked="" class="peer sr-only" name="engine" type="radio">
+<div class="h-full border border-outline-variant/50 rounded-xl p-md bg-surface-container-low transition-all group-hover:border-primary peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:vacuum-glow">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-bold text-on-surface">Narra-Alpha (V3)</p>
+<span class="material-symbols-outlined text-primary text-sm opacity-0 peer-checked:opacity-100">check_circle</span>
+</div>
+<p class="text-xs text-on-surface-variant">Best for deep narration and emotive range. Balanced latency.</p>
+</div>
+</label>
+<!-- Engine Card: Forge-HD -->
+<label class="relative cursor-pointer group">
+<input class="peer sr-only" name="engine" type="radio">
+<div class="h-full border border-outline-variant/50 rounded-xl p-md bg-surface-container-low transition-all group-hover:border-primary peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:vacuum-glow">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-bold text-on-surface">Forge-HD</p>
+<span class="material-symbols-outlined text-primary text-sm opacity-0 peer-checked:opacity-100">check_circle</span>
+</div>
+<p class="text-xs text-on-surface-variant">Extreme high fidelity. Higher latency. Best for batch exports.</p>
+</div>
+</label>
+<!-- Engine Card: Legacy-Vox -->
+<label class="relative cursor-pointer group">
+<input class="peer sr-only" name="engine" type="radio">
+<div class="h-full border border-outline-variant/50 rounded-xl p-md bg-surface-container-low transition-all group-hover:border-primary peer-checked:border-primary peer-checked:bg-primary/5 peer-checked:vacuum-glow">
+<div class="flex justify-between items-start mb-sm">
+<p class="font-bold text-on-surface">Legacy-Vox</p>
+<span class="material-symbols-outlined text-primary text-sm opacity-0 peer-checked:opacity-100">check_circle</span>
+</div>
+<p class="text-xs text-on-surface-variant">Lightweight and fast. Recommended for real-time iteration.</p>
+</div>
+</label>
+</div><div class="mt-lg pt-lg border-t border-outline-variant/20 animate-in fade-in duration-700"><div class="flex justify-between items-center mb-md"><div><h4 class="font-bold text-on-surface">System Voice Talent</h4><p class="text-xs text-on-surface-variant">Curated high-fidelity stock personas for immediate production.</p></div><div class="flex gap-2"><select class="bg-surface-container-low border-outline-variant/30 rounded-lg text-xs py-1 px-3 focus:ring-primary focus:border-primary"><option>All Languages</option><option>English (US)</option><option>English (UK)</option></select><select class="bg-surface-container-low border-outline-variant/30 rounded-lg text-xs py-1 px-3 focus:ring-primary focus:border-primary"><option>All Personas</option><option>Narrative</option><option>Dramatic</option><option>News</option></select></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-md"><div class="flex items-center justify-between p-md bg-surface-container-low rounded-xl border border-outline-variant/30 hover:border-primary/50 transition-colors group cursor-pointer"><div class="flex items-center gap-md"><button class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-all"><span class="material-symbols-outlined">play_arrow</span></button><div><p class="font-bold text-sm">Arthur (Narrative)</p><div class="flex gap-1 mt-1"><span class="text-[9px] font-label-caps bg-secondary/10 text-secondary px-1.5 py-0.5 rounded">Natural</span><span class="text-[9px] font-label-caps bg-tertiary/10 text-tertiary px-1.5 py-0.5 rounded">Smooth</span></div></div></div><button class="text-xs font-bold text-primary border border-primary/30 px-3 py-1 rounded-full hover:bg-primary hover:text-on-primary transition-colors">Select</button></div><div class="flex items-center justify-between p-md bg-surface-container-low rounded-xl border border-outline-variant/30 hover:border-primary/50 transition-colors group cursor-pointer"><div class="flex items-center gap-md"><button class="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-on-primary transition-all"><span class="material-symbols-outlined">play_arrow</span></button><div><p class="font-bold text-sm">Evelyn (Dramatic)</p><div class="flex gap-1 mt-1"><span class="text-[9px] font-label-caps bg-secondary/10 text-secondary px-1.5 py-0.5 rounded">Clear</span><span class="text-[9px] font-label-caps bg-tertiary/10 text-tertiary px-1.5 py-0.5 rounded">Expressive</span></div></div></div><button class="text-xs font-bold text-primary border border-primary/30 px-3 py-1 rounded-full hover:bg-primary hover:text-on-primary transition-colors">Select</button></div></div></div>
+</div>
+<!-- Voice Samples & Tuning -->
+<div class="bg-surface/50 border border-outline-variant/30 rounded-2xl p-lg backdrop-blur-sm shadow-sm">
+<div class="flex justify-between items-center mb-md">
+<h3 class="font-headline-md text-headline-md flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">graphic_eq</span>
+                                Cloning Configuration
+                            </h3>
+<button class="text-sm font-bold text-primary flex items-center gap-1 hover:underline">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                                Add Reference Sample
+                            </button>
+</div>
+<!-- Sample List -->
+<div class="space-y-sm mb-lg">
+<div class="flex items-center justify-between p-sm bg-surface-container-highest/30 rounded-lg border border-outline-variant/20">
+<div class="flex items-center gap-md">
+<button class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">play_arrow</span>
+</button>
+<div>
+<p class="text-sm font-bold">Thorne_Monologue_Clean.wav</p>
+<p class="text-[11px] text-on-surface-variant uppercase tracking-wider">Studio Recording • 0:42s</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-error transition-colors">delete</span>
+</div>
+<div class="flex items-center justify-between p-sm bg-surface-container-highest/30 rounded-lg border border-outline-variant/20">
+<div class="flex items-center gap-md opacity-70">
+<button class="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">play_arrow</span>
+</button>
+<div>
+<p class="text-sm font-bold">Thorne_Angry_Burst.wav</p>
+<p class="text-[11px] text-on-surface-variant uppercase tracking-wider">Reference Clip • 0:15s</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-error transition-colors">delete</span>
+</div>
+</div>
+<!-- Technical Tuning Sliders -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-xl">
+<div class="space-y-sm">
+<div class="flex justify-between items-center">
+<span class="text-sm font-bold text-on-surface">Stability</span>
+<span class="font-code-xs text-code-xs text-primary bg-primary/10 px-1.5 rounded">0.82</span>
+</div>
+<input class="range-slider" max="100" min="0" type="range" value="82">
+<p class="text-[11px] text-on-surface-variant">Higher values make the voice more consistent but may sound monotone.</p>
+</div>
+<div class="space-y-sm">
+<div class="flex justify-between items-center">
+<span class="text-sm font-bold text-on-surface">Similarity Boost</span>
+<span class="font-code-xs text-code-xs text-primary bg-primary/10 px-1.5 rounded">0.75</span>
+</div>
+<input class="range-slider" max="100" min="0" type="range" value="75">
+<p class="text-[11px] text-on-surface-variant">Improves cloning accuracy but may introduce technical artifacts at high values.</p>
+</div>
+<div class="space-y-sm">
+<div class="flex justify-between items-center">
+<span class="text-sm font-bold text-on-surface">Style Exaggeration</span>
+<span class="font-code-xs text-code-xs text-primary bg-primary/10 px-1.5 rounded">0.45</span>
+</div>
+<input class="range-slider" max="100" min="0" type="range" value="45">
+<p class="text-[11px] text-on-surface-variant">Amplifies the original emotion of the reference speaker.</p>
+</div>
+<div class="space-y-sm">
+<div class="flex justify-between items-center">
+<span class="text-sm font-bold text-on-surface">Speech Noise Level</span>
+<span class="font-code-xs text-code-xs text-primary bg-primary/10 px-1.5 rounded">0.12</span>
+</div>
+<input class="range-slider" max="100" min="0" type="range" value="12">
+<p class="text-[11px] text-on-surface-variant">Simulates studio noise floor or atmospheric texture.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Right Column: Model Settings & Live Preview -->
+<div class="lg:col-span-4 space-y-lg">
+<!-- Model Specific Settings -->
+<div class="bg-surface/50 border border-outline-variant/30 rounded-2xl p-lg backdrop-blur-sm shadow-sm">
+<h3 class="font-headline-md text-headline-md mb-md flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">tune</span>
+                            Advanced Settings
+                        </h3>
+<div class="space-y-md">
+<div class="flex items-center justify-between">
+<div>
+<p class="text-sm font-bold">Emotional Inflection</p>
+<p class="text-[11px] text-on-surface-variant">Dynamic response to punctuation.</p>
+</div>
+<button class="w-12 h-6 bg-primary rounded-full relative transition-colors" onclick="this.classList.toggle('bg-primary'); this.classList.toggle('bg-outline-variant');">
+<span class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform"></span>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<p class="text-sm font-bold">Breath Simulation</p>
+<p class="text-[11px] text-on-surface-variant">Injects natural inhalations between pauses.</p>
+</div>
+<button class="w-12 h-6 bg-primary rounded-full relative transition-colors" onclick="this.classList.toggle('bg-primary'); this.classList.toggle('bg-outline-variant');">
+<span class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform"></span>
+</button>
+</div>
+<div class="flex items-center justify-between">
+<div>
+<p class="text-sm font-bold">Prosody Accuracy</p>
+<p class="text-[11px] text-on-surface-variant">Enhanced syllable stress and rhythm.</p>
+</div>
+<button class="w-12 h-6 bg-outline-variant rounded-full relative transition-colors" onclick="this.classList.toggle('bg-primary'); this.classList.toggle('bg-outline-variant');">
+<span class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform"></span>
+</button>
+</div>
+</div>
+</div>
+<!-- Live Preview Area -->
+<div class="bg-primary/5 border-2 border-primary/20 rounded-2xl p-lg shadow-lg relative overflow-hidden">
+<div class="absolute top-0 right-0 p-2">
+<span class="font-label-caps text-[9px] text-primary bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">Real-time Preview</span>
+</div>
+<h3 class="font-bold text-on-surface mb-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-primary">campaign</span>
+                            Studio Playback
+                        </h3>
+<div class="bg-white/80 rounded-xl p-md border border-outline-variant/20 mb-md">
+<p class="font-body-dialogue text-body-dialogue text-on-surface italic leading-relaxed">
+                                "The archives have been silent for far too long, Elias. It's time we opened the vault."
+                            </p>
+</div>
+<!-- Mini Waveform Decoration -->
+<div class="flex items-center justify-center gap-1 h-12 mb-md">
+<div class="w-1.5 h-4 bg-primary/30 rounded-full animate-[bounce_1.2s_infinite]"></div>
+<div class="w-1.5 h-8 bg-primary/50 rounded-full animate-[bounce_1s_infinite]"></div>
+<div class="w-1.5 h-10 bg-primary rounded-full animate-[bounce_0.8s_infinite]"></div>
+<div class="w-1.5 h-6 bg-tertiary rounded-full animate-[bounce_1.1s_infinite]"></div>
+<div class="w-1.5 h-10 bg-primary rounded-full animate-[bounce_0.9s_infinite]"></div>
+<div class="w-1.5 h-7 bg-primary/60 rounded-full animate-[bounce_1.3s_infinite]"></div>
+<div class="w-1.5 h-3 bg-primary/30 rounded-full animate-[bounce_1.5s_infinite]"></div>
+</div>
+<div class="flex flex-col gap-sm">
+<button class="w-full py-2.5 bg-primary text-on-primary rounded-full font-bold flex items-center justify-center gap-2 hover:bg-primary-container transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined">play_circle</span>
+                                Generate Preview
+                            </button>
+<button class="w-full py-2.5 bg-surface border border-primary/30 text-primary rounded-full font-bold flex items-center justify-center gap-2 hover:bg-primary/10 transition-colors active:scale-[0.98]">
+<span class="material-symbols-outlined">auto_fix</span>
+                                Test in Current Project
+                            </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Bar (Mobile only) -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/92 backdrop-blur-md border-t border-outline-variant/20 flex justify-around items-center px-md z-50">
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">auto_stories</span>
+<span class="text-[10px] font-bold">Library</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">group</span>
+<span class="text-[10px] font-bold">Characters</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">public</span>
+<span class="text-[10px] font-bold">World</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-bold">Settings</span>
+</button>
+</nav>
+<script>
+        // Simple Interaction Logic
+        document.querySelectorAll('input[type="range"]').forEach(slider => {
+            slider.addEventListener('input', (e) => {
+                const badge = e.target.parentElement.querySelector('.text-primary');
+                if(badge) {
+                    badge.innerText = (e.target.value / 100).toFixed(2);
+                }
+            });
+        });
+
+        // Hover feedback for Engine cards
+        const engineCards = document.querySelectorAll('label');
+        engineCards.forEach(card => {
+            card.addEventListener('click', () => {
+                // Add physical feedback animation
+                card.style.transform = 'scale(0.98)';
+                setTimeout(() => { card.style.transform = 'scale(1)'; }, 100);
+            });
+        });
+    </script>
+</body></html>

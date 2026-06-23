@@ -1,4 +1,5 @@
 import type { Role, RoleSnapshot } from '../../types';
+import { DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
 import styles from './ProjectVoices.module.css';
 
 interface ProjectVoicesProps {
@@ -9,6 +10,7 @@ interface ProjectVoicesProps {
   onCreateCast: () => void;
   onPreviewRole: (role: Role, sampleText: string) => void;
   onManageRoles: () => void;
+  defaultNarratorPreviewLabel?: string;
 }
 
 const NARRATOR_SAMPLE = '这是一段默认旁白试听，用于确认叙述声音是否沉稳、清晰，并适合长时间解说。';
@@ -54,10 +56,13 @@ export function ProjectVoices({
   onCreateCast,
   onPreviewRole,
   onManageRoles,
+  defaultNarratorPreviewLabel = `Edge-TTS · ${DEFAULT_EDGE_NARRATOR_VOICE}`,
 }: ProjectVoicesProps) {
   const narratorRoles = roles.filter(role => isNarratorRole(role, defaultNarratorRoleId));
   const castRoles = roles.filter(role => !isNarratorRole(role, defaultNarratorRoleId));
-  const defaultNarrator = roles.find(role => role.id === defaultNarratorRoleId) ?? narratorRoles[0] ?? null;
+  const defaultNarrator = defaultNarratorRoleId
+    ? roles.find(role => role.id === defaultNarratorRoleId) ?? null
+    : null;
 
   return (
     <section className={styles.root}>
@@ -108,6 +113,10 @@ export function ProjectVoices({
             <div className={styles.emptyState}>
               <strong>还没有默认旁白</strong>
               <p>创建一个默认旁白角色，用于所有 narration 段落。</p>
+              <div className={styles.defaultVoiceHint}>
+                <span>创建后将使用</span>
+                <strong>{defaultNarratorPreviewLabel}</strong>
+              </div>
             </div>
           )}
         </section>
