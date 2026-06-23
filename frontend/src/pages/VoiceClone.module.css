@@ -297,7 +297,8 @@
   gap: 12px;
 }
 
-.backendPreviewBtn {
+.backendPreviewBtn,
+.saveProfileBtn {
   justify-self: start;
   border: 1px solid rgba(196, 122, 58, 0.24);
   border-radius: var(--radius-full);
@@ -306,6 +307,35 @@
   color: var(--color-text-on-primary);
   font-weight: 850;
   cursor: pointer;
+}
+
+.saveProfileBtn {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--color-primary-dark);
+}
+
+.backendPreviewBtn:disabled,
+.saveProfileBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.designStatus,
+.designError {
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.designStatus {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.designError {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-danger);
 }
 
 .content {

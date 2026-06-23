@@ -5,7 +5,8 @@ import { AudioPreview } from '../components/VoiceClone/AudioPreview';
 import { UrlInput } from '../components/VoiceClone/UrlInput';
 import { VoiceList } from '../components/VoiceClone/VoiceList';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { VoiceProfile } from '../types';
+import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
+import type { TTSResult, VoiceProfile } from '../types';
 import styles from './VoiceClone.module.css';
 
 /** 克隆引擎类型 */
@@ -29,6 +30,11 @@ export function VoiceClone() {
   const [designBrief, setDesignBrief] = useState('温暖、清晰、有纪录片感的中文旁白音色');
   const [designIntensity, setDesignIntensity] = useState(72);
   const [designStability, setDesignStability] = useState(68);
+  const [designPreview, setDesignPreview] = useState<TTSResult | null>(null);
+  const [designProfiles, setDesignProfiles] = useState<VoiceProfile[]>([]);
+  const [designStatus, setDesignStatus] = useState<string | null>(null);
+  const [designError, setDesignError] = useState<string | null>(null);
+  const [designPreviewing, setDesignPreviewing] = useState(false);
 
   /** 录制或上传后得到的 File 对象 */
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -50,6 +56,44 @@ export function VoiceClone() {
   const handleCloneSuccess = () => {
     triggerRefresh();
     resetToChooseMethod();
+  };
+
+  const handleDesignPreview = async () => {
+    setDesignPreviewing(true);
+    setDesignError(null);
+    setDesignStatus(null);
+    try {
+      const preview = await playVoiceDesignPreview({
+        engine: designEngine as VoiceDesignEngine,
+        voiceDescription: designBrief,
+        sampleText: '这是一段试听文本，用来确认这个 Voice Profile 是否适合项目旁白。',
+        intensity: designIntensity,
+        stability: designStability,
+      });
+      setDesignPreview(preview);
+      setDesignStatus(`试听已生成 · ${preview.audio_format || (designEngine === 'voxcpm' ? 'wav' : 'mp3')}`);
+    } catch (error) {
+      console.error('[voice-design] preview failed:', error);
+      setDesignError(error instanceof Error ? error.message : '后端试听失败，请检查模型配置');
+    } finally {
+      setDesignPreviewing(false);
+    }
+  };
+
+  const handleSaveDesignProfile = () => {
+    const id = designPreview?.audio_id || `design-${Date.now()}`;
+    const engineLabel = designEngine === 'mimo' ? 'mimo' : designEngine === 'voxcpm' ? 'voxcpm' : 'qwen';
+    const profile: VoiceProfile = {
+      id,
+      name: designBrief.trim() || 'Untitled Voice Profile',
+      audio_url: designPreview?.audio_url || '',
+      description: designBrief,
+      clone_engine: engineLabel,
+      is_cloned: false,
+      created_at: new Date().toISOString(),
+    };
+    setDesignProfiles(prev => [profile, ...prev.filter(item => item.id !== id)]);
+    setDesignStatus('已保存为 Voice Profile，可绑定到项目 Voice Role');
   };
 
   // ---- 步骤 1: 方法选择 ----
@@ -193,6 +237,13 @@ export function VoiceClone() {
           <h3>Voice Profile Library</h3>
           <p>把克隆、设计、调参后的 Voice Profile 作为全局资产管理，再交给项目内 Voice Role 绑定。</p>
           <div className={styles.profileCards}>
+            {designProfiles.map(profile => (
+              <article key={profile.id}>
+                <strong>{profile.name}</strong>
+                <span>{profile.clone_engine === 'mimo' ? 'MiMo' : profile.clone_engine === 'voxcpm' ? 'VoxCPM' : 'CosyVoice'} · design</span>
+                <em>Project Role Ready</em>
+              </article>
+            ))}
             <article>
               <strong>Documentary Narrator</strong>
               <span>MiMo · design</span>
@@ -235,7 +286,14 @@ export function VoiceClone() {
             稳定性
             <input aria-label="稳定性" type="range" min="0" max="100" value={designStability} onChange={(event) => setDesignStability(Number(event.target.value))} />
           </label>
-          <button type="button" className={styles.backendPreviewBtn}>后端试听</button>
+          <button type="button" className={styles.backendPreviewBtn} onClick={handleDesignPreview} disabled={designPreviewing || !designBrief.trim()}>
+            {designPreviewing ? '后端试听中...' : '后端试听'}
+          </button>
+          <button type="button" className={styles.saveProfileBtn} onClick={handleSaveDesignProfile} disabled={!designPreview}>
+            保存为 Voice Profile
+          </button>
+          {designStatus && <div className={styles.designStatus}>{designStatus}</div>}
+          {designError && <div className={styles.designError}>{designError}</div>}
         </section>
       </div>
     </>
