@@ -133,13 +133,12 @@ function VoiceRoleEditor({
   ];
 
   return (
-    <section className={styles.editorPanel} aria-label="声音角色编辑器">
-      <div className={styles.editorHero}>
-        <div className={styles.editorAvatar}>{draft.name.slice(0, 1) || '声'}</div>
+    <section className={styles.editorPanel} aria-label="声音角色编辑器" data-density="compact">
+      <div className={styles.editorBar}>
         <div>
           <span className={styles.kicker}>Voice Role</span>
           <h3>声音角色配置</h3>
-          <p>{draft.description === 'Narrator' ? '默认旁白声音' : 'Cast 对话角色'} · 配置模型、音色与参数。</p>
+          <p>{draft.description === 'Narrator' ? '默认旁白声音' : 'Cast 对话角色'} · 选择模型、音色和参数。</p>
         </div>
         <div className={styles.editorActions}>
           <button type="button" className={styles.ghostButton} onClick={onCancel}>取消</button>
@@ -163,8 +162,8 @@ function VoiceRoleEditor({
           </section>
 
           <section className={styles.configCard}>
-            <h4>模型与音色参数</h4>
-            <p className={styles.configHint}>TTS / Cloning Engine · 与工作室一致的模型、音色和参数配置。</p>
+            <h4>角色声音参数</h4>
+            <p className={styles.configHint}>参数覆盖 — 修改后用于该角色的新合成。布局与工作室参数面板保持一致。</p>
             <div className={styles.engineRow}>
               <span className={styles.paramLabel}>模型</span>
               <div className={styles.enginePills}>
@@ -186,7 +185,7 @@ function VoiceRoleEditor({
             <div className={styles.paramsGrid}>
               {draft.default_engine === 'edge_tts' && (
                 <>
-                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>Edge voice
+                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>音色
                     <select className={styles.paramSelect} value={params.edge_voice ?? ''} onChange={(event) => setParams({ edge_voice: event.target.value })}>
                       {params.edge_voice && <option value={params.edge_voice}>{params.edge_voice}</option>}
                       {edgeVoices.map(voice => (
