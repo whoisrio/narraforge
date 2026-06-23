@@ -210,10 +210,37 @@
 /* ---- Main Content ---- */
 .main {
   flex: 1;
-  padding: calc(var(--header-height) + 32px) var(--spacing-2xl) var(--spacing-2xl);
-  max-width: 1600px;
-  margin: 0 auto;
   width: 100%;
+  max-width: var(--content-max-width);
+  margin: 0 auto;
+}
+
+.shellSettings {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.storageLabel {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.shellSettings select {
+  min-width: 96px;
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+  outline: none;
 }
 
 /* ---- Empty State ---- */

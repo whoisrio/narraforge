@@ -1,31 +1,51 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import App from '../App';
 
+vi.mock('../pages/TTSSynthesis', () => ({
+  TTSSynthesis: () => <div data-testid="page-tts-synthesis">TTS Studio Page</div>,
+}));
+
+vi.mock('../pages/VoiceClone', () => ({
+  VoiceClone: () => <div data-testid="page-voice-design">Voice Design Page</div>,
+}));
+
+vi.mock('../pages/SpeechToText', () => ({
+  SpeechToText: () => <div data-testid="page-subtitles">Subtitles Page</div>,
+}));
+
+vi.mock('../pages/ModelConfig', () => ({
+  ModelConfig: () => <div data-testid="page-settings">Settings Page</div>,
+}));
+
 describe('App', () => {
-  it('should render tab navigation with two tabs', () => {
+  it('renders the new studio shell with global navigation', () => {
     render(<App />);
 
-    expect(screen.getByTestId('tab-voice-clone')).toBeInTheDocument();
-    expect(screen.getByTestId('tab-tts-synthesis')).toBeInTheDocument();
+    expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+    expect(screen.getByText('NarraForge')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /项目/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /字幕识别/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /音色设计/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /设置/ })).toBeInTheDocument();
   });
 
-  it('should show VoiceClone tab by default', () => {
+  it('shows the project TTS studio by default', () => {
     render(<App />);
 
-    const voiceCloneTab = screen.getByTestId('tab-voice-clone');
-    expect(voiceCloneTab.className).toContain('active');
+    expect(screen.getByRole('button', { name: /项目/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('page-tts-synthesis')).toBeVisible();
   });
 
-  it('should switch to TTSSynthesis tab when clicked', () => {
+  it('switches global navigation destinations', () => {
     render(<App />);
 
-    const voiceCloneTab = screen.getByTestId('tab-voice-clone');
-    const ttsTab = screen.getByTestId('tab-tts-synthesis');
+    fireEvent.click(screen.getByRole('button', { name: /音色设计/ }));
+    expect(screen.getByRole('button', { name: /音色设计/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('page-voice-design')).toBeVisible();
 
-    fireEvent.click(ttsTab);
-
-    expect(voiceCloneTab.className).not.toContain('active');
-    expect(ttsTab.className).toContain('active');
+    fireEvent.click(screen.getByRole('button', { name: /字幕识别/ }));
+    expect(screen.getByRole('button', { name: /字幕识别/ })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByTestId('page-subtitles')).toBeVisible();
   });
 });

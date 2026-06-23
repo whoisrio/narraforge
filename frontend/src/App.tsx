@@ -8,6 +8,7 @@ import { configApi } from './services/api';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/useVoiceRefresh';
 import { ThemeProvider } from './hooks/useTheme';
+import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import styles from './App.module.css';
 
 /** 页面状态：主页 或 三个工具页 + 设置 */
@@ -168,22 +169,37 @@ function AppContent() {
     setActiveView(tab);
   };
 
+  const activeGlobalNav: GlobalNavId =
+    activeTab === 'speech-to-text' ? 'subtitles'
+      : activeTab === 'voice-clone' ? 'voice-design'
+        : activeTab === 'model-config' ? 'settings'
+          : 'projects';
+
+  const handleGlobalNavigate = (id: GlobalNavId) => {
+    const nextTab: Tab =
+      id === 'subtitles' ? 'speech-to-text'
+        : id === 'voice-design' ? 'voice-clone'
+          : id === 'settings' ? 'model-config'
+            : 'tts-synthesis';
+    handleTabClick(nextTab);
+  };
+
+  const settingsSlot = (
+    <div className={styles.shellSettings}>
+      <span className={styles.storageLabel}>存储</span>
+      <SettingsSelect />
+    </div>
+  );
+
   const isHome = activeView === 'home';
 
   return (
     <StorageModeContext.Provider value={{ mode: storageMode, setMode: handleSetStorageMode }}>
       <div className={styles.app}>
-        {!isHome && (
-          <AppHeader
-            activeTab={activeTab}
-            onTabClick={handleTabClick}
-            onBack={() => setActiveView('home')}
-          />
-        )}
-
         {isHome && <Landing onNavigate={handleNavigate} />}
 
         {!isHome && (
+          <AppShell activeNavId={activeGlobalNav} onNavigate={handleGlobalNavigate} rightSlot={settingsSlot}>
             <VoiceRefreshProvider>
               <main className={styles.main}>
                 <div style={{ display: activeTab === 'tts-synthesis' ? 'block' : 'none' }}>
@@ -200,6 +216,7 @@ function AppContent() {
                 </div>
               </main>
             </VoiceRefreshProvider>
+          </AppShell>
           )}
       </div>
     </StorageModeContext.Provider>
