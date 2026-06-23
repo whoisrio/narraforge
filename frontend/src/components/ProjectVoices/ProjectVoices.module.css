@@ -332,40 +332,93 @@
   resize: vertical;
 }
 
-.paramRow,
-.engineGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: var(--spacing-sm);
+.configHint {
+  margin: -6px 0 2px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-.engineCard {
-  display: grid;
-  gap: 5px;
-  padding: 14px;
-  border: 1px solid rgba(216, 194, 180, 0.5);
-  border-radius: 18px;
-  background: rgba(249, 243, 235, 0.6);
+.engineRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(216, 194, 180, 0.32);
+}
+
+.paramLabel {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.enginePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 14px;
+  background: rgba(249, 243, 235, 0.82);
+}
+
+.enginePill {
+  min-height: 30px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 850;
   cursor: pointer;
 }
 
-.engineCard input {
-  width: auto;
+.enginePillActive {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 4px 12px rgba(139, 76, 13, 0.18);
 }
 
-.engineCard strong {
-  color: var(--color-text-primary);
+.paramsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
-.engineCard span {
-  color: var(--color-text-muted);
+.paramField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.paramSelect,
+.paramInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--color-primary);
+}
+
+.sliderVal {
+  min-width: 42px;
+  color: var(--color-primary-dark);
   font-size: 12px;
-}
-
-.engineCardActive {
-  border-color: rgba(139, 76, 13, 0.7);
-  background: rgba(139, 76, 13, 0.08);
-  box-shadow: 0 0 0 4px rgba(139, 76, 13, 0.1);
+  font-weight: 850;
+  text-align: right;
 }
 
 .previewCard {

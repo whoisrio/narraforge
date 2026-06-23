@@ -191,7 +191,8 @@ describe('ProjectVoices', () => {
     fireEvent.click(screen.getByRole('button', { name: /新增 Cast/ }));
 
     expect(screen.getByRole('heading', { name: /声音角色配置/ })).toBeInTheDocument();
-    expect(screen.getByText('TTS / Cloning Engine')).toBeInTheDocument();
+    expect(screen.getByText('模型与音色参数')).toBeInTheDocument();
+    expect(screen.getByText(/TTS \/ Cloning Engine/)).toBeInTheDocument();
     expect(screen.getByText('Studio Playback')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('角色名'), { target: { value: '嘉宾B' } });
@@ -212,6 +213,29 @@ describe('ProjectVoices', () => {
         edge_volume: '+4%',
       }),
     }));
+  });
+
+  it('opens the narrator editor before the role lists so the model setup is immediately visible', () => {
+    const { container } = render(
+      <ProjectVoices
+        roles={[cast]}
+        defaultNarratorRoleId={null}
+        onSetDefaultNarrator={vi.fn()}
+        onCreateDefaultNarrator={vi.fn()}
+        onCreateCast={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /创建默认旁白/ }));
+
+    const editor = screen.getByLabelText('声音角色编辑器');
+    const roleLists = container.querySelector('[data-testid="project-voice-lists"]');
+    expect(roleLists).toBeTruthy();
+    expect(editor.compareDocumentPosition(roleLists as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('模型与音色参数')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Edge-TTS/ })).toBeChecked();
   });
 
   it('opens the narrator editor and saves selected model and voice params', () => {
@@ -236,7 +260,7 @@ describe('ProjectVoices', () => {
     fireEvent.change(screen.getByLabelText('语速'), { target: { value: '0.92' } });
     fireEvent.change(screen.getByLabelText('音量'), { target: { value: '78' } });
     fireEvent.change(screen.getByLabelText('音高'), { target: { value: '0.98' } });
-    fireEvent.change(screen.getByLabelText('风格指令'), { target: { value: '沉稳、纪录片、低压缩动态' } });
+    fireEvent.change(screen.getByPlaceholderText('跟随全局风格指令，或选择预设/直接输入...'), { target: { value: '沉稳、纪录片、低压缩动态' } });
     fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
 
     expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({

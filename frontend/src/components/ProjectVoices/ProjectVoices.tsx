@@ -1,6 +1,9 @@
-import { useState } from 'react';
-import type { Role, RoleSnapshot, SegmentEngineParams } from '../../types';
+import { useEffect, useState } from 'react';
+import type { Role, RoleSnapshot, SegmentEngineParams, VoiceProfile } from '../../types';
+import { ttsApi } from '../../services/api';
+import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
+import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import styles from './ProjectVoices.module.css';
 
 interface ProjectVoicesProps {
@@ -18,6 +21,12 @@ interface ProjectVoicesProps {
 
 const NARRATOR_SAMPLE = '这是一段默认旁白试听，用于确认叙述声音是否沉稳、清晰，并适合长时间解说。';
 const CAST_SAMPLE = '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。';
+const MIMO_PRESET_VOICES = ['冰糖', '星辰', '雪梨', '琥珀', '青云', '紫霞'];
+const COMMON_EDGE_VOICES = [
+  { short_name: DEFAULT_EDGE_NARRATOR_VOICE, display_name: 'Yunxi', gender: 'Male' },
+  { short_name: DEFAULT_EDGE_CAST_VOICE, display_name: 'Yunyang', gender: 'Male' },
+  { short_name: 'zh-CN-XiaoxiaoNeural', display_name: 'Xiaoxiao', gender: 'Female' },
+];
 
 function roleToSnapshot(role: Role): RoleSnapshot {
   return {
@@ -89,6 +98,18 @@ function VoiceRoleEditor({
   onSave: (draft: RoleSnapshot) => void;
 }) {
   const params = draft.default_engine_params;
+  const [voices, setVoices] = useState<VoiceProfile[]>([]);
+  const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>(COMMON_EDGE_VOICES);
+  const { refreshCounter } = useVoiceRefresh();
+
+  useEffect(() => {
+    ttsApi.getVoices().then(setVoices).catch(() => {});
+  }, [refreshCounter]);
+
+  useEffect(() => {
+    ttsApi.getEdgeVoices('Chinese').then(setEdgeVoices).catch(() => {});
+  }, []);
+
   const setEngine = (engine: SegmentEngineParams['engine']) => {
     const nextParams: SegmentEngineParams = engine === 'edge_tts'
       ? { engine, edge_voice: params.edge_voice || DEFAULT_EDGE_CAST_VOICE, edge_rate: params.edge_rate || '+0%', edge_volume: params.edge_volume || '+0%' }
@@ -103,6 +124,13 @@ function VoiceRoleEditor({
     ...draft,
     default_engine_params: { ...draft.default_engine_params, ...next, engine: draft.default_engine } as SegmentEngineParams,
   });
+
+  const engineOptions = [
+    { id: 'cosyvoice' as const, label: 'CosyVoice' },
+    { id: 'edge_tts' as const, label: 'Edge-TTS' },
+    { id: 'mimo_tts' as const, label: 'MiMo' },
+    { id: 'voxcpm' as const, label: 'VoxCPM' },
+  ];
 
   return (
     <section className={styles.editorPanel} aria-label="声音角色编辑器">
@@ -135,74 +163,164 @@ function VoiceRoleEditor({
           </section>
 
           <section className={styles.configCard}>
-            <h4>TTS / Cloning Engine</h4>
-            <div className={styles.engineGrid}>
-              {(['edge_tts', 'cosyvoice', 'mimo_tts', 'voxcpm'] as SegmentEngineParams['engine'][]).map(engine => (
-                <label key={engine} className={`${styles.engineCard} ${draft.default_engine === engine ? styles.engineCardActive : ''}`}>
-                  <input type="radio" name="voice-role-engine" checked={draft.default_engine === engine} onChange={() => setEngine(engine)} />
-                  <strong>{({ edge_tts: 'Edge-TTS', cosyvoice: 'CosyVoice', mimo_tts: 'MiMo', voxcpm: 'VoxCPM' } as Record<string, string>)[engine]}</strong>
-                  <span>{engine === 'edge_tts' ? '快速迭代' : engine === 'cosyvoice' ? '克隆音色' : engine === 'mimo_tts' ? '预设/克隆' : '本地模型'}</span>
-                </label>
-              ))}
+            <h4>模型与音色参数</h4>
+            <p className={styles.configHint}>TTS / Cloning Engine · 与工作室一致的模型、音色和参数配置。</p>
+            <div className={styles.engineRow}>
+              <span className={styles.paramLabel}>模型</span>
+              <div className={styles.enginePills}>
+                {engineOptions.map(engine => (
+                  <button
+                    type="button"
+                    key={engine.id}
+                    role="radio"
+                    aria-checked={draft.default_engine === engine.id}
+                    className={`${styles.enginePill} ${draft.default_engine === engine.id ? styles.enginePillActive : ''}`}
+                    onClick={() => setEngine(engine.id)}
+                  >
+                    {engine.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </section>
 
-          <section className={styles.configCard}>
-            <h4>Voice Binding & Tuning</h4>
-            {draft.default_engine === 'edge_tts' && (
-              <>
-                <label>Edge voice
-                  <input value={params.edge_voice ?? ''} onChange={(event) => setParams({ edge_voice: event.target.value })} />
-                </label>
-                <div className={styles.paramRow}>
-                  <label>语速<input value={params.edge_rate ?? '+0%'} onChange={(event) => setParams({ edge_rate: event.target.value })} /></label>
-                  <label>音量<input value={params.edge_volume ?? '+0%'} onChange={(event) => setParams({ edge_volume: event.target.value })} /></label>
-                </div>
-              </>
-            )}
-            {draft.default_engine === 'cosyvoice' && (
-              <>
-                <label>CosyVoice voice id
-                  <input value={params.voice_id ?? ''} onChange={(event) => setParams({ voice_id: event.target.value })} />
-                </label>
-                <div className={styles.paramRow}>
-                  <label>语速<input type="number" step="0.01" value={params.speed ?? 1} onChange={(event) => setParams({ speed: Number(event.target.value) })} /></label>
-                  <label>音量<input type="number" value={params.volume ?? 80} onChange={(event) => setParams({ volume: Number(event.target.value) })} /></label>
-                  <label>音高<input type="number" step="0.01" value={params.pitch ?? 1} onChange={(event) => setParams({ pitch: Number(event.target.value) })} /></label>
-                </div>
-                <label>风格指令
-                  <textarea value={params.instruction ?? ''} onChange={(event) => setParams({ instruction: event.target.value })} />
-                </label>
-              </>
-            )}
-            {draft.default_engine === 'mimo_tts' && (
-              <>
-                <label>MiMo 模式
-                  <select value={params.mimo_mode ?? 'preset'} onChange={(event) => setParams({ mimo_mode: event.target.value as 'preset' | 'voiceclone' })}>
-                    <option value="preset">Preset</option>
-                    <option value="voiceclone">Voice Clone</option>
-                  </select>
-                </label>
-                <label>MiMo preset voice<input value={params.mimo_preset_voice ?? ''} onChange={(event) => setParams({ mimo_preset_voice: event.target.value })} /></label>
-                <label>MiMo clone voice id<input value={params.mimo_clone_voice_id ?? ''} onChange={(event) => setParams({ mimo_clone_voice_id: event.target.value })} /></label>
-                <label>MiMo instruction<textarea value={params.mimo_instruction ?? ''} onChange={(event) => setParams({ mimo_instruction: event.target.value })} /></label>
-              </>
-            )}
-            {draft.default_engine === 'voxcpm' && (
-              <>
-                <label>VoxCPM mode
-                  <select value={params.voxcpm_mode ?? 'tts'} onChange={(event) => setParams({ voxcpm_mode: event.target.value as NonNullable<SegmentEngineParams['voxcpm_mode']> })}>
-                    <option value="tts">TTS</option>
-                    <option value="design">Design</option>
-                    <option value="clone">Clone</option>
-                    <option value="ultimate">Ultimate</option>
-                  </select>
-                </label>
-                <label>VoxCPM voice id<input value={params.voice_id ?? ''} onChange={(event) => setParams({ voice_id: event.target.value })} /></label>
-                <label>Voice description<textarea value={params.voxcpm_voice_description ?? ''} onChange={(event) => setParams({ voxcpm_voice_description: event.target.value })} /></label>
-                <label>Style control<textarea value={params.voxcpm_style_control ?? ''} onChange={(event) => setParams({ voxcpm_style_control: event.target.value })} /></label>
-              </>
-            )}
+            <div className={styles.paramsGrid}>
+              {draft.default_engine === 'edge_tts' && (
+                <>
+                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>Edge voice
+                    <select className={styles.paramSelect} value={params.edge_voice ?? ''} onChange={(event) => setParams({ edge_voice: event.target.value })}>
+                      {params.edge_voice && <option value={params.edge_voice}>{params.edge_voice}</option>}
+                      {edgeVoices.map(voice => (
+                        <option key={voice.short_name} value={voice.short_name}>
+                          {voice.display_name} ({voice.gender === 'Female' ? '女' : '男'})
+                        </option>
+                      ))}
+                      {!params.edge_voice && edgeVoices.length === 0 && <option value="">请选择 Edge 音色</option>}
+                    </select>
+                  </label>
+                  <label className={styles.paramField}>语速
+                    <input className={styles.paramInput} value={params.edge_rate ?? '+0%'} onChange={(event) => setParams({ edge_rate: event.target.value })} />
+                  </label>
+                  <label className={styles.paramField}>音量
+                    <input className={styles.paramInput} value={params.edge_volume ?? '+0%'} onChange={(event) => setParams({ edge_volume: event.target.value })} />
+                  </label>
+                </>
+              )}
+              {draft.default_engine === 'cosyvoice' && (
+                <>
+                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>CosyVoice voice id
+                    <input className={styles.paramInput} list="project-cosy-voices" value={params.voice_id ?? ''} onChange={(event) => setParams({ voice_id: event.target.value })} />
+                    <datalist id="project-cosy-voices">
+                      {voices.map(voice => {
+                        const key = voice.qwen_voice_id || voice.id;
+                        return <option key={voice.id} value={key}>{voice.description || voice.name}</option>;
+                      })}
+                    </datalist>
+                  </label>
+                  <label className={styles.paramField}>语速
+                    <input
+                      className={styles.range}
+                      aria-label="语速"
+                      type="range"
+                      min={0.5}
+                      max={2}
+                      step={0.01}
+                      value={params.speed ?? 1}
+                      onChange={(event) => setParams({ speed: Number(event.target.value) })}
+                    />
+                    <span className={styles.sliderVal}>{(params.speed ?? 1).toFixed(2)}×</span>
+                  </label>
+                  <label className={styles.paramField}>音量
+                    <input
+                      className={styles.range}
+                      aria-label="音量"
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={params.volume ?? 80}
+                      onChange={(event) => setParams({ volume: Number(event.target.value) })}
+                    />
+                    <span className={styles.sliderVal}>{params.volume ?? 80}</span>
+                  </label>
+                  <label className={styles.paramField}>音高
+                    <input
+                      className={styles.range}
+                      aria-label="音高"
+                      type="range"
+                      min={0.5}
+                      max={2}
+                      step={0.01}
+                      value={params.pitch ?? 1}
+                      onChange={(event) => setParams({ pitch: Number(event.target.value) })}
+                    />
+                    <span className={styles.sliderVal}>{(params.pitch ?? 1).toFixed(2)}</span>
+                  </label>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <StyleInstructionPicker
+                      value={params.instruction ?? ''}
+                      onChange={(value) => setParams({ instruction: value })}
+                      label="风格指令"
+                      placeholder="跟随全局风格指令，或选择预设/直接输入..."
+                      dense
+                    />
+                  </div>
+                </>
+              )}
+              {draft.default_engine === 'mimo_tts' && (
+                <>
+                  <label className={styles.paramField}>MiMo 模式
+                    <select className={styles.paramSelect} value={params.mimo_mode ?? 'preset'} onChange={(event) => setParams({ mimo_mode: event.target.value as 'preset' | 'voiceclone' })}>
+                      <option value="preset">Preset</option>
+                      <option value="voiceclone">Voice Clone</option>
+                    </select>
+                  </label>
+                  <label className={styles.paramField}>MiMo preset voice
+                    <select className={styles.paramSelect} value={params.mimo_preset_voice ?? ''} onChange={(event) => setParams({ mimo_preset_voice: event.target.value })}>
+                      {MIMO_PRESET_VOICES.map(name => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                  </label>
+                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>MiMo clone voice id
+                    <input className={styles.paramInput} value={params.mimo_clone_voice_id ?? ''} onChange={(event) => setParams({ mimo_clone_voice_id: event.target.value })} />
+                  </label>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <StyleInstructionPicker
+                      value={params.mimo_instruction ?? ''}
+                      onChange={(value) => setParams({ mimo_instruction: value })}
+                      label="风格指令"
+                      placeholder="跟随全局风格指令，或选择预设/直接输入..."
+                      dense
+                    />
+                  </div>
+                </>
+              )}
+              {draft.default_engine === 'voxcpm' && (
+                <>
+                  <label className={styles.paramField}>VoxCPM mode
+                    <select className={styles.paramSelect} value={params.voxcpm_mode ?? 'tts'} onChange={(event) => setParams({ voxcpm_mode: event.target.value as NonNullable<SegmentEngineParams['voxcpm_mode']> })}>
+                      <option value="tts">TTS</option>
+                      <option value="design">Design</option>
+                      <option value="clone">Clone</option>
+                      <option value="ultimate">Ultimate</option>
+                    </select>
+                  </label>
+                  <label className={styles.paramField}>VoxCPM voice id
+                    <input className={styles.paramInput} list="project-voxcpm-voices" value={params.voice_id ?? ''} onChange={(event) => setParams({ voice_id: event.target.value })} />
+                    <datalist id="project-voxcpm-voices">
+                      {voices.map(voice => <option key={voice.id} value={voice.id}>{voice.description || voice.name}</option>)}
+                    </datalist>
+                  </label>
+                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>Voice description<textarea value={params.voxcpm_voice_description ?? ''} onChange={(event) => setParams({ voxcpm_voice_description: event.target.value })} /></label>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <StyleInstructionPicker
+                      value={params.voxcpm_style_control ?? ''}
+                      onChange={(value) => setParams({ voxcpm_style_control: value })}
+                      label="风格指令"
+                      placeholder="跟随全局风格指令，或选择预设/直接输入..."
+                      dense
+                    />
+                  </div>
+                </>
+              )}
+            </div>
           </section>
         </div>
 
@@ -256,7 +374,16 @@ export function ProjectVoices({
         <button type="button" className={styles.ghostButton} onClick={onManageRoles}>管理角色库</button>
       </header>
 
-      <div className={styles.grid}>
+      {editingRole && (
+        <VoiceRoleEditor
+          draft={editingRole}
+          onChange={setEditingRole}
+          onCancel={() => setEditingRole(null)}
+          onSave={saveEditingRole}
+        />
+      )}
+
+      <div className={styles.grid} data-testid="project-voice-lists">
         <section className={styles.panel}>
           <div className={styles.panelHeader}>
             <div>
@@ -358,15 +485,6 @@ export function ProjectVoices({
           </div>
         </section>
       </div>
-
-      {editingRole && (
-        <VoiceRoleEditor
-          draft={editingRole}
-          onChange={setEditingRole}
-          onCancel={() => setEditingRole(null)}
-          onSave={saveEditingRole}
-        />
-      )}
     </section>
   );
 }
