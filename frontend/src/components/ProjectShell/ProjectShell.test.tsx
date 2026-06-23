@@ -58,6 +58,15 @@ describe('ProjectShell', () => {
     expect(onSectionChange).toHaveBeenCalledWith('library');
   });
 
+  it('uses a compact workspace chrome instead of a duplicate section hero', () => {
+    renderProjectShell('library');
+
+    const shell = screen.getByTestId('project-shell');
+    expect(shell).toHaveAttribute('data-workspace-chrome', 'compact');
+    expect(screen.queryByRole('heading', { level: 1, name: '文本库' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Project workspace context')).toHaveTextContent('草稿项目/文本库');
+  });
+
   it('provides a visible way to return to the global project hub', () => {
     const { onBackToProjects } = renderProjectShell();
 

@@ -140,12 +140,16 @@
   padding-left: calc(var(--nav-width) + 28px);
 }
 
-.workspaceHeader {
-  padding: var(--spacing-lg);
-  border: 1px solid rgba(216, 194, 180, 0.42);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: var(--shadow-sm);
+.contextBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: 10px 12px;
+  border: 1px solid rgba(216, 194, 180, 0.35);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.48);
+  box-shadow: var(--shadow-xs);
   backdrop-filter: blur(10px);
 }
 
@@ -154,7 +158,6 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
-  margin-bottom: 12px;
   color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 750;
@@ -171,41 +174,20 @@
   color: var(--color-primary-dark);
 }
 
-.workspaceTitleRow {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--spacing-lg);
-  align-items: flex-end;
-}
-
-.workspaceTitleRow h1 {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: 30px;
-  line-height: 1.06;
-  font-weight: 850;
-  letter-spacing: -0.055em;
-}
-
-.workspaceTitleRow p {
-  margin: 8px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 14px;
-}
-
 .stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(82px, auto));
-  gap: 8px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .statItem {
   min-width: 0;
-  padding: 9px 11px;
-  border: 1px solid rgba(216, 194, 180, 0.35);
-  border-radius: 14px;
-  background: rgba(249, 243, 235, 0.72);
+  padding: 6px 9px;
+  border: 1px solid rgba(216, 194, 180, 0.28);
+  border-radius: 12px;
+  background: rgba(249, 243, 235, 0.58);
 }
 
 .statItem span {

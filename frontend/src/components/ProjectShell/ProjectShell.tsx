@@ -49,7 +49,7 @@ export function ProjectShell({
   const t = createTranslator(locale);
 
   return (
-    <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left">
+    <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left" data-workspace-chrome="compact">
       <aside className={styles.projectRail} aria-label="Project navigation">
         <div className={styles.projectIdentity}>
           <div className={styles.projectMark}>{projectName.slice(0, 1) || 'N'}</div>
@@ -89,37 +89,31 @@ export function ProjectShell({
       </aside>
 
       <div className={styles.workspace}>
-        <header className={styles.workspaceHeader}>
+        <div className={styles.contextBar} aria-label="Project workspace context">
           <div className={styles.breadcrumbs}>
             <span>{projectName}</span>
             <span>/</span>
             <strong>{t(`projectNav.${activeSection}`)}</strong>
           </div>
-          <div className={styles.workspaceTitleRow}>
-            <div>
-              <h1>{t(`projectNav.${activeSection}`)}</h1>
-              <p>{activeSection === 'library' ? '章节整体文本管理' : activeSection === 'studio' ? '选择章节，完成分段语音合成' : '项目工作区'}</p>
+          <div className={styles.stats}>
+            <div className={styles.statItem}>
+              <span>章节</span>
+              <strong>{chapterName}</strong>
             </div>
-            <div className={styles.stats}>
-              <div className={styles.statItem}>
-                <span>章节</span>
-                <strong>{chapterName}</strong>
-              </div>
-              <div className={styles.statItem}>
-                <span>分段</span>
-                <strong>{segmentCount} 段</strong>
-              </div>
-              <div className={styles.statItem}>
-                <span>完成</span>
-                <strong>{generatedCount} 已生成</strong>
-              </div>
-              <div className={styles.statItem}>
-                <span>时长</span>
-                <strong>{formatDuration(durationSec)}</strong>
-              </div>
+            <div className={styles.statItem}>
+              <span>分段</span>
+              <strong>{segmentCount} 段</strong>
+            </div>
+            <div className={styles.statItem}>
+              <span>完成</span>
+              <strong>{generatedCount} 已生成</strong>
+            </div>
+            <div className={styles.statItem}>
+              <span>时长</span>
+              <strong>{formatDuration(durationSec)}</strong>
             </div>
           </div>
-        </header>
+        </div>
 
         <div className={styles.workspaceBody}>{children}</div>
       </div>
