@@ -39,14 +39,11 @@ describe('ProjectShell', () => {
     expect(screen.queryByRole('button', { name: /Exports|导出中心/ })).not.toBeInTheDocument();
   });
 
-  it('marks the active project section and renders production stats', () => {
+  it('marks the active project section and renders production context in the breadcrumb line', () => {
     renderProjectShell('studio');
 
     expect(screen.getByRole('button', { name: /工作室/ })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByText('第一章')).toBeInTheDocument();
-    expect(screen.getByText('12 段')).toBeInTheDocument();
-    expect(screen.getByText('8 已生成')).toBeInTheDocument();
-    expect(screen.getByText('1:36')).toBeInTheDocument();
+    expect(screen.getByLabelText('Project workspace context')).toHaveTextContent('草稿项目/工作室/ 第一章 · 12 段 · 8 已生成 · 1:36');
     expect(screen.getByText('Studio content')).toBeInTheDocument();
   });
 
@@ -58,13 +55,16 @@ describe('ProjectShell', () => {
     expect(onSectionChange).toHaveBeenCalledWith('library');
   });
 
-  it('uses a compact workspace chrome instead of a duplicate section hero', () => {
+  it('uses breadcrumb-only workspace chrome instead of duplicate section headers or stat cards', () => {
     renderProjectShell('library');
 
     const shell = screen.getByTestId('project-shell');
-    expect(shell).toHaveAttribute('data-workspace-chrome', 'compact');
+    const context = screen.getByLabelText('Project workspace context');
+    expect(shell).toHaveAttribute('data-workspace-chrome', 'breadcrumb-only');
     expect(screen.queryByRole('heading', { level: 1, name: '文本库' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Project workspace context')).toHaveTextContent('草稿项目/文本库');
+    expect(context).toHaveTextContent('草稿项目/文本库');
+    expect(context).toHaveTextContent('第一章 · 12 段 · 8 已生成 · 1:36');
+    expect(context.querySelector('[data-testid="workspace-stat-card"]')).toBeNull();
   });
 
   it('provides a visible way to return to the global project hub', () => {

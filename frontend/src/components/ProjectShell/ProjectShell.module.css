@@ -143,20 +143,15 @@
 .contextBar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
-  padding: 10px 12px;
-  border: 1px solid rgba(216, 194, 180, 0.35);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.48);
-  box-shadow: var(--shadow-xs);
-  backdrop-filter: blur(10px);
+  gap: var(--spacing-sm);
+  min-height: 28px;
+  padding: 0 2px;
 }
 
 .breadcrumbs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
   color: var(--color-text-muted);
   font-size: 12px;
@@ -174,40 +169,12 @@
   color: var(--color-primary-dark);
 }
 
-.stats {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.statItem {
-  min-width: 0;
-  padding: 6px 9px;
-  border: 1px solid rgba(216, 194, 180, 0.28);
-  border-radius: 12px;
-  background: rgba(249, 243, 235, 0.58);
-}
-
-.statItem span {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.statItem strong {
-  display: block;
-  margin-top: 4px;
+.inlineMeta {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-primary-dark);
-  font-size: 13px;
-  font-weight: 850;
+  color: var(--color-text-muted);
+  font-weight: 650;
 }
 
 .workspaceBody {

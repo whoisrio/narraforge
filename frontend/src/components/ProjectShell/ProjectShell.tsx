@@ -49,7 +49,7 @@ export function ProjectShell({
   const t = createTranslator(locale);
 
   return (
-    <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left" data-workspace-chrome="compact">
+    <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left" data-workspace-chrome="breadcrumb-only">
       <aside className={styles.projectRail} aria-label="Project navigation">
         <div className={styles.projectIdentity}>
           <div className={styles.projectMark}>{projectName.slice(0, 1) || 'N'}</div>
@@ -94,24 +94,7 @@ export function ProjectShell({
             <span>{projectName}</span>
             <span>/</span>
             <strong>{t(`projectNav.${activeSection}`)}</strong>
-          </div>
-          <div className={styles.stats}>
-            <div className={styles.statItem}>
-              <span>章节</span>
-              <strong>{chapterName}</strong>
-            </div>
-            <div className={styles.statItem}>
-              <span>分段</span>
-              <strong>{segmentCount} 段</strong>
-            </div>
-            <div className={styles.statItem}>
-              <span>完成</span>
-              <strong>{generatedCount} 已生成</strong>
-            </div>
-            <div className={styles.statItem}>
-              <span>时长</span>
-              <strong>{formatDuration(durationSec)}</strong>
-            </div>
+            <span className={styles.inlineMeta}>/ {chapterName} · {segmentCount} 段 · {generatedCount} 已生成 · {formatDuration(durationSec)}</span>
           </div>
         </div>
 
