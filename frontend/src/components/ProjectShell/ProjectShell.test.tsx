@@ -4,6 +4,7 @@ import { ProjectShell } from './ProjectShell';
 
 function renderProjectShell(activeSection: 'overview' | 'library' | 'studio' | 'voices' | 'settings' = 'studio') {
   const onSectionChange = vi.fn();
+  const onBackToProjects = vi.fn();
   render(
     <ProjectShell
       projectName="草稿项目"
@@ -15,11 +16,12 @@ function renderProjectShell(activeSection: 'overview' | 'library' | 'studio' | '
       generatedCount={8}
       durationSec={96}
       onSectionChange={onSectionChange}
+      onBackToProjects={onBackToProjects}
     >
       <div>Studio content</div>
     </ProjectShell>,
   );
-  return { onSectionChange };
+  return { onSectionChange, onBackToProjects };
 }
 
 describe('ProjectShell', () => {
@@ -28,7 +30,7 @@ describe('ProjectShell', () => {
 
     expect(screen.getAllByText('草稿项目').length).toBeGreaterThan(0);
     expect(screen.getByText('快速试稿')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /总览/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^◇总览$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /文本库/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /工作室/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /声音角色/ })).toBeInTheDocument();
@@ -53,5 +55,13 @@ describe('ProjectShell', () => {
     fireEvent.click(screen.getByRole('button', { name: /文本库/ }));
 
     expect(onSectionChange).toHaveBeenCalledWith('library');
+  });
+
+  it('provides a visible way to return to the global project hub', () => {
+    const { onBackToProjects } = renderProjectShell();
+
+    fireEvent.click(screen.getByRole('button', { name: /返回项目总览/ }));
+
+    expect(onBackToProjects).toHaveBeenCalled();
   });
 });

@@ -65,10 +65,12 @@ export function TTSSynthesis({
   onNavigateToClone,
   initialProjectId,
   hideProjectSidebar = false,
+  onBackToProjects,
 }: {
   onNavigateToClone?: () => void;
   initialProjectId?: string;
   hideProjectSidebar?: boolean;
+  onBackToProjects?: () => void;
 }) {
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
@@ -1092,6 +1094,7 @@ export function TTSSynthesis({
           generatedCount={generatedSegmentCount}
           durationSec={activeChapterDuration}
           onSectionChange={setProjectSection}
+          onBackToProjects={onBackToProjects}
         >
         {projectSection === 'studio' ? (
         <div className={styles.workbenchMain}>

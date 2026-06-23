@@ -149,6 +149,7 @@ function AppContent() {
                     key={activeProjectId}
                     initialProjectId={activeProjectId}
                     hideProjectSidebar
+                    onBackToProjects={() => setActiveProjectId(null)}
                     onNavigateToClone={() => handleTabClick('voice-clone')}
                   />
                 )}

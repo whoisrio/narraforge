@@ -72,6 +72,25 @@
   font-weight: 650;
 }
 
+.backToProjects {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.backToProjects:hover {
+  background: rgba(255, 220, 195, 0.34);
+  border-color: rgba(196, 122, 58, 0.35);
+}
+
 .projectNav {
   display: flex;
   flex-direction: column;

@@ -15,6 +15,7 @@ interface ProjectShellProps {
   durationSec?: number;
   children: ReactNode;
   onSectionChange: (section: ProjectSectionId) => void;
+  onBackToProjects?: () => void;
 }
 
 const SECTION_ICONS: Record<ProjectSectionId, string> = {
@@ -43,6 +44,7 @@ export function ProjectShell({
   durationSec = 0,
   children,
   onSectionChange,
+  onBackToProjects,
 }: ProjectShellProps) {
   const t = createTranslator(locale);
 
@@ -56,6 +58,15 @@ export function ProjectShell({
             {projectSubtitle && <p title={projectSubtitle}>{projectSubtitle}</p>}
           </div>
         </div>
+
+        <button
+          type="button"
+          className={styles.backToProjects}
+          onClick={onBackToProjects}
+        >
+          <span>←</span>
+          <span>返回项目总览</span>
+        </button>
 
         <nav className={styles.projectNav}>
           {projectNavItems.map(item => {
