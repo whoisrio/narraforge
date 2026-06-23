@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { textSplitApi } from '../../services/api';
 import { stripMarkdownForTTS } from '../../utils/stripMarkdownForTTS';
 import type { Chapter } from '../../types';
+import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import styles from './TextInputPanel.module.css';
 
 interface TextInputPanelProps {
   splitConfig: Chapter['split_config'];
   onSplitConfigChange: (config: Chapter['split_config']) => void;
-  onSplit: (texts: string[], originalText: string) => void;
-  onLLMSplit: (text: string) => Promise<void>;
+  onSplit: (texts: string[], originalText: string, voiceMode: SplitVoiceMode) => void;
+  onLLMSplit: (text: string, voiceMode: SplitVoiceMode) => Promise<void>;
   /** 当前所有段落的文本（用于同步显示） */
   segmentTexts?: string[];
   /** 段落数量 */
@@ -23,6 +24,7 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
   const [isSplitting, setIsSplitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>('narration');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Sync text from segments when not editing
@@ -39,10 +41,10 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
     setIsSplitting(true);
     try {
       if (mode === 'llm') {
-        await onLLMSplit(text);
+        await onLLMSplit(text, splitVoiceMode);
       } else {
         const segments = await textSplitApi.ruleSplit(text, splitConfig.delimiters);
-        onSplit(segments, text);
+        onSplit(segments, text, splitVoiceMode);
       }
       setEditing(false);
     } catch (e: any) {
@@ -50,7 +52,7 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
         console.warn('LLM split failed, falling back to rule:', e);
         try {
           const segments = await textSplitApi.ruleSplit(text, splitConfig.delimiters);
-          onSplit(segments, text);
+          onSplit(segments, text, splitVoiceMode);
           setEditing(false);
         } catch (e2) {
           alert('智能拆分失败，规则拆分也失败: ' + ((e as any)?.message || (e2 as any)?.message || '请重试'));
@@ -119,6 +121,15 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
       </div>
 
       <div className={styles.actionBar}>
+        <div className={styles.voiceModeSwitch} aria-label="配音模式">
+          <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'narration' ? styles.active : ''}`}
+            onClick={() => setSplitVoiceMode('narration')}>旁白为主</button>
+          <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'dialogue' ? styles.active : ''}`}
+            onClick={() => setSplitVoiceMode('dialogue')}>对话/剧本</button>
+          <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'mixed' ? styles.active : ''}`}
+            onClick={() => setSplitVoiceMode('mixed')}>混合模式</button>
+        </div>
+
         <button className={styles.settingsToggle} onClick={() => setShowSettings(!showSettings)}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>

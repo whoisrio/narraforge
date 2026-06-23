@@ -196,7 +196,7 @@ export type Action =
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
   | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   // Segment operations (on active chapter)
-  | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string }[] }
+  | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
   | { type: 'INSERT_SEGMENT'; afterId: string; text?: string }
   | { type: 'DELETE_SEGMENT'; id: string }
@@ -297,8 +297,10 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPLY_SPLIT': {
       return { project: updateActive(p, ch => {
         const newSegs = action.items.map(item => {
-          const seg = makeSegment(item.text, ch.default_params);
+          const seg = makeSegment(item.text, ch.default_params, item.segment_kind ?? 'narration');
           if (item.emotion) seg.emotion = item.emotion as any;
+          if (item.role_id !== undefined) seg.role_id = item.role_id;
+          if (item.role_snapshot !== undefined) seg.role_snapshot = item.role_snapshot;
           return seg;
         });
         return { ...ch, segments: newSegs, selected_segment_id: undefined, updated_at: new Date().toISOString() };

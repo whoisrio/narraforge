@@ -152,6 +152,39 @@
   color: var(--color-primary);
 }
 
+.voiceModeSwitch {
+  display: flex;
+  gap: 0;
+  background: rgba(255, 220, 195, 0.35);
+  padding: 2px;
+  border: 1px solid rgba(196, 122, 58, 0.18);
+  border-radius: var(--radius-sm);
+}
+
+.voiceModeBtn {
+  background: transparent;
+  border: none;
+  color: var(--color-primary-dark);
+  padding: 4px 10px;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+  font-family: inherit;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.voiceModeBtn:hover {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.voiceModeBtn.active {
+  background: var(--color-surface);
+  color: var(--color-primary-dark);
+  box-shadow: var(--shadow-xs);
+  font-weight: 700;
+}
+
 .modeSwitch {
   display: flex;
   gap: 0;

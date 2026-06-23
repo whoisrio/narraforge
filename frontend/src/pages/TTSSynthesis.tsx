@@ -19,7 +19,7 @@ import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams, Role, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
@@ -28,6 +28,7 @@ import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
 import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
 import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
+import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -519,7 +520,7 @@ export function TTSSynthesis({
   }, [activeChapter.segments, dispatch]);
 
   /** Re-split: clean up existing segment audio before applying new split */
-  const doApplySplit = useCallback((items: { text: string; emotion?: string }[], originalText: string) => {
+  const doApplySplit = useCallback((items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[], originalText: string) => {
     const oldAudioIds = activeChapter.segments
       .flatMap(s => [s.current_audio_id, s.previous_audio_id])
       .filter((id): id is string => !!id);
@@ -552,6 +553,14 @@ export function TTSSynthesis({
       return segmentedReducer({ project: appended }, { type: 'SET_SEGMENT_KIND', id: latest.id, segmentKind: kind }).project;
     });
   }, []);
+
+  const buildSplitItemsWithRoles = useCallback((
+    items: { text: string; emotion?: string }[],
+    voiceMode: SplitVoiceMode,
+  ) => items.map(item => ({
+    ...item,
+    ...assignRoleForSplitItem(item.text, voiceMode, roles, project.default_narrator_role_id),
+  })), [roles, project.default_narrator_role_id]);
 
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -1252,12 +1261,12 @@ export function TTSSynthesis({
             <TextInputPanel
               splitConfig={activeChapter.split_config}
               onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
-              onSplit={(texts, originalText) => {
-                doApplySplit(texts.map(t => ({ text: t })), originalText);
+              onSplit={(texts, originalText, voiceMode) => {
+                doApplySplit(buildSplitItemsWithRoles(texts.map(t => ({ text: t })), voiceMode), originalText);
               }}
-              onLLMSplit={async (text) => {
+              onLLMSplit={async (text, voiceMode) => {
                 const result = await textSplitApi.llmSplit(text, activeChapter.split_config.delimiters);
-                doApplySplit(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), text);
+                doApplySplit(buildSplitItemsWithRoles(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), voiceMode), text);
               }}
               segmentTexts={activeChapter.segments.map(s => s.text)}
               segmentCount={activeChapter.segments.length}

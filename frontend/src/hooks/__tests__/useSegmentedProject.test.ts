@@ -45,6 +45,32 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).selected_segment_id).toBeUndefined();
   });
 
+  it('APPLY_SPLIT preserves inferred segment kind and role snapshot', () => {
+    const roleSnapshot = {
+      id: 'role-guest-a',
+      name: '嘉宾A',
+      default_engine: 'edge_tts' as const,
+      default_voice: 'Yunyang',
+      default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunyangNeural' },
+      favorite_styles: [],
+    };
+    const next = segmentedReducer({ project: makeProject() }, {
+      type: 'APPLY_SPLIT',
+      items: [{
+        text: '嘉宾A：你好',
+        segment_kind: 'dialogue',
+        role_id: 'role-guest-a',
+        role_snapshot: roleSnapshot,
+      }],
+    });
+
+    const seg = ac(next.project).segments[0];
+    expect(seg.text).toBe('嘉宾A：你好');
+    expect(seg.segment_kind).toBe('dialogue');
+    expect(seg.role_id).toBe('role-guest-a');
+    expect(seg.role_snapshot?.name).toBe('嘉宾A');
+  });
+
   it('APPEND_SEGMENT appends with default_params', () => {
     const next = segmentedReducer({ project: makeProject() }, { type: 'APPEND_SEGMENT', text: 'hello' });
     expect(ac(next.project).segments).toHaveLength(1);
