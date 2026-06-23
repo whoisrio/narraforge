@@ -1,0 +1,313 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .bronze-glow:focus-within {
+            box-shadow: 0 0 0 4px rgba(139, 76, 13, 0.15);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d8c2b4;
+            border-radius: 10px;
+        }
+        @keyframes pulse-subtle {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .animate-pulse-subtle {
+            animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#8b4c0d",
+                        "surface-dim": "#dfd9d2",
+                        "surface-container": "#f3ede6",
+                        "primary-container": "#a96425",
+                        "outline-variant": "#d8c2b4",
+                        "secondary": "#865310",
+                        "on-secondary-container": "#784703",
+                        "inverse-primary": "#ffb77e",
+                        "tertiary-container": "#008376",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-surface": "#1d1b17",
+                        "surface": "#fff8f1",
+                        "inverse-on-surface": "#f6f0e9",
+                        "surface-bright": "#fff8f1",
+                        "surface-container-highest": "#e8e1db",
+                        "inverse-surface": "#33302c",
+                        "background": "#fff8f1",
+                        "on-primary": "#ffffff",
+                        "on-tertiary-container": "#f4fffb",
+                        "on-background": "#1d1b17",
+                        "tertiary": "#00685d",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed-variant": "#005048",
+                        "error-container": "#ffdad6",
+                        "on-tertiary-fixed": "#00201c",
+                        "on-primary-fixed": "#2f1500",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "surface-variant": "#e8e1db",
+                        "on-secondary-fixed": "#2c1600",
+                        "on-secondary-fixed-variant": "#683c00",
+                        "tertiary-fixed": "#8cf5e4",
+                        "surface-container-high": "#ede7e0",
+                        "on-primary-container": "#fffbff",
+                        "tertiary-fixed-dim": "#6fd8c8",
+                        "on-tertiary": "#ffffff",
+                        "surface-container-low": "#f9f3eb",
+                        "secondary-container": "#feb86f",
+                        "primary-fixed-dim": "#ffb77e",
+                        "surface-tint": "#8e4e10",
+                        "outline": "#867467",
+                        "on-surface-variant": "#534439",
+                        "secondary-fixed-dim": "#feb86f",
+                        "on-error-container": "#93000a",
+                        "primary-fixed": "#ffdcc3",
+                        "secondary-fixed": "#ffdcbd"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "2xl": "48px",
+                        "xl": "32px",
+                        "md": "16px",
+                        "max-width": "1600px",
+                        "xs": "4px",
+                        "lg": "24px",
+                        "unit": "4px"
+                    },
+                    "fontFamily": {
+                        "label-caps": ["Plus Jakarta Sans"],
+                        "body-dialogue": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"],
+                        "code-xs": ["JetBrains Mono"],
+                        "body-base": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.12em", "fontWeight": "700"}],
+                        "body-dialogue": ["17px", {"lineHeight": "29px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                        "headline-md": ["24px", {"lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "display-lg": ["36px", {"lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                        "code-xs": ["12px", {"lineHeight": "18px", "fontWeight": "500"}],
+                        "body-base": ["15px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body-base antialiased min-h-screen overflow-hidden selection:bg-primary/20 selection:text-primary">
+<!-- Background Atmospheric Element -->
+<div class="fixed inset-0 pointer-events-none z-0">
+
+</div>
+<!-- Navigation Shell (Suppressed based on Transactional Rule, but using TopNavBar logic for the branding anchor) -->
+<header class="fixed top-3 left-3 right-3 rounded-xl bg-surface/92 backdrop-blur-md border border-outline-variant/30 shadow-[0_4px_12px_rgba(26,24,20,0.08)] z-50 px-lg h-16 flex items-center justify-between">
+<div class="flex items-center gap-md">
+<span class="font-display-lg text-display-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">NarraForge</span>
+<div class="h-6 w-px bg-outline-variant/30 mx-2"></div>
+<span class="font-label-caps text-label-caps text-on-surface-variant tracking-widest">STUDIO WORKSPACE</span>
+</div>
+<button class="flex items-center gap-sm text-on-surface-variant hover:text-primary transition-colors font-medium active:scale-95 duration-150">
+<span class="material-symbols-outlined text-[20px]">close</span>
+<span class="font-body-base text-body-base">Cancel Setup</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="relative z-10 flex items-center justify-center min-h-screen pt-24 px-md">
+<div class="w-full max-w-[900px] grid grid-cols-1 md:grid-cols-12 gap-xl items-start">
+<!-- Left Column: Visual & Context -->
+<div class="md:col-span-5 space-y-lg hidden md:block">
+<div class="rounded-2xl overflow-hidden aspect-[4/5] shadow-2xl relative border border-outline-variant/20">
+<div class="w-full h-full bg-cover bg-center" data-alt="A moody, high-end studio photography shot of a vintage leather-bound notebook resting on a polished dark wood desk. Warm amber light from a nearby desk lamp spills over the pages, creating deep shadows and highlights. The aesthetic is sophisticated and literary, with a focus on tactile textures like paper grain and leather. In the background, a blurred glass bottle of ink and a fountain pen suggest a serious writing environment." style="background-image: url(&quot;https://lh3.googleusercontent.com/aida-public/AB6AXuBwpemmMDuM1PeI4y3WwsoFdNskCUKO0QCg5zPLmT2VCsv0u07M4is3S4FUwStuixMEjI9hr-afovrx4CCtbFTGibpSk2p8IwLVcJZGIpzdBrYBxUk0GKTJGvbaeEejNpgruYSgxJJq800upPb-FOWLrSi_tGPIwXNYRVtzfLn1ig30yqy7I-OdtZrnqAPMmBuKGNolyVL67z66DPXsls6dsSLCAF60PLtLj39DwH85MRvWbfizSqigBR8mIK3W6kLLSOjsQNRU2Q&quot;);"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-primary/60 to-transparent flex flex-col justify-end p-lg">
+<p class="font-headline-md text-headline-md text-white mb-2 italic">"Every story begins with a single intentional spark."</p>
+<p class="text-white/80 font-body-base text-body-base">Start your next narrative journey in NarraForge Studio.</p>
+</div>
+</div>
+<div class="p-md bg-surface-container-low rounded-xl border border-outline-variant/20">
+<div class="flex items-center gap-sm mb-xs">
+<span class="material-symbols-outlined text-primary text-md">info</span>
+<span class="font-label-caps text-label-caps text-primary uppercase">Studio Tip</span>
+</div>
+<p class="text-on-surface-variant text-[13px] leading-relaxed">
+                        Seeding global characters allows our AI to maintain consistent narrative tone and memory across your dialogue segments.
+                    </p>
+</div>
+</div>
+<!-- Right Column: The Form -->
+<div class="md:col-span-7 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/30 rounded-2xl shadow-xl p-xl bronze-glow transition-all duration-300">
+<div class="mb-xl">
+<h1 class="font-display-lg text-[28px] text-on-surface leading-tight mb-2">Create New Project</h1>
+<p class="font-body-base text-body-base text-on-surface-variant">Configure your workspace and character foundations.</p>
+</div>
+<form class="space-y-lg">
+<!-- Project Core -->
+<div class="space-y-md">
+<div class="group">
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-xs ml-1 uppercase">Project Title</label>
+<input class="w-full bg-surface-container-low border border-outline-variant/40 rounded-xl px-md py-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-base text-on-surface placeholder:text-on-surface-variant/40" placeholder="e.g. The Glass Odyssey" type="text">
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div class="group">
+
+
+</div>
+<div class="group">
+
+
+</div>
+</div>
+<div>
+<label class="block font-label-caps text-label-caps text-on-surface-variant mb-xs ml-1 uppercase">Description</label>
+<textarea class="w-full bg-surface-container-low border border-outline-variant/40 rounded-xl px-md py-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all font-body-base text-on-surface placeholder:text-on-surface-variant/40 resize-none" placeholder="Describe the atmosphere or plot beats..." rows="3"></textarea>
+</div>
+</div>
+<!-- Flow Options -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-md py-md">
+<label class="relative cursor-pointer group">
+<input checked="" class="peer sr-only" name="flow" type="radio">
+<div class="p-md rounded-xl border border-outline-variant/40 bg-surface-container-low peer-checked:border-primary peer-checked:bg-primary/5 transition-all flex items-start gap-md group-hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-primary text-[28px]">edit_note</span>
+<div>
+<span class="block font-bold text-on-surface">Start from Scratch</span>
+<span class="text-xs text-on-surface-variant">Empty studio canvas ready for prose.</span>
+</div>
+</div>
+<div class="absolute top-3 right-3 w-4 h-4 rounded-full border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary transition-all after:content-[''] after:absolute after:inset-1 after:rounded-full after:bg-white"></div>
+</label>
+<label class="relative cursor-pointer group">
+<input class="peer sr-only" name="flow" type="radio">
+<div class="p-md rounded-xl border border-outline-variant/40 bg-surface-container-low peer-checked:border-primary peer-checked:bg-primary/5 transition-all flex items-start gap-md group-hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-on-surface-variant text-[28px] group-hover:text-primary transition-colors">upload_file</span>
+<div>
+<span class="block font-bold text-on-surface">Import Manuscript</span>
+<span class="text-xs text-on-surface-variant">Upload .docx, .txt or .fountain</span>
+</div>
+</div>
+<div class="absolute top-3 right-3 w-4 h-4 rounded-full border-2 border-outline-variant peer-checked:border-primary peer-checked:bg-primary transition-all after:content-[''] after:absolute after:inset-1 after:rounded-full after:bg-white"></div>
+</label>
+</div>
+<!-- Global Characters Seeding -->
+<div class="space-y-md">
+<div class="flex items-center justify-between">
+<label class="font-label-caps text-label-caps text-on-surface-variant uppercase ml-1">Seed Global Characters</label>
+<button class="text-primary font-bold text-xs hover:underline" type="button">+ Create New</button>
+</div>
+<div class="flex flex-wrap gap-sm">
+<!-- Character Token -->
+<div class="flex items-center gap-sm bg-surface-container-high border border-outline-variant/30 rounded-full pl-1 pr-3 py-1 cursor-pointer hover:border-primary transition-colors group">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A sophisticated digital portrait of an elderly male protagonist with sharp, weathered features, wearing a high-collar tweed jacket. The lighting is dramatic, side-lit with a warm amber glow against a dark, minimalist studio background. His expression is contemplative and wise. High-detail digital art style consistent with a premium literary workspace aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJrgD2rBCwXbnjut7H5uHl4WO_svmSZT7ve0m2sEDAYHvP0auoit4fB7QrwShpkWhtVspxPjFKdiWyiCaRTj6Rh9huiXTxdCp3M1ckDE-AeAhBMyOeQQwM-Nnec_uxZeqqBN3X464OZE99vzTETh2b5-eQyaYPLcoDozBxxVrnuOo9rzIxg1gl9U4o3DHuNk65nIb6uEjoYSM9pXDEEP2EwCM7vLrS3h5yuYhZPHb7nbNqXb4xSTeTBSauZDNTWn3ljcYAJsetwA">
+</div>
+<span class="text-sm font-medium text-on-surface">Elias Thorne</span>
+<span class="material-symbols-outlined text-[16px] text-primary">check_circle</span>
+</div>
+<!-- Character Token -->
+<div class="flex items-center gap-sm bg-surface-container-low border border-outline-variant/30 rounded-full pl-1 pr-3 py-1 cursor-pointer hover:border-primary transition-colors group opacity-60">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A portrait of a young woman with intense, intelligent eyes and short-cropped dark hair. She is wearing a modern minimalist silver headset. The lighting is soft and diffused with cool blue and warm copper tones mingling on her skin. She has a focused, professional expression. Digital painting with a cinematic, high-end production quality." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAO8rG5VctbLemARS-X1bF1z2_g89PnCykv-VkVen62z9APoANBygQiDLXPzVy3AGScc7Epv4LyZSfnr2NFjXzNYHoaXet3dMb2yvU8dgu61hIiq0zuF7hIbJV48P-JdGzN2wNC0_d5TttH_6XmQKvg9wyMBkHR8wKsSEBZbKlaANOwH-8WJkPaRlUWtJ6YefUlHfXmY3itPyEGUi4KzqlLskOir_1LeKGNpdQvyaZw66Cr9Jrzvkad_ziRExLV1vIwLtyT18o46w">
+</div>
+<span class="text-sm font-medium text-on-surface">Lyra Vance</span>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-hover:text-primary">add</span>
+</div>
+<!-- Character Token -->
+<div class="flex items-center gap-sm bg-surface-container-low border border-outline-variant/30 rounded-full pl-1 pr-3 py-1 cursor-pointer hover:border-primary transition-colors group opacity-60">
+<div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A close-up portrait of a character with an enigmatic expression, their face partially obscured by the shadow of a wide-brimmed felt hat. The aesthetic is film noir with a modern amber twist. Highly detailed skin textures and sharp focus on the visible eye. The background is a simple warm-toned studio wall. Rich, professional digital artistry." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCrnPLmiuQxXnKlOm8gSYZdhL8s9gj7Kcq6S7F9Rx8SKBtddliAPcvmbNrPkD2Tt2y2heKRltc9Lp-HtHSMctvJ6ngoduRt_bb9FHb8rKHrVGk_wUr2M56i8bKojLmcV0xtvnEedPWNPNylSeEtTiU1UYEOj-9jhaqtet92ueL78PhpsSjB1rC4vfHPe7JW6wfXRznXyiw5IR8glyUY6YiofLyViCfBHDWBvlS3RwYx4zhbMwO7Qt5fMgkP8h4F2LoPU02wCrg-9A">
+</div>
+<span class="text-sm font-medium text-on-surface">The Curator</span>
+<span class="material-symbols-outlined text-[16px] text-outline-variant group-hover:text-primary">add</span>
+</div>
+</div>
+</div>
+<!-- Actions -->
+<div class="pt-lg border-t border-outline-variant/20 flex items-center justify-end gap-md">
+<button class="px-lg h-12 rounded-full font-body-base text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 duration-150" type="button">Save as Draft</button>
+<button class="px-xl h-12 rounded-full bg-gradient-to-r from-primary to-primary-container text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.03] active:scale-[0.97] transition-all duration-200 flex items-center gap-sm" type="submit">
+                            Initialize Project
+                            <span class="material-symbols-outlined text-[20px]">auto_awesome</span>
+</button>
+</div>
+</form>
+</div>
+</div>
+</main>
+<!-- Waveform Decoration (Contextual UI) -->
+<div class="fixed bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-xs p-md bg-surface-container-low/60 backdrop-blur-md rounded-2xl border border-outline-variant/20 opacity-40 hover:opacity-100 transition-opacity">
+<div class="flex items-end gap-[2px] h-4">
+<div class="w-[3px] bg-tertiary rounded-full h-1/2 animate-pulse-subtle"></div>
+<div class="w-[3px] bg-tertiary rounded-full h-full animate-pulse-subtle" style="animation-delay: 0.2s"></div>
+<div class="w-[3px] bg-tertiary rounded-full h-3/4 animate-pulse-subtle" style="animation-delay: 0.4s"></div>
+<div class="w-[3px] bg-tertiary rounded-full h-1/2 animate-pulse-subtle" style="animation-delay: 0.6s"></div>
+<div class="w-[3px] bg-tertiary rounded-full h-full animate-pulse-subtle" style="animation-delay: 0.8s"></div>
+</div>
+<span class="font-code-xs text-code-xs text-on-surface-variant uppercase tracking-widest ml-md">Atmosphere Active</span>
+</div>
+<script>
+        // Micro-interaction for the character selection
+        document.querySelectorAll('.flex.items-center.gap-sm.bg-surface-container-low').forEach(token => {
+            token.addEventListener('click', function() {
+                const icon = this.querySelector('.material-symbols-outlined');
+                if (this.classList.contains('opacity-60')) {
+                    this.classList.remove('opacity-60');
+                    this.classList.add('border-primary');
+                    icon.innerText = 'check_circle';
+                    icon.classList.remove('text-outline-variant');
+                    icon.classList.add('text-primary');
+                } else {
+                    this.classList.add('opacity-60');
+                    this.classList.remove('border-primary');
+                    icon.innerText = 'add';
+                    icon.classList.add('text-outline-variant');
+                    icon.classList.remove('text-primary');
+                }
+            });
+        });
+
+        // Form submission prevent default for demo
+        document.querySelector('form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="material-symbols-outlined animate-spin">refresh</span> Creating Workspace...';
+            btn.disabled = true;
+            setTimeout(() => {
+                btn.innerHTML = '<span class="material-symbols-outlined">done_all</span> Workspace Ready';
+                btn.classList.replace('from-primary', 'from-tertiary');
+                btn.classList.replace('to-primary-container', 'to-tertiary-container');
+            }, 1500);
+        });
+    </script>
+
+
+</body></html>

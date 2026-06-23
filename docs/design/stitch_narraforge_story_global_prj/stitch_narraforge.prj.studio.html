@@ -1,0 +1,517 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-container": "#f4fffb",
+                    "on-background": "#1d1b17",
+                    "on-primary": "#ffffff",
+                    "surface-container-highest": "#e8e1db",
+                    "inverse-surface": "#33302c",
+                    "background": "#fff8f1",
+                    "surface-bright": "#fff8f1",
+                    "on-primary-fixed-variant": "#6e3900",
+                    "on-tertiary-fixed": "#00201c",
+                    "on-primary-fixed": "#2f1500",
+                    "on-error": "#ffffff",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed-variant": "#005048",
+                    "error-container": "#ffdad6",
+                    "tertiary": "#00685d",
+                    "secondary": "#865310",
+                    "primary-container": "#a96425",
+                    "outline-variant": "#d8c2b4",
+                    "surface-container": "#f3ede6",
+                    "surface-dim": "#dfd9d2",
+                    "primary": "#8b4c0d",
+                    "surface": "#fff8f1",
+                    "inverse-on-surface": "#f6f0e9",
+                    "on-surface": "#1d1b17",
+                    "error": "#ba1a1a",
+                    "tertiary-container": "#008376",
+                    "on-secondary": "#ffffff",
+                    "inverse-primary": "#ffb77e",
+                    "on-secondary-container": "#784703",
+                    "secondary-fixed-dim": "#feb86f",
+                    "on-error-container": "#93000a",
+                    "on-surface-variant": "#534439",
+                    "secondary-fixed": "#ffdcbd",
+                    "primary-fixed": "#ffdcc3",
+                    "on-primary-container": "#fffbff",
+                    "tertiary-fixed": "#8cf5e4",
+                    "surface-container-high": "#ede7e0",
+                    "on-secondary-fixed-variant": "#683c00",
+                    "on-secondary-fixed": "#2c1600",
+                    "surface-variant": "#e8e1db",
+                    "outline": "#867467",
+                    "surface-tint": "#8e4e10",
+                    "primary-fixed-dim": "#ffb77e",
+                    "surface-container-low": "#f9f3eb",
+                    "secondary-container": "#feb86f",
+                    "on-tertiary": "#ffffff",
+                    "tertiary-fixed-dim": "#6fd8c8"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "xs": "4px",
+                    "lg": "24px",
+                    "xl": "32px",
+                    "md": "16px",
+                    "max-width": "1600px",
+                    "sm": "8px",
+                    "2xl": "48px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "code-xs": ["JetBrains Mono"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "body-base": ["Plus Jakarta Sans"],
+                    "label-caps": ["Plus Jakarta Sans"],
+                    "body-dialogue": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "display-lg": ["36px", {"lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                    "code-xs": ["12px", {"lineHeight": "18px", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "body-base": ["15px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                    "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.12em", "fontWeight": "700"}],
+                    "body-dialogue": ["17px", {"lineHeight": "29px", "letterSpacing": "-0.01em", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #fff8f1;
+            color: #1d1b17;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            overflow: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .waveform-container {
+            mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d8c2b4;
+            border-radius: 10px;
+        }
+        .bento-card {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(216, 194, 180, 0.3);
+        }
+        @keyframes meter {
+            0% { height: 20%; }
+            50% { height: 80%; }
+            100% { height: 20%; }
+        }
+        .meter-bar {
+            animation: meter 1s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex min-h-screen">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[248px] bg-surface-container-low border-r border-outline-variant/20 flex flex-col pt-24 pb-lg px-md z-40">
+<div class="mb-8 px-2">
+<div class="flex items-center gap-3 mb-6">
+<div class="w-10 h-10 rounded-lg bg-primary-container/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="auto_stories">auto_stories</span>
+</div>
+<div>
+<h3 class="font-body-base text-body-base font-bold text-on-surface">Current Manuscript</h3>
+<p class="text-xs text-on-surface-variant">Book One</p>
+</div>
+</div>
+<button class="w-full py-3 bg-primary hover:scale-[1.02] active:scale-[0.98] transition-all text-on-primary rounded-full font-bold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 mb-8">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                New Chapter
+            </button>
+</div>
+<nav class="space-y-1 flex-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories">auto_stories</span>
+<span class="font-body-base text-body-base">Library</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="font-body-base text-body-base">Characters</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-primary font-bold border-l-4 border-primary bg-primary-container/10" href="#">
+<span class="material-symbols-outlined" data-icon="mic" style="font-variation-settings: &quot;FILL&quot; 1;">mic</span>
+<span class="font-body-base text-body-base">Voice Studio</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="public">public</span>
+<span class="font-body-base text-body-base">Settings</span>
+</a>
+</nav>
+<div class="mt-auto space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="font-body-base text-body-base">Help</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-body-base text-body-base">Settings</span>
+</a>
+</div>
+</aside>
+<!-- TopNavBar -->
+<header class="fixed top-3 left-3 right-3 rounded-xl bg-surface/92 backdrop-blur-md border border-outline-variant/30 shadow-[0_4px_12px_rgba(26,24,20,0.08)] h-16 flex justify-between items-center px-lg z-50">
+<div class="flex items-center gap-8">
+<span class="font-display-lg text-display-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">NarraForge</span>
+<div class="hidden md:flex gap-6 items-center">
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">Project Settings</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">Export</a>
+<a class="text-primary font-bold border-b-2 border-primary pb-1" href="#">Voice Studio</a>
+<a class="text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">Preview</a></div>
+</div>
+<div class="flex items-center gap-4"><div class="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-primary/5 border border-primary/10 rounded-full"><span class="material-symbols-outlined text-sm text-primary animate-spin" style="font-size: 14px;">sync</span><span class="text-[10px] font-bold text-primary uppercase tracking-wider">Syncing Engine</span></div>
+<div class="flex items-center gap-2 px-3 py-1.5 bg-tertiary/10 rounded-full">
+<span class="w-2 h-2 bg-tertiary rounded-full animate-pulse"></span>
+<span class="text-[10px] font-bold text-tertiary uppercase tracking-wider">Engine Active</span>
+</div>
+<span class="material-symbols-outlined text-primary cursor-pointer" data-icon="notifications">notifications</span>
+<div class="w-8 h-8 rounded-full border border-primary/20 overflow-hidden">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7vLVAQBfACUcXKh7jHVO2-8gpUA79B3T8ntY1kACS6wPa9KLeL-tnJL_iU8lwf8V0krvhI1G94gj-lV7Y8yW9OCiueEySp-4exzOmrY-n_hhMMKv5YJQWPsWDyQ2VrK8PK0byFm2dxHnrOodddCEV18O5n-3EZjMXjYkWn3_DgEfVNjkxwIC9ocsoUjR59creuKEvAOY5qYA2ALTKbiupNqWHMe1iecaZbnhzjGbxA9ygjRDEl2vNtLqd31K9IzPfI6ptGfsgjg">
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="flex-1 ml-[248px] pt-24 pb-32 px-lg h-screen overflow-hidden flex flex-col">
+<!-- Studio Header -->
+<div class="flex items-end justify-between mb-8">
+<div>
+<nav class="flex items-center gap-2 text-xs font-medium text-outline mb-2">
+<span class="">Projects</span>
+<span class="material-symbols-outlined text-xs" data-icon="chevron_right">chevron_right</span>
+<span class="">Book One</span>
+<span class="material-symbols-outlined text-xs" data-icon="chevron_right">chevron_right</span>
+<span class="text-on-surface">Voice Studio</span>
+</nav>
+<h1 class="font-headline-md text-display-lg text-on-background">Voice Synthesis Studio</h1>
+</div>
+<div class="flex items-center gap-4">
+<div class="flex flex-col items-end">
+<span class="text-[10px] font-bold text-outline uppercase tracking-widest">Processing Status</span>
+<div class="flex gap-1 h-6 items-end">
+<div class="w-1.5 bg-primary/40 rounded-full meter-bar" style="animation-delay: 0.1s; height: 40%"></div>
+<div class="w-1.5 bg-primary rounded-full meter-bar" style="animation-delay: 0.3s; height: 70%"></div>
+<div class="w-1.5 bg-primary/60 rounded-full meter-bar" style="animation-delay: 0.2s; height: 55%"></div>
+<div class="w-1.5 bg-primary/30 rounded-full meter-bar" style="animation-delay: 0.5s; height: 30%"></div>
+</div>
+</div>
+<button class="bg-primary text-on-primary px-6 py-2.5 rounded-full font-bold shadow-lg shadow-primary/20 flex items-center gap-2 hover:scale-[1.02] active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="bolt">bolt</span>
+                    Batch Synthesize
+                </button>
+</div>
+</div>
+<div class="flex-1 grid grid-cols-12 gap-lg overflow-hidden">
+<!-- Production Timeline (Dialogue Segments) -->
+<section class="col-span-8 flex flex-col overflow-hidden">
+<div class="flex items-center justify-between mb-4 px-2">
+<div class="flex items-center gap-4">
+<h2 class="font-label-caps text-on-surface-variant tracking-widest">CHAPTER 12: THE VEIL OF TRUTH</h2>
+<span class="px-2 py-0.5 rounded bg-surface-container-highest text-[10px] font-bold text-on-surface-variant">14 SEGMENTS</span>
+</div>
+<div class="flex items-center gap-3">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" data-icon="filter_list">filter_list</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors" data-icon="search">search</button>
+</div>
+</div>
+<div class="flex-1 overflow-y-auto pr-4 custom-scrollbar space-y-3 relative">
+<!-- Connector line for vertical timeline -->
+<div class="absolute left-10 top-0 bottom-0 w-px bg-outline-variant/30 -z-10"></div>
+<!-- Segment 1: Synthesized -->
+<div class="bento-card rounded-xl p-4 flex gap-6 group hover:border-primary/40 transition-all">
+<div class="flex flex-col items-center shrink-0 w-12">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20 bg-surface-container">
+<img class="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCa4kLb2UmMcDff6WJQkU_n1CxbJh0qpeAiBnd4ViUAkgewFRsuSBVyo1XMYJsDQ_jEYHusN6QDQLJjmbAaONN-XN_XdyEoAExOFi5c3clMLg9u9T6butyay-4CACNkobEvbjyWnhfvIa8YqTZmOvRFBk-vT0VFxedJey2fSYxtAOGVgWItgyBCSGSjt8656ZyfbQKjKDOOkr0OMecadpDKZxUP3IaoKAuym4e21UrhFskG2zdYAhipO6vMecMjJzXYlWrZ-0ARCQ">
+</div>
+<span class="text-[10px] font-bold text-outline mt-2">00:01</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-3">
+<span class="text-xs font-bold text-primary uppercase">Elias Thorne</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary/10 text-[9px] font-bold text-tertiary border border-tertiary/20 flex items-center gap-1">
+<span class="material-symbols-outlined text-[10px]" data-icon="check_circle" style="font-variation-settings: &quot;FILL&quot; 1;">check_circle</span>
+                                        SYNTHESIZED
+                                    </span><span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-[9px] font-bold text-on-surface-variant border border-outline-variant/30">Alpha-v3</span>
+</div>
+<span class="text-[10px] font-code-xs text-outline">v2.1 (Studio Quality)</span>
+<button class="p-1 rounded-full hover:bg-surface-container-highest text-on-surface-variant transition-colors" title="Segment Options"><span class="material-symbols-outlined text-lg">more_vert</span></button></div>
+<div class="relative group/edit cursor-text"><p class="text-body-dialogue text-on-surface line-clamp-2 pr-8">"The map is not a mere guide, Serafina. It is a record of things that were never meant to be found by hands as young as ours."</p><span class="material-symbols-outlined absolute right-0 top-0 text-sm text-primary opacity-0 group-hover/edit:opacity-100 transition-opacity">edit</span></div>
+<div class="mt-3 flex items-center justify-between">
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="tune">tune</span> MODULATION
+                                    </button>
+<button class="flex items-center gap-1.5 text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="history">history</span> LOG
+                                    </button>
+</div>
+<button class="p-1.5 rounded-full hover:bg-primary/10 text-primary transition-colors">
+<span class="material-symbols-outlined text-lg" data-icon="play_circle">play_circle</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Segment 2: Processing (Active State) -->
+<div class="bento-card rounded-xl p-4 flex gap-6 border-primary bg-primary-container/5 ring-1 ring-primary/10 shadow-lg shadow-primary/5">
+<div class="flex flex-col items-center shrink-0 w-12">
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary shadow-sm">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCElz8Wyy4ZOdXJWEajin2TxueDJfuunrSUDRPpMIIEpbwK0E-nW1VxP7PYwQntBfFfE8jdRWBzyds8auSJ4L5QJuEY2_aWzaHNNoneVtpXr2Eg0q0-1TnspYfuO2g1sR8XXKO05bkyrdnBP-xn7q1kASb5ZjlLkxCCQXzdNNV4E5i-KBsUG2dUmoySd6n3-1tfCIt5k2qMONIcCEEk26lHJ5jcTLWb5xkyJV9ZuTmsTqgAHJLz5l40A_CErwnGFvgHbOam55aqdQ">
+</div>
+<span class="text-[10px] font-bold text-primary mt-2">00:14</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-3">
+<span class="text-xs font-bold text-primary uppercase">Serafina Vane</span>
+<span class="px-2 py-0.5 rounded-full bg-primary/10 text-[9px] font-bold text-primary border border-primary/20 flex items-center gap-1">
+<span class="w-1 h-1 bg-primary rounded-full animate-ping"></span>
+                                        READY FOR EXPORT
+                                    </span><span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-[9px] font-bold text-on-surface-variant border border-outline-variant/30">HD-Turbo</span>
+</div>
+<div class="flex gap-0.5 items-end h-3">
+<div class="w-0.5 h-full bg-primary rounded-full animate-pulse"></div>
+<div class="w-0.5 h-3/4 bg-primary rounded-full animate-pulse" style="animation-delay: 0.2s"></div>
+<div class="w-0.5 h-1/2 bg-primary rounded-full animate-pulse" style="animation-delay: 0.1s"></div>
+</div>
+<button class="p-1 rounded-full hover:bg-surface-container-highest text-on-surface-variant transition-colors" title="Segment Options"><span class="material-symbols-outlined text-lg">more_vert</span></button></div>
+<textarea class="w-full bg-transparent border-none focus:ring-0 font-body-dialogue text-on-surface p-0 resize-none h-auto min-h-[44px]">"Then why show it to me now? Why lead me into the dark if you're so afraid of what I might see?"</textarea>
+<div class="mt-3 flex items-center justify-between pt-3 border-t border-outline-variant/10"><div class="flex items-center gap-6 border-r border-outline-variant/20 pr-6 mr-auto"><div class="flex flex-col gap-1"><span class="text-[9px] font-bold text-outline uppercase">Rate</span><div class="flex items-center gap-2"><input class="w-16 h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="50"><span class="text-[9px] font-code-xs text-primary">1.0x</span></div></div><div class="flex flex-col gap-1"><span class="text-[9px] font-bold text-outline uppercase">Pitch</span><div class="flex items-center gap-2"><input class="w-16 h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="50"><span class="text-[9px] font-code-xs text-primary">0%</span></div></div><div class="flex flex-col gap-1"><span class="text-[9px] font-bold text-outline uppercase">Emphasis</span><div class="flex items-center gap-2"><select class="bg-transparent border-none p-0 text-[9px] font-bold text-primary focus:ring-0 cursor-pointer"><option>Moderate</option><option>Strong</option><option>Reduced</option></select></div></div></div>
+<div class="flex items-center gap-4">
+<button class="flex items-center gap-1.5 text-[10px] font-bold text-primary">
+<span class="material-symbols-outlined text-sm" data-icon="bolt">bolt</span> INTENSITY: HIGH
+                                    </button>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-3 py-1 text-[10px] font-bold text-on-surface-variant hover:text-primary transition-colors">Discard</button>
+<button class="px-4 py-1.5 bg-primary text-on-primary rounded-full text-[10px] font-bold shadow-sm">Commit Track</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Segment 3: Draft -->
+<div class="bento-card rounded-xl p-4 flex gap-6 opacity-75 grayscale hover:opacity-100 hover:grayscale-0 transition-all">
+<div class="flex flex-col items-center shrink-0 w-12">
+<div class="w-10 h-10 rounded-full overflow-hidden border border-outline-variant/30 bg-surface-container-low">
+<img class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDB4cNE8ITmkXl9n8feWkjVfyIL5k6O96Xb2SK0PSy1ftTgwfVFIw-m9a3f7ytmSRxG8i4qvycrxwFKrkvO_fR5Dvfi3s9rXRYYYni580e9WrbrgGDO9beLw8poY9fDAuBeIU1RbAu6w6qSi4HWix71xIfJGb6_Gg6WzRXSTuFeGLZtAjlmTtxcGzD6p27PXYaxKZ2NaiFMR_TUCyb2kxHQDKo6chkz0nY5ucjqhMezp9JgJ-jj7dcrh8DagXG2VDRL4VSQ265oQA">
+</div>
+<span class="text-[10px] font-bold text-outline mt-2">00:28</span>
+</div>
+<div class="flex-1">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-3">
+<span class="text-xs font-bold text-on-surface-variant uppercase">Elias Thorne</span>
+<span class="px-2 py-0.5 rounded-full bg-outline-variant/20 text-[9px] font-bold text-on-surface-variant border border-outline-variant/30">DRAFT</span>
+</div>
+<button class="p-1 rounded-full hover:bg-surface-container-highest text-on-surface-variant transition-colors" title="Segment Options"><span class="material-symbols-outlined text-lg">more_vert</span></button></div>
+<div class="relative group/edit cursor-text"><p class="text-body-dialogue text-on-surface-variant pr-8">"Because the dark is the only place the truth survives. Out there... in the light... it's just stories."</p><span class="material-symbols-outlined absolute right-0 top-0 text-sm text-primary opacity-0 group-hover/edit:opacity-100 transition-opacity">edit</span></div>
+<div class="mt-3 flex items-center justify-end">
+<button class="px-4 py-1.5 border border-primary/30 text-primary hover:bg-primary/5 rounded-full text-[10px] font-bold transition-colors">
+                                    Generate Audio
+                                </button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Asset Sidebar -->
+<section class="col-span-4 flex flex-col gap-lg overflow-hidden">
+<!-- Multi-Track Visualizer -->
+<div class="bento-card rounded-2xl p-lg flex flex-col gap-4">
+<h2 class="font-label-caps text-on-surface-variant tracking-widest border-b border-outline-variant/20 pb-2">SESSION MONITOR</h2>
+<div class="space-y-4">
+<div class="space-y-1">
+<div class="flex justify-between text-[10px] font-bold uppercase text-outline">
+<span class="">Voice Clarity</span>
+<span class="text-tertiary">-3dB</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden flex">
+<div class="h-full bg-tertiary" style="width: 85%"></div>
+</div>
+</div>
+<div class="space-y-1">
+<div class="flex justify-between text-[10px] font-bold uppercase text-outline">
+<span class="">Dynamic Range</span>
+<span class="text-primary">LUFS -14</span>
+</div>
+<div class="h-1.5 w-full bg-surface-container-highest rounded-full overflow-hidden flex">
+<div class="h-full bg-primary" style="width: 62%"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Scene Atmos Layers -->
+<div class="bento-card rounded-2xl p-lg flex-1 flex flex-col gap-4 overflow-hidden">
+<div class="flex items-center justify-between border-b border-outline-variant/20 pb-2">
+<h2 class="font-label-caps text-on-surface-variant tracking-widest">SCENE ATMOSPHERICS</h2>
+<button class="material-symbols-outlined text-sm text-primary" data-icon="add_circle">add_circle</button>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
+<div class="p-3 rounded-xl bg-surface-container-high border border-primary/20">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="cloudy_snowing" style="font-variation-settings: &quot;FILL&quot; 1;">cloudy_snowing</span>
+<span class="text-xs font-bold text-on-surface">Rainy Docks</span>
+</div>
+<span class="text-[10px] font-bold text-primary">LOOPING</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-xs text-outline" data-icon="volume_down">volume_down</span>
+<input class="flex-1 h-1 bg-primary/20 rounded-lg appearance-none cursor-pointer accent-primary" type="range" value="65">
+<span class="material-symbols-outlined text-xs text-outline" data-icon="volume_up">volume_up</span>
+</div>
+</div>
+<div class="p-3 rounded-xl hover:bg-surface-container transition-colors border border-transparent">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-lg" data-icon="local_fire_department">local_fire_department</span>
+<span class="text-xs font-medium text-on-surface-variant">Library Fireplace</span>
+</div>
+<span class="material-symbols-outlined text-sm text-outline cursor-pointer hover:text-primary transition-colors" data-icon="add">add</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Global Synthesis Engine -->
+<div class="bento-card rounded-2xl p-lg flex flex-col gap-4"><div class="flex items-center justify-between border-b border-outline-variant/20 pb-2"><h2 class="font-label-caps text-on-surface-variant tracking-widest">SYNTHESIS QUEUE</h2><span class="px-1.5 py-0.5 rounded bg-primary/10 text-[9px] font-bold text-primary">2 ACTIVE</span></div><div class="space-y-3"><div class="space-y-2"><div class="flex justify-between items-center"><span class="text-[10px] font-medium text-on-surface">Segment #15 (Elias)</span><span class="text-[9px] font-code-xs text-outline">OpenAI-TTS</span></div><div class="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-primary animate-pulse" style="width: 45%"></div></div></div><div class="space-y-2"><div class="flex justify-between items-center"><span class="text-[10px] font-medium text-on-surface">Segment #16 (Serafina)</span><span class="text-[9px] font-code-xs text-outline">Edge-Neural</span></div><div class="h-1 w-full bg-surface-container-highest rounded-full overflow-hidden"><div class="h-full bg-outline-variant/40" style="width: 12%"></div></div></div></div></div><div class="bento-card rounded-2xl p-lg space-y-4">
+<h2 class="font-label-caps text-on-surface-variant tracking-widest border-b border-outline-variant/20 pb-2">GLOBAL ENGINE</h2>
+<div class="space-y-4">
+<div class="flex items-center justify-between p-2 rounded-lg bg-surface-container-low border border-outline-variant/30">
+<span class="text-[10px] font-bold text-on-surface-variant uppercase">Model</span>
+<span class="text-[10px] font-bold text-primary">NARRA-V4 PRO</span>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-[10px] font-bold text-on-surface-variant uppercase">
+<span class="">Global Cadence</span>
+<span class="text-primary">1.0x</span>
+</div>
+<input class="w-full h-1 bg-outline-variant/30 rounded-lg appearance-none cursor-pointer accent-primary" type="range">
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- Master Transport Bar (Refined) -->
+<footer class="fixed bottom-0 left-[248px] right-0 h-28 bg-surface/98 backdrop-blur-2xl border-t border-outline-variant/30 flex flex-col items-center z-50">
+<!-- Progress Handle/Playhead Control -->
+<div class="w-full h-1 bg-outline-variant/10 relative">
+<div class="absolute left-1/4 top-0 bottom-0 w-1 bg-primary z-20 shadow-[0_0_10px_rgba(139,76,13,0.5)] cursor-pointer"></div>
+<div class="absolute inset-y-0 left-0 bg-primary/20" style="width: 25%"></div>
+</div>
+<div class="w-full max-w-[1400px] flex-1 flex items-center px-lg gap-8">
+<!-- Transport Controls -->
+<div class="flex items-center gap-4">
+<button class="text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined text-2xl" data-icon="skip_previous">skip_previous</span>
+</button>
+<button class="w-14 h-14 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all group">
+<span class="material-symbols-outlined text-4xl" data-icon="play_arrow" style="font-variation-settings: &quot;FILL&quot; 1;">play_arrow</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-all">
+<span class="material-symbols-outlined text-2xl" data-icon="skip_next">skip_next</span>
+</button>
+</div>
+<!-- Master Waveform Timeline -->
+<div class="flex-1 h-16 bg-surface-container/30 rounded-xl border border-outline-variant/10 relative flex items-center px-4 overflow-hidden group cursor-pointer">
+<div class="absolute left-4 top-2 text-[10px] font-code-xs text-primary/60 font-bold">01:12</div>
+<div class="absolute right-4 top-2 text-[10px] font-code-xs text-outline font-bold">04:45</div>
+<div class="w-full h-8 flex items-center gap-[1px] waveform-container opacity-60 group-hover:opacity-100 transition-opacity">
+<!-- High-fidelity waveform mock -->
+<div class="flex-1 flex items-center gap-[2px]">
+<div class="w-[2px] h-3 bg-outline-variant/40 rounded-full"></div>
+<div class="w-[2px] h-5 bg-outline-variant/40 rounded-full"></div>
+<div class="w-[2px] h-8 bg-primary/40 rounded-full"></div>
+<div class="w-[2px] h-12 bg-primary/60 rounded-full shadow-sm"></div>
+<div class="w-[2px] h-10 bg-primary rounded-full" style="transform: scaleY(1.2427); transition: transform 0.2s ease-in-out;"></div>
+<div class="w-[2px] h-6 bg-primary/40 rounded-full"></div>
+<div class="w-[2px] h-2 bg-outline-variant/40 rounded-full"></div>
+<div class="w-[2px] h-4 bg-outline-variant/40 rounded-full"></div>
+<div class="w-[2px] h-9 bg-primary/40 rounded-full"></div>
+<div class="w-[2px] h-11 bg-primary rounded-full" style="transform: scaleY(0.739496); transition: transform 0.2s ease-in-out;"></div>
+<div class="w-[2px] h-14 bg-primary rounded-full" style="transform: scaleY(0.718946); transition: transform 0.2s ease-in-out;"></div>
+<div class="w-[2px] h-8 bg-primary/50 rounded-full"></div>
+<div class="w-[2px] h-3 bg-outline-variant/40 rounded-full"></div>
+<div class="w-[2px] h-6 bg-primary/30 rounded-full"></div>
+<div class="w-[2px] h-10 bg-primary/40 rounded-full"></div>
+<div class="w-[2px] h-15 bg-primary rounded-full shadow-md" style="transform: scaleY(1.10255); transition: transform 0.2s ease-in-out;"></div>
+<div class="w-[2px] h-12 bg-primary/60 rounded-full"></div>
+<div class="w-[2px] h-7 bg-primary/40 rounded-full"></div>
+<div class="w-[2px] h-4 bg-outline-variant/40 rounded-full"></div>
+<div class="w-[2px] h-2 bg-outline-variant/40 rounded-full"></div>
+<div class="w-[2px] h-5 bg-primary/20 rounded-full"></div>
+<div class="w-[2px] h-8 bg-primary/40 rounded-full"></div>
+<div class="w-[2px] h-11 bg-primary rounded-full" style="transform: scaleY(0.743969); transition: transform 0.2s ease-in-out;"></div>
+<div class="w-[2px] h-13 bg-primary rounded-full" style="transform: scaleY(1.03932); transition: transform 0.2s ease-in-out;"></div>
+<div class="w-[2px] h-9 bg-primary/60 rounded-full"></div>
+<div class="w-[2px] h-5 bg-primary/30 rounded-full"></div>
+<div class="w-[2px] h-2 bg-outline-variant/40 rounded-full"></div>
+<!-- Repeated pattern for filler -->
+<div class="w-[2px] h-4 bg-outline-variant/30 rounded-full"></div>
+<div class="w-[2px] h-6 bg-outline-variant/30 rounded-full"></div>
+<div class="w-[2px] h-10 bg-outline-variant/30 rounded-full"></div>
+<div class="w-[2px] h-8 bg-outline-variant/30 rounded-full"></div>
+<div class="w-[2px] h-5 bg-outline-variant/30 rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Global Actions -->
+<div class="flex items-center gap-3"><div class="flex items-center gap-3"><button class="flex flex-col items-center gap-1 p-2 text-on-surface-variant hover:text-primary transition-colors" title="Download Subtitles"><span class="material-symbols-outlined">subtitles</span><span class="text-[9px] font-bold uppercase">SRT</span></button><div class="h-10 w-px bg-outline-variant/30"></div><div class="flex flex-col gap-1"><button class="bg-surface-container-highest hover:bg-surface-container-high text-on-surface-variant px-4 py-2 rounded-lg text-[10px] font-bold flex items-center gap-2 transition-all border border-outline-variant/20"><span class="material-symbols-outlined text-sm">folder_open</span><span class="">Remotion: /projects/narraforge/v1</span></button><button class="bg-primary text-on-primary px-6 py-2.5 rounded-full font-bold flex items-center gap-2 transition-all active:scale-95 shadow-lg shadow-primary/20"><span class="material-symbols-outlined text-sm">movie_edit</span><span class="">Finalize &amp; Export</span></button></div></div></div>
+</div>
+</footer>
+<script>
+        // Simulated micro-interactions for active studio
+        document.querySelectorAll('.bento-card').forEach(card => {
+            card.addEventListener('mouseenter', () => {
+                card.style.transform = 'translateY(-2px)';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0)';
+            });
+        });
+
+        // Pulsing bars for active waveform state
+        const bars = document.querySelectorAll('.waveform-container .bg-primary');
+        setInterval(() => {
+            bars.forEach(bar => {
+                if (Math.random() > 0.3) {
+                    const randScale = 0.7 + Math.random() * 0.6;
+                    bar.style.transform = `scaleY(${randScale})`;
+                    bar.style.transition = 'transform 0.2s ease-in-out';
+                }
+            });
+        }, 200);
+    </script>
+
+
+
+
+</body></html>
