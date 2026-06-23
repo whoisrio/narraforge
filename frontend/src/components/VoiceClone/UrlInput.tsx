@@ -10,6 +10,15 @@ interface UrlInputProps {
   onBack: () => void;
 }
 
+function getErrorDetail(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const response = (error as { response?: { data?: { detail?: unknown } } }).response;
+    if (typeof response?.data?.detail === 'string') return response.data.detail;
+  }
+  return fallback;
+}
+
 /**
  * 公网 URL 音频输入组件
  *
@@ -42,8 +51,8 @@ export function UrlInput({ onUrlConfirmed, onBack }: UrlInputProps) {
     try {
       const result = await voiceApi.uploadFromUrl(trimmed);
       onUrlConfirmed(result);
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || '下载失败';
+    } catch (err: unknown) {
+      const msg = getErrorDetail(err, '下载失败');
       setError(`确认失败：${msg}`);
     } finally {
       setIsLoading(false);

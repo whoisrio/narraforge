@@ -15,12 +15,12 @@ import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
 import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
-import { getDraft, deleteDraft } from '../services/segmentedDraftStore';
+import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segmentedDraftStore';
 import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, SegmentEngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
@@ -45,7 +45,11 @@ function toEdgeFormat(value: number) {
 }
 
 function endsWithSentencePeriod(text: string): boolean {
-  return /[。．\.](?:[”"』」》）\)]*)\s*$/.test(text.trim());
+  return /[。．.](?:[”"』」》）)]*)\s*$/.test(text.trim());
+}
+
+function getErrorMessage(error: unknown, fallback = '生成失败'): string {
+  return error instanceof Error ? error.message : String(error || fallback);
 }
 
 function createScratchpadProject(): SegmentedProject {
@@ -115,7 +119,7 @@ export function TTSSynthesis({
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [roles, setRoles] = useState<Role[]>([]);
-  const [previewingRoleId, setPreviewingRoleId] = useState<string | null>(null);
+  const [, setPreviewingRoleId] = useState<string | null>(null);
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [segmentViewMode, setSegmentViewMode] = useState<'list' | 'dialogue'>('list');
@@ -131,7 +135,7 @@ export function TTSSynthesis({
     variant?: 'warning' | 'danger';
     confirmLabel?: string;
     onConfirm: () => void;
-  }>({ open: false, title: '', message: '', onConfirm: () => {} });
+  }>({ open: false, title: '', message: '', onConfirm: () => undefined });
 
   // Derived: active chapter
   const activeChapter = useMemo(() => getActiveChapter(project)!, [project]);
@@ -274,7 +278,7 @@ export function TTSSynthesis({
   const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
-  const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: any } | null>(null);
+  const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: ProjectDraftRecord } | null>(null);
 
   // ---- Chapter management ----
 
@@ -295,7 +299,7 @@ export function TTSSynthesis({
     setVoxcpmPromptText(ch.voxcpm_prompt_text || '');
     setVoxcpmCfgValue(ch.voxcpm_cfg_value ?? 2.0);
     setVoxcpmInferenceTimesteps(ch.voxcpm_inference_timesteps ?? 10);
-    setParams({ language: (ch.language as any) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
+    setParams({ language: (ch.language as TTSRequest['language']) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
     setPanelOpen(ch.panel_open ?? true);
   }, []);
 
@@ -318,8 +322,8 @@ export function TTSSynthesis({
     const ch = project.chapters.find(c => c.id === chapterId);
     if (ch) {
       for (const seg of ch.segments) {
-        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
-        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
       }
     }
     dispatch({ type: 'DELETE_CHAPTER', id: chapterId });
@@ -478,8 +482,8 @@ export function TTSSynthesis({
     const nxt = segs[keepIdx + 1];
     const hasAudio = !!(cur.current_audio_id || nxt.current_audio_id);
     const doMerge = async () => {
-      if (cur.current_audio_id) { try { await deleteTTSResult(cur.current_audio_id); } catch {} }
-      if (nxt.current_audio_id) { try { await deleteTTSResult(nxt.current_audio_id); } catch {} }
+      if (cur.current_audio_id) { try { await deleteTTSResult(cur.current_audio_id); } catch { /* ignore */ } }
+      if (nxt.current_audio_id) { try { await deleteTTSResult(nxt.current_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'MERGE_SEGMENTS', id, direction });
     };
     if (hasAudio) {
@@ -499,7 +503,7 @@ export function TTSSynthesis({
     if (!seg) return;
     const hasAudio = !!seg.current_audio_id;
     const doSplit = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
+      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'SPLIT_SEGMENT', id, position });
     };
     if (hasAudio) {
@@ -518,8 +522,8 @@ export function TTSSynthesis({
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
     const doDelete = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
-      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'DELETE_SEGMENT', id });
     };
     const preview = seg.text.length > 20 ? seg.text.slice(0, 20) + '…' : seg.text;
@@ -539,7 +543,7 @@ export function TTSSynthesis({
       .filter((id): id is string => !!id);
 
     const apply = async () => {
-      for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch {} }
+      for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch { /* ignore */ } }
       dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
       dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
       dispatch({ type: 'APPLY_SPLIT', items });
@@ -708,36 +712,36 @@ export function TTSSynthesis({
 
       // Params: locked → use stored; unlocked → use CURRENT global, fallback to stored for CosyVoice-specific fields
       const voiceId = hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id);
-      const speed = overrides.includes('speed') ? sp.speed : ((gp as any).speed ?? 1.0);
-      const volume = overrides.includes('volume') ? sp.volume : ((gp as any).volume ?? 80);
-      const pitch = overrides.includes('pitch') ? sp.pitch : ((gp as any).pitch ?? 1.0);
-      const instruction = overrides.includes('instruction') ? sp.instruction : ((gp as any).instruction || sp.instruction || '');
-      const language = overrides.includes('language') ? sp.language : ((gp as any).language || sp.language || 'Chinese');
+      const speed = overrides.includes('speed') ? sp.speed : (gp.speed ?? 1.0);
+      const volume = overrides.includes('volume') ? sp.volume : (gp.volume ?? 80);
+      const pitch = overrides.includes('pitch') ? sp.pitch : (gp.pitch ?? 1.0);
+      const instruction = overrides.includes('instruction') ? sp.instruction : (gp.instruction || sp.instruction || '');
+      const language = overrides.includes('language') ? sp.language : (gp.language || sp.language || 'Chinese');
 
       // Edge-TTS: locked → stored; unlocked → current global
-      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : ((gp as any).edge_voice || '');
-      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : ((gp as any).edge_rate ?? '+0%');
-      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : ((gp as any).edge_volume ?? '+0%');
+      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : (gp.edge_voice || '');
+      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : (gp.edge_rate ?? '+0%');
+      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : (gp.edge_volume ?? '+0%');
 
       // MiMo: locked → stored; unlocked → current global
-      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : ((gp as any).mimo_mode || 'preset');
-      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : ((gp as any).mimo_preset_voice || '');
-      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : ((gp as any).mimo_clone_voice_id || '');
-      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : ((gp as any).mimo_instruction || '');
+      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : (gp.mimo_mode || 'preset');
+      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : (gp.mimo_preset_voice || '');
+      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : (gp.mimo_clone_voice_id || '');
+      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : (gp.mimo_instruction || '');
 
       // VoxCPM: locked → stored; unlocked → current global
-      const effectiveVoxcpmMode = hasVoiceLock ? (sp.voxcpm_mode || 'tts') : ((gp as any).voxcpm_mode || 'tts');
-      const effectiveVoxcpmCfg = hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : ((gp as any).voxcpm_cfg_value ?? 2.0);
-      const effectiveVoxcpmTimesteps = hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : ((gp as any).voxcpm_inference_timesteps ?? 10);
-      const effectiveVoxcpmDesc = hasVoiceLock ? (sp.voxcpm_voice_description || '') : ((gp as any).voxcpm_voice_description || '');
-      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : ((gp as any).voxcpm_style_control || '');
-      const effectiveVoxcpmPrompt = hasVoiceLock ? (sp.voxcpm_prompt_text || '') : ((gp as any).voxcpm_prompt_text || '');
+      const effectiveVoxcpmMode = hasVoiceLock ? (sp.voxcpm_mode || 'tts') : (gp.voxcpm_mode || 'tts');
+      const effectiveVoxcpmCfg = hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : (gp.voxcpm_cfg_value ?? 2.0);
+      const effectiveVoxcpmTimesteps = hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : (gp.voxcpm_inference_timesteps ?? 10);
+      const effectiveVoxcpmDesc = hasVoiceLock ? (sp.voxcpm_voice_description || '') : (gp.voxcpm_voice_description || '');
+      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : (gp.voxcpm_style_control || '');
+      const effectiveVoxcpmPrompt = hasVoiceLock ? (sp.voxcpm_prompt_text || '') : (gp.voxcpm_prompt_text || '');
 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
 
       // Voice identifier & params snapshot — shared by both backend and frontend paths
       const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
-      const updatedParams: Partial<import('../types').SegmentEngineParams> = { engine: effectiveEngine as any };
+      const updatedParams: Partial<SegmentEngineParams> = { engine: effectiveEngine };
       if (effectiveEngine === 'edge_tts') {
         updatedParams.edge_voice = effectiveEdgeVoice;
         updatedParams.edge_rate = effectiveEdgeRate;
@@ -748,7 +752,7 @@ export function TTSSynthesis({
         updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
         updatedParams.mimo_instruction = effectiveMimoInstruction;
       } else if (effectiveEngine === 'voxcpm') {
-        updatedParams.voxcpm_mode = effectiveVoxcpmMode as any;
+        updatedParams.voxcpm_mode = effectiveVoxcpmMode;
         updatedParams.voxcpm_cfg_value = effectiveVoxcpmCfg;
         updatedParams.voxcpm_inference_timesteps = effectiveVoxcpmTimesteps;
         updatedParams.voxcpm_voice_description = effectiveVoxcpmDesc;
@@ -804,11 +808,11 @@ export function TTSSynthesis({
         );
         // Extract the regenerated segment from the backend response
         const updatedSeg = updated.chapters
-          ?.flatMap((c: any) => c.segments ?? [])
-          ?.find((s: any) => s.id === seg.id);
+          ?.flatMap((c: Chapter) => c.segments ?? [])
+          ?.find((s: Segment) => s.id === seg.id);
         // Clear legacy IndexedDB audio_id if it existed (segment now uses backend path)
-        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
-        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
         // Surgically update only the regenerated segment — preserve all other segments' frontend state
         const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : voiceId);
         dispatch({
@@ -870,10 +874,10 @@ export function TTSSynthesis({
       ac.close();
       const audioId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
-      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams });
-    } catch (e: any) {
-      dispatch({ type: 'GENERATE_FAIL', id, error: e?.message ?? '生成失败' });
+    } catch (error: unknown) {
+      dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error) });
     }
   }, [activeChapter.segments, dispatch, buildCurrentParams, showToast]);
 
@@ -931,7 +935,7 @@ export function TTSSynthesis({
       // Step 1: Delete existing audio for segments that have it
       for (const seg of toRegenerate) {
         if (seg.current_audio_id) {
-          try { await deleteTTSResult(seg.current_audio_id); } catch {}
+          try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
         }
         dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id });
       }
@@ -1021,7 +1025,7 @@ export function TTSSynthesis({
         current_audio_id: seg?.current_audio_id,
         current_audio_path: seg?.current_audio_path,
       });
-      const msg = (e as any)?.message ?? String(e);
+      const msg = getErrorMessage(e, String(e));
       showToast(`播放失败 (${ctx}): ${msg}`, 'error');
     };
 
@@ -1037,7 +1041,7 @@ export function TTSSynthesis({
             const body = await resp.clone().json();
             if (body?.detail) detail = `${resp.status} ${body.detail}`;
           } catch {
-            try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch {}
+            try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch { /* ignore */ }
           }
           throw new Error(detail);
         }
@@ -1129,7 +1133,7 @@ export function TTSSynthesis({
           const resp = await fetch(url);
           if (!resp.ok) {
             let detail = `HTTP ${resp.status}`;
-            try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch {}
+            try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch { /* ignore */ }
             console.error(`[PlayAll:backend HTTP ${resp.status}]`, detail);
             continue;
           }
@@ -1198,7 +1202,7 @@ export function TTSSynthesis({
       // Save trimmed audio, delete old
       const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       await saveTTSResult({ id: newId, text: seg.text, voice_id: seg.params.voice_id || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: seg.params.speed ?? 1, volume: seg.params.volume ?? 80, pitch: seg.params.pitch ?? 1, instruction: seg.params.instruction || '', language: seg.params.language || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
-      try { await deleteTTSResult(seg.current_audio_id); } catch {}
+      try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, generated_voice_id: seg.generated_voice_id });
       showToast(`裁剪了 ${trimmedMs}ms 静音`);
     } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
@@ -1367,7 +1371,7 @@ export function TTSSynthesis({
                 onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
                 onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
                 onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
-                onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+                onLanguageChange={v => setParams(p => ({ ...p, language: v as TTSRequest['language'] }))}
                 onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
                 onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
                 onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}

@@ -10,7 +10,7 @@ import { indexedDBStorage, type SegmentedProjectStorage } from './services/segme
 import { backendStorage } from './services/backendSegmentedProjectStorage';
 import { createInitialProject } from './hooks/useSegmentedProject';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
-import { VoiceRefreshProvider } from './hooks/useVoiceRefresh';
+import { VoiceRefreshProvider } from './hooks/VoiceRefreshProvider';
 import { ThemeProvider } from './hooks/useTheme';
 import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import type { SegmentedProject } from './types';

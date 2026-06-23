@@ -38,12 +38,12 @@ export async function migrateIndexedDBProjectsToBackend(): Promise<MigrationResu
   }
 
   // Strip current_audio_id since the backend will return its own current_audio_path
-  const projects = localProjects.map((p) => JSON.parse(JSON.stringify(p)));
-  for (const proj of projects as SegmentedProject[]) {
+  const projects: SegmentedProject[] = localProjects.map((p) => JSON.parse(JSON.stringify(p)) as SegmentedProject);
+  for (const proj of projects) {
     for (const ch of proj.chapters || []) {
       for (const seg of ch.segments || []) {
-        delete (seg as any).current_audio_id;
-        delete (seg as any).previous_audio_id;
+        delete seg.current_audio_id;
+        delete seg.previous_audio_id;
       }
     }
   }

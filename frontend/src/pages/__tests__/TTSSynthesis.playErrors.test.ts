@@ -21,7 +21,7 @@ async function extractErrorDetail(resp: Response): Promise<string> {
     const body = await resp.clone().json();
     if (body?.detail) detail = `${resp.status} ${body.detail}`;
   } catch {
-    try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch {}
+    try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch { /* ignore */ }
   }
   return detail;
 }

@@ -83,7 +83,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
               const body = await resp.clone().json();
               if (body?.detail) detail = `${resp.status} ${body.detail}`;
             } catch {
-              try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch {}
+              try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch { /* ignore */ }
             }
             throw new Error(`MP3 导出失败：${detail}`);
           }

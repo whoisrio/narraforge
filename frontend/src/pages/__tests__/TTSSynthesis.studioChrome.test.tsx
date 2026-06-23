@@ -107,7 +107,14 @@ vi.mock('../../components/TTSSynthesis/VoxCPMPanel', () => ({
 }));
 
 vi.mock('../../components/VoiceStudio/VoiceStudioLayout', () => ({
-  VoiceStudioLayout: ({ children, viewMode, onViewModeChange, onBatchSynthesize, onExport, onPlayAll }: any) => (
+  VoiceStudioLayout: ({ children, viewMode, onViewModeChange, onBatchSynthesize, onExport, onPlayAll }: {
+    children: React.ReactNode;
+    viewMode: 'list' | 'dialogue';
+    onViewModeChange: (mode: 'list' | 'dialogue') => void;
+    onBatchSynthesize: () => void;
+    onExport: () => void;
+    onPlayAll: () => void;
+  }) => (
     <section data-testid="voice-studio-layout">
       <h2>Voice Studio</h2>
       <button type="button" aria-pressed={viewMode === 'list'} onClick={() => onViewModeChange('list')}>列表视图</button>

@@ -58,6 +58,15 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
+  const getErrorMessage = (error: unknown, fallback = '请重试') => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error !== null) {
+      const response = (error as { response?: { data?: { detail?: unknown } } }).response;
+      if (typeof response?.data?.detail === 'string') return response.data.detail;
+    }
+    return fallback;
+  };
+
   const handleSplit = async () => {
     if (!text.trim()) return;
     setIsSplitting(true);
@@ -69,19 +78,19 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
         onSplit(segments, text, splitVoiceMode);
       }
       setEditing(false);
-    } catch (e: any) {
+    } catch (error: unknown) {
       if (mode === 'llm') {
-        console.warn('LLM split failed, falling back to rule:', e);
+        console.warn('LLM split failed, falling back to rule:', error);
         try {
           const segments = await textSplitApi.ruleSplit(text, splitConfig.delimiters);
           onSplit(segments, text, splitVoiceMode);
           setEditing(false);
-        } catch (e2) {
-          alert('智能拆分失败，规则拆分也失败: ' + ((e as any)?.message || (e2 as any)?.message || '请重试'));
+        } catch (fallbackError: unknown) {
+          alert(`智能拆分失败，规则拆分也失败: ${getErrorMessage(error) || getErrorMessage(fallbackError)}`);
         }
       } else {
-        console.error('Rule split failed:', e);
-        alert('拆分失败: ' + ((e as any)?.response?.data?.detail || (e as any)?.message || '请重试'));
+        console.error('Rule split failed:', error);
+        alert(`拆分失败: ${getErrorMessage(error)}`);
       }
     } finally {
       setIsSplitting(false);
@@ -95,7 +104,7 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
     onSplitConfigChange({ ...splitConfig, delimiters: next });
   };
 
-  const hasMarkdown = /[#*`\[\]|_~>]/.test(text) || /^\d+\.\s/m.test(text) || /^[-*+]\s/m.test(text);
+  const hasMarkdown = /[#*`[\]|_~>]/.test(text) || /^\d+\.\s/m.test(text) || /^[-*+]\s/m.test(text);
 
   const handleStripMarkdown = () => {
     const cleaned = stripMarkdownForTTS(text);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import styles from './StyleInstructionPicker.module.css';
 
 export interface StyleInstructionPreset {
@@ -57,7 +57,7 @@ export function StyleInstructionPicker({
   placeholder = '直接输入风格指令，或从预设中选择...',
   dense = false,
 }: StyleInstructionPickerProps) {
-  const [presets, setPresets] = useState<StyleInstructionPreset[]>(() => loadPresets());
+  const [presets, setPresetsState] = useState<StyleInstructionPreset[]>(() => loadPresets());
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState(() => {
@@ -74,16 +74,13 @@ export function StyleInstructionPicker({
     [presets, selectedPresetId],
   );
 
-  useEffect(() => {
-    savePresets(presets);
-  }, [presets]);
-
-  useEffect(() => {
-    if (selectedPresetId === CUSTOM_VALUE) return;
-    if (!selectedPreset) {
-      setSelectedPresetId(CUSTOM_VALUE);
-    }
-  }, [selectedPreset, selectedPresetId]);
+  const setPresets = (updater: (prev: StyleInstructionPreset[]) => StyleInstructionPreset[]) => {
+    setPresetsState((prev) => {
+      const next = updater(prev);
+      savePresets(next);
+      return next;
+    });
+  };
 
   const selectValue = selectedPreset?.id ?? CUSTOM_VALUE;
   const trimmedValue = value.trim();

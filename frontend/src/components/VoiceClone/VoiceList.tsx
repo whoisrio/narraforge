@@ -10,6 +10,15 @@ interface VoiceListProps {
   onRefresh?: () => void;
 }
 
+function getErrorDetail(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const response = (error as { response?: { status?: number; data?: { detail?: unknown } } }).response;
+    if (typeof response?.data?.detail === 'string') return response.data.detail;
+  }
+  return fallback;
+}
+
 export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -194,10 +203,13 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       triggerRefresh(); // 通知 TTS 页面刷新声音列表
       setEditingId(null);
       setEditingError('');
-    } catch (err: any) {
+    } catch (err: unknown) {
       // 409 表示描述重复，显示错误提示并保持编辑状态让用户修改
-      if (err?.response?.status === 409) {
-        setEditingError(err.response.data?.detail || '该描述已用于其他声音');
+      const response = typeof err === 'object' && err !== null
+        ? (err as { response?: { status?: number; data?: { detail?: unknown } } }).response
+        : undefined;
+      if (response?.status === 409) {
+        setEditingError(getErrorDetail(err, '该描述已用于其他声音'));
       } else {
         console.error('Failed to save description:', err);
         setEditingId(null);

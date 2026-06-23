@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { SegmentedProject } from '../types';
-import type { SegmentedProjectStorage, SaveOptions } from './segmentedProjectStorage';
+import type { SegmentedProjectStorage } from './segmentedProjectStorage';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -32,7 +32,7 @@ export const backendStorage: SegmentedProjectStorage = {
     const { data } = await api.get<SegmentedProject>(`/segmented-projects/${id}`);
     return data;
   },
-  async saveProject(project: SegmentedProject, _opts?: SaveOptions) {
+  async saveProject(project: SegmentedProject) {
     const payload = {
       ...project,
       chapters: project.chapters.map((chapter) => ({

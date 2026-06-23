@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SegmentedProject, Chapter, Segment } from '../../types';
+import type { RawSegmentedProject } from '../useSegmentedProject';
 import { segmentedReducer, createInitialProject, migrateV1 } from '../useSegmentedProject';
 
 function makeChapter(overrides: Partial<Chapter> = {}): Chapter {
@@ -276,13 +277,13 @@ describe('segmentedReducer', () => {
   });
 
   it('LOAD_PROJECT migrates v1 data automatically', () => {
-    const v1 = {
+    const v1: RawSegmentedProject = {
       schema_version: 1, id: 'old', name: 'Old',
       segments: [], default_params: { engine: 'cosyvoice' },
       split_config: { delimiters: ['，'], mode: 'rule' },
       layout: 'vertical', created_at: '', updated_at: '',
     };
-    const next = segmentedReducer({ project: createInitialProject() }, { type: 'LOAD_PROJECT', project: v1 as any });
+    const next = segmentedReducer({ project: createInitialProject() }, { type: 'LOAD_PROJECT', project: v1 });
     expect(next.project.schema_version).toBe(2);
     expect(next.project.chapters).toHaveLength(1);
   });

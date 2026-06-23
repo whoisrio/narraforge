@@ -17,6 +17,11 @@ export function ModelConfig() {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
   // 加载配置
   useEffect(() => {
     modelConfigApi.getAll().then(data => {
@@ -41,11 +46,6 @@ export function ModelConfig() {
       setLoading(false);
       showToast('加载配置失败', 'error');
     });
-  }, []);
-
-  const showToast = useCallback((message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
   }, []);
 
   const toggleExpand = useCallback((provider: string) => {
