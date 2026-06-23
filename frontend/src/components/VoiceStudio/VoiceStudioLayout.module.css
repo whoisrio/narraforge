@@ -229,6 +229,34 @@
   margin-top: 8px;
 }
 
+.roleSummaryGroup {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.roleSummaryLabel {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.rolePill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 220, 195, 0.35);
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .transportBar {
   position: fixed;
   left: calc(var(--nav-width) + 28px);

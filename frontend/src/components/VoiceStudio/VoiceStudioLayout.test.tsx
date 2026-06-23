@@ -17,6 +17,8 @@ function renderStudio(viewMode: 'list' | 'dialogue' = 'list') {
       generatedCount={8}
       durationSec={96}
       queueCount={2}
+      narratorRoles={[{ id: 'role-narrator', name: '默认旁白' }]}
+      castRoles={[{ id: 'role-guest-a', name: '嘉宾A' }]}
       viewMode={viewMode}
       remotionPath="/tmp/remotion"
       onViewModeChange={onViewModeChange}
@@ -41,6 +43,7 @@ describe('VoiceStudioLayout', () => {
     expect(screen.getByText('Session Monitor')).toBeInTheDocument();
     expect(screen.getByText('Synthesis Queue')).toBeInTheDocument();
     expect(screen.getByText('Global Engine')).toBeInTheDocument();
+    expect(screen.getByText('Available Roles')).toBeInTheDocument();
     expect(screen.getByText('Master Transport')).toBeInTheDocument();
     expect(screen.getByTestId('studio-segment-content')).toBeInTheDocument();
   });
@@ -54,7 +57,9 @@ describe('VoiceStudioLayout', () => {
     expect(screen.getByText('2 active')).toBeInTheDocument();
     expect(screen.getByText('/tmp/remotion')).toBeInTheDocument();
     expect(screen.getByText('Edge-TTS')).toBeInTheDocument();
-    expect(screen.getByText('默认旁白')).toBeInTheDocument();
+    expect(screen.getAllByText('默认旁白').length).toBeGreaterThan(0);
+    expect(screen.getByText('Narrator')).toBeInTheDocument();
+    expect(screen.getByText('嘉宾A')).toBeInTheDocument();
   });
 
   it('keeps list and dialogue mode switches wired', () => {

@@ -1181,6 +1181,12 @@ export function TTSSynthesis({
     || edgeVoice
     || mimoPresetVoice
     || '默认旁白';
+  const narratorRoleSummaries = roles
+    .filter(role => role.id === project.default_narrator_role_id || `${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') || `${role.name} ${role.description ?? ''}`.includes('旁白'))
+    .map(role => ({ id: role.id, name: role.name }));
+  const castRoleSummaries = roles
+    .filter(role => !narratorRoleSummaries.some(narrator => narrator.id === role.id))
+    .map(role => ({ id: role.id, name: role.name }));
 
   return (
     <div className={styles.container}>
@@ -1219,6 +1225,8 @@ export function TTSSynthesis({
           generatedCount={generatedSegmentCount}
           durationSec={activeChapterDuration}
           queueCount={activeChapter.segments.filter(segment => segment.status === 'queued' || segment.status === 'pending').length}
+          narratorRoles={narratorRoleSummaries}
+          castRoles={castRoleSummaries}
           viewMode={segmentViewMode}
           remotionPath={project.remotion_project_path}
           onViewModeChange={setSegmentViewMode}

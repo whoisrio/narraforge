@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import styles from './VoiceStudioLayout.module.css';
 
 export type StudioViewMode = 'list' | 'dialogue';
+export type StudioRoleSummary = { id: string; name: string };
 
 interface VoiceStudioLayoutProps {
   projectName: string;
@@ -12,6 +13,8 @@ interface VoiceStudioLayoutProps {
   generatedCount: number;
   durationSec: number;
   queueCount: number;
+  narratorRoles?: StudioRoleSummary[];
+  castRoles?: StudioRoleSummary[];
   viewMode: StudioViewMode;
   remotionPath?: string | null;
   children: ReactNode;
@@ -37,6 +40,8 @@ export function VoiceStudioLayout({
   generatedCount,
   durationSec,
   queueCount,
+  narratorRoles = [],
+  castRoles = [],
   viewMode,
   remotionPath,
   children,
@@ -108,6 +113,22 @@ export function VoiceStudioLayout({
             <div className={styles.sideTitle}>Global Engine</div>
             <div className={styles.engineRow}><span>Engine</span><strong>{engineLabel}</strong></div>
             <div className={styles.engineRow}><span>Voice Role</span><strong>{voiceRoleLabel}</strong></div>
+          </section>
+
+          <section className={styles.sideCard}>
+            <div className={styles.sideTitle}>Available Roles</div>
+            <div className={styles.roleSummaryGroup}>
+              <span className={styles.roleSummaryLabel}>Narrator</span>
+              {(narratorRoles.length ? narratorRoles : [{ id: 'none-narrator', name: '未设置默认旁白' }]).map(role => (
+                <span key={role.id} className={styles.rolePill}>{role.name}</span>
+              ))}
+            </div>
+            <div className={styles.roleSummaryGroup}>
+              <span className={styles.roleSummaryLabel}>Cast</span>
+              {(castRoles.length ? castRoles : [{ id: 'none-cast', name: '暂无 Cast' }]).map(role => (
+                <span key={role.id} className={styles.rolePill}>{role.name}</span>
+              ))}
+            </div>
           </section>
         </aside>
       </div>
