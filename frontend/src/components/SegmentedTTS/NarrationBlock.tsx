@@ -36,9 +36,6 @@ export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, o
     <article
       className={`${styles.root} ${emotionClass(segment.emotion)} ${isSelected ? styles.selected : ''}`}
       onClick={() => onSelect(segment.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => { if (event.key === 'Enter') onSelect(segment.id); }}
     >
       <div className={styles.label}>旁白 #{String(index).padStart(2, '0')}</div>
       {!hasNarratorVoice && <div className={styles.warning}>需要设置旁白音色</div>}

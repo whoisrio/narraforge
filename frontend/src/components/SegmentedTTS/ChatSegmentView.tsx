@@ -39,6 +39,10 @@ export function ChatSegmentView({
 
   return (
     <div className={styles.root}>
+      <div className={styles.header}>
+        <span className={styles.kicker}>Script Production Flow</span>
+        <p>旁白与台词按生产顺序排列，保留生成、播放和局部语气标记。</p>
+      </div>
       {!hasNarratorVoice && (
         <div className={styles.narratorWarning}>多角色项目需要设置旁白音色。请在角色库中创建旁白角色并设为项目旁白。</div>
       )}

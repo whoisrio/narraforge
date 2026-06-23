@@ -1,6 +1,28 @@
 .root {
   display: grid;
-  gap: 14px;
+  gap: 16px;
+}
+
+.header {
+  padding: 14px 16px;
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.kicker {
+  display: block;
+  color: var(--color-primary-dark);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.header p {
+  margin: 6px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
 }
 
 .narratorWarning {

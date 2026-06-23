@@ -56,15 +56,14 @@ export function ChatBubble({ segment, index, role, isSelected, isPlaying, isStal
     <article
       className={`${styles.root} ${emotionClass(emotion)} ${isSelected ? styles.selected : ''}`}
       onClick={() => onSelect(segment.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => { if (event.key === 'Enter') onSelect(segment.id); }}
     >
       <VoiceAvatar name={roleName} size={36} gender="female" />
       <div className={styles.body}>
         <header className={styles.meta}>
-          <span>#{String(index).padStart(2, '0')} · {roleName}</span>
-          <span>{segment.params.engine} · {voiceLabel(segment)}</span>
+          <span>台词 #{String(index).padStart(2, '0')}</span>
+          <span>{roleName}</span>
+          <span>{segment.params.engine === 'edge_tts' ? 'Edge-TTS' : segment.params.engine} · {voiceLabel(segment)}</span>
+          <span>{emotion}</span>
         </header>
         <p
           className={styles.text}
