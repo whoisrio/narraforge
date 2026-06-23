@@ -17,7 +17,26 @@ interface ChatSegmentViewProps {
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
   onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
+  onUpdateKind?: (id: string, kind: SegmentKind, roleSnapshot: RoleSnapshot | null) => void;
   onUpdateProsodyMarks: (id: string, marks: NonNullable<Segment['prosody_marks']>) => void;
+}
+
+function isNarratorRole(role: Role): boolean {
+  const text = `${role.name} ${role.description ?? ''}`.toLowerCase();
+  return text.includes('narrator') || text.includes('旁白');
+}
+
+function toSnapshot(role: Role): RoleSnapshot {
+  return {
+    id: role.id,
+    name: role.name,
+    avatar: role.avatar,
+    description: role.description,
+    default_engine: role.default_engine,
+    default_voice: role.default_voice,
+    default_engine_params: { ...role.default_engine_params },
+    favorite_styles: [...role.favorite_styles],
+  };
 }
 
 export function ChatSegmentView({
@@ -31,9 +50,12 @@ export function ChatSegmentView({
   onRegenerate,
   onPlay,
   onUpdateRole,
+  onUpdateKind,
   onUpdateProsodyMarks,
 }: ChatSegmentViewProps) {
   const [selection, setSelection] = useState<{ segmentId: string; start: number; end: number; text: string } | null>(null);
+  const narratorRoles = roles.filter(isNarratorRole);
+  const castRoles = roles.filter(role => !isNarratorRole(role));
 
   const handleTextSelection = (segmentId: string, start: number, end: number, text: string) => {
     setSelection({ segmentId, start, end, text });
@@ -68,6 +90,10 @@ export function ChatSegmentView({
                 hasNarratorVoice={hasNarratorVoice}
                 onSelect={onSelect}
                 onTextSelection={handleTextSelection}
+                onUpdateKind={onUpdateKind ? (id) => {
+                  const nextRole = castRoles[0] ?? null;
+                  onUpdateKind(id, 'dialogue', nextRole ? toSnapshot(nextRole) : null);
+                } : undefined}
               />
             );
           }
@@ -76,8 +102,8 @@ export function ChatSegmentView({
               key={segment.id}
               segment={segment}
               index={index + 1}
-              role={roles.find(role => role.id === segment.role_id)}
-              roles={roles}
+              role={castRoles.find(role => role.id === segment.role_id)}
+              roles={castRoles}
               isSelected={segment.id === selectedId}
               isPlaying={segment.id === playingId}
               isStale={isSegmentAudioStale(segment, segment.role_snapshot?.default_engine_params ?? segment.params)}
@@ -85,6 +111,10 @@ export function ChatSegmentView({
               onRegenerate={onRegenerate}
               onPlay={onPlay}
               onUpdateRole={onUpdateRole}
+              onUpdateKind={onUpdateKind ? (id) => {
+                const nextRole = narratorRoles[0] ?? null;
+                onUpdateKind(id, 'narration', nextRole ? toSnapshot(nextRole) : null);
+              } : undefined}
               onTextSelection={handleTextSelection}
             />
           );

@@ -26,6 +26,20 @@
   font-weight: 900;
 }
 
+.kindSwitch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid rgba(42, 157, 143, 0.18);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.58);
+  color: #00685d;
+  font-size: 11px;
+  font-weight: 850;
+}
+
 .warning {
   display: inline-flex;
   margin-left: 8px;

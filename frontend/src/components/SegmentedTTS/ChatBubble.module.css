@@ -49,6 +49,19 @@
   background: rgba(255, 220, 195, 0.42);
 }
 
+.kindSwitch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(196, 122, 58, 0.2);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 850;
+}
+
 .rolePicker {
   display: inline-flex;
   align-items: center;

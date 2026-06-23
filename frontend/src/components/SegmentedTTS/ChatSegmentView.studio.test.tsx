@@ -20,9 +20,22 @@ function makeSegment(id: string, kind: 'narration' | 'dialogue', text: string): 
   };
 }
 
+const narratorRole: Role = {
+  id: 'role-narrator',
+  name: '默认旁白',
+  description: 'Narrator',
+  default_engine: 'edge_tts',
+  default_voice: 'Yunxi',
+  default_engine_params: baseParams,
+  favorite_styles: [],
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+};
+
 const roles: Role[] = [{
   id: 'role-a',
   name: '嘉宾A',
+  description: 'Cast',
   default_engine: 'edge_tts',
   default_voice: 'Yunxi',
   default_engine_params: baseParams,
@@ -32,10 +45,12 @@ const roles: Role[] = [{
 }];
 
 const extraRoles: Role[] = [
+  narratorRole,
   ...roles,
   {
     id: 'role-b',
     name: '嘉宾B',
+    description: 'Cast',
     default_engine: 'edge_tts',
     default_voice: 'Yunyang',
     default_engine_params: { ...baseParams, edge_voice: 'zh-CN-YunyangNeural' },
@@ -129,7 +144,7 @@ describe('ChatSegmentView studio script flow', () => {
     expect(onAppend).toHaveBeenCalledWith('narration');
   });
 
-  it('lets each dialogue block choose a Voice Role', () => {
+  it('filters dialogue role choices to Cast roles only', () => {
     const onUpdateRole = vi.fn();
     const segment = makeSegment('s1', 'dialogue', '台词内容');
     segment.role_id = null;
@@ -150,12 +165,37 @@ describe('ChatSegmentView studio script flow', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('选择角色'), { target: { value: 'role-b' } });
+    const options = Array.from(screen.getByLabelText('选择角色').querySelectorAll('option')).map(option => option.textContent);
+    expect(options).toContain('嘉宾A');
+    expect(options).toContain('嘉宾B');
+    expect(options).not.toContain('默认旁白');
+  });
 
-    expect(onUpdateRole).toHaveBeenCalledWith('s1', 'role-b', expect.objectContaining({
-      id: 'role-b',
-      name: '嘉宾B',
-      default_voice: 'Yunyang',
+  it('can switch segment kind and assigns the first matching role snapshot', () => {
+    const onUpdateKind = vi.fn();
+    const segment = makeSegment('s1', 'dialogue', '台词内容');
+
+    render(
+      <ChatSegmentView
+        segments={[segment]}
+        roles={extraRoles}
+        selectedId="s1"
+        playingId={undefined}
+        hasNarratorVoice
+        onSelect={vi.fn()}
+        onAppend={vi.fn()}
+        onRegenerate={vi.fn()}
+        onPlay={vi.fn()}
+        onUpdateKind={onUpdateKind}
+        onUpdateProsodyMarks={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /改为旁白/ }));
+
+    expect(onUpdateKind).toHaveBeenCalledWith('s1', 'narration', expect.objectContaining({
+      id: 'role-narrator',
+      name: '默认旁白',
     }));
   });
 });

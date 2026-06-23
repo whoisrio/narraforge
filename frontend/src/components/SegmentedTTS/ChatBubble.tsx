@@ -15,6 +15,7 @@ interface ChatBubbleProps {
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
   onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
+  onUpdateKind?: (id: string) => void;
   onTextSelection: (segmentId: string, start: number, end: number, text: string) => void;
 }
 
@@ -64,7 +65,7 @@ function renderMarkedText(segment: Segment): ReactNode {
   return parts;
 }
 
-export function ChatBubble({ segment, index, role, roles = [], isSelected, isPlaying, isStale, onSelect, onRegenerate, onPlay, onUpdateRole, onTextSelection }: ChatBubbleProps) {
+export function ChatBubble({ segment, index, role, roles = [], isSelected, isPlaying, isStale, onSelect, onRegenerate, onPlay, onUpdateRole, onUpdateKind, onTextSelection }: ChatBubbleProps) {
   const roleName = role?.name ?? segment.role_snapshot?.name ?? '未命名角色';
   const emotion = (segment.emotion ?? 'neutral') as EmotionType;
   return (
@@ -76,6 +77,15 @@ export function ChatBubble({ segment, index, role, roles = [], isSelected, isPla
       <div className={styles.body}>
         <header className={styles.meta}>
           <span>台词 #{String(index).padStart(2, '0')}</span>
+          {onUpdateKind && (
+            <button
+              type="button"
+              className={styles.kindSwitch}
+              onClick={(event) => { event.stopPropagation(); onUpdateKind(segment.id); }}
+            >
+              改为旁白
+            </button>
+          )}
           {onUpdateRole ? (
             <label className={styles.rolePicker} onClick={(event) => event.stopPropagation()}>
               <span>选择角色</span>
