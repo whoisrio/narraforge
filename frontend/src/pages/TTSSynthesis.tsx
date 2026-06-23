@@ -27,6 +27,7 @@ import { RolePicker } from '../components/SegmentedTTS/RolePicker';
 import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
 import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
+import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -1068,6 +1069,13 @@ export function TTSSynthesis({
   // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
   const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.duration_sec ?? 0), 0);
   const generatedSegmentCount = activeChapter.segments.filter(segment => segment.status === 'ready').length;
+  const engineLabel = ({ cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM' } as Record<Engine, string>)[engine] || engine;
+  const voiceRoleLabel = project.default_narrator_snapshot?.name
+    || selectedVoice?.description
+    || selectedVoice?.name
+    || edgeVoice
+    || mimoPresetVoice
+    || '默认旁白';
 
   return (
     <div className={styles.container}>
@@ -1097,6 +1105,22 @@ export function TTSSynthesis({
           onBackToProjects={onBackToProjects}
         >
         {projectSection === 'studio' ? (
+        <VoiceStudioLayout
+          projectName={project.name}
+          chapterName={activeChapter.name}
+          engineLabel={engineLabel}
+          voiceRoleLabel={voiceRoleLabel}
+          segmentCount={activeChapter.segments.length}
+          generatedCount={generatedSegmentCount}
+          durationSec={activeChapterDuration}
+          queueCount={activeChapter.segments.filter(segment => segment.status === 'queued' || segment.status === 'pending').length}
+          viewMode={segmentViewMode}
+          remotionPath={project.remotion_project_path}
+          onViewModeChange={setSegmentViewMode}
+          onBatchSynthesize={handleRegenerateAll}
+          onExport={() => setExportOpen(true)}
+          onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
+        >
         <div className={styles.workbenchMain}>
           <div className={styles.toolbar}>
             <div className={styles.projectTitleCluster}>
@@ -1356,6 +1380,7 @@ export function TTSSynthesis({
             </div>
           </div>
         </div>
+        </VoiceStudioLayout>
         ) : projectSection === 'library' ? (
           <ProjectLibrary
             chapters={project.chapters}
