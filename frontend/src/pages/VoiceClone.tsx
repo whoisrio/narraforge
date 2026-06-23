@@ -6,6 +6,7 @@ import { UrlInput } from '../components/VoiceClone/UrlInput';
 import { VoiceList } from '../components/VoiceClone/VoiceList';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
+import { t } from '../i18n';
 import type { TTSResult, VoiceProfile } from '../types';
 import styles from './VoiceClone.module.css';
 
@@ -71,7 +72,7 @@ export function VoiceClone() {
         stability: designStability,
       });
       setDesignPreview(preview);
-      setDesignStatus(`试听已生成 · ${preview.audio_format || (designEngine === 'voxcpm' ? 'wav' : 'mp3')}`);
+      setDesignStatus(`${t('voiceDesign.previewGenerated')} · ${preview.audio_format || (designEngine === 'voxcpm' ? 'wav' : 'mp3')}`);
     } catch (error) {
       console.error('[voice-design] preview failed:', error);
       setDesignError(error instanceof Error ? error.message : '后端试听失败，请检查模型配置');
@@ -233,15 +234,15 @@ export function VoiceClone() {
 
       <div className={styles.designWorkspace}>
         <section className={styles.profileLibraryPanel}>
-          <span className={styles.kicker}>Voice Profile Library</span>
-          <h3>Voice Profile Library</h3>
+          <span className={styles.kicker}>{t('voiceDesign.profileLibrary')}</span>
+          <h3>{t('voiceDesign.profileLibrary')}</h3>
           <p>把克隆、设计、调参后的 Voice Profile 作为全局资产管理，再交给项目内 Voice Role 绑定。</p>
           <div className={styles.profileCards}>
             {designProfiles.map(profile => (
               <article key={profile.id}>
                 <strong>{profile.name}</strong>
                 <span>{profile.clone_engine === 'mimo' ? 'MiMo' : profile.clone_engine === 'voxcpm' ? 'VoxCPM' : 'CosyVoice'} · design</span>
-                <em>Project Role Ready</em>
+                <em>{t('voiceDesign.projectRoleReady')}</em>
               </article>
             ))}
             <article>
@@ -258,8 +259,8 @@ export function VoiceClone() {
         </section>
 
         <section className={styles.designBriefPanel}>
-          <span className={styles.kicker}>Design Brief</span>
-          <h3>Design Brief</h3>
+          <span className={styles.kicker}>{t('voiceDesign.designBrief')}</span>
+          <h3>{t('voiceDesign.designBrief')}</h3>
           <label>
             音色描述
             <textarea
@@ -276,8 +277,8 @@ export function VoiceClone() {
         </section>
 
         <section className={styles.tuneLabPanel}>
-          <span className={styles.kicker}>Tune Lab</span>
-          <h3>Tune Lab</h3>
+          <span className={styles.kicker}>{t('voiceDesign.tuneLab')}</span>
+          <h3>{t('voiceDesign.tuneLab')}</h3>
           <label>
             表现强度
             <input aria-label="表现强度" type="range" min="0" max="100" value={designIntensity} onChange={(event) => setDesignIntensity(Number(event.target.value))} />
@@ -287,10 +288,10 @@ export function VoiceClone() {
             <input aria-label="稳定性" type="range" min="0" max="100" value={designStability} onChange={(event) => setDesignStability(Number(event.target.value))} />
           </label>
           <button type="button" className={styles.backendPreviewBtn} onClick={handleDesignPreview} disabled={designPreviewing || !designBrief.trim()}>
-            {designPreviewing ? '后端试听中...' : '后端试听'}
+            {designPreviewing ? '后端试听中...' : t('voiceDesign.backendPreview')}
           </button>
           <button type="button" className={styles.saveProfileBtn} onClick={handleSaveDesignProfile} disabled={!designPreview}>
-            保存为 Voice Profile
+            {t('voiceDesign.saveProfile')}
           </button>
           {designStatus && <div className={styles.designStatus}>{designStatus}</div>}
           {designError && <div className={styles.designError}>{designError}</div>}

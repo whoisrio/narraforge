@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { speechToTextApi, subtitleLlmApi } from '../services/api';
 import type { TranscribeResult, TranscriptionRecord, CorrectionSuggestion, BilingualSegment } from '../services/api';
+import { t } from '../i18n';
 
 /** 字符级 diff：将 original 和 suggested 分成 changed/unchanged 片段 */
 function getErrorDetail(error: unknown, fallback: string): string {
@@ -417,9 +418,9 @@ export function SpeechToText() {
     <div className={styles.container}>
       <section className={styles.studioHero}>
         <div>
-          <span className={styles.kicker}>Subtitle Studio</span>
-          <h1>字幕识别</h1>
-          <p>把单文件、多文件、音视频素材统一放入 Ingest 流程，生成可编辑 Transcript，再统一校准、翻译和导出。</p>
+          <span className={styles.kicker}>{t('subtitles.studioKicker')}</span>
+          <h1>{t('subtitles.title')}</h1>
+          <p>{t('subtitles.heroDescription')}</p>
         </div>
         <div className={styles.workflowPills} aria-label="subtitle workflow">
           <span>Ingest</span>
@@ -433,14 +434,14 @@ export function SpeechToText() {
         <aside className={styles.ingestPanel}>
           <div className={styles.panelHeader}>
             <span className={styles.kicker}>Ingest</span>
-            <h2>素材导入</h2>
-            <p>单文件快速识别，或把多个音频/视频片段加入队列后统一 ASR。</p>
+            <h2>{t('subtitles.ingest')}</h2>
+            <p>{t('subtitles.ingestDescription')}</p>
           </div>
 
           <div className={styles.sourceSwitch} aria-label="subtitle source modes">
-            <button type="button" className={`${styles.sourceMode} ${styles.sourceModeActive}`}>单文件</button>
-            <button type="button" className={styles.sourceMode} onClick={() => localQueueInputRef.current?.click()}>多文件队列</button>
-            <button type="button" className={styles.sourceMode} onClick={() => multiAudioRef.current?.scrollIntoView({ behavior: 'smooth' })}>历史音频</button>
+            <button type="button" className={`${styles.sourceMode} ${styles.sourceModeActive}`}>{t('subtitles.singleFile')}</button>
+            <button type="button" className={styles.sourceMode} onClick={() => localQueueInputRef.current?.click()}>{t('subtitles.multiFileQueue')}</button>
+            <button type="button" className={styles.sourceMode} onClick={() => multiAudioRef.current?.scrollIntoView({ behavior: 'smooth' })}>{t('subtitles.historyAudio')}</button>
           </div>
 
           <div
@@ -532,7 +533,7 @@ export function SpeechToText() {
           <div className={styles.panelHeaderRow}>
             <div>
               <span className={styles.kicker}>Transcript Editor</span>
-              <h2>字幕文本</h2>
+              <h2>{t('subtitles.transcriptEditor')}</h2>
             </div>
             <div className={styles.resultMeta}>
               {result ? (
@@ -651,7 +652,7 @@ export function SpeechToText() {
         <aside className={styles.reviewPanel}>
           <div className={styles.panelHeader}>
             <span className={styles.kicker}>Review & Export</span>
-            <h2>校准与导出</h2>
+            <h2>{t('subtitles.reviewExport')}</h2>
             <p>集中处理错字校准、双语字幕和多格式导出。</p>
           </div>
 
@@ -750,7 +751,7 @@ export function SpeechToText() {
         <div className={styles.boundaryHeader}>
           <div>
             <span className={styles.kicker}>Boundary Timeline</span>
-            <h2>Boundary Map</h2>
+            <h2>{t('subtitles.boundaryMap')}</h2>
           </div>
           <div className={styles.exportButtons}>
             <button type="button" disabled={!result} onClick={() => exportSubtitle('json')}>导出 JSON</button>
