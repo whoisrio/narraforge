@@ -32,13 +32,17 @@ vi.mock('../../components/SpeechToText', () => ({
 }));
 
 describe('SpeechToText redesign shell', () => {
-  it('surfaces a global subtitle hub for multi-file unified ASR workflow', () => {
+  it('surfaces a unified Subtitle Studio layout instead of stacked legacy cards', () => {
     render(<SpeechToText />);
 
-    expect(screen.getByText('Subtitle Hub')).toBeInTheDocument();
-    expect(screen.getByText('多文件拼接')).toBeInTheDocument();
-    expect(screen.getByText('统一 ASR Timeline')).toBeInTheDocument();
-    expect(screen.getByText('SRT / TXT / JSON')).toBeInTheDocument();
+    expect(screen.getByText('Subtitle Studio')).toBeInTheDocument();
+    expect(screen.getAllByText('Ingest').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Transcript Editor').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Review & Export').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Boundary Timeline').length).toBeGreaterThan(0);
+    expect(screen.getByText('单文件')).toBeInTheDocument();
+    expect(screen.getAllByText('多文件队列').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/或使用「多音频合并转写」/)).not.toBeInTheDocument();
     expect(screen.getByTestId('multi-audio-selector')).toBeInTheDocument();
   });
 
@@ -82,9 +86,9 @@ describe('SpeechToText redesign shell', () => {
     expect(screen.getAllByText(/part-b\.wav/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/part-a\.mp3/).length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: '导出 JSON' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '导出 JSON' })[0]);
     expect(click).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '导出 TXT' }));
+    fireEvent.click(screen.getAllByRole('button', { name: '导出 TXT' })[0]);
     expect(click).toHaveBeenCalledTimes(2);
 
     createObjectURL.mockRestore();
