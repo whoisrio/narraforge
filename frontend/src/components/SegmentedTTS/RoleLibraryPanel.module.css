@@ -1,7 +1,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 40;
+  z-index: var(--z-modal-backdrop);
   display: flex;
   justify-content: flex-end;
   background: rgba(30, 20, 12, 0.32);
