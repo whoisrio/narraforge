@@ -28,6 +28,8 @@ import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
 import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
 import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
+import { ProjectOverview } from '../components/ProjectOverview/ProjectOverview';
+import { ProjectSettings } from '../components/ProjectSettings/ProjectSettings';
 import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
 import { createVoiceRoleDraft, roleVoiceLabelFromParams } from '../services/voiceRoleDefaults';
@@ -1358,16 +1360,9 @@ export function TTSSynthesis({
                 />
               </label>
               <div className={styles.segmentedActions}>
-                <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
-                  {generating ? '生成中...' : '⚡ 全部生成'}
-                </button>
-                <button className={styles.segmentedActionBtn} onClick={playAllActive ? handleStopAll : handlePlayAll} disabled={!!playingId && !playAllActive}>
-                  {playAllActive ? '■ 停止' : '▶ 全部播放'}
-                </button>
                 {engine === 'cosyvoice' && (
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
                 )}
-                <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
                 <button className={styles.segmentedActionBtn} onClick={() => setRoleLibraryOpen(true)}>
                   🎭 角色库{roles.length > 0 ? ` (${roles.length})` : ''}
                 </button>
@@ -1580,15 +1575,34 @@ export function TTSSynthesis({
             onManageRoles={() => setRoleLibraryOpen(true)}
             defaultNarratorPreviewLabel={defaultNarratorPreviewLabel}
           />
+        ) : projectSection === 'overview' ? (
+          <ProjectOverview
+            projectName={project.name}
+            chapters={project.chapters}
+            activeChapterId={project.active_chapter_id}
+            defaultNarratorName={project.default_narrator_snapshot?.name ?? null}
+            remotionPath={project.remotion_project_path}
+            onEnterLibrary={() => setProjectSection('library')}
+            onEnterStudio={() => setProjectSection('studio')}
+            onOpenVoices={() => setProjectSection('voices')}
+            onOpenSettings={() => setProjectSection('settings')}
+          />
+        ) : projectSection === 'settings' ? (
+          <ProjectSettings
+            projectName={project.name}
+            remotionPath={project.remotion_project_path}
+            defaultNarratorName={project.default_narrator_snapshot?.name ?? null}
+            storageMode={storageMode}
+            chapterCount={project.chapters.length}
+            onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
+            onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
+            onBackToOverview={() => setProjectSection('overview')}
+          />
         ) : (
           <div className={styles.projectSectionPlaceholder}>
             <span className={styles.projectSectionKicker}>Coming next</span>
-            <h2>{projectSection === 'settings' ? '项目设置' : '项目总览'}</h2>
-            <p>
-              {projectSection === 'settings'
-                    ? '这里将配置项目默认参数、Remotion 路径和导出目标。'
-                    : '这里将展示项目状态、章节进度、最近导出和待处理事项。'}
-            </p>
+            <h2>项目总览</h2>
+            <p>这里将展示项目状态、章节进度、最近导出和待处理事项。</p>
           </div>
         )}
         </ProjectShell>

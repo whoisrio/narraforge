@@ -130,8 +130,10 @@ describe('TTSSynthesis Studio chrome', () => {
     expect(screen.getAllByRole('button', { name: '列表视图' })).toHaveLength(1);
     expect(screen.getAllByRole('button', { name: '对话视图' })).toHaveLength(1);
     expect(screen.getByRole('button', { name: '批量合成' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '全部播放' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '导出' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /全部播放/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /导出/ })).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: /全部生成/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /角色库/ })).toBeInTheDocument();
     expect(screen.getByTestId('edge-tts-panel')).toBeInTheDocument();
   });
 });
