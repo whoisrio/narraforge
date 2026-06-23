@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Role, RoleSnapshot } from '../../types';
+import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
 import { ProjectVoices } from './ProjectVoices';
 
 const narrator: Role = {
@@ -68,7 +69,8 @@ describe('ProjectVoices', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /创建默认旁白/ }));
 
-    expect(onCreateDefaultNarrator).toHaveBeenCalled();
+    expect(screen.getByRole('heading', { name: /声音角色配置/ })).toBeInTheDocument();
+    expect(screen.getByLabelText('角色名')).toHaveValue('默认旁白');
   });
 
   it('shows the actual voice that will be used for narrator creation', () => {
@@ -104,11 +106,11 @@ describe('ProjectVoices', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /新增 Cast/ }));
     fireEvent.click(screen.getAllByRole('button', { name: /试听/ })[1]);
+    fireEvent.click(screen.getByRole('button', { name: /新增 Cast/ }));
 
-    expect(onCreateCast).toHaveBeenCalled();
     expect(onPreviewRole).toHaveBeenCalledWith(expect.objectContaining({ id: 'role-guest-a' }), expect.any(String));
+    expect(screen.getByRole('heading', { name: /声音角色配置/ })).toBeInTheDocument();
   });
 
   it('does not treat existing narrator roles as the project default until selected', () => {
@@ -156,5 +158,88 @@ describe('ProjectVoices', () => {
     fireEvent.change(screen.getByLabelText('默认旁白角色'), { target: { value: 'role-narrator' } });
 
     expect(onSetDefaultNarrator).toHaveBeenCalledWith('role-narrator', expect.objectContaining(roleSnapshot));
+  });
+
+  it('opens a voice role editor for a new Cast and saves Edge-TTS voice params', () => {
+    const onSaveRole = vi.fn();
+
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onCreateDefaultNarrator={vi.fn()}
+        onCreateCast={vi.fn()}
+        onSaveRole={onSaveRole}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /新增 Cast/ }));
+
+    expect(screen.getByRole('heading', { name: /声音角色配置/ })).toBeInTheDocument();
+    expect(screen.getByText('TTS / Cloning Engine')).toBeInTheDocument();
+    expect(screen.getByText('Studio Playback')).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('角色名'), { target: { value: '嘉宾B' } });
+    fireEvent.change(screen.getByLabelText('Edge voice'), { target: { value: 'zh-CN-XiaoxiaoNeural' } });
+    fireEvent.change(screen.getByLabelText('语速'), { target: { value: '+12%' } });
+    fireEvent.change(screen.getByLabelText('音量'), { target: { value: '+4%' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
+
+    expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
+      name: '嘉宾B',
+      description: 'Cast',
+      default_engine: 'edge_tts',
+      default_voice: 'zh-CN-XiaoxiaoNeural',
+      default_engine_params: expect.objectContaining({
+        engine: 'edge_tts',
+        edge_voice: 'zh-CN-XiaoxiaoNeural',
+        edge_rate: '+12%',
+        edge_volume: '+4%',
+      }),
+    }));
+  });
+
+  it('edits an existing role and saves CosyVoice params', () => {
+    const onSaveRole = vi.fn();
+
+    render(
+      <ProjectVoices
+        roles={[narrator, cast]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onCreateDefaultNarrator={vi.fn()}
+        onCreateCast={vi.fn()}
+        onSaveRole={onSaveRole}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '编辑 嘉宾A' }));
+    fireEvent.click(screen.getByRole('radio', { name: /CosyVoice/ }));
+    fireEvent.change(screen.getByLabelText('CosyVoice voice id'), { target: { value: 'voice-linxia' } });
+    fireEvent.change(screen.getByLabelText('语速'), { target: { value: '1.18' } });
+    fireEvent.change(screen.getByLabelText('音量'), { target: { value: '86' } });
+    fireEvent.change(screen.getByLabelText('音高'), { target: { value: '1.05' } });
+    fireEvent.change(screen.getByLabelText('风格指令'), { target: { value: '温柔、克制、纪录片旁白感' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
+
+    expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'role-guest-a',
+      name: '嘉宾A',
+      default_engine: 'cosyvoice',
+      default_voice: 'voice-linxia',
+      default_engine_params: expect.objectContaining({
+        engine: 'cosyvoice',
+        voice_id: 'voice-linxia',
+        speed: 1.18,
+        volume: 86,
+        pitch: 1.05,
+        instruction: '温柔、克制、纪录片旁白感',
+      }),
+    }));
   });
 });

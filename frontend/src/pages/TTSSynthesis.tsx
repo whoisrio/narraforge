@@ -614,6 +614,41 @@ export function TTSSynthesis({
     }
   }, [createRoleDraft, roles, showToast]);
 
+  const roleSnapshotFromRole = useCallback((role: Role): RoleSnapshot => ({
+    id: role.id,
+    name: role.name,
+    avatar: role.avatar,
+    description: role.description,
+    default_engine: role.default_engine,
+    default_voice: role.default_voice,
+    default_engine_params: { ...role.default_engine_params },
+    favorite_styles: [...role.favorite_styles],
+  }), []);
+
+  const handleSaveRole = useCallback(async (draft: RoleSnapshot) => {
+    try {
+      const exists = roles.some(role => role.id === draft.id);
+      const saved = exists
+        ? await roleApi.updateRole(draft.id, draft)
+        : await roleApi.createRole(draft);
+      setRoles(prev => exists
+        ? prev.map(role => role.id === saved.id ? saved : role)
+        : [saved, ...prev.filter(role => role.id !== saved.id)]);
+      const isNarrator = `${saved.name} ${saved.description ?? ''}`.toLowerCase().includes('narrator') || `${saved.name} ${saved.description ?? ''}`.includes('旁白');
+      if (isNarrator || project.default_narrator_role_id === saved.id) {
+        dispatch({
+          type: 'SET_PROJECT_NARRATOR',
+          roleId: saved.id,
+          roleSnapshot: roleSnapshotFromRole(saved),
+        });
+      }
+      showToast(exists ? '角色已更新' : '角色已创建');
+    } catch (error) {
+      console.error('Save role failed:', error);
+      showToast('角色保存失败', 'error');
+    }
+  }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
+
   const handlePreviewRole = useCallback(async (role: Role, sampleText: string) => {
     setPreviewingRoleId(role.id);
     try {
@@ -1517,6 +1552,7 @@ export function TTSSynthesis({
             onSetDefaultNarrator={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
             onCreateDefaultNarrator={handleCreateDefaultNarrator}
             onCreateCast={handleCreateCastRole}
+            onSaveRole={handleSaveRole}
             onPreviewRole={handlePreviewRole}
             onManageRoles={() => setRoleLibraryOpen(true)}
             defaultNarratorPreviewLabel={defaultNarratorPreviewLabel}
