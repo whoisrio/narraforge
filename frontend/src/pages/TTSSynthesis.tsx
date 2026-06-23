@@ -8,7 +8,7 @@ import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi } from '../services/api';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
@@ -27,6 +27,7 @@ import { RolePicker } from '../components/SegmentedTTS/RolePicker';
 import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
 import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
+import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
 import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
 import styles from './TTSSynthesis.module.css';
@@ -110,6 +111,7 @@ export function TTSSynthesis({
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [roles, setRoles] = useState<Role[]>([]);
+  const [previewingRoleId, setPreviewingRoleId] = useState<string | null>(null);
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [segmentViewMode, setSegmentViewMode] = useState<'list' | 'dialogue'>('list');
@@ -257,6 +259,12 @@ export function TTSSynthesis({
   }, []);
 
   useEffect(() => { ttsApi.getVoices().then(setVoices).catch(() => {}); }, [refreshCounter]);
+
+  useEffect(() => {
+    roleApi.listRoles()
+      .then(setRoles)
+      .catch((error) => console.warn('Role list failed:', error));
+  }, []);
 
   const projectStorage: SegmentedProjectStorage = storageMode === 'backend' ? backendStorage : indexedDBStorage;
   const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
@@ -561,6 +569,94 @@ export function TTSSynthesis({
     ...item,
     ...assignRoleForSplitItem(item.text, voiceMode, roles, project.default_narrator_role_id),
   })), [roles, project.default_narrator_role_id]);
+
+  const createRoleDraft = useCallback((name: string, description: 'Narrator' | 'Cast'): RoleSnapshot => {
+    const roleParams = buildCurrentParams();
+    const defaultVoice = roleParams.edge_voice || roleParams.voice_id || roleParams.mimo_preset_voice || roleParams.voxcpm_voice_description || '';
+    return {
+      id: `role-${description.toLowerCase()}-${Date.now()}`,
+      name,
+      description,
+      default_engine: roleParams.engine,
+      default_voice: defaultVoice,
+      default_engine_params: roleParams,
+      favorite_styles: [],
+    };
+  }, [buildCurrentParams]);
+
+  const handleCreateDefaultNarrator = useCallback(async () => {
+    try {
+      const saved = await roleApi.createRole(createRoleDraft('默认旁白', 'Narrator'));
+      setRoles(prev => [saved, ...prev.filter(role => role.id !== saved.id)]);
+      dispatch({
+        type: 'SET_PROJECT_NARRATOR',
+        roleId: saved.id,
+        roleSnapshot: {
+          id: saved.id,
+          name: saved.name,
+          avatar: saved.avatar,
+          description: saved.description,
+          default_engine: saved.default_engine,
+          default_voice: saved.default_voice,
+          default_engine_params: { ...saved.default_engine_params },
+          favorite_styles: [...saved.favorite_styles],
+        },
+      });
+      showToast('默认旁白已创建');
+    } catch (error) {
+      console.error('Create narrator role failed:', error);
+      showToast('创建默认旁白失败', 'error');
+    }
+  }, [createRoleDraft, dispatch, showToast]);
+
+  const handleCreateCastRole = useCallback(async () => {
+    const castCount = roles.filter(role => !`${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') && !`${role.name} ${role.description ?? ''}`.includes('旁白')).length;
+    try {
+      const saved = await roleApi.createRole(createRoleDraft(`嘉宾${castCount + 1}`, 'Cast'));
+      setRoles(prev => [saved, ...prev.filter(role => role.id !== saved.id)]);
+      showToast('Cast 角色已创建');
+    } catch (error) {
+      console.error('Create cast role failed:', error);
+      showToast('创建 Cast 失败', 'error');
+    }
+  }, [createRoleDraft, roles, showToast]);
+
+  const handlePreviewRole = useCallback(async (role: Role, sampleText: string) => {
+    setPreviewingRoleId(role.id);
+    try {
+      const rp = role.default_engine_params;
+      const resp = rp.engine === 'edge_tts'
+        ? await ttsApi.synthesize({
+            text: sampleText,
+            engine: 'edge_tts',
+            voice_id: '',
+            edge_voice: rp.edge_voice || role.default_voice || '',
+            edge_rate: rp.edge_rate || '+0%',
+            edge_volume: rp.edge_volume || '+0%',
+            format: 'mp3',
+          })
+        : await ttsApi.synthesize({
+            text: sampleText,
+            voice_id: rp.voice_id || role.default_voice || '',
+            language: (rp.language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean',
+            speed: rp.speed ?? 1,
+            volume: rp.volume ?? 80,
+            pitch: rp.pitch ?? 1,
+            instruction: rp.instruction ?? '',
+            enable_ssml: rp.enable_ssml ?? false,
+            enable_markdown_filter: rp.enable_markdown_filter ?? false,
+            format: 'mp3',
+          });
+      if (!resp.audio_base64) throw new Error('No preview audio returned');
+      const audio = new Audio(`data:audio/${resp.audio_format || 'mp3'};base64,${resp.audio_base64}`);
+      await audio.play();
+    } catch (error) {
+      console.error('Preview role failed:', error);
+      showToast('试听失败', 'error');
+    } finally {
+      setPreviewingRoleId(null);
+    }
+  }, [showToast]);
 
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -1407,14 +1503,22 @@ export function TTSSynthesis({
               setProjectSection('studio');
             }}
           />
+        ) : projectSection === 'voices' ? (
+          <ProjectVoices
+            roles={roles}
+            defaultNarratorRoleId={project.default_narrator_role_id}
+            onSetDefaultNarrator={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
+            onCreateDefaultNarrator={handleCreateDefaultNarrator}
+            onCreateCast={handleCreateCastRole}
+            onPreviewRole={handlePreviewRole}
+            onManageRoles={() => setRoleLibraryOpen(true)}
+          />
         ) : (
           <div className={styles.projectSectionPlaceholder}>
             <span className={styles.projectSectionKicker}>Coming next</span>
-            <h2>{projectSection === 'voices' ? '声音角色' : projectSection === 'settings' ? '项目设置' : '项目总览'}</h2>
+            <h2>{projectSection === 'settings' ? '项目设置' : '项目总览'}</h2>
             <p>
-              {projectSection === 'voices'
-                  ? '这里将管理项目内 Voice Role，并绑定具体模型、音色和参数。'
-                  : projectSection === 'settings'
+              {projectSection === 'settings'
                     ? '这里将配置项目默认参数、Remotion 路径和导出目标。'
                     : '这里将展示项目状态、章节进度、最近导出和待处理事项。'}
             </p>
