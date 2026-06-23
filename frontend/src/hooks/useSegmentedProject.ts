@@ -1,4 +1,4 @@
-import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, ProsodyMark, RoleSnapshot, SegmentKind } from '../types';
+import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, ProsodyMark, RoleSnapshot, SegmentKind, EmotionType } from '../types';
 
 let _idCounter = 0;
 function uid(): string {
@@ -57,8 +57,29 @@ export function createInitialProject(): SegmentedProject {
 }
 
 /** Migrate v1 project (no chapters) to v2 */
+type RawSegment = Omit<Partial<Segment>, 'overrides'> & {
+  overrides?: unknown;
+  locked_params?: string[];
+  current_audio_path?: string;
+  current_audio_id?: string;
+};
+
+type RawChapter = Partial<Chapter> & { segments?: RawSegment[] };
+export type RawSegmentedProject = Omit<Partial<SegmentedProject>, 'schema_version'> & { schema_version?: number; chapters?: RawChapter[]; segments?: Segment[] };
+
+function isEmotionType(value: unknown): value is EmotionType {
+  return typeof value === 'string' && ['happy', 'sad', 'angry', 'calm', 'neutral', 'excited'].includes(value);
+}
+
+function normalizeSegmentOverrides(value: unknown): Segment['overrides'] {
+  const valid = new Set(['voice', 'speed', 'volume', 'pitch', 'instruction', 'language']);
+  return Array.isArray(value)
+    ? value.filter((item): item is NonNullable<Segment['overrides']>[number] => typeof item === 'string' && valid.has(item))
+    : [];
+}
+
 /** Enrich a raw backend project/chapter/segment object with missing frontend-only fields. */
-function enrichSegment(raw: any, defaultParams: SegmentEngineParams): Segment {
+function enrichSegment(raw: RawSegment, defaultParams: SegmentEngineParams): Segment {
   const now = new Date().toISOString();
   const hasAudio = !!(raw.current_audio_path || raw.current_audio_id);
   return {
@@ -76,8 +97,8 @@ function enrichSegment(raw: any, defaultParams: SegmentEngineParams): Segment {
     generated_params: raw.generated_params,
     duration_sec: raw.duration_sec,
     ssml_annotated_by_llm: raw.ssml_annotated_by_llm,
-    emotion: raw.emotion,
-    overrides: raw.overrides ?? raw.locked_params?.map((k: string) => k) ?? [],
+    emotion: isEmotionType(raw.emotion) ? raw.emotion : undefined,
+    overrides: normalizeSegmentOverrides(raw.overrides ?? raw.locked_params),
     generated_voice_id: raw.generated_voice_id,
     role_id: raw.role_id ?? null,
     role_snapshot: raw.role_snapshot ?? null,
@@ -88,17 +109,17 @@ function enrichSegment(raw: any, defaultParams: SegmentEngineParams): Segment {
   };
 }
 
-export function migrateV1(raw: any): SegmentedProject {
+export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
   if (raw.schema_version === 2 && raw.chapters) {
     // Enrich segments with frontend-only fields that the backend doesn't return
-    const chapters: Chapter[] = raw.chapters.map((ch: any) => {
+    const chapters: Chapter[] = raw.chapters.map((ch) => {
       const defaultParams = ch.default_params || { engine: 'edge_tts' } as SegmentEngineParams;
       return {
         ...ch,
         default_params: defaultParams,
         split_config: ch.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
         design_title: ch.design_title ?? ch.name,
-        segments: (ch.segments || []).map((s: any) => enrichSegment(s, defaultParams)),
+        segments: (ch.segments || []).map((s) => enrichSegment(s, defaultParams)),
       };
     });
     return {
@@ -184,7 +205,7 @@ function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): S
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
-  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path'>> }
+  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path' | 'description' | 'project_type' | 'default_language' | 'export_directory' | 'export_naming_template'>> }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
   | { type: 'ADD_CHAPTER'; name: string }
@@ -195,8 +216,9 @@ export type Action =
   | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
   | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
+  | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   // Segment operations (on active chapter)
-  | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string }[] }
+  | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
   | { type: 'INSERT_SEGMENT'; afterId: string; text?: string }
   | { type: 'DELETE_SEGMENT'; id: string }
@@ -292,13 +314,17 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => ({ ...ch, split_config: action.config, updated_at: new Date().toISOString() })) };
     case 'SET_CHAPTER_META':
       return { project: updateActive(p, ch => ({ ...ch, ...action.meta, updated_at: new Date().toISOString() })) };
+    case 'SET_CHAPTER_META_BY_ID':
+      return { project: updateChapter(p, action.id, ch => ({ ...ch, ...action.meta, updated_at: new Date().toISOString() })) };
 
     // ---- Segment operations (active chapter) ----
     case 'APPLY_SPLIT': {
       return { project: updateActive(p, ch => {
         const newSegs = action.items.map(item => {
-          const seg = makeSegment(item.text, ch.default_params);
-          if (item.emotion) seg.emotion = item.emotion as any;
+          const seg = makeSegment(item.text, ch.default_params, item.segment_kind ?? 'narration');
+          if (item.emotion && isEmotionType(item.emotion)) seg.emotion = item.emotion;
+          if (item.role_id !== undefined) seg.role_id = item.role_id;
+          if (item.role_snapshot !== undefined) seg.role_snapshot = item.role_snapshot;
           return seg;
         });
         return { ...ch, segments: newSegs, selected_segment_id: undefined, updated_at: new Date().toISOString() };
@@ -389,7 +415,7 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
-        if (seg) { seg.emotion = action.emotion as any; seg.updated_at = new Date().toISOString(); }
+        if (seg && isEmotionType(action.emotion)) { seg.emotion = action.emotion; seg.updated_at = new Date().toISOString(); }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }

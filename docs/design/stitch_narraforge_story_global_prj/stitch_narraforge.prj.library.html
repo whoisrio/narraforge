@@ -1,0 +1,434 @@
+<!DOCTYPE html><html class="light" lang="en" style=""><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NarraForge | Story Library</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-error": "#ffffff",
+                    "on-primary-container": "#fffbff",
+                    "on-surface": "#1d1b17",
+                    "surface-dim": "#dfd9d2",
+                    "secondary": "#865310",
+                    "on-error-container": "#93000a",
+                    "outline-variant": "#d8c2b4",
+                    "surface-container-low": "#f9f3eb",
+                    "primary-fixed-dim": "#ffb77e",
+                    "secondary-fixed": "#ffdcbd",
+                    "background": "#fff8f1",
+                    "surface-variant": "#e8e1db",
+                    "on-tertiary-container": "#f4fffb",
+                    "surface-container-highest": "#e8e1db",
+                    "inverse-primary": "#ffb77e",
+                    "on-tertiary-fixed-variant": "#005048",
+                    "tertiary-container": "#008376",
+                    "error": "#ba1a1a",
+                    "on-secondary-fixed-variant": "#683c00",
+                    "tertiary-fixed-dim": "#6fd8c8",
+                    "on-secondary-fixed": "#2c1600",
+                    "surface": "#fff8f1",
+                    "on-primary-fixed-variant": "#6e3900",
+                    "on-tertiary": "#ffffff",
+                    "inverse-surface": "#33302c",
+                    "surface-container-lowest": "#ffffff",
+                    "inverse-on-surface": "#f6f0e9",
+                    "surface-bright": "#fff8f1",
+                    "primary": "#8b4c0d",
+                    "tertiary": "#00685d",
+                    "primary-container": "#a96425",
+                    "secondary-fixed-dim": "#feb86f",
+                    "on-primary-fixed": "#2f1500",
+                    "surface-container": "#f3ede6",
+                    "surface-container-high": "#ede7e0",
+                    "outline": "#867467",
+                    "on-tertiary-fixed": "#00201c",
+                    "on-secondary": "#ffffff",
+                    "on-secondary-container": "#784703",
+                    "tertiary-fixed": "#8cf5e4",
+                    "on-surface-variant": "#534439",
+                    "on-background": "#1d1b17",
+                    "error-container": "#ffdad6",
+                    "primary-fixed": "#ffdcc3",
+                    "on-primary": "#ffffff",
+                    "surface-tint": "#8e4e10",
+                    "secondary-container": "#feb86f"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "2xl": "48px",
+                    "lg": "24px",
+                    "md": "16px",
+                    "unit": "4px",
+                    "max-width": "1600px",
+                    "xs": "4px",
+                    "xl": "32px",
+                    "sm": "8px"
+            },
+            "fontFamily": {
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "body-dialogue": ["Plus Jakarta Sans"],
+                    "body-base": ["Plus Jakarta Sans"],
+                    "label-caps": ["Plus Jakarta Sans"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "code-xs": ["JetBrains Mono"]
+            },
+            "fontSize": {
+                    "display-lg": ["36px", {"lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                    "body-dialogue": ["17px", {"lineHeight": "29px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                    "body-base": ["15px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                    "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.12em", "fontWeight": "700"}],
+                    "headline-md": ["24px", {"lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "code-xs": ["12px", {"lineHeight": "18px", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        vertical-align: middle;
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #d8c2b4;
+        border-radius: 10px;
+      }
+      .glass-card {
+        backdrop-filter: blur(8px);
+        background: rgba(255, 248, 241, 0.7);
+      }
+      .manuscript-hover:hover .cover-image {
+        transform: scale(1.05) translateY(-4px);
+      }
+      .glow-amber:focus-within {
+        box-shadow: 0 0 0 4px rgba(139, 76, 13, 0.15);
+      }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-base selection:bg-primary-fixed selection:text-on-primary-fixed">
+<!-- TopNavBar -->
+<header class="fixed top-3 left-3 right-3 rounded-xl bg-surface/92 backdrop-blur-md border border-outline-variant/30 shadow-[0_4px_12px_rgba(26,24,20,0.08)] z-50 h-16 flex justify-between items-center px-lg max-w-max-width mx-auto">
+<div class="flex items-center gap-xl">
+<h1 class="font-display-lg text-display-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">NarraForge</h1>
+<nav class="hidden md:flex items-center gap-md">
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-all" href="#">Project Settings</a>
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-all" href="#">Export</a>
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-all" href="#">Preview</a>
+</nav>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative hidden sm:block">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" data-icon="search">search</span>
+<input class="bg-surface-container-low border border-outline-variant/40 rounded-full pl-10 pr-4 py-1.5 w-64 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-body-base" placeholder="Search manuscripts..." type="text">
+</div>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95">
+<span class="material-symbols-outlined" data-icon="cloud_done">cloud_done</span>
+</button>
+<button class="w-10 h-10 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high transition-colors active:scale-95 relative">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full"></span>
+</button>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary/20 cursor-pointer hover:border-primary transition-colors">
+<img class="w-full h-full object-cover" data-alt="A professional headshot of a creative individual with a warm, soft-lit studio background. The lighting is golden and natural, emphasizing a sophisticated yet approachable author persona. The image is clean and high-resolution, perfectly fitting a premium light-mode UI aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxp0gIbo-thJ3Kg4DqePDF5LxJDWKHRiiVhRLPzODNvc6M63p5je81KsLOQ6kRr9A_XAE1STgQzlDKYgeHdFzCW6zqr6EmXfa-csgPOSgXqSfrEOrvoMC5lPLFb6QrwaWRj2y1AFGXjChGnU9XU2DgKIzRA25FrfQKIa-4WDYzCJUAEHnbbm0WTTna1gMMTfowW8omsJUslOXIMaz8urucGT_YgSS4HkjDUhy4RJf8KW_E32wTeFy551lHDB8BqYkC9jIfvnX37A">
+</div>
+</div>
+</header>
+<div class="flex h-screen pt-24">
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[248px] bg-surface-container-low border-r border-outline-variant/20 flex flex-col pt-24 pb-lg px-md hidden lg:flex">
+<div class="mb-xl px-2">
+<div class="flex items-center gap-md p-3 rounded-xl bg-surface-container-high/50 border border-outline-variant/10">
+<div class="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+<span class="material-symbols-outlined" data-icon="book" style="font-variation-settings: &quot;FILL&quot; 1;">book</span>
+</div>
+<div>
+<p class="font-bold text-on-surface text-sm leading-tight">Current Manuscript</p>
+<p class="text-xs text-on-surface-variant">Book One</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-md p-3 rounded-lg text-primary font-bold border-l-4 border-primary bg-primary-container/10 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories" style="font-variation-settings: &quot;FILL&quot; 1;">auto_stories</span>
+<span class="">Library</span>
+</a>
+<a class="flex items-center gap-md p-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary" data-icon="group">group</span>
+<span class="">Characters</span>
+</a>
+<a class="flex items-center gap-md p-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary" data-icon="public">public</span>
+<span class="">studio</span>
+</a>
+<a class="flex items-center gap-md p-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary" data-icon="settings">settings</span>
+<span class="">Settings</span>
+</a>
+</nav>
+<div class="mt-auto pt-lg space-y-1 border-t border-outline-variant/20">
+<a class="flex items-center gap-md p-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span class="">Help</span>
+</a>
+<a class="flex items-center gap-md p-3 rounded-lg text-on-surface-variant font-medium hover:bg-surface-container-high transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span class="">Archive</span>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 lg:ml-[248px] px-lg md:px-2xl pb-2xl max-w-max-width mx-auto">
+<!-- Header Section -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-md mb-xl">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-2">Your Manuscripts</h2>
+<p class="text-on-surface-variant font-body-base">Continue your narrative journey where you left off.</p>
+</div>
+<div class="flex items-center gap-sm"><button class="bg-gradient-to-r from-primary to-primary-container text-white px-xl py-3 rounded-full font-bold flex items-center gap-sm hover:scale-[1.03] active:scale-[0.97] transition-all shadow-lg shadow-primary/20"><span class="material-symbols-outlined" data-icon="add">add</span><span class="">New Chapter</span></button><button class="bg-surface-container-high text-on-surface px-lg py-3 rounded-full font-bold flex items-center gap-sm hover:bg-primary-fixed transition-all border border-outline-variant/20"><span class="material-symbols-outlined" data-icon="upload">upload</span><span class="">Import</span></button></div>
+</div>
+<!-- Dashboard Stats / Filter -->
+<div class="flex flex-wrap gap-md mb-xl overflow-x-auto pb-2">
+<div class="bg-surface-container-high/40 border border-outline-variant/30 rounded-2xl px-md py-sm flex items-center gap-sm cursor-pointer hover:bg-surface-container-high transition-colors">
+<span class="text-xs font-label-caps uppercase tracking-widest text-on-surface-variant">Active</span>
+<span class="bg-primary text-white text-[10px] px-1.5 py-0.5 rounded-full">4</span>
+</div>
+<div class="bg-surface-container px-md py-sm rounded-2xl flex items-center gap-sm cursor-pointer hover:bg-surface-container-high transition-colors">
+<span class="text-xs font-label-caps uppercase tracking-widest text-on-surface-variant">Drafts</span>
+<span class="bg-outline-variant text-on-surface-variant text-[10px] px-1.5 py-0.5 rounded-full">12</span>
+</div>
+<div class="bg-surface-container px-md py-sm rounded-2xl flex items-center gap-sm cursor-pointer hover:bg-surface-container-high transition-colors">
+<span class="text-xs font-label-caps uppercase tracking-widest text-on-surface-variant">Completed</span>
+<span class="bg-outline-variant text-on-surface-variant text-[10px] px-1.5 py-0.5 rounded-full">2</span>
+</div>
+</div>
+<!-- Bento Grid of Manuscript Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-xl">
+<!-- Manuscript Card 1 -->
+<div class="manuscript-hover group bg-surface-container-lowest border border-outline-variant/30 rounded-[24px] overflow-hidden flex flex-col hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+<div class="h-56 relative overflow-hidden bg-surface-variant">
+<img class="cover-image w-full h-full object-cover transition-transform duration-500" data-alt="A vintage, detailed book cover illustration featuring a mystical forest under a warm, amber moonlight. The style is etched linework with deep oranges and dark browns, evoking a classic fantasy novel feel. The composition is centered and artistic, reflecting a professional author's library dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2pir441sgPChKaL5xTMDoxhq5KspsJ9UOor92dweLpBmPFtGK-4vaeFMiGAZwM13l1kCnKf8yo4LH04T5EHy38Xztiz6mSW4asFqpoQgh3eHuZboOPA7KvFAgBzqd0RjiuUegp0G5k9G_snNUpKCvaQE03szeYIxVTrLAj-oxcAfZQi-qzL0Pv5v9oukmAnsrSB9g0AQJFX6ADoy7JSr-A5uuxkc5r643MNtR4GvebExJvkcyo9R0xTKySA_g2dGo9QdO8IRv2g">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<span class="px-3 py-1 rounded-full bg-tertiary/20 backdrop-blur-md text-tertiary-fixed text-[10px] font-label-caps uppercase border border-tertiary/30">Fantasy</span>
+<div class="flex items-center gap-1 text-white/90">
+<span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span>
+<span class="text-xs">2h ago</span>
+</div>
+</div>
+</div>
+<div class="p-lg flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-headline-md text-on-surface group-hover:text-primary transition-colors">The Last Alchemist</h3>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<p class="text-on-surface-variant text-sm mb-lg line-clamp-2 italic">"The fire didn't consume the silver, it invited it to dance in a language forgotten by men..."</p>
+<div class="mt-auto space-y-3">
+<div class="flex justify-between text-xs font-label-caps text-on-surface-variant uppercase">
+<span class="">Progress</span>
+<span class="">42,000 / 80,000 words</span>
+</div>
+<div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[52.5%] rounded-full shadow-[0_0_8px_rgba(139,76,13,0.3)] transition-all duration-1000"></div>
+</div>
+<div class="flex items-center gap-md pt-2">
+<button class="flex-1 py-2 rounded-xl bg-surface-container-high text-on-surface font-bold text-sm hover:bg-primary-fixed transition-all border border-outline-variant/20 active:scale-95">Open Editor</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant border border-outline-variant/20 hover:text-primary active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</button>
+<button class="flex-1 py-2 rounded-xl bg-secondary-container/10 text-secondary font-bold text-sm hover:bg-secondary-container/20 transition-all border border-secondary/30 active:scale-95 flex items-center justify-center gap-1"><span class="material-symbols-outlined text-sm">mic</span><span class="">Synthesize</span></button></div>
+</div>
+</div>
+</div>
+<!-- Manuscript Card 2 -->
+<div class="manuscript-hover group bg-surface-container-lowest border border-outline-variant/30 rounded-[24px] overflow-hidden flex flex-col hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+<div class="h-56 relative overflow-hidden bg-surface-variant">
+<img class="cover-image w-full h-full object-cover transition-transform duration-500" data-alt="An atmospheric, minimalist sci-fi book cover showcasing a single glowing neon blue ring in a vast, dusty red desert at dusk. The lighting is dramatic and cinematic, with a warm horizon line. The overall aesthetic is clean, modern, and focused, suited for a high-end creative storytelling app." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBE2mzpGhiDg57uWgiGhOpyex-mNlGveSJrXbQE96L-PO_vh6ITAcIAy2JltdLyaw9RMRcMc19aEJWh4wpdo1Th9usscxAh_XGIuGyQ2R-6jaX7HfzXluGL6lqmR2LNHSshtjQFJh0AkjWNOFlvurdcJS3XSf_LJ0jja3pVXcf_c7mME1buwXF6Xaq0Uj_F9RpO4UHG__Xicn7uxOoENS4chN_y6pEN3ytLzZ3kP256uSWwRVFBEX4RVWhj_mfFexgzoBtBWv54bg">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<span class="px-3 py-1 rounded-full bg-secondary-container/20 backdrop-blur-md text-secondary-fixed text-[10px] font-label-caps uppercase border border-secondary/30">Sci-Fi</span>
+<div class="flex items-center gap-1 text-white/90">
+<span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span>
+<span class="text-xs">Yesterday</span>
+</div>
+</div>
+</div>
+<div class="p-lg flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-headline-md text-on-surface group-hover:text-primary transition-colors">Echoes of Mars</h3>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<p class="text-on-surface-variant text-sm mb-lg line-clamp-2 italic">"Static wasn't just noise; it was the heartbeat of a planet that refused to die."</p>
+<div class="mt-auto space-y-3">
+<div class="flex justify-between text-xs font-label-caps text-on-surface-variant uppercase">
+<span class="">Progress</span>
+<span class="">12,450 / 65,000 words</span>
+</div>
+<div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[19%] rounded-full shadow-[0_0_8px_rgba(139,76,13,0.3)] transition-all duration-1000"></div>
+</div>
+<div class="flex items-center gap-md pt-2">
+<button class="flex-1 py-2 rounded-xl bg-surface-container-high text-on-surface font-bold text-sm hover:bg-primary-fixed transition-all border border-outline-variant/20 active:scale-95">Open Editor</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant border border-outline-variant/20 hover:text-primary active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</button>
+<button class="flex-1 py-2 rounded-xl bg-secondary-container/10 text-secondary font-bold text-sm hover:bg-secondary-container/20 transition-all border border-secondary/30 active:scale-95 flex items-center justify-center gap-1"><span class="material-symbols-outlined text-sm">mic</span><span class="">Synthesize</span></button></div>
+</div>
+</div>
+</div>
+<!-- Create New Card -->
+<div class="group border-2 border-dashed border-outline-variant/50 rounded-[24px] flex flex-col items-center justify-center p-xl gap-md cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-all duration-300 min-h-[400px]">
+<div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-4xl" data-icon="add_circle">upload_file</span>
+</div>
+<div class="text-center">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-1">Import Manuscript</h3>
+<p class="text-on-surface-variant text-sm">Upload a .docx, .txt, or .md file to start your audio narrative.</p>
+<a href="#" class="mt-2 block text-xs font-medium text-primary hover:underline">Or create from template</a></div>
+</div>
+<!-- Manuscript Card 3 -->
+<div class="manuscript-hover group bg-surface-container-lowest border border-outline-variant/30 rounded-[24px] overflow-hidden flex flex-col hover:border-primary/40 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300">
+<div class="h-56 relative overflow-hidden bg-surface-variant">
+<img class="cover-image w-full h-full object-cover transition-transform duration-500" data-alt="An elegant, moody book cover showing a Victorian-era street at night, lit by flickering gas lamps. Deep blues and warm yellows dominate the palette. A subtle fog hangs over the cobblestones. The art style is refined and literary, perfectly matching a premium writer's workspace design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDuanJljX7exa4aF7-c1TCDUpInOisBN11fnsaHyQpt0sGXjSWJyvCQUreb7_ChaHtBOZVvGQL4DKYdLVADhenU67FIQzkh0AthSiZ9TpOmx5CCKo_5GwrM0f9W94uv6wulzm5J6MsvdXhLh7Sv2CQCdz97vE84ByyLgwuqzvg7Aesd6f-jcCCdbEsEWjzBeCN0__hA68f4qY52JJ7hKEaubqTGscBG_6y3Rt75mvOhOzr4zrjl6mbax7NN6h9Jstd3t81JdysLaA">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<div class="absolute bottom-4 left-4 right-4 flex justify-between items-end">
+<span class="px-3 py-1 rounded-full bg-primary/20 backdrop-blur-md text-primary-fixed text-[10px] font-label-caps uppercase border border-primary/30">Mystery</span>
+<div class="flex items-center gap-1 text-white/90">
+<span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span>
+<span class="text-xs">3 days ago</span>
+</div>
+</div>
+</div>
+<div class="p-lg flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<h3 class="font-headline-md text-headline-md text-on-surface group-hover:text-primary transition-colors">Shadow of the Spire</h3>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<p class="text-on-surface-variant text-sm mb-lg line-clamp-2 italic">"In London, every shadow has a name, and every spire hides a secret."</p>
+<div class="mt-auto space-y-3">
+<div class="flex justify-between text-xs font-label-caps text-on-surface-variant uppercase">
+<span class="">Progress</span>
+<span class="">78,200 / 90,000 words</span>
+</div>
+<div class="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[87%] rounded-full shadow-[0_0_8px_rgba(139,76,13,0.3)] transition-all duration-1000"></div>
+</div>
+<div class="flex items-center gap-md pt-2">
+<button class="flex-1 py-2 rounded-xl bg-surface-container-high text-on-surface font-bold text-sm hover:bg-primary-fixed transition-all border border-outline-variant/20 active:scale-95">Open Editor</button>
+<button class="w-10 h-10 flex items-center justify-center rounded-xl bg-surface-container-high text-on-surface-variant border border-outline-variant/20 hover:text-primary active:scale-95 transition-all">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</button>
+<button class="flex-1 py-2 rounded-xl bg-secondary-container/10 text-secondary font-bold text-sm hover:bg-secondary-container/20 transition-all border border-secondary/30 active:scale-95 flex items-center justify-center gap-1"><span class="material-symbols-outlined text-sm">mic</span><span class="">Synthesize</span></button></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Recently Modified / Quick Access -->
+<section class="mt-2xl">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-lg">Recent Narrative Beats</h3>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-md">
+<div class="glass-card border border-outline-variant/20 p-md rounded-2xl flex items-center gap-md hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="w-12 h-12 bg-tertiary-container/10 rounded-xl flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="history_edu">history_edu</span>
+</div>
+<div class="flex-1">
+<p class="font-bold text-on-surface">Chapter 14: The Confrontation</p>
+<p class="text-xs text-on-surface-variant">Last edited: 45m ago • 2,400 words</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="chevron_right">chevron_right</span>
+</div>
+<div class="glass-card border border-outline-variant/20 p-md rounded-2xl flex items-center gap-md hover:bg-surface-container-high transition-all cursor-pointer">
+<div class="w-12 h-12 bg-secondary-container/10 rounded-xl flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined" data-icon="draw">draw</span>
+</div>
+<div class="flex-1">
+<p class="font-bold text-on-surface">Character Sketch: Elara Vance</p>
+<p class="text-xs text-on-surface-variant">Last edited: 2h ago • Character Bio</p>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="chevron_right">chevron_right</span>
+</div>
+</div>
+</section>
+</main>
+</div>
+<!-- Mobile Bottom Navigation -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/92 backdrop-blur-md border-t border-outline-variant/20 flex justify-around items-center px-md z-50">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined" data-icon="auto_stories" style="font-variation-settings: &quot;FILL&quot; 1;">auto_stories</span>
+<span class="text-[10px] font-label-caps">Library</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="group">group</span>
+<span class="text-[10px] font-label-caps">Characters</span>
+</a>
+<div class="relative -top-6">
+<button class="w-14 h-14 bg-primary text-white rounded-full shadow-lg shadow-primary/30 flex items-center justify-center active:scale-90 transition-all">
+<span class="material-symbols-outlined text-3xl" data-icon="add">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="public">public</span>
+<span class="text-[10px] font-label-caps">World</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-on-surface-variant" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-[10px] font-label-caps">Settings</span>
+</a>
+</nav>
+<!-- Micro-interaction Scripts -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Placeholder for future interaction logic
+            const cards = document.querySelectorAll('.manuscript-hover');
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', () => {
+                    // Subtle hover vibration/sound could go here
+                });
+            });
+
+            // Smooth appear animation for progress bars
+            const progressBars = document.querySelectorAll('.w-full.h-2 > div');
+            setTimeout(() => {
+                progressBars.forEach(bar => {
+                    const width = bar.style.width;
+                    bar.style.width = '0%';
+                    setTimeout(() => {
+                        bar.style.width = width;
+                    }, 100);
+                });
+            }, 500);
+        });
+    </script>
+
+
+
+
+</body></html>

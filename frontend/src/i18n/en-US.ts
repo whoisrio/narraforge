@@ -1,0 +1,62 @@
+import type { Messages } from './zh-CN';
+
+export const enUS: Messages = {
+  nav: {
+    projects: 'Projects',
+    subtitles: 'Subtitles',
+    voiceDesign: 'Voice Design',
+    settings: 'Settings',
+  },
+  projectNav: {
+    overview: 'Overview',
+    library: 'Library',
+    studio: 'Studio',
+    voices: 'Voices',
+    settings: 'Project Settings',
+  },
+  projectHub: {
+    title: 'Project Hub',
+    newProject: 'New Project',
+    recentProjects: 'Recent Projects',
+    continueProject: 'Continue',
+  },
+  subtitles: {
+    title: 'Subtitles',
+    uploadMultiple: 'Upload multiple files',
+    concatenateAndRecognize: 'Concatenate and recognize',
+    studioKicker: 'Subtitle Studio',
+    heroDescription: 'Ingest single files, multi-file queues, and audio/video sources into one editable transcript, then review, translate, and export.',
+    ingest: 'Ingest',
+    ingestDescription: 'Recognize one file quickly, or queue multiple audio/video clips for unified ASR.',
+    singleFile: 'Single File',
+    multiFileQueue: 'Multi-file Queue',
+    historyAudio: 'History Audio',
+    transcriptEditor: 'Transcript Editor',
+    reviewExport: 'Review & Export',
+    boundaryMap: 'Boundary Map',
+    backendPreview: 'Backend Recognition',
+  },
+  voiceDesign: {
+    title: 'Voice Design',
+    voiceProfile: 'Voice Profile',
+    clonedVoice: 'Cloned Voice',
+    backendPreview: 'Backend Preview',
+    saveProfile: 'Save as Voice Profile',
+    profileLibrary: 'Voice Profile Library',
+    designBrief: 'Design Brief',
+    tuneLab: 'Tune Lab',
+    projectRoleReady: 'Project Role Ready',
+    previewGenerated: 'Preview generated',
+  },
+  studio: {
+    title: 'Voice Studio',
+    listView: 'List View',
+    dialogueView: 'Dialogue View',
+    batchSynthesize: 'Batch Synthesize',
+  },
+  voiceRole: {
+    label: 'Voice Role',
+    short: 'Voice',
+    defaultNarrator: 'Default Narrator',
+  },
+};

@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Mock } from 'vitest';
+import type { SegmentedProject } from '../../types';
 import 'fake-indexeddb/auto';
 
 const { fakeApi } = vi.hoisted(() => {
@@ -14,7 +16,7 @@ vi.mock('axios', () => ({
 
 import { backendStorage } from '../backendSegmentedProjectStorage';
 
-beforeEach(() => { Object.values(fakeApi).forEach((f: any) => f.mockReset()); });
+beforeEach(() => { Object.values(fakeApi).forEach((f) => (f as Mock).mockReset()); });
 
 describe('backendStorage', () => {
   it('listProjects calls GET /segmented-projects and maps summaries', async () => {
@@ -35,8 +37,8 @@ describe('backendStorage', () => {
 
   it('saveProject maps frontend overrides to backend locked_params', async () => {
     fakeApi.put.mockResolvedValueOnce({ data: null });
-    const project = {
-      id: 'p1', name: 'n', schema_version: 2 as const, layout: 'vertical' as const,
+    const project: SegmentedProject = {
+      id: 'p1', name: 'n', schema_version: 2, layout: 'vertical',
       active_chapter_id: 'ch1', created_at: 't', updated_at: 't',
       chapters: [{
         id: 'ch1', name: '第一章', default_params: { engine: 'cosyvoice' }, split_config: {},
@@ -46,7 +48,7 @@ describe('backendStorage', () => {
         }], created_at: 't', updated_at: 't',
       }],
     };
-    await backendStorage.saveProject(project as any);
+    await backendStorage.saveProject(project);
     const payload = fakeApi.put.mock.calls[0][1];
     expect(payload.chapters[0].segments[0].locked_params).toEqual(['voice']);
   });

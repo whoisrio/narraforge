@@ -5,6 +5,10 @@ import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import styles from './SegmentEditPanel.module.css';
 
+type SegmentOverride = NonNullable<Segment['overrides']>[number];
+type SegmentParamField = keyof SegmentEngineParams;
+type SegmentParamValue = SegmentEngineParams[SegmentParamField];
+
 const EMOTION_LABELS: Record<EmotionType, string> = {
   happy: '欣喜', sad: '沉重', angry: '愤怒',
   calm: '沉稳', neutral: '中性', excited: '激昂',
@@ -80,6 +84,46 @@ export function SegmentEditPanel({
     if (segment) onUpdateText(segment.id, text);
   }, [segment, onUpdateText]);
 
+  const handleParamChange = useCallback((field: SegmentParamField, value: SegmentParamValue) => {
+    if (!segment) return;
+    const params: Partial<SegmentEngineParams> = {};
+    if (field === 'engine') {
+      params.engine = value as SegmentEngineParams['engine'];
+      // Reset voice when switching engine
+      if (value === 'edge_tts') { params.edge_voice = ''; }
+      else if (value === 'mimo_tts') { params.mimo_preset_voice = '冰糖'; }
+      else if (value === 'voxcpm') { params.voxcpm_mode = 'tts'; }
+      else { params.voice_id = ''; }
+    }
+    else if (field === 'speed') params.speed = value as number;
+    else if (field === 'volume') params.volume = value as number;
+    else if (field === 'pitch') params.pitch = value as number;
+    else if (field === 'voice_id') params.voice_id = value as string;
+    else if (field === 'edge_voice') params.edge_voice = value as string;
+    else if (field === 'mimo_preset_voice') params.mimo_preset_voice = value as string;
+    else if (field === 'mimo_clone_voice_id') params.mimo_clone_voice_id = value as string;
+    else if (field === 'mimo_instruction') params.mimo_instruction = value as string;
+    else if (field === 'voxcpm_style_control') params.voxcpm_style_control = value as string;
+    else if (field === 'language') params.language = value as string;
+    else if (field === 'instruction') params.instruction = value as string;
+    onUpdateParams(segment.id, params);
+
+    // Track overrides (skip engine switch)
+    if (field !== 'engine') {
+      const overrideField: SegmentOverride = field === 'voice_id' || field === 'edge_voice' || field === 'mimo_preset_voice' || field === 'mimo_clone_voice_id'
+        ? 'voice'
+        : (field === 'mimo_instruction' || field === 'voxcpm_style_control' ? 'instruction' : field as SegmentOverride);
+      if (onUpdateOverrides && !segment.overrides?.includes(overrideField)) {
+        onUpdateOverrides(segment.id, [...(segment.overrides || []), overrideField]);
+      }
+    }
+  }, [segment, onUpdateParams, onUpdateOverrides]);
+
+  const handleResetOverride = useCallback((field: SegmentOverride) => {
+    if (!segment || !onUpdateOverrides) return;
+    onUpdateOverrides(segment.id, (segment.overrides || []).filter(f => f !== field));
+  }, [segment, onUpdateOverrides]);
+
   if (!segment) return null;
 
   const emotion = segment.emotion || 'neutral';
@@ -107,46 +151,6 @@ export function SegmentEditPanel({
   }
   if (segment.overrides?.includes('speed')) overrideSummary.push(`语速: ${(segment.params.speed ?? 1).toFixed(1)}×`);
   if (segment.overrides?.includes('pitch')) overrideSummary.push(`语调: ${(segment.params.pitch ?? 1).toFixed(1)}`);
-
-  const handleParamChange = useCallback((field: string, value: any) => {
-    if (!segment) return;
-    const params: Partial<SegmentEngineParams> = {};
-    if (field === 'engine') {
-      params.engine = value;
-      // Reset voice when switching engine
-      if (value === 'edge_tts') { params.edge_voice = ''; }
-      else if (value === 'mimo_tts') { params.mimo_preset_voice = '冰糖'; }
-      else if (value === 'voxcpm') { params.voxcpm_mode = 'tts'; }
-      else { params.voice_id = ''; }
-    }
-    else if (field === 'speed') params.speed = value;
-    else if (field === 'volume') params.volume = value;
-    else if (field === 'pitch') params.pitch = value;
-    else if (field === 'voice_id') params.voice_id = value;
-    else if (field === 'edge_voice') params.edge_voice = value;
-    else if (field === 'mimo_preset_voice') params.mimo_preset_voice = value;
-    else if (field === 'mimo_clone_voice_id') params.mimo_clone_voice_id = value;
-    else if (field === 'mimo_instruction') params.mimo_instruction = value;
-    else if (field === 'voxcpm_style_control') params.voxcpm_style_control = value;
-    else if (field === 'language') params.language = value;
-    else if (field === 'instruction') params.instruction = value;
-    onUpdateParams(segment.id, params);
-
-    // Track overrides (skip engine switch)
-    if (field !== 'engine') {
-      const overrideField = field === 'voice_id' || field === 'edge_voice' || field === 'mimo_preset_voice' || field === 'mimo_clone_voice_id'
-        ? 'voice'
-        : (field === 'mimo_instruction' || field === 'voxcpm_style_control' ? 'instruction' : field as any);
-      if (onUpdateOverrides && !segment.overrides?.includes(overrideField)) {
-        onUpdateOverrides(segment.id, [...(segment.overrides || []), overrideField]);
-      }
-    }
-  }, [segment, onUpdateParams, onUpdateOverrides]);
-
-  const handleResetOverride = useCallback((field: NonNullable<Segment['overrides']>[number]) => {
-    if (!segment || !onUpdateOverrides) return;
-    onUpdateOverrides(segment.id, (segment.overrides || []).filter(f => f !== field));
-  }, [segment, onUpdateOverrides]);
 
   return (
     <div className={styles.panel}>

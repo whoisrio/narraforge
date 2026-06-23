@@ -1,48 +1,70 @@
 .root {
-  max-width: 720px;
-  margin: 0 auto;
-  border: 1px dashed rgba(196, 122, 58, 0.35);
-  border-radius: 16px;
-  padding: 12px 16px;
-  text-align: center;
+  width: 100%;
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  border-left: 4px solid rgba(42, 157, 143, 0.68);
+  border-radius: 18px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.62);
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
 }
 
 .selected {
-  border-style: solid;
   border-color: #c47a3a;
-  box-shadow: 0 0 0 3px rgba(196, 122, 58, 0.14);
+  box-shadow: 0 0 0 4px rgba(196, 122, 58, 0.14), var(--shadow-md);
 }
 
 .label {
-  color: #8a4f1f;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 9px;
+  border-radius: var(--radius-full);
+  background: rgba(42, 157, 143, 0.11);
+  color: #00685d;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 900;
+}
+
+.kindSwitch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border: 1px solid rgba(42, 157, 143, 0.18);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.58);
+  color: #00685d;
+  font-size: 11px;
+  font-weight: 850;
 }
 
 .warning {
   display: inline-flex;
-  margin-top: 6px;
+  margin-left: 8px;
   border-radius: 999px;
   padding: 3px 8px;
   background: #fff0e8;
   color: #a33;
   font-size: 12px;
+  font-weight: 850;
 }
 
 .root p {
-  margin: 8px 0 0;
-  color: var(--text-primary);
-  line-height: 1.7;
+  margin: 10px 0 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1.78;
   white-space: pre-wrap;
 }
 
-.emoHappy { background: rgba(255, 232, 166, 0.35); }
-.emoSad { background: rgba(202, 218, 240, 0.35); }
-.emoAngry { background: rgba(244, 190, 176, 0.35); }
-.emoCalm { background: rgba(196, 225, 207, 0.35); }
+.emoHappy { background: var(--emo-happy-bg); }
+.emoSad { background: var(--emo-sad-bg); }
+.emoAngry { background: var(--emo-angry-bg); }
+.emoCalm { background: var(--emo-calm-bg); }
 .emoNeutral { background: rgba(255, 255, 255, 0.68); }
-.emoExcited { background: rgba(255, 216, 172, 0.42); }
+.emoExcited { background: var(--emo-excited-bg); }
 
 .prosodyMark {
   border-radius: 5px;

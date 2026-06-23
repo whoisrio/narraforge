@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { SegmentedProject, Chapter, Segment } from '../../types';
+import type { RawSegmentedProject } from '../useSegmentedProject';
 import { segmentedReducer, createInitialProject, migrateV1 } from '../useSegmentedProject';
 
 function makeChapter(overrides: Partial<Chapter> = {}): Chapter {
@@ -43,6 +44,32 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments[0].text).toBe('a');
     expect(ac(next.project).segments[0].status).toBe('idle');
     expect(ac(next.project).selected_segment_id).toBeUndefined();
+  });
+
+  it('APPLY_SPLIT preserves inferred segment kind and role snapshot', () => {
+    const roleSnapshot = {
+      id: 'role-guest-a',
+      name: '嘉宾A',
+      default_engine: 'edge_tts' as const,
+      default_voice: 'Yunyang',
+      default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunyangNeural' },
+      favorite_styles: [],
+    };
+    const next = segmentedReducer({ project: makeProject() }, {
+      type: 'APPLY_SPLIT',
+      items: [{
+        text: '嘉宾A：你好',
+        segment_kind: 'dialogue',
+        role_id: 'role-guest-a',
+        role_snapshot: roleSnapshot,
+      }],
+    });
+
+    const seg = ac(next.project).segments[0];
+    expect(seg.text).toBe('嘉宾A：你好');
+    expect(seg.segment_kind).toBe('dialogue');
+    expect(seg.role_id).toBe('role-guest-a');
+    expect(seg.role_snapshot?.name).toBe('嘉宾A');
   });
 
   it('APPEND_SEGMENT appends with default_params', () => {
@@ -213,6 +240,23 @@ describe('segmentedReducer', () => {
     expect(next.project.active_chapter_id).toBe('ch2');
   });
 
+  it('SET_CHAPTER_META_BY_ID updates the requested chapter without relying on active chapter', () => {
+    const ch1 = makeChapter({ id: 'ch1', original_text: '第一章旧文本' });
+    const ch2 = makeChapter({ id: 'ch2', original_text: '第二章旧文本' });
+    const p: SegmentedProject = { schema_version: 2, id: 'p1', name: 'Test', chapters: [ch1, ch2], active_chapter_id: 'ch1', layout: 'vertical', created_at: '', updated_at: '' };
+
+    const next = segmentedReducer({ project: p }, {
+      type: 'SET_CHAPTER_META_BY_ID',
+      id: 'ch2',
+      meta: { original_text: '第二章来自文本库的新文本', design_title: '第二章视觉标题' },
+    });
+
+    expect(next.project.active_chapter_id).toBe('ch1');
+    expect(next.project.chapters.find(chapter => chapter.id === 'ch1')?.original_text).toBe('第一章旧文本');
+    expect(next.project.chapters.find(chapter => chapter.id === 'ch2')?.original_text).toBe('第二章来自文本库的新文本');
+    expect(next.project.chapters.find(chapter => chapter.id === 'ch2')?.design_title).toBe('第二章视觉标题');
+  });
+
   it('migrateV1 converts old project to v2 with chapters', () => {
     const v1 = {
       schema_version: 1, id: 'old', name: 'Old Project',
@@ -233,13 +277,13 @@ describe('segmentedReducer', () => {
   });
 
   it('LOAD_PROJECT migrates v1 data automatically', () => {
-    const v1 = {
+    const v1: RawSegmentedProject = {
       schema_version: 1, id: 'old', name: 'Old',
       segments: [], default_params: { engine: 'cosyvoice' },
       split_config: { delimiters: ['，'], mode: 'rule' },
       layout: 'vertical', created_at: '', updated_at: '',
     };
-    const next = segmentedReducer({ project: createInitialProject() }, { type: 'LOAD_PROJECT', project: v1 as any });
+    const next = segmentedReducer({ project: createInitialProject() }, { type: 'LOAD_PROJECT', project: v1 });
     expect(next.project.schema_version).toBe(2);
     expect(next.project.chapters).toHaveLength(1);
   });

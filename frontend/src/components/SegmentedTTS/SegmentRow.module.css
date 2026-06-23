@@ -7,7 +7,8 @@
   grid-template-columns: 90px 1fr;
   background: var(--color-surface);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
+  border-left: 4px solid rgba(196, 122, 58, 0.56);
+  border-radius: 18px;
   overflow: hidden;
   cursor: pointer;
   transition: all 0.2s;
@@ -261,8 +262,10 @@
   align-items: center;
   gap: 10px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--color-border);
-  background: var(--color-surface);
+  border: 1px solid rgba(216, 194, 180, 0.44);
+  border-left: 3px solid rgba(196, 122, 58, 0.52);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
   cursor: pointer;
   transition: background 0.15s;
 }

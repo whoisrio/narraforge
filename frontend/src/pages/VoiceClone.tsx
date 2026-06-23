@@ -5,7 +5,9 @@ import { AudioPreview } from '../components/VoiceClone/AudioPreview';
 import { UrlInput } from '../components/VoiceClone/UrlInput';
 import { VoiceList } from '../components/VoiceClone/VoiceList';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { VoiceProfile } from '../types';
+import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
+import { t } from '../i18n';
+import type { TTSResult, VoiceProfile } from '../types';
 import styles from './VoiceClone.module.css';
 
 /** 克隆引擎类型 */
@@ -26,6 +28,14 @@ export function VoiceClone() {
   const [method, setMethod] = useState<InputMethod>(null);
   const [engine, setEngine] = useState<CloneEngine>('qwen');
   const [designEngine, setDesignEngine] = useState<CloneEngine>('mimo');
+  const [designBrief, setDesignBrief] = useState('温暖、清晰、有纪录片感的中文旁白音色');
+  const [designIntensity, setDesignIntensity] = useState(72);
+  const [designStability, setDesignStability] = useState(68);
+  const [designPreview, setDesignPreview] = useState<TTSResult | null>(null);
+  const [designProfiles, setDesignProfiles] = useState<VoiceProfile[]>([]);
+  const [designStatus, setDesignStatus] = useState<string | null>(null);
+  const [designError, setDesignError] = useState<string | null>(null);
+  const [designPreviewing, setDesignPreviewing] = useState(false);
 
   /** 录制或上传后得到的 File 对象 */
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -47,6 +57,44 @@ export function VoiceClone() {
   const handleCloneSuccess = () => {
     triggerRefresh();
     resetToChooseMethod();
+  };
+
+  const handleDesignPreview = async () => {
+    setDesignPreviewing(true);
+    setDesignError(null);
+    setDesignStatus(null);
+    try {
+      const preview = await playVoiceDesignPreview({
+        engine: designEngine as VoiceDesignEngine,
+        voiceDescription: designBrief,
+        sampleText: '这是一段试听文本，用来确认这个 Voice Profile 是否适合项目旁白。',
+        intensity: designIntensity,
+        stability: designStability,
+      });
+      setDesignPreview(preview);
+      setDesignStatus(`${t('voiceDesign.previewGenerated')} · ${preview.audio_format || (designEngine === 'voxcpm' ? 'wav' : 'mp3')}`);
+    } catch (error) {
+      console.error('[voice-design] preview failed:', error);
+      setDesignError(error instanceof Error ? error.message : '后端试听失败，请检查模型配置');
+    } finally {
+      setDesignPreviewing(false);
+    }
+  };
+
+  const handleSaveDesignProfile = () => {
+    const id = designPreview?.audio_id || `design-${Date.now()}`;
+    const engineLabel = designEngine === 'mimo' ? 'mimo' : designEngine === 'voxcpm' ? 'voxcpm' : 'qwen';
+    const profile: VoiceProfile = {
+      id,
+      name: designBrief.trim() || 'Untitled Voice Profile',
+      audio_url: designPreview?.audio_url || '',
+      description: designBrief,
+      clone_engine: engineLabel,
+      is_cloned: false,
+      created_at: new Date().toISOString(),
+    };
+    setDesignProfiles(prev => [profile, ...prev.filter(item => item.id !== id)]);
+    setDesignStatus('已保存为 Voice Profile，可绑定到项目 Voice Role');
   };
 
   // ---- 步骤 1: 方法选择 ----
@@ -184,80 +232,88 @@ export function VoiceClone() {
         </button>
       </div>
 
-      <div className={styles.placeholderSection}>
-        <div className={styles.placeholderIcon}>🎨</div>
-        <h3>音色设计</h3>
-        <p className={styles.placeholderDesc}>
-          通过文本描述设计全新音色，或对已有声音进行风格调整。
-        </p>
-        <div className={styles.placeholderFeatures}>
-          {designEngine === 'mimo' ? (
-            <>
-              <div className={styles.placeholderFeature}>
-                <span className={styles.featureIcon}>✍️</span>
-                <div>
-                  <div className={styles.featureTitle}>文本描述定制</div>
-                  <div className={styles.featureDesc}>用自然语言描述想要的音色特征，MiMo 即时生成</div>
-                </div>
-              </div>
-            </>
-          ) : designEngine === 'voxcpm' ? (
-            <>
-              <div className={styles.placeholderFeature}>
-                <span className={styles.featureIcon}>🎨</span>
-                <div>
-                  <div className={styles.featureTitle}>Voice Design</div>
-                  <div className={styles.featureDesc}>用自然语言描述音色特征（性别、年龄、语调、情感），VoxCPM 本地生成全新音色，无需参考音频</div>
-                </div>
-              </div>
-              <div className={styles.placeholderFeature}>
-                <span className={styles.featureIcon}>🌍</span>
-                <div>
-                  <div className={styles.featureTitle}>30 语言支持</div>
-                  <div className={styles.featureDesc}>支持中英日韩法德西等 30 种语言，含粤语、四川话等方言</div>
-                </div>
-              </div>
-              <div className={styles.placeholderFeature}>
-                <span className={styles.featureIcon}>⚡</span>
-                <div>
-                  <div className={styles.featureTitle}>本地 GPU 推理</div>
-                  <div className={styles.featureDesc}>模型运行在本地 GPU，无需 API Key，无调用费用</div>
-                </div>
-              </div>
-              <div style={{ marginTop: 12, padding: '8px 12px', background: '#eff6ff', borderRadius: 8, fontSize: 13, color: '#3b82f6' }}>
-                💡 请在「文字转语音」页面选择 VoxCPM 引擎 → Voice Design 模式体验
-              </div>
-            </>
-          ) : (
-            <>
-              <div className={styles.placeholderFeature}>
-                <span className={styles.featureIcon}>🎭</span>
-                <div>
-                  <div className={styles.featureTitle}>风格迁移</div>
-                  <div className={styles.featureDesc}>将已有声音转换为不同风格（温柔、激昂、播音腔等）</div>
-                </div>
-              </div>
-              <div className={styles.placeholderFeature}>
-                <span className={styles.featureIcon}>🔀</span>
-                <div>
-                  <div className={styles.featureTitle}>声音混合</div>
-                  <div className={styles.featureDesc}>混合多个声音特征，创造独特音色</div>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-        <div className={styles.placeholderBadge}>即将推出</div>
+      <div className={styles.designWorkspace}>
+        <section className={styles.profileLibraryPanel}>
+          <span className={styles.kicker}>{t('voiceDesign.profileLibrary')}</span>
+          <h3>{t('voiceDesign.profileLibrary')}</h3>
+          <p>把克隆、设计、调参后的 Voice Profile 作为全局资产管理，再交给项目内 Voice Role 绑定。</p>
+          <div className={styles.profileCards}>
+            {designProfiles.map(profile => (
+              <article key={profile.id}>
+                <strong>{profile.name}</strong>
+                <span>{profile.clone_engine === 'mimo' ? 'MiMo' : profile.clone_engine === 'voxcpm' ? 'VoxCPM' : 'CosyVoice'} · design</span>
+                <em>{t('voiceDesign.projectRoleReady')}</em>
+              </article>
+            ))}
+            <article>
+              <strong>Documentary Narrator</strong>
+              <span>MiMo · design</span>
+              <em>可绑定到项目 Voice Role</em>
+            </article>
+            <article>
+              <strong>Warm Cast Voice</strong>
+              <span>VoxCPM · tune</span>
+              <em>Project Role Ready</em>
+            </article>
+          </div>
+        </section>
+
+        <section className={styles.designBriefPanel}>
+          <span className={styles.kicker}>{t('voiceDesign.designBrief')}</span>
+          <h3>{t('voiceDesign.designBrief')}</h3>
+          <label>
+            音色描述
+            <textarea
+              aria-label="音色描述"
+              value={designBrief}
+              onChange={(event) => setDesignBrief(event.target.value)}
+              placeholder="例如：温暖、沉稳、有纪录片感的中文男声"
+            />
+          </label>
+          <div className={styles.previewPrompt}>
+            <strong>当前 Brief</strong>
+            <p>{designBrief}</p>
+          </div>
+        </section>
+
+        <section className={styles.tuneLabPanel}>
+          <span className={styles.kicker}>{t('voiceDesign.tuneLab')}</span>
+          <h3>{t('voiceDesign.tuneLab')}</h3>
+          <label>
+            表现强度
+            <input aria-label="表现强度" type="range" min="0" max="100" value={designIntensity} onChange={(event) => setDesignIntensity(Number(event.target.value))} />
+          </label>
+          <label>
+            稳定性
+            <input aria-label="稳定性" type="range" min="0" max="100" value={designStability} onChange={(event) => setDesignStability(Number(event.target.value))} />
+          </label>
+          <button type="button" className={styles.backendPreviewBtn} onClick={handleDesignPreview} disabled={designPreviewing || !designBrief.trim()}>
+            {designPreviewing ? '后端试听中...' : t('voiceDesign.backendPreview')}
+          </button>
+          <button type="button" className={styles.saveProfileBtn} onClick={handleSaveDesignProfile} disabled={!designPreview}>
+            {t('voiceDesign.saveProfile')}
+          </button>
+          {designStatus && <div className={styles.designStatus}>{designStatus}</div>}
+          {designError && <div className={styles.designError}>{designError}</div>}
+        </section>
       </div>
     </>
   );
 
   return (
     <div className={styles.container}>
-      <div className={styles.header}>
-        <h1>音色设计</h1>
-        <p>创建和管理你的专属音色</p>
-      </div>
+      <section className={styles.hero}>
+        <div>
+          <span className={styles.kicker}>Voice Design</span>
+          <h1>音色设计</h1>
+          <p>管理可复用 Voice Profile，支持克隆、设计、调参，并交给项目 Voice Role 使用。</p>
+        </div>
+        <div className={styles.heroPills} aria-label="voice design workflow">
+          <span>Voice Profile Library</span>
+          <span>Clone / Design / Tune</span>
+          <span>Project Role Ready</span>
+        </div>
+      </section>
 
       {/* 顶层功能区切换 */}
       <div className={styles.sectionTabs}>

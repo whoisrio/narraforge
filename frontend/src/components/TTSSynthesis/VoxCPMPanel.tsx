@@ -45,6 +45,15 @@ const MODE_TABS: { value: VoxCPMMode; label: string; icon: string }[] = [
   { value: 'ultimate', label: '极致克隆', icon: '🎙️' },
 ];
 
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && error !== null) {
+    const response = (error as { response?: { data?: { detail?: unknown } } }).response;
+    if (typeof response?.data?.detail === 'string') return response.data.detail;
+  }
+  return fallback;
+}
+
 export function VoxCPMPanel({
   mode,
   onModeChange,
@@ -128,8 +137,8 @@ export function VoxCPMPanel({
     try {
       await voxcpmApi.loadModel();
       await refreshStatus();
-    } catch (err: any) {
-      setActionError(err?.response?.data?.detail || '加载失败');
+    } catch (err: unknown) {
+      setActionError(getApiErrorMessage(err, '加载失败'));
     } finally {
       setActionLoading(false);
     }
@@ -141,8 +150,8 @@ export function VoxCPMPanel({
     try {
       await voxcpmApi.unloadModel();
       await refreshStatus();
-    } catch (err: any) {
-      setActionError(err?.response?.data?.detail || '释放失败');
+    } catch (err: unknown) {
+      setActionError(getApiErrorMessage(err, '释放失败'));
     } finally {
       setActionLoading(false);
     }

@@ -1,56 +1,122 @@
 .root {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  max-width: 760px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
   cursor: pointer;
 }
 
 .body {
   min-width: 0;
-  border: 1px solid rgba(196, 122, 58, 0.18);
-  border-radius: 18px 18px 18px 6px;
-  padding: 12px 14px;
-  box-shadow: 0 2px 8px rgba(80, 45, 12, 0.08);
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  border-left: 4px solid rgba(196, 122, 58, 0.6);
+  border-radius: 18px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: var(--shadow-sm);
 }
 
 .selected .body {
   border-color: #c47a3a;
-  box-shadow: 0 0 0 3px rgba(196, 122, 58, 0.16);
+  box-shadow: 0 0 0 4px rgba(196, 122, 58, 0.14), var(--shadow-md);
 }
 
 .meta,
 .footer {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  color: var(--text-secondary);
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
 
+.meta span,
+.footer span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(249, 243, 235, 0.72);
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.meta span:first-child {
+  color: var(--color-primary-dark);
+  background: rgba(255, 220, 195, 0.42);
+}
+
+.kindSwitch {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(196, 122, 58, 0.2);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.rolePicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 220, 195, 0.42);
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.rolePicker span {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.rolePicker select {
+  max-width: 120px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  outline: none;
+}
+
 .text {
-  margin: 8px 0;
-  color: var(--text-primary);
-  line-height: 1.7;
+  margin: 12px 0;
+  color: var(--color-text-primary);
+  font-size: 16px;
+  line-height: 1.75;
   white-space: pre-wrap;
 }
 
 .footer button {
-  border: 0;
-  border-radius: 999px;
-  padding: 4px 9px;
-  background: rgba(196, 122, 58, 0.12);
-  color: #8a4f1f;
+  border: 1px solid rgba(196, 122, 58, 0.22);
+  border-radius: var(--radius-full);
+  padding: 5px 11px;
+  background: rgba(196, 122, 58, 0.1);
+  color: var(--color-primary-dark);
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
 }
 
-.emoHappy .body { background: rgba(255, 232, 166, 0.52); }
-.emoSad .body { background: rgba(202, 218, 240, 0.52); }
-.emoAngry .body { background: rgba(244, 190, 176, 0.52); }
-.emoCalm .body { background: rgba(196, 225, 207, 0.52); }
-.emoNeutral .body { background: rgba(255, 255, 255, 0.86); }
-.emoExcited .body { background: rgba(255, 216, 172, 0.58); }
+.emoHappy .body { background: var(--emo-happy-bg); }
+.emoSad .body { background: var(--emo-sad-bg); }
+.emoAngry .body { background: var(--emo-angry-bg); }
+.emoCalm .body { background: var(--emo-calm-bg); }
+.emoNeutral .body { background: rgba(255, 255, 255, 0.78); }
+.emoExcited .body { background: var(--emo-excited-bg); }
 
 .prosodyMark {
   border-radius: 5px;
@@ -61,9 +127,7 @@
 }
 
 .stale {
-  border-radius: 999px;
-  padding: 3px 8px;
-  background: #fff0e8;
-  color: #a33;
-  font-weight: 700;
+  background: #fff0e8 !important;
+  color: #a33 !important;
+  font-weight: 900;
 }

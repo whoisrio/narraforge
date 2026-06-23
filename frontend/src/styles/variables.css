@@ -7,12 +7,14 @@
   /* ---- Primary Palette — Warm Amber ---- */
   --color-primary: #c47a3a;
   --color-primary-light: #d4944e;
-  --color-primary-dark: #b0692d;
+  --color-primary-dark: #8b4c0d;
+  --color-primary-container: #ffdcc3;
+  --color-primary-container-strong: #a96425;
   --color-primary-gradient: linear-gradient(135deg, #c47a3a, #d4944e);
 
   /* ---- Accent / CTA ---- */
   --color-cta: #c47a3a;
-  --color-cta-hover: #b0692d;
+  --color-cta-hover: #8b4c0d;
 
   /* ---- Semantic Colors ---- */
   --color-success: #2a9d8f;
@@ -23,23 +25,28 @@
   --color-info: #3b82c4;
 
   /* ---- Background & Surface ---- */
-  --color-background: #f8f7f4;
+  --color-background: #fff8f1;
   --color-surface: #ffffff;
+  --color-surface-low: #f9f3eb;
+  --color-surface-container: #f3ede6;
+  --color-surface-high: #ede7e0;
+  --color-surface-highest: #e8e1db;
   --color-surface-hover: #f3f2ee;
-  --color-surface-active: #e8e5de;
+  --color-surface-active: #e8e1db;
   --color-surface-elevated: #ffffff;
   --color-surface-inset: #edecea;
 
   /* ---- Text ---- */
-  --color-text-primary: #1a1814;
-  --color-text-secondary: #6b6560;
-  --color-text-muted: #9e978e;
-  --color-text-disabled: #d8d4cc;
+  --color-text-primary: #1d1b17;
+  --color-text-secondary: #534439;
+  --color-text-muted: #867467;
+  --color-text-disabled: #d8c2b4;
   --color-text-on-primary: #ffffff;
 
   /* ---- Borders ---- */
-  --color-border: #e8e5de;
-  --color-border-light: #efeee9;
+  --color-border: #e8e1db;
+  --color-border-light: #f3ede6;
+  --color-border-strong: #d8c2b4;
   --color-border-focus: #c47a3a;
 
   /* ---- Glow Effects ---- */
@@ -47,13 +54,13 @@
   --glow-primary-strong: rgba(196, 122, 58, 0.3);
 
   /* ---- Shadows ---- */
-  --shadow-xs: 0 1px 2px rgba(26, 24, 20, 0.02);
-  --shadow-sm: 0 1px 2px rgba(26, 24, 20, 0.04);
-  --shadow-md: 0 2px 4px rgba(26, 24, 20, 0.06), 0 1px 2px rgba(26, 24, 20, 0.04);
-  --shadow-lg: 0 4px 12px rgba(26, 24, 20, 0.08), 0 2px 4px rgba(26, 24, 20, 0.04);
-  --shadow-xl: 0 12px 24px rgba(26, 24, 20, 0.1), 0 4px 8px rgba(26, 24, 20, 0.04);
+  --shadow-xs: 0 1px 2px rgba(26, 24, 20, 0.04);
+  --shadow-sm: 0 1px 3px rgba(26, 24, 20, 0.06), 0 1px 2px rgba(26, 24, 20, 0.04);
+  --shadow-md: 0 4px 12px rgba(26, 24, 20, 0.07), 0 1px 3px rgba(26, 24, 20, 0.04);
+  --shadow-lg: 0 8px 24px rgba(26, 24, 20, 0.08), 0 2px 6px rgba(26, 24, 20, 0.04);
+  --shadow-xl: 0 18px 36px rgba(26, 24, 20, 0.12), 0 6px 12px rgba(26, 24, 20, 0.05);
   --shadow-card: 0 1px 3px rgba(26, 24, 20, 0.06), 0 1px 2px rgba(26, 24, 20, 0.04);
-  --shadow-card-hover: 0 8px 24px rgba(26, 24, 20, 0.08), 0 2px 6px rgba(26, 24, 20, 0.04);
+  --shadow-card-hover: 0 12px 24px rgba(139, 76, 13, 0.12);
 
   /* ---- Spacing Scale ---- */
   --spacing-xs: 4px;
@@ -109,8 +116,10 @@
   --z-tooltip: 700;
 
   /* ---- Component Tokens ---- */
-  --header-height: 56px;
-  --nav-width: 240px;
+  --header-height: 64px;
+  --nav-width: 248px;
+  --nav-collapsed-width: 56px;
+  --content-max-width: 1600px;
 
   /* ---- Emotion Colors ---- */
   --emo-happy: #e8a838;

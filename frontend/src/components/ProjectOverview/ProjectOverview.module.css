@@ -1,0 +1,201 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  padding: 20px;
+  border: 1px solid rgba(216, 194, 180, 0.48);
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255, 252, 247, 0.92), rgba(255, 241, 224, 0.72));
+  box-shadow: var(--shadow-sm);
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+
+.header p,
+.sideCard p,
+.mainCard p {
+  margin: 6px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actions button,
+.sideCard button {
+  border: 1px solid rgba(196, 122, 58, 0.24);
+  border-radius: var(--radius-full);
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-primary-dark);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.actions .primary {
+  border-color: transparent;
+  background: var(--color-primary);
+  color: white;
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metrics > div,
+.mainCard,
+.sideCard,
+.chapterCard {
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: var(--shadow-xs);
+}
+
+.metrics > div {
+  padding: 14px 16px;
+}
+
+.metrics span,
+.chapterCard span,
+.chapterCard small {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.metrics strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--color-text-primary);
+  font-size: 20px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+  gap: 16px;
+}
+
+.mainCard,
+.sideCard {
+  padding: 18px;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+}
+
+.cardHeader strong,
+.sideCard strong,
+.chapterCard strong {
+  color: var(--color-text-primary);
+}
+
+.mainCard p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+}
+
+.progressRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+  color: var(--color-primary-dark);
+  font-weight: 900;
+}
+
+.track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(216, 194, 180, 0.32);
+}
+
+.track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #c47a3a, #e4ad74);
+}
+
+.sideStack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sideCard button {
+  margin-top: 12px;
+}
+
+.chapterStrip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.chapterCard {
+  padding: 14px;
+}
+
+.chapterCard strong,
+.chapterCard small {
+  display: block;
+  margin-top: 6px;
+}
+
+.active {
+  border-color: rgba(196, 122, 58, 0.6);
+  background: rgba(255, 244, 232, 0.84);
+}
+
+@media (max-width: 900px) {
+  .header,
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

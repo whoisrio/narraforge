@@ -124,7 +124,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
             <select
               id="language"
               value={params.language || 'Chinese'}
-              onChange={(e) => onParamChange({ ...params, language: e.target.value as any })}
+              onChange={(e) => onParamChange({ ...params, language: e.target.value as TTSRequest['language'] })}
             >
               {LANGUAGE_OPTIONS.map(opt => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>

@@ -18,6 +18,59 @@
   color: var(--color-text-secondary);
 }
 
+.hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-2xl);
+  padding: 22px;
+  border: 1px solid rgba(216, 194, 180, 0.48);
+  border-radius: 26px;
+  background: linear-gradient(135deg, rgba(255, 252, 247, 0.94), rgba(255, 241, 224, 0.74));
+  box-shadow: var(--shadow-sm);
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 30px;
+  letter-spacing: -0.04em;
+}
+
+.hero p {
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+}
+
+.heroPills {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.heroPills span {
+  border: 1px solid rgba(196, 122, 58, 0.22);
+  border-radius: var(--radius-full);
+  padding: 7px 11px;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 850;
+}
+
 .engineSwitch {
   display: inline-flex;
   background: var(--color-surface-hover);
@@ -152,6 +205,137 @@
   border-radius: var(--radius-full);
   font-size: var(--font-size-sm);
   font-weight: 600;
+}
+
+/* 音色设计工作区 */
+.designWorkspace {
+  display: grid;
+  gap: 16px;
+}
+
+.profileLibraryPanel,
+.designBriefPanel,
+.tuneLabPanel {
+  padding: 18px;
+  border: 1px solid rgba(216, 194, 180, 0.52);
+  border-radius: 22px;
+  background: rgba(255, 252, 247, 0.84);
+  text-align: left;
+}
+
+.profileLibraryPanel h3,
+.designBriefPanel h3,
+.tuneLabPanel h3 {
+  margin: 0 0 8px;
+  color: var(--color-text-primary);
+}
+
+.profileLibraryPanel p {
+  margin: 0 0 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.profileCards {
+  display: grid;
+  gap: 10px;
+}
+
+.profileCards article {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(196, 122, 58, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.profileCards strong {
+  color: var(--color-text-primary);
+}
+
+.profileCards span,
+.profileCards em,
+.previewPrompt p {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.designBriefPanel label,
+.tuneLabPanel label {
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.designBriefPanel textarea {
+  min-height: 96px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.previewPrompt {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(196, 122, 58, 0.08);
+}
+
+.previewPrompt p {
+  margin: 4px 0 0;
+}
+
+.tuneLabPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.backendPreviewBtn,
+.saveProfileBtn {
+  justify-self: start;
+  border: 1px solid rgba(196, 122, 58, 0.24);
+  border-radius: var(--radius-full);
+  padding: 9px 14px;
+  background: var(--color-primary-gradient);
+  color: var(--color-text-on-primary);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.saveProfileBtn {
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--color-primary-dark);
+}
+
+.backendPreviewBtn:disabled,
+.saveProfileBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.designStatus,
+.designError {
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.designStatus {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.designError {
+  background: rgba(220, 38, 38, 0.1);
+  color: var(--color-danger);
 }
 
 .content {

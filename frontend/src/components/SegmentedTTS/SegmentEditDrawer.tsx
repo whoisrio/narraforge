@@ -12,20 +12,20 @@ interface SegmentEditDrawerProps {
   onAnnotateSSML: (id: string) => void;
 }
 
-export function SegmentEditDrawer({ segment, onClose, onUpdateText, onUpdateSSML, onUpdateParams, onRegenerate, onAnnotateSSML }: SegmentEditDrawerProps) {
-  const [localText, setLocalText] = useState(segment?.text ?? '');
-  const [localSSML, setLocalSSML] = useState(segment?.ssml ?? '');
+interface SegmentEditDrawerContentProps extends Omit<SegmentEditDrawerProps, 'segment'> {
+  segment: Segment;
+}
+
+function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML, onUpdateParams, onRegenerate, onAnnotateSSML }: SegmentEditDrawerContentProps) {
+  const [localText, setLocalText] = useState(segment.text);
+  const [localSSML, setLocalSSML] = useState(segment.ssml ?? '');
   const [dirty, setDirty] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isCosyVoice = segment.params.engine === 'cosyvoice';
 
   useEffect(() => {
-    if (segment) {
-      setLocalText(segment.text);
-      setLocalSSML(segment.ssml ?? '');
-      setDirty(false);
-      textareaRef.current?.focus();
-    }
-  }, [segment?.id]);
+    textareaRef.current?.focus();
+  }, []);
 
   const handleClose = useCallback(() => {
     if (dirty) {
@@ -34,10 +34,6 @@ export function SegmentEditDrawer({ segment, onClose, onUpdateText, onUpdateSSML
     }
     onClose();
   }, [dirty, onClose]);
-
-  if (!segment) return null;
-
-  const isCosyVoice = segment.params.engine === 'cosyvoice';
 
   return (
     <div className={styles.overlay} onClick={handleClose}>
@@ -108,4 +104,9 @@ export function SegmentEditDrawer({ segment, onClose, onUpdateText, onUpdateSSML
       </div>
     </div>
   );
+}
+
+export function SegmentEditDrawer({ segment, ...props }: SegmentEditDrawerProps) {
+  if (!segment) return null;
+  return <SegmentEditDrawerContent key={segment.id} segment={segment} {...props} />;
 }

@@ -21,9 +21,12 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
   const dirtyRef = useRef(false);
   // Stash projectId/storage in refs so the timer callback always reads current values
   const projectIdRef = useRef(projectId);
-  projectIdRef.current = projectId;
   const storageRef = useRef(storage);
-  storageRef.current = storage;
+
+  useEffect(() => {
+    projectIdRef.current = projectId;
+    storageRef.current = storage;
+  }, [projectId, storage]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -49,11 +52,11 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
       };
       await putDraft(next);
       dirtyRef.current = false;
-    } catch (e: any) {
+    } catch (error: unknown) {
       const next: ProjectDraftRecord = {
         ...rec,
         dirty: true,
-        last_save_error: e?.message ?? String(e),
+        last_save_error: error instanceof Error ? error.message : String(error),
         last_save_attempt_at: new Date().toISOString(),
       };
       await putDraft(next);

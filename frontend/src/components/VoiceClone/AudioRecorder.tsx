@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { Button, Card } from '../ui';
 
 interface AudioRecorderProps {
@@ -21,7 +21,7 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const draw = useCallback(() => {
+  const draw = () => {
     const a = analyserRef.current;
     const c = canvasRef.current;
     if (!a || !c) return;
@@ -58,7 +58,16 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
     }
 
     animRef.current = requestAnimationFrame(draw);
-  }, []);
+  };
+
+  const stopAll = () => {
+    cancelAnimationFrame(animRef.current);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => { /* ignore */ }); audioCtxRef.current = null; }
+    analyserRef.current = null;
+    setVolumeLevel(0);
+  };
 
   const startRecording = async () => {
     try {
@@ -113,15 +122,6 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
     }
   };
 
-  const stopAll = () => {
-    cancelAnimationFrame(animRef.current);
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
-    if (audioCtxRef.current) { audioCtxRef.current.close().catch(() => {}); audioCtxRef.current = null; }
-    analyserRef.current = null;
-    setVolumeLevel(0);
-  };
-
   const stopRecording = () => {
     recorderRef.current?.stop();
     setRecording(false);
@@ -138,43 +138,25 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
 
   return (
     <Card>
-      <h3 style={{ margin: 0, marginBottom: 16, fontSize: 18, fontWeight: 600 }}>🎙️ 实时录制</h3>
-
-      {!recording && !audioBlob && (
-        <Button variant="danger" fullWidth onClick={startRecording}>● 开始录制</Button>
-      )}
-
-      {recording && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, color: '#ef4444', fontWeight: 500, fontSize: 14 }}>
-            <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', animation: 'pulse 1s infinite' }} />
-            录制中 {fmt(recordTime)}
-            <span style={{ marginLeft: 'auto', color: volumeLevel > 5 ? '#22c55e' : '#9ca3af', fontSize: 13 }}>
-              🔊 {volumeLevel}%
-            </span>
-          </div>
-          <div style={{ background: '#0f172a', borderRadius: 8, padding: 8, marginBottom: 12 }}>
-            <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: 50 }} />
-          </div>
-          <Button variant="secondary" fullWidth onClick={stopRecording}>⏹ 停止录制</Button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <h3 style={{ margin: 0 }}>🎙️ 录制声音样本</h3>
+        <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>
+          录制 10-30 秒清晰语音，可用于克隆音色。
+        </p>
+        <canvas ref={canvasRef} style={{ width: '100%', height: 50, background: 'var(--color-surface-secondary)', borderRadius: 8 }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>音量 {volumeLevel}%</span>
+          <span>{fmt(recordTime)}</span>
         </div>
-      )}
-
-      {audioBlob && !recording && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <audio src={URL.createObjectURL(audioBlob)} controls style={{ width: '100%' }} />
-          <div style={{ fontSize: 13, color: '#6b7280' }}>
-            大小: {(audioBlob.size / 1024).toFixed(0)} KB
-          </div>
-          {audioBlob.size === 0 && (
-            <div style={{ fontSize: 13, color: '#ef4444' }}>⚠️ 录制数据为空，请检查麦克风</div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {!recording ? (
+            <Button onClick={startRecording}>开始录制</Button>
+          ) : (
+            <Button variant="secondary" onClick={stopRecording}>停止录制</Button>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Button variant="primary" onClick={confirmRecording} disabled={audioBlob.size === 0}>✓ 确认使用</Button>
-            <Button variant="ghost" onClick={() => setAudioBlob(null)}>✕ 丢弃重录</Button>
-          </div>
+          <Button variant="secondary" disabled={!audioBlob || recording} onClick={confirmRecording}>使用录音</Button>
         </div>
-      )}
+      </div>
     </Card>
   );
 }

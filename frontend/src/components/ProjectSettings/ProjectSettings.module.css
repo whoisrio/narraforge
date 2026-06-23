@@ -1,0 +1,150 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.header,
+.card {
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: var(--shadow-xs);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(255, 252, 247, 0.92), rgba(255, 242, 226, 0.74));
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.header h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 28px;
+  letter-spacing: -0.04em;
+}
+
+.header p,
+.exportRule p {
+  margin: 6px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+}
+
+.header button {
+  border: 1px solid rgba(196, 122, 58, 0.24);
+  border-radius: var(--radius-full);
+  padding: 8px 14px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--color-primary-dark);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.card {
+  padding: 18px;
+}
+
+.card:last-child {
+  grid-column: 1 / -1;
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.field span,
+.metaList span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field input,
+.field textarea,
+.field select {
+  width: 100%;
+  border: 1px solid rgba(216, 194, 180, 0.65);
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: rgba(255, 252, 248, 0.88);
+  color: var(--color-text-primary);
+  font: inherit;
+  outline: none;
+}
+
+.field textarea {
+  min-height: 92px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.twoColFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: rgba(196, 122, 58, 0.65);
+  box-shadow: 0 0 0 3px rgba(196, 122, 58, 0.12);
+}
+
+.metaList {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.metaList > div,
+.exportRule {
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(249, 243, 235, 0.62);
+}
+
+.metaList strong,
+.exportRule strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-text-primary);
+}
+
+@media (max-width: 900px) {
+  .header,
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    flex-direction: column;
+  }
+
+  .card:last-child {
+    grid-column: auto;
+  }
+}

@@ -5,12 +5,11 @@ import { useEffect, useRef, useState } from 'react';
  * Used for the duration display in SegmentRow when a segment becomes ready.
  */
 export function useCountUp(end: number, durationMs: number, trigger: boolean): number {
-  const [value, setValue] = useState(0);
+  const [value, setValue] = useState(trigger ? 0 : end);
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
     if (!trigger) {
-      setValue(0);
       return;
     }
 

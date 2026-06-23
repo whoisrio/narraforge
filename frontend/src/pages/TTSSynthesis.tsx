@@ -8,23 +8,32 @@ import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi } from '../services/api';
+import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
 import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
-import { getDraft, deleteDraft } from '../services/segmentedDraftStore';
+import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segmentedDraftStore';
 import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, SegmentEngineParams, Role, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, SegmentEngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import { RolePicker } from '../components/SegmentedTTS/RolePicker';
 import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
+import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
+import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
+import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
+import { ProjectOverview } from '../components/ProjectOverview/ProjectOverview';
+import { ProjectSettings } from '../components/ProjectSettings/ProjectSettings';
+import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
+import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
+import { createVoiceRoleDraft, roleVoiceLabelFromParams } from '../services/voiceRoleDefaults';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -36,7 +45,11 @@ function toEdgeFormat(value: number) {
 }
 
 function endsWithSentencePeriod(text: string): boolean {
-  return /[。．\.](?:[”"』」》）\)]*)\s*$/.test(text.trim());
+  return /[。．.](?:[”"』」》）)]*)\s*$/.test(text.trim());
+}
+
+function getErrorMessage(error: unknown, fallback = '生成失败'): string {
+  return error instanceof Error ? error.message : String(error || fallback);
 }
 
 function createScratchpadProject(): SegmentedProject {
@@ -59,7 +72,17 @@ function sortProjectsWithScratchpad(projects: SegmentedProject[]) {
   });
 }
 
-export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => void }) {
+export function TTSSynthesis({
+  onNavigateToClone,
+  initialProjectId,
+  hideProjectSidebar = false,
+  onBackToProjects,
+}: {
+  onNavigateToClone?: () => void;
+  initialProjectId?: string;
+  hideProjectSidebar?: boolean;
+  onBackToProjects?: () => void;
+}) {
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
   const [engine, setEngine] = useState<Engine>('edge_tts');
@@ -96,9 +119,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [roles, setRoles] = useState<Role[]>([]);
+  const [, setPreviewingRoleId] = useState<string | null>(null);
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [segmentViewMode, setSegmentViewMode] = useState<'list' | 'dialogue'>('list');
+  const [projectSection, setProjectSection] = useState<ProjectSectionId>('studio');
   const [panelOpen, setPanelOpen] = useState(true);
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
   const isScratchpadProject = project.id === SCRATCHPAD_PROJECT_ID;
@@ -110,7 +135,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     variant?: 'warning' | 'danger';
     confirmLabel?: string;
     onConfirm: () => void;
-  }>({ open: false, title: '', message: '', onConfirm: () => {} });
+  }>({ open: false, title: '', message: '', onConfirm: () => undefined });
 
   // Derived: active chapter
   const activeChapter = useMemo(() => getActiveChapter(project)!, [project]);
@@ -164,7 +189,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       ]);
       setProjectList(list);
 
-      let full = await projectStorage.getProject(SCRATCHPAD_PROJECT_ID);
+      let full = await projectStorage.getProject(initialProjectId ?? SCRATCHPAD_PROJECT_ID);
+      if (!full && initialProjectId) full = await projectStorage.getProject(SCRATCHPAD_PROJECT_ID);
       if (!full) full = scratchpad;
       const localDraft = await getDraft(full.id);
       if (localDraft && localDraft.base_updated_at && localDraft.base_updated_at < full.updated_at && localDraft.dirty) {
@@ -196,7 +222,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       }
     })().catch((e) => console.warn('Project load failed:', e));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageMode]);
+  }, [storageMode, initialProjectId]);
 
   // Auto-save: debounce PUT in backend mode; IndexedDB direct in frontend mode
   useEffect(() => {
@@ -242,11 +268,17 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
   useEffect(() => { ttsApi.getVoices().then(setVoices).catch(() => {}); }, [refreshCounter]);
 
+  useEffect(() => {
+    roleApi.listRoles()
+      .then(setRoles)
+      .catch((error) => console.warn('Role list failed:', error));
+  }, []);
+
   const projectStorage: SegmentedProjectStorage = storageMode === 'backend' ? backendStorage : indexedDBStorage;
   const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
-  const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: any } | null>(null);
+  const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: ProjectDraftRecord } | null>(null);
 
   // ---- Chapter management ----
 
@@ -267,7 +299,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     setVoxcpmPromptText(ch.voxcpm_prompt_text || '');
     setVoxcpmCfgValue(ch.voxcpm_cfg_value ?? 2.0);
     setVoxcpmInferenceTimesteps(ch.voxcpm_inference_timesteps ?? 10);
-    setParams({ language: (ch.language as any) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
+    setParams({ language: (ch.language as TTSRequest['language']) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
     setPanelOpen(ch.panel_open ?? true);
   }, []);
 
@@ -279,8 +311,9 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     if (ch) restoreChapterSettings(ch);
   }, [project.chapters, dispatch, restoreChapterSettings]);
 
-  const handleAddChapter = useCallback(() => {
-    const name = `第${project.chapters.length + 1}章`;
+  const handleAddChapter = useCallback((requestedName?: string) => {
+    const fallbackName = `新章节 ${project.chapters.length + 1}`;
+    const name = requestedName?.trim() || fallbackName;
     dispatch({ type: 'ADD_CHAPTER', name });
     // New chapter inherits settings from previous active chapter, so no need to reset global state
   }, [project.chapters.length, dispatch]);
@@ -289,8 +322,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     const ch = project.chapters.find(c => c.id === chapterId);
     if (ch) {
       for (const seg of ch.segments) {
-        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
-        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
       }
     }
     dispatch({ type: 'DELETE_CHAPTER', id: chapterId });
@@ -449,8 +482,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     const nxt = segs[keepIdx + 1];
     const hasAudio = !!(cur.current_audio_id || nxt.current_audio_id);
     const doMerge = async () => {
-      if (cur.current_audio_id) { try { await deleteTTSResult(cur.current_audio_id); } catch {} }
-      if (nxt.current_audio_id) { try { await deleteTTSResult(nxt.current_audio_id); } catch {} }
+      if (cur.current_audio_id) { try { await deleteTTSResult(cur.current_audio_id); } catch { /* ignore */ } }
+      if (nxt.current_audio_id) { try { await deleteTTSResult(nxt.current_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'MERGE_SEGMENTS', id, direction });
     };
     if (hasAudio) {
@@ -470,7 +503,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     if (!seg) return;
     const hasAudio = !!seg.current_audio_id;
     const doSplit = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
+      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'SPLIT_SEGMENT', id, position });
     };
     if (hasAudio) {
@@ -489,8 +522,8 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
     const doDelete = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
-      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'DELETE_SEGMENT', id });
     };
     const preview = seg.text.length > 20 ? seg.text.slice(0, 20) + '…' : seg.text;
@@ -504,13 +537,13 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
   }, [activeChapter.segments, dispatch]);
 
   /** Re-split: clean up existing segment audio before applying new split */
-  const doApplySplit = useCallback((items: { text: string; emotion?: string }[], originalText: string) => {
+  const doApplySplit = useCallback((items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[], originalText: string) => {
     const oldAudioIds = activeChapter.segments
       .flatMap(s => [s.current_audio_id, s.previous_audio_id])
       .filter((id): id is string => !!id);
 
     const apply = async () => {
-      for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch {} }
+      for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch { /* ignore */ } }
       dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
       dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
       dispatch({ type: 'APPLY_SPLIT', items });
@@ -538,6 +571,131 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
     });
   }, []);
 
+  const buildSplitItemsWithRoles = useCallback((
+    items: { text: string; emotion?: string }[],
+    voiceMode: SplitVoiceMode,
+  ) => items.map(item => ({
+    ...item,
+    ...assignRoleForSplitItem(item.text, voiceMode, roles, project.default_narrator_role_id),
+  })), [roles, project.default_narrator_role_id]);
+
+  const createRoleDraft = useCallback((name: string, description: 'Narrator' | 'Cast'): RoleSnapshot => createVoiceRoleDraft({
+    name,
+    roleKind: description,
+    currentParams: buildCurrentParams(),
+  }), [buildCurrentParams]);
+
+  const handleCreateDefaultNarrator = useCallback(async () => {
+    try {
+      const saved = await roleApi.createRole(createRoleDraft('默认旁白', 'Narrator'));
+      setRoles(prev => [saved, ...prev.filter(role => role.id !== saved.id)]);
+      dispatch({
+        type: 'SET_PROJECT_NARRATOR',
+        roleId: saved.id,
+        roleSnapshot: {
+          id: saved.id,
+          name: saved.name,
+          avatar: saved.avatar,
+          description: saved.description,
+          default_engine: saved.default_engine,
+          default_voice: saved.default_voice,
+          default_engine_params: { ...saved.default_engine_params },
+          favorite_styles: [...saved.favorite_styles],
+        },
+      });
+      showToast('默认旁白已创建');
+    } catch (error) {
+      console.error('Create narrator role failed:', error);
+      showToast('创建默认旁白失败', 'error');
+    }
+  }, [createRoleDraft, dispatch, showToast]);
+
+  const handleCreateCastRole = useCallback(async () => {
+    const castCount = roles.filter(role => !`${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') && !`${role.name} ${role.description ?? ''}`.includes('旁白')).length;
+    try {
+      const saved = await roleApi.createRole(createRoleDraft(`嘉宾${castCount + 1}`, 'Cast'));
+      setRoles(prev => [saved, ...prev.filter(role => role.id !== saved.id)]);
+      showToast('Cast 角色已创建');
+    } catch (error) {
+      console.error('Create cast role failed:', error);
+      showToast('创建 Cast 失败', 'error');
+    }
+  }, [createRoleDraft, roles, showToast]);
+
+  const roleSnapshotFromRole = useCallback((role: Role): RoleSnapshot => ({
+    id: role.id,
+    name: role.name,
+    avatar: role.avatar,
+    description: role.description,
+    default_engine: role.default_engine,
+    default_voice: role.default_voice,
+    default_engine_params: { ...role.default_engine_params },
+    favorite_styles: [...role.favorite_styles],
+  }), []);
+
+  const handleSaveRole = useCallback(async (draft: RoleSnapshot) => {
+    try {
+      const exists = roles.some(role => role.id === draft.id);
+      const saved = exists
+        ? await roleApi.updateRole(draft.id, draft)
+        : await roleApi.createRole(draft);
+      setRoles(prev => exists
+        ? prev.map(role => role.id === saved.id ? saved : role)
+        : [saved, ...prev.filter(role => role.id !== saved.id)]);
+      const isNarrator = `${saved.name} ${saved.description ?? ''}`.toLowerCase().includes('narrator') || `${saved.name} ${saved.description ?? ''}`.includes('旁白');
+      if (isNarrator || project.default_narrator_role_id === saved.id) {
+        dispatch({
+          type: 'SET_PROJECT_NARRATOR',
+          roleId: saved.id,
+          roleSnapshot: roleSnapshotFromRole(saved),
+        });
+      }
+      showToast(exists ? '角色已更新' : '角色已创建');
+    } catch (error) {
+      console.error('Save role failed:', error);
+      showToast('角色保存失败', 'error');
+    }
+  }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
+
+  const handleDeleteRole = useCallback(async (roleId: string) => {
+    const target = roles.find(role => role.id === roleId);
+    if (!target) return;
+    const isNarrator = `${target.name} ${target.description ?? ''}`.toLowerCase().includes('narrator') || `${target.name} ${target.description ?? ''}`.includes('旁白');
+    const remainingNarrators = roles.filter(role => role.id !== roleId && (`${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') || `${role.name} ${role.description ?? ''}`.includes('旁白')));
+    if (isNarrator && remainingNarrators.length === 0) {
+      showToast('至少保留一个旁白音色', 'error');
+      return;
+    }
+    try {
+      await roleApi.deleteRole(roleId);
+      setRoles(prev => prev.filter(role => role.id !== roleId));
+      if (project.default_narrator_role_id === roleId) {
+        const nextNarrator = remainingNarrators[0] ?? null;
+        dispatch({
+          type: 'SET_PROJECT_NARRATOR',
+          roleId: nextNarrator?.id ?? null,
+          roleSnapshot: nextNarrator ? roleSnapshotFromRole(nextNarrator) : null,
+        });
+      }
+      showToast('角色已删除');
+    } catch (error) {
+      console.error('Delete role failed:', error);
+      showToast('角色删除失败', 'error');
+    }
+  }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
+
+  const handlePreviewRole = useCallback(async (role: RoleSnapshot, sampleText: string) => {
+    setPreviewingRoleId(role.id);
+    try {
+      await playVoiceRolePreview(role, sampleText);
+    } catch (error) {
+      console.error('Preview role failed:', error);
+      showToast('试听失败：请检查后端 TTS 服务、模型配置和音色参数', 'error');
+    } finally {
+      setPreviewingRoleId(null);
+    }
+  }, [showToast]);
+
   const handleRegenerate = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
@@ -554,36 +712,36 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
       // Params: locked → use stored; unlocked → use CURRENT global, fallback to stored for CosyVoice-specific fields
       const voiceId = hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id);
-      const speed = overrides.includes('speed') ? sp.speed : ((gp as any).speed ?? 1.0);
-      const volume = overrides.includes('volume') ? sp.volume : ((gp as any).volume ?? 80);
-      const pitch = overrides.includes('pitch') ? sp.pitch : ((gp as any).pitch ?? 1.0);
-      const instruction = overrides.includes('instruction') ? sp.instruction : ((gp as any).instruction || sp.instruction || '');
-      const language = overrides.includes('language') ? sp.language : ((gp as any).language || sp.language || 'Chinese');
+      const speed = overrides.includes('speed') ? sp.speed : (gp.speed ?? 1.0);
+      const volume = overrides.includes('volume') ? sp.volume : (gp.volume ?? 80);
+      const pitch = overrides.includes('pitch') ? sp.pitch : (gp.pitch ?? 1.0);
+      const instruction = overrides.includes('instruction') ? sp.instruction : (gp.instruction || sp.instruction || '');
+      const language = overrides.includes('language') ? sp.language : (gp.language || sp.language || 'Chinese');
 
       // Edge-TTS: locked → stored; unlocked → current global
-      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : ((gp as any).edge_voice || '');
-      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : ((gp as any).edge_rate ?? '+0%');
-      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : ((gp as any).edge_volume ?? '+0%');
+      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : (gp.edge_voice || '');
+      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : (gp.edge_rate ?? '+0%');
+      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : (gp.edge_volume ?? '+0%');
 
       // MiMo: locked → stored; unlocked → current global
-      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : ((gp as any).mimo_mode || 'preset');
-      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : ((gp as any).mimo_preset_voice || '');
-      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : ((gp as any).mimo_clone_voice_id || '');
-      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : ((gp as any).mimo_instruction || '');
+      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : (gp.mimo_mode || 'preset');
+      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : (gp.mimo_preset_voice || '');
+      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : (gp.mimo_clone_voice_id || '');
+      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : (gp.mimo_instruction || '');
 
       // VoxCPM: locked → stored; unlocked → current global
-      const effectiveVoxcpmMode = hasVoiceLock ? (sp.voxcpm_mode || 'tts') : ((gp as any).voxcpm_mode || 'tts');
-      const effectiveVoxcpmCfg = hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : ((gp as any).voxcpm_cfg_value ?? 2.0);
-      const effectiveVoxcpmTimesteps = hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : ((gp as any).voxcpm_inference_timesteps ?? 10);
-      const effectiveVoxcpmDesc = hasVoiceLock ? (sp.voxcpm_voice_description || '') : ((gp as any).voxcpm_voice_description || '');
-      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : ((gp as any).voxcpm_style_control || '');
-      const effectiveVoxcpmPrompt = hasVoiceLock ? (sp.voxcpm_prompt_text || '') : ((gp as any).voxcpm_prompt_text || '');
+      const effectiveVoxcpmMode = hasVoiceLock ? (sp.voxcpm_mode || 'tts') : (gp.voxcpm_mode || 'tts');
+      const effectiveVoxcpmCfg = hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : (gp.voxcpm_cfg_value ?? 2.0);
+      const effectiveVoxcpmTimesteps = hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : (gp.voxcpm_inference_timesteps ?? 10);
+      const effectiveVoxcpmDesc = hasVoiceLock ? (sp.voxcpm_voice_description || '') : (gp.voxcpm_voice_description || '');
+      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : (gp.voxcpm_style_control || '');
+      const effectiveVoxcpmPrompt = hasVoiceLock ? (sp.voxcpm_prompt_text || '') : (gp.voxcpm_prompt_text || '');
 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
 
       // Voice identifier & params snapshot — shared by both backend and frontend paths
       const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
-      const updatedParams: Partial<import('../types').SegmentEngineParams> = { engine: effectiveEngine as any };
+      const updatedParams: Partial<SegmentEngineParams> = { engine: effectiveEngine };
       if (effectiveEngine === 'edge_tts') {
         updatedParams.edge_voice = effectiveEdgeVoice;
         updatedParams.edge_rate = effectiveEdgeRate;
@@ -594,7 +752,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
         updatedParams.mimo_instruction = effectiveMimoInstruction;
       } else if (effectiveEngine === 'voxcpm') {
-        updatedParams.voxcpm_mode = effectiveVoxcpmMode as any;
+        updatedParams.voxcpm_mode = effectiveVoxcpmMode;
         updatedParams.voxcpm_cfg_value = effectiveVoxcpmCfg;
         updatedParams.voxcpm_inference_timesteps = effectiveVoxcpmTimesteps;
         updatedParams.voxcpm_voice_description = effectiveVoxcpmDesc;
@@ -650,11 +808,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         );
         // Extract the regenerated segment from the backend response
         const updatedSeg = updated.chapters
-          ?.flatMap((c: any) => c.segments ?? [])
-          ?.find((s: any) => s.id === seg.id);
+          ?.flatMap((c: Chapter) => c.segments ?? [])
+          ?.find((s: Segment) => s.id === seg.id);
         // Clear legacy IndexedDB audio_id if it existed (segment now uses backend path)
-        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch {} }
-        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
         // Surgically update only the regenerated segment — preserve all other segments' frontend state
         const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : voiceId);
         dispatch({
@@ -716,10 +874,10 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       ac.close();
       const audioId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
-      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch {} }
+      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams });
-    } catch (e: any) {
-      dispatch({ type: 'GENERATE_FAIL', id, error: e?.message ?? '生成失败' });
+    } catch (error: unknown) {
+      dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error) });
     }
   }, [activeChapter.segments, dispatch, buildCurrentParams, showToast]);
 
@@ -777,7 +935,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       // Step 1: Delete existing audio for segments that have it
       for (const seg of toRegenerate) {
         if (seg.current_audio_id) {
-          try { await deleteTTSResult(seg.current_audio_id); } catch {}
+          try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
         }
         dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id });
       }
@@ -867,7 +1025,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
         current_audio_id: seg?.current_audio_id,
         current_audio_path: seg?.current_audio_path,
       });
-      const msg = (e as any)?.message ?? String(e);
+      const msg = getErrorMessage(e, String(e));
       showToast(`播放失败 (${ctx}): ${msg}`, 'error');
     };
 
@@ -883,7 +1041,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             const body = await resp.clone().json();
             if (body?.detail) detail = `${resp.status} ${body.detail}`;
           } catch {
-            try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch {}
+            try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch { /* ignore */ }
           }
           throw new Error(detail);
         }
@@ -975,7 +1133,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           const resp = await fetch(url);
           if (!resp.ok) {
             let detail = `HTTP ${resp.status}`;
-            try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch {}
+            try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch { /* ignore */ }
             console.error(`[PlayAll:backend HTTP ${resp.status}]`, detail);
             continue;
           }
@@ -1044,7 +1202,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
       // Save trimmed audio, delete old
       const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       await saveTTSResult({ id: newId, text: seg.text, voice_id: seg.params.voice_id || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: seg.params.speed ?? 1, volume: seg.params.volume ?? 80, pitch: seg.params.pitch ?? 1, instruction: seg.params.instruction || '', language: seg.params.language || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
-      try { await deleteTTSResult(seg.current_audio_id); } catch {}
+      try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, generated_voice_id: seg.generated_voice_id });
       showToast(`裁剪了 ${trimmedMs}ms 静音`);
     } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
@@ -1052,10 +1210,32 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
 
   const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
   // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
+  const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.duration_sec ?? 0), 0);
+  const generatedSegmentCount = activeChapter.segments.filter(segment => segment.status === 'ready').length;
+  const engineLabel = ({ cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM' } as Record<Engine, string>)[engine] || engine;
+  const voiceRoleLabel = project.default_narrator_snapshot?.name
+    || selectedVoice?.description
+    || selectedVoice?.name
+    || edgeVoice
+    || mimoPresetVoice
+    || '默认旁白';
+  const narratorRoleSummaries = roles
+    .filter(role => role.id === project.default_narrator_role_id || `${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') || `${role.name} ${role.description ?? ''}`.includes('旁白'))
+    .map(role => ({ id: role.id, name: role.name }));
+  const castRoleSummaries = roles
+    .filter(role => !narratorRoleSummaries.some(narrator => narrator.id === role.id))
+    .map(role => ({ id: role.id, name: role.name }));
+  const narratorDraftPreview = createVoiceRoleDraft({
+    name: '默认旁白',
+    roleKind: 'Narrator',
+    currentParams: buildCurrentParams(),
+  });
+  const defaultNarratorPreviewLabel = `${({ cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM' } as Record<Engine, string>)[narratorDraftPreview.default_engine] || narratorDraftPreview.default_engine} · ${roleVoiceLabelFromParams(narratorDraftPreview.default_engine_params, narratorDraftPreview.default_voice)}`;
 
   return (
     <div className={styles.container}>
       <div className={styles.workbenchLayout}>
+        {!hideProjectSidebar && (
         <ProjectSidebar
           projects={projectList}
           activeProjectId={project.id}
@@ -1066,14 +1246,40 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
           onCreateProject={() => { void handleCreateProject(); }}
           onDeleteProject={handleDeleteProject}
         />
+        )}
 
+        <ProjectShell
+          projectName={project.name}
+          projectSubtitle={isScratchpadProject ? '快速试稿' : '项目制 · 章节分段'}
+          activeSection={projectSection}
+          chapterName={activeChapter.name}
+          segmentCount={activeChapter.segments.length}
+          generatedCount={generatedSegmentCount}
+          durationSec={activeChapterDuration}
+          onSectionChange={setProjectSection}
+          onBackToProjects={onBackToProjects}
+        >
+        {projectSection === 'studio' ? (
+        <VoiceStudioLayout
+          projectName={project.name}
+          chapterName={activeChapter.name}
+          engineLabel={engineLabel}
+          voiceRoleLabel={voiceRoleLabel}
+          segmentCount={activeChapter.segments.length}
+          generatedCount={generatedSegmentCount}
+          durationSec={activeChapterDuration}
+          queueCount={activeChapter.segments.filter(segment => segment.status === 'queued' || segment.status === 'pending').length}
+          narratorRoles={narratorRoleSummaries}
+          castRoles={castRoleSummaries}
+          viewMode={segmentViewMode}
+          remotionPath={project.remotion_project_path}
+          onViewModeChange={setSegmentViewMode}
+          onBatchSynthesize={handleRegenerateAll}
+          onExport={() => setExportOpen(true)}
+          onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
+        >
         <div className={styles.workbenchMain}>
-          <div className={styles.toolbar}>
-            <div className={styles.projectTitleCluster}>
-              <span className={styles.toolbarTitle}>分段配音工作台</span>
-              <span className={styles.projectSubtitle}>{isScratchpadProject ? '草稿项目 · 快速试稿' : '项目制 · 章节分段'}</span>
-            </div>
-            <div className={styles.toolbarDivider} />
+          <div className={styles.toolbar} aria-label="Studio model selector">
             <div className={styles.toolbarGroup}>
               <button className={`${styles.toolbarPill} ${engine === 'edge_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
               <button className={`${styles.toolbarPill} ${engine === 'cosyvoice' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
@@ -1113,7 +1319,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                     </option>
                   ))}
                 </select>
-                <button className={styles.chapterBtn} onClick={handleAddChapter} title="新建章节">+</button>
+                <button className={styles.chapterBtn} onClick={() => handleAddChapter()} title="新建章节">+</button>
                 {project.chapters.length > 1 && (
                   <button className={styles.chapterBtnDanger} onClick={() => handleDeleteChapter(project.active_chapter_id || '')} title="删除当前章节">✕</button>
                 )}
@@ -1135,16 +1341,9 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 />
               </label>
               <div className={styles.segmentedActions}>
-                <button className={styles.segmentedActionBtn} onClick={handleRegenerateAll} disabled={generating}>
-                  {generating ? '生成中...' : '⚡ 全部生成'}
-                </button>
-                <button className={styles.segmentedActionBtn} onClick={playAllActive ? handleStopAll : handlePlayAll} disabled={!!playingId && !playAllActive}>
-                  {playAllActive ? '■ 停止' : '▶ 全部播放'}
-                </button>
                 {engine === 'cosyvoice' && (
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
                 )}
-                <button className={styles.segmentedActionBtn} onClick={() => setExportOpen(true)}>⬇ 导出</button>
                 <button className={styles.segmentedActionBtn} onClick={() => setRoleLibraryOpen(true)}>
                   🎭 角色库{roles.length > 0 ? ` (${roles.length})` : ''}
                 </button>
@@ -1172,7 +1371,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
                 onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
                 onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
-                onLanguageChange={v => setParams(p => ({ ...p, language: v as any }))}
+                onLanguageChange={v => setParams(p => ({ ...p, language: v as TTSRequest['language'] }))}
                 onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
                 onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
                 onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
@@ -1198,13 +1397,14 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             <TextInputPanel
               splitConfig={activeChapter.split_config}
               onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
-              onSplit={(texts, originalText) => {
-                doApplySplit(texts.map(t => ({ text: t })), originalText);
+              onSplit={(texts, originalText, voiceMode) => {
+                doApplySplit(buildSplitItemsWithRoles(texts.map(t => ({ text: t })), voiceMode), originalText);
               }}
-              onLLMSplit={async (text) => {
+              onLLMSplit={async (text, voiceMode) => {
                 const result = await textSplitApi.llmSplit(text, activeChapter.split_config.delimiters);
-                doApplySplit(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), text);
+                doApplySplit(buildSplitItemsWithRoles(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), voiceMode), text);
               }}
+              sourceText={activeChapter.original_text}
               segmentTexts={activeChapter.segments.map(s => s.text)}
               segmentCount={activeChapter.segments.length}
             />
@@ -1223,10 +1423,6 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 </button>
               </div>
 
-              <div className={styles.viewSwitch}>
-                <button type="button" onClick={() => setSegmentViewMode('list')} aria-pressed={segmentViewMode === 'list'}>列表视图</button>
-                <button type="button" onClick={() => setSegmentViewMode('dialogue')} aria-pressed={segmentViewMode === 'dialogue'}>对话视图</button>
-              </div>
               {segmentViewMode === 'dialogue' ? (
                 <>
                   <div className={styles.roleControls}>
@@ -1261,6 +1457,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                     onAppend={handleAppendByKind}
                     onRegenerate={handleRegenerate}
                     onPlay={handlePlaySegment}
+                    onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
+                    onUpdateKind={(id, kind, roleSnapshot) => {
+                      dispatch({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind });
+                      dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot });
+                    }}
                     onUpdateProsodyMarks={(id, prosodyMarks) => dispatch({ type: 'UPDATE_PROSODY_MARKS', id, prosodyMarks })}
                   />
                 </>
@@ -1273,6 +1474,7 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 isPaused={isPaused}
                 compact={compactMode}
                 voices={voices}
+                roles={roles}
                 globalVoiceId={selectedVoiceId}
                 globalVoiceName={selectedVoice?.description || selectedVoice?.name}
                 globalEdgeVoice={edgeVoice}
@@ -1306,6 +1508,11 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
                 onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
                 onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
+                onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
+                onUpdateKind={(id, kind, roleSnapshot) => {
+                  dispatch({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind });
+                  dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot });
+                }}
                 onToggleIndependentVoice={handleToggleIndependentVoice}
                 onMerge={handleMerge}
                 onSplit={handleSplit}
@@ -1326,6 +1533,70 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             </div>
           </div>
         </div>
+        </VoiceStudioLayout>
+        ) : projectSection === 'library' ? (
+          <ProjectLibrary
+            chapters={project.chapters}
+            activeChapterId={project.active_chapter_id}
+            onSelectChapter={handleSelectChapter}
+            onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
+            onUpdateChapterText={(id, text) => {
+              dispatch({ type: 'SET_CHAPTER_META_BY_ID', id, meta: { original_text: text } });
+            }}
+            onUpdateChapterDesignTitle={(id, designTitle) => {
+              dispatch({ type: 'SET_CHAPTER_META_BY_ID', id, meta: { design_title: designTitle } });
+            }}
+            onAddChapter={handleAddChapter}
+            onDeleteChapter={handleDeleteChapter}
+            onEnterStudio={(chapterId) => {
+              handleSelectChapter(chapterId);
+              setProjectSection('studio');
+            }}
+          />
+        ) : projectSection === 'voices' ? (
+          <ProjectVoices
+            roles={roles}
+            defaultNarratorRoleId={project.default_narrator_role_id}
+            onSetDefaultNarrator={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
+            onCreateDefaultNarrator={handleCreateDefaultNarrator}
+            onCreateCast={handleCreateCastRole}
+            onSaveRole={handleSaveRole}
+            onDeleteRole={handleDeleteRole}
+            onPreviewRole={handlePreviewRole}
+            onManageRoles={() => setRoleLibraryOpen(true)}
+            defaultNarratorPreviewLabel={defaultNarratorPreviewLabel}
+          />
+        ) : projectSection === 'overview' ? (
+          <ProjectOverview
+            projectName={project.name}
+            chapters={project.chapters}
+            activeChapterId={project.active_chapter_id}
+            defaultNarratorName={project.default_narrator_snapshot?.name ?? null}
+            remotionPath={project.remotion_project_path}
+            onEnterLibrary={() => setProjectSection('library')}
+            onEnterStudio={() => setProjectSection('studio')}
+            onOpenVoices={() => setProjectSection('voices')}
+            onOpenSettings={() => setProjectSection('settings')}
+          />
+        ) : projectSection === 'settings' ? (
+          <ProjectSettings
+            projectName={project.name}
+            remotionPath={project.remotion_project_path}
+            defaultNarratorName={voiceRoleLabel}
+            storageMode={storageMode}
+            chapterCount={project.chapters.length}
+            projectDescription={project.description}
+            projectType={project.project_type}
+            defaultLanguage={project.default_language}
+            exportDirectory={project.export_directory}
+            exportNamingTemplate={project.export_naming_template}
+            onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
+            onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
+            onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}
+            onBackToOverview={() => setProjectSection('overview')}
+          />
+        ) : null}
+        </ProjectShell>
       </div>
 
       <ConfirmDialog

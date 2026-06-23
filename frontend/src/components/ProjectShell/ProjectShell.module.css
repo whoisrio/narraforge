@@ -1,0 +1,219 @@
+.root {
+  display: block;
+  min-height: calc(100vh - var(--header-height) - 76px);
+}
+
+.projectRail {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: calc(var(--z-fixed) - 1);
+  width: var(--nav-width);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: 96px 12px 18px;
+  border-right: 1px solid rgba(216, 194, 180, 0.42);
+  background: rgba(249, 243, 235, 0.92);
+  box-shadow: 10px 0 30px rgba(26, 24, 20, 0.04);
+  backdrop-filter: blur(12px);
+}
+
+.projectIdentity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(255, 220, 195, 0.28);
+  border: 1px solid rgba(196, 122, 58, 0.12);
+}
+
+.projectMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: #fff;
+  font-weight: 900;
+  box-shadow: 0 8px 18px rgba(139, 76, 13, 0.18);
+}
+
+.projectTextBlock {
+  min-width: 0;
+}
+
+.projectTextBlock h2 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  line-height: 1.15;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+}
+
+.projectTextBlock p {
+  margin: 4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.backToProjects {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.backToProjects:hover {
+  background: rgba(255, 220, 195, 0.34);
+  border-color: rgba(196, 122, 58, 0.35);
+}
+
+.projectNav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.projectNavItem {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 11px;
+  border-radius: 14px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 750;
+  transition: background var(--transition-normal), color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.projectNavItem:hover {
+  color: var(--color-primary-dark);
+  background: rgba(249, 243, 235, 0.86);
+}
+
+.projectNavItemActive {
+  color: var(--color-primary-dark);
+  background: rgba(255, 220, 195, 0.5);
+  box-shadow: inset 3px 0 0 var(--color-primary), 0 0 0 1px rgba(196, 122, 58, 0.13);
+}
+
+.projectNavIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.workspace {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding-left: calc(var(--nav-width) + 28px);
+}
+
+.contextBar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: 28px;
+  padding: 0 2px;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.breadcrumbs span,
+.breadcrumbs strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumbs strong {
+  color: var(--color-primary-dark);
+}
+
+.inlineMeta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  font-weight: 650;
+}
+
+.workspaceBody {
+  min-width: 0;
+}
+
+@media (max-width: 1100px) {
+  .projectRail {
+    position: static;
+    min-height: auto;
+    width: auto;
+    padding: var(--spacing-md);
+    border-right: 0;
+    border: 1px solid rgba(216, 194, 180, 0.42);
+    border-radius: 24px;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .workspace {
+    padding-left: 0;
+  }
+
+  .projectNav {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .projectNavItem {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .workspaceTitleRow {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .stats {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

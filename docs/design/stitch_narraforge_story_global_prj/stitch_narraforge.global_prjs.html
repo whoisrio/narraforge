@@ -1,0 +1,405 @@
+
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NarraForge Studio | Global Projects</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<!-- Shared Style Context & Custom Components -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "primary": "#8b4c0d",
+                    "surface-dim": "#dfd9d2",
+                    "surface-container": "#f3ede6",
+                    "primary-container": "#a96425",
+                    "outline-variant": "#d8c2b4",
+                    "secondary": "#865310",
+                    "on-secondary-container": "#784703",
+                    "inverse-primary": "#ffb77e",
+                    "tertiary-container": "#008376",
+                    "on-secondary": "#ffffff",
+                    "error": "#ba1a1a",
+                    "on-surface": "#1d1b17",
+                    "surface": "#fff8f1",
+                    "inverse-on-surface": "#f6f0e9",
+                    "surface-bright": "#fff8f1",
+                    "surface-container-highest": "#e8e1db",
+                    "inverse-surface": "#33302c",
+                    "background": "#fff8f1",
+                    "on-background": "#1d1b17",
+                    "tertiary": "#00685d",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-fixed-variant": "#005048",
+                    "error-container": "#ffdad6",
+                    "on-tertiary-fixed": "#00201c",
+                    "on-primary-fixed": "#2f1500",
+                    "on-error": "#ffffff",
+                    "on-primary-fixed-variant": "#6e3900",
+                    "surface-variant": "#e8e1db",
+                    "on-secondary-fixed": "#2c1600",
+                    "on-secondary-fixed-variant": "#683c00",
+                    "tertiary-fixed": "#8cf5e4",
+                    "surface-container-high": "#ede7e0",
+                    "on-primary-container": "#fffbff",
+                    "tertiary-fixed-dim": "#6fd8c8",
+                    "on-tertiary": "#ffffff",
+                    "surface-container-low": "#f9f3eb",
+                    "secondary-container": "#feb86f",
+                    "primary-fixed-dim": "#ffb77e",
+                    "surface-tint": "#8e4e10",
+                    "outline": "#867467",
+                    "on-surface-variant": "#534439",
+                    "secondary-fixed-dim": "#feb86f",
+                    "on-error-container": "#93000a",
+                    "primary-fixed": "#ffdcc3",
+                    "secondary-fixed": "#ffdcbd"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "sm": "8px",
+                    "2xl": "48px",
+                    "xl": "32px",
+                    "md": "16px",
+                    "max-width": "1600px",
+                    "xs": "4px",
+                    "lg": "24px",
+                    "unit": "4px"
+            },
+            "fontFamily": {
+                    "label-caps": ["Plus Jakarta Sans"],
+                    "body-dialogue": ["Plus Jakarta Sans"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "display-lg": ["Plus Jakarta Sans"],
+                    "code-xs": ["JetBrains Mono"],
+                    "body-base": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.12em", "fontWeight": "700"}],
+                    "body-dialogue": ["17px", {"lineHeight": "29px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                    "headline-md": ["24px", {"lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "display-lg": ["36px", {"lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                    "code-xs": ["12px", {"lineHeight": "18px", "fontWeight": "500"}],
+                    "body-base": ["15px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #fff8f1;
+            color: #1d1b17;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .studio-glass {
+            background: rgba(248, 247, 244, 0.92);
+            backdrop-filter: blur(12px);
+        }
+        .project-card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .project-card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(139, 76, 13, 0.12);
+        }
+        .active-nav-glow {
+            box-shadow: 0 0 15px rgba(139, 76, 13, 0.15);
+        }
+        .copper-gradient-btn {
+            background: linear-gradient(135deg, #8b4c0d 0%, #a96425 100%);
+        }
+        .shimmer {
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite;
+        }
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+    </style>
+</head>
+<body class="min-h-screen selection:bg-primary/20">
+<!-- TopNavBar (Shared Component Strategy) -->
+<header class="fixed top-3 left-3 right-3 rounded-xl backdrop-blur-md border border-outline-variant/30 shadow-[0_4px_12px_rgba(26,24,20,0.08)] bg-surface/92 z-50 flex justify-between items-center h-16 px-lg max-w-max-width mx-auto transition-all duration-150">
+<div class="flex items-center gap-md">
+<span class="font-display-lg text-display-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">NarraForge</span>
+
+</div>
+<div class="flex items-center gap-md">
+<div class="relative group hidden sm:block">
+<div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-on-surface-variant">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="bg-surface-container-low border-outline-variant/20 rounded-full pl-10 pr-4 py-1.5 text-body-base font-body-base w-64 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all" placeholder="Search projects..." type="text">
+</div>
+<button class="text-on-surface-variant hover:text-primary transition-colors active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-on-surface-variant hover:text-primary transition-colors active:scale-95">
+<span class="material-symbols-outlined">cloud_done</span>
+</button>
+<div class="w-10 h-10 rounded-full border-2 border-primary/20 p-0.5 overflow-hidden">
+<img class="w-full h-full object-cover rounded-full" data-alt="A professional headshot of a creative director in a warm-lit studio environment. The lighting is cinematic with golden hour hues. The style is modern photography with a shallow depth of field, reflecting the elegant NarraForge brand aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5w3m8EVO_K6T1EDuBpzWQ7vM5GFli63MofRxgjCpk0HylLRMJ4__cUjUemxYG9Suxi1uZZF_SO7hKcmHg5wnm4Cx_YexSgVrL2R9gp3iyBj1i84Od3qLkw0rUumHVhE4j85EdMRCMaAxC31JX4FSPLmaj8hfOnt9Tr-nyp7aMwxIlURxIGZwlorJhrB9u7GbxnUYdhhbGf1H89st01VwS5ZtdhwyEwCDCeXqXEBGD8Qj_MmdovUY1oueDhNhRpeVy6pjLA0bu2w">
+</div>
+</div>
+</header>
+<!-- SideNavBar (Shared Component Strategy) -->
+<aside class="fixed left-0 top-0 h-full w-[248px] bg-surface-container-low border-r border-outline-variant/20 flex flex-col pt-24 pb-lg px-md z-40 hidden md:flex">
+<div class="px-md mb-xl">
+<div class="flex items-center gap-sm mb-xs">
+<div class="w-8 h-8 rounded-lg bg-primary-container/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[20px]">auto_stories</span>
+</div>
+<span class="font-headline-md text-[18px] text-on-surface">Global Library</span>
+</div>
+<p class="text-[12px] text-on-surface-variant font-medium px-1 uppercase tracking-wider">Workspace Hub</p>
+</div>
+<nav class="flex-1 space-y-1">
+<a class="flex items-center gap-md px-md py-3 text-primary font-bold border-l-4 border-primary bg-primary-container/10 transition-all" href="#">
+<span class="material-symbols-outlined">library_books</span>
+<span class="font-body-base text-body-base">My Projects</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">group</span>
+<span class="font-body-base text-body-base">Global Characters</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">description</span>
+<span class="font-body-base text-body-base">Transcription</span>
+</a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-base text-body-base">Settings</span>
+</a>
+</nav>
+<div class="mt-auto space-y-1 pt-lg border-t border-outline-variant/20">
+<a class="flex items-center gap-md px-md py-2 text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">help</span>
+<span class="font-body-base text-body-base">Help Center</span>
+</a>
+<a class="flex items-center gap-md px-md py-2 text-on-surface-variant font-medium hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">inventory_2</span>
+<span class="font-body-base text-body-base">Archive</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="md:ml-[248px] pt-32 pb-xl px-lg md:px-2xl max-w-max-width">
+<div class="mb-xl flex flex-col md:flex-row md:items-end justify-between gap-md">
+<div>
+<h1 class="font-display-lg text-display-lg text-primary mb-xs">Project Hub</h1>
+<p class="font-body-base text-body-base text-on-surface-variant max-w-2xl">Welcome back to NarraForge. Continue your storytelling journey or spark a new narrative masterpiece.</p>
+</div>
+<div class="flex gap-sm">
+<button class="px-md py-2 rounded-full border border-outline text-on-surface hover:bg-surface-container transition-colors flex items-center gap-2 active:scale-95">
+<span class="material-symbols-outlined text-[20px]">filter_list</span>
+<span class="font-body-base text-body-base">Filter</span>
+</button>
+</div>
+</div>
+<!-- Dashboard Grid -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-xl">
+<!-- Create New Project Card -->
+<button class="group relative aspect-[3/4] flex flex-col items-center justify-center border-2 border-dashed border-outline-variant/50 rounded-2xl bg-surface-container-lowest hover:border-primary hover:bg-primary/5 transition-all duration-300 active:scale-[0.97]">
+<div class="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+<span class="material-symbols-outlined text-[40px]">add</span>
+</div>
+<span class="mt-md font-headline-md text-headline-md text-primary">New Project</span>
+<span class="mt-xs font-body-base text-body-base text-on-surface-variant">Start from a template</span>
+</button>
+<!-- Project Card 1 -->
+<div class="group project-card-hover bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/20 flex flex-col cursor-pointer">
+<div class="relative h-48 overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A dark, moody fantasy landscape with a colossal obsidian spire rising into a purple-tinted cloudy sky. The lighting is cinematic with glowing volcanic cracks on the ground. A professional book cover aesthetic for 'The Obsidian Chronicles' featuring deep bronzes and mystical ambers." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCood7DqJcQ-lViMTxyfTAFC8zaKqWTpXhOiR-AjR_TmKkzhD-Com7_mVp7919vogB1EOt6bEwsMFkpUKB8EwNjECfn39Y7bOeNJ9J3RVxwRH9t59Orzr5ygOozTmGTFF4EhEWOPsVsm3xC1_DPOKbdcUg9SsfxmheGXcX7WfO0boTLVI_eBNvh-lX09P1_GCeUosmJRtS9bnPeqoYkb9xmYedOUWzkH4FnGyJtSYk2eBXKpTctsOotqawUNyPAkK-Ipk_RfEJL_A">
+<div class="absolute top-4 right-4 z-20">
+<span class="px-3 py-1 rounded-full bg-tertiary text-on-tertiary-container font-label-caps text-label-caps backdrop-blur-md">IN PRODUCTION</span>
+</div>
+</div>
+<div class="p-md flex-1 flex flex-col">
+<h3 class="font-headline-md text-[20px] text-on-surface mb-xs">The Obsidian Chronicles</h3>
+<div class="flex items-center gap-sm text-on-surface-variant mb-md">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+<span class="font-body-base text-[13px]">Last edited: 2 hours ago</span>
+</div>
+<div class="mt-auto flex items-center justify-between">
+<div class="flex -space-x-2">
+<div class="w-7 h-7 rounded-full border-2 border-surface-container-lowest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Portrait of a female digital artist, warm interior studio lighting, soft cream aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDoyF9De9NgYkvyj8vgTMJFKJp0Tb9WOjo7_nyAgnX7LQclZ356FpWmbJ1dTXqFYgxKWRjOmrlqXugSIJ0TU4MKAsZYATRl-3-_PKO04zex3P1ILI-VWigkj4eLusHmnHZ75HtXmuXyWR6d307cLE4freIMSwfKgLJs_t5eqt78F5vt_d5fOqWVRUIgQgfa19IgsleviASxF1FkmPto2orWhOg_sJtzuKaPa9ZyfAn6OWyDhASvnd0uSWNQzehiweQlxtFP1nWvgQ">
+</div>
+<div class="w-7 h-7 rounded-full border-2 border-surface-container-lowest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Portrait of a male sound designer, professional studio backdrop, amber highlights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAy87zjrdoVWrIpEk9k9GDb5mPCvLc71fv62EBXGelyz1udtpDjCmRwqsO08yFFrmz-y2upZ3sY4MGOaqxXqoOX0VyVv_LwMQK9X2RHPl22mIeR3WNRZjy1qqhUpahNKBqRLLiu51o7QpZjhQpEbLv3SZ8F2a3Pr8G0z5H58ku7NMAiklC1e44732CZdVCMVS2I0itlzTAH64z7nyG5ma1lQzVYJXHzIJg6I72Ro64OiKXLjFdYpD_YIJvnsl8sVfAHKdEfZlCbGw">
+</div>
+</div>
+<button class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Project Card 2 -->
+<div class="group project-card-hover bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/20 flex flex-col cursor-pointer">
+<div class="relative h-48 overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="A vast, high-contrast science fiction vista of a ringed planet seen from a desert moon. The color palette features warm copper sands and a deep navy cosmos. The style is epic and minimal, like a professional film concept art piece for 'Stellar Echoes'." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCq7HvFJFF2q6gt4uOk3FGkOqb5z5m7BIvwWhZA0eMTD-wrrUCopS2xY2ViCqNnNkTYtMIEfOIPNg5-aihLGwhVSq6vUQWQCcTMC6VaILJWtKFOthch6YCInXe7vQByLYQqJVPafh7gif68dw4yFQcYu7H_BSyPODgt5pT1I0PcpnZ2niRIjCvQabK0fICm8BOttTq1OS0JPJ_w-LoRUw4ci5yZjHnwVNe3PWISkplz-HTUSVaFg5npKnOMjhXHrSGIl2NdDzFJyw">
+<div class="absolute top-4 right-4 z-20">
+<span class="px-3 py-1 rounded-full bg-secondary-container text-on-secondary-container font-label-caps text-label-caps backdrop-blur-md">DRAFTING</span>
+</div>
+</div>
+<div class="p-md flex-1 flex flex-col">
+<h3 class="font-headline-md text-[20px] text-on-surface mb-xs">Stellar Echoes</h3>
+<div class="flex items-center gap-sm text-on-surface-variant mb-md">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+<span class="font-body-base text-[13px]">Last edited: Oct 24, 2023</span>
+</div>
+<div class="mt-auto flex items-center justify-between">
+<div class="flex -space-x-2">
+<div class="w-7 h-7 rounded-full border-2 border-surface-container-lowest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Close up of a script writer's face, focused expression, natural light." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwg-Z0hIQHGflz81P6__gzhQRAqkIE0VAjeMsSYxGjZ4OjTxaZZlZDxJgqXZiHg7s1XkmuY_6GQbhb_G_zQrCsK0BfRrZU2S10u1ckKkX8naywrDrNom7pYjEl1Ev4oTKZElLN_91CaRynt6rm8WcKms8Kx-8BCD5WnqQXCX4xVyDA-57JJcFMIq-A-Aeu5rH85AvfZcipt9qfQACLbOHSM3V4aduTAcorihkk4IySmJCbue--CHKdwM0OCJZvULMtv4xJEstRwQ">
+</div>
+</div>
+<button class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Project Card 3 -->
+<div class="group project-card-hover bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/20 flex flex-col cursor-pointer">
+<div class="relative h-48 overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" data-alt="An atmospheric mystery-themed visual featuring an old leather-bound journal on a dark mahogany desk, illuminated by a single flickering candle. Tendrils of smoke and deep warm shadows create a noir aesthetic. Professional cover art for 'Whispering Winds'." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEJcwrBGosULXFA0PRjuS0BRtxW29QyfuyGvoh1IsWW2sCC0H_tCk9oU9ZRLo7PngzILUJqxs7EN4FrQ0rjQtVxIJQvRUucbJFidNOKztZ_uoC3elNxKW3HlZr6WuU9H7gIHwknndxut3N9FVQx1Q9ecnaetfyBMHufiUateoCJnd1XyHM7OjrZbjMD9NDfeZ4ajmpsjEmw-gyPm4f0JBDx_xrq6WISqWj16t1dV9jl7gvEaR9P7HwKNUOa6Vs3whl3wR8HsPUFA">
+<div class="absolute top-4 right-4 z-20">
+<span class="px-3 py-1 rounded-full bg-surface-container-highest text-on-surface-variant font-label-caps text-label-caps backdrop-blur-md">ARCHIVED</span>
+</div>
+</div>
+<div class="p-md flex-1 flex flex-col">
+<h3 class="font-headline-md text-[20px] text-on-surface mb-xs">Whispering Winds</h3>
+<div class="flex items-center gap-sm text-on-surface-variant mb-md">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+<span class="font-body-base text-[13px]">Last edited: Sep 12, 2023</span>
+</div>
+<div class="mt-auto flex items-center justify-between">
+<div class="flex -space-x-2">
+<div class="w-7 h-7 rounded-full border-2 border-surface-container-lowest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Author portrait, creative professional style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCvgea8hc41lb7JfAPbd3FhVCK3nVi7t_D8ze1zipm9ZJv8vK7lksbRHbGFUhEpA3u02Ekjo3QwDhYfkW1vrgGbqpQf-8V7m-aCeKEEtOF5QV3PcUGDERczzdghGsfIGJKq62T7kwIKyCeK1WaOXYfr8F__tefBNQYbAjQnO7y10O5wPiaPXxh4yn19k1V6VhsOvAKgmUTaoMXqjXYAsFCpRxpcL0Bq34cwCFZg33gNvX3kBmSCphuOXMUWDQs6rO4ozK8_k-gycw">
+</div>
+</div>
+<button class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:bg-primary hover:text-white transition-all">
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Insights Section (Bento Style) -->
+<div class="mt-2xl grid grid-cols-1 md:grid-cols-3 gap-lg">
+<div class="md:col-span-2 bg-surface-container rounded-2xl p-xl border border-outline-variant/20 flex flex-col md:flex-row gap-xl items-center">
+<div class="flex-1">
+<h4 class="font-headline-md text-headline-md text-primary mb-sm">Master the Forge</h4>
+<p class="font-body-base text-body-base text-on-surface-variant mb-md">Our new AI-powered character voice profiling is now live. Enhance your dialogue delivery with studio-grade precision.</p>
+<button class="copper-gradient-btn px-lg py-2.5 rounded-full text-white font-body-base hover:scale-[1.03] active:scale-[0.97] transition-all shadow-lg">
+                        Explore Features
+                    </button>
+</div>
+<div class="w-full md:w-48 aspect-square rounded-xl bg-surface-container-highest overflow-hidden border border-outline-variant/30 flex items-center justify-center">
+<div class="flex gap-1 items-end">
+<!-- Waveform Decoration -->
+<div class="w-2 h-8 bg-primary rounded-full animate-[bounce_1s_infinite_0s]"></div>
+<div class="w-2 h-12 bg-primary-container rounded-full animate-[bounce_1s_infinite_0.1s]"></div>
+<div class="w-2 h-16 bg-primary rounded-full animate-[bounce_1s_infinite_0.2s]"></div>
+<div class="w-2 h-10 bg-primary-container rounded-full animate-[bounce_1s_infinite_0.3s]"></div>
+<div class="w-2 h-6 bg-primary rounded-full animate-[bounce_1s_infinite_0.4s]"></div>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-high rounded-2xl p-xl border border-outline-variant/20 flex flex-col">
+<h4 class="font-headline-md text-[18px] text-on-surface mb-md">Recent Activity</h4>
+<div class="space-y-md">
+<div class="flex items-start gap-sm">
+<div class="w-2 h-2 rounded-full bg-primary mt-2"></div>
+<div>
+<p class="font-body-base text-[14px] text-on-surface leading-snug">Transcription completed for <strong>The Obsidian Chronicles</strong> (Scene 4)</p>
+<span class="text-[12px] text-on-surface-variant">45 mins ago</span>
+</div>
+</div>
+<div class="flex items-start gap-sm">
+<div class="w-2 h-2 rounded-full bg-tertiary mt-2"></div>
+<div>
+<p class="font-body-base text-[14px] text-on-surface leading-snug">New collaborator <strong>Sarah J.</strong> joined Stellar Echoes</p>
+<span class="text-[12px] text-on-surface-variant">2 hours ago</span>
+</div>
+</div>
+</div>
+<button class="mt-auto text-primary font-bold text-[14px] hover:underline flex items-center gap-1">
+                    View All Activity <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Mobile Navigation (Bottom Bar) -->
+<nav class="fixed bottom-0 left-0 right-0 h-16 bg-surface-container-lowest border-t border-outline-variant/20 md:hidden flex justify-around items-center z-50">
+<button class="flex flex-col items-center gap-0.5 text-primary">
+<span class="material-symbols-outlined">library_books</span>
+<span class="text-[10px] font-bold">Projects</span>
+</button>
+<button class="flex flex-col items-center gap-0.5 text-on-surface-variant">
+<span class="material-symbols-outlined">group</span>
+<span class="text-[10px] font-medium">Actors</span>
+</button>
+<div class="-mt-8">
+<button class="w-12 h-12 rounded-full copper-gradient-btn text-white shadow-xl flex items-center justify-center">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+<button class="flex flex-col items-center gap-0.5 text-on-surface-variant">
+<span class="material-symbols-outlined">description</span>
+<span class="text-[10px] font-medium">Scripts</span>
+</button>
+<button class="flex flex-col items-center gap-0.5 text-on-surface-variant">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-medium">Settings</span>
+</button>
+</nav>
+<script>
+        // Micro-interactions and subtle effects
+        document.querySelectorAll('.project-card-hover').forEach(card => {
+            card.addEventListener('mousedown', () => {
+                card.style.transform = 'scale(0.98)';
+            });
+            card.addEventListener('mouseup', () => {
+                card.style.transform = '';
+            });
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = '';
+            });
+        });
+
+        // Search bar focus effect
+        const searchInput = document.querySelector('input[type="text"]');
+        searchInput.addEventListener('focus', () => {
+            searchInput.parentElement.classList.add('active-nav-glow');
+        });
+        searchInput.addEventListener('blur', () => {
+            searchInput.parentElement.classList.remove('active-nav-glow');
+        });
+    </script>
+
+
+</body></html>

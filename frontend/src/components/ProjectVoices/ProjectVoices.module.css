@@ -1,0 +1,453 @@
+.root {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.header,
+.panel {
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(10px);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--color-primary-dark);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.header h2,
+.panelHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  letter-spacing: -0.055em;
+}
+
+.header h2 {
+  font-size: 26px;
+  line-height: 1.08;
+}
+
+.header p {
+  margin: 10px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 15px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.panel {
+  padding: var(--spacing-lg);
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.panelHeader h3 {
+  font-size: 24px;
+}
+
+.primaryButton,
+.ghostButton,
+.roleCard button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 15px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.primaryButton,
+.roleCard button {
+  background: var(--color-primary-gradient);
+  color: white;
+  box-shadow: 0 10px 22px rgba(139, 76, 13, 0.16);
+}
+
+.ghostButton {
+  border: 1px solid rgba(216, 194, 180, 0.55);
+  background: rgba(249, 243, 235, 0.74);
+  color: var(--color-primary-dark);
+}
+
+.defaultPicker {
+  display: grid;
+  gap: 7px;
+  margin-bottom: var(--spacing-md);
+}
+
+.defaultPicker span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.defaultPicker select {
+  min-height: 40px;
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  border-radius: 14px;
+  padding: 0 12px;
+  background: rgba(249, 243, 235, 0.72);
+  color: var(--color-text-primary);
+  font-weight: 800;
+}
+
+.castList {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.roleCard {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid rgba(216, 194, 180, 0.36);
+  border-radius: 20px;
+  background: rgba(249, 243, 235, 0.56);
+}
+
+.roleCardDefault {
+  border-color: rgba(139, 76, 13, 0.45);
+  background: rgba(139, 76, 13, 0.07);
+  box-shadow: 0 0 0 3px rgba(139, 76, 13, 0.08);
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  color: white;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.roleBody {
+  min-width: 0;
+}
+
+.roleBody strong,
+.roleBody span,
+.roleBody p {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roleBody strong {
+  color: var(--color-text-primary);
+  font-size: 15px;
+}
+
+.roleBody span {
+  margin-top: 3px;
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.roleBody p {
+  margin: 7px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+
+.roleActions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.emptyState {
+  padding: var(--spacing-lg);
+  border: 1px dashed rgba(216, 194, 180, 0.72);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.emptyState strong {
+  color: var(--color-text-primary);
+}
+
+.emptyState p {
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.65;
+}
+
+.defaultVoiceHint {
+  display: inline-grid;
+  gap: 4px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(139, 76, 13, 0.18);
+  border-radius: 16px;
+  background: rgba(139, 76, 13, 0.07);
+}
+
+.defaultVoiceHint span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.defaultVoiceHint strong {
+  color: var(--color-primary-dark);
+  font-size: 13px;
+}
+
+.editorPanel {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  border-radius: 24px;
+  background: rgba(255, 248, 241, 0.82);
+  box-shadow: var(--shadow-md);
+}
+
+.editorBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(216, 194, 180, 0.32);
+}
+
+.editorBar h3,
+.configCard h4,
+.previewCard h4 {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.editorBar p,
+.previewCard p {
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.editorActions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.editorGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr);
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.editorMain {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+.configCard,
+.previewCard {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border: 1px solid rgba(216, 194, 180, 0.36);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.56);
+}
+
+.configCard label {
+  display: grid;
+  gap: 7px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.configCard input,
+.configCard select,
+.configCard textarea {
+  width: 100%;
+  border: 1px solid rgba(216, 194, 180, 0.5);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(249, 243, 235, 0.72);
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.configCard textarea {
+  min-height: 78px;
+  resize: vertical;
+}
+
+.configHint {
+  margin: -6px 0 2px;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.engineRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(216, 194, 180, 0.32);
+}
+
+.paramLabel {
+  flex: none;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.enginePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 14px;
+  background: rgba(249, 243, 235, 0.82);
+}
+
+.enginePill {
+  min-height: 30px;
+  padding: 0 13px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.enginePillActive {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 4px 12px rgba(139, 76, 13, 0.18);
+}
+
+.paramsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.paramField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.paramSelect,
+.paramInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.sliderRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.range {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--color-primary);
+}
+
+.sliderVal {
+  min-width: 42px;
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 850;
+  text-align: right;
+}
+
+.previewCard {
+  border-color: rgba(139, 76, 13, 0.2);
+  background: rgba(139, 76, 13, 0.06);
+}
+
+.waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 58px;
+}
+
+.waveform i {
+  width: 7px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-dark));
+}
+
+.waveform i:nth-child(1) { height: 18px; opacity: 0.35; }
+.waveform i:nth-child(2) { height: 34px; opacity: 0.58; }
+.waveform i:nth-child(3) { height: 48px; }
+.waveform i:nth-child(4) { height: 28px; opacity: 0.72; }
+.waveform i:nth-child(5) { height: 42px; opacity: 0.86; }
+.waveform i:nth-child(6) { height: 20px; opacity: 0.42; }
+
+@media (max-width: 1100px) {
+  .grid,
+  .header {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .roleCard {
+    grid-template-columns: 42px minmax(0, 1fr);
+  }
+
+  .roleCard button {
+    grid-column: 1 / -1;
+  }
+}

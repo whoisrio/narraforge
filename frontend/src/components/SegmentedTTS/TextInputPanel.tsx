@@ -2,13 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { textSplitApi } from '../../services/api';
 import { stripMarkdownForTTS } from '../../utils/stripMarkdownForTTS';
 import type { Chapter } from '../../types';
+import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import styles from './TextInputPanel.module.css';
 
 interface TextInputPanelProps {
   splitConfig: Chapter['split_config'];
   onSplitConfigChange: (config: Chapter['split_config']) => void;
-  onSplit: (texts: string[], originalText: string) => void;
-  onLLMSplit: (text: string) => Promise<void>;
+  onSplit: (texts: string[], originalText: string, voiceMode: SplitVoiceMode) => void;
+  onLLMSplit: (text: string, voiceMode: SplitVoiceMode) => Promise<void>;
+  /** Library 章节全文，作为 Studio 拆分输入源 */
+  sourceText?: string;
   /** 当前所有段落的文本（用于同步显示） */
   segmentTexts?: string[];
   /** 段落数量 */
@@ -17,47 +20,77 @@ interface TextInputPanelProps {
 
 const DELIMITER_OPTIONS = ['，', '。', '！', '？', '；', '、'];
 
-export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLLMSplit, segmentTexts, segmentCount }: TextInputPanelProps) {
-  const [text, setText] = useState('');
+export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLLMSplit, sourceText, segmentTexts, segmentCount }: TextInputPanelProps) {
+  const [text, setText] = useState(sourceText ?? '');
   const mode = splitConfig.mode;
   const [isSplitting, setIsSplitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>('narration');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const hasSegments = (segmentCount ?? 0) > 0;
 
-  // Sync text from segments when not editing
+  const sourceTextRef = useRef(sourceText);
+
+  // Sync text from Library chapter source before first split.
+  useEffect(() => {
+    if (!editing && !hasSegments && sourceTextRef.current !== sourceText) {
+      setText(sourceText ?? '');
+      sourceTextRef.current = sourceText;
+    }
+  }, [sourceText, editing, hasSegments]);
+
+  // Sync text from segments when not editing.
   useEffect(() => {
     if (!editing && segmentTexts && segmentTexts.length > 0) {
       setText(segmentTexts.join('\n'));
     }
   }, [segmentTexts, editing]);
 
-  const hasSegments = (segmentCount ?? 0) > 0;
+  const normalizedSourceText = (sourceText ?? '').trim();
+  const normalizedSegmentText = (segmentTexts ?? []).join('\n').trim();
+  const isSourceStale = hasSegments && !!normalizedSourceText && normalizedSourceText !== normalizedSegmentText;
+
+  const useLibrarySourceText = () => {
+    setText(sourceText ?? '');
+    setEditing(true);
+    sourceTextRef.current = sourceText;
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+
+  const getErrorMessage = (error: unknown, fallback = '请重试') => {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error !== null) {
+      const response = (error as { response?: { data?: { detail?: unknown } } }).response;
+      if (typeof response?.data?.detail === 'string') return response.data.detail;
+    }
+    return fallback;
+  };
 
   const handleSplit = async () => {
     if (!text.trim()) return;
     setIsSplitting(true);
     try {
       if (mode === 'llm') {
-        await onLLMSplit(text);
+        await onLLMSplit(text, splitVoiceMode);
       } else {
         const segments = await textSplitApi.ruleSplit(text, splitConfig.delimiters);
-        onSplit(segments, text);
+        onSplit(segments, text, splitVoiceMode);
       }
       setEditing(false);
-    } catch (e: any) {
+    } catch (error: unknown) {
       if (mode === 'llm') {
-        console.warn('LLM split failed, falling back to rule:', e);
+        console.warn('LLM split failed, falling back to rule:', error);
         try {
           const segments = await textSplitApi.ruleSplit(text, splitConfig.delimiters);
-          onSplit(segments, text);
+          onSplit(segments, text, splitVoiceMode);
           setEditing(false);
-        } catch (e2) {
-          alert('智能拆分失败，规则拆分也失败: ' + ((e as any)?.message || (e2 as any)?.message || '请重试'));
+        } catch (fallbackError: unknown) {
+          alert(`智能拆分失败，规则拆分也失败: ${getErrorMessage(error) || getErrorMessage(fallbackError)}`);
         }
       } else {
-        console.error('Rule split failed:', e);
-        alert('拆分失败: ' + ((e as any)?.response?.data?.detail || (e as any)?.message || '请重试'));
+        console.error('Rule split failed:', error);
+        alert(`拆分失败: ${getErrorMessage(error)}`);
       }
     } finally {
       setIsSplitting(false);
@@ -71,7 +104,7 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
     onSplitConfigChange({ ...splitConfig, delimiters: next });
   };
 
-  const hasMarkdown = /[#*`\[\]|_~>]/.test(text) || /^\d+\.\s/m.test(text) || /^[-*+]\s/m.test(text);
+  const hasMarkdown = /[#*`[\]|_~>]/.test(text) || /^\d+\.\s/m.test(text) || /^[-*+]\s/m.test(text);
 
   const handleStripMarkdown = () => {
     const cleaned = stripMarkdownForTTS(text);
@@ -82,18 +115,29 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
   if (hasSegments && !editing) {
     const preview = text.replace(/\n/g, ' ').slice(0, 60);
     return (
-      <div className={styles.summaryBar} onClick={() => { setEditing(true); setTimeout(() => textareaRef.current?.focus(), 50); }}>
-        <div className={styles.summaryLeft}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.4 }}>
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>
-          </svg>
-          <span className={styles.summaryText}>{preview}{text.length > 60 ? '...' : ''}</span>
-        </div>
-        <div className={styles.summaryRight}>
-          <span className={styles.summaryMeta}>{segmentCount} 段 · {text.length} 字</span>
-          <button className={styles.summaryEditBtn} onClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => textareaRef.current?.focus(), 50); }}>
-            编辑
-          </button>
+      <div className={styles.summaryStack}>
+        {isSourceStale && (
+          <div className={styles.staleNotice}>
+            <div>
+              <strong>文本库已更新，建议重新拆分</strong>
+              <span>不会自动覆盖已有段落与音频；确认后可用章节全文生成新的拆分草稿。</span>
+            </div>
+            <button className={styles.sourceBtn} onClick={useLibrarySourceText}>使用文本库全文</button>
+          </div>
+        )}
+        <div className={styles.summaryBar} onClick={() => { setEditing(true); setTimeout(() => textareaRef.current?.focus(), 50); }}>
+          <div className={styles.summaryLeft}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.4 }}>
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>
+            </svg>
+            <span className={styles.summaryText}>{preview}{text.length > 60 ? '...' : ''}</span>
+          </div>
+          <div className={styles.summaryRight}>
+            <span className={styles.summaryMeta}>{segmentCount} 段 · {text.length} 字</span>
+            <button className={styles.summaryEditBtn} onClick={(e) => { e.stopPropagation(); setEditing(true); setTimeout(() => textareaRef.current?.focus(), 50); }}>
+              编辑
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -102,6 +146,15 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
   // Expanded: textarea + split controls
   return (
     <div className={styles.panel}>
+      {isSourceStale && (
+        <div className={styles.staleNotice}>
+          <div>
+            <strong>文本库已更新，建议重新拆分</strong>
+            <span>不会自动覆盖已有段落与音频；确认后可用章节全文生成新的拆分草稿。</span>
+          </div>
+          <button className={styles.sourceBtn} onClick={useLibrarySourceText}>使用文本库全文</button>
+        </div>
+      )}
       <div className={styles.textareaWrap}>
         <textarea
           ref={textareaRef}
@@ -119,6 +172,15 @@ export function TextInputPanel({ splitConfig, onSplitConfigChange, onSplit, onLL
       </div>
 
       <div className={styles.actionBar}>
+        <div className={styles.voiceModeSwitch} aria-label="配音模式">
+          <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'narration' ? styles.active : ''}`}
+            onClick={() => setSplitVoiceMode('narration')}>旁白为主</button>
+          <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'dialogue' ? styles.active : ''}`}
+            onClick={() => setSplitVoiceMode('dialogue')}>对话/剧本</button>
+          <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'mixed' ? styles.active : ''}`}
+            onClick={() => setSplitVoiceMode('mixed')}>混合模式</button>
+        </div>
+
         <button className={styles.settingsToggle} onClick={() => setShowSettings(!showSettings)}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>

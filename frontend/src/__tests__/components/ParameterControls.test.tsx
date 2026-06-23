@@ -19,11 +19,14 @@ describe('ParameterControls', () => {
       />
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /参数设置/ }));
+
     expect(screen.getByLabelText('语言')).toBeInTheDocument();
     expect(screen.getByText(/语速/)).toBeInTheDocument();
     expect(screen.getByText(/音量/)).toBeInTheDocument();
     expect(screen.getByText(/语调/)).toBeInTheDocument();
-    expect(screen.getByText(/语气/)).toBeInTheDocument();
+    expect(screen.getByText('复刻指令')).toBeInTheDocument();
+    expect(screen.getByText('启用 SSML')).toBeInTheDocument();
   });
 
   it('should call onParamChange when speed slider changes', () => {
@@ -35,6 +38,8 @@ describe('ParameterControls', () => {
         onParamChange={onParamChange}
       />
     );
+
+    fireEvent.click(screen.getByRole('button', { name: /参数设置/ }));
 
     const speedSlider = screen.getByRole('slider', { name: /语速/ });
     fireEvent.change(speedSlider, { target: { value: '1.5' } });
@@ -53,6 +58,8 @@ describe('ParameterControls', () => {
         onParamChange={onParamChange}
       />
     );
+
+    fireEvent.click(screen.getByRole('button', { name: /参数设置/ }));
 
     const languageSelect = screen.getByLabelText('语言');
     fireEvent.change(languageSelect, { target: { value: 'English' } });

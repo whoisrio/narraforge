@@ -1,4 +1,5 @@
-import type { Segment, SegmentEngineParams, VoiceProfile } from '../../types';
+import type { Segment, SegmentEngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
+import { isNarratorRole } from '../../services/voiceRoleKind';
 import { SegmentRow } from './SegmentRow';
 import { SegmentEditPanel } from './SegmentEditPanel';
 import styles from './SegmentList.module.css';
@@ -11,6 +12,7 @@ interface SegmentListProps {
   isPaused?: boolean;
   compact?: boolean;
   voices: VoiceProfile[];
+  roles?: Role[];
   globalVoiceId?: string;
   globalVoiceName?: string;
   globalEdgeVoice?: string;
@@ -36,14 +38,30 @@ interface SegmentListProps {
   onUpdateSSML?: (id: string, ssml: string) => void;
   onUpdateParams?: (id: string, params: Partial<SegmentEngineParams>) => void;
   onUpdateEmotion?: (id: string, emotion: string) => void;
+  onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
+  onUpdateKind?: (id: string, kind: SegmentKind, roleSnapshot: RoleSnapshot | null) => void;
   onToggleIndependentVoice?: (id: string) => void;
   onMerge?: (id: string, direction: 'up' | 'down') => void;
   onSplit?: (id: string, position: number) => void;
 }
 
+function toSnapshot(role: Role): RoleSnapshot {
+  return {
+    id: role.id,
+    name: role.name,
+    avatar: role.avatar,
+    description: role.description,
+    default_engine: role.default_engine,
+    default_voice: role.default_voice,
+    default_engine_params: { ...role.default_engine_params },
+    favorite_styles: [...role.favorite_styles],
+  };
+}
+
 export function SegmentList(props: SegmentListProps) {
   const { segments, layout, selectedId, playingId, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId, onAppend, onEdit, onPlay } = props;
-
+  const narratorRoles = (props.roles ?? []).filter(isNarratorRole);
+  const castRoles = (props.roles ?? []).filter(role => !isNarratorRole(role));
   // Compute cumulative time ranges for each segment (starting from chapter offset)
   const timeRanges: { start: number; end?: number }[] = [];
   let cumulative = props.chapterStartOffset ?? 0;
@@ -90,6 +108,41 @@ export function SegmentList(props: SegmentListProps) {
         const isEditing = seg.id === selectedId;
         return (
           <div key={seg.id} className={styles.segmentGroup}>
+            <div className={styles.roleStrip}>
+              <span className={styles.kindBadge}>{(seg.segment_kind ?? 'narration') === 'dialogue' ? '台词' : '旁白'}</span>
+              {props.onUpdateKind && (
+                <button
+                  type="button"
+                  className={styles.kindSwitch}
+                  onClick={() => {
+                    const nextKind: SegmentKind = (seg.segment_kind ?? 'narration') === 'dialogue' ? 'narration' : 'dialogue';
+                    const nextRole = (nextKind === 'dialogue' ? castRoles : narratorRoles)[0] ?? null;
+                    props.onUpdateKind?.(seg.id, nextKind, nextRole ? toSnapshot(nextRole) : null);
+                  }}
+                >
+                  {(seg.segment_kind ?? 'narration') === 'dialogue' ? '改为旁白' : '改为台词'}
+                </button>
+              )}
+              {props.onUpdateRole && (
+                <label className={styles.rolePicker}>
+                  <span>{(seg.segment_kind ?? 'narration') === 'dialogue' ? 'Cast' : 'Narrator'}</span>
+                  <select
+                    aria-label={(seg.segment_kind ?? 'narration') === 'dialogue' ? '选择台词角色' : '选择旁白角色'}
+                    value={seg.role_id ?? ''}
+                    onChange={(event) => {
+                      const pool = (seg.segment_kind ?? 'narration') === 'dialogue' ? castRoles : narratorRoles;
+                      const nextRole = pool.find(role => role.id === event.target.value) ?? null;
+                      props.onUpdateRole?.(seg.id, nextRole?.id ?? null, nextRole ? toSnapshot(nextRole) : null);
+                    }}
+                  >
+                    <option value="">未选择</option>
+                    {((seg.segment_kind ?? 'narration') === 'dialogue' ? castRoles : narratorRoles).map(role => (
+                      <option key={role.id} value={role.id}>{role.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+            </div>
             <SegmentRow {...rowProps(seg, i)} layout="vertical" />
             {isEditing && editingSegment && (
               <div className={styles.accordionWrapper}>

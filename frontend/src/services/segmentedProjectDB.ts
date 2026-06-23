@@ -1,5 +1,7 @@
-import type { SegmentedProject } from '../types';
+import type { SegmentedProject, Segment } from '../types';
 import { _openDB, _SEGMENTED_PROJECTS_STORE, deleteTTSResult } from './indexedDB';
+
+type LegacySegmentedProject = SegmentedProject & { segments?: Segment[] };
 
 function tx<T>(
   storeName: string,
@@ -27,8 +29,9 @@ async function collectAudioIds(project: SegmentedProject): Promise<Set<string>> 
     }
   }
   // v1 fallback: top-level segments
-  if ((project as any).segments) {
-    for (const seg of (project as any).segments) {
+  const legacyProject = project as LegacySegmentedProject;
+  if (legacyProject.segments) {
+    for (const seg of legacyProject.segments) {
       if (seg.current_audio_id) ids.add(seg.current_audio_id);
       if (seg.previous_audio_id) ids.add(seg.previous_audio_id);
     }

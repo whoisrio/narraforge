@@ -35,24 +35,34 @@ export const Input: React.FC<InputProps> = ({ type = 'text', label, error, class
     color: 'var(--color-danger)',
   };
 
-  const handleFocus = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
     e.currentTarget.style.borderColor = 'var(--color-primary)';
     e.currentTarget.style.boxShadow = 'inset 0 1px 2px rgba(28, 25, 23, 0.06), 0 0 0 3px var(--glow-primary)';
-    props.onFocus?.(e as any);
+    props.onFocus?.(e);
   };
 
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     e.currentTarget.style.borderColor = error ? 'var(--color-danger)' : 'var(--color-border)';
     e.currentTarget.style.boxShadow = 'inset 0 1px 2px rgba(28, 25, 23, 0.06)';
-    props.onBlur?.(e as any);
+    props.onBlur?.(e);
+  };
+
+  const handleTextareaFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    e.currentTarget.style.borderColor = 'var(--color-primary)';
+    e.currentTarget.style.boxShadow = 'inset 0 1px 2px rgba(28, 25, 23, 0.06), 0 0 0 3px var(--glow-primary)';
+  };
+
+  const handleTextareaBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    e.currentTarget.style.borderColor = error ? 'var(--color-danger)' : 'var(--color-border)';
+    e.currentTarget.style.boxShadow = 'inset 0 1px 2px rgba(28, 25, 23, 0.06)';
   };
 
   const inputElement = type === 'textarea' ? (
     <textarea
       style={{ ...inputStyle, resize: 'vertical', minHeight: '80px' }}
       {...props as React.TextareaHTMLAttributes<HTMLTextAreaElement>}
-      onFocus={handleFocus}
-      onBlur={handleBlur}
+      onFocus={handleTextareaFocus}
+      onBlur={handleTextareaBlur}
     />
   ) : (
     <input

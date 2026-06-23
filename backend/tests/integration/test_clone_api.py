@@ -205,7 +205,8 @@ class TestCloneAPI:
             "role": "custom"
         }
 
-        with patch("app.api.clone.upload_to_qiniu", return_value=public_url):
+        with patch("app.api.clone.is_qiniu_configured", return_value=True), \
+             patch("app.api.clone.upload_to_qiniu", return_value=public_url):
             response = client.post("/api/clone/create-clone", json=request_data)
 
         assert response.status_code == 200
