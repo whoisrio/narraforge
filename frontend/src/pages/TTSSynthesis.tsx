@@ -26,6 +26,7 @@ import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import { RolePicker } from '../components/SegmentedTTS/RolePicker';
 import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
+import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -1341,6 +1342,22 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
             </div>
           </div>
         </div>
+        ) : projectSection === 'library' ? (
+          <ProjectLibrary
+            chapters={project.chapters}
+            activeChapterId={project.active_chapter_id}
+            onSelectChapter={handleSelectChapter}
+            onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
+            onUpdateChapterText={(id, text) => {
+              if (id !== activeChapter.id) handleSelectChapter(id);
+              dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: text } });
+            }}
+            onAddChapter={handleAddChapter}
+            onEnterStudio={(chapterId) => {
+              handleSelectChapter(chapterId);
+              setProjectSection('studio');
+            }}
+          />
         ) : (
           <div className={styles.projectSectionPlaceholder}>
             <span className={styles.projectSectionKicker}>Coming next</span>
