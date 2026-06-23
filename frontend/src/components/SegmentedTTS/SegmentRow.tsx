@@ -238,8 +238,7 @@ export function SegmentRow({
   if (layout === 'horizontal') {
     return (
       <div className={`${styles.hBlock} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected ? styles.selH : ''}`}
-        onClick={() => onSelect(segment.id)} title={segment.text}
-        role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') onSelect(segment.id); }}>
+        onClick={() => onSelect(segment.id)} title={segment.text}>
         <span className={styles.hIdx}>#{idx}</span>
         <span className={styles.hDur}>
           {timeStart != null ? `${fmtTime(timeStart)}${timeEnd != null ? `–${fmtTime(timeEnd)}` : '–…'}` : (dur || '—')}
@@ -265,8 +264,7 @@ export function SegmentRow({
     return (
       <div
         className={`${styles.compactCard} ${styles[`emo${emoCamel}`] || ''} ${isSelected ? styles.selected : ''} ${isPlaying ? styles.playing : ''}`}
-        onClick={() => onSelect(segment.id)} role="button" tabIndex={0}
-        onKeyDown={(e) => { if (e.key === 'Enter') onSelect(segment.id); }}
+        onClick={() => onSelect(segment.id)}
       >
         <div className={styles.compactEmo} />
         <div className={styles.compactAvatarWrap}>
@@ -323,8 +321,7 @@ export function SegmentRow({
   return (
     <div
       className={`${styles.card} ${styles[`emo${emoCamel}`] || ''} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected ? styles.selected : ''} ${isPlaying ? styles.playing : ''} ${isStale ? styles.stale : ''}`}
-      onClick={() => onSelect(segment.id)} role="button" tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(segment.id); }}
+      onClick={() => onSelect(segment.id)}
     >
       <div className={styles.avatarCol}>
 <VoiceAvatar name={voiceDisplayName} size={48} gender={voiceGender}
