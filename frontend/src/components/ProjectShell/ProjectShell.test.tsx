@@ -28,6 +28,7 @@ describe('ProjectShell', () => {
   it('renders project-level navigation without an exports entry', () => {
     renderProjectShell();
 
+    expect(screen.getByTestId('project-shell')).toHaveAttribute('data-sidebar', 'fixed-left');
     expect(screen.getAllByText('草稿项目').length).toBeGreaterThan(0);
     expect(screen.getByText('快速试稿')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^◇总览$/ })).toBeInTheDocument();

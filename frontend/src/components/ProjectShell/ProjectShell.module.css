@@ -1,24 +1,23 @@
 .root {
-  display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
-  gap: var(--spacing-lg);
+  display: block;
   min-height: calc(100vh - var(--header-height) - 76px);
 }
 
 .projectRail {
-  position: sticky;
-  top: calc(var(--header-height) + 32px);
-  align-self: start;
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: calc(var(--z-fixed) - 1);
+  width: var(--nav-width);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
-  min-height: calc(100vh - var(--header-height) - 88px);
-  padding: var(--spacing-md);
-  border: 1px solid rgba(216, 194, 180, 0.42);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(10px);
+  padding: 96px 12px 18px;
+  border-right: 1px solid rgba(216, 194, 180, 0.42);
+  background: rgba(249, 243, 235, 0.92);
+  box-shadow: 10px 0 30px rgba(26, 24, 20, 0.04);
+  backdrop-filter: blur(12px);
 }
 
 .projectIdentity {
@@ -138,6 +137,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
+  padding-left: calc(var(--nav-width) + 28px);
 }
 
 .workspaceHeader {
@@ -233,13 +233,19 @@
 }
 
 @media (max-width: 1100px) {
-  .root {
-    grid-template-columns: 1fr;
-  }
-
   .projectRail {
     position: static;
     min-height: auto;
+    width: auto;
+    padding: var(--spacing-md);
+    border-right: 0;
+    border: 1px solid rgba(216, 194, 180, 0.42);
+    border-radius: 24px;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .workspace {
+    padding-left: 0;
   }
 
   .projectNav {

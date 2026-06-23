@@ -49,7 +49,7 @@ export function ProjectShell({
   const t = createTranslator(locale);
 
   return (
-    <section className={styles.root} data-testid="project-shell">
+    <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left">
       <aside className={styles.projectRail} aria-label="Project navigation">
         <div className={styles.projectIdentity}>
           <div className={styles.projectMark}>{projectName.slice(0, 1) || 'N'}</div>
