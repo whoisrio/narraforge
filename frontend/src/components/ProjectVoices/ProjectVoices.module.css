@@ -137,6 +137,12 @@
   background: rgba(249, 243, 235, 0.56);
 }
 
+.roleCardDefault {
+  border-color: rgba(139, 76, 13, 0.45);
+  background: rgba(139, 76, 13, 0.07);
+  box-shadow: 0 0 0 3px rgba(139, 76, 13, 0.08);
+}
+
 .avatar {
   display: grid;
   place-items: center;

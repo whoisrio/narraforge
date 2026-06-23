@@ -649,6 +649,33 @@ export function TTSSynthesis({
     }
   }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
 
+  const handleDeleteRole = useCallback(async (roleId: string) => {
+    const target = roles.find(role => role.id === roleId);
+    if (!target) return;
+    const isNarrator = `${target.name} ${target.description ?? ''}`.toLowerCase().includes('narrator') || `${target.name} ${target.description ?? ''}`.includes('旁白');
+    const remainingNarrators = roles.filter(role => role.id !== roleId && (`${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') || `${role.name} ${role.description ?? ''}`.includes('旁白')));
+    if (isNarrator && remainingNarrators.length === 0) {
+      showToast('至少保留一个旁白音色', 'error');
+      return;
+    }
+    try {
+      await roleApi.deleteRole(roleId);
+      setRoles(prev => prev.filter(role => role.id !== roleId));
+      if (project.default_narrator_role_id === roleId) {
+        const nextNarrator = remainingNarrators[0] ?? null;
+        dispatch({
+          type: 'SET_PROJECT_NARRATOR',
+          roleId: nextNarrator?.id ?? null,
+          roleSnapshot: nextNarrator ? roleSnapshotFromRole(nextNarrator) : null,
+        });
+      }
+      showToast('角色已删除');
+    } catch (error) {
+      console.error('Delete role failed:', error);
+      showToast('角色删除失败', 'error');
+    }
+  }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
+
   const handlePreviewRole = useCallback(async (role: Role, sampleText: string) => {
     setPreviewingRoleId(role.id);
     try {
@@ -1553,6 +1580,7 @@ export function TTSSynthesis({
             onCreateDefaultNarrator={handleCreateDefaultNarrator}
             onCreateCast={handleCreateCastRole}
             onSaveRole={handleSaveRole}
+            onDeleteRole={handleDeleteRole}
             onPreviewRole={handlePreviewRole}
             onManageRoles={() => setRoleLibraryOpen(true)}
             defaultNarratorPreviewLabel={defaultNarratorPreviewLabel}

@@ -16,6 +16,18 @@ const narrator: Role = {
   updated_at: '2026-01-01T00:00:00.000Z',
 };
 
+const narratorAlt: Role = {
+  id: 'role-narrator-alt',
+  name: '新闻旁白',
+  description: 'Narrator',
+  default_engine: 'edge_tts',
+  default_voice: 'Xiaoxiao',
+  default_engine_params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
+  favorite_styles: [],
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+};
+
 const cast: Role = {
   id: 'role-guest-a',
   name: '嘉宾A',
@@ -126,8 +138,8 @@ describe('ProjectVoices', () => {
       />,
     );
 
-    expect(screen.getByText('还没有默认旁白')).toBeInTheDocument();
-    expect(screen.getByText('创建后将使用')).toBeInTheDocument();
+    expect(screen.getByText('还没有选择默认旁白')).toBeInTheDocument();
+    expect(screen.getByText('可选旁白音色。选择为默认后用于 narration 段落。')).toBeInTheDocument();
     expect(screen.queryByText('这是一段默认旁白试听，用于确认叙述声音是否沉稳、清晰，并适合长时间解说。')).not.toBeInTheDocument();
   });
 
@@ -202,13 +214,13 @@ describe('ProjectVoices', () => {
     }));
   });
 
-  it('edits an existing role and saves CosyVoice params', () => {
+  it('opens the narrator editor and saves selected model and voice params', () => {
     const onSaveRole = vi.fn();
 
     render(
       <ProjectVoices
-        roles={[narrator, cast]}
-        defaultNarratorRoleId="role-narrator"
+        roles={[cast]}
+        defaultNarratorRoleId={null}
         onSetDefaultNarrator={vi.fn()}
         onCreateDefaultNarrator={vi.fn()}
         onCreateCast={vi.fn()}
@@ -218,28 +230,73 @@ describe('ProjectVoices', () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '编辑 嘉宾A' }));
+    fireEvent.click(screen.getByRole('button', { name: /创建默认旁白/ }));
     fireEvent.click(screen.getByRole('radio', { name: /CosyVoice/ }));
-    fireEvent.change(screen.getByLabelText('CosyVoice voice id'), { target: { value: 'voice-linxia' } });
-    fireEvent.change(screen.getByLabelText('语速'), { target: { value: '1.18' } });
-    fireEvent.change(screen.getByLabelText('音量'), { target: { value: '86' } });
-    fireEvent.change(screen.getByLabelText('音高'), { target: { value: '1.05' } });
-    fireEvent.change(screen.getByLabelText('风格指令'), { target: { value: '温柔、克制、纪录片旁白感' } });
+    fireEvent.change(screen.getByLabelText('CosyVoice voice id'), { target: { value: 'voice-narrator-main' } });
+    fireEvent.change(screen.getByLabelText('语速'), { target: { value: '0.92' } });
+    fireEvent.change(screen.getByLabelText('音量'), { target: { value: '78' } });
+    fireEvent.change(screen.getByLabelText('音高'), { target: { value: '0.98' } });
+    fireEvent.change(screen.getByLabelText('风格指令'), { target: { value: '沉稳、纪录片、低压缩动态' } });
     fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
 
     expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
-      id: 'role-guest-a',
-      name: '嘉宾A',
+      name: '默认旁白',
+      description: 'Narrator',
       default_engine: 'cosyvoice',
-      default_voice: 'voice-linxia',
+      default_voice: 'voice-narrator-main',
       default_engine_params: expect.objectContaining({
         engine: 'cosyvoice',
-        voice_id: 'voice-linxia',
-        speed: 1.18,
-        volume: 86,
-        pitch: 1.05,
-        instruction: '温柔、克制、纪录片旁白感',
+        voice_id: 'voice-narrator-main',
+        speed: 0.92,
+        volume: 78,
+        pitch: 0.98,
+        instruction: '沉稳、纪录片、低压缩动态',
       }),
     }));
+  });
+
+  it('renders multiple narrator voices, selects exactly one default, and allows deleting extras', () => {
+    const onSetDefaultNarrator = vi.fn();
+    const onDeleteRole = vi.fn();
+
+    render(
+      <ProjectVoices
+        roles={[narrator, narratorAlt, cast]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={onSetDefaultNarrator}
+        onCreateDefaultNarrator={vi.fn()}
+        onCreateCast={vi.fn()}
+        onSaveRole={vi.fn()}
+        onDeleteRole={onDeleteRole}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText('默认旁白').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('新闻旁白').length).toBeGreaterThan(1);
+    fireEvent.change(screen.getByLabelText('默认旁白角色'), { target: { value: 'role-narrator-alt' } });
+    expect(onSetDefaultNarrator).toHaveBeenCalledWith('role-narrator-alt', expect.objectContaining({ id: 'role-narrator-alt' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '删除 默认旁白' }));
+    expect(onDeleteRole).toHaveBeenCalledWith('role-narrator');
+  });
+
+  it('keeps at least one narrator by disabling the last narrator delete action', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator, cast]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onCreateDefaultNarrator={vi.fn()}
+        onCreateCast={vi.fn()}
+        onSaveRole={vi.fn()}
+        onDeleteRole={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: '删除 默认旁白' })).toBeDisabled();
   });
 });

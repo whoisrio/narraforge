@@ -7,9 +7,10 @@ interface ProjectVoicesProps {
   roles: Role[];
   defaultNarratorRoleId?: string | null;
   onSetDefaultNarrator: (roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
-  onCreateDefaultNarrator: () => void;
-  onCreateCast: () => void;
+  onCreateDefaultNarrator?: () => void;
+  onCreateCast?: () => void;
   onSaveRole?: (role: RoleSnapshot) => void;
+  onDeleteRole?: (roleId: string) => void;
   onPreviewRole: (role: Role, sampleText: string) => void;
   onManageRoles: () => void;
   defaultNarratorPreviewLabel?: string;
@@ -221,9 +222,8 @@ export function ProjectVoices({
   roles,
   defaultNarratorRoleId,
   onSetDefaultNarrator,
-  onCreateDefaultNarrator,
-  onCreateCast,
   onSaveRole,
+  onDeleteRole,
   onPreviewRole,
   onManageRoles,
   defaultNarratorPreviewLabel = `Edge-TTS · ${DEFAULT_EDGE_NARRATOR_VOICE}`,
@@ -237,6 +237,12 @@ export function ProjectVoices({
   const saveEditingRole = (draft: RoleSnapshot) => {
     onSaveRole?.(draft);
     setEditingRole(null);
+  };
+  const startCreateNarrator = () => {
+    setEditingRole(createRoleDraft('Narrator'));
+  };
+  const startCreateCast = () => {
+    setEditingRole(createRoleDraft('Cast'));
   };
 
   return (
@@ -257,7 +263,7 @@ export function ProjectVoices({
               <span className={styles.kicker}>Narrator</span>
               <h3>默认旁白</h3>
             </div>
-            <button type="button" className={styles.primaryButton} onClick={() => setEditingRole(createRoleDraft('Narrator'))}>创建默认旁白</button>
+            <button type="button" className={styles.primaryButton} onClick={startCreateNarrator}>创建默认旁白</button>
           </div>
 
           <label className={styles.defaultPicker}>
@@ -274,19 +280,39 @@ export function ProjectVoices({
             </select>
           </label>
 
-          {defaultNarrator ? (
-            <article className={styles.roleCard}>
-              <div className={styles.avatar}>{defaultNarrator.name.slice(0, 1)}</div>
-              <div className={styles.roleBody}>
-                <strong>{defaultNarrator.name}</strong>
-                <span>{engineLabel(defaultNarrator)} · {roleVoiceLabel(defaultNarrator)}</span>
-                <p>{NARRATOR_SAMPLE}</p>
-              </div>
-              <div className={styles.roleActions}>
-                <button type="button" onClick={() => onPreviewRole(defaultNarrator, NARRATOR_SAMPLE)}>试听</button>
-                <button type="button" aria-label={`编辑 ${defaultNarrator.name}`} onClick={() => setEditingRole(roleToSnapshot(defaultNarrator))}>编辑</button>
-              </div>
-            </article>
+          {narratorRoles.length > 0 ? (
+            <div className={styles.castList}>
+              {narratorRoles.map(role => {
+                const isDefault = role.id === defaultNarratorRoleId;
+                return (
+                  <article key={role.id} className={`${styles.roleCard} ${isDefault ? styles.roleCardDefault : ''}`}>
+                    <div className={styles.avatar}>{role.name.slice(0, 1)}</div>
+                    <div className={styles.roleBody}>
+                      <strong>{role.name}</strong>
+                      <span>{engineLabel(role)} · {roleVoiceLabel(role)}{isDefault ? ' · 默认' : ''}</span>
+                      <p>{isDefault ? NARRATOR_SAMPLE : '可选旁白音色。选择为默认后用于 narration 段落。'}</p>
+                    </div>
+                    <div className={styles.roleActions}>
+                      <button type="button" onClick={() => onPreviewRole(role, NARRATOR_SAMPLE)}>试听</button>
+                      <button type="button" aria-label={`编辑 ${role.name}`} onClick={() => setEditingRole(roleToSnapshot(role))}>编辑</button>
+                      <button
+                        type="button"
+                        aria-label={`删除 ${role.name}`}
+                        disabled={narratorRoles.length <= 1}
+                        title={narratorRoles.length <= 1 ? '至少保留一个旁白音色' : '删除旁白音色'}
+                        onClick={() => onDeleteRole?.(role.id)}
+                      >删除</button>
+                    </div>
+                  </article>
+                );
+              })}
+              {!defaultNarrator && (
+                <div className={styles.emptyState}>
+                  <strong>还没有选择默认旁白</strong>
+                  <p>已存在旁白音色，但当前项目还没有指定默认旁白。请从上方下拉框选择一个。</p>
+                </div>
+              )}
+            </div>
           ) : (
             <div className={styles.emptyState}>
               <strong>还没有默认旁白</strong>
@@ -305,7 +331,7 @@ export function ProjectVoices({
               <span className={styles.kicker}>Cast</span>
               <h3>对话角色</h3>
             </div>
-            <button type="button" className={styles.primaryButton} onClick={() => setEditingRole(createRoleDraft('Cast'))}>新增 Cast</button>
+            <button type="button" className={styles.primaryButton} onClick={startCreateCast}>新增 Cast</button>
           </div>
 
           <div className={styles.castList}>
