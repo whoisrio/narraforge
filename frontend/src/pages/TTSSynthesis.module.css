@@ -433,3 +433,15 @@
   background: rgba(196, 122, 58, 0.14);
   color: #8a4f1f;
 }
+
+.roleControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin: 12px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  background: rgba(196, 122, 58, 0.05);
+}

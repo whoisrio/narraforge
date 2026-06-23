@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Segment, EmotionType, VoiceProfile } from '../../types';
-import { isSegmentAudioStale } from '../../services/segmentGenerationInputs';
+import { isSegmentAudioStale, isSegmentVoiceStale } from '../../services/segmentGenerationInputs';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { MergeMenu } from './MergeMenu';
 import styles from './SegmentRow.module.css';
@@ -208,7 +208,18 @@ export function SegmentRow({
     mimo_preset_voice: !hasOverride ? globalMimoPresetVoice : segment.params.mimo_preset_voice,
     mimo_clone_voice_id: !hasOverride ? globalMimoCloneVoiceId : segment.params.mimo_clone_voice_id,
   };
-  const isStale = isSegmentAudioStale(segment, defaultParamsForStale);
+  const isStale = segment.generated_params
+    ? isSegmentAudioStale(segment, defaultParamsForStale)
+    // Legacy / frontend-mode audio without recorded generated_params: fall back
+    // to voice/engine comparison so a global voice change is still detected.
+    : isSegmentVoiceStale({
+        status: segment.status,
+        hasVoiceOverride: !!hasOverride,
+        generatedEngine,
+        effectiveEngine: effectiveEngine as Segment['params']['engine'],
+        generatedVoiceId: segment.generated_voice_id,
+        currentGlobalVoice,
+      });
 
   // Build a human-readable label for the current global voice (for stale warning text)
   const currentGlobalVoiceLabel = effectiveEngine === 'edge_tts'

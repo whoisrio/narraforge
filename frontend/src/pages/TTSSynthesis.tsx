@@ -23,6 +23,7 @@ import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Se
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
+import { RolePicker } from '../components/SegmentedTTS/RolePicker';
 import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import styles from './TTSSynthesis.module.css';
 
@@ -1227,18 +1228,42 @@ export function TTSSynthesis({ onNavigateToClone }: { onNavigateToClone?: () => 
                 <button type="button" onClick={() => setSegmentViewMode('dialogue')} aria-pressed={segmentViewMode === 'dialogue'}>对话视图</button>
               </div>
               {segmentViewMode === 'dialogue' ? (
-                <ChatSegmentView
-                  segments={activeChapter.segments}
-                  roles={roles}
-                  selectedId={activeChapter.selected_segment_id}
-                  playingId={playingId}
-                  hasNarratorVoice={!!project.default_narrator_snapshot?.default_voice || !!project.default_narrator_snapshot?.default_engine_params?.edge_voice}
-                  onSelect={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
-                  onAppend={handleAppendByKind}
-                  onRegenerate={handleRegenerate}
-                  onPlay={handlePlaySegment}
-                  onUpdateProsodyMarks={(id, prosodyMarks) => dispatch({ type: 'UPDATE_PROSODY_MARKS', id, prosodyMarks })}
-                />
+                <>
+                  <div className={styles.roleControls}>
+                    <RolePicker
+                      roles={roles}
+                      label="旁白角色"
+                      value={project.default_narrator_role_id}
+                      onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
+                      onManage={() => setRoleLibraryOpen(true)}
+                    />
+                    {activeChapter.selected_segment_id && (() => {
+                      const selectedSegment = activeChapter.segments.find(s => s.id === activeChapter.selected_segment_id);
+                      if (!selectedSegment) return null;
+                      return (
+                        <RolePicker
+                          roles={roles}
+                          label="当前段角色"
+                          value={selectedSegment.role_id}
+                          onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id: selectedSegment.id, roleId, roleSnapshot })}
+                          onManage={() => setRoleLibraryOpen(true)}
+                        />
+                      );
+                    })()}
+                  </div>
+                  <ChatSegmentView
+                    segments={activeChapter.segments}
+                    roles={roles}
+                    selectedId={activeChapter.selected_segment_id}
+                    playingId={playingId}
+                    hasNarratorVoice={!!project.default_narrator_snapshot?.default_voice || !!project.default_narrator_snapshot?.default_engine_params?.edge_voice}
+                    onSelect={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
+                    onAppend={handleAppendByKind}
+                    onRegenerate={handleRegenerate}
+                    onPlay={handlePlaySegment}
+                    onUpdateProsodyMarks={(id, prosodyMarks) => dispatch({ type: 'UPDATE_PROSODY_MARKS', id, prosodyMarks })}
+                  />
+                </>
               ) : (
               <SegmentList
                 segments={activeChapter.segments}
