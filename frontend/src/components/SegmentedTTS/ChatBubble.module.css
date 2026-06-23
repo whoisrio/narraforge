@@ -49,6 +49,36 @@
   background: rgba(255, 220, 195, 0.42);
 }
 
+.rolePicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 220, 195, 0.42);
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.rolePicker span {
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.rolePicker select {
+  max-width: 120px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  outline: none;
+}
+
 .text {
   margin: 12px 0;
   color: var(--color-text-primary);

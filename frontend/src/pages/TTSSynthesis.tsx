@@ -1315,6 +1315,7 @@ export function TTSSynthesis({
                     onAppend={handleAppendByKind}
                     onRegenerate={handleRegenerate}
                     onPlay={handlePlaySegment}
+                    onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
                     onUpdateProsodyMarks={(id, prosodyMarks) => dispatch({ type: 'UPDATE_PROSODY_MARKS', id, prosodyMarks })}
                   />
                 </>

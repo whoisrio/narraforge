@@ -42,6 +42,44 @@
   background: linear-gradient(180deg, rgba(248, 243, 236, 0.92), rgba(255, 251, 246, 0.92));
 }
 
+.emptyState {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  padding: 36px;
+  border: 1px dashed rgba(216, 194, 180, 0.72);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.5);
+  text-align: center;
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-full);
+  background: rgba(196, 122, 58, 0.1);
+  color: var(--color-primary);
+  font-size: 28px;
+}
+
+.emptyState h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 20px;
+  letter-spacing: -0.04em;
+}
+
+.emptyState p {
+  max-width: 460px;
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
 .actions {
   display: flex;
   justify-content: center;

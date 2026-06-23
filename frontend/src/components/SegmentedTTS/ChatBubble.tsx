@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { EmotionType, Role, Segment } from '../../types';
+import type { EmotionType, Role, RoleSnapshot, Segment } from '../../types';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import styles from './ChatBubble.module.css';
 
@@ -7,12 +7,14 @@ interface ChatBubbleProps {
   segment: Segment;
   index: number;
   role?: Role;
+  roles?: Role[];
   isSelected: boolean;
   isPlaying: boolean;
   isStale?: boolean;
   onSelect: (id: string) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
+  onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
   onTextSelection: (segmentId: string, start: number, end: number, text: string) => void;
 }
 
@@ -34,6 +36,19 @@ function voiceLabel(segment: Segment): string {
   return '未选择音色';
 }
 
+function toSnapshot(role: Role): RoleSnapshot {
+  return {
+    id: role.id,
+    name: role.name,
+    avatar: role.avatar,
+    description: role.description,
+    default_engine: role.default_engine,
+    default_voice: role.default_voice,
+    default_engine_params: { ...role.default_engine_params },
+    favorite_styles: [...role.favorite_styles],
+  };
+}
+
 function renderMarkedText(segment: Segment): ReactNode {
   const text = segment.text || '空台词';
   const marks = [...(segment.prosody_marks ?? [])].sort((a, b) => a.start - b.start);
@@ -49,7 +64,7 @@ function renderMarkedText(segment: Segment): ReactNode {
   return parts;
 }
 
-export function ChatBubble({ segment, index, role, isSelected, isPlaying, isStale, onSelect, onRegenerate, onPlay, onTextSelection }: ChatBubbleProps) {
+export function ChatBubble({ segment, index, role, roles = [], isSelected, isPlaying, isStale, onSelect, onRegenerate, onPlay, onUpdateRole, onTextSelection }: ChatBubbleProps) {
   const roleName = role?.name ?? segment.role_snapshot?.name ?? '未命名角色';
   const emotion = (segment.emotion ?? 'neutral') as EmotionType;
   return (
@@ -61,7 +76,24 @@ export function ChatBubble({ segment, index, role, isSelected, isPlaying, isStal
       <div className={styles.body}>
         <header className={styles.meta}>
           <span>台词 #{String(index).padStart(2, '0')}</span>
-          <span>{roleName}</span>
+          {onUpdateRole ? (
+            <label className={styles.rolePicker} onClick={(event) => event.stopPropagation()}>
+              <span>选择角色</span>
+              <select
+                aria-label="选择角色"
+                value={segment.role_id ?? ''}
+                onChange={(event) => {
+                  const nextRole = roles.find(item => item.id === event.target.value);
+                  onUpdateRole(segment.id, nextRole?.id ?? null, nextRole ? toSnapshot(nextRole) : null);
+                }}
+              >
+                <option value="">未选择</option>
+                {roles.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              </select>
+            </label>
+          ) : (
+            <span>{roleName}</span>
+          )}
           <span>{segment.params.engine === 'edge_tts' ? 'Edge-TTS' : segment.params.engine} · {voiceLabel(segment)}</span>
           <span>{emotion}</span>
         </header>
