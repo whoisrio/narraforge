@@ -1,0 +1,376 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>NarraForge | Immersive Editor</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;family=Lora:ital,wght@0,400;0,500;0,600;1,400&amp;display=swap" rel="stylesheet">
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "on-error": "#ffffff",
+                "on-primary-container": "#fffbff",
+                "on-surface": "#1d1b17",
+                "surface-dim": "#dfd9d2",
+                "secondary": "#865310",
+                "on-error-container": "#93000a",
+                "outline-variant": "#d8c2b4",
+                "surface-container-low": "#f9f3eb",
+                "primary-fixed-dim": "#ffb77e",
+                "secondary-fixed": "#ffdcbd",
+                "background": "#fff8f1",
+                "surface-variant": "#e8e1db",
+                "on-tertiary-container": "#f4fffb",
+                "surface-container-highest": "#e8e1db",
+                "inverse-primary": "#ffb77e",
+                "on-tertiary-fixed-variant": "#005048",
+                "tertiary-container": "#008376",
+                "error": "#ba1a1a",
+                "on-secondary-fixed-variant": "#683c00",
+                "tertiary-fixed-dim": "#6fd8c8",
+                "on-secondary-fixed": "#2c1600",
+                "surface": "#fff8f1",
+                "on-primary-fixed-variant": "#6e3900",
+                "on-tertiary": "#ffffff",
+                "inverse-surface": "#33302c",
+                "surface-container-lowest": "#ffffff",
+                "inverse-on-surface": "#f6f0e9",
+                "surface-bright": "#fff8f1",
+                "primary": "#8b4c0d",
+                "tertiary": "#00685d",
+                "primary-container": "#a96425",
+                "secondary-fixed-dim": "#feb86f",
+                "on-primary-fixed": "#2f1500",
+                "surface-container": "#f3ede6",
+                "surface-container-high": "#ede7e0",
+                "outline": "#867467",
+                "on-tertiary-fixed": "#00201c",
+                "on-secondary": "#ffffff",
+                "on-secondary-container": "#784703",
+                "tertiary-fixed": "#8cf5e4",
+                "on-surface-variant": "#534439",
+                "on-background": "#1d1b17",
+                "error-container": "#ffdad6",
+                "primary-fixed": "#ffdcc3",
+                "on-primary": "#ffffff",
+                "surface-tint": "#8e4e10",
+                "secondary-container": "#feb86f"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px"
+            },
+            "spacing": {
+                "2xl": "48px",
+                "lg": "24px",
+                "md": "16px",
+                "unit": "4px",
+                "max-width": "1600px",
+                "xs": "4px",
+                "xl": "32px",
+                "sm": "8px"
+            },
+            "fontFamily": {
+                "display-lg": ["Plus Jakarta Sans"],
+                "body-dialogue": ["Lora", "serif"],
+                "body-base": ["Plus Jakarta Sans"],
+                "label-caps": ["Plus Jakarta Sans"],
+                "headline-md": ["Plus Jakarta Sans"],
+                "code-xs": ["JetBrains Mono"]
+            },
+            "fontSize": {
+                "display-lg": ["36px", {"lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700"}],
+                "body-dialogue": ["19px", {"lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                "body-base": ["15px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.12em", "fontWeight": "700"}],
+                "headline-md": ["24px", {"lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                "code-xs": ["12px", {"lineHeight": "18px", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        body {
+            background-color: #fff8f1;
+            color: #1d1b17;
+            overflow: hidden;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .editor-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        .editor-container::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .editor-container::-webkit-scrollbar-thumb {
+            background: #e8e1db;
+            border-radius: 10px;
+        }
+        .glass-panel {
+            background: rgba(248, 247, 244, 0.92);
+            backdrop-filter: blur(12px);
+        }
+        .writing-canvas {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .character-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .character-card:hover {
+            box-shadow: 0 8px 24px rgba(139, 76, 13, 0.12);
+            transform: translateY(-2px);
+        }
+        .typewriter-cursor {
+            border-right: 2px solid #8b4c0d;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink {
+            from, to { border-color: transparent }
+            50% { border-color: #8b4c0d }
+        }
+        .drawer-transition {
+            transition: transform 0.4s cubic-bezier(0.2, 0, 0, 1);
+        }
+    </style>
+</head>
+<body class="font-body-base text-body-base">
+<!-- Top Navigation Bar -->
+<header class="fixed top-3 left-3 right-3 rounded-xl z-50 glass-panel border border-outline-variant/30 shadow-[0_4px_12px_rgba(26,24,20,0.08)] h-16 flex justify-between items-center px-lg">
+<div class="flex items-center gap-md">
+<button class="w-10 h-10 flex items-center justify-center rounded-full bg-surface-container-high text-primary hover:scale-[1.05] transition-transform active:scale-[0.95]">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<div class="flex flex-col">
+<span class="font-display-lg text-[20px] bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent leading-none">NarraForge</span>
+<span class="text-[11px] font-label-caps text-on-surface-variant uppercase tracking-widest opacity-60">Studio v2.4</span>
+</div>
+</div>
+<div class="absolute left-1/2 -translate-x-1/2 flex items-center gap-sm">
+<span class="text-on-surface-variant opacity-40 font-label-caps">CHAPTER 04</span>
+<h1 class="font-headline-md text-primary">The Whispering Alms</h1>
+<span class="material-symbols-outlined text-tertiary text-sm" style="font-variation-settings: 'FILL' 1;">cloud_done</span>
+</div>
+<div class="flex items-center gap-md">
+<div class="hidden md:flex gap-md px-md py-sm rounded-full bg-surface-container-low border border-outline-variant/20">
+<button class="text-primary font-bold border-b-2 border-primary pb-1 transition-all">Project Settings</button>
+<button class="text-on-surface-variant font-medium hover:text-primary transition-colors">Export</button>
+<button class="text-on-surface-variant font-medium hover:text-primary transition-colors">Preview</button>
+<button class="text-on-surface-variant font-medium hover:text-primary transition-colors flex items-center gap-xs" onclick="window.location.href='{{DATA:SCREEN:SCREEN_6}}'"><span class="material-symbols-outlined text-[18px]">mic</span><span class="">Voice Studio</span></button></div>
+<div class="w-[1px] h-6 bg-outline-variant/30"></div>
+<button class="text-on-surface-variant hover:text-primary transition-transform hover:scale-110 active:scale-95">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<div class="w-10 h-10 rounded-full border-2 border-primary/20 overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A professional studio portrait of a young creative writer with glasses, warm ambient indoor studio lighting with amber tones, soft bokeh background, high-end photography style, looking thoughtful." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC7hm7v-GuJhttFORNRXIKPIjBwboOa6O5taBhA83vwwGh87ZyPl00SDDX0WqAkGyoNdAnYNowEclMcgf7DwZcYeTorKLuR9-jB30Mf9ILcm1HkITL9LvYeLeSlkYIoziyQ7U7ADqdQ6oyMGftufMVSvajNFcjKcDRUnpyrv7IcrjfhjKDEElOCbPG7loifJBDNJWjy8O-yAr0n-lEtlLRlXpKTp2kuNv_TcevqQVopflnLm8qdKzFeL12k2ZDAIPGh2ecqXDkR8A">
+</div>
+</div>
+</header>
+<!-- Side Navigation (Collapsed by default in focus mode) -->
+<aside class="fixed left-0 top-0 h-full w-[64px] flex flex-col pt-24 pb-lg items-center bg-surface-container-low border-r border-outline-variant/20 z-40">
+<div class="flex flex-col gap-sm">
+<button class="w-10 h-10 rounded-xl bg-primary-container/10 text-primary flex items-center justify-center hover:bg-surface-container-high transition-colors" title="Library">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">auto_stories</span>
+</button>
+<button class="w-10 h-10 rounded-xl text-on-surface-variant flex items-center justify-center hover:bg-surface-container-high transition-colors" title="Characters">
+<span class="material-symbols-outlined">group</span>
+</button>
+<button class="w-10 h-10 rounded-xl text-on-surface-variant flex items-center justify-center hover:bg-surface-container-high transition-colors" title="World Building">
+<span class="material-symbols-outlined">public</span>
+</button>
+<button class="w-10 h-10 rounded-xl text-on-surface-variant flex items-center justify-center hover:bg-surface-container-high transition-colors" title="Settings">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<div class="mt-auto flex flex-col gap-sm">
+<button class="w-10 h-10 rounded-xl text-on-surface-variant flex items-center justify-center hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<button class="w-10 h-10 rounded-xl text-on-surface-variant flex items-center justify-center hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">inventory_2</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-[64px] mr-[320px] h-screen pt-24 flex flex-col items-center overflow-y-auto editor-container">
+<!-- Writing Canvas -->
+<div class="writing-canvas w-full px-lg pb-32">
+<div class="flex flex-col gap-md mb-xl">
+<span class="font-label-caps text-secondary tracking-[0.2em]">MAY 14, 1924</span>
+<h2 class="font-display-lg text-[48px] text-on-surface leading-tight">The rain did not fall so much as it surrendered.</h2>
+</div>
+<article class="font-body-dialogue text-body-dialogue text-on-surface/90 space-y-lg text-justify selection:bg-secondary-fixed">
+<p class="">
+                    Elias stood at the edge of the copper docks, his boots sinking slightly into the brine-soaked timber. The air here smelled of ozone and rusted dreams, a scent he had grown to associate with the inevitable. Behind him, the city of NarraForge hummed with the sound of a thousand ticking clocks, each one a heartbeat in a body of brass and steam.
+                </p>
+<p class="">
+                    He adjusted the collar of his coat, the fabric heavy with the morning's mist. He wasn't looking for trouble—trouble in this city usually found you long before you had the chance to look—but he was looking for a man who didn't want to be found. A man whose name was etched in the back of a silver pocket watch currently burning a hole in Elias's pocket.
+                </p>
+<div class="py-md flex items-center gap-md">
+<div class="h-[1px] flex-1 bg-outline-variant/30"></div>
+<span class="material-symbols-outlined text-outline-variant">flare</span>
+<div class="h-[1px] flex-1 bg-outline-variant/30"></div>
+</div>
+<p class="">
+                    "You're early," a voice rasped from the shadows of a stack of crates. 
+                </p>
+<p class="">
+                    Elias didn't turn. He knew that voice. It was like sand moving over silk. "And you're still hiding, Thorne. Some things never change."
+                </p>
+<p class="">
+                    A figure stepped into the flickering light of a nearby gas lamp. Thorne looked older, his face a map of regrets, but his eyes still held that sharp, predatory glint. "I prefer to call it 'selective visibility.' Now, do you have it?"
+                </p>
+<p class="typewriter-cursor inline-block">
+                    Elias reached into his pocket. The silver felt cold against his palm, a stark contrast to the humid air. He pulled out the watch and held it up, the moonlight catching the intricate engravings on its face. "I have it. But I want answers first. Why did she give this to me?"
+                </p>
+</article>
+<!-- Waveform Decoration -->
+<div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-surface-container-high px-md py-sm rounded-full flex items-center gap-sm shadow-lg border border-outline-variant/20">
+<button class="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</button>
+<div class="flex items-end gap-[2px] h-4">
+<div class="w-1 bg-tertiary/40 h-1 rounded-full animate-pulse"></div>
+<div class="w-1 bg-tertiary h-3 rounded-full"></div>
+<div class="w-1 bg-tertiary h-4 rounded-full"></div>
+<div class="w-1 bg-tertiary h-2 rounded-full"></div>
+<div class="w-1 bg-tertiary h-3 rounded-full"></div>
+<div class="w-1 bg-tertiary/40 h-1 rounded-full"></div>
+</div>
+<span class="text-[12px] font-code-xs text-on-surface-variant px-sm">04:12 / 12:45</span>
+<button class="text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-md">mic</span>
+</button>
+</div>
+</div>
+</main>
+<!-- Right-hand Drawer (Story Bible) -->
+<aside class="fixed right-0 top-0 h-full w-[320px] bg-surface-container-low border-l border-outline-variant/20 pt-24 px-md pb-lg flex flex-col z-30 drawer-transition shadow-[-8px_0_24px_rgba(26,24,20,0.04)]" id="storyBible">
+<div class="flex items-center justify-between mb-lg">
+<div class="flex items-center gap-sm">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 1;">menu_book</span>
+<h3 class="font-headline-md text-[18px] text-on-surface">Story Bible</h3>
+</div>
+<button class="text-on-surface-variant hover:text-primary">
+<span class="material-symbols-outlined">search</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto pr-sm flex flex-col gap-md">
+<!-- Character Section -->
+<section>
+<div class="flex items-center justify-between mb-sm">
+<span class="font-label-caps text-on-surface-variant">CHARACTERS</span>
+<button class="text-[10px] text-primary font-bold hover:underline">VIEW ALL</button>
+</div>
+<div class="space-y-sm">
+<!-- Character Card -->
+<div class="character-card p-md rounded-xl bg-surface border border-outline-variant/30 cursor-pointer">
+<div class="flex gap-md items-center mb-sm">
+<div class="w-10 h-10 rounded-full bg-secondary-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A detailed portrait of a middle-aged man with sharp features, salt and pepper hair, wearing a worn leather trench coat, atmospheric low-light street setting, amber and copper lighting tones, cinematic depth of field." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC0wd4HIT1O5q4mMisf7dqHqZZtZKdyA-PhfVBduRdfEMWAqB0BNvEC5_6BlMRPIIUO9YWc0IHIFarzq4Q-KufxMogT1LitZbiWEzsLd6NIXq_4F8ZlZTcygQq2gAuKMx12SHiLVQUixlxnyJx-T5kumAPEXXZD2uEcb4WVEN3JKIl9TsqB6EsvXnOgZuQjV0FzTDORhxaoKnW2F1GbtZMqFzYQ8n1v26Py0aRpDxDQRv74Q1Nd8VivrkIKa5GKrAcjh_IhjtUqIQ">
+</div>
+<div>
+<h4 class="font-bold text-on-surface leading-none">Elias Thorne</h4>
+<span class="text-[12px] text-secondary">Protagonist</span>
+</div>
+</div>
+<p class="text-[13px] text-on-surface-variant leading-relaxed line-clamp-2">
+                            Ex-clockwork engineer turned investigator. Seeking the truth about the Great Gear Failure.
+                        </p>
+</div>
+<div class="character-card p-md rounded-xl bg-surface border border-outline-variant/30 cursor-pointer">
+<div class="flex gap-md items-center mb-sm">
+<div class="w-10 h-10 rounded-full bg-tertiary-container overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A portrait of a mysterious woman in her late 20s with vibrant teal eyes and dark hair, wearing a velvet emerald gown with brass jewelry, standing in a library with soft warm candlelight, elegant and moody atmosphere." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDThSbXcLxDqQJ-bemZU7fAUMUjkQvteS03B7DVsc7MWkx54fN8NqbokiqT8OyOVxeGannLtr9cnPfIhXbMN4rbUYIFJV9McKGGMovv-86Rdq2hr6pxpG6SIkPdT5TCAibQDdFu-j6DeswJ_OwXGVlMLhNz0hshhK9J1aiRW6sFW5cSXT1Q7bduJNV2Ivx0aaVKBshPfTnkCICmQFvXodiyAPsv3Q-yJ_5dx3Ug8WQvZ4PcG1C-2hyyFtaxVrc74FNr5ffP5s65gg">
+</div>
+<div>
+<h4 class="font-bold text-on-surface leading-none">Serafina Vane</h4>
+<span class="text-[12px] text-tertiary">Ally / Mystery</span>
+</div>
+</div>
+<p class="text-[13px] text-on-surface-variant leading-relaxed line-clamp-2">
+                            A high-society socialite with connections to the underground 'Echo' movement.
+                        </p>
+</div>
+</div>
+</section>
+<!-- World Building / Locations -->
+<section class="mt-md">
+<div class="flex items-center justify-between mb-sm">
+<span class="font-label-caps text-on-surface-variant">LOCATIONS</span>
+</div>
+<div class="rounded-xl overflow-hidden border border-outline-variant/30 relative h-32 group">
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-110" data-alt="A cinematic landscape of a steampunk city built over water, with glowing amber lights reflecting in the ripples, copper pipes and Victorian architecture, mist and fog, sunset lighting with a warm parchment glow." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCgVz0RQ2HQI5bg5i8ur-NO5VDE_MOyCY9MaIQFxL9d0XOPcpFridoaHcGXk8va7hCZ6wRrdxmLIBOF26c1XbWDa_k3e3DRv9SKZLb7B9ckD3eZrVGiVxt_UiKAb7TD1hiZN6kp5JpIoLqMWy576CDyMpWijMJkbOtL3zAezAj7J-7Rn7hrlJ-Tc5kyYoR8pnm5qIN6TaCNhSW8Cf6Y9SYxWPfzjETaO3669uP6qG28WR7UWWaPKcIsZyavQ-_HJtf0lN59DAx9Dg')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+<div class="absolute bottom-2 left-3">
+<p class="text-white font-bold text-sm">The Copper Docks</p>
+<p class="text-white/70 text-[11px]">Industrial District</p>
+</div>
+</div>
+</section>
+<!-- Quick Notes -->
+<section class="mt-md">
+<div class="flex items-center justify-between mb-sm">
+<span class="font-label-caps text-on-surface-variant">QUICK NOTES</span>
+<button class="text-primary hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-sm">add_circle</span>
+</button>
+</div>
+<div class="p-md rounded-xl bg-primary-container/5 border-l-4 border-primary/40">
+<p class="text-[13px] italic text-on-surface-variant">
+                        "The sound of the clocks is the heartbeat of the city. If they stop, the city dies." 
+                    </p>
+<span class="text-[10px] font-label-caps text-primary/60 mt-sm block">— Key Theme</span>
+</div>
+</section>
+</div>
+<button class="mt-lg w-full py-md rounded-full bg-gradient-to-r from-primary to-secondary text-white font-bold flex items-center justify-center gap-sm hover:scale-[1.03] active:scale-[0.97] transition-all shadow-md">
+<span class="material-symbols-outlined text-md">add</span>
+<span class="">New Entry</span>
+</button>
+</aside>
+<!-- Floating Action Button (Contextual) -->
+<button class="fixed bottom-8 right-8 w-14 h-14 rounded-full bg-primary text-white shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-50 group">
+<span class="material-symbols-outlined group-hover:rotate-90 transition-transform">auto_fix_high</span>
+<div class="absolute right-full mr-4 bg-on-surface text-surface text-xs px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+            Forge AI Assistance
+        </div>
+</button>
+<!-- Micro-interaction Script -->
+<script>
+        document.addEventListener('keydown', function(e) {
+            // Simple distraction-free toggle (Ctrl+B)
+            if (e.ctrlKey && e.key === 'b') {
+                const drawer = document.getElementById('storyBible');
+                const main = document.querySelector('main');
+                if (drawer.style.transform === 'translateX(100%)') {
+                    drawer.style.transform = 'translateX(0)';
+                    main.style.marginRight = '320px';
+                } else {
+                    drawer.style.transform = 'translateX(100%)';
+                    main.style.marginRight = '0';
+                }
+            }
+        });
+
+        // Hover effect for the cursor
+        const canvas = document.querySelector('article');
+        canvas.addEventListener('click', () => {
+            // Simulate focusing
+            console.log('Editor Focused');
+        });
+    </script>
+
+
+</body></html>
