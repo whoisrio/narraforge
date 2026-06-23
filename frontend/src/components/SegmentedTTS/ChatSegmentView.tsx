@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Role, RoleSnapshot, Segment, SegmentKind } from '../../types';
 import { isSegmentAudioStale } from '../../services/segmentGenerationInputs';
+import { isNarratorRole } from '../../services/voiceRoleKind';
 import { ChatBubble } from './ChatBubble';
 import { NarrationBlock } from './NarrationBlock';
 import { ProsodyMarkEditor } from './ProsodyMarkEditor';
@@ -19,11 +20,6 @@ interface ChatSegmentViewProps {
   onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
   onUpdateKind?: (id: string, kind: SegmentKind, roleSnapshot: RoleSnapshot | null) => void;
   onUpdateProsodyMarks: (id: string, marks: NonNullable<Segment['prosody_marks']>) => void;
-}
-
-function isNarratorRole(role: Role): boolean {
-  const text = `${role.name} ${role.description ?? ''}`.toLowerCase();
-  return text.includes('narrator') || text.includes('旁白');
 }
 
 function toSnapshot(role: Role): RoleSnapshot {

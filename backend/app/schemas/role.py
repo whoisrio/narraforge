@@ -10,6 +10,7 @@ class RoleIn(BaseModel):
     name: str = Field(..., min_length=1)
     avatar: str | None = None
     description: str | None = None
+    role_kind: str = "cast"
     default_engine: str = "edge_tts"
     default_voice: str | None = None
     default_engine_params: dict[str, Any] = Field(default_factory=dict)
@@ -20,6 +21,7 @@ class RoleUpdate(BaseModel):
     name: str | None = None
     avatar: str | None = None
     description: str | None = None
+    role_kind: str | None = None
     default_engine: str | None = None
     default_voice: str | None = None
     default_engine_params: dict[str, Any] | None = None

@@ -207,6 +207,107 @@
   font-weight: 600;
 }
 
+/* 音色设计工作区 */
+.designWorkspace {
+  display: grid;
+  gap: 16px;
+}
+
+.profileLibraryPanel,
+.designBriefPanel,
+.tuneLabPanel {
+  padding: 18px;
+  border: 1px solid rgba(216, 194, 180, 0.52);
+  border-radius: 22px;
+  background: rgba(255, 252, 247, 0.84);
+  text-align: left;
+}
+
+.profileLibraryPanel h3,
+.designBriefPanel h3,
+.tuneLabPanel h3 {
+  margin: 0 0 8px;
+  color: var(--color-text-primary);
+}
+
+.profileLibraryPanel p {
+  margin: 0 0 14px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.profileCards {
+  display: grid;
+  gap: 10px;
+}
+
+.profileCards article {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(196, 122, 58, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.profileCards strong {
+  color: var(--color-text-primary);
+}
+
+.profileCards span,
+.profileCards em,
+.previewPrompt p {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.designBriefPanel label,
+.tuneLabPanel label {
+  display: grid;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.designBriefPanel textarea {
+  min-height: 96px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--color-text-primary);
+  font: inherit;
+  resize: vertical;
+}
+
+.previewPrompt {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(196, 122, 58, 0.08);
+}
+
+.previewPrompt p {
+  margin: 4px 0 0;
+}
+
+.tuneLabPanel {
+  display: grid;
+  gap: 12px;
+}
+
+.backendPreviewBtn {
+  justify-self: start;
+  border: 1px solid rgba(196, 122, 58, 0.24);
+  border-radius: var(--radius-full);
+  padding: 9px 14px;
+  background: var(--color-primary-gradient);
+  color: var(--color-text-on-primary);
+  font-weight: 850;
+  cursor: pointer;
+}
+
 .content {
   display: grid;
   /* 用百分比而非 fr，避免子内容撑大某一列 */

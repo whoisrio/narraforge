@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import App from '../App';
+import { indexedDBStorage } from '../services/segmentedProjectStorage';
 
 vi.mock('../services/api', () => ({
   configApi: {
@@ -28,10 +29,22 @@ vi.mock('../services/backendSegmentedProjectStorage', () => ({
 }));
 
 vi.mock('../components/ProjectHub/ProjectHub', () => ({
-  ProjectHub: ({ onOpenProject, onCreateProject }: { onOpenProject: (id: string) => void; onCreateProject: () => void }) => (
+  ProjectHub: ({
+    onOpenProject,
+    onCreateProject,
+    onDeleteProject,
+    onRenameProject,
+  }: {
+    onOpenProject: (id: string) => void;
+    onCreateProject: () => void;
+    onDeleteProject: (id: string) => void;
+    onRenameProject: (id: string, name: string) => void;
+  }) => (
     <div data-testid="project-hub">
       <button type="button" onClick={() => onOpenProject('p-demo')}>打开项目卡片</button>
       <button type="button" onClick={onCreateProject}>新建项目</button>
+      <button type="button" onClick={() => onDeleteProject('p-demo')}>删除项目卡片</button>
+      <button type="button" onClick={() => onRenameProject('p-demo', '改名项目')}>重命名项目卡片</button>
     </div>
   ),
 }));
@@ -57,6 +70,12 @@ vi.mock('../pages/ModelConfig', () => ({
 }));
 
 describe('App', () => {
+  beforeEach(() => {
+    vi.mocked(indexedDBStorage.deleteProject).mockResolvedValue(undefined);
+    vi.mocked(indexedDBStorage.saveProject).mockResolvedValue(undefined);
+    vi.mocked(indexedDBStorage.listProjects).mockReturnValue(new Promise(() => {}));
+  });
+
   it('renders the global project hub with global navigation by default', () => {
     render(<App />);
 
@@ -101,5 +120,43 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: /字幕识别/ }));
     expect(screen.getByRole('button', { name: /字幕识别/ })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTestId('page-subtitles')).toBeVisible();
+  });
+
+  it('deletes a project from the global hub without entering the workspace', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    vi.mocked(indexedDBStorage.listProjects).mockResolvedValue([]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /删除项目卡片/ }));
+
+    await waitFor(() => expect(indexedDBStorage.deleteProject).toHaveBeenCalledWith('p-demo'));
+    expect(screen.getByTestId('project-hub')).toBeInTheDocument();
+    expect(screen.queryByTestId('page-tts-synthesis')).not.toBeInTheDocument();
+  });
+
+  it('renames a project from the global hub without entering the workspace', async () => {
+    vi.mocked(indexedDBStorage.getProject).mockResolvedValue({
+      schema_version: 2,
+      id: 'p-demo',
+      name: '旧项目',
+      active_chapter_id: 'ch-1',
+      layout: 'vertical',
+      chapters: [],
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+    });
+    vi.mocked(indexedDBStorage.listProjects).mockResolvedValue([]);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: /重命名项目卡片/ }));
+
+    await waitFor(() => expect(indexedDBStorage.saveProject).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'p-demo', name: '改名项目' }),
+      { mode: 'immediate' },
+    ));
+    expect(screen.getByTestId('project-hub')).toBeInTheDocument();
+    expect(screen.queryByTestId('page-tts-synthesis')).not.toBeInTheDocument();
   });
 });

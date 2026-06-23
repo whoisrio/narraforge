@@ -3,6 +3,14 @@ import { speechToTextApi, subtitleLlmApi } from '../services/api';
 import type { TranscribeResult, TranscriptionRecord, CorrectionSuggestion, BilingualSegment } from '../services/api';
 
 /** 字符级 diff：将 original 和 suggested 分成 changed/unchanged 片段 */
+function getErrorDetail(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as { response?: { data?: { detail?: string } } }).response;
+    return response?.data?.detail || fallback;
+  }
+  return fallback;
+}
+
 function computeCharDiff(original: string, suggested: string) {
   // 找最长公共子序列的简化版 — 从两端向中间收缩
   let prefixLen = 0;
@@ -68,7 +76,9 @@ export function SpeechToText() {
   const [dragOver, setDragOver] = useState(false);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [history, setHistory] = useState<TranscriptionRecord[]>([]);
+  const [localQueue, setLocalQueue] = useState<{ id: string; file: File }[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const localQueueInputRef = useRef<HTMLInputElement>(null);
   const multiAudioRef = useRef<HTMLDivElement>(null);
 
   // LLM 校准状态
@@ -151,8 +161,8 @@ export function SpeechToText() {
       }
 
       loadHistory();
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Transcription failed');
+    } catch (err: unknown) {
+      setError(getErrorDetail(err, 'Transcription failed'));
     } finally {
       setProcessing(false);
     }
@@ -254,8 +264,8 @@ export function SpeechToText() {
       const res = await subtitleLlmApi.correct(result.content, originalDoc, 'zh', correctionMode);
       setSuggestions(res.suggestions);
       setCorrectionModel(res.model);
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'LLM 校准失败，请检查 .env 中的 LLM 配置');
+    } catch (err: unknown) {
+      setError(getErrorDetail(err, 'LLM 校准失败，请检查 .env 中的 LLM 配置'));
     } finally {
       setCorrecting(false);
     }
@@ -298,8 +308,8 @@ export function SpeechToText() {
       const res = await subtitleLlmApi.translate(result.content, targetLang);
       setBilingualSegments(res.segments);
       setBilingualSrt(res.bilingual_srt);
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || '翻译失败，请检查 API Key 配置');
+    } catch (err: unknown) {
+      setError(getErrorDetail(err, '翻译失败，请检查 API Key 配置'));
     } finally {
       setTranslating(false);
     }
@@ -344,11 +354,63 @@ export function SpeechToText() {
       }
 
       loadHistory();
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Multi-transcribe failed');
+    } catch (err: unknown) {
+      setError(getErrorDetail(err, 'Multi-transcribe failed'));
     } finally {
       setProcessing(false);
     }
+  };
+
+  const handleLocalQueueSelect = (files: FileList | File[]) => {
+    const accepted = Array.from(files).filter(item => /\.(wav|mp3|m4a|mp4|mov|webm)$/i.test(item.name));
+    setLocalQueue(prev => [
+      ...prev,
+      ...accepted.map((item, index) => ({ id: `${item.name}-${item.size}-${item.lastModified}-${Date.now()}-${index}`, file: item })),
+    ]);
+  };
+
+  const moveLocalQueueItem = (id: string, direction: -1 | 1) => {
+    setLocalQueue(prev => {
+      const index = prev.findIndex(item => item.id === id);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const removeLocalQueueItem = (id: string) => {
+    setLocalQueue(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleLocalQueueTranscribe = () => {
+    if (localQueue.length === 0) return;
+    void handleMultiTranscribe(localQueue.map(item => item.file));
+  };
+
+  const exportSubtitle = (format: 'json' | 'txt') => {
+    if (!result) return;
+    const stem = (file?.name || result.filename || 'subtitle').replace(/\.[^.]+$/, '');
+    const payload = format === 'json'
+      ? JSON.stringify({
+          file_id: result.file_id,
+          filename: result.filename,
+          language: result.language,
+          language_probability: result.language_probability,
+          boundary_map: localQueue.map((item, index) => ({ index: index + 1, filename: item.file.name, size: item.file.size })),
+          content: result.content,
+        }, null, 2)
+      : result.content.replace(/\d+\n(\d\d:\d\d:\d\d,\d{3} --> \d\d:\d\d:\d\d,\d{3}\n)?/g, '').trim();
+    const blob = new Blob([payload], { type: format === 'json' ? 'application/json;charset=utf-8' : 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${stem}.${format}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -685,6 +747,76 @@ export function SpeechToText() {
           </div>
         </div>
       </div>
+
+      <div className={styles.localQueueCard}>
+        <div className={styles.queueHeader}>
+          <div>
+            <span className={styles.kicker}>Local File Queue</span>
+            <h2>多文件队列</h2>
+            <p>上传音频/视频片段，排序后统一送入 ASR，并保留 Boundary Map 供字幕校准和 JSON 导出。</p>
+          </div>
+          <button type="button" className={styles.queueUploadBtn} onClick={() => localQueueInputRef.current?.click()}>
+            添加文件
+          </button>
+        </div>
+        <input
+          ref={localQueueInputRef}
+          aria-label="选择多文件队列"
+          type="file"
+          multiple
+          accept=".wav,.mp3,.m4a,.mp4,.mov,.webm"
+          className={styles.hiddenInput}
+          onChange={(event) => {
+            if (event.target.files) handleLocalQueueSelect(event.target.files);
+            event.currentTarget.value = '';
+          }}
+        />
+        {localQueue.length > 0 ? (
+          <div className={styles.queueList}>
+            {localQueue.map((item, index) => (
+              <article key={item.id} className={styles.queueItem}>
+                <span className={styles.queueIndex}>{String(index + 1).padStart(2, '0')}</span>
+                <div>
+                  <strong>{item.file.name}</strong>
+                  <small>{(item.file.size / 1024 / 1024).toFixed(2)} MB</small>
+                </div>
+                <div className={styles.queueActions}>
+                  <button type="button" aria-label={`上移 ${item.file.name}`} onClick={() => moveLocalQueueItem(item.id, -1)} disabled={index === 0}>↑</button>
+                  <button type="button" aria-label={`下移 ${item.file.name}`} onClick={() => moveLocalQueueItem(item.id, 1)} disabled={index === localQueue.length - 1}>↓</button>
+                  <button type="button" aria-label={`移除 ${item.file.name}`} onClick={() => removeLocalQueueItem(item.id)}>移除</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className={styles.queueEmpty}>还没有本地文件。可添加多个音频/视频片段后统一识别。</div>
+        )}
+        <div className={styles.queueFooter}>
+          <button type="button" className={styles.queuePrimaryBtn} disabled={localQueue.length === 0 || processing} onClick={handleLocalQueueTranscribe}>
+            {processing ? '统一 ASR 中...' : '统一 ASR'}
+          </button>
+          <span>{localQueue.length} 个文件 · 顺序决定拼接时间线</span>
+        </div>
+      </div>
+
+      {localQueue.length > 0 && (
+        <div className={styles.boundaryMap}>
+          <div className={styles.boundaryHeader}>
+            <h3>Boundary Map</h3>
+            <div className={styles.exportButtons}>
+              <button type="button" disabled={!result} onClick={() => exportSubtitle('json')}>导出 JSON</button>
+              <button type="button" disabled={!result} onClick={() => exportSubtitle('txt')}>导出 TXT</button>
+            </div>
+          </div>
+          {localQueue.map((item, index) => (
+            <div key={item.id} className={styles.boundaryRow}>
+              <span>{index + 1}</span>
+              <strong>{item.file.name}</strong>
+              <small>boundary_{index + 1} · size {item.file.size}</small>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className={styles.historySection} ref={multiAudioRef}>
         <MultiAudioSelector onTranscribe={handleMultiTranscribe} processing={processing} />

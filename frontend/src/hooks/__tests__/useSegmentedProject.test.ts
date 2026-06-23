@@ -239,6 +239,23 @@ describe('segmentedReducer', () => {
     expect(next.project.active_chapter_id).toBe('ch2');
   });
 
+  it('SET_CHAPTER_META_BY_ID updates the requested chapter without relying on active chapter', () => {
+    const ch1 = makeChapter({ id: 'ch1', original_text: '第一章旧文本' });
+    const ch2 = makeChapter({ id: 'ch2', original_text: '第二章旧文本' });
+    const p: SegmentedProject = { schema_version: 2, id: 'p1', name: 'Test', chapters: [ch1, ch2], active_chapter_id: 'ch1', layout: 'vertical', created_at: '', updated_at: '' };
+
+    const next = segmentedReducer({ project: p }, {
+      type: 'SET_CHAPTER_META_BY_ID',
+      id: 'ch2',
+      meta: { original_text: '第二章来自文本库的新文本', design_title: '第二章视觉标题' },
+    });
+
+    expect(next.project.active_chapter_id).toBe('ch1');
+    expect(next.project.chapters.find(chapter => chapter.id === 'ch1')?.original_text).toBe('第一章旧文本');
+    expect(next.project.chapters.find(chapter => chapter.id === 'ch2')?.original_text).toBe('第二章来自文本库的新文本');
+    expect(next.project.chapters.find(chapter => chapter.id === 'ch2')?.design_title).toBe('第二章视觉标题');
+  });
+
   it('migrateV1 converts old project to v2 with chapters', () => {
     const v1 = {
       schema_version: 1, id: 'old', name: 'Old Project',

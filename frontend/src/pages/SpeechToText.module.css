@@ -248,6 +248,142 @@
   margin-top: var(--spacing-2xl);
 }
 
+.hiddenInput {
+  display: none;
+}
+
+.localQueueCard,
+.boundaryMap {
+  margin-top: var(--spacing-2xl);
+  padding: 20px;
+  border: 1px solid rgba(216, 194, 180, 0.52);
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.92);
+  box-shadow: var(--shadow-sm);
+}
+
+.queueHeader,
+.boundaryHeader,
+.queueFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.queueHeader h2,
+.boundaryHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.queueHeader p {
+  margin: 6px 0 0;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.queueUploadBtn,
+.queuePrimaryBtn,
+.exportButtons button,
+.queueActions button {
+  border: 1px solid rgba(196, 122, 58, 0.24);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-primary-dark);
+  padding: 8px 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.queuePrimaryBtn {
+  background: var(--color-primary-gradient);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 2px 8px var(--glow-primary);
+}
+
+.queueUploadBtn:disabled,
+.queuePrimaryBtn:disabled,
+.exportButtons button:disabled,
+.queueActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.queueList {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.queueItem,
+.boundaryRow {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.queueIndex,
+.boundaryRow span {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(196, 122, 58, 0.13);
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.queueItem strong,
+.boundaryRow strong {
+  display: block;
+  color: var(--color-text-primary);
+}
+
+.queueItem small,
+.boundaryRow small,
+.queueFooter span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.queueActions,
+.exportButtons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.queueEmpty {
+  margin-top: 16px;
+  padding: 24px;
+  border: 1px dashed rgba(196, 122, 58, 0.32);
+  border-radius: 18px;
+  color: var(--color-text-secondary);
+  text-align: center;
+}
+
+.queueFooter {
+  margin-top: 16px;
+}
+
+.boundaryMap {
+  margin-top: var(--spacing-lg);
+}
+
+.boundaryHeader {
+  margin-bottom: 14px;
+}
+
 /* ---- GPU badge ---- */
 .gpuBadge {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);

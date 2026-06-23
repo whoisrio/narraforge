@@ -86,15 +86,43 @@ function AppContent() {
     setActiveView(tab);
   };
 
+  const refreshProjects = async () => {
+    const list = await projectStorage.listProjects();
+    setProjects(list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+  };
+
   const handleCreateProject = async () => {
     const project = createInitialProject();
     project.name = `新项目 ${projects.length + 1}`;
     await projectStorage.saveProject(project, { mode: 'immediate' });
-    const list = await projectStorage.listProjects();
-    setProjects(list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+    await refreshProjects();
     setActiveTab('tts-synthesis');
     setActiveView('tts-synthesis');
     setActiveProjectId(project.id);
+  };
+
+  const handleDeleteProjectFromHub = async (projectId: string) => {
+    const target = projects.find(project => project.id === projectId);
+    const targetName = target?.name ?? '该项目';
+    if (!window.confirm(`确定删除项目「${targetName}」？\n此操作不可撤销，所有章节和音频将一并删除。`)) return;
+    await projectStorage.deleteProject(projectId);
+    await refreshProjects();
+    if (activeProjectId === projectId) {
+      setActiveProjectId(null);
+    }
+  };
+
+  const handleRenameProjectFromHub = async (projectId: string, name: string) => {
+    const nextName = name.trim();
+    if (!nextName) return;
+    const existingProject = projects.find(project => project.id === projectId) ?? await projectStorage.getProject(projectId);
+    if (!existingProject) return;
+    await projectStorage.saveProject({
+      ...existingProject,
+      name: nextName,
+      updated_at: new Date().toISOString(),
+    }, { mode: 'immediate' });
+    await refreshProjects();
   };
 
   const activeGlobalNav: GlobalNavId =
@@ -142,6 +170,8 @@ function AppContent() {
                     projects={projects}
                     onOpenProject={(projectId) => setActiveProjectId(projectId)}
                     onCreateProject={() => { void handleCreateProject(); }}
+                    onDeleteProject={(projectId) => { void handleDeleteProjectFromHub(projectId); }}
+                    onRenameProject={(projectId, name) => { void handleRenameProjectFromHub(projectId, name); }}
                   />
                 )}
                 {activeTab === 'tts-synthesis' && activeProjectId && (

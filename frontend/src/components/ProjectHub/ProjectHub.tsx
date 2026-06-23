@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { SegmentedProject } from '../../types';
 import styles from './ProjectHub.module.css';
 
@@ -5,6 +6,8 @@ interface ProjectHubProps {
   projects: SegmentedProject[];
   onOpenProject: (projectId: string) => void;
   onCreateProject: () => void;
+  onDeleteProject: (projectId: string) => void;
+  onRenameProject: (projectId: string, name: string) => void;
 }
 
 function projectStats(project: SegmentedProject) {
@@ -32,9 +35,32 @@ function projectInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || 'N';
 }
 
-export function ProjectHub({ projects, onOpenProject, onCreateProject }: ProjectHubProps) {
+export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteProject, onRenameProject }: ProjectHubProps) {
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState('');
   const totalSegments = projects.reduce((total, project) => total + projectStats(project).segments, 0);
   const totalGenerated = projects.reduce((total, project) => total + projectStats(project).generated, 0);
+
+  const startRename = (project: SegmentedProject) => {
+    setEditingProjectId(project.id);
+    setOpenMenuProjectId(null);
+    setRenameDraft(project.name);
+  };
+
+  const saveRename = (project: SegmentedProject) => {
+    const nextName = renameDraft.trim();
+    if (!nextName) {
+      setEditingProjectId(null);
+      setRenameDraft('');
+      return;
+    }
+    if (nextName !== project.name) {
+      onRenameProject(project.id, nextName);
+    }
+    setEditingProjectId(null);
+    setRenameDraft('');
+  };
 
   return (
     <section className={styles.root}>
@@ -61,19 +87,45 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject }: Project
         {projects.map(project => {
           const stats = projectStats(project);
           const progress = stats.segments === 0 ? 0 : Math.round((stats.generated / stats.segments) * 100);
+          const isEditing = editingProjectId === project.id;
+          const isMenuOpen = openMenuProjectId === project.id;
           return (
-            <button
-              key={project.id}
-              type="button"
-              className={styles.projectCard}
-              onClick={() => onOpenProject(project.id)}
-            >
+            <article key={project.id} className={styles.projectCard} aria-label={`项目 ${project.name}`}>
               <div className={styles.cardCover}>
+                <button
+                  type="button"
+                  className={styles.coverOpenButton}
+                  aria-label={`打开 ${project.name}`}
+                  onClick={() => onOpenProject(project.id)}
+                />
                 <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
                 <span className={styles.statusBadge}>{progress === 100 && stats.segments > 0 ? 'READY' : 'IN PROGRESS'}</span>
               </div>
               <div className={styles.cardBody}>
-                <h2>{project.name}</h2>
+                {isEditing ? (
+                  <div className={styles.renameForm}>
+                    <label htmlFor={`project-name-${project.id}`}>项目名称</label>
+                    <input
+                      id={`project-name-${project.id}`}
+                      value={renameDraft}
+                      onChange={(event) => setRenameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') saveRename(project);
+                        if (event.key === 'Escape') {
+                          setEditingProjectId(null);
+                          setRenameDraft('');
+                        }
+                      }}
+                      autoFocus
+                    />
+                    <div className={styles.renameActions}>
+                      <button type="button" onClick={() => saveRename(project)}>保存项目名称</button>
+                      <button type="button" onClick={() => { setEditingProjectId(null); setRenameDraft(''); }}>取消</button>
+                    </div>
+                  </div>
+                ) : (
+                  <h2>{project.name}</h2>
+                )}
                 <p>{project.active_narration_version ?? '默认旁白版本'}</p>
                 <div className={styles.cardStats}>
                   <span>{stats.chapters} 章</span>
@@ -84,8 +136,40 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject }: Project
                   <span style={{ width: `${progress}%` }} />
                 </div>
                 <small>{stats.generated}/{stats.segments} 已生成</small>
+                <div className={styles.cardFooter}>
+                  <div className={styles.miniAvatars} aria-hidden="true">
+                    <span>{projectInitial(project.name)}</span>
+                    <span>声</span>
+                  </div>
+                  <div className={styles.menuWrap}>
+                    <button
+                      type="button"
+                      className={styles.menuButton}
+                      aria-label={`项目操作 ${project.name}`}
+                      aria-haspopup="menu"
+                      aria-expanded={isMenuOpen}
+                      onClick={() => setOpenMenuProjectId(isMenuOpen ? null : project.id)}
+                    >
+                      ⋯
+                    </button>
+                    {isMenuOpen && (
+                      <div className={styles.actionMenu} role="menu" aria-label={`${project.name} 操作菜单`}>
+                        <button type="button" role="menuitem" onClick={() => onOpenProject(project.id)}>打开项目</button>
+                        <button type="button" role="menuitem" onClick={() => startRename(project)}>重命名</button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={styles.menuDanger}
+                          onClick={() => { setOpenMenuProjectId(null); onDeleteProject(project.id); }}
+                        >
+                          删除项目
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </button>
+            </article>
           );
         })}
       </div>

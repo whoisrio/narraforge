@@ -1,4 +1,5 @@
 import type { Segment, SegmentEngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
+import { isNarratorRole } from '../../services/voiceRoleKind';
 import { SegmentRow } from './SegmentRow';
 import { SegmentEditPanel } from './SegmentEditPanel';
 import styles from './SegmentList.module.css';
@@ -42,11 +43,6 @@ interface SegmentListProps {
   onToggleIndependentVoice?: (id: string) => void;
   onMerge?: (id: string, direction: 'up' | 'down') => void;
   onSplit?: (id: string, position: number) => void;
-}
-
-function isNarratorRole(role: Role): boolean {
-  const text = `${role.name} ${role.description ?? ''}`.toLowerCase();
-  return text.includes('narrator') || text.includes('旁白');
 }
 
 function toSnapshot(role: Role): RoleSnapshot {

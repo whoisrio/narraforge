@@ -13,6 +13,7 @@ class Role(Base):
     name = Column(String, nullable=False)
     avatar = Column(String, nullable=True)
     description = Column(String, nullable=True)
+    role_kind = Column(String, nullable=False, default="cast")
     default_engine = Column(String, nullable=False, default="edge_tts")
     default_voice = Column(String, nullable=True)
     default_engine_params = Column(JSON, nullable=False, default=dict)

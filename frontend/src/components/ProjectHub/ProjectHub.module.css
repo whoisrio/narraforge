@@ -150,21 +150,49 @@
   align-items: center;
   justify-content: center;
   height: 150px;
+  overflow: hidden;
   background:
     radial-gradient(circle at 28% 30%, rgba(255, 220, 195, 0.92), transparent 34%),
+    radial-gradient(circle at 76% 18%, rgba(255, 248, 241, 0.26), transparent 22%),
     linear-gradient(135deg, #8b4c0d, #c47a3a 55%, #d4944e);
 }
 
+.cardCover::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 54%;
+  background: linear-gradient(to top, rgba(47, 21, 0, 0.34), transparent);
+  pointer-events: none;
+}
+
+.coverOpenButton {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.coverOpenButton:hover ~ .projectInitial {
+  transform: scale(1.04);
+}
+
 .projectInitial {
+  position: relative;
+  z-index: 2;
   color: rgba(255, 255, 255, 0.92);
   font-size: 54px;
   font-weight: 900;
   letter-spacing: -0.09em;
   text-shadow: 0 12px 28px rgba(47, 21, 0, 0.22);
+  transition: transform var(--transition-normal);
 }
 
 .statusBadge {
   position: absolute;
+  z-index: 3;
   top: 14px;
   right: 14px;
   padding: 5px 9px;
@@ -234,6 +262,144 @@
   color: var(--color-text-muted);
   font-size: 12px;
   font-weight: 700;
+}
+
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.miniAvatars {
+  display: flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.miniAvatars span {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: -6px;
+  border: 2px solid rgba(255, 255, 255, 0.86);
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, rgba(255, 220, 195, 0.96), rgba(196, 122, 58, 0.9));
+  color: #fffdf8;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.miniAvatars span:first-child {
+  margin-left: 0;
+}
+
+.menuWrap {
+  position: relative;
+}
+
+.menuButton {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(216, 194, 180, 0.38);
+  border-radius: var(--radius-full);
+  background: rgba(237, 231, 224, 0.78);
+  color: var(--color-text-secondary);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+  transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+}
+
+.menuButton:hover,
+.menuButton[aria-expanded='true'] {
+  background: var(--color-primary);
+  color: #fffdf8;
+  transform: translateY(-1px);
+}
+
+.actionMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 8;
+  min-width: 150px;
+  padding: 7px;
+  border: 1px solid rgba(216, 194, 180, 0.5);
+  border-radius: 16px;
+  background: rgba(255, 248, 241, 0.98);
+  box-shadow: 0 16px 36px rgba(47, 21, 0, 0.16);
+  backdrop-filter: blur(12px);
+}
+
+.actionMenu button {
+  display: flex;
+  width: 100%;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  padding: 9px 10px;
+  text-align: left;
+}
+
+.actionMenu button:hover {
+  background: rgba(255, 220, 195, 0.42);
+}
+
+.actionMenu .menuDanger {
+  color: #a33a20;
+}
+
+.renameActions button {
+  border: 1px solid rgba(196, 122, 58, 0.22);
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 850;
+  padding: 7px 10px;
+}
+
+.renameActions button:hover {
+  border-color: rgba(196, 122, 58, 0.48);
+  background: rgba(255, 220, 195, 0.38);
+}
+
+.renameForm {
+  display: grid;
+  gap: 8px;
+}
+
+.renameForm label {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.renameForm input {
+  width: 100%;
+  border: 1px solid rgba(196, 122, 58, 0.34);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 850;
+  padding: 9px 11px;
+}
+
+.renameActions {
+  display: flex;
+  gap: 8px;
 }
 
 .emptyState {

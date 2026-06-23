@@ -57,3 +57,46 @@ describe('TextInputPanel split voice mode', () => {
     await waitFor(() => expect(onLLMSplit).toHaveBeenCalledWith('“你好。”', 'mixed'));
   });
 });
+
+describe('TextInputPanel Library source linking', () => {
+  it('prefills split textarea from Library chapter text when no segments exist', () => {
+    render(
+      <TextInputPanel
+        splitConfig={{ delimiters: ['。'], mode: 'rule' }}
+        onSplitConfigChange={vi.fn()}
+        onSplit={vi.fn()}
+        onLLMSplit={vi.fn()}
+        sourceText="来自文本库的章节全文。"
+        segmentTexts={[]}
+        segmentCount={0}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText('粘贴整段文本，拆分为多个语音段落...')).toHaveValue('来自文本库的章节全文。');
+  });
+
+  it('detects stale segments when Library text changes and can replace the split draft with Library text', async () => {
+    vi.mocked(textSplitApi.ruleSplit).mockResolvedValue(['新文本']);
+    const onSplit = vi.fn();
+
+    render(
+      <TextInputPanel
+        splitConfig={{ delimiters: ['。'], mode: 'rule' }}
+        onSplitConfigChange={vi.fn()}
+        onSplit={onSplit}
+        onLLMSplit={vi.fn()}
+        sourceText="新文本。"
+        segmentTexts={['旧文本。']}
+        segmentCount={1}
+      />,
+    );
+
+    expect(screen.getByText('文本库已更新，建议重新拆分')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /使用文本库全文/ }));
+    expect(screen.getByPlaceholderText('粘贴整段文本，拆分为多个语音段落...')).toHaveValue('新文本。');
+
+    fireEvent.click(screen.getByRole('button', { name: /^重新拆分$/ }));
+    await waitFor(() => expect(onSplit).toHaveBeenCalledWith(['新文本'], '新文本。', 'narration'));
+  });
+});

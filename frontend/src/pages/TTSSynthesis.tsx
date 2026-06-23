@@ -9,6 +9,7 @@ import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
 import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi } from '../services/api';
+import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
@@ -306,8 +307,9 @@ export function TTSSynthesis({
     if (ch) restoreChapterSettings(ch);
   }, [project.chapters, dispatch, restoreChapterSettings]);
 
-  const handleAddChapter = useCallback(() => {
-    const name = `第${project.chapters.length + 1}章`;
+  const handleAddChapter = useCallback((requestedName?: string) => {
+    const fallbackName = `新章节 ${project.chapters.length + 1}`;
+    const name = requestedName?.trim() || fallbackName;
     dispatch({ type: 'ADD_CHAPTER', name });
     // New chapter inherits settings from previous active chapter, so no need to reset global state
   }, [project.chapters.length, dispatch]);
@@ -678,38 +680,13 @@ export function TTSSynthesis({
     }
   }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
 
-  const handlePreviewRole = useCallback(async (role: Role, sampleText: string) => {
+  const handlePreviewRole = useCallback(async (role: RoleSnapshot, sampleText: string) => {
     setPreviewingRoleId(role.id);
     try {
-      const rp = role.default_engine_params;
-      const resp = rp.engine === 'edge_tts'
-        ? await ttsApi.synthesize({
-            text: sampleText,
-            engine: 'edge_tts',
-            voice_id: '',
-            edge_voice: rp.edge_voice || role.default_voice || '',
-            edge_rate: rp.edge_rate || '+0%',
-            edge_volume: rp.edge_volume || '+0%',
-            format: 'mp3',
-          })
-        : await ttsApi.synthesize({
-            text: sampleText,
-            voice_id: rp.voice_id || role.default_voice || '',
-            language: (rp.language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean',
-            speed: rp.speed ?? 1,
-            volume: rp.volume ?? 80,
-            pitch: rp.pitch ?? 1,
-            instruction: rp.instruction ?? '',
-            enable_ssml: rp.enable_ssml ?? false,
-            enable_markdown_filter: rp.enable_markdown_filter ?? false,
-            format: 'mp3',
-          });
-      if (!resp.audio_base64) throw new Error('No preview audio returned');
-      const audio = new Audio(`data:audio/${resp.audio_format || 'mp3'};base64,${resp.audio_base64}`);
-      await audio.play();
+      await playVoiceRolePreview(role, sampleText);
     } catch (error) {
       console.error('Preview role failed:', error);
-      showToast('试听失败', 'error');
+      showToast('试听失败：请检查后端 TTS 服务、模型配置和音色参数', 'error');
     } finally {
       setPreviewingRoleId(null);
     }
@@ -1338,7 +1315,7 @@ export function TTSSynthesis({
                     </option>
                   ))}
                 </select>
-                <button className={styles.chapterBtn} onClick={handleAddChapter} title="新建章节">+</button>
+                <button className={styles.chapterBtn} onClick={() => handleAddChapter()} title="新建章节">+</button>
                 {project.chapters.length > 1 && (
                   <button className={styles.chapterBtnDanger} onClick={() => handleDeleteChapter(project.active_chapter_id || '')} title="删除当前章节">✕</button>
                 )}
@@ -1423,6 +1400,7 @@ export function TTSSynthesis({
                 const result = await textSplitApi.llmSplit(text, activeChapter.split_config.delimiters);
                 doApplySplit(buildSplitItemsWithRoles(result.segments.map(s => ({ text: s.text, emotion: s.emotion })), voiceMode), text);
               }}
+              sourceText={activeChapter.original_text}
               segmentTexts={activeChapter.segments.map(s => s.text)}
               segmentCount={activeChapter.segments.length}
             />
@@ -1559,10 +1537,13 @@ export function TTSSynthesis({
             onSelectChapter={handleSelectChapter}
             onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
             onUpdateChapterText={(id, text) => {
-              if (id !== activeChapter.id) handleSelectChapter(id);
-              dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: text } });
+              dispatch({ type: 'SET_CHAPTER_META_BY_ID', id, meta: { original_text: text } });
+            }}
+            onUpdateChapterDesignTitle={(id, designTitle) => {
+              dispatch({ type: 'SET_CHAPTER_META_BY_ID', id, meta: { design_title: designTitle } });
             }}
             onAddChapter={handleAddChapter}
+            onDeleteChapter={handleDeleteChapter}
             onEnterStudio={(chapterId) => {
               handleSelectChapter(chapterId);
               setProjectSection('studio');
@@ -1597,20 +1578,20 @@ export function TTSSynthesis({
           <ProjectSettings
             projectName={project.name}
             remotionPath={project.remotion_project_path}
-            defaultNarratorName={project.default_narrator_snapshot?.name ?? null}
+            defaultNarratorName={voiceRoleLabel}
             storageMode={storageMode}
             chapterCount={project.chapters.length}
+            projectDescription={project.description}
+            projectType={project.project_type}
+            defaultLanguage={project.default_language}
+            exportDirectory={project.export_directory}
+            exportNamingTemplate={project.export_naming_template}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
+            onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}
             onBackToOverview={() => setProjectSection('overview')}
           />
-        ) : (
-          <div className={styles.projectSectionPlaceholder}>
-            <span className={styles.projectSectionKicker}>Coming next</span>
-            <h2>项目总览</h2>
-            <p>这里将展示项目状态、章节进度、最近导出和待处理事项。</p>
-          </div>
-        )}
+        ) : null}
         </ProjectShell>
       </div>
 

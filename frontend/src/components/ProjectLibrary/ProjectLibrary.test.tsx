@@ -48,7 +48,9 @@ describe('ProjectLibrary', () => {
         onSelectChapter={vi.fn()}
         onRenameChapter={vi.fn()}
         onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
         onAddChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
         onEnterStudio={vi.fn()}
       />,
     );
@@ -62,6 +64,8 @@ describe('ProjectLibrary', () => {
     expect(screen.getByText('2/3 已生成')).toBeInTheDocument();
     expect(screen.getAllByText('打开文本').length).toBeGreaterThan(0);
     expect(screen.getAllByText('进入工作室').length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /重命名章节/ }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /删除章节/ }).length).toBeGreaterThan(0);
   });
 
   it('opens an immersive chapter text view from a chapter card', () => {
@@ -72,7 +76,9 @@ describe('ProjectLibrary', () => {
         onSelectChapter={vi.fn()}
         onRenameChapter={vi.fn()}
         onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
         onAddChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
         onEnterStudio={vi.fn()}
       />,
     );
@@ -82,12 +88,14 @@ describe('ProjectLibrary', () => {
     expect(screen.getByText('Immersive Chapter Editor')).toBeInTheDocument();
     expect(screen.getByLabelText('章节标题')).toHaveValue('第一章');
     expect(screen.getByLabelText('章节全文')).toHaveValue('这是第一章完整旁白文本。');
+    expect(screen.getByLabelText('设计标题')).toHaveValue('第一章 视觉标题');
     expect(screen.getByRole('button', { name: /返回文本库/ })).toBeInTheDocument();
   });
 
-  it('edits chapter title and text inside the chapter text view', () => {
+  it('edits chapter title, design title, and text inside the chapter text view', () => {
     const onRenameChapter = vi.fn();
     const onUpdateChapterText = vi.fn();
+    const onUpdateChapterDesignTitle = vi.fn();
 
     render(
       <ProjectLibrary
@@ -96,17 +104,72 @@ describe('ProjectLibrary', () => {
         onSelectChapter={vi.fn()}
         onRenameChapter={onRenameChapter}
         onUpdateChapterText={onUpdateChapterText}
+        onUpdateChapterDesignTitle={onUpdateChapterDesignTitle}
         onAddChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
         onEnterStudio={vi.fn()}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /打开文本/ }));
     fireEvent.change(screen.getByLabelText('章节标题'), { target: { value: '新标题' } });
+    fireEvent.change(screen.getByLabelText('设计标题'), { target: { value: '新设计标题' } });
     fireEvent.change(screen.getByLabelText('章节全文'), { target: { value: '新的完整旁白文本' } });
 
     expect(onRenameChapter).toHaveBeenCalledWith('ch-1', '新标题');
+    expect(onUpdateChapterDesignTitle).toHaveBeenCalledWith('ch-1', '新设计标题');
     expect(onUpdateChapterText).toHaveBeenCalledWith('ch-1', '新的完整旁白文本');
+  });
+
+  it('renames and deletes chapters from overview without selecting them', () => {
+    const onSelectChapter = vi.fn();
+    const onRenameChapter = vi.fn();
+    const onDeleteChapter = vi.fn();
+
+    render(
+      <ProjectLibrary
+        chapters={[makeChapter('ch-1', '第一章', '文本一'), makeChapter('ch-2', '第二章', '文本二')]}
+        activeChapterId="ch-1"
+        onSelectChapter={onSelectChapter}
+        onRenameChapter={onRenameChapter}
+        onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
+        onAddChapter={vi.fn()}
+        onDeleteChapter={onDeleteChapter}
+        onEnterStudio={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /重命名章节 第一章/ }));
+    fireEvent.change(screen.getByLabelText('章节卡片名称'), { target: { value: '第一章新版' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存章节名称/ }));
+
+    expect(onRenameChapter).toHaveBeenCalledWith('ch-1', '第一章新版');
+    expect(onSelectChapter).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /删除章节 第二章/ }));
+    expect(onDeleteChapter).toHaveBeenCalledWith('ch-2');
+    expect(onSelectChapter).not.toHaveBeenCalled();
+  });
+
+  it('does not delete the last remaining chapter from overview', () => {
+    const onDeleteChapter = vi.fn();
+
+    render(
+      <ProjectLibrary
+        chapters={[makeChapter('ch-1', '第一章', '文本一')]}
+        activeChapterId="ch-1"
+        onSelectChapter={vi.fn()}
+        onRenameChapter={vi.fn()}
+        onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
+        onAddChapter={vi.fn()}
+        onDeleteChapter={onDeleteChapter}
+        onEnterStudio={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /删除章节 第一章/ })).toBeDisabled();
   });
 
   it('enters Studio from overview and chapter text view', () => {
@@ -119,7 +182,9 @@ describe('ProjectLibrary', () => {
         onSelectChapter={vi.fn()}
         onRenameChapter={vi.fn()}
         onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
         onAddChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
         onEnterStudio={onEnterStudio}
       />,
     );
@@ -146,15 +211,19 @@ describe('ProjectLibrary', () => {
         onSelectChapter={onSelectChapter}
         onRenameChapter={vi.fn()}
         onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
         onAddChapter={onAddChapter}
+        onDeleteChapter={vi.fn()}
         onEnterStudio={vi.fn()}
       />,
     );
 
     fireEvent.click(screen.getByRole('button', { name: /选择第二章/ }));
     fireEvent.click(screen.getByRole('button', { name: /新建章节/ }));
+    fireEvent.change(screen.getByLabelText('新章节名称'), { target: { value: '第三章：正式开场' } });
+    fireEvent.click(screen.getByRole('button', { name: /创建章节/ }));
 
     expect(onSelectChapter).toHaveBeenCalledWith('ch-2');
-    expect(onAddChapter).toHaveBeenCalled();
+    expect(onAddChapter).toHaveBeenCalledWith('第三章：正式开场');
   });
 });

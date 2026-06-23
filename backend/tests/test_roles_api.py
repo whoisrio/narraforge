@@ -7,6 +7,7 @@ def _role_payload(role_id: str = "role-linxia") -> dict:
         "name": "林夏",
         "avatar": "avatar://linxia",
         "description": "温柔但紧张的女主角",
+        "role_kind": "cast",
         "default_engine": "edge_tts",
         "default_voice": "zh-CN-XiaoxiaoNeural",
         "default_engine_params": {
@@ -27,6 +28,7 @@ def test_roles_crud_round_trip(client):
     body = created.json()
     assert body["id"] == "role-linxia"
     assert body["name"] == "林夏"
+    assert body["role_kind"] == "cast"
     assert body["default_engine"] == "edge_tts"
     assert body["default_engine_params"]["edge_voice"] == "zh-CN-XiaoxiaoNeural"
     assert body["favorite_styles"][0]["name"] == "低声"
@@ -41,6 +43,7 @@ def test_roles_crud_round_trip(client):
         "/api/roles/role-linxia",
         json={
             "name": "林夏新版",
+            "role_kind": "narrator",
             "default_voice": "zh-CN-XiaoyiNeural",
             "default_engine_params": {
                 "engine": "edge_tts",
@@ -50,6 +53,7 @@ def test_roles_crud_round_trip(client):
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["name"] == "林夏新版"
+    assert updated.json()["role_kind"] == "narrator"
     assert updated.json()["default_voice"] == "zh-CN-XiaoyiNeural"
 
     deleted = client.delete("/api/roles/role-linxia")

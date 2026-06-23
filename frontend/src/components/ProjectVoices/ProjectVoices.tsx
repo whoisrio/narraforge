@@ -3,6 +3,7 @@ import type { Role, RoleSnapshot, SegmentEngineParams, VoiceProfile } from '../.
 import { ttsApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
+import { isNarratorRole } from '../../services/voiceRoleKind';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import styles from './ProjectVoices.module.css';
 
@@ -14,7 +15,7 @@ interface ProjectVoicesProps {
   onCreateCast?: () => void;
   onSaveRole?: (role: RoleSnapshot) => void;
   onDeleteRole?: (roleId: string) => void;
-  onPreviewRole: (role: Role, sampleText: string) => void;
+  onPreviewRole: (role: RoleSnapshot, sampleText: string) => void;
   onManageRoles: () => void;
   defaultNarratorPreviewLabel?: string;
 }
@@ -39,11 +40,6 @@ function roleToSnapshot(role: Role): RoleSnapshot {
     default_engine_params: { ...role.default_engine_params },
     favorite_styles: [...role.favorite_styles],
   };
-}
-
-function isNarratorRole(role: Role, defaultNarratorRoleId?: string | null): boolean {
-  const text = `${role.name} ${role.description ?? ''}`.toLowerCase();
-  return role.id === defaultNarratorRoleId || text.includes('narrator') || text.includes('旁白');
 }
 
 function engineLabel(role: Role): string {
@@ -91,11 +87,13 @@ function VoiceRoleEditor({
   onChange,
   onCancel,
   onSave,
+  onPreview,
 }: {
   draft: RoleSnapshot;
   onChange: (draft: RoleSnapshot) => void;
   onCancel: () => void;
   onSave: (draft: RoleSnapshot) => void;
+  onPreview: (draft: RoleSnapshot, sampleText: string) => void;
 }) {
   const params = draft.default_engine_params;
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
@@ -328,7 +326,11 @@ function VoiceRoleEditor({
           <h4>Studio Playback</h4>
           <p>“这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。”</p>
           <div className={styles.waveform} aria-hidden="true"><i /><i /><i /><i /><i /><i /></div>
-          <button type="button" className={styles.ghostButton}>生成试听</button>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => onPreview(normalizeDraftForSave(draft), '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。')}
+          >生成试听</button>
         </aside>
       </div>
     </section>
@@ -379,6 +381,7 @@ export function ProjectVoices({
           onChange={setEditingRole}
           onCancel={() => setEditingRole(null)}
           onSave={saveEditingRole}
+          onPreview={onPreviewRole}
         />
       )}
 
@@ -419,7 +422,7 @@ export function ProjectVoices({
                       <p>{isDefault ? NARRATOR_SAMPLE : '可选旁白音色。选择为默认后用于 narration 段落。'}</p>
                     </div>
                     <div className={styles.roleActions}>
-                      <button type="button" onClick={() => onPreviewRole(role, NARRATOR_SAMPLE)}>试听</button>
+                      <button type="button" onClick={() => onPreviewRole(roleToSnapshot(role), NARRATOR_SAMPLE)}>试听</button>
                       <button type="button" aria-label={`编辑 ${role.name}`} onClick={() => setEditingRole(roleToSnapshot(role))}>编辑</button>
                       <button
                         type="button"
@@ -476,7 +479,7 @@ export function ProjectVoices({
                   <p>{CAST_SAMPLE}</p>
                 </div>
                 <div className={styles.roleActions}>
-                  <button type="button" onClick={() => onPreviewRole(role, CAST_SAMPLE)}>试听</button>
+                  <button type="button" onClick={() => onPreviewRole(roleToSnapshot(role), CAST_SAMPLE)}>试听</button>
                   <button type="button" aria-label={`编辑 ${role.name}`} onClick={() => setEditingRole(roleToSnapshot(role))}>编辑</button>
                 </div>
               </article>

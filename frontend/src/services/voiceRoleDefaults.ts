@@ -69,6 +69,7 @@ export function createVoiceRoleDraft({
     id: `role-${roleKind.toLowerCase()}-${Date.now()}`,
     name,
     description: roleKind,
+    role_kind: roleKind === 'Narrator' ? 'narrator' : 'cast',
     default_engine: roleParams.engine,
     default_voice: defaultVoiceFromParams(roleParams),
     default_engine_params: roleParams,

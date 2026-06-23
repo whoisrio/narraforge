@@ -171,8 +171,9 @@ describe('ProjectVoices', () => {
     expect(onSetDefaultNarrator).toHaveBeenCalledWith('role-narrator', expect.objectContaining(roleSnapshot));
   });
 
-  it('opens a voice role editor for a new Cast and saves Edge-TTS voice params', () => {
+  it('opens a voice role editor for a new Cast, previews draft params, and saves Edge-TTS voice params', () => {
     const onSaveRole = vi.fn();
+    const onPreviewRole = vi.fn();
 
     render(
       <ProjectVoices
@@ -182,7 +183,7 @@ describe('ProjectVoices', () => {
         onCreateDefaultNarrator={vi.fn()}
         onCreateCast={vi.fn()}
         onSaveRole={onSaveRole}
-        onPreviewRole={vi.fn()}
+        onPreviewRole={onPreviewRole}
         onManageRoles={vi.fn()}
       />,
     );
@@ -198,6 +199,19 @@ describe('ProjectVoices', () => {
     fireEvent.change(screen.getByLabelText('音色'), { target: { value: 'zh-CN-XiaoxiaoNeural' } });
     fireEvent.change(screen.getByLabelText('语速'), { target: { value: '+12%' } });
     fireEvent.change(screen.getByLabelText('音量'), { target: { value: '+4%' } });
+    fireEvent.click(screen.getByRole('button', { name: /生成试听/ }));
+
+    expect(onPreviewRole).toHaveBeenCalledWith(expect.objectContaining({
+      name: '嘉宾B',
+      default_engine: 'edge_tts',
+      default_voice: 'zh-CN-XiaoxiaoNeural',
+      default_engine_params: expect.objectContaining({
+        edge_voice: 'zh-CN-XiaoxiaoNeural',
+        edge_rate: '+12%',
+        edge_volume: '+4%',
+      }),
+    }), expect.any(String));
+
     fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
 
     expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({

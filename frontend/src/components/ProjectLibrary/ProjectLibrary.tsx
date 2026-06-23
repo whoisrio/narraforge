@@ -8,7 +8,9 @@ interface ProjectLibraryProps {
   onSelectChapter: (id: string) => void;
   onRenameChapter: (id: string, name: string) => void;
   onUpdateChapterText: (id: string, text: string) => void;
-  onAddChapter: () => void;
+  onUpdateChapterDesignTitle: (id: string, designTitle: string) => void;
+  onAddChapter: (name?: string) => void;
+  onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
 }
 
@@ -53,11 +55,18 @@ export function ProjectLibrary({
   onSelectChapter,
   onRenameChapter,
   onUpdateChapterText,
+  onUpdateChapterDesignTitle,
   onAddChapter,
+  onDeleteChapter,
   onEnterStudio,
 }: ProjectLibraryProps) {
   const [mode, setMode] = useState<LibraryMode>('overview');
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
+  const [chapterNameDraft, setChapterNameDraft] = useState('');
+  const [creatingChapter, setCreatingChapter] = useState(false);
+  const [newChapterName, setNewChapterName] = useState('');
   const activeChapter = chapters.find(chapter => chapter.id === activeChapterId) ?? chapters[0];
+  const canDeleteChapter = chapters.length > 1;
   const totals = useMemo(() => {
     const chars = chapters.reduce((sum, chapter) => sum + countTextChars(chapterText(chapter)), 0);
     const segments = chapters.reduce((sum, chapter) => sum + chapter.segments.length, 0);
@@ -65,13 +74,38 @@ export function ProjectLibrary({
     return { chars, segments, ready };
   }, [chapters]);
 
+  const startRenameChapter = (chapter: Chapter) => {
+    setEditingChapterId(chapter.id);
+    setChapterNameDraft(chapter.name);
+  };
+
+  const saveChapterName = (chapter: Chapter) => {
+    const nextName = chapterNameDraft.trim();
+    if (!nextName) {
+      setEditingChapterId(null);
+      setChapterNameDraft('');
+      return;
+    }
+    if (nextName !== chapter.name) {
+      onRenameChapter(chapter.id, nextName);
+    }
+    setEditingChapterId(null);
+    setChapterNameDraft('');
+  };
+
+  const createChapter = () => {
+    onAddChapter(newChapterName.trim() || undefined);
+    setNewChapterName('');
+    setCreatingChapter(false);
+  };
+
   if (!activeChapter) {
     return (
       <section className={styles.emptyRoot}>
         <span className={styles.kicker}>Library</span>
         <h2>Chapter Library</h2>
         <p>还没有章节。先创建一个章节，再进入工作室分段合成。</p>
-        <button type="button" onClick={onAddChapter}>新建章节</button>
+        <button type="button" onClick={() => onAddChapter()}>新建章节</button>
       </section>
     );
   }
@@ -115,10 +149,15 @@ export function ProjectLibrary({
 
         <aside className={styles.inspectorPanel}>
           <h3>章节信息</h3>
-          <div className={styles.inspectorCard}>
+          <label className={styles.inspectorField} htmlFor="library-chapter-design-title">
             <span>设计标题</span>
-            <strong>{activeChapter.design_title || activeChapter.name}</strong>
-          </div>
+            <input
+              id="library-chapter-design-title"
+              value={activeChapter.design_title || ''}
+              onChange={(event) => onUpdateChapterDesignTitle(activeChapter.id, event.target.value)}
+              placeholder={activeChapter.name}
+            />
+          </label>
           <div className={styles.inspectorCard}>
             <span>分段状态</span>
             <strong>{progress.ready}/{progress.total} 已生成</strong>
@@ -127,6 +166,14 @@ export function ProjectLibrary({
             <span>音频时长</span>
             <strong>{formatSeconds(chapterAudioDuration(activeChapter))}</strong>
           </div>
+          <button
+            type="button"
+            className={styles.inspectorDanger}
+            disabled={!canDeleteChapter}
+            onClick={() => onDeleteChapter(activeChapter.id)}
+          >
+            删除章节 {activeChapter.name}
+          </button>
           <p className={styles.inspectorHint}>文本库负责章节全文；进入工作室后再进行切分、配音、试听与导出。</p>
         </aside>
       </section>
@@ -145,7 +192,7 @@ export function ProjectLibrary({
           <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
           <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
           <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
-          <button type="button" className={styles.primaryButton} onClick={onAddChapter}>新建章节</button>
+          <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
         </div>
       </header>
 
@@ -155,11 +202,36 @@ export function ProjectLibrary({
         <span className={styles.filterChip}>Completed <strong>{totals.ready}</strong></span>
       </div>
 
+      {creatingChapter && (
+        <div className={styles.createChapterPanel}>
+          <label htmlFor="library-new-chapter-name">新章节名称</label>
+          <input
+            id="library-new-chapter-name"
+            value={newChapterName}
+            placeholder={`新章节 ${chapters.length + 1}`}
+            onChange={(event) => setNewChapterName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') createChapter();
+              if (event.key === 'Escape') {
+                setCreatingChapter(false);
+                setNewChapterName('');
+              }
+            }}
+            autoFocus
+          />
+          <div className={styles.createChapterActions}>
+            <button type="button" onClick={createChapter}>创建章节</button>
+            <button type="button" onClick={() => { setCreatingChapter(false); setNewChapterName(''); }}>取消</button>
+          </div>
+        </div>
+      )}
+
       <div className={styles.chapterGrid}>
         {chapters.map((chapter, index) => {
           const text = chapterText(chapter);
           const chars = countTextChars(text);
           const progress = chapterProgress(chapter);
+          const isEditing = editingChapterId === chapter.id;
           return (
             <article key={chapter.id} className={styles.chapterCard}>
               <button
@@ -173,7 +245,38 @@ export function ProjectLibrary({
                 <span className={styles.chapterBadge}>CH {String(index + 1).padStart(2, '0')}</span>
               </button>
               <div className={styles.chapterBody}>
-                <h3>{chapter.name}</h3>
+                <div className={styles.chapterTitleRow}>
+                  {isEditing ? (
+                    <div className={styles.chapterRenameForm}>
+                      <label htmlFor={`chapter-card-name-${chapter.id}`}>章节卡片名称</label>
+                      <input
+                        id={`chapter-card-name-${chapter.id}`}
+                        value={chapterNameDraft}
+                        onChange={(event) => setChapterNameDraft(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') saveChapterName(chapter);
+                          if (event.key === 'Escape') {
+                            setEditingChapterId(null);
+                            setChapterNameDraft('');
+                          }
+                        }}
+                        autoFocus
+                      />
+                      <div className={styles.chapterRenameActions}>
+                        <button type="button" onClick={() => saveChapterName(chapter)}>保存章节名称</button>
+                        <button type="button" onClick={() => { setEditingChapterId(null); setChapterNameDraft(''); }}>取消</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <h3>{chapter.name}</h3>
+                  )}
+                  {!isEditing && (
+                    <div className={styles.chapterQuickActions}>
+                      <button type="button" aria-label={`重命名章节 ${chapter.name}`} onClick={() => startRenameChapter(chapter)}>✎</button>
+                      <button type="button" aria-label={`删除章节 ${chapter.name}`} disabled={!canDeleteChapter} onClick={() => onDeleteChapter(chapter.id)}>⌫</button>
+                    </div>
+                  )}
+                </div>
                 <p>{text || '尚未填写章节全文。'}</p>
                 <div className={styles.chapterStats}>
                   <span>{chars} 字</span>

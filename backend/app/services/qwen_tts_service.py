@@ -1016,8 +1016,8 @@ class QwenTTSService:
         # 新加坡和北京地域的API Key不同。获取API Key：https://help.aliyun.com/zh/model-studio/get-api-key
         # 若没有配置环境变量，请用百炼API Key将下行替换为：dashscope.api_key = "sk-xxx"
 
-        dashscope.api_key = os.getenv("QWEN_API_KEY")
-        dashscope.model = os.getenv("QWEN_MODEL")
+        dashscope.api_key = self.api_key or os.getenv("QWEN_API_KEY")
+        dashscope.model = self.model or os.getenv("QWEN_MODEL")
         if not dashscope.api_key:
             raise ValueError("QWEN_API_KEY environment variable not set.")
 

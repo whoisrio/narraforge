@@ -184,7 +184,7 @@ function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): S
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
-  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path'>> }
+  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path' | 'description' | 'project_type' | 'default_language' | 'export_directory' | 'export_naming_template'>> }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
   | { type: 'ADD_CHAPTER'; name: string }
@@ -195,6 +195,7 @@ export type Action =
   | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
   | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
+  | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[] }
   | { type: 'APPEND_SEGMENT'; text?: string }
@@ -292,6 +293,8 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => ({ ...ch, split_config: action.config, updated_at: new Date().toISOString() })) };
     case 'SET_CHAPTER_META':
       return { project: updateActive(p, ch => ({ ...ch, ...action.meta, updated_at: new Date().toISOString() })) };
+    case 'SET_CHAPTER_META_BY_ID':
+      return { project: updateChapter(p, action.id, ch => ({ ...ch, ...action.meta, updated_at: new Date().toISOString() })) };
 
     // ---- Segment operations (active chapter) ----
     case 'APPLY_SPLIT': {
