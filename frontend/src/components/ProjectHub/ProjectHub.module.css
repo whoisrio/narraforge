@@ -188,6 +188,7 @@
   letter-spacing: -0.09em;
   text-shadow: 0 12px 28px rgba(47, 21, 0, 0.22);
   transition: transform var(--transition-normal);
+  pointer-events: none;
 }
 
 .statusBadge {

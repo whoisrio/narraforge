@@ -74,4 +74,18 @@ describe('ProjectShell', () => {
 
     expect(onBackToProjects).toHaveBeenCalled();
   });
+
+  it('collapses and expands the project sidebar while keeping nav accessible', () => {
+    renderProjectShell();
+
+    fireEvent.click(screen.getByRole('button', { name: /收起项目导航/ }));
+
+    expect(screen.getByTestId('project-shell')).toHaveAttribute('data-collapsed', 'true');
+    expect(screen.getByRole('button', { name: /展开项目导航/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /工作室/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /展开项目导航/ }));
+
+    expect(screen.getByTestId('project-shell')).toHaveAttribute('data-collapsed', 'false');
+  });
 });

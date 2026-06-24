@@ -85,6 +85,16 @@ def _dump_animation_spec(spec: dict[str, Any] | None) -> str | None:
 # ----- serialization -----
 
 def project_to_summary(p: SegmentedProject) -> ProjectSummary:
+    chapter_count = len(p.chapters)
+    segment_count = 0
+    generated_count = 0
+    duration_sec = 0.0
+    for chapter in p.chapters:
+        segment_count += len(chapter.segments)
+        for segment in chapter.segments:
+            if segment.current_audio_path:
+                generated_count += 1
+            duration_sec += float(segment.duration_sec or 0)
     return ProjectSummary(
         id=p.id,
         name=p.name,
@@ -92,6 +102,12 @@ def project_to_summary(p: SegmentedProject) -> ProjectSummary:
         layout=p.layout,
         active_chapter_id=p.active_chapter_id,
         remotion_project_path=getattr(p, "remotion_project_path", None),
+        summary_stats={
+            "chapter_count": chapter_count,
+            "segment_count": segment_count,
+            "generated_count": generated_count,
+            "duration_sec": round(duration_sec, 2),
+        },
         created_at=_to_iso(p.created_at) or "",
         updated_at=_to_iso(p.updated_at) or "",
     )

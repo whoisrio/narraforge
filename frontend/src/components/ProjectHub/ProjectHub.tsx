@@ -11,6 +11,14 @@ interface ProjectHubProps {
 }
 
 function projectStats(project: SegmentedProject) {
+  if (project.summary_stats) {
+    return {
+      chapters: project.summary_stats.chapter_count,
+      segments: project.summary_stats.segment_count,
+      generated: project.summary_stats.generated_count,
+      duration: project.summary_stats.duration_sec,
+    };
+  }
   const chapters = project.chapters.length;
   const segments = project.chapters.reduce((total, chapter) => total + chapter.segments.length, 0);
   const generated = project.chapters.reduce(

@@ -13,6 +13,7 @@ interface ListResponse {
   created_at: string;
   updated_at: string;
   remotion_project_path?: string | null;
+  summary_stats?: SegmentedProject['summary_stats'];
 }
 
 export const backendStorage: SegmentedProjectStorage = {
@@ -25,6 +26,7 @@ export const backendStorage: SegmentedProjectStorage = {
       chapters: [],
       active_chapter_id: p.active_chapter_id ?? undefined,
       remotion_project_path: p.remotion_project_path ?? null,
+      summary_stats: p.summary_stats ?? null,
       created_at: p.created_at, updated_at: p.updated_at,
     } as SegmentedProject));
   },

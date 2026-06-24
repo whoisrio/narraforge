@@ -100,6 +100,7 @@ class ProjectSummary(BaseModel):
     layout: str
     active_chapter_id: str | None
     remotion_project_path: str | None = None
+    summary_stats: dict[str, int | float] | None = None
     created_at: str
     updated_at: str
 
