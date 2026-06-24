@@ -1,6 +1,11 @@
 .root {
   display: block;
   min-height: calc(100vh - var(--header-height) - 76px);
+  --project-rail-width: var(--nav-width);
+}
+
+.root[data-collapsed='true'] {
+  --project-rail-width: var(--nav-collapsed-width);
 }
 
 .projectRail {
@@ -9,7 +14,7 @@
   top: 0;
   bottom: 0;
   z-index: calc(var(--z-fixed) - 1);
-  width: var(--nav-width);
+  width: var(--project-rail-width);
   display: flex;
   flex-direction: column;
   gap: var(--spacing-lg);
@@ -18,6 +23,7 @@
   background: rgba(249, 243, 235, 0.92);
   box-shadow: 10px 0 30px rgba(26, 24, 20, 0.04);
   backdrop-filter: blur(12px);
+  transition: width var(--transition-normal);
 }
 
 .projectIdentity {
@@ -29,6 +35,7 @@
   border-radius: 18px;
   background: rgba(255, 220, 195, 0.28);
   border: 1px solid rgba(196, 122, 58, 0.12);
+  overflow: hidden;
 }
 
 .projectMark {
@@ -107,6 +114,8 @@
   color: var(--color-text-secondary);
   font-size: 14px;
   font-weight: 750;
+  white-space: nowrap;
+  overflow: hidden;
   transition: background var(--transition-normal), color var(--transition-normal), box-shadow var(--transition-normal);
 }
 
@@ -132,12 +141,28 @@
   background: rgba(255, 255, 255, 0.52);
 }
 
+.collapseButton {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(216, 194, 180, 0.5);
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .workspace {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  padding-left: calc(var(--nav-width) + 28px);
+  padding-left: calc(var(--project-rail-width) + 28px);
+  transition: padding-left var(--transition-normal);
 }
 
 .contextBar {

@@ -58,6 +58,28 @@ describe('ProjectHub', () => {
     expect(screen.queryByRole('button', { name: /工作室/ })).not.toBeInTheDocument();
   });
 
+  it('uses backend summary stats when list cards are summary-only', () => {
+    const project = {
+      ...makeProject('p-summary', '后端项目', 0, 0),
+      summary_stats: { chapter_count: 3, segment_count: 12, generated_count: 7, duration_sec: 91 },
+    };
+
+    render(
+      <ProjectHub
+        projects={[project]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onRenameProject={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('3 章')).toBeInTheDocument();
+    expect(screen.getByText('12 段')).toBeInTheDocument();
+    expect(screen.getByText('1m 31s')).toBeInTheDocument();
+    expect(screen.getByText('7/12 已生成')).toBeInTheDocument();
+  });
+
   it('opens a project from the card body or menu open action', () => {
     const onOpenProject = vi.fn();
 

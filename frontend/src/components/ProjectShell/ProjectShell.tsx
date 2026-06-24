@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createTranslator, projectNavItems, type Locale } from '../../i18n';
 import styles from './ProjectShell.module.css';
 
@@ -46,17 +46,18 @@ export function ProjectShell({
   onSectionChange,
   onBackToProjects,
 }: ProjectShellProps) {
+  const [collapsed, setCollapsed] = useState(false);
   const t = createTranslator(locale);
 
   return (
-    <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left" data-workspace-chrome="breadcrumb-only">
+    <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left" data-workspace-chrome="breadcrumb-only" data-collapsed={collapsed ? 'true' : 'false'}>
       <aside className={styles.projectRail} aria-label="Project navigation">
         <div className={styles.projectIdentity}>
           <div className={styles.projectMark}>{projectName.slice(0, 1) || 'N'}</div>
-          <div className={styles.projectTextBlock}>
+          {!collapsed && <div className={styles.projectTextBlock}>
             <h2 title={projectName}>{projectName}</h2>
             {projectSubtitle && <p title={projectSubtitle}>{projectSubtitle}</p>}
-          </div>
+          </div>}
         </div>
 
         <button
@@ -65,7 +66,7 @@ export function ProjectShell({
           onClick={onBackToProjects}
         >
           <span>←</span>
-          <span>返回项目总览</span>
+          {!collapsed && <span>返回项目总览</span>}
         </button>
 
         <nav className={styles.projectNav}>
@@ -78,14 +79,26 @@ export function ProjectShell({
                 type="button"
                 className={`${styles.projectNavItem} ${active ? styles.projectNavItemActive : ''}`}
                 aria-current={active ? 'page' : undefined}
+                aria-label={collapsed ? t(item.labelKey) : undefined}
+                title={collapsed ? t(item.labelKey) : undefined}
                 onClick={() => onSectionChange(id)}
               >
                 <span className={styles.projectNavIcon}>{SECTION_ICONS[id]}</span>
-                <span>{t(item.labelKey)}</span>
+                {!collapsed && <span>{t(item.labelKey)}</span>}
               </button>
             );
           })}
         </nav>
+
+        <button
+          type="button"
+          className={styles.collapseButton}
+          aria-label={collapsed ? '展开项目导航' : '收起项目导航'}
+          onClick={() => setCollapsed(value => !value)}
+        >
+          <span>{collapsed ? '›' : '‹'}</span>
+          {!collapsed && <span>收起</span>}
+        </button>
       </aside>
 
       <div className={styles.workspace}>

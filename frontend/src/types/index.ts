@@ -406,6 +406,13 @@ export interface SegmentedProject {
   active_narration_version?: string | null;
   /** 默认关联的 Remotion 项目路径；导出文件优先写入其 public/audio */
   remotion_project_path?: string | null;
+  /** Backend list endpoint summary for project-card stats when chapters are not hydrated. */
+  summary_stats?: {
+    chapter_count: number;
+    segment_count: number;
+    generated_count: number;
+    duration_sec: number;
+  } | null;
   default_narrator_role_id?: string | null;
   default_narrator_snapshot?: RoleSnapshot | null;
   created_at: string;

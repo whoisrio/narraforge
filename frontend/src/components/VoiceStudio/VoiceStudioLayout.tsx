@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import styles from './VoiceStudioLayout.module.css';
 
 export type StudioViewMode = 'list' | 'dialogue';
@@ -50,10 +50,11 @@ export function VoiceStudioLayout({
   onExport,
   onPlayAll,
 }: VoiceStudioLayoutProps) {
+  const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
   const progress = segmentCount === 0 ? 0 : Math.round((generatedCount / segmentCount) * 100);
 
   return (
-    <section className={styles.root} data-testid="voice-studio-layout">
+    <section className={styles.root} data-testid="voice-studio-layout" data-side-panel-collapsed={sidePanelCollapsed ? 'true' : 'false'}>
       <header className={styles.header}>
         <div className={styles.titleBlock}>
           <div className={styles.breadcrumbs}>
@@ -71,6 +72,14 @@ export function VoiceStudioLayout({
             <span />
             <span />
           </div>
+          <button
+            type="button"
+            className={styles.panelToggleButton}
+            aria-label={sidePanelCollapsed ? '展开右侧面板' : '收起右侧面板'}
+            onClick={() => setSidePanelCollapsed(value => !value)}
+          >
+            {sidePanelCollapsed ? '展开面板' : '收起面板'}
+          </button>
           <button type="button" className={styles.primaryButton} onClick={onBatchSynthesize}>批量合成</button>
         </div>
       </header>
@@ -90,7 +99,7 @@ export function VoiceStudioLayout({
           <div className={styles.segmentCanvas}>{children}</div>
         </main>
 
-        <aside className={styles.sidePanel}>
+        {!sidePanelCollapsed && <aside className={styles.sidePanel}>
           <section className={styles.sideCard}>
             <div className={styles.sideTitle}>Session Monitor</div>
             <div className={styles.statGrid}>
@@ -130,7 +139,7 @@ export function VoiceStudioLayout({
               ))}
             </div>
           </section>
-        </aside>
+        </aside>}
       </div>
 
       <footer className={styles.transportBar}>

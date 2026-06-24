@@ -33,6 +33,15 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: /Settings/ })).toBeInTheDocument();
   });
 
+  it('shows the header labels as status context instead of unexplained action buttons', () => {
+    renderShell('zh-CN');
+
+    expect(screen.getByText('Warm amber theme')).toBeInTheDocument();
+    expect(screen.getByText('本地工作区')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Warm Amber Studio/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Local workspace/i })).not.toBeInTheDocument();
+  });
+
   it('calls onNavigate with the selected global destination', () => {
     const { onNavigate } = renderShell('zh-CN');
 

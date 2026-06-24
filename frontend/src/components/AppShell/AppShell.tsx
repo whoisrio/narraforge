@@ -45,10 +45,10 @@ export function AppShell({
         </div>
 
         <div className={styles.headerCenter}>
-          <span className={styles.headerPill}>Warm Amber Studio</span>
+          <span className={styles.headerPill}>Warm amber theme</span>
           <span className={styles.headerStatus}>
             <span className={styles.statusDot} />
-            Local workspace
+            本地工作区
           </span>
         </div>
 

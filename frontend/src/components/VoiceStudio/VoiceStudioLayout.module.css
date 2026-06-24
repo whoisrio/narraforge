@@ -4,6 +4,10 @@
   padding-bottom: 118px;
 }
 
+.root[data-side-panel-collapsed='true'] .workspaceGrid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .header {
   display: flex;
   justify-content: space-between;
@@ -79,6 +83,17 @@
   font-size: 13px;
   font-weight: 900;
   box-shadow: 0 10px 22px rgba(139, 76, 13, 0.16);
+}
+
+.panelToggleButton {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(216, 194, 180, 0.48);
+  background: rgba(249, 243, 235, 0.74);
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .workspaceGrid {

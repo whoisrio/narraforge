@@ -55,6 +55,35 @@ def test_crud_round_trip(client, tmp_path, monkeypatch):
     assert r.status_code == 204
 
 
+def test_list_projects_includes_card_summary_stats(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p-stats")
+    payload["chapters"].append({
+        "id": "c2", "position": 1, "name": "第二章", "engine": "edge_tts",
+        "default_params": {"engine": "edge_tts", "voice_id": "v1"},
+        "split_config": {"delimiters": ["。"], "mode": "rule"},
+        "segments": [
+            {"id": "s2", "position": 0, "text": "ready", "params": {"engine": "edge_tts"}, "current_audio_path": "p/c2/s2.mp3", "duration_sec": 3.4},
+            {"id": "s3", "position": 1, "text": "idle", "params": {"engine": "edge_tts"}},
+        ],
+    })
+    payload["chapters"][0]["segments"][0]["current_audio_path"] = "p/c1/s1.mp3"
+    payload["chapters"][0]["segments"][0]["duration_sec"] = 2.2
+
+    created = client.post("/api/segmented-projects", json=payload)
+    assert created.status_code == 201, created.text
+
+    r = client.get("/api/segmented-projects")
+    assert r.status_code == 200
+    summary = r.json()[0]
+    assert summary["summary_stats"] == {
+        "chapter_count": 2,
+        "segment_count": 3,
+        "generated_count": 2,
+        "duration_sec": 5.6,
+    }
+
+
 def test_404_on_missing(client):
     r = client.get("/api/segmented-projects/nope")
     assert r.status_code == 404

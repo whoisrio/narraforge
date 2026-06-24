@@ -82,4 +82,19 @@ describe('VoiceStudioLayout', () => {
     expect(onPlayAll).toHaveBeenCalled();
     expect(onExport).toHaveBeenCalled();
   });
+
+  it('collapses and expands the studio right panel', () => {
+    renderStudio();
+
+    fireEvent.click(screen.getByRole('button', { name: /收起右侧面板/ }));
+
+    expect(screen.getByTestId('voice-studio-layout')).toHaveAttribute('data-side-panel-collapsed', 'true');
+    expect(screen.getByRole('button', { name: /展开右侧面板/ })).toBeInTheDocument();
+    expect(screen.queryByText('Session Monitor')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /展开右侧面板/ }));
+
+    expect(screen.getByTestId('voice-studio-layout')).toHaveAttribute('data-side-panel-collapsed', 'false');
+    expect(screen.getByText('Session Monitor')).toBeInTheDocument();
+  });
 });
