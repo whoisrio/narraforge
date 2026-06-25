@@ -95,7 +95,7 @@
 /* 预置音色网格 */
 .voiceGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--spacing-sm);
 }
 

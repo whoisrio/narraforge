@@ -21,19 +21,20 @@
 .hero {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
-  align-items: flex-start;
-  margin-bottom: var(--spacing-2xl);
-  padding: 22px;
-  border: 1px solid rgba(216, 194, 180, 0.48);
-  border-radius: 26px;
-  background: linear-gradient(135deg, rgba(255, 252, 247, 0.94), rgba(255, 241, 224, 0.74));
-  box-shadow: var(--shadow-sm);
+  gap: var(--spacing-md);
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border: 1px solid rgba(216, 194, 180, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: none;
+  backdrop-filter: blur(8px);
 }
 
 .kicker {
-  display: block;
-  margin-bottom: 6px;
+  display: none;
+  margin-bottom: 0;
   color: var(--color-primary-dark);
   font-size: 11px;
   font-weight: 900;
@@ -43,15 +44,14 @@
 
 .hero h1 {
   margin: 0;
-  color: var(--color-text-primary);
-  font-size: 30px;
+  color: var(--color-primary-dark);
+  font-size: 20px;
+  line-height: 1.1;
   letter-spacing: -0.04em;
 }
 
 .hero p {
-  margin: 8px 0 0;
-  color: var(--color-text-secondary);
-  line-height: 1.65;
+  display: none;
 }
 
 .heroPills {
@@ -64,11 +64,13 @@
 .heroPills span {
   border: 1px solid rgba(196, 122, 58, 0.22);
   border-radius: var(--radius-full);
-  padding: 7px 11px;
-  background: rgba(255, 255, 255, 0.7);
+  min-height: 24px;
+  padding: 0 8px;
+  background: rgba(249, 243, 235, 0.5);
   color: var(--color-primary-dark);
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 850;
+  line-height: 24px;
 }
 
 .engineSwitch {
@@ -340,8 +342,7 @@
 
 .content {
   display: grid;
-  /* 用百分比而非 fr，避免子内容撑大某一列 */
-  grid-template-columns: 50% 50%;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: var(--spacing-2xl);
 }
 
@@ -349,14 +350,22 @@
 .listSection {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
 
 .card {
+  min-width: 0;
+  overflow: hidden;
   background: var(--color-surface);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-card);
+}
+
+.card :where(div, span, p, strong) {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .card h2 {

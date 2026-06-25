@@ -20,7 +20,8 @@ describe('VoiceClone redesign shell', () => {
   it('surfaces global Voice Design as reusable voice profile workspace', () => {
     render(<VoiceClone />);
 
-    expect(screen.getByText('Voice Design')).toBeInTheDocument();
+    const title = screen.getByText('Voice Design');
+    expect(title.closest('section')).toHaveAttribute('data-visual', 'thin-global-header');
     expect(screen.getByText('Voice Profile Library')).toBeInTheDocument();
     expect(screen.getByText('Clone / Design / Tune')).toBeInTheDocument();
     expect(screen.getByText('Project Role Ready')).toBeInTheDocument();

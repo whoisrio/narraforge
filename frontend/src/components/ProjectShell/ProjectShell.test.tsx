@@ -34,7 +34,7 @@ describe('ProjectShell', () => {
     expect(screen.getByRole('button', { name: /^◇总览$/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /文本库/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /工作室/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /声音角色/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /角色/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /项目设置/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Exports|导出中心/ })).not.toBeInTheDocument();
   });
@@ -87,5 +87,36 @@ describe('ProjectShell', () => {
     fireEvent.click(screen.getByRole('button', { name: /展开项目导航/ }));
 
     expect(screen.getByTestId('project-shell')).toHaveAttribute('data-collapsed', 'false');
+  });
+
+  it('renders chapter rows as compact cards without nested buttons', () => {
+    const onSelectChapter = vi.fn();
+    render(
+      <ProjectShell
+        projectName="草稿项目"
+        activeSection="studio"
+        locale="zh-CN"
+        chapterName="第一章"
+        chapters={[
+          { id: 'ch-1', name: '第一章', segments: [], default_params: { engine: 'edge_tts' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+          { id: 'ch-2', name: '第二章', segments: [], default_params: { engine: 'edge_tts' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+        ]}
+        activeChapterId="ch-1"
+        onSelectChapter={onSelectChapter}
+        onRenameChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
+        onSectionChange={vi.fn()}
+      >
+        <div>Studio content</div>
+      </ProjectShell>,
+    );
+
+    const row = screen.getByRole('button', { name: '选择章节 第一章' }).closest('[data-chapter-card="compact"]');
+    expect(row).toBeInTheDocument();
+    expect(row?.querySelector('button button')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '选择章节 第二章' }));
+
+    expect(onSelectChapter).toHaveBeenCalledWith('ch-2');
   });
 });

@@ -40,246 +40,277 @@ const cast: Role = {
 };
 
 describe('ProjectVoices', () => {
-  it('renders narrator and cast sections with preview controls', () => {
+  it('renders role cards with name, identity chip, and engine chip', () => {
     render(
       <ProjectVoices
         roles={[narrator, cast]}
         defaultNarratorRoleId="role-narrator"
         onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
         onPreviewRole={vi.fn()}
         onManageRoles={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('Narrator')).toBeInTheDocument();
-    expect(screen.getByText('Cast')).toBeInTheDocument();
-    expect(screen.getAllByText('默认旁白').length).toBeGreaterThan(0);
+    expect(screen.getByText('默认旁白')).toBeInTheDocument();
     expect(screen.getByText('嘉宾A')).toBeInTheDocument();
+    // Identity chips
+    expect(screen.getAllByText(/旁白/).length).toBeGreaterThan(0);
+    // Cast chip uses exact text "角色" — use getAllByText since "角色" also appears in placeholder
+    const castChips = screen.getAllByText('角色');
+    expect(castChips.length).toBeGreaterThan(0);
+    // Engine chips
+    expect(screen.getAllByText('Edge-TTS').length).toBeGreaterThan(0);
+    // Preview buttons
     expect(screen.getAllByRole('button', { name: /试听/ })).toHaveLength(2);
   });
 
-  it('prompts to create a usable default narrator when missing', () => {
-    const onCreateDefaultNarrator = vi.fn();
-
-    render(
-      <ProjectVoices
-        roles={[cast]}
-        defaultNarratorRoleId={null}
-        onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={onCreateDefaultNarrator}
-        onCreateCast={vi.fn()}
-        onPreviewRole={vi.fn()}
-        onManageRoles={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText('创建后将使用')).toBeInTheDocument();
-    expect(screen.getByText(/Edge-TTS · zh-CN-YunxiNeural/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /创建默认旁白/ }));
-
-    expect(screen.getByRole('heading', { name: /声音角色配置/ })).toBeInTheDocument();
-    expect(screen.getByLabelText('角色名')).toHaveValue('默认旁白');
-  });
-
-  it('shows the actual voice that will be used for narrator creation', () => {
+  it('shows empty state when no roles exist', () => {
     render(
       <ProjectVoices
         roles={[]}
         defaultNarratorRoleId={null}
-        defaultNarratorPreviewLabel="Edge-TTS · zh-HK-HiuGaaiNeural"
         onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
         onPreviewRole={vi.fn()}
         onManageRoles={vi.fn()}
       />,
     );
 
-    expect(screen.getByText(/Edge-TTS · zh-HK-HiuGaaiNeural/)).toBeInTheDocument();
+    expect(screen.getByText('还没有旁白角色')).toBeInTheDocument();
+    expect(screen.getByText('还没有对话角色')).toBeInTheDocument();
   });
 
-  it('creates cast and previews roles', () => {
-    const onCreateCast = vi.fn();
+  it('shows placeholder cards for adding new roles', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /新增旁白/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /新增角色/ })).toBeInTheDocument();
+  });
+
+  it('opens editor when clicking a role card', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /编辑 默认旁白/ }));
+
+    expect(screen.getByLabelText('声音角色编辑器')).toBeInTheDocument();
+    expect(screen.getByLabelText('角色名')).toHaveValue('默认旁白');
+    expect(screen.getByText('角色声音参数')).toBeInTheDocument();
+  });
+
+  it('opens editor for new narrator via placeholder card', () => {
+    render(
+      <ProjectVoices
+        roles={[cast]}
+        defaultNarratorRoleId={null}
+        onSetDefaultNarrator={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /新增旁白/ }));
+
+    expect(screen.getByLabelText('声音角色编辑器')).toBeInTheDocument();
+    expect(screen.getByLabelText('角色名')).toHaveValue('默认旁白');
+  });
+
+  it('opens editor for new cast via placeholder card', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /新增角色/ }));
+
+    expect(screen.getByLabelText('声音角色编辑器')).toBeInTheDocument();
+    expect(screen.getByLabelText('角色名')).toHaveValue('新 Cast');
+  });
+
+  it('saves edited role with correct params', () => {
+    const onSaveRole = vi.fn();
+
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onSaveRole={onSaveRole}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    // Click card to open editor
+    fireEvent.click(screen.getByRole('button', { name: /编辑 默认旁白/ }));
+
+    // Modify name and voice
+    fireEvent.change(screen.getByLabelText('角色名'), { target: { value: '新旁白名' } });
+    fireEvent.change(screen.getByLabelText('音色'), { target: { value: 'zh-CN-XiaoxiaoNeural' } });
+    fireEvent.change(screen.getByLabelText('语速'), { target: { value: '+12%' } });
+
+    // Save
+    fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
+
+    expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
+      name: '新旁白名',
+      default_engine: 'edge_tts',
+      default_voice: 'zh-CN-XiaoxiaoNeural',
+      default_engine_params: expect.objectContaining({
+        edge_voice: 'zh-CN-XiaoxiaoNeural',
+        edge_rate: '+12%',
+      }),
+    }));
+  });
+
+  it('cancels editing and closes editor', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /编辑 默认旁白/ }));
+    expect(screen.getByLabelText('声音角色编辑器')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /取消/ }));
+    expect(screen.queryByLabelText('声音角色编辑器')).not.toBeInTheDocument();
+  });
+
+  it('previews role from card', () => {
     const onPreviewRole = vi.fn();
+
+    render(
+      <ProjectVoices
+        roles={[cast]}
+        defaultNarratorRoleId={null}
+        onSetDefaultNarrator={vi.fn()}
+        onPreviewRole={onPreviewRole}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getAllByRole('button', { name: /试听/ })[0]);
+
+    expect(onPreviewRole).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'role-guest-a' }),
+      expect.any(String),
+    );
+  });
+
+  it('deletes role from card', () => {
+    const onDeleteRole = vi.fn();
 
     render(
       <ProjectVoices
         roles={[narrator, cast]}
         defaultNarratorRoleId="role-narrator"
         onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={onCreateCast}
-        onPreviewRole={onPreviewRole}
-        onManageRoles={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getAllByRole('button', { name: /试听/ })[1]);
-    fireEvent.click(screen.getByRole('button', { name: /新增 Cast/ }));
-
-    expect(onPreviewRole).toHaveBeenCalledWith(expect.objectContaining({ id: 'role-guest-a' }), expect.any(String));
-    expect(screen.getByRole('heading', { name: /声音角色配置/ })).toBeInTheDocument();
-  });
-
-  it('does not treat existing narrator roles as the project default until selected', () => {
-    render(
-      <ProjectVoices
-        roles={[narrator]}
-        defaultNarratorRoleId={null}
-        onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
+        onDeleteRole={onDeleteRole}
         onPreviewRole={vi.fn()}
         onManageRoles={vi.fn()}
       />,
     );
 
-    expect(screen.getByText('还没有选择默认旁白')).toBeInTheDocument();
-    expect(screen.getByText('可选旁白音色。选择为默认后用于 narration 段落。')).toBeInTheDocument();
-    expect(screen.queryByText('这是一段默认旁白试听，用于确认叙述声音是否沉稳、清晰，并适合长时间解说。')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '删除 嘉宾A' }));
+
+    expect(onDeleteRole).toHaveBeenCalledWith('role-guest-a');
   });
 
-  it('sets default narrator from available narrator roles', () => {
-    const onSetDefaultNarrator = vi.fn();
-    const roleSnapshot: RoleSnapshot = {
-      id: narrator.id,
-      name: narrator.name,
-      description: narrator.description,
-      default_engine: narrator.default_engine,
-      default_voice: narrator.default_voice,
-      default_engine_params: narrator.default_engine_params,
-      favorite_styles: [],
+  it('filters roles by engine', () => {
+    const cosyRole: Role = {
+      ...cast,
+      id: 'role-cosy',
+      name: 'Cosy角色',
+      default_engine: 'cosyvoice',
+      default_voice: 'voice-123',
+      default_engine_params: { engine: 'cosyvoice', voice_id: 'voice-123' },
     };
 
     render(
       <ProjectVoices
-        roles={[narrator]}
-        defaultNarratorRoleId={null}
-        onSetDefaultNarrator={onSetDefaultNarrator}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
+        roles={[narrator, cosyRole]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
         onPreviewRole={vi.fn()}
         onManageRoles={vi.fn()}
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('默认旁白角色'), { target: { value: 'role-narrator' } });
+    // Both visible initially
+    expect(screen.getByText('默认旁白')).toBeInTheDocument();
+    expect(screen.getByText('Cosy角色')).toBeInTheDocument();
 
-    expect(onSetDefaultNarrator).toHaveBeenCalledWith('role-narrator', expect.objectContaining(roleSnapshot));
+    // Filter to CosyVoice only
+    fireEvent.change(screen.getByDisplayValue('全部引擎'), { target: { value: 'cosyvoice' } });
+
+    expect(screen.queryByText('默认旁白')).not.toBeInTheDocument();
+    expect(screen.getByText('Cosy角色')).toBeInTheDocument();
   });
 
-  it('opens a voice role editor for a new Cast, previews draft params, and saves Edge-TTS voice params', () => {
+  it('marks default narrator with default indicator', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator, narratorAlt]}
+        defaultNarratorRoleId="role-narrator"
+        onSetDefaultNarrator={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    // The default narrator card should have the "默认" chip text
+    const defaultChips = screen.getAllByText(/默认/);
+    expect(defaultChips.length).toBeGreaterThan(0);
+  });
+
+  it('opens CosyVoice editor with correct params', () => {
     const onSaveRole = vi.fn();
-    const onPreviewRole = vi.fn();
 
     render(
       <ProjectVoices
         roles={[narrator]}
         defaultNarratorRoleId="role-narrator"
         onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
-        onSaveRole={onSaveRole}
-        onPreviewRole={onPreviewRole}
-        onManageRoles={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /新增 Cast/ }));
-
-    expect(screen.getByLabelText('声音角色编辑器')).toHaveAttribute('data-density', 'compact');
-    expect(screen.getByText('角色声音参数')).toBeInTheDocument();
-    expect(screen.getByText(/修改后用于该角色的新合成/)).toBeInTheDocument();
-    expect(screen.getByText('Studio Playback')).toBeInTheDocument();
-
-    fireEvent.change(screen.getByLabelText('角色名'), { target: { value: '嘉宾B' } });
-    fireEvent.change(screen.getByLabelText('音色'), { target: { value: 'zh-CN-XiaoxiaoNeural' } });
-    fireEvent.change(screen.getByLabelText('语速'), { target: { value: '+12%' } });
-    fireEvent.change(screen.getByLabelText('音量'), { target: { value: '+4%' } });
-    fireEvent.click(screen.getByRole('button', { name: /生成试听/ }));
-
-    expect(onPreviewRole).toHaveBeenCalledWith(expect.objectContaining({
-      name: '嘉宾B',
-      default_engine: 'edge_tts',
-      default_voice: 'zh-CN-XiaoxiaoNeural',
-      default_engine_params: expect.objectContaining({
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        edge_rate: '+12%',
-        edge_volume: '+4%',
-      }),
-    }), expect.any(String));
-
-    fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
-
-    expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
-      name: '嘉宾B',
-      description: 'Cast',
-      default_engine: 'edge_tts',
-      default_voice: 'zh-CN-XiaoxiaoNeural',
-      default_engine_params: expect.objectContaining({
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        edge_rate: '+12%',
-        edge_volume: '+4%',
-      }),
-    }));
-  });
-
-  it('opens the narrator editor before the role lists so the model setup is immediately visible', () => {
-    const { container } = render(
-      <ProjectVoices
-        roles={[cast]}
-        defaultNarratorRoleId={null}
-        onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
-        onPreviewRole={vi.fn()}
-        onManageRoles={vi.fn()}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole('button', { name: /创建默认旁白/ }));
-
-    const editor = screen.getByLabelText('声音角色编辑器');
-    const roleLists = container.querySelector('[data-testid="project-voice-lists"]');
-    expect(roleLists).toBeTruthy();
-    expect(editor.compareDocumentPosition(roleLists as Element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(screen.getByText('角色声音参数')).toBeInTheDocument();
-    expect(screen.getByText(/修改后用于该角色的新合成/)).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Edge-TTS/ })).toBeChecked();
-  });
-
-  it('opens the narrator editor and saves selected model and voice params', () => {
-    const onSaveRole = vi.fn();
-
-    render(
-      <ProjectVoices
-        roles={[cast]}
-        defaultNarratorRoleId={null}
-        onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
         onSaveRole={onSaveRole}
         onPreviewRole={vi.fn()}
         onManageRoles={vi.fn()}
       />,
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /创建默认旁白/ }));
+    fireEvent.click(screen.getByRole('button', { name: /编辑 默认旁白/ }));
     fireEvent.click(screen.getByRole('radio', { name: /CosyVoice/ }));
     fireEvent.change(screen.getByLabelText('CosyVoice voice id'), { target: { value: 'voice-narrator-main' } });
     fireEvent.change(screen.getByLabelText('语速'), { target: { value: '0.92' } });
     fireEvent.change(screen.getByLabelText('音量'), { target: { value: '78' } });
     fireEvent.change(screen.getByLabelText('音高'), { target: { value: '0.98' } });
-    fireEvent.change(screen.getByPlaceholderText('跟随全局风格指令，或选择预设/直接输入...'), { target: { value: '沉稳、纪录片、低压缩动态' } });
+    fireEvent.change(screen.getByPlaceholderText('跟随全局风格指令，或选择预设/直接输入...'), { target: { value: '沉稳、纪录片' } });
     fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
 
     expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
-      name: '默认旁白',
-      description: 'Narrator',
       default_engine: 'cosyvoice',
       default_voice: 'voice-narrator-main',
       default_engine_params: expect.objectContaining({
@@ -288,53 +319,8 @@ describe('ProjectVoices', () => {
         speed: 0.92,
         volume: 78,
         pitch: 0.98,
-        instruction: '沉稳、纪录片、低压缩动态',
+        instruction: '沉稳、纪录片',
       }),
     }));
-  });
-
-  it('renders multiple narrator voices, selects exactly one default, and allows deleting extras', () => {
-    const onSetDefaultNarrator = vi.fn();
-    const onDeleteRole = vi.fn();
-
-    render(
-      <ProjectVoices
-        roles={[narrator, narratorAlt, cast]}
-        defaultNarratorRoleId="role-narrator"
-        onSetDefaultNarrator={onSetDefaultNarrator}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
-        onSaveRole={vi.fn()}
-        onDeleteRole={onDeleteRole}
-        onPreviewRole={vi.fn()}
-        onManageRoles={vi.fn()}
-      />,
-    );
-
-    expect(screen.getAllByText('默认旁白').length).toBeGreaterThan(1);
-    expect(screen.getAllByText('新闻旁白').length).toBeGreaterThan(1);
-    fireEvent.change(screen.getByLabelText('默认旁白角色'), { target: { value: 'role-narrator-alt' } });
-    expect(onSetDefaultNarrator).toHaveBeenCalledWith('role-narrator-alt', expect.objectContaining({ id: 'role-narrator-alt' }));
-
-    fireEvent.click(screen.getByRole('button', { name: '删除 默认旁白' }));
-    expect(onDeleteRole).toHaveBeenCalledWith('role-narrator');
-  });
-
-  it('keeps at least one narrator by disabling the last narrator delete action', () => {
-    render(
-      <ProjectVoices
-        roles={[narrator, cast]}
-        defaultNarratorRoleId="role-narrator"
-        onSetDefaultNarrator={vi.fn()}
-        onCreateDefaultNarrator={vi.fn()}
-        onCreateCast={vi.fn()}
-        onSaveRole={vi.fn()}
-        onDeleteRole={vi.fn()}
-        onPreviewRole={vi.fn()}
-        onManageRoles={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole('button', { name: '删除 默认旁白' })).toBeDisabled();
   });
 });

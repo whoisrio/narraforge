@@ -76,7 +76,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
         <div>
           <span className={styles.kicker}>Projects</span>
           <h1>Project Hub</h1>
-          <p>从这里进入项目。全局项目页只展示项目总览；点击项目卡片后才进入文本库、工作室、声音角色和项目设置。</p>
+          <p>项目总览 · 点击卡片进入项目工作区。</p>
         </div>
         <div className={styles.heroStats}>
           <div><span>项目</span><strong>{projects.length}</strong></div>
@@ -98,57 +98,68 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
           const isEditing = editingProjectId === project.id;
           const isMenuOpen = openMenuProjectId === project.id;
           return (
-            <article key={project.id} className={styles.projectCard} aria-label={`项目 ${project.name}`}>
-              <div className={styles.cardCover}>
-                <button
-                  type="button"
-                  className={styles.coverOpenButton}
-                  aria-label={`打开 ${project.name}`}
-                  onClick={() => onOpenProject(project.id)}
-                />
-                <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
-                <span className={styles.statusBadge}>{progress === 100 && stats.segments > 0 ? 'READY' : 'IN PROGRESS'}</span>
+            <article key={project.id} className={styles.projectCard} aria-label={`项目 ${project.name}`} data-card-variant="compact-project-card">
+              <div className={styles.cardHead}>
+                {isEditing ? (
+                  <div className={styles.cardOpenButton}>
+                    <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
+                    <span className={styles.cardTitleBlock}>
+                      <span className={styles.renameForm}>
+                        <label htmlFor={`project-name-${project.id}`}>项目名称</label>
+                        <input
+                          id={`project-name-${project.id}`}
+                          value={renameDraft}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') saveRename(project);
+                            if (event.key === 'Escape') {
+                              setEditingProjectId(null);
+                              setRenameDraft('');
+                            }
+                          }}
+                          autoFocus
+                        />
+                      </span>
+                    </span>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.cardOpenButton}
+                    aria-label={`打开 ${project.name}`}
+                    onClick={() => onOpenProject(project.id)}
+                  >
+                  <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
+                  <span className={styles.cardTitleBlock}>
+                    <strong>{project.name}</strong>
+                    <small>{project.active_narration_version ?? '默认旁白版本'}</small>
+                  </span>
+                  </button>
+                )}
+                <span className={styles.statusBadge}>{progress === 100 && stats.segments > 0 ? '完成' : '制作中'}</span>
               </div>
               <div className={styles.cardBody}>
                 {isEditing ? (
-                  <div className={styles.renameForm}>
-                    <label htmlFor={`project-name-${project.id}`}>项目名称</label>
-                    <input
-                      id={`project-name-${project.id}`}
-                      value={renameDraft}
-                      onChange={(event) => setRenameDraft(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') saveRename(project);
-                        if (event.key === 'Escape') {
-                          setEditingProjectId(null);
-                          setRenameDraft('');
-                        }
-                      }}
-                      autoFocus
-                    />
-                    <div className={styles.renameActions}>
-                      <button type="button" onClick={() => saveRename(project)}>保存项目名称</button>
-                      <button type="button" onClick={() => { setEditingProjectId(null); setRenameDraft(''); }}>取消</button>
-                    </div>
+                  <div className={styles.renameActions}>
+                    <button type="button" onClick={() => saveRename(project)}>保存项目名称</button>
+                    <button type="button" onClick={() => { setEditingProjectId(null); setRenameDraft(''); }}>取消</button>
                   </div>
-                ) : (
-                  <h2>{project.name}</h2>
-                )}
-                <p>{project.active_narration_version ?? '默认旁白版本'}</p>
+                ) : null}
                 <div className={styles.cardStats}>
                   <span>{stats.chapters} 章</span>
                   <span>{stats.segments} 段</span>
                   <span>{formatDuration(stats.duration)}</span>
                 </div>
-                <div className={styles.progressTrack}>
-                  <span style={{ width: `${progress}%` }} />
-                </div>
-                <small>{stats.generated}/{stats.segments} 已生成</small>
-                <div className={styles.cardFooter}>
-                  <div className={styles.miniAvatars} aria-hidden="true">
-                    <span>{projectInitial(project.name)}</span>
-                    <span>声</span>
+                <div className={styles.progressBlock}>
+                  <div className={styles.progressCopy}>
+                    <span>{stats.generated}/{stats.segments} 已生成</span>
+                    <strong>{progress}%</strong>
                   </div>
+                  <div className={styles.progressTrack}>
+                    <span style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+                <div className={styles.cardFooter}>
                   <div className={styles.menuWrap}>
                     <button
                       type="button"

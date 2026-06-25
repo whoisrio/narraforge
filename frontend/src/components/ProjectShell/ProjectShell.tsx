@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { createTranslator, projectNavItems, type Locale } from '../../i18n';
+import type { Chapter } from '../../types';
 import styles from './ProjectShell.module.css';
+
 
 export type ProjectSectionId = 'overview' | 'library' | 'studio' | 'voices' | 'settings';
 
@@ -13,6 +15,13 @@ interface ProjectShellProps {
   segmentCount?: number;
   generatedCount?: number;
   durationSec?: number;
+  chapters?: Chapter[];
+  activeChapterId?: string;
+  onSelectChapter?: (chapterId: string) => void;
+  onAddChapter?: () => void;
+  onRenameChapter?: (chapterId: string, name: string) => void;
+  onDeleteChapter?: (chapterId: string) => void;
+  rightPanelCollapsed?: boolean;
   children: ReactNode;
   onSectionChange: (section: ProjectSectionId) => void;
   onBackToProjects?: () => void;
@@ -42,12 +51,35 @@ export function ProjectShell({
   segmentCount = 0,
   generatedCount = 0,
   durationSec = 0,
+  chapters,
+  activeChapterId,
+  onSelectChapter,
+  onAddChapter,
+  onRenameChapter,
+  onDeleteChapter,
+  rightPanelCollapsed = true,
   children,
   onSectionChange,
   onBackToProjects,
 }: ProjectShellProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
+  const [chapterNameDraft, setChapterNameDraft] = useState('');
   const t = createTranslator(locale);
+
+  const startRename = (chapter: Chapter) => {
+    setEditingChapterId(chapter.id);
+    setChapterNameDraft(chapter.name);
+  };
+
+  const saveRename = (chapter: Chapter) => {
+    const nextName = chapterNameDraft.trim();
+    if (nextName && nextName !== chapter.name) {
+      onRenameChapter?.(chapter.id, nextName);
+    }
+    setEditingChapterId(null);
+    setChapterNameDraft('');
+  };
 
   return (
     <section className={styles.root} data-testid="project-shell" data-sidebar="fixed-left" data-workspace-chrome="breadcrumb-only" data-collapsed={collapsed ? 'true' : 'false'}>
@@ -90,6 +122,68 @@ export function ProjectShell({
           })}
         </nav>
 
+        {(activeSection === 'library' || activeSection === 'studio') && chapters && chapters.length > 0 && (
+          <div className={styles.chapterListSection}>
+            <span className={styles.chapterListLabel}>Chapters</span>
+            <ul className={styles.chapterList}>
+              {chapters.map((chapter, index) => (
+                <li key={chapter.id} className={styles.chapterListItemWrap}>
+                  {editingChapterId === chapter.id ? (
+                    <div className={styles.chapterRenameInline}>
+                      <input
+                        className={styles.chapterRenameInput}
+                        value={chapterNameDraft}
+                        onChange={(e) => setChapterNameDraft(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') saveRename(chapter); if (e.key === 'Escape') { setEditingChapterId(null); setChapterNameDraft(''); } }}
+                        autoFocus
+                      />
+                      <button type="button" className={styles.chapterRenameSave} onClick={() => saveRename(chapter)}>✓</button>
+                    </div>
+                  ) : (
+                    <div
+                      className={`${styles.chapterListItem} ${chapter.id === activeChapterId ? styles.chapterListItemActive : ''}`}
+                      data-chapter-card="compact"
+                    >
+                      <button
+                        type="button"
+                        className={styles.chapterListSelect}
+                        aria-label={`选择章节 ${chapter.name}`}
+                        onClick={() => onSelectChapter?.(chapter.id)}
+                      >
+                        <span className={styles.chapterListIndex}>{String(index + 1).padStart(2, '0')}</span>
+                        {!collapsed && <span className={styles.chapterListName}>{chapter.name}</span>}
+                      </button>
+                      {!collapsed && (
+                        <span className={styles.chapterItemActions}>
+                          <button
+                            type="button"
+                            className={styles.chapterItemAction}
+                            aria-label={`重命名 ${chapter.name}`}
+                            onClick={() => startRename(chapter)}
+                          >✎</button>
+                          {chapters.length > 1 && (
+                            <button
+                              type="button"
+                              className={styles.chapterItemActionDanger}
+                              aria-label={`删除 ${chapter.name}`}
+                              onClick={() => onDeleteChapter?.(chapter.id)}
+                            >⌫</button>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {onAddChapter && (
+              <button type="button" className={styles.newChapterBtn} onClick={onAddChapter}>
+                {!collapsed ? '+ 新建章节' : '+'}
+              </button>
+            )}
+          </div>
+        )}
+
         <button
           type="button"
           className={styles.collapseButton}
@@ -101,7 +195,7 @@ export function ProjectShell({
         </button>
       </aside>
 
-      <div className={styles.workspace}>
+      <div className={styles.workspace} data-right-panel-collapsed={rightPanelCollapsed ? 'true' : 'false'}>
         <div className={styles.contextBar} aria-label="Project workspace context">
           <div className={styles.breadcrumbs}>
             <span>{projectName}</span>

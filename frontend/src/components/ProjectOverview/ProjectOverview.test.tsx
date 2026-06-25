@@ -50,24 +50,24 @@ describe('ProjectOverview', () => {
       />,
     );
 
-    expect(screen.getByText('Project Overview')).toBeInTheDocument();
-    expect(screen.getByText('草稿项目')).toBeInTheDocument();
-    expect(screen.getByText('2 章')).toBeInTheDocument();
-    expect(screen.getByText('2 段')).toBeInTheDocument();
-    expect(screen.getByText('1 已生成')).toBeInTheDocument();
-    expect(screen.getByText('0:06')).toBeInTheDocument();
+    expect(screen.getByText('Production Progress')).toBeInTheDocument();
+    expect(screen.getByText('Manuscript Quick Access')).toBeInTheDocument();
+    expect(screen.queryByText('0/2 Chapters Synthesized')).not.toBeInTheDocument();
     expect(screen.getByText('默认旁白')).toBeInTheDocument();
     expect(screen.getByText('/tmp/remotion')).toBeInTheDocument();
-    expect(screen.getAllByText('开场叙事').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /打开文本库/ }));
-    fireEvent.click(screen.getByRole('button', { name: /进入工作室/ }));
-    fireEvent.click(screen.getByRole('button', { name: /配置声音角色/ }));
-    fireEvent.click(screen.getByRole('button', { name: /项目设置/ }));
+    const activeChapterCard = screen.getByLabelText('章节 开场叙事');
+    expect(activeChapterCard).toHaveAttribute('data-chapter-card', 'compact');
+    expect(activeChapterCard).toHaveTextContent('01');
+    expect(activeChapterCard).toHaveTextContent('2 段 · 1 已生成 · 0:06');
+    expect(activeChapterCard.querySelector('[class*="chapterProgressTrack"]')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /View All Chapters/ }));
+    fireEvent.click(screen.getByRole('button', { name: /ASSIGN CHARACTER/ }));
 
     expect(onEnterLibrary).toHaveBeenCalled();
-    expect(onEnterStudio).toHaveBeenCalled();
+    expect(onEnterStudio).not.toHaveBeenCalled();
     expect(onOpenVoices).toHaveBeenCalled();
-    expect(onOpenSettings).toHaveBeenCalled();
+    expect(onOpenSettings).not.toHaveBeenCalled();
   });
 });

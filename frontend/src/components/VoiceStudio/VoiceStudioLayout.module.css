@@ -2,255 +2,53 @@
   position: relative;
   min-height: 720px;
   padding-bottom: 118px;
+  --studio-right-panel-width: 300px;
 }
 
-.root[data-side-panel-collapsed='true'] .workspaceGrid {
-  grid-template-columns: minmax(0, 1fr);
+.root[data-side-panel-collapsed='true'] {
+  --studio-right-panel-width: 48px;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-lg);
-  border: 1px solid rgba(216, 194, 180, 0.42);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(10px);
-}
+/* ---- Main Content ---- */
 
-.breadcrumbs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.breadcrumbs strong {
-  color: var(--color-primary-dark);
-}
-
-.titleBlock h2 {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: 34px;
-  line-height: 1.05;
-  letter-spacing: -0.06em;
-}
-
-.titleBlock p {
-  margin: 8px 0 0;
-  color: var(--color-text-secondary);
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.meter {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 28px;
-}
-
-.meter span {
-  width: 5px;
-  border-radius: var(--radius-full);
-  background: var(--color-primary);
-  opacity: 0.7;
-}
-
-.meter span:nth-child(1) { height: 35%; }
-.meter span:nth-child(2) { height: 75%; }
-.meter span:nth-child(3) { height: 55%; }
-.meter span:nth-child(4) { height: 90%; }
-
-.primaryButton {
-  min-height: 40px;
-  padding: 0 18px;
-  border-radius: var(--radius-full);
-  background: var(--color-primary-gradient);
-  color: white;
-  font-size: 13px;
-  font-weight: 900;
-  box-shadow: 0 10px 22px rgba(139, 76, 13, 0.16);
-}
-
-.panelToggleButton {
-  min-height: 40px;
-  padding: 0 14px;
-  border-radius: var(--radius-full);
-  border: 1px solid rgba(216, 194, 180, 0.48);
-  background: rgba(249, 243, 235, 0.74);
-  color: var(--color-primary-dark);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.workspaceGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
-  gap: var(--spacing-lg);
-  align-items: start;
-}
-
-.timelinePanel,
-.sideCard,
-.transportBar {
-  border: 1px solid rgba(216, 194, 180, 0.42);
-  background: rgba(255, 255, 255, 0.58);
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(10px);
-}
-
-.timelinePanel {
+.mainContent {
   min-width: 0;
-  border-radius: 28px;
-  padding: var(--spacing-lg);
-}
-
-.panelHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
-}
-
-.kicker,
-.sideTitle {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.panelHeader h3 {
-  margin: 5px 0 0;
-  color: var(--color-text-primary);
-  font-size: 18px;
-  letter-spacing: -0.04em;
-}
-
-.viewSwitch {
-  display: inline-flex;
-  gap: 5px;
-  padding: 4px;
-  border: 1px solid rgba(216, 194, 180, 0.45);
-  border-radius: var(--radius-full);
-  background: rgba(249, 243, 235, 0.72);
-}
-
-.viewSwitch button {
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: var(--radius-full);
-  color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.viewSwitch button[aria-pressed='true'] {
-  background: white;
-  color: var(--color-primary-dark);
-  box-shadow: var(--shadow-xs);
+  width: 100%;
 }
 
 .segmentCanvas {
   min-height: 440px;
 }
 
+/* ---- Right Side Panel (fixed, matches left ProjectShell rail) ---- */
+
 .sidePanel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: calc(var(--z-fixed) - 1);
+  width: var(--studio-right-panel-width);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
-}
-
-.sideCard {
-  border-radius: 22px;
-  padding: var(--spacing-md);
-}
-
-.statGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9px;
-  margin-top: var(--spacing-md);
-}
-
-.statGrid div,
-.engineRow {
-  padding: 10px;
-  border: 1px solid rgba(216, 194, 180, 0.35);
-  border-radius: 14px;
-  background: rgba(249, 243, 235, 0.72);
-}
-
-.statGrid span,
-.engineRow span {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-
-.statGrid strong,
-.engineRow strong {
-  display: block;
-  margin-top: 5px;
-  color: var(--color-primary-dark);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.queueRow {
-  margin-top: var(--spacing-md);
-  color: var(--color-primary-dark);
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.queueTrack,
-.masterTrack {
-  height: 7px;
-  margin-top: 9px;
+  padding: 96px 12px 18px;
+  border-left: 1px solid rgba(216, 194, 180, 0.42);
+  background: rgba(249, 243, 235, 0.92);
+  box-shadow: -10px 0 30px rgba(26, 24, 20, 0.04);
+  backdrop-filter: blur(12px);
+  transition: width var(--transition-normal), padding var(--transition-normal);
   overflow: hidden;
-  border-radius: var(--radius-full);
-  background: rgba(216, 194, 180, 0.34);
 }
 
-.queueTrack span,
-.masterTrack span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-primary-gradient);
+.sidePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px;
+  margin-bottom: var(--spacing-md);
 }
 
-.engineRow + .engineRow {
-  margin-top: 8px;
-}
-
-.roleSummaryGroup {
-  display: grid;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.roleSummaryLabel {
+.sidePanelTitle {
   color: var(--color-text-muted);
   font-size: 10px;
   font-weight: 900;
@@ -258,24 +56,64 @@
   text-transform: uppercase;
 }
 
-.rolePill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  width: fit-content;
-  max-width: 100%;
-  padding: 5px 10px;
-  border-radius: var(--radius-full);
-  background: rgba(255, 220, 195, 0.35);
-  color: var(--color-primary-dark);
-  font-size: 12px;
-  font-weight: 850;
+.sidePanelBody {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: 0 4px;
 }
+
+.sidePanelBody::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidePanelBody::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidePanelBody::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 10px;
+}
+
+.sidePanelCollapseBtn,
+.sidePanelExpandBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--color-text-secondary);
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidePanelCollapseBtn:hover,
+.sidePanelExpandBtn:hover {
+  background: rgba(255, 220, 195, 0.34);
+  border-color: rgba(196, 122, 58, 0.35);
+}
+
+.sidePanelExpandBtn {
+  align-self: center;
+  margin: 0 auto;
+}
+
+/* ---- Transport Bar ---- */
 
 .transportBar {
   position: fixed;
   left: calc(var(--nav-width) + 28px);
-  right: 28px;
+  right: calc(var(--studio-right-panel-width) + 28px);
   bottom: 18px;
   z-index: 260;
   display: flex;
@@ -283,7 +121,12 @@
   gap: var(--spacing-lg);
   min-height: 86px;
   padding: 12px 18px;
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 -4px 20px rgba(109, 76, 58, 0.06);
+  backdrop-filter: blur(10px);
   border-radius: 24px;
+  transition: right var(--transition-normal);
 }
 
 .transportControls {
@@ -332,6 +175,21 @@
   color: var(--color-primary-dark);
 }
 
+.masterTrack {
+  height: 7px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: rgba(216, 194, 180, 0.34);
+}
+
+.masterTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-primary-gradient);
+}
+
 .exportGroup {
   display: flex;
   align-items: center;
@@ -352,9 +210,24 @@
   font-weight: 750;
 }
 
+.primaryButton {
+  min-height: 40px;
+  padding: 0 18px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-gradient);
+  color: white;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(139, 76, 13, 0.16);
+}
+
 @media (max-width: 1200px) {
-  .workspaceGrid {
-    grid-template-columns: 1fr;
+  .sidePanel {
+    display: none;
+  }
+
+  .mainContent {
+    margin-right: 0;
   }
 
   .transportBar {

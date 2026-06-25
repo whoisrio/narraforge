@@ -302,7 +302,7 @@ export function VoiceClone() {
 
   return (
     <div className={styles.container}>
-      <section className={styles.hero}>
+      <section className={styles.hero} data-visual="thin-global-header">
         <div>
           <span className={styles.kicker}>Voice Design</span>
           <h1>音色设计</h1>

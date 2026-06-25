@@ -1,0 +1,515 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@500&amp;family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@100..900&amp;display=swap" rel="stylesheet">
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .filled-icon {
+            font-variation-settings: 'FILL' 1;
+        }
+        .glass-panel {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .physical-inset {
+            box-shadow: inset 0 2px 4px rgba(26, 24, 20, 0.05);
+        }
+        .amber-glow:focus-within {
+            box-shadow: 0 0 0 4px rgba(169, 100, 37, 0.15);
+        }
+        .waveform-bar {
+            transition: height 0.2s ease;
+        }
+        @keyframes pulse-glow {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1; }
+        }
+        .animate-pulse-glow {
+            animation: pulse-glow 2s infinite;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-fixed": "#8cf5e4",
+                        "on-tertiary-fixed": "#00201c",
+                        "primary-container": "#a96425",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary": "#865310",
+                        "on-secondary-fixed-variant": "#683c00",
+                        "on-primary-fixed": "#2f1500",
+                        "secondary-fixed": "#ffdcbd",
+                        "surface-container-low": "#f9f3eb",
+                        "surface-container-high": "#ede7e0",
+                        "on-tertiary-fixed-variant": "#005048",
+                        "on-background": "#1d1b17",
+                        "on-secondary": "#ffffff",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#008376",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-fixed-variant": "#6e3900",
+                        "surface-container-highest": "#e8e1db",
+                        "secondary-fixed-dim": "#feb86f",
+                        "surface-tint": "#8e4e10",
+                        "outline-variant": "#d8c2b4",
+                        "surface-bright": "#fff8f1",
+                        "on-tertiary-container": "#f4fffb",
+                        "on-primary": "#ffffff",
+                        "primary-fixed": "#ffdcc3",
+                        "outline": "#867467",
+                        "inverse-on-surface": "#f6f0e9",
+                        "on-surface-variant": "#534439",
+                        "on-error-container": "#93000a",
+                        "surface-dim": "#dfd9d2",
+                        "on-error": "#ffffff",
+                        "tertiary": "#00685d",
+                        "surface": "#fff8f1",
+                        "on-secondary-container": "#784703",
+                        "surface-variant": "#e8e1db",
+                        "inverse-primary": "#ffb77e",
+                        "on-primary-container": "#fffbff",
+                        "background": "#fff8f1",
+                        "tertiary-fixed-dim": "#6fd8c8",
+                        "error-container": "#ffdad6",
+                        "primary": "#8b4c0d",
+                        "surface-container": "#f3ede6",
+                        "on-secondary-fixed": "#2c1600",
+                        "secondary-container": "#feb86f",
+                        "inverse-surface": "#33302c",
+                        "primary-fixed-dim": "#ffb77e",
+                        "on-surface": "#1d1b17"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "sm": "8px",
+                        "md": "16px",
+                        "lg": "24px",
+                        "unit": "4px",
+                        "xs": "4px",
+                        "xl": "32px",
+                        "2xl": "48px",
+                        "max-width": "1600px"
+                    },
+                    "fontFamily": {
+                        "body-base": ["Plus Jakarta Sans"],
+                        "label-caps": ["Plus Jakarta Sans"],
+                        "body-dialogue": ["Plus Jakarta Sans"],
+                        "code-xs": ["JetBrains Mono"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "body-base": ["15px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                        "label-caps": ["10px", {"lineHeight": "12px", "letterSpacing": "0.12em", "fontWeight": "700"}],
+                        "body-dialogue": ["17px", {"lineHeight": "29px", "letterSpacing": "-0.01em", "fontWeight": "400"}],
+                        "code-xs": ["12px", {"lineHeight": "18px", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "28px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "display-lg": ["36px", {"lineHeight": "40px", "letterSpacing": "-0.03em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-base">
+<!-- TopNavBar -->
+<nav class="fixed top-3 left-3 right-3 rounded-xl bg-surface/92 backdrop-blur-md border border-outline-variant/30 shadow-[0_4px_12px_rgba(26,24,20,0.08)] flex justify-between items-center h-16 px-lg z-50 max-w-max-width mx-auto">
+<div class="flex items-center gap-xl">
+<span class="font-display-lg text-display-lg bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">NarraForge</span>
+<div class="hidden md:flex items-center gap-lg">
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-transform" href="#">Project Settings</a>
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-transform" href="#">Export</a>
+<a class="text-on-surface-variant font-medium hover:text-primary hover:scale-[1.03] transition-transform" href="#">Preview</a>
+</div>
+</div>
+<div class="flex items-center gap-md">
+<div class="relative group">
+<div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="bg-surface-container border border-outline-variant/30 rounded-full py-2 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-primary/20 w-64 text-body-base" placeholder="Search voices..." type="text">
+</div>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary transition-colors">
+<span class="material-symbols-outlined">cloud_done</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-primary-container overflow-hidden border border-outline-variant/50">
+<img class="w-full h-full object-cover" data-alt="Professional studio portrait of a narrative designer, soft cinematic lighting, warm ambient tones, minimalist ivory background, high detail digital art style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuALd5NT8Xplk5ZDuTZ2JCjYWdmj8w7qSbsonGGOu7BVO3v077m-ix4qYvRPKKsMpXs9sd1eTvgZ0mNl7hHTIK6xiVhxvaB2D92f56ALqLIeTx-uLxJBe-qy6D9NTxfbuu_2BNkklQoBvdy6tk7Q40K6zM-T_arCLTrERO9mf2UWQye1YssXZYxaNnYhzlyo5lFLQVPocP_k34nxA2SM4r01AL_r01JwI05dzcq6dbTZwwJKmcL7ztHhQoRX37hsGEKxaYvt6kUNyw">
+</div>
+</div>
+</nav>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-0 h-full w-[248px] bg-surface-container-low border-r border-outline-variant/20 flex flex-col pt-24 pb-lg px-md z-40 hidden md:flex">
+<div class="px-md mb-xl">
+<div class="flex items-center gap-md mb-sm">
+<div class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined filled-icon">auto_stories</span>
+</div>
+<div>
+<h3 class="font-headline-md text-[16px] text-on-surface">Current Manuscript</h3>
+<p class="text-on-surface-variant text-[12px]">Book One</p>
+</div>
+</div>
+<button class="w-full py-3 px-md bg-gradient-to-r from-primary-container to-secondary rounded-full text-white font-bold text-body-base hover:scale-[1.03] active:scale-[0.97] transition-all flex items-center justify-center gap-sm shadow-md">
+<span class="material-symbols-outlined text-[20px]">add</span>
+                New Chapter
+            </button>
+</div>
+<nav class="flex-1 flex flex-col gap-unit">
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary">auto_stories</span>
+                Library
+            </a>
+<a class="flex items-center gap-md px-md py-3 text-primary font-bold border-l-4 border-primary bg-primary-container/10 transition-all rounded-r-lg group" href="#">
+<span class="material-symbols-outlined filled-icon">group</span>
+                Characters
+            </a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary">public</span>
+                World Building
+            </a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined group-hover:text-primary">settings</span>
+                Settings
+            </a>
+</nav>
+<div class="mt-auto border-t border-outline-variant/20 pt-md flex flex-col gap-unit">
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined">help</span>
+                Help
+            </a>
+<a class="flex items-center gap-md px-md py-3 text-on-surface-variant font-medium hover:bg-surface-container-high transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+                Archive
+            </a>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="md:ml-[248px] pt-32 px-lg pb-xl max-w-max-width mx-auto">
+<!-- Header & Tabs -->
+<header class="mb-xl">
+<div class="flex justify-between items-end mb-lg">
+<div>
+<h1 class="font-display-lg text-display-lg text-on-surface mb-xs">Voice Discovery</h1>
+<p class="text-on-surface-variant text-body-base">Browse and clone studio-quality system voices for your narrative project.</p>
+</div>
+<div class="flex gap-md bg-surface-container-high p-1 rounded-xl">
+<button class="px-lg py-2 rounded-lg bg-surface-container-lowest text-primary font-bold shadow-sm transition-all">System Voices</button>
+<button class="px-lg py-2 rounded-lg text-on-surface-variant font-medium hover:text-primary transition-all">My Characters</button>
+</div>
+</div>
+<!-- Filters -->
+<div class="flex flex-wrap gap-md items-center border-b border-outline-variant/20 pb-lg">
+<div class="flex items-center gap-sm bg-surface-container px-4 py-2 rounded-lg border border-outline-variant/30 amber-glow">
+<span class="text-on-surface-variant text-[14px] font-medium">Engine:</span>
+<select class="bg-transparent border-none focus:ring-0 text-on-surface font-semibold text-[14px] cursor-pointer">
+<option>All Engines</option>
+<option>Edge-TTS</option>
+<option>CosyVoice</option>
+<option>MiMo</option>
+</select>
+</div>
+<div class="flex items-center gap-sm bg-surface-container px-4 py-2 rounded-lg border border-outline-variant/30 amber-glow">
+<span class="text-on-surface-variant text-[14px] font-medium">Language:</span>
+<select class="bg-transparent border-none focus:ring-0 text-on-surface font-semibold text-[14px] cursor-pointer">
+<option>English (US)</option>
+<option>English (UK)</option>
+<option>French</option>
+<option>Japanese</option>
+</select>
+</div>
+<div class="flex items-center gap-sm bg-surface-container px-4 py-2 rounded-lg border border-outline-variant/30 amber-glow">
+<span class="text-on-surface-variant text-[14px] font-medium">Tone:</span>
+<select class="bg-transparent border-none focus:ring-0 text-on-surface font-semibold text-[14px] cursor-pointer">
+<option>All Tones</option>
+<option>Narrative</option>
+<option>Energetic</option>
+<option>Whimsical</option>
+<option>Somber</option>
+</select>
+</div>
+</div>
+</header>
+<!-- Voice Grid (Bento Style) -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
+<!-- Voice Card 1: Edge-TTS -->
+<div class="group bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-md flex flex-col gap-md transition-all hover:border-primary hover:shadow-lg hover:scale-[1.01]">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-primary-fixed flex items-center justify-center border-2 border-primary/20">
+<img class="w-full h-full object-cover" data-alt="A stylized portrait of a mature male narrator, warm amber lighting, detailed facial features, watercolor sketch style, deep blacks and sepia tones." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCmAQvuSrSreqUBkQTZ9N1eNTJ4mc_hNadLzZ682o2DdGuovIqZ4WPDXx1b_fuw6dgDr0oU6ZN5NJn7kjtucs8GjNeYWw6IL-Rvj-3cYQ7QWhjzru-wO2_U8laq0Hv2l2mWEiUBg-_nIimwnFCFcFvEl63aYJMctCVBbChaEhVxGS-_u97w76M88mE-0HFG2Orm_0Y4iqDzVrUO_NEkgmZT4dF6S304rOp3zj7yFzEYwqKitiShzF3v6tPzEFW4gwVqVh3-NOI6A">
+</div>
+<div>
+<h4 class="font-headline-md text-[18px] text-on-surface">Alistair</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-primary-container/10 text-primary border border-primary/20">Edge-TTS</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all active:scale-95 shadow-sm">
+<span class="material-symbols-outlined filled-icon">play_arrow</span>
+</button>
+</div>
+<div class="flex items-center gap-2 mb-sm">
+<div class="h-6 flex items-end gap-[2px]">
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-2" style="height: 19px;"></div>
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-4" style="height: 12px;"></div>
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-3" style="height: 18px;"></div>
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-5" style="height: 10px;"></div>
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-2" style="height: 8px;"></div>
+</div>
+<p class="text-[13px] text-on-surface-variant italic">"The wind whispered secrets through the ancient oaks..."</p>
+</div>
+<div class="flex flex-wrap gap-xs">
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">BRITISH ACCENT</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">CALM</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">AUTHORITATIVE</span>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/10 flex gap-md">
+<button class="flex-1 py-2 bg-primary text-white rounded-full font-bold text-[14px] hover:bg-secondary transition-all active:scale-[0.97]" onclick="openCloneModal('Alistair', 'Edge-TTS')">Clone to Project</button>
+<button class="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container transition-all rounded-lg" title="Use as Template">
+<span class="material-symbols-outlined">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Voice Card 2: CosyVoice -->
+<div class="group bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-md flex flex-col gap-md transition-all hover:border-primary hover:shadow-lg hover:scale-[1.01]">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-tertiary-fixed flex items-center justify-center border-2 border-tertiary/20">
+<img class="w-full h-full object-cover" data-alt="A portrait of a young woman with a vibrant, cheerful expression, bright daylight, cinematic lens flare, high-end 3D render style with soft focus background." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsd58hScrZPc7Iqjxfjlwf-sMJ_XV7EsD-Z-Mj1ZABVdYXVWzvpfMwgx3naAvACS997UEb6z5udXfeKuYxY7KMweATxwkBpd_NdwAbespEU8_KISO9hbVuLSoYMI0TkZuOcply4e9xolzPi99sWXboVNRMyArcZaD_897JZ2N4BixIhF9Ar6xeSv89MKwQuJ7PmEZE_2VkovIWRZQNh0lCfSgFFg4kyMjKsWeFa03NefWPL_RGUPdbRrHsVUqkcXPstz097HjwVg">
+</div>
+<div>
+<h4 class="font-headline-md text-[18px] text-on-surface">Elena</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-tertiary-container/10 text-tertiary border border-tertiary/20">CosyVoice</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all active:scale-95 shadow-sm">
+<span class="material-symbols-outlined filled-icon">play_arrow</span>
+</button>
+</div>
+<div class="flex items-center gap-2 mb-sm">
+<div class="h-6 flex items-end gap-[2px]">
+<div class="waveform-bar w-1 bg-primary rounded-full h-3" style="height: 11px;"></div>
+<div class="waveform-bar w-1 bg-primary rounded-full h-5" style="height: 13px;"></div>
+<div class="waveform-bar w-1 bg-primary rounded-full h-2" style="height: 5px;"></div>
+<div class="waveform-bar w-1 bg-primary rounded-full h-4" style="height: 7px;"></div>
+<div class="waveform-bar w-1 bg-primary rounded-full h-6" style="height: 11px;"></div>
+</div>
+<p class="text-[13px] text-on-surface-variant italic">"Oh! I never expected to find a hidden garden here!"</p>
+</div>
+<div class="flex flex-wrap gap-xs">
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">US ACCENT</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">ENERGETIC</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">YOUTHFUL</span>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/10 flex gap-md">
+<button class="flex-1 py-2 bg-primary text-white rounded-full font-bold text-[14px] hover:bg-secondary transition-all active:scale-[0.97]" onclick="openCloneModal('Elena', 'CosyVoice')">Clone to Project</button>
+<button class="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container transition-all rounded-lg" title="Use as Template">
+<span class="material-symbols-outlined">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Voice Card 3: MiMo -->
+<div class="group bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-md flex flex-col gap-md transition-all hover:border-primary hover:shadow-lg hover:scale-[1.01]">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-secondary-fixed flex items-center justify-center border-2 border-secondary/20">
+<img class="w-full h-full object-cover" data-alt="Close up of a fantasy creature narrator with expressive large eyes, mysterious dark cavern background with glowing mushrooms, detailed texture, ethereal lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBJmAbdy3OY8W9qlN-cW_Y_yEjppslODgSC632KDpsBs9RtkdP88NdM93rFXzJpf2ZDhVlj_m8v0us-SBImFbk_cE-77uhMMSTdPmBg5t1I_aN_8gTZRscLWQB20TFJrbdgLzFAGJq5ULapTdeqRxP4zac0iTsVWsU0cCmlZgYq3c329Jq6L_S1tuAgo-5SuUZrqhOvDCeM7DiXta1EwAyZbgPvcPfm-sm2xuRmt32v0pEmAvXM4pB42h7J2wuPd4c_7jdoR4kINg">
+</div>
+<div>
+<h4 class="font-headline-md text-[18px] text-on-surface">Puck</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-on-secondary-fixed-variant/10 text-on-secondary-fixed-variant border border-on-secondary-fixed-variant/20">MiMo</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all active:scale-95 shadow-sm">
+<span class="material-symbols-outlined filled-icon">play_arrow</span>
+</button>
+</div>
+<div class="flex items-center gap-2 mb-sm">
+<div class="h-6 flex items-end gap-[2px]">
+<div class="waveform-bar w-1 bg-secondary rounded-full h-5" style="height: 14px;"></div>
+<div class="waveform-bar w-1 bg-secondary rounded-full h-3" style="height: 18px;"></div>
+<div class="waveform-bar w-1 bg-secondary rounded-full h-4" style="height: 19px;"></div>
+<div class="waveform-bar w-1 bg-secondary rounded-full h-2" style="height: 11px;"></div>
+<div class="waveform-bar w-1 bg-secondary rounded-full h-1" style="height: 22px;"></div>
+</div>
+<p class="text-[13px] text-on-surface-variant italic">"Hehehe... are you lost, little traveler?"</p>
+</div>
+<div class="flex flex-wrap gap-xs">
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">NON-HUMAN</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">WHIMSICAL</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">HIGH-PITCH</span>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/10 flex gap-md">
+<button class="flex-1 py-2 bg-primary text-white rounded-full font-bold text-[14px] hover:bg-secondary transition-all active:scale-[0.97]" onclick="openCloneModal('Puck', 'MiMo')">Clone to Project</button>
+<button class="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container transition-all rounded-lg" title="Use as Template">
+<span class="material-symbols-outlined">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Voice Card 4: Edge-TTS -->
+<div class="group bg-surface-container-lowest border border-outline-variant/30 rounded-2xl p-md flex flex-col gap-md transition-all hover:border-primary hover:shadow-lg hover:scale-[1.01]">
+<div class="flex justify-between items-start">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-primary-fixed flex items-center justify-center border-2 border-primary/20">
+<img class="w-full h-full object-cover" data-alt="Portrait of a composed female professional in a minimalist glass-walled office, warm evening sunlight casting long shadows, sleek modern design aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_DLPI1OJr5qbl_fT8wHXVcxhdXftR5HO4emcfOEKqGJAdOvUVyKSbCPAc6haWw8jaqW5eQMoczt-D4AUgLdEbqiOtlKyGN5tNstlB7_u04lyKXA19IpO7nzSvDK5Zk1myJydmMc1X0pZu_sZZc4lhzppcyNi9VWcuJWLYEV0tE7VdDP5TxClYv4RYQ1bIooAJ266SrqSTri4DuD6UR9Yenn6c2WAONBgyi-l0cs9IugiCiki2o0hO2juZsFkugGoU9yXdsU26XQ">
+</div>
+<div>
+<h4 class="font-headline-md text-[18px] text-on-surface">Sarah</h4>
+<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-primary-container/10 text-primary border border-primary/20">Edge-TTS</span>
+</div>
+</div>
+<button class="w-10 h-10 rounded-full bg-surface-container-high flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all active:scale-95 shadow-sm">
+<span class="material-symbols-outlined filled-icon">play_arrow</span>
+</button>
+</div>
+<div class="flex items-center gap-2 mb-sm">
+<div class="h-6 flex items-end gap-[2px]">
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-2" style="height: 14px;"></div>
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-4" style="height: 10px;"></div>
+<div class="waveform-bar w-1 bg-tertiary-container rounded-full h-5" style="height: 9px;"></div>
+</div>
+<p class="text-[13px] text-on-surface-variant italic">"This report summarizes the final quarter results..."</p>
+</div>
+<div class="flex flex-wrap gap-xs">
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">US ACCENT</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">PROFESSIONAL</span>
+<span class="text-label-caps bg-surface-container px-2 py-1 rounded text-on-surface-variant border border-outline-variant/20">NEUTRAL</span>
+</div>
+<div class="mt-auto pt-md border-t border-outline-variant/10 flex gap-md">
+<button class="flex-1 py-2 bg-primary text-white rounded-full font-bold text-[14px] hover:bg-secondary transition-all active:scale-[0.97]" onclick="openCloneModal('Sarah', 'Edge-TTS')">Clone to Project</button>
+<button class="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container transition-all rounded-lg" title="Use as Template">
+<span class="material-symbols-outlined">content_copy</span>
+</button>
+</div>
+</div>
+<!-- Add Custom Voice Placeholder -->
+<div class="group bg-surface-container-low border-2 border-dashed border-outline-variant/50 rounded-2xl p-md flex flex-col items-center justify-center gap-md transition-all hover:bg-surface-container-high hover:border-primary/50 cursor-pointer text-center py-12">
+<div class="w-16 h-16 rounded-full bg-surface-container-highest flex items-center justify-center text-outline group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[40px]">add_circle</span>
+</div>
+<div>
+<h4 class="font-headline-md text-[18px] text-on-surface">Upload Sample</h4>
+<p class="text-on-surface-variant text-[13px] max-w-[200px]">Create a custom character by uploading a 30s audio sample.</p>
+</div>
+</div>
+</div>
+</main>
+<!-- Quick-Create Modal -->
+<div class="fixed inset-0 z-[60] flex items-center justify-center hidden" id="clone-modal">
+<div class="absolute inset-0 bg-on-background/40 backdrop-blur-sm" onclick="closeModal()"></div>
+<div class="relative bg-surface rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl border border-outline-variant/30 transform transition-all">
+<div class="p-lg border-b border-outline-variant/20 flex justify-between items-center">
+<h3 class="font-headline-md text-headline-md text-on-surface">Clone to Project</h3>
+<button class="text-on-surface-variant hover:text-on-surface" onclick="closeModal()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="p-lg space-y-lg">
+<div class="flex items-center gap-md p-md bg-surface-container-low rounded-xl">
+<div class="w-14 h-14 rounded-full bg-primary-fixed overflow-hidden border-2 border-primary/20" id="modal-voice-img">
+<img class="w-full h-full object-cover" data-alt="A small detailed avatar icon representing a high quality studio voice." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDyqa3ssNB0lCLWvdEzooGyS3T0OX68S6C3SYW8EEGo-8g4lBQmROTgI82GzlOY0zNr_Owj7Sy_VEP74KArhnWFXguOnz8fwK62qVdy8VKBDdScCOQe40TYxxHA4U29uMw6E3vZ-YPdlGoXwj5nv6DH9fMUmkI-UXB0ynsRJG2v9BP0tyJEnyGWDwS_HBxxdAYwa7_I6aI-eZWcRqpb8M-ZDMYXLCw0cNyN-cmeKqcutJrrRsnFkXrXaCwN_UlIOVRKyF0MHY9Hqg">
+</div>
+<div>
+<p class="text-label-caps text-on-surface-variant">SELECTED VOICE</p>
+<h4 class="font-headline-md text-[20px] text-on-surface" id="modal-voice-name">Voice Name</h4>
+<span class="text-[12px] font-bold text-primary" id="modal-voice-engine">Engine Name</span>
+</div>
+</div>
+<div>
+<label class="block text-label-caps text-on-surface-variant mb-xs">CHARACTER NAME</label>
+<input class="w-full bg-surface-container-low border border-outline-variant/30 rounded-lg py-3 px-md focus:ring-2 focus:ring-primary/20 outline-none transition-all" id="new-char-name" type="text" value="Alistair Copy">
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div>
+<label class="block text-label-caps text-on-surface-variant mb-xs">PITCH</label>
+<input class="w-full accent-primary" type="range">
+<div class="flex justify-between text-[10px] text-outline mt-1 font-bold">
+<span>LOW</span>
+<span>HIGH</span>
+</div>
+</div>
+<div>
+<label class="block text-label-caps text-on-surface-variant mb-xs">SPEED</label>
+<input class="w-full accent-primary" type="range">
+<div class="flex justify-between text-[10px] text-outline mt-1 font-bold">
+<span>SLOW</span>
+<span>FAST</span>
+</div>
+</div>
+</div>
+<div class="flex items-center gap-md py-lg border-t border-outline-variant/20">
+<button class="flex-1 py-3 text-on-surface-variant font-bold hover:bg-surface-container transition-all rounded-full" onclick="closeModal()">Cancel</button>
+<button class="flex-[2] py-3 bg-gradient-to-r from-primary to-secondary text-white font-bold rounded-full shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all" onclick="successCreate()">Create Character</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Success Toast -->
+<div class="fixed bottom-lg left-1/2 -translate-x-1/2 z-[100] flex items-center gap-md bg-inverse-surface text-inverse-on-surface px-lg py-3 rounded-full shadow-xl opacity-0 pointer-events-none transition-all" id="toast">
+<span class="material-symbols-outlined text-tertiary-fixed">check_circle</span>
+<span class="font-medium">Character successfully cloned to project!</span>
+</div>
+<script>
+        function openCloneModal(name, engine) {
+            const modal = document.getElementById('clone-modal');
+            const nameEl = document.getElementById('modal-voice-name');
+            const engineEl = document.getElementById('modal-voice-engine');
+            const inputEl = document.getElementById('new-char-name');
+            
+            nameEl.textContent = name;
+            engineEl.textContent = engine;
+            inputEl.value = `${name} Clone`;
+            
+            modal.classList.remove('hidden');
+            // Micro-interaction
+            setTimeout(() => {
+                modal.querySelector('.relative').classList.add('scale-100', 'opacity-100');
+                modal.querySelector('.relative').classList.remove('scale-95', 'opacity-0');
+            }, 10);
+        }
+
+        function closeModal() {
+            const modal = document.getElementById('clone-modal');
+            modal.querySelector('.relative').classList.remove('scale-100', 'opacity-100');
+            modal.querySelector('.relative').classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 200);
+        }
+
+        function successCreate() {
+            closeModal();
+            const toast = document.getElementById('toast');
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'bottom-2xl');
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'pointer-events-none');
+                toast.classList.remove('opacity-100', 'bottom-2xl');
+            }, 3000);
+        }
+
+        // Randomly animate waveforms for aesthetic life
+        setInterval(() => {
+            document.querySelectorAll('.waveform-bar').forEach(bar => {
+                const height = Math.floor(Math.random() * 20) + 4;
+                bar.style.height = `${height}px`;
+            });
+        }, 300);
+    </script>
+</body></html>

@@ -11,7 +11,7 @@ export const enUS: Messages = {
     overview: 'Overview',
     library: 'Library',
     studio: 'Studio',
-    voices: 'Voices',
+    voices: 'Characters',
     settings: 'Project Settings',
   },
   projectHub: {

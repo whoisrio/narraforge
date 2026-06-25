@@ -44,75 +44,62 @@ export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRat
   useEffect(() => { loadVoices(); }, [loadVoices]);
 
   return (
-    <div className={styles.bar}>
+    <div className={styles.panel}>
       {/* Language */}
-      <div className={styles.section}>
-        <span className={styles.label}>语言</span>
-        <select className={styles.select} value={selectedLanguage} onChange={e => setSelectedLanguage(e.target.value)}>
-          {languages.map(lang => <option key={lang} value={lang}>{lang}</option>)}
-        </select>
-      </div>
-
-      <div className={styles.divider} />
+      <label className={styles.fieldLabel}>语言</label>
+      <select className={styles.select} value={selectedLanguage} onChange={e => setSelectedLanguage(e.target.value)}>
+        {languages.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+      </select>
 
       {/* Gender */}
-      <div className={styles.section}>
-        <span className={styles.label}>性别</span>
-        <div className={styles.pillGroup}>
-          {GENDER_OPTIONS.map(opt => (
-            <button key={opt.value} className={`${styles.pill} ${selectedGender === opt.value ? styles.pillActive : ''}`}
-              onClick={() => setSelectedGender(opt.value)}>{opt.label}</button>
-          ))}
-        </div>
+      <label className={styles.fieldLabel}>性别</label>
+      <div className={styles.pillGroup}>
+        {GENDER_OPTIONS.map(opt => (
+          <button key={opt.value} className={`${styles.pill} ${selectedGender === opt.value ? styles.pillActive : ''}`}
+            onClick={() => setSelectedGender(opt.value)}>{opt.label}</button>
+        ))}
       </div>
-
-      <div className={styles.divider} />
 
       {/* Voice */}
-      <div className={styles.section}>
-        <span className={styles.label}>音色</span>
-        {isLoading ? (
-          <span className={styles.loadingText}>加载中...</span>
-        ) : (
-          <select className={styles.select} value={selectedVoice || ''} onChange={e => onVoiceSelect(e.target.value)}>
-            {voices.map(v => (
-              <option key={v.short_name} value={v.short_name}>
-                {v.display_name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+      <label className={styles.fieldLabel}>音色</label>
+      {isLoading ? (
+        <span className={styles.loadingText}>加载中...</span>
+      ) : (
+        <select className={styles.select} value={selectedVoice || ''} onChange={e => onVoiceSelect(e.target.value)}>
+          {voices.map(v => (
+            <option key={v.short_name} value={v.short_name}>
+              {v.display_name}
+            </option>
+          ))}
+        </select>
+      )}
 
-      {/* Rate + Volume (if provided) */}
+      {/* Rate */}
       {onRateChange && (
-        <>
-          <div className={styles.divider} />
-          <div className={styles.section}>
-            <span className={styles.label}>语速</span>
-            <div className={styles.sliderWrap}>
-              <input type="range" min={-50} max={50} step={5} value={rate ?? 0}
-                className={styles.range}
-                style={{ '--fill-pct': `${(((rate ?? 0) + 50) / 100) * 100}%` } as React.CSSProperties}
-                onChange={e => onRateChange(parseInt(e.target.value))} />
-            </div>
+        <div className={styles.sliderRow}>
+          <div className={styles.sliderHeader}>
+            <span className={styles.fieldLabel}>语速</span>
             <span className={styles.paramValue}>{rate ?? 0}%</span>
           </div>
-        </>
+          <input type="range" min={-50} max={50} step={5} value={rate ?? 0}
+            className={styles.range}
+            style={{ '--fill-pct': `${(((rate ?? 0) + 50) / 100) * 100}%` } as React.CSSProperties}
+            onChange={e => onRateChange(parseInt(e.target.value))} />
+        </div>
       )}
+
+      {/* Volume */}
       {onVolumeChange && (
-        <>
-          <div className={styles.section}>
-            <span className={styles.label}>音量</span>
-            <div className={styles.sliderWrap}>
-              <input type="range" min={-50} max={50} step={5} value={volume ?? 0}
-                className={styles.range}
-                style={{ '--fill-pct': `${(((volume ?? 0) + 50) / 100) * 100}%` } as React.CSSProperties}
-                onChange={e => onVolumeChange(parseInt(e.target.value))} />
-            </div>
+        <div className={styles.sliderRow}>
+          <div className={styles.sliderHeader}>
+            <span className={styles.fieldLabel}>音量</span>
             <span className={styles.paramValue}>{volume ?? 0}%</span>
           </div>
-        </>
+          <input type="range" min={-50} max={50} step={5} value={volume ?? 0}
+            className={styles.range}
+            style={{ '--fill-pct': `${(((volume ?? 0) + 50) / 100) * 100}%` } as React.CSSProperties}
+            onChange={e => onVolumeChange(parseInt(e.target.value))} />
+        </div>
       )}
     </div>
   );

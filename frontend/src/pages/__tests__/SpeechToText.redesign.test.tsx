@@ -28,73 +28,44 @@ vi.mock('../../services/api', () => ({
 
 vi.mock('../../components/SpeechToText', () => ({
   TranscriptionHistory: () => <div data-testid="transcription-history" />,
-  MultiAudioSelector: () => <div data-testid="multi-audio-selector">多文件队列</div>,
+  AudioDropzone: ({ files, onTranscribe, processing }: { files: File[]; onTranscribe: () => void; processing: boolean }) => (
+    <div data-testid="audio-dropzone">
+      <span>{files.length} files</span>
+      <button onClick={onTranscribe} disabled={processing || files.length === 0}>
+        {processing ? '识别中...' : '开始识别'}
+      </button>
+    </div>
+  ),
+  TranscriptEditor: () => <div data-testid="transcript-editor" />,
+  CorrectionPanel: () => <div data-testid="correction-panel" />,
+  SidebarConfig: () => <div data-testid="sidebar-config" />,
+  ExportPanel: () => <div data-testid="export-panel" />,
+  BilingualCard: () => <div data-testid="bilingual-card" />,
+  QualityReport: () => <div data-testid="quality-report" />,
+  PlaybackBar: () => <div data-testid="playback-bar" />,
 }));
 
-describe('SpeechToText redesign shell', () => {
-  it('surfaces a unified Subtitle Studio layout instead of stacked legacy cards', () => {
+describe('SpeechToText redesigned layout', () => {
+  it('renders the two-column Transcription Hub layout with all sections', () => {
     render(<SpeechToText />);
 
-    expect(screen.getByText('Subtitle Studio')).toBeInTheDocument();
-    expect(screen.getAllByText('Ingest').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Transcript Editor').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Review & Export').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Boundary Timeline').length).toBeGreaterThan(0);
-    expect(screen.getByText('单文件')).toBeInTheDocument();
-    expect(screen.getAllByText('多文件队列').length).toBeGreaterThan(0);
-    expect(screen.queryByText(/或使用「多音频合并转写」/)).not.toBeInTheDocument();
-    expect(screen.getByTestId('multi-audio-selector')).toBeInTheDocument();
+    expect(screen.getByText('Transcription Hub')).toBeInTheDocument();
+    expect(screen.getByText('Convert spoken narrative into polished prose.')).toBeInTheDocument();
+    expect(screen.getByTestId('audio-dropzone')).toBeInTheDocument();
+    expect(screen.getByTestId('transcript-editor')).toBeInTheDocument();
+    expect(screen.getByTestId('correction-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('sidebar-config')).toBeInTheDocument();
+    expect(screen.getByTestId('export-panel')).toBeInTheDocument();
+    expect(screen.getByTestId('bilingual-card')).toBeInTheDocument();
+    expect(screen.getByTestId('playback-bar')).toBeInTheDocument();
+    expect(screen.getByTestId('transcription-history')).toBeInTheDocument();
   });
 
-  it('queues local subtitle files, reorders them, transcribes unified ASR, shows boundary map, and exports JSON/TXT', async () => {
-    vi.mocked(speechToTextApi.multiTranscribe).mockResolvedValue({
-      file_id: 'merged-1',
-      filename: 'merged_audio.srt',
-      content: '1\n00:00:00,000 --> 00:00:01,000\n你好\n',
-      language: 'zh',
-      language_probability: 0.98,
-      download_url: '/api/speech-to-text/download/merged-1',
-    });
-    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:subtitle-export');
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
-    const click = vi.fn();
-    const appendChild = vi.spyOn(document.body, 'appendChild');
-    const removeChild = vi.spyOn(document.body, 'removeChild');
-    const createElement = vi.spyOn(document, 'createElement');
-    createElement.mockImplementation(((tagName: string) => {
-      const element = document.createElementNS('http://www.w3.org/1999/xhtml', tagName) as HTMLElement;
-      if (tagName.toLowerCase() === 'a') {
-        Object.assign(element, { click });
-      }
-      return element;
-    }) as typeof document.createElement);
-
+  it('renders without boundary timeline or source mode switch', () => {
     render(<SpeechToText />);
-
-    const fileInput = screen.getByLabelText('选择多文件队列') as HTMLInputElement;
-    const first = new File(['a'], 'part-a.mp3', { type: 'audio/mpeg' });
-    const second = new File(['b'], 'part-b.wav', { type: 'audio/wav' });
-    fireEvent.change(fileInput, { target: { files: [first, second] } });
-
-    expect(screen.getAllByText('part-a.mp3').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('part-b.wav').length).toBeGreaterThan(0);
-    fireEvent.click(screen.getByRole('button', { name: '上移 part-b.wav' }));
-    fireEvent.click(screen.getByRole('button', { name: /统一 ASR/ }));
-
-    await waitFor(() => expect(speechToTextApi.multiTranscribe).toHaveBeenCalledWith([second, first], 'large-v3', 5, 'whisper', true));
-    expect(screen.getByText('Boundary Map')).toBeInTheDocument();
-    expect(screen.getAllByText(/part-b\.wav/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/part-a\.mp3/).length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getAllByRole('button', { name: '导出 JSON' })[0]);
-    expect(click).toHaveBeenCalled();
-    fireEvent.click(screen.getAllByRole('button', { name: '导出 TXT' })[0]);
-    expect(click).toHaveBeenCalledTimes(2);
-
-    createObjectURL.mockRestore();
-    revokeObjectURL.mockRestore();
-    appendChild.mockRestore();
-    removeChild.mockRestore();
-    createElement.mockRestore();
+    expect(screen.queryByText('Boundary Timeline')).not.toBeInTheDocument();
+    expect(screen.queryByText('Boundary Map')).not.toBeInTheDocument();
+    expect(screen.queryByText('单文件')).not.toBeInTheDocument();
+    expect(screen.queryByText('素材导入')).not.toBeInTheDocument();
   });
 });

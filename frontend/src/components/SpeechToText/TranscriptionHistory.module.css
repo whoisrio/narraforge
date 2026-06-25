@@ -1,5 +1,5 @@
 .container {
-  background: var(--color-surface);
+  background: var(--color-surface-low);
   border-radius: var(--radius-lg);
   padding: var(--spacing-lg);
   margin-top: var(--spacing-md);
@@ -28,7 +28,7 @@
   text-align: center;
   padding: var(--spacing-2xl);
   color: var(--color-text-secondary);
-  background: var(--color-surface);
+  background: var(--color-surface-low);
   border-radius: var(--radius-lg);
 }
 

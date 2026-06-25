@@ -1,832 +1,110 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { speechToTextApi, subtitleLlmApi } from '../services/api';
-import type { TranscribeResult, TranscriptionRecord, CorrectionSuggestion, BilingualSegment } from '../services/api';
-import { t } from '../i18n';
-
-/** 字符级 diff：将 original 和 suggested 分成 changed/unchanged 片段 */
-function getErrorDetail(error: unknown, fallback: string): string {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { detail?: string } } }).response;
-    return response?.data?.detail || fallback;
-  }
-  return fallback;
-}
-
-function computeCharDiff(original: string, suggested: string) {
-  // 找最长公共子序列的简化版 — 从两端向中间收缩
-  let prefixLen = 0;
-  while (prefixLen < original.length && prefixLen < suggested.length && original[prefixLen] === suggested[prefixLen]) prefixLen++;
-  let suffixLen = 0;
-  while (
-    suffixLen < original.length - prefixLen &&
-    suffixLen < suggested.length - prefixLen &&
-    original[original.length - 1 - suffixLen] === suggested[suggested.length - 1 - suffixLen]
-  ) suffixLen++;
-
-  const origMid = original.slice(prefixLen, original.length - suffixLen);
-  const suggMid = suggested.slice(prefixLen, suggested.length - suffixLen);
-  const prefix = original.slice(0, prefixLen);
-  const suffix = original.slice(original.length - suffixLen);
-
-  const left: { text: string; changed: boolean }[] = [];
-  const right: { text: string; changed: boolean }[] = [];
-  if (prefix) { left.push({ text: prefix, changed: false }); right.push({ text: prefix, changed: false }); }
-  if (origMid) left.push({ text: origMid, changed: true });
-  if (suggMid) right.push({ text: suggMid, changed: true });
-  if (suffix) { left.push({ text: suffix, changed: false }); right.push({ text: suffix, changed: false }); }
-  return { left, right };
-}
-import { saveSTTResult, getSTTHistory, deleteSTTResult } from '../services/indexedDB';
-import { useStorageMode } from '../hooks/useStorageMode';
-import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/Select';
-import { Slider } from '../components/ui/Slider';
-import { Loading } from '../components/ui/Loading';
-import { TranscriptionHistory } from '../components/SpeechToText';
-import { MultiAudioSelector } from '../components/SpeechToText';
+import { useTranscription } from '../hooks/useTranscription';
+import {
+  AudioDropzone,
+  TranscriptEditor,
+  CorrectionPanel,
+  SidebarConfig,
+  ExportPanel,
+  BilingualCard,
+  QualityReport,
+  PlaybackBar,
+  TranscriptionHistory,
+} from '../components/SpeechToText';
 import styles from './SpeechToText.module.css';
 
-const ENGINE_OPTIONS = [
-  { value: 'whisper', label: 'Whisper (多语言)' },
-  { value: 'funasr', label: 'FunASR (中文优化)' },
-];
-
-const WHISPER_MODEL_OPTIONS = [
-  { value: 'tiny', label: 'Tiny (最快)' },
-  { value: 'base', label: 'Base' },
-  { value: 'small', label: 'Small' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'large-v3', label: 'Large-v3 (最准)' },
-];
-
-const FUNASR_MODEL_OPTIONS = [
-  { value: 'paraformer-zh', label: 'Paraformer-ZH (中文)' },
-  { value: 'paraformer-zh-streaming', label: 'Paraformer-ZH Streaming' },
-];
-
 export function SpeechToText() {
-  const { mode: storageMode } = useStorageMode();
-  const [file, setFile] = useState<File | null>(null);
-  const [engine, setEngine] = useState('whisper');
-  const [modelSize, setModelSize] = useState('large-v3');
-  const [beamSize, setBeamSize] = useState(5);
-  const [enableVad, setEnableVad] = useState(true);
-  const [processing, setProcessing] = useState(false);
-  const [result, setResult] = useState<TranscribeResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [history, setHistory] = useState<TranscriptionRecord[]>([]);
-  const [localQueue, setLocalQueue] = useState<{ id: string; file: File }[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const localQueueInputRef = useRef<HTMLInputElement>(null);
-  const multiAudioRef = useRef<HTMLDivElement>(null);
-
-  // LLM 校准状态
-  const [originalDoc, setOriginalDoc] = useState('');
-  const [correctionMode, setCorrectionMode] = useState<'smart' | 'full'>('smart');
-  const [suggestions, setSuggestions] = useState<CorrectionSuggestion[]>([]);
-  const [correcting, setCorrecting] = useState(false);
-  const [correctionModel, setCorrectionModel] = useState<string | null>(null);
-  const [acceptedSuggestions, setAcceptedSuggestions] = useState<Set<number>>(new Set());
-
-  // 双语字幕状态
-  const [bilingualSegments, setBilingualSegments] = useState<BilingualSegment[]>([]);
-  const [bilingualSrt, setBilingualSrt] = useState('');
-  const [translating, setTranslating] = useState(false);
-  const [targetLang, setTargetLang] = useState('English');
-
-  // 用 ref 跟踪当前模式，避免异步竞态
-  const storageModeRef = useRef(storageMode);
-  storageModeRef.current = storageMode;
-
-  // 保存 blob URL 以便清理，避免内存泄漏
-  const blobUrlsRef = useRef<string[]>([]);
-
-  const revokeBlobUrls = useCallback(() => {
-    blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
-    blobUrlsRef.current = [];
-  }, []);
-
-  const handleFileSelect = useCallback((selectedFile: File) => {
-    const ext = selectedFile.name.split('.').pop()?.toLowerCase();
-    if (ext !== 'wav' && ext !== 'mp3') {
-      setError('Only .wav and .mp3 files are supported');
-      return;
-    }
-    setFile(selectedFile);
-    setResult(null);
-    setError(null);
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
-    setAudioUrl(URL.createObjectURL(selectedFile));
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setDragOver(false);
-      const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile) handleFileSelect(droppedFile);
-    },
-    [handleFileSelect],
-  );
-
-  // 切换引擎时自动选择对应默认模型
-  const handleEngineChange = (newEngine: string) => {
-    setEngine(newEngine);
-    if (newEngine === 'whisper') setModelSize('large-v3');
-    else setModelSize('paraformer-zh');
-  };
-
-  const handleTranscribe = async () => {
-    if (!file) return;
-    setProcessing(true);
-    setError(null);
-    try {
-      const res = await speechToTextApi.transcribe(file, modelSize, beamSize, engine, enableVad);
-      // enableVad only relevant for funasr
-      setResult(res);
-
-      // 前端存储模式：将识别结果存入 IndexedDB
-      if (storageMode === 'frontend') {
-        await saveSTTResult({
-          id: res.file_id,
-          original_filename: file.name,
-          audioBlob: file, // 保存原始音频文件，以便历史回放
-          srtContent: res.content,
-          language: res.language,
-          language_probability: res.language_probability,
-          model_size: modelSize,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      loadHistory();
-    } catch (err: unknown) {
-      setError(getErrorDetail(err, 'Transcription failed'));
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDownload = () => {
-    if (!result || !file) return;
-    const stem = file.name.replace(/\.[^.]+$/, '');
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const filename = `${stem}_${date}.srt`;
-    const blob = new Blob([result.content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const loadHistory = useCallback(async () => {
-    const modeAtStart = storageModeRef.current;
-    try {
-      if (modeAtStart === 'frontend') {
-        // 前端存储模式：从 IndexedDB 加载，映射为 TranscriptionRecord 格式
-        const localRecords = await getSTTHistory();
-        if (storageModeRef.current !== modeAtStart) return;
-
-        // 清理旧的 blob URL，为每条记录生成新的
-        revokeBlobUrls();
-
-        const mapped: TranscriptionRecord[] = localRecords.map((r) => {
-          // 旧记录可能没有 audioBlob，此时不生成播放 URL
-          const audioUrl = r.audioBlob ? URL.createObjectURL(r.audioBlob) : '';
-          if (audioUrl) blobUrlsRef.current.push(audioUrl);
-
-          // 为 SRT 内容生成 blob URL，以便历史下载
-          const srtBlob = new Blob([r.srtContent || ''], { type: 'text/plain;charset=utf-8' });
-          const srtUrl = URL.createObjectURL(srtBlob);
-          blobUrlsRef.current.push(srtUrl);
-
-          return {
-            id: r.id,
-            original_filename: r.original_filename,
-            audio_url: audioUrl,
-            srt_download_url: srtUrl,
-            language: r.language,
-            language_probability: r.language_probability,
-            model_size: r.model_size,
-            created_at: r.created_at,
-          };
-        });
-        setHistory(mapped);
-      } else {
-        const data = await speechToTextApi.getHistory();
-        if (storageModeRef.current !== modeAtStart) return;
-        setHistory(data);
-      }
-    } catch (error) {
-      console.error('Failed to load history:', error);
-    }
-  }, []);
-
-  useEffect(() => { loadHistory(); }, [storageMode, loadHistory]);
-
-  // 组件卸载时清理 blob URL，避免内存泄漏
-  useEffect(() => {
-    return () => {
-      revokeBlobUrls();
-    };
-  }, [revokeBlobUrls]);
-
-  const handleDeleteRecord = useCallback(async (id: string) => {
-    try {
-      if (storageMode === 'frontend') {
-        await deleteSTTResult(id);
-      } else {
-        await speechToTextApi.deleteRecord(id);
-      }
-      setHistory(prev => prev.filter(r => r.id !== id));
-    } catch (error) {
-      console.error('Failed to delete record:', error);
-    }
-  }, [storageMode]);
-
-  // ---- LLM 字幕校准 ----
-  const handleCorrect = async () => {
-    if (!result?.content) return;
-    if (!originalDoc.trim()) {
-      setError('请先粘贴原始文稿，再进行校准');
-      return;
-    }
-    setCorrecting(true);
-    setError(null);
-    setSuggestions([]);
-    setAcceptedSuggestions(new Set());
-    try {
-      const res = await subtitleLlmApi.correct(result.content, originalDoc, 'zh', correctionMode);
-      setSuggestions(res.suggestions);
-      setCorrectionModel(res.model);
-    } catch (err: unknown) {
-      setError(getErrorDetail(err, 'LLM 校准失败，请检查 .env 中的 LLM 配置'));
-    } finally {
-      setCorrecting(false);
-    }
-  };
-
-  const toggleAcceptSuggestion = (index: number) => {
-    setAcceptedSuggestions(prev => {
-      const next = new Set(prev);
-      if (next.has(index)) next.delete(index);
-      else next.add(index);
-      return next;
-    });
-  };
-
-  const applyCorrections = () => {
-    if (!result || acceptedSuggestions.size === 0) return;
-    let content = result.content;
-    const sorted = [...suggestions]
-      .filter(s => acceptedSuggestions.has(s.index))
-      .sort((a, b) => {
-        // 按在原文中的位置倒序替换，避免偏移
-        const posA = content.indexOf(a.original);
-        const posB = content.indexOf(b.original);
-        return posB - posA;
-      });
-    for (const s of sorted) {
-      content = content.replace(s.original, s.suggested);
-    }
-    setResult({ ...result, content });
-    setSuggestions([]);
-    setAcceptedSuggestions(new Set());
-  };
-
-  // ---- 双语字幕 ----
-  const handleTranslate = async () => {
-    if (!result?.content) return;
-    setTranslating(true);
-    setError(null);
-    try {
-      const res = await subtitleLlmApi.translate(result.content, targetLang);
-      setBilingualSegments(res.segments);
-      setBilingualSrt(res.bilingual_srt);
-    } catch (err: unknown) {
-      setError(getErrorDetail(err, '翻译失败，请检查 API Key 配置'));
-    } finally {
-      setTranslating(false);
-    }
-  };
-
-  const handleDownloadBilingual = () => {
-    if (!bilingualSrt || !file) return;
-    const stem = file.name.replace(/\.[^.]+$/, '');
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const filename = `${stem}_${date}_bilingual.srt`;
-    const blob = new Blob([bilingualSrt], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleMultiTranscribe = async (files: File[]) => {
-    setProcessing(true);
-    setError(null);
-    try {
-      const res = await speechToTextApi.multiTranscribe(files, modelSize, beamSize, engine, enableVad);
-      setResult(res);
-
-      // 前端存储模式：存入 IndexedDB
-      if (storageMode === 'frontend') {
-        // multi 模式下无单个 File，保存第一个文件的 Blob 作为归档
-        await saveSTTResult({
-          id: res.file_id,
-          original_filename: 'merged_audio.mp3',
-          audioBlob: files[0],
-          srtContent: res.content,
-          language: res.language,
-          language_probability: res.language_probability,
-          model_size: modelSize,
-          created_at: new Date().toISOString(),
-        });
-      }
-
-      loadHistory();
-    } catch (err: unknown) {
-      setError(getErrorDetail(err, 'Multi-transcribe failed'));
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleLocalQueueSelect = (files: FileList | File[]) => {
-    const accepted = Array.from(files).filter(item => /\.(wav|mp3|m4a|mp4|mov|webm)$/i.test(item.name));
-    setLocalQueue(prev => [
-      ...prev,
-      ...accepted.map((item, index) => ({ id: `${item.name}-${item.size}-${item.lastModified}-${Date.now()}-${index}`, file: item })),
-    ]);
-  };
-
-  const moveLocalQueueItem = (id: string, direction: -1 | 1) => {
-    setLocalQueue(prev => {
-      const index = prev.findIndex(item => item.id === id);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[target]] = [next[target], next[index]];
-      return next;
-    });
-  };
-
-  const removeLocalQueueItem = (id: string) => {
-    setLocalQueue(prev => prev.filter(item => item.id !== id));
-  };
-
-  const handleLocalQueueTranscribe = () => {
-    if (localQueue.length === 0) return;
-    void handleMultiTranscribe(localQueue.map(item => item.file));
-  };
-
-  const exportSubtitle = (format: 'json' | 'txt') => {
-    if (!result) return;
-    const stem = (file?.name || result.filename || 'subtitle').replace(/\.[^.]+$/, '');
-    const payload = format === 'json'
-      ? JSON.stringify({
-          file_id: result.file_id,
-          filename: result.filename,
-          language: result.language,
-          language_probability: result.language_probability,
-          boundary_map: localQueue.map((item, index) => ({ index: index + 1, filename: item.file.name, size: item.file.size })),
-          content: result.content,
-        }, null, 2)
-      : result.content.replace(/\d+\n(\d\d:\d\d:\d\d,\d{3} --> \d\d:\d\d:\d\d,\d{3}\n)?/g, '').trim();
-    const blob = new Blob([payload], { type: format === 'json' ? 'application/json;charset=utf-8' : 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${stem}.${format}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
+  const tx = useTranscription();
 
   return (
     <div className={styles.container}>
-      <section className={styles.studioHero}>
+      {/* Section header */}
+      <div className={styles.pageHeader}>
         <div>
-          <span className={styles.kicker}>{t('subtitles.studioKicker')}</span>
-          <h1>{t('subtitles.title')}</h1>
-          <p>{t('subtitles.heroDescription')}</p>
+          <h2 className={styles.pageTitle}>Transcription Hub</h2>
+          <p className={styles.pageDesc}>Convert spoken narrative into polished prose.</p>
         </div>
-        <div className={styles.workflowPills} aria-label="subtitle workflow">
-          <span>Ingest</span>
-          <span>Transcript Editor</span>
-          <span>Review & Export</span>
-          <span>Boundary Timeline</span>
-        </div>
-      </section>
+      </div>
 
-      <div className={styles.studioGrid}>
-        <aside className={styles.ingestPanel}>
-          <div className={styles.panelHeader}>
-            <span className={styles.kicker}>Ingest</span>
-            <h2>{t('subtitles.ingest')}</h2>
-            <p>{t('subtitles.ingestDescription')}</p>
-          </div>
-
-          <div className={styles.sourceSwitch} aria-label="subtitle source modes">
-            <button type="button" className={`${styles.sourceMode} ${styles.sourceModeActive}`}>{t('subtitles.singleFile')}</button>
-            <button type="button" className={styles.sourceMode} onClick={() => localQueueInputRef.current?.click()}>{t('subtitles.multiFileQueue')}</button>
-            <button type="button" className={styles.sourceMode} onClick={() => multiAudioRef.current?.scrollIntoView({ behavior: 'smooth' })}>{t('subtitles.historyAudio')}</button>
-          </div>
-
-          <div
-            className={`${styles.uploadZone} ${dragOver ? styles.dragOver : ''} ${file ? styles.hasFile : ''}`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
-          >
-            {file ? (
-              <>
-                <div className={styles.uploadIcon}>🎵</div>
-                <div className={styles.fileName}>{file.name}</div>
-                <div className={styles.uploadHint}>点击更换文件 · 支持 .wav / .mp3</div>
-              </>
-            ) : (
-              <>
-                <div className={styles.uploadIcon}>📁</div>
-                <div className={styles.uploadText}>拖拽音频文件到此处，或点击选择</div>
-                <div className={styles.uploadHint}>支持 .wav, .mp3 格式</div>
-              </>
-            )}
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".wav,.mp3"
-            className={styles.hiddenInput}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleFileSelect(f);
-            }}
+      {/* Two-column layout */}
+      <div className={styles.layout}>
+        {/* Main content */}
+        <div className={styles.main}>
+          <AudioDropzone
+            files={tx.files}
+            onReplace={tx.replaceFiles}
+            onAdd={tx.addFiles}
+            onRemove={tx.removeFile}
+            onMove={tx.moveFile}
+            onTranscribe={tx.handleTranscribe}
+            processing={tx.processing}
           />
 
-          {audioUrl && (
-            <div className={styles.audioPlayer}>
-              <audio controls src={audioUrl} className={styles.audio} />
-            </div>
-          )}
+          <TranscriptEditor
+            result={tx.result}
+            processing={tx.processing}
+            error={tx.error}
+            onContentChange={(content) => tx.setResult(tx.result ? { ...tx.result, content } : null)}
+          />
 
-          <div className={styles.paramsCompact}>
-            <Select
-              label="识别引擎"
-              options={ENGINE_OPTIONS}
-              value={engine}
-              onChange={(e) => handleEngineChange(e.target.value)}
-            />
-            <Select
-              label="模型大小"
-              options={engine === 'whisper' ? WHISPER_MODEL_OPTIONS : FUNASR_MODEL_OPTIONS}
-              value={modelSize}
-              onChange={(e) => setModelSize(e.target.value)}
-            />
-            {engine === 'whisper' && <Slider
-              label="Beam Size"
-              value={beamSize}
-              onChange={setBeamSize}
-              min={1}
-              max={10}
-              step={1}
-            />}
-            {engine === 'funasr' && (
-              <label className={styles.inlineCheck}>
-                <input
-                  type="checkbox"
-                  checked={enableVad}
-                  onChange={(e) => setEnableVad(e.target.checked)}
-                />
-                启用 VAD (语音活动检测)
-              </label>
-            )}
+          <CorrectionPanel
+            suggestions={tx.suggestions}
+            acceptedSuggestions={tx.acceptedSuggestions}
+            correctionModel={tx.correctionModel}
+            correcting={tx.correcting}
+            originalDoc={tx.originalDoc}
+            correctionMode={tx.correctionMode}
+            onOriginalDocChange={tx.setOriginalDoc}
+            onModeChange={tx.setCorrectionMode}
+            onCorrect={tx.handleCorrect}
+            onToggleAccept={tx.toggleAcceptSuggestion}
+            onApply={tx.applyCorrections}
+          />
+
+          {/* History section */}
+          <div className={styles.historySection}>
+            <TranscriptionHistory records={tx.history} onDelete={tx.handleDeleteRecord} />
           </div>
+        </div>
 
-          <Button
-            variant="primary"
-            fullWidth
-            loading={processing}
-            disabled={!file || processing}
-            onClick={handleTranscribe}
-          >
-            {processing ? '识别中...' : '开始识别'}
-          </Button>
-        </aside>
+        {/* Sidebar */}
+        <aside className={styles.sidebar}>
+          <SidebarConfig
+            engine={tx.engine}
+            modelSize={tx.modelSize}
+            beamSize={tx.beamSize}
+            enableVad={tx.enableVad}
+            engineOptions={tx.engineOptions}
+            whisperModelOptions={tx.whisperModelOptions}
+            funasrModelOptions={tx.funasrModelOptions}
+            onEngineChange={tx.handleEngineChange}
+            onModelSizeChange={tx.setModelSize}
+            onBeamSizeChange={tx.setBeamSize}
+            onEnableVadChange={tx.setEnableVad}
+          />
 
-        <main className={styles.transcriptPanel}>
-          <div className={styles.panelHeaderRow}>
-            <div>
-              <span className={styles.kicker}>Transcript Editor</span>
-              <h2>{t('subtitles.transcriptEditor')}</h2>
-            </div>
-            <div className={styles.resultMeta}>
-              {result ? (
-                <>
-                  <span className={styles.languageBadge}>{result.language} ({(result.language_probability * 100).toFixed(1)}%)</span>
-                  {result.device && (
-                    <span className={`${styles.languageBadge} ${result.device === 'cuda' ? styles.gpuBadge : ''}`}>
-                      {result.device === 'cuda' ? '🚀 GPU' : '💻 CPU'} ({result.compute_type})
-                    </span>
-                  )}
-                </>
-              ) : (
-                <span>等待识别结果</span>
-              )}
-            </div>
-          </div>
+          <QualityReport result={tx.result} />
 
-          {processing && (
-            <div className={styles.processing}>
-              <Loading size="lg" />
-              <div className={styles.processingText}>正在识别语音，请耐心等待...</div>
-            </div>
-          )}
-          {error && <div className={styles.errorBanner}>{error}</div>}
-          {result && !processing ? (
-            <textarea
-              className={styles.transcriptEditor}
-              aria-label="Transcript Editor"
-              value={result.content}
-              onChange={(e) => setResult({ ...result, content: e.target.value })}
-            />
-          ) : !processing && !error ? (
-            <div className={styles.emptyTranscript}>
-              <strong>还没有 Transcript</strong>
-              <span>上传单文件或从多文件队列启动统一 ASR，字幕会显示在这里。</span>
-            </div>
-          ) : null}
+          <ExportPanel
+            hasResult={!!tx.result}
+            onDownloadSrt={tx.handleDownload}
+            onExport={tx.exportSubtitle}
+          />
 
-          {suggestions.length > 0 && (
-            <div className={styles.corrPanel}>
-              <div className={styles.corrToolbar}>
-                <div className={styles.corrToolbarLeft}>
-                  <span className={styles.corrBadge}>{suggestions.length}</span>
-                  <span className={styles.corrToolbarTitle}>处识别错误</span>
-                  {correctionModel && <span className={styles.corrModelTag}>{correctionModel}</span>}
-                </div>
-                <div className={styles.corrToolbarRight}>
-                  <button className={styles.corrLinkBtn} onClick={() => {
-                    if (acceptedSuggestions.size === suggestions.length) setAcceptedSuggestions(new Set());
-                    else setAcceptedSuggestions(new Set(suggestions.map(s => s.index)));
-                  }}>
-                    {acceptedSuggestions.size === suggestions.length ? '取消全选' : '全选'}
-                  </button>
-                  <button
-                    className={styles.corrApplyBtn}
-                    disabled={acceptedSuggestions.size === 0}
-                    onClick={applyCorrections}
-                  >
-                    应用修改 {acceptedSuggestions.size > 0 && `(${acceptedSuggestions.size})`}
-                  </button>
-                </div>
-              </div>
-
-              <div className={styles.corrTable}>
-                <div className={styles.corrTableHeader}>
-                  <div className={styles.corrColCheck}></div>
-                  <div className={styles.corrColIdx}>#</div>
-                  <div className={styles.corrColLeft}>识别文本</div>
-                  <div className={styles.corrColRight}>校准文本</div>
-                  <div className={styles.corrColReason}>说明</div>
-                </div>
-                {suggestions.map((s, i) => {
-                  const accepted = acceptedSuggestions.has(s.index);
-                  const diffResult = computeCharDiff(s.original, s.suggested);
-                  return (
-                    <div
-                      key={`${s.index}-${i}`}
-                      className={`${styles.corrRow} ${accepted ? styles.corrRowActive : ''}`}
-                      onClick={() => toggleAcceptSuggestion(s.index)}
-                    >
-                      <div className={styles.corrColCheck}>
-                        <div className={`${styles.corrCheck} ${accepted ? styles.corrCheckOn : ''}`}>
-                          {accepted && '✓'}
-                        </div>
-                      </div>
-                      <div className={styles.corrColIdx}>{s.index}</div>
-                      <div className={styles.corrColLeft}>
-                        {diffResult.left.map((part, j) =>
-                          part.changed
-                            ? <del key={j} className={styles.corrDel}>{part.text}</del>
-                            : <span key={j}>{part.text}</span>
-                        )}
-                      </div>
-                      <div className={styles.corrColRight}>
-                        {diffResult.right.map((part, j) =>
-                          part.changed
-                            ? <ins key={j} className={styles.corrIns}>{part.text}</ins>
-                            : <span key={j}>{part.text}</span>
-                        )}
-                      </div>
-                      <div className={styles.corrColReason}>
-                        <span className={`${styles.corrConf} ${
-                          s.confidence === 'high' ? styles.corrConfHigh :
-                          s.confidence === 'medium' ? styles.corrConfMed : styles.corrConfLow
-                        }`}>{s.confidence === 'high' ? '高' : s.confidence === 'medium' ? '中' : '低'}</span>
-                        {s.reason}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </main>
-
-        <aside className={styles.reviewPanel}>
-          <div className={styles.panelHeader}>
-            <span className={styles.kicker}>Review & Export</span>
-            <h2>{t('subtitles.reviewExport')}</h2>
-            <p>集中处理错字校准、双语字幕和多格式导出。</p>
-          </div>
-
-          <div className={styles.exportStack}>
-            <Button variant="primary" disabled={!result} onClick={handleDownload}>
-              导出 SRT
-            </Button>
-            <button type="button" disabled={!result} onClick={() => exportSubtitle('txt')}>导出 TXT</button>
-            <button type="button" disabled={!result} onClick={() => exportSubtitle('json')}>导出 JSON</button>
-          </div>
-
-          <div className={styles.reviewCard}>
-            <h3>字幕校准</h3>
-            {correctionModel && <span className={styles.correctionModelBadge}>{correctionModel}</span>}
-            <p>提供原始文稿，LLM 对比识别结果，只修正错别字，不改变内容意思。</p>
-            <div className={styles.correctionModeRow}>
-              <button
-                className={`${styles.modeBtn} ${correctionMode === 'smart' ? styles.modeBtnActive : ''}`}
-                onClick={() => setCorrectionMode('smart')}
-              >
-                ⚡ 智能模式
-                <span className={styles.modeHint}>本地预筛 + LLM 复验</span>
-              </button>
-              <button
-                className={`${styles.modeBtn} ${correctionMode === 'full' ? styles.modeBtnActive : ''}`}
-                onClick={() => setCorrectionMode('full')}
-              >
-                🔍 全量模式
-                <span className={styles.modeHint}>所有字幕送 LLM 分析</span>
-              </button>
-            </div>
-            <textarea
-              className={styles.originalDocInput}
-              placeholder="在此粘贴原始文稿/脚本..."
-              value={originalDoc}
-              onChange={(e) => setOriginalDoc(e.target.value)}
-              rows={4}
-            />
-            <div className={styles.correctionSectionActions}>
-              <Button
-                variant="primary"
-                loading={correcting}
-                disabled={correcting || !originalDoc.trim()}
-                onClick={handleCorrect}
-              >
-                {correcting ? '校准中...' : '开始校准'}
-              </Button>
-              {suggestions.length > 0 && <span className={styles.correctionResultHint}>发现 {suggestions.length} 处可能的识别错误</span>}
-              {suggestions.length === 0 && correctionModel && !correcting && <span className={styles.correctionOkHint}>✓ 未发现识别错误</span>}
-            </div>
-          </div>
-
-          <div className={styles.reviewCard}>
-            <h3>双语字幕</h3>
-            <div className={styles.translateRow}>
-              <Select
-                label=""
-                options={[
-                  { value: 'English', label: 'English' },
-                  { value: 'Japanese', label: '日本語' },
-                  { value: 'Korean', label: '한국어' },
-                  { value: 'French', label: 'Français' },
-                  { value: 'German', label: 'Deutsch' },
-                  { value: 'Spanish', label: 'Español' },
-                ]}
-                value={targetLang}
-                onChange={(e) => setTargetLang(e.target.value)}
-              />
-              <Button variant="secondary" loading={translating} disabled={translating || !result} onClick={handleTranslate}>
-                {translating ? '翻译中...' : '生成双语'}
-              </Button>
-            </div>
-            {bilingualSegments.length > 0 && (
-              <div className={styles.bilingualPanel}>
-                <div className={styles.suggestionsHeader}>
-                  <h3>🌐 双语字幕 ({targetLang})</h3>
-                  <Button variant="primary" onClick={handleDownloadBilingual}>下载双语 SRT</Button>
-                </div>
-                <div className={styles.bilingualList}>
-                  {bilingualSegments.map((seg) => (
-                    <div key={seg.index} className={styles.bilingualItem}>
-                      <div className={styles.bilingualIndex}>{seg.index}</div>
-                      <div className={styles.bilingualTime}>{seg.time_line}</div>
-                      <div className={styles.bilingualOriginal}>{seg.original}</div>
-                      <div className={styles.bilingualTranslated}>{seg.translated}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <BilingualCard
+            bilingualSegments={tx.bilingualSegments}
+            bilingualSrt={tx.bilingualSrt}
+            translating={tx.translating}
+            targetLang={tx.targetLang}
+            hasResult={!!tx.result}
+            onTargetLangChange={tx.setTargetLang}
+            onTranslate={tx.handleTranslate}
+            onDownload={tx.handleDownloadBilingual}
+          />
         </aside>
       </div>
 
-      <section className={styles.timelinePanel}>
-        <div className={styles.boundaryHeader}>
-          <div>
-            <span className={styles.kicker}>Boundary Timeline</span>
-            <h2>{t('subtitles.boundaryMap')}</h2>
-          </div>
-          <div className={styles.exportButtons}>
-            <button type="button" disabled={!result} onClick={() => exportSubtitle('json')}>导出 JSON</button>
-            <button type="button" disabled={!result} onClick={() => exportSubtitle('txt')}>导出 TXT</button>
-          </div>
-        </div>
-        <div className={styles.timelineTrack}>
-          {localQueue.length > 0 ? localQueue.map((item, index) => (
-            <div key={item.id} className={styles.timelineBlock} style={{ flexGrow: Math.max(1, item.file.size) }}>
-              <span>{String(index + 1).padStart(2, '0')}</span>
-              <strong>{item.file.name}</strong>
-              <small>boundary_{index + 1} · size {item.file.size}</small>
-            </div>
-          )) : (
-            <div className={styles.timelineEmpty}>添加多文件后，这里会显示拼接顺序和边界。</div>
-          )}
-        </div>
-      </section>
-
-      <section className={styles.localQueueCard}>
-        <div className={styles.queueHeader}>
-          <div>
-            <span className={styles.kicker}>Local File Queue</span>
-            <h2>本地队列</h2>
-            <p>上传音频/视频片段，排序后统一送入 ASR，并保留 Boundary Map 供字幕校准和 JSON 导出。</p>
-          </div>
-          <button type="button" className={styles.queueUploadBtn} onClick={() => localQueueInputRef.current?.click()}>
-            添加文件
-          </button>
-        </div>
-        <input
-          ref={localQueueInputRef}
-          aria-label="选择多文件队列"
-          type="file"
-          multiple
-          accept=".wav,.mp3,.m4a,.mp4,.mov,.webm"
-          className={styles.hiddenInput}
-          onChange={(event) => {
-            if (event.target.files) handleLocalQueueSelect(event.target.files);
-            event.currentTarget.value = '';
-          }}
-        />
-        {localQueue.length > 0 ? (
-          <div className={styles.queueList}>
-            {localQueue.map((item, index) => (
-              <article key={item.id} className={styles.queueItem}>
-                <span className={styles.queueIndex}>{String(index + 1).padStart(2, '0')}</span>
-                <div>
-                  <strong>{item.file.name}</strong>
-                  <small>{(item.file.size / 1024 / 1024).toFixed(2)} MB</small>
-                </div>
-                <div className={styles.queueActions}>
-                  <button type="button" aria-label={`上移 ${item.file.name}`} onClick={() => moveLocalQueueItem(item.id, -1)} disabled={index === 0}>↑</button>
-                  <button type="button" aria-label={`下移 ${item.file.name}`} onClick={() => moveLocalQueueItem(item.id, 1)} disabled={index === localQueue.length - 1}>↓</button>
-                  <button type="button" aria-label={`移除 ${item.file.name}`} onClick={() => removeLocalQueueItem(item.id)}>移除</button>
-                </div>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <div className={styles.queueEmpty}>还没有本地文件。可添加多个音频/视频片段后统一识别。</div>
-        )}
-        <div className={styles.queueFooter}>
-          <button type="button" className={styles.queuePrimaryBtn} disabled={localQueue.length === 0 || processing} onClick={handleLocalQueueTranscribe}>
-            {processing ? '统一 ASR 中...' : '统一 ASR'}
-          </button>
-          <span>{localQueue.length} 个文件 · 顺序决定拼接时间线</span>
-        </div>
-      </section>
-
-      <section className={styles.historySection} ref={multiAudioRef}>
-        <span className={styles.kicker}>Legacy Audio Sources</span>
-        <MultiAudioSelector onTranscribe={handleMultiTranscribe} processing={processing} />
-        <TranscriptionHistory records={history} onDelete={handleDeleteRecord} />
-      </section>
+      {/* Floating playback bar */}
+      <PlaybackBar audioUrl={tx.audioUrl} />
     </div>
   );
 }

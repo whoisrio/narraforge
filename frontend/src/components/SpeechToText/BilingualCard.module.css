@@ -1,0 +1,86 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-low);
+}
+
+.cardTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cardTitle span {
+  font-size: 20px;
+  color: var(--color-primary);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--spacing-sm);
+  align-items: end;
+}
+
+.segmentList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.segment {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--color-surface-low);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border-light);
+}
+
+.segIndex {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-mono);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 2px;
+}
+
+.segContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.segTime {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-family: var(--font-family-mono);
+}
+
+.segOriginal {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+}
+
+.segTranslated {
+  font-size: var(--font-size-sm);
+  color: var(--color-primary);
+  font-style: italic;
+}

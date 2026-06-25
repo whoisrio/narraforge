@@ -1,21 +1,10 @@
-.panel {
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  padding: 14px 16px;
-  border: 1px solid var(--color-border-light);
-  box-shadow: var(--shadow-xs);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* Summary bar (collapsed state) */
-.summaryStack {
+.detailsRoot {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
+/* Stale notice (always visible) */
 .staleNotice {
   display: flex;
   align-items: center;
@@ -65,38 +54,65 @@
   box-shadow: 0 8px 18px rgba(196, 122, 58, 0.12);
 }
 
-.summaryBar {
+/* Details/Summary structure */
+.detailsRoot details {
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.detailsRoot details > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+}
+
+.detailsRoot details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.summaryContent {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all 0.15s;
+  padding: 10px 16px;
+  transition: background var(--transition-fast);
 }
 
-.summaryBar:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--glow-primary);
+.summaryContent:hover {
+  background: rgba(249, 243, 235, 0.6);
 }
 
 .summaryLeft {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
-  flex: 1;
 }
 
-.summaryText {
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  white-space: nowrap;
+.sourceTextBadge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-container);
+  color: var(--color-text-muted);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.chapterLabel {
+  font-size: var(--font-size-xs);
+  font-weight: 700;
+  color: var(--color-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .summaryRight {
@@ -106,35 +122,55 @@
   flex-shrink: 0;
 }
 
-.summaryMeta {
+.segmentMeta {
   font-size: 11px;
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.summaryEditBtn {
-  padding: 4px 12px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 500;
+.smartSegmentBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 14px;
+  border: 1px solid rgba(196, 122, 58, 0.24);
+  border-radius: var(--radius-full);
+  background: rgba(196, 122, 58, 0.08);
+  color: var(--color-primary-dark);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.15s;
+  transition: all var(--transition-fast);
   white-space: nowrap;
 }
 
-.summaryEditBtn:hover {
+.smartSegmentBtn:hover:not(:disabled) {
+  background: rgba(196, 122, 58, 0.16);
   border-color: var(--color-primary);
-  color: var(--color-primary);
 }
 
-/* Textarea wrapper with collapse button */
+.smartSegmentBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Expanded content */
+.expandedContent {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0 16px 14px;
+  border-top: 1px solid var(--color-border-light);
+}
+
+/* Textarea wrapper */
 .textareaWrap {
   position: relative;
+  padding-top: 10px;
 }
 
 .textarea {
@@ -144,7 +180,6 @@
   color: var(--color-text-primary);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
-  padding-right: 36px;
   font-size: var(--font-size-sm);
   font-family: inherit;
   resize: vertical;
@@ -158,33 +193,12 @@
   box-shadow: 0 0 0 2px var(--glow-primary);
 }
 
-.collapseBtn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-
-.collapseBtn:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
 /* Action bar */
 .actionBar {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .settingsToggle {

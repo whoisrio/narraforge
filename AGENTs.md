@@ -16,6 +16,7 @@ NarraForge is an AI narration workshop that integrates voice cloning, text-to-sp
 | Environment variables | `docs/ENV.md` | Backend `.env` configuration. |
 | Runbook | `docs/RUNBOOK.md` | Deployment and operations guide. |
 | Contributing guide | `docs/CONTRIBUTING.md` | Development conventions and contribution guidelines. |
+| design guide | `docs/design/stitch_narraforge_story_global_prj/DESIGN.md` | UI design guidelines. |
 
 ## Commands
 

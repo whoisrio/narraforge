@@ -40,7 +40,7 @@ interface VoxCPMPanelProps {
 
 const MODE_TABS: { value: VoxCPMMode; label: string; icon: string }[] = [
   { value: 'tts', label: '文本合成', icon: '🗣️' },
-  { value: 'design', label: 'Voice Design', icon: '🎨' },
+  { value: 'design', label: '音色设计', icon: '🎨' },
   { value: 'clone', label: '声音克隆', icon: '🎛️' },
   { value: 'ultimate', label: '极致克隆', icon: '🎙️' },
 ];

@@ -22,10 +22,9 @@ import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, SegmentEngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
-import { CollapsiblePanel } from '../components/ui/CollapsiblePanel';
+
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import { RolePicker } from '../components/SegmentedTTS/RolePicker';
-import { ChatSegmentView } from '../components/SegmentedTTS/ChatSegmentView';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
 import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
 import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
@@ -122,10 +121,17 @@ export function TTSSynthesis({
   const [, setPreviewingRoleId] = useState<string | null>(null);
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
-  const [segmentViewMode, setSegmentViewMode] = useState<'list' | 'dialogue'>('list');
+  const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>('narration');
   const [projectSection, setProjectSection] = useState<ProjectSectionId>('studio');
   const [panelOpen, setPanelOpen] = useState(true);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
+
+  // Sidebar accordion state — engine open by default, others collapsed
+  const [sidebarOpen, setSidebarOpen] = useState({ voiceMode: false, narrator: false, engine: true });
+  const toggleSidebarSection = (section: keyof typeof sidebarOpen) => {
+    setSidebarOpen(prev => ({ ...prev, [section]: !prev[section] }));
+  };
   const isScratchpadProject = project.id === SCRATCHPAD_PROJECT_ID;
 
   const [isPaused, setIsPaused] = useState(false);
@@ -560,16 +566,6 @@ export function TTSSynthesis({
       apply();
     }
   }, [activeChapter.segments, dispatch, buildCurrentParams, selectedVoiceId, edgeVoice, engine]);
-
-  const handleAppendByKind = useCallback((kind: SegmentKind) => {
-    setProject(prev => {
-      const appended = segmentedReducer({ project: prev }, { type: 'APPEND_SEGMENT', text: '' }).project;
-      const active = getActiveChapter(appended);
-      const latest = active?.segments[active.segments.length - 1];
-      if (!latest) return appended;
-      return segmentedReducer({ project: appended }, { type: 'SET_SEGMENT_KIND', id: latest.id, segmentKind: kind }).project;
-    });
-  }, []);
 
   const buildSplitItemsWithRoles = useCallback((
     items: { text: string; emotion?: string }[],
@@ -1212,19 +1208,12 @@ export function TTSSynthesis({
   // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
   const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.duration_sec ?? 0), 0);
   const generatedSegmentCount = activeChapter.segments.filter(segment => segment.status === 'ready').length;
-  const engineLabel = ({ cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM' } as Record<Engine, string>)[engine] || engine;
   const voiceRoleLabel = project.default_narrator_snapshot?.name
     || selectedVoice?.description
     || selectedVoice?.name
     || edgeVoice
     || mimoPresetVoice
     || '默认旁白';
-  const narratorRoleSummaries = roles
-    .filter(role => role.id === project.default_narrator_role_id || `${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') || `${role.name} ${role.description ?? ''}`.includes('旁白'))
-    .map(role => ({ id: role.id, name: role.name }));
-  const castRoleSummaries = roles
-    .filter(role => !narratorRoleSummaries.some(narrator => narrator.id === role.id))
-    .map(role => ({ id: role.id, name: role.name }));
   const narratorDraftPreview = createVoiceRoleDraft({
     name: '默认旁白',
     roleKind: 'Narrator',
@@ -1256,144 +1245,136 @@ export function TTSSynthesis({
           segmentCount={activeChapter.segments.length}
           generatedCount={generatedSegmentCount}
           durationSec={activeChapterDuration}
+          chapters={project.chapters}
+          activeChapterId={activeChapter.id}
+          onSelectChapter={handleSelectChapter}
+          onAddChapter={handleAddChapter}
+          onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
+          onDeleteChapter={handleDeleteChapter}
+          rightPanelCollapsed={projectSection === 'studio' ? rightPanelCollapsed : true}
           onSectionChange={setProjectSection}
           onBackToProjects={onBackToProjects}
         >
         {projectSection === 'studio' ? (
         <VoiceStudioLayout
-          projectName={project.name}
-          chapterName={activeChapter.name}
-          engineLabel={engineLabel}
-          voiceRoleLabel={voiceRoleLabel}
           segmentCount={activeChapter.segments.length}
           generatedCount={generatedSegmentCount}
           durationSec={activeChapterDuration}
-          queueCount={activeChapter.segments.filter(segment => segment.status === 'queued' || segment.status === 'pending').length}
-          narratorRoles={narratorRoleSummaries}
-          castRoles={castRoleSummaries}
-          viewMode={segmentViewMode}
           remotionPath={project.remotion_project_path}
-          onViewModeChange={setSegmentViewMode}
-          onBatchSynthesize={handleRegenerateAll}
           onExport={() => setExportOpen(true)}
           onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
+          onSidebarCollapseChange={setRightPanelCollapsed}
+          sidebarContent={
+            <div className={styles.sidebarAccordion}>
+              {/* Voice Mode */}
+              <div className={`${styles.sidebarSection} ${sidebarOpen.voiceMode ? styles.open : ''}`}>
+                <div className={styles.sidebarSectionHeader} onClick={() => toggleSidebarSection('voiceMode')}>
+                  <span className={styles.sidebarSectionTitle}>Voice Mode</span>
+                  <span className={styles.sidebarSectionCaret}>›</span>
+                </div>
+                <div className={styles.sidebarSectionBody}>
+                  <div className={styles.sidebarSectionBodyInner}>
+                    <div className={styles.sidebarModeSwitch} aria-label="配音模式">
+                      <button
+                        type="button"
+                        className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'narration' ? styles.sidebarModeBtnActive : ''}`}
+                        onClick={e => { e.stopPropagation(); setSplitVoiceMode('narration'); }}
+                      >
+                        旁白
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'dialogue' ? styles.sidebarModeBtnActive : ''}`}
+                        onClick={e => { e.stopPropagation(); setSplitVoiceMode('dialogue'); }}
+                      >
+                        对话
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'mixed' ? styles.sidebarModeBtnActive : ''}`}
+                        onClick={e => { e.stopPropagation(); setSplitVoiceMode('mixed'); }}
+                      >
+                        混合
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Narrator */}
+              <div className={`${styles.sidebarSection} ${sidebarOpen.narrator ? styles.open : ''}`}>
+                <div className={styles.sidebarSectionHeader} onClick={() => toggleSidebarSection('narrator')}>
+                  <span className={styles.sidebarSectionTitle}>Narrator</span>
+                  <span className={styles.sidebarSectionCaret}>›</span>
+                </div>
+                <div className={styles.sidebarSectionBody}>
+                  <div className={styles.sidebarSectionBodyInner}>
+                    <RolePicker
+                      roles={roles}
+                      label="旁白角色"
+                      value={project.default_narrator_role_id}
+                      onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
+                      onManage={() => setRoleLibraryOpen(true)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Engine */}
+              <div className={`${styles.sidebarSection} ${sidebarOpen.engine ? styles.open : ''}`}>
+                <div className={styles.sidebarSectionHeader} onClick={() => toggleSidebarSection('engine')}>
+                  <span className={styles.sidebarSectionTitle}>Engine</span>
+                  <span className={styles.sidebarSectionCaret}>›</span>
+                </div>
+                <div className={styles.sidebarSectionBody}>
+                  <div className={styles.sidebarSectionBodyInner}>
+                    <select
+                      className={styles.sidebarEngineSelect}
+                      value={engine}
+                      onChange={e => setEngine(e.target.value as Engine)}
+                    >
+                      <option value="edge_tts">Edge-TTS</option>
+                      <option value="cosyvoice">CosyVoice</option>
+                      <option value="mimo_tts">MiMo TTS</option>
+                      <option value="voxcpm">VoxCPM</option>
+                    </select>
+                    {engine === 'cosyvoice' ? (
+                      <GlobalControlBar
+                        selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+                        speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
+                        instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
+                        onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
+                        onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
+                        onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
+                        onLanguageChange={v => setParams(p => ({ ...p, language: v as TTSRequest['language'] }))}
+                        onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
+                        onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
+                        onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
+                        onNavigateToClone={onNavigateToClone}
+                      />
+                    ) : engine === 'edge_tts' ? (
+                      <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
+                    ) : engine === 'mimo_tts' ? (
+                      <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
+                    ) : (
+                      <VoxCPMPanel
+                        mode={voxcpmMode} onModeChange={setVoxcpmMode}
+                        voiceDescription={voxcpmVoiceDescription} onVoiceDescriptionChange={setVoxcpmVoiceDescription}
+                        styleControl={voxcpmStyleControl} onStyleControlChange={setVoxcpmStyleControl}
+                        promptText={voxcpmPromptText} onPromptTextChange={setVoxcpmPromptText}
+                        selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+                        cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
+                        inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
+                      />
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
         >
         <div className={styles.workbenchMain}>
-          <div className={styles.toolbar} aria-label="Studio model selector">
-            <div className={styles.toolbarGroup}>
-              <button className={`${styles.toolbarPill} ${engine === 'edge_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('edge_tts')}>Edge-TTS</button>
-              <button className={`${styles.toolbarPill} ${engine === 'cosyvoice' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('cosyvoice')}>CosyVoice</button>
-              <button className={`${styles.toolbarPill} ${engine === 'mimo_tts' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('mimo_tts')}>MiMo</button>
-              <button className={`${styles.toolbarPill} ${engine === 'voxcpm' ? styles.toolbarPillActive : ''}`} onClick={() => setEngine('voxcpm')}>VoxCPM</button>
-            </div>
-          </div>
-
           <div className={styles.segmentedContent}>
-            <div className={styles.segmentedToolbar}>
-              <input
-                className={styles.segmentedNameInput}
-                value={project.name}
-                disabled={isScratchpadProject}
-                onChange={(e) => dispatch({ type: 'RENAME_PROJECT', name: e.target.value })}
-              />
-              {isScratchpadProject && <span className={styles.scratchpadBadge}>默认草稿</span>}
-              <label className={styles.inlineMetaField} title="关联 Remotion 项目路径；导出文件优先写入 public/audio，目录不存在则写入项目根目录">
-                <span>Remotion</span>
-                <input
-                  value={project.remotion_project_path ?? ''}
-                  disabled={isScratchpadProject}
-                  placeholder="/path/to/remotion-project"
-                  onChange={(e) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: e.target.value || null } })}
-                />
-              </label>
-              {project.remotion_project_path && <span className={styles.exportHint}>导出→Remotion</span>}
-              <div className={styles.chapterGroup}>
-                <select
-                  className={styles.chapterSelect}
-                  value={project.active_chapter_id || ''}
-                  onChange={(e) => handleSelectChapter(e.target.value)}
-                >
-                  {project.chapters.map(ch => (
-                    <option key={ch.id} value={ch.id}>
-                      {ch.name} ({ch.segments.length}段)
-                    </option>
-                  ))}
-                </select>
-                <button className={styles.chapterBtn} onClick={() => handleAddChapter()} title="新建章节">+</button>
-                {project.chapters.length > 1 && (
-                  <button className={styles.chapterBtnDanger} onClick={() => handleDeleteChapter(project.active_chapter_id || '')} title="删除当前章节">✕</button>
-                )}
-              </div>
-              <span className={styles.segmentedStats}>
-                {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
-                {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
-              </span>
-              <div className={styles.toolbarGroup}>
-                <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>章节时间</button>
-                <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>全局时间</button>
-              </div>
-              <label className={styles.inlineMetaField} title="视觉设计/Remotion 场景标题，可与朗读章节名不同">
-                <span>设计标题</span>
-                <input
-                  value={activeChapter.design_title ?? activeChapter.name}
-                  placeholder={activeChapter.name}
-                  onChange={(e) => dispatch({ type: 'SET_CHAPTER_META', meta: { design_title: e.target.value } })}
-                />
-              </label>
-              <div className={styles.segmentedActions}>
-                {engine === 'cosyvoice' && (
-                  <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
-                )}
-                <button className={styles.segmentedActionBtn} onClick={() => setRoleLibraryOpen(true)}>
-                  🎭 角色库{roles.length > 0 ? ` (${roles.length})` : ''}
-                </button>
-                {!isScratchpadProject && <button className={styles.segmentedActionBtnDanger} onClick={() => handleDeleteProject(project.id)}>🗑 删除</button>}
-              </div>
-            </div>
-
-            <CollapsiblePanel
-              title={({cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM'} as Record<Engine, string>)[engine] || engine}
-              summary={
-                engine === 'cosyvoice'
-                  ? (selectedVoice?.description || selectedVoice?.name || '未选择')
-                  : engine === 'edge_tts'
-                    ? (edgeVoice ? edgeVoice.split('-').pop()?.replace(/Neural$|V\d+$/i, '') || edgeVoice : '未选择')
-                    : (mimoMode === 'voiceclone' ? '自定义音色' : mimoPresetVoice || '未选择')
-              }
-              open={panelOpen}
-              onToggle={() => setPanelOpen(!panelOpen)}
-            >
-            {engine === 'cosyvoice' ? (
-              <GlobalControlBar
-                selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
-                speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
-                instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
-                onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
-                onVolumeChange={v => setParams(p => ({ ...p, volume: v }))}
-                onPitchChange={v => setParams(p => ({ ...p, pitch: v }))}
-                onLanguageChange={v => setParams(p => ({ ...p, language: v as TTSRequest['language'] }))}
-                onInstructionChange={v => setParams(p => ({ ...p, instruction: v }))}
-                onSsmlToggle={() => setParams(p => ({ ...p, enable_ssml: !p.enable_ssml }))}
-                onMarkdownFilterToggle={() => setParams(p => ({ ...p, enable_markdown_filter: !p.enable_markdown_filter }))}
-                onNavigateToClone={onNavigateToClone}
-              />
-            ) : engine === 'edge_tts' ? (
-              <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
-            ) : engine === 'mimo_tts' ? (
-              <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
-            ) : (
-              <VoxCPMPanel
-                mode={voxcpmMode} onModeChange={setVoxcpmMode}
-                voiceDescription={voxcpmVoiceDescription} onVoiceDescriptionChange={setVoxcpmVoiceDescription}
-                styleControl={voxcpmStyleControl} onStyleControlChange={setVoxcpmStyleControl}
-                promptText={voxcpmPromptText} onPromptTextChange={setVoxcpmPromptText}
-                selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
-                cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
-                inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
-              />
-            )}
-            </CollapsiblePanel>
-
             <TextInputPanel
               splitConfig={activeChapter.split_config}
               onSplitConfigChange={(config) => dispatch({ type: 'SET_SPLIT_CONFIG', config })}
@@ -1407,65 +1388,43 @@ export function TTSSynthesis({
               sourceText={activeChapter.original_text}
               segmentTexts={activeChapter.segments.map(s => s.text)}
               segmentCount={activeChapter.segments.length}
+              chapterId={activeChapter.id}
+              chapterName={activeChapter.design_title || activeChapter.name}
+              splitVoiceMode={splitVoiceMode}
+              onSplitVoiceModeChange={setSplitVoiceMode}
+              showVoiceModeSwitch={false}
             />
 
-            <div className={styles.segmentedEditor}>
-              <div className={styles.viewToggle}>
-                <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
-                  onClick={() => setCompactMode(true)}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-                  紧凑
+            <div className={styles.sourceProductionBar} aria-label="Source Text production controls">
+              <div className={styles.productionActions}>
+                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ 批量合成</button>
+                <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
+                  {playAllActive ? '⏹ 停止' : '▶ 全部播放'}
                 </button>
-                <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
-                  onClick={() => setCompactMode(false)}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18"/></svg>
-                  展开
-                </button>
+                {isScratchpadProject && <span className={styles.scratchpadBadge}>默认草稿</span>}
+                <span className={styles.segmentedStats}>
+                  {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
+                  {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
+                </span>
+                {engine === 'cosyvoice' && (
+                  <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
+                )}
               </div>
+              <div className={styles.productionRight}>
+                <div className={styles.toolbarGroup} aria-label="segment 时间呈现">
+                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>章节时间</button>
+                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>全局时间</button>
+                </div>
+                <div className={styles.viewToggle} aria-label="segment 卡片呈现">
+                  <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
+                    onClick={() => setCompactMode(true)}>紧凑</button>
+                  <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
+                    onClick={() => setCompactMode(false)}>展开</button>
+                </div>
+              </div>
+            </div>
 
-              {segmentViewMode === 'dialogue' ? (
-                <>
-                  <div className={styles.roleControls}>
-                    <RolePicker
-                      roles={roles}
-                      label="旁白角色"
-                      value={project.default_narrator_role_id}
-                      onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
-                      onManage={() => setRoleLibraryOpen(true)}
-                    />
-                    {activeChapter.selected_segment_id && (() => {
-                      const selectedSegment = activeChapter.segments.find(s => s.id === activeChapter.selected_segment_id);
-                      if (!selectedSegment) return null;
-                      return (
-                        <RolePicker
-                          roles={roles}
-                          label="当前段角色"
-                          value={selectedSegment.role_id}
-                          onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id: selectedSegment.id, roleId, roleSnapshot })}
-                          onManage={() => setRoleLibraryOpen(true)}
-                        />
-                      );
-                    })()}
-                  </div>
-                  <ChatSegmentView
-                    segments={activeChapter.segments}
-                    roles={roles}
-                    selectedId={activeChapter.selected_segment_id}
-                    playingId={playingId}
-                    hasNarratorVoice={!!project.default_narrator_snapshot?.default_voice || !!project.default_narrator_snapshot?.default_engine_params?.edge_voice}
-                    onSelect={(id) => dispatch({ type: 'SELECT_SEGMENT', id })}
-                    onAppend={handleAppendByKind}
-                    onRegenerate={handleRegenerate}
-                    onPlay={handlePlaySegment}
-                    onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
-                    onUpdateKind={(id, kind, roleSnapshot) => {
-                      dispatch({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind });
-                      dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot });
-                    }}
-                    onUpdateProsodyMarks={(id, prosodyMarks) => dispatch({ type: 'UPDATE_PROSODY_MARKS', id, prosodyMarks })}
-                  />
-                </>
-              ) : (
+            <div className={styles.segmentedEditor}>
               <SegmentList
                 segments={activeChapter.segments}
                 layout={project.layout}
@@ -1473,6 +1432,7 @@ export function TTSSynthesis({
                 playingId={playingId}
                 isPaused={isPaused}
                 compact={compactMode}
+                voiceMode={splitVoiceMode}
                 voices={voices}
                 roles={roles}
                 globalVoiceId={selectedVoiceId}
@@ -1517,7 +1477,6 @@ export function TTSSynthesis({
                 onMerge={handleMerge}
                 onSplit={handleSplit}
               />
-              )}
 
               <ExportDialog
                 open={exportOpen}
@@ -1573,10 +1532,11 @@ export function TTSSynthesis({
             activeChapterId={project.active_chapter_id}
             defaultNarratorName={project.default_narrator_snapshot?.name ?? null}
             remotionPath={project.remotion_project_path}
+            roles={roles}
+            defaultNarratorRoleId={project.default_narrator_role_id}
             onEnterLibrary={() => setProjectSection('library')}
             onEnterStudio={() => setProjectSection('studio')}
             onOpenVoices={() => setProjectSection('voices')}
-            onOpenSettings={() => setProjectSection('settings')}
           />
         ) : projectSection === 'settings' ? (
           <ProjectSettings
