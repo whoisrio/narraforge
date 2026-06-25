@@ -38,16 +38,25 @@ from app.core.time_utils import utcnow
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+SCRATCHPAD_PROJECT_ID = "__scratchpad__"
+
+def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_project_id"):
+    """防止草稿项目污染后端数据库."""
+    if project_id == SCRATCHPAD_PROJECT_ID:
+        raise HTTPException(status_code=403, detail=detail)
+
 
 # ----- project CRUD -----
 
 @router.get("/segmented-projects", response_model=list[ProjectSummary])
 def list_projects(db: Session = Depends(get_db)):
-    return svc.list_projects(db)
+    projects = svc.list_projects(db)
+    return [p for p in projects if p.id != SCRATCHPAD_PROJECT_ID]
 
 
 @router.post("/segmented-projects", response_model=ProjectDetail, status_code=201)
 def create_project(project: ProjectIn, db: Session = Depends(get_db)):
+    _reject_scratchpad(project.id)
     existing = svc.get_project_row(db, project.id)
     if existing is not None:
         raise HTTPException(status_code=409, detail="project_already_exists")
@@ -56,6 +65,7 @@ def create_project(project: ProjectIn, db: Session = Depends(get_db)):
 
 @router.get("/segmented-projects/{project_id}", response_model=ProjectDetail)
 def get_project(project_id: str, db: Session = Depends(get_db)):
+    _reject_scratchpad(project_id)
     detail = svc.get_project_detail(db, project_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="project_not_found")
@@ -64,6 +74,7 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
 
 @router.put("/segmented-projects/{project_id}", response_model=ProjectDetail)
 def put_project(project_id: str, project: ProjectIn, db: Session = Depends(get_db)):
+    _reject_scratchpad(project_id)
     if project.id != project_id:
         raise HTTPException(status_code=400, detail="id_mismatch")
     return svc.save_project(db, project)
@@ -71,6 +82,7 @@ def put_project(project_id: str, project: ProjectIn, db: Session = Depends(get_d
 
 @router.delete("/segmented-projects/{project_id}", status_code=204)
 def delete_project(project_id: str, db: Session = Depends(get_db)):
+    _reject_scratchpad(project_id)
     ok = svc.delete_project(db, project_id)
     if not ok:
         raise HTTPException(status_code=404, detail="project_not_found")

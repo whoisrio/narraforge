@@ -99,9 +99,8 @@ export function TTSSynthesis({
   const [mimoInstruction, setMimoInstruction] = useState('');
   const [mimoCloneVoiceId, setMimoCloneVoiceId] = useState('');
 
-  // VoxCPM state
-  const [voxcpmMode, setVoxcpmMode] = useState<VoxCPMMode>('tts');
-  const [voxcpmVoiceDescription, setVoxcpmVoiceDescription] = useState('');
+  // VoxCPM state（工作室只保留 clone/ultimate，design 在角色语音设计中提供）
+  const [voxcpmMode, setVoxcpmMode] = useState<VoxCPMMode>('clone');
   const [voxcpmStyleControl, setVoxcpmStyleControl] = useState('');
   const [voxcpmPromptText, setVoxcpmPromptText] = useState('');
   const [voxcpmCfgValue, setVoxcpmCfgValue] = useState(2.0);
@@ -181,25 +180,71 @@ export function TTSSynthesis({
   // Load scratchpad project on mount, possibly surfacing migration prompt
   useEffect(() => {
     (async () => {
-      const rawList = await projectStorage.listProjects();
-      let scratchpad = rawList.find(p => p.id === SCRATCHPAD_PROJECT_ID);
-
-      if (!scratchpad) {
-        scratchpad = createScratchpadProject();
-        await projectStorage.saveProject(scratchpad, { mode: 'immediate' });
+      console.log(`[TTSSynthesis] load effect: storageMode=${storageMode}, initialProjectId=${initialProjectId}`);
+      // scratchpad 只在前端存储模式下使用，后端模式不需要创建/保存 scratchpad
+      let scratchpad: SegmentedProject | undefined;
+      if (storageMode === 'frontend') {
+        const rawList = await indexedDBStorage.listProjects();
+        scratchpad = rawList.find(p => p.id === SCRATCHPAD_PROJECT_ID);
+        if (!scratchpad) {
+          scratchpad = createScratchpadProject();
+          await indexedDBStorage.saveProject(scratchpad, { mode: 'immediate' });
+        }
       }
 
-      const list = sortProjectsWithScratchpad([
-        scratchpad,
-        ...rawList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID),
-      ]);
+      // 项目列表始终从当前存储模式获取
+      const rawList = await projectStorage.listProjects();
+      console.log(`[TTSSynthesis] rawList count=${rawList.length}, ids=${rawList.map(p => p.id.slice(0, 20)).join(', ')}`);
+
+      // 项目列表：前端模式包含 scratchpad，后端模式只包含真实项目
+      const filteredList = storageMode === 'frontend'
+        ? [scratchpad!, ...rawList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID)]
+        : rawList;
+
+      const list = sortProjectsWithScratchpad(filteredList);
       setProjectList(list);
 
-      let full = await projectStorage.getProject(initialProjectId ?? SCRATCHPAD_PROJECT_ID);
-      if (!full && initialProjectId) full = await projectStorage.getProject(SCRATCHPAD_PROJECT_ID);
-      if (!full) full = scratchpad;
+      // 如果没有指定项目 ID，后端模式用第一个项目，前端模式用 scratchpad
+      const targetProjectId = initialProjectId ?? (
+        storageMode === 'frontend'
+          ? SCRATCHPAD_PROJECT_ID
+          : rawList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID)[0]?.id
+      );
+
+      let full: SegmentedProject | undefined;
+      if (targetProjectId) {
+        console.log(`[TTSSynthesis] loading project: ${targetProjectId}`);
+        full = await projectStorage.getProject(targetProjectId);
+        console.log(`[TTSSynthesis] getProject result: ${full ? `found: ${full.name} (id=${full.id})` : 'null'}`);
+      }
+
+      // 防御性验证：确保读取的项目 ID 与请求一致
+      if (full && targetProjectId && full.id !== targetProjectId) {
+        console.error(`[TTSSynthesis] ID mismatch: requested ${targetProjectId}, got ${full.id} (name=${full.name})`);
+        full = undefined;
+      }
+
+      // 真实项目加载失败，不静默降级到草稿
+      if (!full && initialProjectId) {
+        console.error(`[TTSSynthesis] Project ${initialProjectId} not found in ${storageMode} storage`);
+        showToast(`项目加载失败（存储模式: ${storageMode}）`, 'error');
+        onBackToProjects?.();
+        return;
+      }
+
+      // 后端模式没有项目时，创建临时项目不保存；前端模式用 scratchpad
+      if (!full) {
+        if (storageMode === 'frontend') {
+          full = scratchpad!;
+        } else {
+          full = createInitialProject();
+          full.name = '临时项目';
+        }
+      }
       const localDraft = await getDraft(full.id);
+      console.log('[TTSSynthesis] draft check:', { projectId: full.id, hasDraft: !!localDraft, dirty: localDraft?.dirty, base_updated_at: localDraft?.base_updated_at, project_updated_at: full.updated_at });
       if (localDraft && localDraft.base_updated_at && localDraft.base_updated_at < full.updated_at && localDraft.dirty) {
+        console.log(`[TTSSynthesis] conflict detected for ${full.id}`);
         if (full.id === SCRATCHPAD_PROJECT_ID) {
           const migratedDraft = migrateV1(localDraft.draft);
           setProject(migratedDraft);
@@ -212,6 +257,7 @@ export function TTSSynthesis({
         return;
       }
       const migrated = migrateV1(full);
+      console.log(`[TTSSynthesis] setting project: ${migrated.name} (id=${migrated.id}, chapters=${migrated.chapters?.length})`);
       setProject(migrated);
       dispatch({ type: 'LOAD_PROJECT', project: migrated });
       const ch = getActiveChapter(migrated);
@@ -226,7 +272,13 @@ export function TTSSynthesis({
           setShowMigration(true);
         }
       }
-    })().catch((e) => console.warn('Project load failed:', e));
+    })().catch((e) => {
+      console.error('Project load failed:', e);
+      if (initialProjectId) {
+        showToast('项目加载失败，请重试', 'error');
+        onBackToProjects?.();
+      }
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageMode, initialProjectId]);
 
@@ -258,14 +310,14 @@ export function TTSSynthesis({
         edge_rate: edgeRate, edge_volume: edgeVolume,
         mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice,
         mimo_instruction: mimoInstruction, mimo_clone_voice_id: mimoCloneVoiceId,
-        voxcpm_mode: voxcpmMode, voxcpm_voice_description: voxcpmVoiceDescription,
+        voxcpm_mode: voxcpmMode,
         voxcpm_style_control: voxcpmStyleControl, voxcpm_prompt_text: voxcpmPromptText,
         voxcpm_cfg_value: voxcpmCfgValue, voxcpm_inference_timesteps: voxcpmInferenceTimesteps,
         language: params.language, speed: params.speed,
         volume: params.volume, pitch: params.pitch, panel_open: panelOpen,
       },
     });
-  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmVoiceDescription, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
+  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
     setToast({ message, type });
@@ -299,8 +351,7 @@ export function TTSSynthesis({
     setMimoPresetVoice(ch.mimo_preset_voice || '冰糖');
     setMimoInstruction(ch.mimo_instruction || '');
     setMimoCloneVoiceId(ch.mimo_clone_voice_id || '');
-    setVoxcpmMode((ch.voxcpm_mode as VoxCPMMode) || 'tts');
-    setVoxcpmVoiceDescription(ch.voxcpm_voice_description || '');
+    setVoxcpmMode((ch.voxcpm_mode as VoxCPMMode) || 'clone');
     setVoxcpmStyleControl(ch.voxcpm_style_control || '');
     setVoxcpmPromptText(ch.voxcpm_prompt_text || '');
     setVoxcpmCfgValue(ch.voxcpm_cfg_value ?? 2.0);
@@ -367,7 +418,7 @@ export function TTSSynthesis({
     if (engine === 'voxcpm') {
       const params: SegmentEngineParams = {
         engine: 'voxcpm', voice_id: selectedVoiceId, voxcpm_mode: voxcpmMode,
-        voxcpm_voice_description: voxcpmVoiceDescription, voxcpm_style_control: voxcpmStyleControl,
+        voxcpm_style_control: voxcpmStyleControl,
         voxcpm_prompt_text: voxcpmPromptText, voxcpm_cfg_value: voxcpmCfgValue,
         voxcpm_inference_timesteps: voxcpmInferenceTimesteps,
       };
@@ -380,7 +431,7 @@ export function TTSSynthesis({
       pitch: params.pitch ?? 1.0, language: params.language || 'Chinese',
       enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false,
     };
-  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmVoiceDescription, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps]);
+  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps]);
 
   const resetGlobalSettings = useCallback(() => {
     setEngine('edge_tts');
@@ -392,8 +443,7 @@ export function TTSSynthesis({
     setMimoPresetVoice('冰糖');
     setMimoInstruction('');
     setMimoCloneVoiceId('');
-    setVoxcpmMode('tts');
-    setVoxcpmVoiceDescription('');
+    setVoxcpmMode('clone');
     setVoxcpmStyleControl('');
     setVoxcpmPromptText('');
     setVoxcpmCfgValue(2.0);
@@ -415,9 +465,10 @@ export function TTSSynthesis({
     }
   }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
 
-  const handleCreateProject = useCallback(async () => {
+  const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
     const np = createInitialProject();
-    np.name = `新项目 ${projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1}`;
+    np.name = name || `新项目 ${projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1}`;
+    if (logo) np.logo = logo;
     await projectStorage.saveProject(np, { mode: 'immediate' });
     const list = sortProjectsWithScratchpad(await projectStorage.listProjects());
     setProjectList(list);
@@ -446,11 +497,18 @@ export function TTSSynthesis({
         if (nextProject) {
           await loadProjectById(nextProject.id);
         } else {
-          const scratchpad = createScratchpadProject();
-          await projectStorage.saveProject(scratchpad, { mode: 'immediate' });
-          setProjectList([scratchpad]);
-          setProject(scratchpad);
-          dispatch({ type: 'LOAD_PROJECT', project: scratchpad });
+          // 只有前端模式才需要创建 scratchpad，后端模式创建临时项目不保存
+          const fallback = createInitialProject();
+          if (storageMode === 'frontend') {
+            fallback.id = SCRATCHPAD_PROJECT_ID;
+            fallback.name = '草稿项目';
+            await indexedDBStorage.saveProject(fallback, { mode: 'immediate' });
+          } else {
+            fallback.name = '临时项目';
+          }
+          setProjectList([fallback]);
+          setProject(fallback);
+          dispatch({ type: 'LOAD_PROJECT', project: fallback });
           resetGlobalSettings();
         }
       }
@@ -663,8 +721,12 @@ export function TTSSynthesis({
       return;
     }
     try {
-      await roleApi.deleteRole(roleId);
+      // 仅从当前项目移除，不全局删除
+      // 1. 清除所有引用该角色的 segment 的 role_id 和 role_snapshot
+      dispatch({ type: 'CLEAR_ROLE_FROM_SEGMENTS', roleId });
+      // 2. 从本地角色列表移除（不调用 roleApi.deleteRole）
       setRoles(prev => prev.filter(role => role.id !== roleId));
+      // 3. 如果是默认旁白，重新指定
       if (project.default_narrator_role_id === roleId) {
         const nextNarrator = remainingNarrators[0] ?? null;
         dispatch({
@@ -673,10 +735,10 @@ export function TTSSynthesis({
           roleSnapshot: nextNarrator ? roleSnapshotFromRole(nextNarrator) : null,
         });
       }
-      showToast('角色已删除');
+      showToast('角色已从项目移除');
     } catch (error) {
-      console.error('Delete role failed:', error);
-      showToast('角色删除失败', 'error');
+      console.error('Remove role from project failed:', error);
+      showToast('移除角色失败', 'error');
     }
   }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
 
@@ -723,6 +785,7 @@ export function TTSSynthesis({
       const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : (gp.mimo_mode || 'preset');
       const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : (gp.mimo_preset_voice || '');
       const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : (gp.mimo_clone_voice_id || '');
+      const effectiveMimoVoiceDesc = hasVoiceLock ? (sp.mimo_voice_description || '') : (gp.mimo_voice_description || '');
       const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : (gp.mimo_instruction || '');
 
       // VoxCPM: locked → stored; unlocked → current global
@@ -736,7 +799,7 @@ export function TTSSynthesis({
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
 
       // Voice identifier & params snapshot — shared by both backend and frontend paths
-      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
+      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoMode === 'voicedesign' ? effectiveMimoVoiceDesc : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
       const updatedParams: Partial<SegmentEngineParams> = { engine: effectiveEngine };
       if (effectiveEngine === 'edge_tts') {
         updatedParams.edge_voice = effectiveEdgeVoice;
@@ -746,6 +809,7 @@ export function TTSSynthesis({
         updatedParams.mimo_mode = effectiveMimoMode;
         updatedParams.mimo_preset_voice = effectiveMimoPreset;
         updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
+        updatedParams.mimo_voice_description = effectiveMimoVoiceDesc;
         updatedParams.mimo_instruction = effectiveMimoInstruction;
       } else if (effectiveEngine === 'voxcpm') {
         updatedParams.voxcpm_mode = effectiveVoxcpmMode;
@@ -776,6 +840,7 @@ export function TTSSynthesis({
           requestParams.mimo_mode = effectiveMimoMode;
           requestParams.mimo_preset_voice = effectiveMimoPreset;
           requestParams.mimo_clone_voice_id = effectiveMimoCloneId;
+          requestParams.mimo_voice_description = effectiveMimoVoiceDesc;
           requestParams.mimo_instruction = effectiveMimoInstruction;
         } else if (effectiveEngine === 'voxcpm') {
           requestParams.voice_id = voiceId;
@@ -828,9 +893,13 @@ export function TTSSynthesis({
       if (effectiveEngine === 'edge_tts') {
         resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
       } else if (effectiveEngine === 'mimo_tts') {
-        resp = effectiveMimoMode === 'preset'
-          ? await mimoTtsApi.synthesizePreset({ text: textToSend, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' })
-          : await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
+        if (effectiveMimoMode === 'voicedesign') {
+          resp = await mimoTtsApi.synthesizeVoiceDesign({ text: textToSend, voice_description: effectiveMimoVoiceDesc || '', format: 'wav' });
+        } else if (effectiveMimoMode === 'voiceclone') {
+          resp = await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
+        } else {
+          resp = await mimoTtsApi.synthesizePreset({ text: textToSend, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
+        }
       } else if (effectiveEngine === 'voxcpm') {
         if (effectiveVoxcpmMode === 'design') {
           resp = await voxcpmApi.design({ voice_description: effectiveVoxcpmDesc, text: textToSend || undefined, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
@@ -1359,7 +1428,6 @@ export function TTSSynthesis({
                     ) : (
                       <VoxCPMPanel
                         mode={voxcpmMode} onModeChange={setVoxcpmMode}
-                        voiceDescription={voxcpmVoiceDescription} onVoiceDescriptionChange={setVoxcpmVoiceDescription}
                         styleControl={voxcpmStyleControl} onStyleControlChange={setVoxcpmStyleControl}
                         promptText={voxcpmPromptText} onPromptTextChange={setVoxcpmPromptText}
                         selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}

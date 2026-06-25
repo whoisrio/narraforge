@@ -16,6 +16,8 @@ import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import type { SegmentedProject } from './types';
 import styles from './App.module.css';
 
+const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
+
 type Page = 'home';
 type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config';
 type View = Page | Tab;
@@ -44,13 +46,14 @@ function AppContent() {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<SegmentedProject[]>([]);
   const [storageMode, setStorageMode] = useState<StorageMode>('frontend');
+  const [storageModeLoaded, setStorageModeLoaded] = useState(false);
 
   const projectStorage = storageForMode(storageMode);
 
   useEffect(() => {
     configApi.getStorageMode().then(
-      (data) => setStorageMode(data.storage_mode as StorageMode),
-      () => console.warn('Failed to load storage mode, using default frontend'),
+      (data) => { setStorageMode(data.storage_mode as StorageMode); setStorageModeLoaded(true); },
+      () => { console.warn('Failed to load storage mode, using default frontend'); setStorageModeLoaded(true); },
     );
   }, []);
 
@@ -58,7 +61,10 @@ function AppContent() {
     let cancelled = false;
     projectStorage.listProjects()
       .then(list => {
-        if (!cancelled) setProjects(list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+        if (!cancelled) {
+          const filtered = list.filter(p => p.id !== SCRATCHPAD_PROJECT_ID);
+          setProjects(filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+        }
       })
       .catch(error => console.warn('Failed to load project hub list:', error));
     return () => { cancelled = true; };
@@ -91,9 +97,10 @@ function AppContent() {
     setProjects(list.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
   };
 
-  const handleCreateProject = async () => {
+  const handleCreateProject = async (name?: string, logo?: string | null) => {
     const project = createInitialProject();
-    project.name = `新项目 ${projects.length + 1}`;
+    project.name = name || `新项目 ${projects.length + 1}`;
+    if (logo) project.logo = logo;
     await projectStorage.saveProject(project, { mode: 'immediate' });
     await refreshProjects();
     setActiveTab('tts-synthesis');
@@ -169,12 +176,12 @@ function AppContent() {
                   <ProjectHub
                     projects={projects}
                     onOpenProject={(projectId) => setActiveProjectId(projectId)}
-                    onCreateProject={() => { void handleCreateProject(); }}
+                    onCreateProject={(name, logo) => { void handleCreateProject(name, logo); }}
                     onDeleteProject={(projectId) => { void handleDeleteProjectFromHub(projectId); }}
                     onRenameProject={(projectId, name) => { void handleRenameProjectFromHub(projectId, name); }}
                   />
                 )}
-                {activeTab === 'tts-synthesis' && activeProjectId && (
+                {activeTab === 'tts-synthesis' && activeProjectId && storageModeLoaded && (
                   <TTSSynthesis
                     key={activeProjectId}
                     initialProjectId={activeProjectId}
