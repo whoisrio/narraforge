@@ -1,4 +1,6 @@
-import type { Chapter } from '../../types';
+import type { Chapter, Role } from '../../types';
+import { isNarratorRole } from '../../services/voiceRoleKind';
+import { roleVoiceLabelFromParams } from '../../services/voiceRoleDefaults';
 import styles from './ProjectOverview.module.css';
 
 interface ProjectOverviewProps {
@@ -7,100 +9,270 @@ interface ProjectOverviewProps {
   activeChapterId?: string;
   defaultNarratorName?: string | null;
   remotionPath?: string | null;
+  roles?: Role[];
+  defaultNarratorRoleId?: string | null;
   onEnterLibrary: () => void;
   onEnterStudio: () => void;
   onOpenVoices: () => void;
-  onOpenSettings: () => void;
+  onOpenSettings?: () => void;
 }
 
-function formatDuration(seconds: number): string {
-  const safe = Math.max(0, Math.round(seconds));
+type ChapterStatus = 'ready' | 'synthesizing' | 'draft';
+
+const ENGINE_LABELS: Record<string, string> = {
+  edge_tts: 'Edge-TTS',
+  cosyvoice: 'CosyVoice',
+  mimo_tts: 'MiMo',
+  voxcpm: 'VoxCPM',
+};
+
+function getChapterStatus(chapter: Chapter): ChapterStatus {
+  if (chapter.segments.length === 0) return 'draft';
+  if (chapter.segments.every(s => s.status === 'ready')) return 'ready';
+  if (chapter.segments.some(s => s.status === 'queued' || s.status === 'pending')) return 'synthesizing';
+  return 'draft';
+}
+
+function chapterStatusLabel(status: ChapterStatus): string {
+  if (status === 'ready') return '完成';
+  if (status === 'synthesizing') return '合成中';
+  return '草稿';
+}
+
+function formatRelativeTime(isoDate?: string | null): string {
+  if (!isoDate) return '';
+  const now = Date.now();
+  const then = new Date(isoDate).getTime();
+  if (Number.isNaN(then)) return '';
+  const diffSec = Math.floor((now - then) / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay === 1) return 'Yesterday';
+  return `${diffDay}d ago`;
+}
+
+function formatDuration(totalSec: number): string {
+  const safe = Math.max(0, Math.round(totalSec));
   const minutes = Math.floor(safe / 60);
-  const rest = safe % 60;
-  return `${minutes}:${String(rest).padStart(2, '0')}`;
+  const seconds = safe % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function estimateWords(chapter: Chapter): number {
-  const source = chapter.original_text || chapter.segments.map(segment => segment.text).join('');
-  return source.replace(/\s+/g, '').length;
+function chapterProgress(chapter: Chapter): { generated: number; total: number; percent: number; duration: number } {
+  const total = chapter.segments.length;
+  const generated = chapter.segments.filter(segment => segment.status === 'ready').length;
+  const percent = total === 0 ? 0 : Math.round((generated / total) * 100);
+  const duration = chapter.segments.reduce((sum, segment) => sum + (segment.duration_sec ?? 0), 0);
+  return { generated, total, percent, duration };
 }
 
-export function ProjectOverview({
-  projectName,
-  chapters,
-  activeChapterId,
-  defaultNarratorName,
-  remotionPath,
-  onEnterLibrary,
-  onEnterStudio,
-  onOpenVoices,
-  onOpenSettings,
-}: ProjectOverviewProps) {
-  const activeChapter = chapters.find(chapter => chapter.id === activeChapterId) ?? chapters[0];
-  const segmentCount = chapters.reduce((sum, chapter) => sum + chapter.segments.length, 0);
-  const generatedCount = chapters.reduce((sum, chapter) => sum + chapter.segments.filter(segment => segment.status === 'ready').length, 0);
-  const durationSec = chapters.reduce((sum, chapter) => sum + chapter.segments.reduce((inner, segment) => inner + (segment.duration_sec ?? 0), 0), 0);
+function engineLabel(engine: string): string {
+  return ENGINE_LABELS[engine] ?? engine;
+}
+
+function voiceLabel(role: Role): string {
+  return roleVoiceLabelFromParams(role.default_engine_params, role.default_voice);
+}
+
+function partitionRoles(roles: Role[], defaultNarratorRoleId?: string | null): { narrators: Role[]; cast: Role[] } {
+  const narrators: Role[] = [];
+  const cast: Role[] = [];
+  for (const role of roles) {
+    if (isNarratorRole(role, defaultNarratorRoleId)) {
+      narrators.push(role);
+    } else {
+      cast.push(role);
+    }
+  }
+  return { narrators, cast };
+}
+
+export function ProjectOverview(props: ProjectOverviewProps) {
+  const {
+    chapters,
+    activeChapterId,
+    defaultNarratorName,
+    remotionPath,
+    roles = [],
+    defaultNarratorRoleId,
+    onEnterLibrary,
+    onOpenVoices,
+  } = props;
+  const segmentCount = chapters.reduce((sum, ch) => sum + ch.segments.length, 0);
+  const generatedCount = chapters.reduce(
+    (sum, ch) => sum + ch.segments.filter(s => s.status === 'ready').length,
+    0,
+  );
   const progress = segmentCount === 0 ? 0 : Math.round((generatedCount / segmentCount) * 100);
+  const { narrators, cast } = partitionRoles(roles, defaultNarratorRoleId);
 
   return (
     <section className={styles.root}>
-      <header className={styles.header}>
-        <div>
-          <span className={styles.kicker}>Project Overview</span>
-          <h2>{projectName}</h2>
-          <p>从文本库、声音角色到工作室生产的项目状态总览。</p>
-        </div>
-        <div className={styles.actions}>
-          <button type="button" onClick={onEnterLibrary}>打开文本库</button>
-          <button type="button" className={styles.primary} onClick={onEnterStudio}>进入工作室</button>
-        </div>
-      </header>
-
-      <div className={styles.metrics}>
-        <div><span>章节</span><strong>{chapters.length} 章</strong></div>
-        <div><span>分段</span><strong>{segmentCount} 段</strong></div>
-        <div><span>完成</span><strong>{generatedCount} 已生成</strong></div>
-        <div><span>时长</span><strong>{formatDuration(durationSec)}</strong></div>
-      </div>
-
-      <div className={styles.grid}>
-        <article className={styles.mainCard}>
-          <div className={styles.cardHeader}>
-            <span className={styles.kicker}>Active Chapter</span>
-            <strong>{activeChapter?.design_title || activeChapter?.name || '暂无章节'}</strong>
+      {/* Production Progress */}
+      <section className={styles.progressCard}>
+        <div className={styles.progressHeader}>
+          <div className={styles.sectionTitle}>
+            <span className={styles.sectionIcon}>◈</span>
+            <span>Production Progress</span>
           </div>
-          <p>{activeChapter?.original_text || activeChapter?.segments.map(segment => segment.text).join(' ') || '还没有章节正文。打开文本库开始整理章节全文。'}</p>
-          <div className={styles.progressRow}>
-            <span>{progress}%</span>
-            <div className={styles.track}><i style={{ width: `${progress}%` }} /></div>
+          <span className={styles.progressPercent}>{progress}%</span>
+        </div>
+        <div className={styles.progressBar}>
+          <i style={{ width: `${progress}%` }} />
+        </div>
+      </section>
+
+      {/* Manuscript + Cast row */}
+      <div className={styles.bentoRow}>
+        {/* Manuscript Quick Access */}
+        <section className={styles.manuscriptCard}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>
+              <span className={styles.sectionIcon}>▤</span>
+              <span>Manuscript Quick Access</span>
+            </div>
+            <button type="button" className={styles.linkButton} onClick={onEnterLibrary}>
+              View All Chapters
+            </button>
           </div>
-        </article>
+          {chapters.length === 0 ? (
+            <p className={styles.emptyHint}>No chapters yet. Open the text library to get started.</p>
+          ) : (
+            <ul className={styles.chapterList} data-visual="compact-chapter-list">
+              {chapters.map((chapter, index) => {
+                const status = getChapterStatus(chapter);
+                const chapterStats = chapterProgress(chapter);
+                return (
+                  <li
+                    key={chapter.id}
+                    className={`${styles.chapterListItem} ${chapter.id === activeChapterId ? styles.chapterListItemActive : ''}`}
+                    data-chapter-card="compact"
+                    aria-label={`章节 ${chapter.design_title || chapter.name}`}
+                  >
+                    <span className={styles.chapterIndex}>{String(index + 1).padStart(2, '0')}</span>
+                    <div className={styles.chapterInfo}>
+                      <strong>{chapter.design_title || chapter.name}</strong>
+                      <small>{chapterStats.total} 段 · {chapterStats.generated} 已生成 · {formatDuration(chapterStats.duration)} · {formatRelativeTime(chapter.updated_at || chapter.created_at)}</small>
+                      <div className={styles.chapterProgressTrack} aria-hidden="true">
+                        <i style={{ width: `${chapterStats.percent}%` }} />
+                      </div>
+                    </div>
+                    <span
+                      className={
+                        status === 'ready'
+                          ? styles.statusReady
+                          : status === 'synthesizing'
+                            ? styles.statusSynthesizing
+                            : styles.statusDraft
+                      }
+                    >
+                      {chapterStatusLabel(status)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
 
-        <aside className={styles.sideStack}>
-          <section className={styles.sideCard}>
-            <span className={styles.kicker}>Voice Role</span>
-            <strong>{defaultNarratorName || '未设置默认旁白'}</strong>
-            <p>旁白角色决定 narration 段的默认声音。</p>
-            <button type="button" onClick={onOpenVoices}>配置声音角色</button>
-          </section>
-          <section className={styles.sideCard}>
-            <span className={styles.kicker}>Remotion Target</span>
-            <strong>{remotionPath || '未设置 Remotion 路径'}</strong>
-            <p>导出会优先写入 Remotion 项目的 public/audio。</p>
-            <button type="button" onClick={onOpenSettings}>项目设置</button>
-          </section>
-        </aside>
+        {/* Active Cast */}
+        <section className={styles.castCard}>
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>
+              <span className={styles.sectionIcon}>◌</span>
+              <span>Active Cast</span>
+            </div>
+          </div>
+
+          {/* Narrators */}
+          <div className={styles.castSection}>
+            <h4 className={styles.castLabel}>Narrators</h4>
+            {narrators.length === 0 && !defaultNarratorName ? (
+              <p className={styles.emptyHint}>No narrator assigned.</p>
+            ) : (
+              <>
+                {defaultNarratorName && narrators.length === 0 && (
+                  <div className={styles.castMember}>
+                    <div className={styles.castAvatar}>{defaultNarratorName.slice(0, 1)}</div>
+                    <div className={styles.castInfo}>
+                      <strong>{defaultNarratorName}</strong>
+                      <small>Default narrator</small>
+                    </div>
+                  </div>
+                )}
+                {narrators.map(role => (
+                  <div key={role.id} className={styles.castMember}>
+                    <div className={styles.castAvatar}>{role.name.slice(0, 1)}</div>
+                    <div className={styles.castInfo}>
+                      <strong>{role.name}</strong>
+                      <small>{engineLabel(role.default_engine)} · {voiceLabel(role)}</small>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* Divider */}
+          {cast.length > 0 && <div className={styles.castDivider} />}
+
+          {/* Cast */}
+          {cast.length > 0 && (
+            <div className={styles.castSection}>
+              <h4 className={styles.castLabel}>Cast</h4>
+              <div className={styles.castList}>
+                {cast.map(role => (
+                  <div key={role.id} className={styles.castMember}>
+                    <div className={styles.castAvatar}>{role.name.slice(0, 1)}</div>
+                    <div className={styles.castInfo}>
+                      <strong>{role.name}</strong>
+                      <small>{engineLabel(role.default_engine)} · {voiceLabel(role)}</small>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button type="button" className={styles.assignButton} onClick={onOpenVoices}>
+            + ASSIGN CHARACTER
+          </button>
+        </section>
       </div>
 
-      <div className={styles.chapterStrip}>
-        {chapters.map((chapter, index) => (
-          <article key={chapter.id} className={`${styles.chapterCard} ${chapter.id === activeChapterId ? styles.active : ''}`}>
-            <span>CH {String(index + 1).padStart(2, '0')}</span>
-            <strong>{chapter.design_title || chapter.name}</strong>
-            <small>{estimateWords(chapter)} 字 · {chapter.segments.length} 段 · {chapter.segments.filter(segment => segment.status === 'ready').length} 已生成</small>
-          </article>
-        ))}
-      </div>
+      {/* Technical Overview */}
+      <section className={styles.technicalCard}>
+        <div className={styles.sectionHeader}>
+          <div className={styles.sectionTitle}>
+            <span className={styles.sectionIcon}>⚙</span>
+            <span>Technical Overview</span>
+          </div>
+        </div>
+        <div className={styles.techGrid}>
+          <div className={styles.techField}>
+            <span className={styles.techLabel}>Remotion Repository</span>
+            <div className={styles.techValue}>
+              <code>{remotionPath || 'Not configured'}</code>
+            </div>
+          </div>
+          <div className={styles.techField}>
+            <span className={styles.techLabel}>Auto-SRT Generation</span>
+            <div className={styles.techToggleRow}>
+              <span className={styles.techToggleLabel}>Coming soon</span>
+              <label className={styles.toggleDisabled}>
+                <input type="checkbox" disabled />
+                <span className={styles.toggleTrack}>
+                  <span className={styles.toggleThumb} />
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
     </section>
   );
 }

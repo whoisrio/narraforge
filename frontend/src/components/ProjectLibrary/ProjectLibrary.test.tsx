@@ -57,6 +57,8 @@ describe('ProjectLibrary', () => {
 
     expect(screen.getByText('Chapter Library')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /新建章节/ })).toBeInTheDocument();
+    const firstChapterSelect = screen.getByRole('button', { name: /选择第一章/ });
+    expect(firstChapterSelect.closest('article')).toHaveAttribute('data-chapter-card', 'compact');
     expect(screen.getByRole('button', { name: /选择第一章/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /选择第二章/ })).toBeInTheDocument();
     expect(screen.getAllByText('12 字').length).toBeGreaterThan(0);

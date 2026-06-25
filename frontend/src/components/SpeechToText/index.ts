@@ -1,2 +1,9 @@
 export { TranscriptionHistory } from './TranscriptionHistory';
-export { MultiAudioSelector } from './MultiAudioSelector';
+export { AudioDropzone } from './AudioDropzone';
+export { TranscriptEditor } from './TranscriptEditor';
+export { CorrectionPanel } from './CorrectionPanel';
+export { SidebarConfig } from './SidebarConfig';
+export { ExportPanel } from './ExportPanel';
+export { BilingualCard } from './BilingualCard';
+export { QualityReport } from './QualityReport';
+export { PlaybackBar } from './PlaybackBar';

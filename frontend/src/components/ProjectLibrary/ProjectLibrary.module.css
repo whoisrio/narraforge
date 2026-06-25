@@ -5,7 +5,6 @@
 .emptyRoot,
 .libraryHeader,
 .chapterCard,
-.inspectorPanel,
 .writingCanvas {
   border: 1px solid rgba(216, 194, 180, 0.42);
   background: rgba(255, 255, 255, 0.62);
@@ -71,58 +70,54 @@
 .libraryHeader {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  gap: var(--spacing-xl);
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-xl);
-  border-radius: 30px;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 14px;
 }
 
 .libraryHeader h2 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 34px;
-  line-height: 1.05;
-  letter-spacing: -0.06em;
+  font-size: 20px;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
 }
 
 .libraryHeader p {
-  max-width: 700px;
-  margin: 12px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 15px;
-  line-height: 1.7;
+  display: none;
 }
 
 .headerActions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .headerStat {
-  min-width: 74px;
-  padding: 10px 12px;
-  border: 1px solid rgba(216, 194, 180, 0.35);
-  border-radius: 16px;
-  background: rgba(249, 243, 235, 0.72);
+  min-width: 64px;
+  padding: 5px 9px;
+  border: 1px solid rgba(216, 194, 180, 0.24);
+  border-radius: 12px;
+  background: rgba(249, 243, 235, 0.5);
 }
 
 .headerStat span {
   display: block;
   color: var(--color-text-muted);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 
 .headerStat strong {
   display: block;
-  margin-top: 5px;
+  margin-top: 1px;
   color: var(--color-primary-dark);
-  font-size: 18px;
+  font-size: 13px;
   line-height: 1;
 }
 
@@ -160,63 +155,76 @@
 
 .chapterGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(285px, 1fr));
-  gap: var(--spacing-lg);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
 }
 
 .chapterCard {
   overflow: hidden;
-  border-radius: 28px;
+  min-height: 210px;
+  border-radius: 22px;
   transition: transform var(--transition-normal), box-shadow var(--transition-normal), border-color var(--transition-normal);
 }
 
 .chapterCard:hover {
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: rgba(196, 122, 58, 0.4);
-  box-shadow: var(--shadow-card-hover);
+  box-shadow: 0 14px 34px rgba(47, 21, 0, 0.08);
 }
 
 .chapterCover {
   position: relative;
   width: 100%;
-  height: 145px;
+  height: 52px;
   overflow: hidden;
   border-radius: 0;
   background:
-    radial-gradient(circle at 28% 28%, rgba(255, 220, 195, 0.88), transparent 34%),
-    linear-gradient(135deg, var(--color-primary-dark), var(--color-primary) 60%, var(--color-primary-light));
-  color: white;
+    radial-gradient(circle at 12% 35%, rgba(196, 122, 58, 0.18), transparent 30%),
+    linear-gradient(135deg, rgba(255, 248, 241, 0.94), rgba(249, 243, 235, 0.72));
+  color: var(--color-primary-dark);
 }
 
 .chapterInitial {
-  font-size: 50px;
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(196, 122, 58, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.64);
+  font-size: 18px;
   font-weight: 900;
-  letter-spacing: -0.08em;
-  text-shadow: 0 12px 28px rgba(47, 21, 0, 0.25);
+  letter-spacing: -0.04em;
+  text-shadow: none;
 }
 
 .chapterBadge {
   position: absolute;
-  right: 14px;
-  bottom: 14px;
-  padding: 5px 9px;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px 8px;
   border-radius: var(--radius-full);
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.7);
   color: var(--color-primary-dark);
   font-family: var(--font-family-mono);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
 }
 
 .chapterBody {
-  padding: var(--spacing-md);
+  padding: 12px;
 }
 
 .chapterTitleRow {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .chapterQuickActions {
@@ -228,13 +236,13 @@
 .chapterQuickActions button {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border: 1px solid rgba(216, 194, 180, 0.45);
   border-radius: var(--radius-full);
   background: rgba(249, 243, 235, 0.72);
   color: var(--color-primary-dark);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -318,21 +326,21 @@
 .chapterBody h3 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1.12;
   letter-spacing: -0.045em;
 }
 
 .chapterBody p {
   display: -webkit-box;
-  min-height: 46px;
-  margin: 8px 0 14px;
+  min-height: 20px;
+  margin: 6px 0 10px;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   color: var(--color-text-secondary);
-  font-size: 14px;
-  line-height: 1.65;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .chapterStats,
@@ -341,24 +349,24 @@
   justify-content: space-between;
   gap: 8px;
   color: var(--color-text-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 750;
 }
 
 .chapterStats {
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .chapterStats span {
-  padding: 5px 8px;
+  padding: 4px 7px;
   border-radius: var(--radius-full);
   background: var(--color-surface-low);
 }
 
 .progressTrack {
-  height: 7px;
-  margin: 8px 0 14px;
+  height: 5px;
+  margin: 6px 0 10px;
   overflow: hidden;
   border-radius: var(--radius-full);
   background: rgba(216, 194, 180, 0.34);
@@ -373,83 +381,171 @@
 
 .cardActions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .cardActions button {
   flex: 1;
-  border-radius: 14px;
+  min-height: 34px;
+  border-radius: 13px;
 }
 
 .chapterEditorRoot {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 310px;
-  gap: var(--spacing-lg);
-}
-
-.writingCanvas {
-  padding: var(--spacing-xl);
-  border-radius: 30px;
-}
-
-.chapterToolbar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
+  height: calc(100vh - var(--header-height) - 120px);
 }
 
-.chapterTitleLabel,
-.textEditorLabel {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+.editorHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-sm) 0;
+  flex-shrink: 0;
+}
+
+/* ---- Bottom Bar ---- */
+
+.bottomBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  padding: 14px var(--spacing-xl);
+  border: 1px solid rgba(216, 194, 180, 0.42);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 -4px 20px rgba(109, 76, 58, 0.06);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
+  position: sticky;
+  bottom: var(--spacing-md);
+  z-index: 10;
+}
+
+.bottomBarDivider {
+  width: 1px;
+  height: 24px;
+  background: rgba(216, 194, 180, 0.3);
+  flex-shrink: 0;
+}
+
+.bottomBarNav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  border: 1px solid rgba(216, 194, 180, 0.55);
+  border-radius: var(--radius-full);
+  background: rgba(249, 243, 235, 0.74);
+  color: var(--color-primary-dark);
+  font-size: 13px;
+  font-weight: 850;
+  cursor: pointer;
+  transition: background var(--transition-normal);
+}
+
+.bottomBarNav:hover {
+  background: rgba(255, 220, 195, 0.45);
+}
+
+.bottomBarLabel {
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  font-weight: 800;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chapterTitleInput {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   border: 0;
-  border-bottom: 1px solid rgba(216, 194, 180, 0.6);
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 42px;
+  font-size: 26px;
   font-weight: 850;
-  line-height: 1.12;
-  letter-spacing: -0.065em;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+  padding: 4px 0;
 }
 
 .editorMetrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin: var(--spacing-lg) 0;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .editorMetrics span {
-  padding: 6px 10px;
+  padding: 4px 10px;
   border-radius: var(--radius-full);
   background: rgba(249, 243, 235, 0.76);
   color: var(--color-text-secondary);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
+  white-space: nowrap;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.designTitleField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border: 1px solid rgba(216, 194, 180, 0.36);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.52);
+}
+
+.designTitleField span {
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.designTitleField input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 750;
+  outline: none;
 }
 
 .manuscriptEditor {
   width: 100%;
-  min-height: 520px;
-  resize: vertical;
+  flex: 1;
+  min-height: 0;
+  resize: none;
   border: 0;
-  border-radius: 24px;
-  padding: 24px;
+  border-radius: 18px;
+  padding: 20px 24px;
   background: rgba(255, 248, 241, 0.72);
   color: var(--color-text-primary);
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 19px;
+  font-size: 18px;
   line-height: 1.8;
   letter-spacing: -0.01em;
 }
@@ -457,99 +553,7 @@
 .manuscriptEditor:focus,
 .chapterTitleInput:focus {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(196, 122, 58, 0.12);
-}
-
-.inspectorPanel {
-  align-self: start;
-  position: sticky;
-  top: calc(var(--header-height) + 32px);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
-  border-radius: 28px;
-}
-
-.inspectorPanel h3 {
-  margin: 0;
-  color: var(--color-text-primary);
-  font-size: 19px;
-  letter-spacing: -0.04em;
-}
-
-.inspectorCard {
-  padding: 14px;
-  border: 1px solid rgba(216, 194, 180, 0.35);
-  border-radius: 16px;
-  background: rgba(249, 243, 235, 0.72);
-}
-
-.inspectorCard span {
-  display: block;
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.inspectorCard strong {
-  display: block;
-  margin-top: 6px;
-  color: var(--color-primary-dark);
-  font-size: 14px;
-}
-
-.inspectorField {
-  display: grid;
-  gap: 8px;
-  padding: 14px;
-  border: 1px solid rgba(216, 194, 180, 0.35);
-  border-radius: 16px;
-  background: rgba(249, 243, 235, 0.72);
-}
-
-.inspectorField span {
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.inspectorField input {
-  width: 100%;
-  border: 1px solid rgba(196, 122, 58, 0.25);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.76);
-  color: var(--color-primary-dark);
-  font: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  padding: 8px 10px;
-}
-
-.inspectorDanger {
-  min-height: 38px;
-  border: 1px solid rgba(163, 58, 32, 0.22);
-  border-radius: var(--radius-full);
-  background: rgba(255, 218, 214, 0.38);
-  color: #a33a20;
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.inspectorDanger:disabled {
-  cursor: not-allowed;
-  opacity: 0.46;
-}
-
-.inspectorHint {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  line-height: 1.65;
+  box-shadow: 0 0 0 3px rgba(196, 122, 58, 0.1);
 }
 
 @media (max-width: 1100px) {
@@ -559,11 +563,17 @@
     flex-direction: column;
   }
 
-  .chapterEditorRoot {
-    grid-template-columns: 1fr;
+  .bottomBar {
+    position: static;
+    flex-wrap: wrap;
   }
 
-  .inspectorPanel {
-    position: static;
+  .editorHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .chapterTitleInput {
+    font-size: 22px;
   }
 }

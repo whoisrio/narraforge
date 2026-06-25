@@ -271,7 +271,7 @@ export function SegmentRow({
           <VoiceAvatar name={voiceDisplayName} size={28} gender={voiceGender} />
         </div>
         <div className={styles.compactVoice}>
-          <span className={styles.compactVoiceName}>{voiceDisplayName}</span>
+          <span className={styles.compactVoiceName} title={voiceDisplayName}>{voiceDisplayName}</span>
           <span className={styles.compactVoiceEngine}>{displayEngine}</span>
         </div>
         <span className={styles.compactIdx}>#{idx}</span>

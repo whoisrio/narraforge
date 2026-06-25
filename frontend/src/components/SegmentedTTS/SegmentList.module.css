@@ -24,6 +24,8 @@
   gap: 8px;
   margin: 0 0 6px 0;
   padding: 0 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .kindBadge,
@@ -52,20 +54,38 @@
 }
 
 .rolePicker {
+  position: relative;
   gap: 6px;
+  width: 168px;
+  max-width: 168px;
+  flex: 0 0 168px;
   padding: 3px 8px;
   background: rgba(249, 243, 235, 0.72);
   color: var(--color-text-secondary);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.rolePicker > span:first-child {
+  flex: 0 0 auto;
+}
+
+.roleNamePreview {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-primary);
 }
 
 .rolePicker select {
-  max-width: 132px;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-primary);
-  font-size: 11px;
-  font-weight: 850;
-  outline: none;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 /* Accordion edit panel */

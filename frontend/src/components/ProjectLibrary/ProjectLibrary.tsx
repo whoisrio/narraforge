@@ -49,6 +49,14 @@ function initialForChapter(chapter: Chapter): string {
   return chapter.name.trim().slice(0, 1) || '章';
 }
 
+function navigateChapter(chapters: Chapter[], currentId: string, direction: 'prev' | 'next'): string {
+  const idx = chapters.findIndex(c => c.id === currentId);
+  if (idx < 0) return chapters[0]?.id ?? currentId;
+  const len = chapters.length;
+  const nextIdx = direction === 'next' ? (idx + 1) % len : (idx - 1 + len) % len;
+  return chapters[nextIdx].id;
+}
+
 export function ProjectLibrary({
   chapters,
   activeChapterId,
@@ -116,66 +124,73 @@ export function ProjectLibrary({
     const progress = chapterProgress(activeChapter);
     return (
       <section className={styles.chapterEditorRoot}>
-        <main className={styles.writingCanvas}>
-          <div className={styles.chapterToolbar}>
-            <button type="button" className={styles.ghostButton} onClick={() => setMode('overview')}>返回文本库</button>
-            <button type="button" className={styles.primaryButton} onClick={() => onEnterStudio(activeChapter.id)}>进入工作室</button>
-          </div>
-
-          <span className={styles.kicker}>Immersive Chapter Editor</span>
-          <label className={styles.chapterTitleLabel} htmlFor="library-chapter-title">章节标题</label>
+        <header className={styles.editorHeader}>
+          <h2 className={styles.srOnly}>Immersive Chapter Editor</h2>
           <input
-            id="library-chapter-title"
             className={styles.chapterTitleInput}
+            aria-label="章节标题"
             value={activeChapter.name}
             onChange={(event) => onRenameChapter(activeChapter.id, event.target.value)}
+            placeholder="章节标题"
           />
-
           <div className={styles.editorMetrics}>
             <span>{chars} 字</span>
             <span>预计 {formatSeconds(estimateDurationSec(text))}</span>
             <span>{progress.ready}/{progress.total} 已生成</span>
           </div>
+        </header>
 
-          <label className={styles.textEditorLabel} htmlFor="library-chapter-full-text">章节全文</label>
-          <textarea
-            id="library-chapter-full-text"
-            className={styles.manuscriptEditor}
-            value={text}
-            onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
-            placeholder="在这里维护本章完整旁白稿。进入工作室后再切分为语音段落。"
+        <label className={styles.designTitleField}>
+          <span>设计标题</span>
+          <input
+            value={activeChapter.design_title ?? ''}
+            onChange={(event) => onUpdateChapterDesignTitle(activeChapter.id, event.target.value)}
+            placeholder="用于视频画面的章节标题"
           />
-        </main>
+        </label>
 
-        <aside className={styles.inspectorPanel}>
-          <h3>章节信息</h3>
-          <label className={styles.inspectorField} htmlFor="library-chapter-design-title">
-            <span>设计标题</span>
-            <input
-              id="library-chapter-design-title"
-              value={activeChapter.design_title || ''}
-              onChange={(event) => onUpdateChapterDesignTitle(activeChapter.id, event.target.value)}
-              placeholder={activeChapter.name}
-            />
-          </label>
-          <div className={styles.inspectorCard}>
-            <span>分段状态</span>
-            <strong>{progress.ready}/{progress.total} 已生成</strong>
-          </div>
-          <div className={styles.inspectorCard}>
-            <span>音频时长</span>
-            <strong>{formatSeconds(chapterAudioDuration(activeChapter))}</strong>
-          </div>
+        <textarea
+          className={styles.manuscriptEditor}
+          aria-label="章节全文"
+          value={text}
+          onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
+          placeholder="在这里维护本章完整旁白稿。进入工作室后再切分为语音段落。"
+        />
+
+        <div className={styles.bottomBar}>
           <button
             type="button"
-            className={styles.inspectorDanger}
-            disabled={!canDeleteChapter}
-            onClick={() => onDeleteChapter(activeChapter.id)}
+            className={styles.ghostButton}
+            onClick={() => setMode('overview')}
           >
-            删除章节 {activeChapter.name}
+            ← 返回文本库
           </button>
-          <p className={styles.inspectorHint}>文本库负责章节全文；进入工作室后再进行切分、配音、试听与导出。</p>
-        </aside>
+          <div className={styles.bottomBarDivider} />
+          <button
+            type="button"
+            className={styles.bottomBarNav}
+            onClick={() => onSelectChapter(navigateChapter(chapters, activeChapter.id, 'prev'))}
+            aria-label="上一章"
+          >
+            ← 上一章
+          </button>
+          <span className={styles.bottomBarLabel}>{activeChapter.name}</span>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={() => onEnterStudio(activeChapter.id)}
+          >
+            进入工作室
+          </button>
+          <button
+            type="button"
+            className={styles.bottomBarNav}
+            onClick={() => onSelectChapter(navigateChapter(chapters, activeChapter.id, 'next'))}
+            aria-label="下一章"
+          >
+            下一章 →
+          </button>
+        </div>
       </section>
     );
   }
@@ -233,7 +248,7 @@ export function ProjectLibrary({
           const progress = chapterProgress(chapter);
           const isEditing = editingChapterId === chapter.id;
           return (
-            <article key={chapter.id} className={styles.chapterCard}>
+            <article key={chapter.id} className={styles.chapterCard} data-chapter-card="compact">
               <button
                 type="button"
                 className={styles.chapterCover}

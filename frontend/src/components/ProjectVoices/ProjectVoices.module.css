@@ -1,276 +1,501 @@
-.root {
-  display: grid;
-  gap: var(--spacing-lg);
-}
+/* ============================================================
+   ProjectVoices — Character Card Grid
+   Warm Stone & Amber Studio design language
+   ============================================================ */
 
-.header,
-.panel {
-  border: 1px solid rgba(216, 194, 180, 0.42);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(10px);
+/* --- Root & Header --- */
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
 }
 
 .header {
   display: flex;
+  align-items: flex-end;
   justify-content: space-between;
-  align-items: center;
   gap: var(--spacing-md);
-  padding: var(--spacing-lg) var(--spacing-xl);
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
 }
 
 .kicker {
-  display: block;
-  margin-bottom: 8px;
   color: var(--color-primary-dark);
   font-size: 10px;
   font-weight: 900;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-.header h2,
-.panelHeader h3 {
+.header h2 {
   margin: 0;
   color: var(--color-text-primary);
-  letter-spacing: -0.055em;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.04em;
 }
 
-.header h2 {
-  font-size: 26px;
-  line-height: 1.08;
-}
-
-.header p {
-  margin: 10px 0 0;
+.headerDesc {
+  margin: 0;
   color: var(--color-text-secondary);
-  font-size: 15px;
+  font-size: var(--font-size-sm);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-  gap: var(--spacing-lg);
-  align-items: start;
-}
-
-.panel {
-  padding: var(--spacing-lg);
-}
-
-.panelHeader {
+/* --- Filter Bar --- */
+.filterBar {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.filterSelect {
+  appearance: none;
+  padding: var(--spacing-xs) var(--spacing-lg) var(--spacing-xs) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23867467' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+
+.filterSelect:hover {
+  border-color: var(--color-primary-light);
+}
+
+.filterSelect:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--glow-primary);
+}
+
+.filterSpacer {
+  flex: 1;
+}
+
+/* --- Role Group --- */
+.roleGroup {
+  display: flex;
+  flex-direction: column;
   gap: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
 }
 
-.panelHeader h3 {
-  font-size: 24px;
+.roleGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
-.primaryButton,
-.ghostButton,
-.roleCard button {
+.roleGroupHeader h3 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: -0.02em;
+}
+
+.roleGroupHeader .kicker {
+  font-size: 9px;
+}
+
+/* --- Card Grid --- */
+.cardGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 900px) {
+  .cardGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Character Card (horizontal) --- */
+.charCard {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.charCard:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-card-hover);
+  border-color: var(--color-primary-light);
+}
+
+.charCard:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--glow-primary-strong);
+}
+
+.charCardDefault {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.charCardDefault:hover {
+  border-color: var(--color-primary-dark);
+}
+
+/* Narrator cards get a subtle warm tint */
+.charCardNarrator {
+  background: rgba(139, 76, 13, 0.03);
+}
+
+/* --- Avatar --- */
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 900;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.avatarEdge {
+  background: linear-gradient(135deg, #c47a3a, #a05a20);
+}
+
+.avatarCosy {
+  background: linear-gradient(135deg, #2a9d8f, #1a7a6e);
+}
+
+.avatarMimo {
+  background: linear-gradient(135deg, #7c5cbf, #5a3d9a);
+}
+
+.avatarVoxcpm {
+  background: linear-gradient(135deg, #3b82c4, #2a6090);
+}
+
+.avatarDefault {
+  background: linear-gradient(135deg, #8b7355, #6b5a45);
+}
+
+/* --- Card Body --- */
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+/* --- Card Name --- */
+.charName {
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.defaultBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* --- Chip Row --- */
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Identity chips */
+.chipNarrator {
+  background: rgba(139, 76, 13, 0.1);
+  color: var(--color-primary-dark);
+}
+
+.chipCast {
+  background: rgba(0, 104, 93, 0.1);
+  color: #00685d;
+}
+
+/* Engine chips */
+.chipEngine {
+  background: var(--color-surface-container);
+  color: var(--color-text-secondary);
+}
+
+/* Status indicator */
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusReady {
+  background: var(--color-success);
+}
+
+.statusDraft {
+  background: var(--color-warning);
+}
+
+/* --- Waveform decoration --- */
+.waveform {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 20px;
+  opacity: 0.45;
+}
+
+.waveform i {
+  display: block;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-success);
+  animation: wave 1.2s ease-in-out infinite;
+}
+
+.waveform i:nth-child(1) { height: 6px; animation-delay: 0s; }
+.waveform i:nth-child(2) { height: 12px; animation-delay: 0.15s; }
+.waveform i:nth-child(3) { height: 8px; animation-delay: 0.3s; }
+.waveform i:nth-child(4) { height: 16px; animation-delay: 0.45s; }
+.waveform i:nth-child(5) { height: 5px; animation-delay: 0.6s; }
+
+@keyframes wave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(0.35); }
+}
+
+/* --- Card Actions --- */
+.cardActions {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* --- Placeholder Card (Add New) --- */
+.placeholderCard {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  min-height: 64px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+  color: var(--color-text-muted);
+  background: transparent;
+}
+
+.placeholderCard:hover {
+  border-color: var(--color-primary);
+  background: rgba(196, 122, 58, 0.04);
+  color: var(--color-primary);
+}
+
+.placeholderIcon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.placeholderLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* --- Buttons --- */
+.primaryButton {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-height: 38px;
-  padding: 0 15px;
+  padding: 0 var(--spacing-lg);
+  border: none;
   border-radius: var(--radius-full);
-  font-size: 13px;
-  font-weight: 850;
-}
-
-.primaryButton,
-.roleCard button {
   background: var(--color-primary-gradient);
-  color: white;
-  box-shadow: 0 10px 22px rgba(139, 76, 13, 0.16);
-}
-
-.ghostButton {
-  border: 1px solid rgba(216, 194, 180, 0.55);
-  background: rgba(249, 243, 235, 0.74);
-  color: var(--color-primary-dark);
-}
-
-.defaultPicker {
-  display: grid;
-  gap: 7px;
-  margin-bottom: var(--spacing-md);
-}
-
-.defaultPicker span {
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.defaultPicker select {
-  min-height: 40px;
-  border: 1px solid rgba(216, 194, 180, 0.45);
-  border-radius: 14px;
-  padding: 0 12px;
-  background: rgba(249, 243, 235, 0.72);
-  color: var(--color-text-primary);
-  font-weight: 800;
-}
-
-.castList {
-  display: grid;
-  gap: var(--spacing-md);
-}
-
-.roleCard {
-  display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 14px;
-  border: 1px solid rgba(216, 194, 180, 0.36);
-  border-radius: 20px;
-  background: rgba(249, 243, 235, 0.56);
-}
-
-.roleCardDefault {
-  border-color: rgba(139, 76, 13, 0.45);
-  background: rgba(139, 76, 13, 0.07);
-  box-shadow: 0 0 0 3px rgba(139, 76, 13, 0.08);
-}
-
-.avatar {
-  display: grid;
-  place-items: center;
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  color: white;
-  font-size: 20px;
-  font-weight: 900;
-}
-
-.roleBody {
-  min-width: 0;
-}
-
-.roleBody strong,
-.roleBody span,
-.roleBody p {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.roleBody strong {
-  color: var(--color-text-primary);
-  font-size: 15px;
-}
-
-.roleBody span {
-  margin-top: 3px;
-  color: var(--color-primary-dark);
-  font-size: 12px;
-  font-weight: 850;
-}
-
-.roleBody p {
-  margin: 7px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  line-height: 1.55;
+  color: var(--color-text-on-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
   white-space: nowrap;
 }
 
-.roleActions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: stretch;
+.primaryButton:hover {
+  transform: scale(1.03);
+  box-shadow: var(--shadow-md);
 }
 
+.primaryButton:active {
+  transform: scale(0.97);
+}
+
+.ghostButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: rgba(249, 243, 235, 0.74);
+  color: var(--color-primary-dark);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+  white-space: nowrap;
+}
+
+.ghostButton:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  transition: border-color var(--transition-fast), color var(--transition-fast), background var(--transition-fast);
+}
+
+.iconButton:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(196, 122, 58, 0.06);
+}
+
+/* --- Empty State --- */
 .emptyState {
-  padding: var(--spacing-lg);
-  border: 1px dashed rgba(216, 194, 180, 0.72);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.42);
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-2xl) var(--spacing-md);
+  text-align: center;
+  color: var(--color-text-muted);
 }
 
 .emptyState strong {
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
 }
 
 .emptyState p {
-  margin: 8px 0 0;
-  color: var(--color-text-secondary);
-  line-height: 1.65;
+  margin: 0;
+  max-width: 360px;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
 }
 
-.defaultVoiceHint {
-  display: inline-grid;
-  gap: 4px;
-  margin-top: 14px;
-  padding: 10px 12px;
-  border: 1px solid rgba(139, 76, 13, 0.18);
-  border-radius: 16px;
-  background: rgba(139, 76, 13, 0.07);
-}
-
-.defaultVoiceHint span {
-  color: var(--color-text-muted);
-  font-size: 10px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.defaultVoiceHint strong {
-  color: var(--color-primary-dark);
-  font-size: 13px;
-}
-
+/* --- Editor Panel (expanded below grid) --- */
 .editorPanel {
   display: grid;
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
-  border: 1px solid rgba(216, 194, 180, 0.42);
-  border-radius: 24px;
-  background: rgba(255, 248, 241, 0.82);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
   box-shadow: var(--shadow-md);
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .editorBar {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-md);
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(216, 194, 180, 0.32);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
-.editorBar h3,
-.configCard h4,
-.previewCard h4 {
+.editorBar h3 {
   margin: 0;
   color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
 }
 
-.editorBar p,
-.previewCard p {
-  margin: 8px 0 0;
+.editorBar p {
+  margin: var(--spacing-xs) 0 0;
   color: var(--color-text-secondary);
-  line-height: 1.6;
+  font-size: var(--font-size-sm);
 }
 
 .editorActions {
   display: flex;
-  gap: 10px;
+  gap: var(--spacing-sm);
   align-items: center;
+  flex-shrink: 0;
 }
 
 .editorGrid {
@@ -280,39 +505,70 @@
   align-items: start;
 }
 
+@media (max-width: 900px) {
+  .editorGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .editorMain {
   display: grid;
   gap: var(--spacing-md);
 }
 
-.configCard,
-.previewCard {
+/* --- Config Card (inside editor) --- */
+.configCard {
   display: grid;
   gap: var(--spacing-md);
   padding: var(--spacing-lg);
-  border: 1px solid rgba(216, 194, 180, 0.36);
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.56);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-low);
+}
+
+.configCard h4 {
+  margin: 0;
+  color: var(--color-primary-dark);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.configHint {
+  margin: calc(var(--spacing-xs) * -1) 0 var(--spacing-xs);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-normal);
 }
 
 .configCard label {
   display: grid;
-  gap: 7px;
+  gap: var(--spacing-xs);
   color: var(--color-text-secondary);
-  font-size: 12px;
-  font-weight: 850;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
 }
 
 .configCard input,
 .configCard select,
 .configCard textarea {
   width: 100%;
-  border: 1px solid rgba(216, 194, 180, 0.5);
-  border-radius: 14px;
-  padding: 10px 12px;
-  background: rgba(249, 243, 235, 0.72);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
   color: var(--color-text-primary);
-  font: inherit;
+  font-size: var(--font-size-sm);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.configCard input:focus,
+.configCard select:focus,
+.configCard textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: var(--glow-primary);
 }
 
 .configCard textarea {
@@ -320,19 +576,13 @@
   resize: vertical;
 }
 
-.configHint {
-  margin: -6px 0 2px;
-  color: var(--color-text-muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
+/* --- Engine Pills --- */
 .engineRow {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(216, 194, 180, 0.32);
+  gap: var(--spacing-sm);
+  padding-bottom: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .paramLabel {
@@ -347,22 +597,27 @@
 .enginePills {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 3px;
   padding: 3px;
-  border-radius: 14px;
-  background: rgba(249, 243, 235, 0.82);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-container);
 }
 
 .enginePill {
   min-height: 30px;
-  padding: 0 13px;
+  padding: 0 var(--spacing-md);
   border: none;
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 850;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.enginePill:hover {
+  color: var(--color-primary);
 }
 
 .enginePillActive {
@@ -371,16 +626,17 @@
   box-shadow: 0 4px 12px rgba(139, 76, 13, 0.18);
 }
 
+/* --- Params Grid --- */
 .paramsGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .paramField {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .paramSelect,
@@ -389,10 +645,11 @@
   min-width: 0;
 }
 
+/* --- Range slider --- */
 .sliderRow {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
 }
 
 .range {
@@ -404,50 +661,47 @@
 .sliderVal {
   min-width: 42px;
   color: var(--color-primary-dark);
-  font-size: 12px;
-  font-weight: 850;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
   text-align: right;
 }
 
+/* --- Preview Card (inside editor) --- */
 .previewCard {
-  border-color: rgba(139, 76, 13, 0.2);
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border: 1px solid rgba(139, 76, 13, 0.2);
+  border-radius: var(--radius-xl);
   background: rgba(139, 76, 13, 0.06);
 }
 
-.waveform {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 58px;
+.previewCard h4 {
+  margin: 0;
+  color: var(--color-primary-dark);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 
-.waveform i {
-  width: 7px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, var(--color-primary), var(--color-primary-dark));
+.previewCard p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base);
+  font-style: italic;
+  line-height: var(--line-height-relaxed);
 }
 
-.waveform i:nth-child(1) { height: 18px; opacity: 0.35; }
-.waveform i:nth-child(2) { height: 34px; opacity: 0.58; }
-.waveform i:nth-child(3) { height: 48px; }
-.waveform i:nth-child(4) { height: 28px; opacity: 0.72; }
-.waveform i:nth-child(5) { height: 42px; opacity: 0.86; }
-.waveform i:nth-child(6) { height: 20px; opacity: 0.42; }
+/* --- Default Picker (legacy, hidden) --- */
+.defaultPicker {
+  display: none;
+}
 
-@media (max-width: 1100px) {
-  .grid,
+/* --- Responsive: header stacks on mobile --- */
+@media (max-width: 768px) {
   .header {
-    grid-template-columns: 1fr;
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .roleCard {
-    grid-template-columns: 42px minmax(0, 1fr);
-  }
-
-  .roleCard button {
-    grid-column: 1 / -1;
   }
 }

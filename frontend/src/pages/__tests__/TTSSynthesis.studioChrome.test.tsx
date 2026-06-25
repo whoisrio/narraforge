@@ -107,40 +107,40 @@ vi.mock('../../components/TTSSynthesis/VoxCPMPanel', () => ({
 }));
 
 vi.mock('../../components/VoiceStudio/VoiceStudioLayout', () => ({
-  VoiceStudioLayout: ({ children, viewMode, onViewModeChange, onBatchSynthesize, onExport, onPlayAll }: {
+  VoiceStudioLayout: ({ children, sidebarContent, onExport, onPlayAll }: {
     children: React.ReactNode;
-    viewMode: 'list' | 'dialogue';
-    onViewModeChange: (mode: 'list' | 'dialogue') => void;
-    onBatchSynthesize: () => void;
+    sidebarContent?: React.ReactNode;
     onExport: () => void;
     onPlayAll: () => void;
   }) => (
     <section data-testid="voice-studio-layout">
       <h2>Voice Studio</h2>
-      <button type="button" aria-pressed={viewMode === 'list'} onClick={() => onViewModeChange('list')}>列表视图</button>
-      <button type="button" aria-pressed={viewMode === 'dialogue'} onClick={() => onViewModeChange('dialogue')}>对话视图</button>
-      <button type="button" onClick={onBatchSynthesize}>批量合成</button>
-      <button type="button" onClick={onPlayAll}>全部播放</button>
-      <button type="button" onClick={onExport}>导出</button>
+      <aside data-testid="voice-studio-sidebar">{sidebarContent}</aside>
       {children}
+      <button type="button" onClick={onPlayAll}>播放</button>
+      <button type="button" onClick={onExport}>导出</button>
     </section>
   ),
 }));
 
 describe('TTSSynthesis Studio chrome', () => {
-  it('lets VoiceStudioLayout own the title and list/dialogue switch without legacy duplicates', async () => {
+  it('keeps Studio chrome minimal and places production controls below Source Text', async () => {
     render(<TTSSynthesis hideProjectSidebar />);
 
     await waitFor(() => expect(screen.getByTestId('voice-studio-layout')).toBeInTheDocument());
 
     expect(screen.queryByText('分段配音工作台')).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: '列表视图' })).toHaveLength(1);
-    expect(screen.getAllByRole('button', { name: '对话视图' })).toHaveLength(1);
-    expect(screen.getByRole('button', { name: '批量合成' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '列表视图' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '对话视图' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('voice-studio-sidebar')).toHaveTextContent('Voice Mode');
+    expect(screen.getByRole('button', { name: '旁白模式' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /批量合成/ })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /全部播放/ })).toHaveLength(1);
+    expect(screen.getByLabelText('segment 时间呈现')).toHaveTextContent('章节时间');
+    expect(screen.getByLabelText('segment 卡片呈现')).toHaveTextContent('紧凑');
     expect(screen.getAllByRole('button', { name: /导出/ })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /全部生成/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /角色库/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /管理/ })).toBeInTheDocument();
     expect(screen.getByTestId('edge-tts-panel')).toBeInTheDocument();
   });
 });

@@ -7,23 +7,23 @@
 .header,
 .card {
   border: 1px solid rgba(216, 194, 180, 0.45);
-  border-radius: 24px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.76);
   box-shadow: var(--shadow-xs);
 }
 
 .header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 20px;
-  background: linear-gradient(135deg, rgba(255, 252, 247, 0.92), rgba(255, 242, 226, 0.74));
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .kicker {
-  display: block;
-  margin-bottom: 6px;
+  display: none;
+  margin-bottom: 0;
   color: var(--color-primary-dark);
   font-size: 11px;
   font-weight: 900;
@@ -34,15 +34,20 @@
 .header h2 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 28px;
+  font-size: 20px;
   letter-spacing: -0.04em;
 }
 
 .header p,
 .exportRule p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--color-text-secondary);
-  line-height: 1.65;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.header p {
+  display: none;
 }
 
 .header button {

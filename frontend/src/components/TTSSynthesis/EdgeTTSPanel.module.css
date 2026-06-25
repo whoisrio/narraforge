@@ -1,40 +1,21 @@
-/* Edge-TTS Panel — Horizontal Bar Style (matches GlobalControlBar) */
-.bar {
+/* Edge-TTS Panel — Vertical sidebar layout */
+.panel {
   display: flex;
-  align-items: center;
-  gap: 18px;
-  padding: 12px 20px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.label {
-  font-size: 11px;
+.fieldLabel {
+  display: block;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-.divider {
-  width: 1px;
-  height: 24px;
-  background: var(--color-border);
-  flex-shrink: 0;
+  color: var(--color-text-secondary);
+  margin-bottom: -2px;
 }
 
 .select {
-  padding: 5px 28px 5px 10px;
+  width: 100%;
+  padding: 7px 32px 7px 12px;
   border: 1.5px solid var(--color-border);
   border-radius: var(--radius-sm);
   font-size: 13px;
@@ -45,8 +26,8 @@
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239e978e' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
-  min-width: 120px;
+  background-position: right 12px center;
+  transition: border-color var(--transition-fast);
 }
 
 .select:focus {
@@ -56,23 +37,25 @@
 
 .pillGroup {
   display: flex;
-  gap: 3px;
-  background: var(--color-surface-hover);
-  padding: 2px;
-  border-radius: var(--radius-sm);
+  gap: 4px;
+  background: rgba(216, 194, 180, 0.24);
+  padding: 3px;
+  border-radius: var(--radius-full);
 }
 
 .pill {
-  padding: 4px 12px;
-  border-radius: 6px;
+  flex: 1;
+  padding: 5px 0;
+  border-radius: var(--radius-full);
   border: none;
   background: transparent;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-text-muted);
   cursor: pointer;
   font-family: inherit;
   transition: all var(--transition-fast);
+  text-align: center;
 }
 
 .pill:hover {
@@ -80,21 +63,36 @@
 }
 
 .pillActive {
-  background: var(--color-surface);
-  color: var(--color-text-primary);
-  box-shadow: var(--shadow-sm);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-primary-dark);
+  box-shadow: 0 2px 8px rgba(139, 76, 13, 0.1);
 }
 
-.sliderWrap {
-  width: 72px;
+.sliderRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sliderHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.paramValue {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
 }
 
 .range {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 4px;
-  border-radius: 2px;
+  height: 5px;
+  border-radius: 3px;
   background: linear-gradient(to right, var(--color-primary) 0%, var(--color-primary) var(--fill-pct, 50%), var(--color-surface-hover) var(--fill-pct, 50%));
   outline: none;
   cursor: pointer;
@@ -102,21 +100,23 @@
 
 .range::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background: var(--color-surface);
   border: 2px solid var(--color-primary);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 4px rgba(139, 76, 13, 0.18);
   cursor: grab;
 }
 
-.paramValue {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-primary);
-  font-variant-numeric: tabular-nums;
-  min-width: 30px;
+.range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 2px solid var(--color-primary);
+  box-shadow: 0 1px 4px rgba(139, 76, 13, 0.18);
+  cursor: grab;
 }
 
 .loadingText {

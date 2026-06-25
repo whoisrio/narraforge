@@ -9,7 +9,7 @@ export const zhCN = {
     overview: '总览',
     library: '文本库',
     studio: '工作室',
-    voices: '声音角色',
+    voices: '角色',
     settings: '项目设置',
   },
   projectHub: {

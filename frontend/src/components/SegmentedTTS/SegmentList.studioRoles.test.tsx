@@ -28,6 +28,17 @@ const roles: Role[] = [
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
   },
+  {
+    id: 'cast-long',
+    name: '这是一个非常非常非常长的角色名字会把Segment信息挤歪',
+    description: 'Cast',
+    default_engine: 'edge_tts',
+    default_voice: 'zh-CN-YunyangNeural',
+    default_engine_params: { ...baseParams, edge_voice: 'zh-CN-YunyangNeural' },
+    favorite_styles: [],
+    created_at: '2026-01-01',
+    updated_at: '2026-01-01',
+  },
 ];
 
 function makeSegment(id: string, kind: 'narration' | 'dialogue'): Segment {
@@ -72,13 +83,23 @@ function renderList(overrides: Partial<React.ComponentProps<typeof SegmentList>>
 }
 
 describe('SegmentList studio role controls', () => {
-  it('shows segment kind controls in list view and switches kind with matching role snapshot', () => {
+  it('hides kind controls and narrator labels in narration mode', () => {
+    renderList({ voiceMode: 'narration' });
+
+    expect(screen.queryByText('旁白')).not.toBeInTheDocument();
+    expect(screen.queryByText('台词')).not.toBeInTheDocument();
+    expect(screen.queryByText('Narrator')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('选择旁白角色')).not.toBeInTheDocument();
+  });
+
+  it('shows segment kind controls in mixed mode and switches kind with matching role snapshot', () => {
     const onUpdateKind = vi.fn();
 
-    renderList({ onUpdateKind });
+    renderList({ voiceMode: 'mixed', onUpdateKind });
 
     expect(screen.getByText('旁白')).toBeInTheDocument();
     expect(screen.getByText('台词')).toBeInTheDocument();
+    expect(screen.queryByText('Narrator')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /改为台词/ }));
 
@@ -88,16 +109,16 @@ describe('SegmentList studio role controls', () => {
     }));
   });
 
-  it('filters role pickers by segment kind', () => {
+  it('only shows Cast role pickers for dialogue segments', () => {
     const onUpdateRole = vi.fn();
 
-    renderList({ onUpdateRole });
+    renderList({ voiceMode: 'mixed', onUpdateRole });
 
-    const narratorOptions = Array.from(screen.getByLabelText('选择旁白角色').querySelectorAll('option')).map(option => option.textContent);
+    expect(screen.queryByLabelText('选择旁白角色')).not.toBeInTheDocument();
+    expect(screen.queryByText('Narrator')).not.toBeInTheDocument();
+
     const castOptions = Array.from(screen.getByLabelText('选择台词角色').querySelectorAll('option')).map(option => option.textContent);
 
-    expect(narratorOptions).toContain('默认旁白');
-    expect(narratorOptions).not.toContain('嘉宾A');
     expect(castOptions).toContain('嘉宾A');
     expect(castOptions).not.toContain('默认旁白');
 
@@ -107,5 +128,22 @@ describe('SegmentList studio role controls', () => {
       id: 'cast-1',
       name: '嘉宾A',
     }));
+  });
+
+  it('keeps long Cast role names in a fixed-width ellipsis preview', () => {
+    renderList({
+      voiceMode: 'mixed',
+      segments: [makeSegment('s-long', 'dialogue')].map(segment => ({
+        ...segment,
+        role_id: 'cast-long',
+      })),
+      onUpdateRole: vi.fn(),
+    });
+
+    const preview = screen.getAllByTitle('这是一个非常非常非常长的角色名字会把Segment信息挤歪')
+      .find(element => element.className.includes('roleNamePreview'));
+    expect(preview).toBeTruthy();
+    expect(preview?.className).toContain('roleNamePreview');
+    expect(screen.getByLabelText('选择台词角色')).toBeInTheDocument();
   });
 });

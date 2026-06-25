@@ -1,5 +1,9 @@
 .root {
+  box-sizing: border-box;
   display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: calc(100vh - var(--header-height) - 76px);
   --project-rail-width: var(--nav-width);
 }
@@ -141,6 +145,230 @@
   background: rgba(255, 255, 255, 0.52);
 }
 
+/* ---- Chapter List Section ---- */
+
+.chapterListSection {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chapterListLabel {
+  display: block;
+  padding: 0 11px;
+  margin-bottom: 2px;
+  color: var(--color-text-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.chapterList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  max-height: 260px;
+}
+
+.chapterListItemWrap {
+  position: relative;
+}
+
+.chapterListItem {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  min-height: 38px;
+  padding: 3px;
+  border: 1px solid rgba(216, 194, 180, 0.22);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.38);
+  color: var(--color-text-secondary);
+  transition: background var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal);
+}
+
+.chapterListItem::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 0 var(--radius-full) var(--radius-full) 0;
+  background: transparent;
+}
+
+.chapterListItem:hover {
+  border-color: rgba(196, 122, 58, 0.2);
+  background: rgba(255, 248, 241, 0.64);
+  color: var(--color-text-primary);
+}
+
+.chapterListItem:hover .chapterItemActions {
+  opacity: 1;
+}
+
+.chapterListItemActive {
+  border-color: rgba(196, 122, 58, 0.32);
+  background: rgba(255, 220, 195, 0.26);
+  color: var(--color-primary-dark);
+  font-weight: 850;
+}
+
+.chapterListItemActive::before {
+  background: var(--color-primary);
+}
+
+.chapterListSelect {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 4px 0 7px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chapterItemActions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.chapterListItemActive .chapterItemActions,
+.chapterListItem:focus-within .chapterItemActions {
+  opacity: 1;
+}
+
+.chapterItemAction,
+.chapterItemActionDanger {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(216, 194, 180, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.chapterItemAction:hover {
+  background: rgba(196, 122, 58, 0.12);
+  color: var(--color-primary);
+}
+
+.chapterItemActionDanger:hover {
+  background: rgba(163, 58, 32, 0.1);
+  color: #a33a20;
+}
+
+.chapterRenameInline {
+  display: flex;
+  gap: 4px;
+  padding: 2px;
+}
+
+.chapterRenameInput {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(196, 122, 58, 0.4);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+}
+
+.chapterRenameInput:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--glow-primary);
+}
+
+.chapterRenameSave {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(42, 157, 143, 0.3);
+  border-radius: 6px;
+  background: rgba(42, 157, 143, 0.08);
+  color: var(--color-success);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.chapterRenameSave:hover {
+  background: rgba(42, 157, 143, 0.16);
+}
+
+.chapterListIndex {
+  font-family: var(--font-family-mono);
+  font-size: 9px;
+  font-weight: 900;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  width: 20px;
+}
+
+.chapterListName {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newChapterBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 0 11px;
+  border: 1px dashed rgba(196, 122, 58, 0.35);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition-normal), border-color var(--transition-normal);
+}
+
+.newChapterBtn:hover {
+  background: rgba(255, 220, 195, 0.25);
+  border-color: rgba(196, 122, 58, 0.55);
+}
+
 .collapseButton {
   margin-top: auto;
   display: flex;
@@ -157,12 +385,19 @@
 }
 
 .workspace {
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
   padding-left: calc(var(--project-rail-width) + 28px);
-  transition: padding-left var(--transition-normal);
+  padding-right: 312px;
+  transition: padding-left var(--transition-normal), padding-right var(--transition-normal);
+}
+
+.workspace[data-right-panel-collapsed='true'] {
+  padding-right: 60px;
 }
 
 .contextBar {
@@ -204,6 +439,7 @@
 
 .workspaceBody {
   min-width: 0;
+  width: 100%;
 }
 
 @media (max-width: 1100px) {
@@ -230,6 +466,10 @@
   .projectNavItem {
     width: auto;
     flex: 0 0 auto;
+  }
+
+  .chapterListSection {
+    display: none;
   }
 
   .workspaceTitleRow {
