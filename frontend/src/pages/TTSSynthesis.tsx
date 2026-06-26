@@ -720,6 +720,7 @@ export function TTSSynthesis({
     } catch (error) {
       console.error('Save role failed:', error);
       showToast('角色保存失败', 'error');
+      throw error;
     }
   }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
 
@@ -1606,6 +1607,7 @@ export function TTSSynthesis({
         ) : projectSection === 'voices' ? (
           <ProjectVoices
             roles={roles}
+            projectId={project.id}
             defaultNarratorRoleId={project.default_narrator_role_id}
             onSetDefaultNarrator={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
             onCreateDefaultNarrator={handleCreateDefaultNarrator}

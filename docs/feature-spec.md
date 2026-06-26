@@ -37,7 +37,7 @@ The page has two top-level sections toggled by tabs:
 | Section       | Description                                    |
 |---------------|------------------------------------------------|
 | Voice Clone   | Upload/record audio and register a voice       |
-| Voice Design  | Text-based voice style design (coming soon)    |
+| Voice Design  | Text-described voice style design (MiMo / VoxCPM) |
 
 ### 3.2 Clone Engine Support
 
@@ -61,11 +61,28 @@ The page has two top-level sections toggled by tabs:
 - Filtered by current clone engine (`qwen` or `mimo`)
 - Supports deleting voices and manual sync from Qwen cloud
 
-### 3.5 Voice Design (Placeholder)
+### 3.5 Voice Design
 
-- Currently displays a "Coming Soon" placeholder
-- MiMo mode: text-description-based voice customization
-- CosyVoice mode: style transfer and voice mixing (planned)
+Two-step flow: **design → confirm → save**.
+
+| Sub-engine | Method | Output |
+|------------|--------|--------|
+| **MiMo** | Text description → `/api/mimo-tts/voicedesign` | MP3 audio preview |
+| **VoxCPM** | Text description → VoxCPM design endpoint | WAV audio preview |
+
+#### Design Flow
+
+1. **Describe** — Enter a natural-language voice description (e.g. "年轻女性，温柔甜美，语速适中")
+2. **Preview** — System synthesizes a sample audio using the selected engine
+3. **Confirm** — "确认保存音色" persists the audio as a `VoiceProfile` via `/api/clone/create-from-design` without leaving the design UI
+4. **Save Role** — "保存角色" links the `VoiceProfile` to the role as a `voiceclone` reference (`mimo_clone_voice_id` / `voice_id`)
+
+#### Project Role Editor Integration
+
+- Roles designed via voice design are saved with `mimo_mode: 'voiceclone'` (or `voxcpm_mode: 'clone'`) and the `VoiceProfile` ID
+- Reopening a designed role shows the **clone** tab with the voice pre-selected
+- CharacterCard "试听" button plays the saved preview audio directly (no re-synthesis)
+- Designed voices appear in the clone voice dropdown alongside manually cloned voices
 
 ### 3.6 Voice Refresh
 
@@ -414,9 +431,10 @@ interface SegmentEngineParams {
 | Clone | `/api/clone/upload` | POST | Upload audio file |
 | Clone | `/api/clone/create-clone` | POST | CosyVoice register |
 | Clone | `/api/clone/create-clone-mimo` | POST | MiMo mark for clone |
+| Clone | `/api/clone/create-from-design` | POST | Create VoiceProfile from design preview audio |
 | Clone | `/api/clone/list` | GET | List voices |
 | TTS | `/api/tts/synthesize` | POST | CosyVoice/Edge synthesis |
-| TTS | `/api/tts/voices` | GET | CosyVoice voices |
+| TTS | `/api/tts/voices` | GET | Cloned voices with scoping (see below) |
 | TTS | `/api/tts/edge-voices` | GET | Edge-TTS voices |
 | MiMo | `/api/mimo-tts/preset` | POST | Preset voice synthesis |
 | MiMo | `/api/mimo-tts/voicedesign` | POST | Text-described voice |
@@ -429,6 +447,42 @@ interface SegmentEngineParams {
 | LLM | `/api/subtitle-llm/correct` | POST | Subtitle correction |
 | LLM | `/api/subtitle-llm/translate` | POST | Bilingual translation |
 | Config | `/api/model-config` | GET/PUT | Model configuration |
+
+### `/api/tts/voices` Query Parameters
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `voice_id` | string? | Return a single voice by ID (any scope) |
+| `project_id` | string? | Return global voices (`project_id IS NULL`) + project-specific voices |
+
+- No params → global voices only (`project_id IS NULL`, `is_cloned = True`)
+- `voice_id` → single voice lookup, 404 if not found
+- `project_id` → global + project-specific voices
+
+Response envelope: `{"voices": [VoiceProfileOut, ...]}`
+
+Each voice object returns 15 fields: `id`, `name`, `description`, `audio_url`, `original_audio_url`, `cloned_preview_url`, `qwen_voice_id`, `role`, `clone_engine`, `is_cloned`, `cloned_at`, `created_at`, `prompt_text`, `avatar`, `voices_engine`.
+
+`voices_engine` structure:
+```json
+{
+  "type": "design",           // "model_default" | "clone" | "design"
+  "engine": {
+    "type": "Mimo",           // "CosyVoice" | "Mimo" | "VoxCpm" | "EdgeTTS"
+    "sub_type": "mimo-design" // "mimo-clone" | "mimo-design" | "voxcpm-clone" | "voxcpm-ultimate" | "voxcpm-design" | null
+  },
+  "prompt_text": null,
+  "parameters": {
+    "voice_description": "年轻女性，温柔甜美，语速适中",
+    "instruction": ""
+  }
+}
+```
+
+Voice scoping model:
+- `VoiceProfile.project_id = NULL` → global voice (available in all projects)
+- `VoiceProfile.project_id = <id>` → project-specific voice (only visible in that project)
+- Project voices are created via `/api/clone/create-from-design` with `project_id` parameter
 
 ## 分段项目后端存储
 

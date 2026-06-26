@@ -1,4 +1,16 @@
 // Voice Profile (cloned voices)
+export interface VoiceEngine {
+  type: string;           // 'CosyVoice' | 'Mimo' | 'VoxCpm' | 'EdgeTTS'
+  sub_type?: string | null;  // 'mimo-clone' | 'mimo-design' | 'voxcpm-clone' | 'voxcpm-ultimate' | 'voxcpm-design'
+}
+
+export interface VoicesEngine {
+  type: string;           // 'model_default' | 'clone' | 'design'
+  engine: VoiceEngine;
+  prompt_text?: string | null;
+  parameters: Record<string, unknown>;
+}
+
 export interface VoiceProfile {
   id: string;
   name: string;
@@ -14,6 +26,7 @@ export interface VoiceProfile {
   cloned_at?: string;
   created_at: string;
   avatar?: string | null;  // 头像（data URL 或外部 URL）
+  voices_engine?: VoicesEngine | null;  // 音色来源与引擎信息
 }
 
 // TTS Config (model configurations)
