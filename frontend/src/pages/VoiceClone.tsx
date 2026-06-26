@@ -487,6 +487,17 @@ export function VoiceClone() {
                     )}
                   </div>
                 </div>
+                <div className={styles.voiceCardActions}>
+                  <button
+                    type="button"
+                    className={styles.previewBtn}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const audio = new Audio(v.audio_url);
+                      audio.play().catch(() => {});
+                    }}
+                  >试听</button>
+                </div>
               </article>
             ))}
           </div>
