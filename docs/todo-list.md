@@ -82,3 +82,32 @@
 - [ ] 叠字幕
 - [ ] 合成旁白
 - [ ] 导出完整视频
+
+
+
+---
+### VoxCPM
+VoxCPM的文本合成是完全随机的，在工作室界面不提供这个功能；
+VoxCPM的音色设计，只在角色语音设计提供；
+VoxCPM的声音克隆也要支持克隆所有角色的音色，极致克隆同理；
+
+MiMO 的音色复刻，要支持选择角色设计的音色，无论哪个模型；
+视频MiMO的design API；
+
+---
+在项目角色音色设计中，采用类似全局音色设计的形式，分为 模型预制声音 | 克隆音色 | 设计新音色，
+模型预制音色，呈现的模型就是 Edge-TTS和Mimo-TTS的预制音色；
+克隆音色，可选cosyvoice、mimo(mimo-tts-voiceclone) 和 voxcpm， cosyvoice只提供语音公网地址，用户填入地址确认后，后端要执行提交qwen服务克隆和下载音频的操作(后端应该已经支持了）；此外，mimo-tts在这里要改成mimo-tts-voiceclone, mimo-tts-voiceclone和voxcpm，提供实时录制和上传文件的方式克隆，不需要有其他参数；mimo和voxcpm克隆时，使用上传或者录制音色，根据 试听文本 生成合成语音，voxcpm 是支持极致克隆和克隆两种模式，克隆时支持设置声音描述，极致克隆时必须要填入录制或上传的语音的文本，声音克隆的角色需要保存原始的声音和克隆试听的声音，克隆的时候始终选择原始声音作为克隆参考；
+设计新音色，只有mimo(mimo-tts-voicedesign)和voxcpm支持；设计新音色要支持填入声音描述和试听文本；
+
+全局和项目的角色，不光是音色，声音的参数也必须要保留下来；
+---
+mimo-tts-voicedesign，optimize_text_preview 默认设置为false，严格要求使用传入的文本朗读；声音描述填在user里，合成文本填在assistant里；
+mimo-tts-voicedesign，应该是不支持表现强度和稳定性这两个参数的；
+---
+在工作室中，当处于旁白模式，通过模型选择音色时，
+cosyvoice只能选择上传到 cosyvoice克隆过的声音，以及设置对应的合成参数；
+edge-tts则可以选择系统默认音色和合成参数；
+mimo可以选择系统声音音色以及参数 ，以及选择mimo-tts-clone，clone的音色则来自项目中或者全局通过mimo-clone或者voxcpm设计的角色音色，以及对应的参数；
+voxcpm可以选择通过voxcpm 设计的角色声音以及参数,voxcpm声音克隆可以选择风格指令，极致克隆只能选择克隆的声音(且克隆的声音必须包含声音内容(不是音色)的文本描述)；
+voxcpm和mimo均不能选择cosyvoice的克隆音色(cosyvoice的克隆音色可能是在远端，找不到)
