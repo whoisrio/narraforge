@@ -29,8 +29,7 @@
 }
 
 .kindBadge,
-.kindSwitch,
-.rolePicker {
+.kindSwitch {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -53,39 +52,53 @@
   cursor: pointer;
 }
 
-.rolePicker {
-  position: relative;
-  gap: 6px;
-  width: 168px;
-  max-width: 168px;
-  flex: 0 0 168px;
-  padding: 3px 8px;
-  background: rgba(249, 243, 235, 0.72);
+.roleChipBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.roleChipBar::-webkit-scrollbar {
+  display: none;
+}
+
+.roleChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 2px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
   color: var(--color-text-secondary);
-  min-width: 0;
-  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+  min-height: 26px;
 }
 
-.rolePicker > span:first-child {
-  flex: 0 0 auto;
+.roleChip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
-.roleNamePreview {
-  min-width: 0;
-  flex: 1;
+.roleChipActive {
+  border-color: var(--color-primary);
+  background: rgba(196, 122, 58, 0.1);
+  color: var(--color-primary-dark);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+.roleChipName {
+  max-width: 80px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--color-text-primary);
-}
-
-.rolePicker select {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
 }
 
 /* Accordion edit panel */

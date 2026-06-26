@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Segment, SegmentEngineParams, EmotionType, VoiceProfile } from '../../types';
 import { ttsApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
+import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import styles from './SegmentEditPanel.module.css';
 
@@ -168,6 +169,22 @@ export function SegmentEditPanel({
           </div>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
+
+        {/* Role info (if assigned) */}
+        {segment.role_snapshot && (
+          <div className={styles.roleInfo}>
+            <VoiceAvatar
+              avatar={segment.role_snapshot.avatar}
+              name={segment.role_snapshot.name}
+              engine={segment.role_snapshot.default_engine}
+              size={28}
+            />
+            <span className={styles.roleInfoName}>{segment.role_snapshot.name}</span>
+            <span className={styles.roleInfoKind}>
+              {segment.role_snapshot.role_kind === 'narrator' ? '旁白' : '角色'}
+            </span>
+          </div>
+        )}
 
         {/* Text */}
         <textarea ref={textareaRef} className={styles.textarea} value={localText}
