@@ -241,7 +241,8 @@ export type Action =
   | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string }
   | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down' }
   | { type: 'SPLIT_SEGMENT'; id: string; position: number }
-  | { type: 'SELECT_SEGMENT'; id: string | undefined };
+  | { type: 'SELECT_SEGMENT'; id: string | undefined }
+  | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
 export interface State { project: SegmentedProject }
 
@@ -623,6 +624,24 @@ export function segmentedReducer(state: State, action: Action): State {
     }
     case 'SELECT_SEGMENT': {
       return { project: updateActive(p, ch => ({ ...ch, selected_segment_id: action.id })) };
+    }
+    case 'CLEAR_ROLE_FROM_SEGMENTS': {
+      const now = new Date().toISOString();
+      return {
+        project: {
+          ...p,
+          chapters: p.chapters.map(ch => ({
+            ...ch,
+            segments: ch.segments.map(seg =>
+              seg.role_id === action.roleId
+                ? { ...seg, role_id: null, role_snapshot: null, updated_at: now }
+                : seg
+            ),
+            updated_at: now,
+          })),
+          updated_at: now,
+        },
+      };
     }
     default:
       return state;
