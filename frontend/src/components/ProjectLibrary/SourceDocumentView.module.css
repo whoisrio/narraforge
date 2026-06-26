@@ -8,17 +8,19 @@
 .editor {
   flex: 1;
   min-height: 400px;
-}
-
-.editor :global(.w-md-editor) {
+  padding: 24px 32px;
   border: none;
-  border-radius: 0;
-  box-shadow: none;
-  background: transparent;
+  background: var(--color-surface);
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  resize: none;
+  outline: none;
 }
 
-.editor :global(.w-md-editor-content) {
-  min-height: 400px;
+.editor::placeholder {
+  color: var(--color-text-tertiary);
 }
 
 .previewArea {
@@ -29,7 +31,6 @@
   line-height: 1.7;
   color: var(--color-text-primary);
   background: var(--color-surface);
-  border-radius: var(--radius-md);
   min-height: 400px;
 }
 
@@ -55,36 +56,4 @@
   padding: 0.5em 1em;
   border-left: 3px solid var(--color-border);
   color: var(--color-text-secondary);
-}
-
-.bottomBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-top: 1px solid var(--color-border-light);
-  background: var(--color-surface);
-}
-
-.stats {
-  display: flex;
-  gap: 16px;
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-}
-
-.ghostButton {
-  padding: 6px 14px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.ghostButton:hover {
-  background: var(--color-bg-secondary);
-  color: var(--color-text-primary);
 }

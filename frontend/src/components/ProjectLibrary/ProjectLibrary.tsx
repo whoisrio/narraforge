@@ -85,6 +85,7 @@ export function ProjectLibrary({
   const [mode, setMode] = useState<LibraryMode>('overview');
   const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
   const [comparing, setComparing] = useState(false);
+  const [sourceViewMode, setSourceViewMode] = useState<'edit' | 'view'>('edit');
   const [showPreview, setShowPreview] = useState(false);
 
   const setLibraryMode = (next: LibraryMode) => {
@@ -419,15 +420,30 @@ export function ProjectLibrary({
             </button>
           </div>
         </div>
-        {activeTab === 'narration' && !comparing && (
-          <div className={styles.headerActions}>
-            <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
-            <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
-            <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
-            <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
-            <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
-          </div>
-        )}
+        <div className={styles.headerActions}>
+          {activeTab === 'source' && !comparing && (
+            <>
+              <button
+                type="button"
+                className={styles.ghostButton}
+                onClick={() => setSourceViewMode(sourceViewMode === 'edit' ? 'view' : 'edit')}
+              >
+                {sourceViewMode === 'edit' ? '查看' : '编辑'}
+              </button>
+              <button type="button" className={styles.ghostButton} onClick={() => setComparing(true)}>对比查看</button>
+              <button type="button" className={styles.ghostButton} onClick={() => setActiveTab('narration')}>← 返回文档库</button>
+            </>
+          )}
+          {activeTab === 'narration' && !comparing && (
+            <>
+              <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
+              <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
+              <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
+              <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
+              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
+            </>
+          )}
+        </div>
       </header>
 
       {comparing ? (
@@ -442,6 +458,8 @@ export function ProjectLibrary({
           onChange={(text) => onUpdateSourceDocument?.(text)}
           onCompare={() => setComparing(true)}
           onBack={() => setActiveTab('narration')}
+          viewMode={sourceViewMode}
+          onViewModeChange={setSourceViewMode}
         />
       ) : (
         narrationContent
