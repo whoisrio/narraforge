@@ -145,6 +145,10 @@ export function SegmentRow({
         const cloneId = useGlobal ? globalMimoCloneVoiceId : p.mimo_clone_voice_id;
         return { engine: eng, voice: cloneId ? '自定义音色' : '未选择' };
       }
+      if (mode === 'voicedesign') {
+        const desc = p.mimo_voice_description || '';
+        return { engine: eng, voice: desc ? desc.slice(0, 20) : '音色设计' };
+      }
       // preset mode (default)
       const preset = useGlobal ? globalMimoPresetVoice : p.mimo_preset_voice;
       return { engine: eng, voice: preset || '未选择' };

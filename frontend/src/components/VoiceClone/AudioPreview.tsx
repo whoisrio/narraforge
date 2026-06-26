@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { voiceApi } from '../../services/api';
+import { ImageUploadZone } from '../ui/ImageUploadZone';
 import styles from './AudioPreview.module.css';
 
 interface AudioPreviewProps {
@@ -24,6 +25,9 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
   const [uploadedVoiceId, setUploadedVoiceId] = useState<string | null>(null);
   /** VoxCPM 模式下的参考音频文本 */
   const [promptText, setPromptText] = useState('');
+  /** 音色名称和头像 */
+  const [voiceName, setVoiceName] = useState('');
+  const [voiceAvatar, setVoiceAvatar] = useState<string | null>(null);
 
   /** 文件模式下用于播放的本地 blob URL */
   const blobUrl = file ? URL.createObjectURL(file) : null;
@@ -55,12 +59,14 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
       }
 
       // 根据引擎选择不同的克隆 API
+      const name = voiceName.trim() || undefined;
+      const avatar = voiceAvatar || undefined;
       if (engine === 'mimo') {
-        await voiceApi.createCloneMiMo(targetVoiceId);
+        await voiceApi.createCloneMiMo(targetVoiceId, name, avatar);
       } else if (engine === 'voxcpm') {
-        await voiceApi.createCloneVoxCPM(targetVoiceId);
+        await voiceApi.createCloneVoxCPM(targetVoiceId, name, avatar);
       } else {
-        await voiceApi.createClone(targetVoiceId);
+        await voiceApi.createClone(targetVoiceId, name, avatar);
       }
 
       // 成功，清理 blob URL 并通知父组件
@@ -113,7 +119,6 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
       </div>
 
       <div className={styles.fileInfo}>
-        <span className={styles.fileIcon}>{voiceId ? '🌐' : '📁'}</span>
         <span className={styles.fileName}>
           {voiceId ? '外部音频' : file?.name}
         </span>
@@ -125,6 +130,26 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
       {playUrl && (
         <audio className={styles.audioPlayer} src={playUrl} controls />
       )}
+
+      {/* 音色名称和头像 */}
+      <div className={styles.identityRow}>
+        <ImageUploadZone
+          value={voiceAvatar}
+          onChange={(dataUrl) => setVoiceAvatar(dataUrl)}
+          size="sm"
+        />
+        <div className={styles.identityFields}>
+          <label className={styles.fieldLabel}>
+            音色名称
+            <input
+              className={styles.fieldInput}
+              value={voiceName}
+              onChange={e => setVoiceName(e.target.value)}
+              placeholder={file?.name?.replace(/\.[^.]+$/, '') || '输入音色名称...'}
+            />
+          </label>
+        </div>
+      </div>
 
       {/* VoxCPM 模式：填写参考音频文本 */}
       {engine === 'voxcpm' && (

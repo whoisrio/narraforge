@@ -1,0 +1,77 @@
+.zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: 2px dashed var(--color-border-strong);
+  border-radius: 50%;
+  background: var(--color-surface-low);
+  cursor: pointer;
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.zone:hover,
+.zone.dragOver {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--glow-primary);
+}
+
+.zone.hasImage {
+  border-style: solid;
+  border-color: var(--color-border);
+  cursor: default;
+}
+
+.zone.hasImage:hover {
+  border-color: var(--color-primary);
+}
+
+.preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.removeBtn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.zone:hover .removeBtn {
+  opacity: 1;
+}
+
+.hint {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.error {
+  font-size: 11px;
+  color: var(--color-error);
+  margin-top: 4px;
+}

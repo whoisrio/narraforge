@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { SegmentedProject } from '../../types';
+import { ImageUploadZone } from '../ui/ImageUploadZone';
 import styles from './ProjectHub.module.css';
 
 interface ProjectHubProps {
   projects: SegmentedProject[];
   onOpenProject: (projectId: string) => void;
-  onCreateProject: () => void;
+  onCreateProject: (name: string, logo?: string | null) => void;
   onDeleteProject: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => void;
 }
@@ -47,6 +48,9 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createLogo, setCreateLogo] = useState<string | null>(null);
   const totalSegments = projects.reduce((total, project) => total + projectStats(project).segments, 0);
   const totalGenerated = projects.reduce((total, project) => total + projectStats(project).generated, 0);
 
@@ -70,6 +74,14 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
     setRenameDraft('');
   };
 
+  const handleCreate = () => {
+    const name = createName.trim() || `新项目 ${projects.filter(p => !p.name.startsWith('临时')).length + 1}`;
+    onCreateProject(name, createLogo);
+    setShowCreateDialog(false);
+    setCreateName('');
+    setCreateLogo(null);
+  };
+
   return (
     <section className={styles.root}>
       <header className={styles.hero}>
@@ -86,7 +98,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
       </header>
 
       <div className={styles.grid}>
-        <button type="button" className={styles.createCard} onClick={onCreateProject}>
+        <button type="button" className={styles.createCard} onClick={() => setShowCreateDialog(true)}>
           <span className={styles.createIcon}>+</span>
           <strong>新建项目</strong>
           <small>创建新的旁白项目</small>
@@ -102,7 +114,11 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
               <div className={styles.cardHead}>
                 {isEditing ? (
                   <div className={styles.cardOpenButton}>
-                    <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
+                    {project.logo ? (
+                      <img src={project.logo} alt="" className={styles.projectLogo} />
+                    ) : (
+                      <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
+                    )}
                     <span className={styles.cardTitleBlock}>
                       <span className={styles.renameForm}>
                         <label htmlFor={`project-name-${project.id}`}>项目名称</label>
@@ -129,7 +145,11 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                     aria-label={`打开 ${project.name}`}
                     onClick={() => onOpenProject(project.id)}
                   >
-                  <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
+                  {project.logo ? (
+                    <img src={project.logo} alt="" className={styles.projectLogo} />
+                  ) : (
+                    <span className={styles.projectInitial}>{projectInitial(project.name)}</span>
+                  )}
                   <span className={styles.cardTitleBlock}>
                     <strong>{project.name}</strong>
                     <small>{project.active_narration_version ?? '默认旁白版本'}</small>
@@ -197,6 +217,37 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
         <div className={styles.emptyState}>
           <h2>还没有项目</h2>
           <p>先创建一个项目，再进入项目内的文本库和工作室。</p>
+        </div>
+      )}
+
+      {/* Create project dialog */}
+      {showCreateDialog && (
+        <div className={styles.dialogOverlay} onClick={() => setShowCreateDialog(false)}>
+          <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
+            <h3 className={styles.dialogTitle}>新建项目</h3>
+            <div className={styles.dialogBody}>
+              <ImageUploadZone
+                value={createLogo}
+                onChange={setCreateLogo}
+                size="lg"
+              />
+              <label className={styles.dialogLabel}>
+                项目名称
+                <input
+                  className={styles.dialogInput}
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  placeholder="输入项目名称..."
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+                />
+              </label>
+            </div>
+            <div className={styles.dialogActions}>
+              <button type="button" className={styles.dialogCancelBtn} onClick={() => setShowCreateDialog(false)}>取消</button>
+              <button type="button" className={styles.dialogCreateBtn} onClick={handleCreate}>创建项目</button>
+            </div>
+          </div>
         </div>
       )}
     </section>

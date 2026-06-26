@@ -157,14 +157,19 @@ describe('ProjectHub', () => {
     expect(screen.getByText('DeepSeek 解说')).toBeInTheDocument();
   });
 
-  it('creates a project from the new project card', () => {
+  it('creates a project from the new project card via dialog', () => {
     const onCreateProject = vi.fn();
 
     render(<ProjectHub projects={[]} onOpenProject={vi.fn()} onCreateProject={onCreateProject} onDeleteProject={vi.fn()} onRenameProject={vi.fn()} />);
 
+    // Click "+" card to open dialog
     fireEvent.click(screen.getByRole('button', { name: /新建项目/ }));
+    expect(onCreateProject).not.toHaveBeenCalled();
 
-    expect(onCreateProject).toHaveBeenCalled();
+    // Click "创建项目" in dialog
+    fireEvent.click(screen.getByRole('button', { name: /创建项目/ }));
+
+    expect(onCreateProject).toHaveBeenCalledWith(expect.any(String), null);
     expect(screen.getByText('还没有项目')).toBeInTheDocument();
   });
 });

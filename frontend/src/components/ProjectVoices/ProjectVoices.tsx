@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import type { Role, RoleSnapshot, SegmentEngineParams, VoiceProfile } from '../../types';
-import { ttsApi } from '../../services/api';
+import { ttsApi, voiceApi } from '../../services/api';
+import { fetchVoiceRolePreview } from '../../services/voiceRolePreview';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
 import { isNarratorRole } from '../../services/voiceRoleKind';
+import { VoiceAvatar } from '../ui/VoiceAvatar';
+import { ImageUploadZone } from '../ui/ImageUploadZone';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import styles from './ProjectVoices.module.css';
 
@@ -67,10 +70,6 @@ function engineLabel(role: Role): string {
   return ENGINE_META[role.default_engine as EngineKey]?.label ?? role.default_engine;
 }
 
-function avatarClass(engine: string): string {
-  return ENGINE_META[engine as EngineKey]?.avatarClass ?? styles.avatarDefault;
-}
-
 function isConfigured(role: Role): boolean {
   return !!(role.default_voice || role.default_engine_params.edge_voice || role.default_engine_params.voice_id || role.default_engine_params.mimo_preset_voice);
 }
@@ -96,7 +95,7 @@ function normalizeDraftForSave(draft: RoleSnapshot): RoleSnapshot {
     : draft.default_engine === 'cosyvoice'
       ? params.voice_id ?? ''
       : draft.default_engine === 'mimo_tts'
-        ? params.mimo_clone_voice_id || params.mimo_preset_voice || ''
+        ? params.mimo_clone_voice_id || params.mimo_preset_voice || params.mimo_voice_description || ''
         : params.voice_id || params.voxcpm_voice_description || '';
   return { ...draft, default_voice: defaultVoice, default_engine_params: params };
 }
@@ -122,6 +121,101 @@ function VoiceRoleEditor({
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>(COMMON_EDGE_VOICES);
   const { refreshCounter } = useVoiceRefresh();
+
+  // 音色设计流程状态（MiMo voicedesign / VoxCPM design 共用）
+  const [designPhase, setDesignPhase] = useState<'idle' | 'previewing' | 'previewed' | 'saving'>('idle');
+  const [designAudioBase64, setDesignAudioBase64] = useState('');
+  const [designAudioSrc, setDesignAudioSrc] = useState('');
+  const [designError, setDesignError] = useState('');
+
+  const isDesignMode = (draft.default_engine === 'mimo_tts' && params.mimo_mode === 'voicedesign')
+    || (draft.default_engine === 'voxcpm' && params.voxcpm_mode === 'design');
+
+  const voiceDescription = draft.default_engine === 'mimo_tts'
+    ? (params.mimo_voice_description ?? '')
+    : (params.voxcpm_voice_description ?? '');
+
+  const setVoiceDescription = (desc: string) => {
+    if (draft.default_engine === 'mimo_tts') {
+      setParams({ mimo_voice_description: desc });
+    } else {
+      setParams({ voxcpm_voice_description: desc });
+    }
+  };
+
+  const handleDesignPreview = useCallback(async () => {
+    setDesignPhase('previewing');
+    setDesignError('');
+    try {
+      const result = await fetchVoiceRolePreview(
+        normalizeDraftForSave(draft),
+        '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。',
+      );
+      if (result.audio_base64) {
+        setDesignAudioBase64(result.audio_base64);
+        setDesignAudioSrc(`data:audio/${result.audio_format || 'wav'};base64,${result.audio_base64}`);
+        setDesignPhase('previewed');
+      } else if (result.audio_url) {
+        setDesignAudioBase64('');
+        setDesignAudioSrc(result.audio_url);
+        setDesignPhase('previewed');
+      } else {
+        setDesignError('未返回音频数据');
+        setDesignPhase('idle');
+      }
+    } catch (err) {
+      setDesignError(err instanceof Error ? err.message : '试听失败');
+      setDesignPhase('idle');
+    }
+  }, [draft]);
+
+  const handleDesignConfirmSave = useCallback(async () => {
+    if (!designAudioBase64 && !designAudioSrc) {
+      setDesignError('没有可保存的音频，请先试听');
+      return;
+    }
+    setDesignPhase('saving');
+    setDesignError('');
+    try {
+      // 如果只有 audio_url 没有 audio_base64，先获取并转换
+      let audioBase64 = designAudioBase64;
+      if (!audioBase64 && designAudioSrc) {
+        const resp = await fetch(designAudioSrc);
+        const blob = await resp.blob();
+        const reader = new FileReader();
+        audioBase64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1] || '');
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+      if (!audioBase64) {
+        setDesignError('无法获取音频数据');
+        setDesignPhase('previewed');
+        return;
+      }
+      const engine = draft.default_engine === 'mimo_tts' ? 'mimo' : 'voxcpm';
+      const profile = await voiceApi.createFromDesign({
+        audio_base64: audioBase64,
+        engine,
+        name: draft.name,
+        description: voiceDescription,
+      });
+      // 设计完成 → 自动切换为 voiceclone 模式，绑定新声音
+      const updatedParams: SegmentEngineParams = draft.default_engine === 'mimo_tts'
+        ? { ...params, engine: 'mimo_tts', mimo_mode: 'voiceclone', mimo_clone_voice_id: profile.id }
+        : { ...params, engine: 'voxcpm', voxcpm_mode: 'clone', voice_id: profile.id };
+      onChange({ ...draft, default_engine_params: updatedParams });
+      setDesignPhase('idle');
+      setDesignAudioBase64('');
+    } catch (err) {
+      setDesignError(err instanceof Error ? err.message : '保存失败');
+      setDesignPhase('previewed');
+    }
+  }, [draft, designAudioBase64, voiceDescription, params, onChange]);
 
   useEffect(() => {
     ttsApi.getVoices().then(setVoices).catch(() => {});
@@ -172,15 +266,24 @@ function VoiceRoleEditor({
         <div className={styles.editorMain}>
           <section className={styles.configCard}>
             <h4>Role Identity</h4>
-            <label>角色名
-              <input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
-            </label>
-            <label>角色类型
-              <select value={draft.description ?? 'Cast'} onChange={(event) => onChange({ ...draft, description: event.target.value })}>
-                <option value="Narrator">Narrator</option>
-                <option value="Cast">Cast</option>
-              </select>
-            </label>
+            <div className={styles.identityRow}>
+              <ImageUploadZone
+                value={draft.avatar ?? null}
+                onChange={(dataUrl) => onChange({ ...draft, avatar: dataUrl })}
+                size="md"
+              />
+              <div className={styles.identityFields}>
+                <label>角色名
+                  <input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
+                </label>
+                <label>角色类型
+                  <select value={draft.description ?? 'Cast'} onChange={(event) => onChange({ ...draft, description: event.target.value })}>
+                    <option value="Narrator">Narrator</option>
+                    <option value="Cast">Cast</option>
+                  </select>
+                </label>
+              </div>
+            </div>
           </section>
 
           <section className={styles.configCard}>
@@ -257,19 +360,35 @@ function VoiceRoleEditor({
               {draft.default_engine === 'mimo_tts' && (
                 <>
                   <label className={styles.paramField}>MiMo 模式
-                    <select className={styles.paramSelect} value={params.mimo_mode ?? 'preset'} onChange={(event) => setParams({ mimo_mode: event.target.value as 'preset' | 'voiceclone' })}>
-                      <option value="preset">Preset</option>
-                      <option value="voiceclone">Voice Clone</option>
+                    <select className={styles.paramSelect} value={params.mimo_mode ?? 'preset'} onChange={(event) => setParams({ mimo_mode: event.target.value as 'preset' | 'voiceclone' | 'voicedesign' })}>
+                      <option value="preset">预置音色</option>
+                      <option value="voicedesign">音色设计</option>
+                      <option value="voiceclone">音色复刻</option>
                     </select>
                   </label>
-                  <label className={styles.paramField}>MiMo preset voice
-                    <select className={styles.paramSelect} value={params.mimo_preset_voice ?? ''} onChange={(event) => setParams({ mimo_preset_voice: event.target.value })}>
-                      {MIMO_PRESET_VOICES.map(name => <option key={name} value={name}>{name}</option>)}
-                    </select>
-                  </label>
-                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>MiMo clone voice id
-                    <input className={styles.paramInput} value={params.mimo_clone_voice_id ?? ''} onChange={(event) => setParams({ mimo_clone_voice_id: event.target.value })} />
-                  </label>
+                  {(params.mimo_mode ?? 'preset') === 'preset' && (
+                    <label className={styles.paramField}>MiMo preset voice
+                      <select className={styles.paramSelect} value={params.mimo_preset_voice ?? ''} onChange={(event) => setParams({ mimo_preset_voice: event.target.value })}>
+                        {MIMO_PRESET_VOICES.map(name => <option key={name} value={name}>{name}</option>)}
+                      </select>
+                    </label>
+                  )}
+                  {(params.mimo_mode ?? 'preset') === 'voicedesign' && (
+                    <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>音色描述
+                      <textarea
+                        className={styles.paramTextarea}
+                        value={params.mimo_voice_description ?? ''}
+                        onChange={(event) => setParams({ mimo_voice_description: event.target.value })}
+                        placeholder="描述你想要的音色，如：年轻女性，温柔甜美，语速适中..."
+                        rows={3}
+                      />
+                    </label>
+                  )}
+                  {(params.mimo_mode ?? 'preset') === 'voiceclone' && (
+                    <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>MiMo clone voice id
+                      <input className={styles.paramInput} value={params.mimo_clone_voice_id ?? ''} onChange={(event) => setParams({ mimo_clone_voice_id: event.target.value })} />
+                    </label>
+                  )}
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                     <StyleInstructionPicker value={params.mimo_instruction ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label="风格指令" placeholder="跟随全局风格指令，或选择预设/直接输入..." dense />
                   </div>
@@ -306,7 +425,43 @@ function VoiceRoleEditor({
           <h4>Studio Playback</h4>
           <p>"这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。"</p>
           <div className={styles.waveform} aria-hidden="true"><i /><i /><i /><i /><i /></div>
-          <button type="button" className={styles.ghostButton} onClick={() => onPreview(normalizeDraftForSave(draft), '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。')}>生成试听</button>
+
+          {isDesignMode ? (
+            <div className={styles.designFlow}>
+              {designError && <p className={styles.designError}>{designError}</p>}
+              {designPhase === 'idle' && (
+                <button
+                  type="button"
+                  className={styles.primaryButton}
+                  onClick={handleDesignPreview}
+                  disabled={!voiceDescription.trim()}
+                >
+                  试听音色
+                </button>
+              )}
+              {designPhase === 'previewing' && (
+                <button type="button" className={styles.ghostButton} disabled>生成中...</button>
+              )}
+              {designPhase === 'previewed' && (
+                <>
+                  <p className={styles.designHint}>已试听 · 满意后点击「确认保存」</p>
+                  <div className={styles.designActions}>
+                    <button type="button" className={styles.ghostButton} onClick={handleDesignPreview}>重新生成</button>
+                    <button type="button" className={styles.primaryButton} onClick={handleDesignConfirmSave}>确认保存音色</button>
+                  </div>
+                </>
+              )}
+              {designPhase === 'saving' && (
+                <button type="button" className={styles.ghostButton} disabled>保存中...</button>
+              )}
+              {/* 试听音频播放器（可重复播放） */}
+              {designAudioSrc && designPhase === 'previewed' && (
+                <audio controls className={styles.designAudioPlayer} src={designAudioSrc} />
+              )}
+            </div>
+          ) : (
+            <button type="button" className={styles.ghostButton} onClick={() => onPreview(normalizeDraftForSave(draft), '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。')}>生成试听</button>
+          )}
         </aside>
       </div>
     </section>
@@ -348,9 +503,12 @@ function CharacterCard({
       onClick={onEdit}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(); } }}
     >
-      <div className={`${styles.avatar} ${avatarClass(role.default_engine)}`}>
-        {role.name.slice(0, 1)}
-      </div>
+      <VoiceAvatar
+        avatar={role.avatar}
+        name={role.name}
+        engine={role.default_engine}
+        size={36}
+      />
 
       <div className={styles.cardBody}>
         <strong className={styles.charName}>

@@ -80,4 +80,5 @@ playwright-report/
 .claude/worktrees/
 .agents/skills/
 .trae
-.superpowers
+.superpowersbackend/db.sqlite3
+backend/*.db

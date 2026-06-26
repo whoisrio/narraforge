@@ -79,14 +79,14 @@ export function MiMoTTSPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 加载克隆声音列表 (用于 voiceclone 模式，仅显示 MiMo 声音)
+  // 加载克隆声音列表 (用于 voiceclone 模式，显示所有有音频的声音)
   const loadCloneVoices = useCallback(async () => {
     setCloneVoicesLoading(true);
     try {
       const all = await voiceApi.list();
-      // 仅显示 MiMo 复刻的声音
-      const mimoVoices = all.filter(v => v.is_cloned && v.clone_engine === 'mimo');
-      setCloneVoices(mimoVoices);
+      // 显示所有有音频的声音（不限 clone_engine，支持跨引擎复刻）
+      const availableVoices = all.filter(v => v.audio_url);
+      setCloneVoices(availableVoices);
       if (!selectedCloneVoiceId && mimoVoices.length > 0) {
         onCloneVoiceSelect(mimoVoices[0].id);
       }
@@ -163,7 +163,7 @@ export function MiMoTTSPanel({
             <div className={styles.loading}>加载声音列表...</div>
           ) : cloneVoices.length === 0 ? (
             <div className={styles.empty}>
-              没有 MiMo 复刻的声音，请先在「音色设计」页面使用 MiMo 引擎上传音频
+              没有可用的声音，请先在「音色设计」页面上传或设计音色
             </div>
           ) : (
             <div className={styles.cloneVoiceList}>

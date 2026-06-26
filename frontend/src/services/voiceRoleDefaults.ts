@@ -9,9 +9,9 @@ function hasUsableVoice(params: SegmentEngineParams): boolean {
   if (params.engine === 'edge_tts') return Boolean(params.edge_voice?.trim());
   if (params.engine === 'cosyvoice') return Boolean(params.voice_id?.trim());
   if (params.engine === 'mimo_tts') {
-    return params.mimo_mode === 'voiceclone'
-      ? Boolean(params.mimo_clone_voice_id?.trim())
-      : Boolean(params.mimo_preset_voice?.trim());
+    if (params.mimo_mode === 'voiceclone') return Boolean(params.mimo_clone_voice_id?.trim());
+    if (params.mimo_mode === 'voicedesign') return Boolean(params.mimo_voice_description?.trim());
+    return Boolean(params.mimo_preset_voice?.trim());
   }
   if (params.engine === 'voxcpm') {
     return params.voxcpm_mode === 'clone' || params.voxcpm_mode === 'ultimate'

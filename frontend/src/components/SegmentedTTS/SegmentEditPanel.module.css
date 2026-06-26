@@ -56,6 +56,32 @@
   border-color: var(--color-error);
 }
 
+/* Role info */
+.roleInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(196, 122, 58, 0.06);
+  border: 1px solid rgba(196, 122, 58, 0.12);
+}
+
+.roleInfoName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.roleInfoKind {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 220, 195, 0.48);
+  color: var(--color-primary-dark);
+}
+
 /* Emotion tag */
 .emotionTag {
   font-size: 9px;

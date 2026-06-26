@@ -1,6 +1,7 @@
 import type { Segment, SegmentEngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import { isNarratorRole } from '../../services/voiceRoleKind';
+import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { SegmentRow } from './SegmentRow';
 import { SegmentEditPanel } from './SegmentEditPanel';
 import styles from './SegmentList.module.css';
@@ -109,7 +110,6 @@ export function SegmentList(props: SegmentListProps) {
     <div className={styles.verticalContainer}>
       {segments.map((seg, i) => {
         const isEditing = seg.id === selectedId;
-        const selectedCastRole = castRoles.find(role => role.id === seg.role_id) ?? null;
         return (
           <div key={seg.id} className={styles.segmentGroup}>
             {showKindControls && <div className={styles.roleStrip}>
@@ -128,25 +128,23 @@ export function SegmentList(props: SegmentListProps) {
                 </button>
               )}
               {props.onUpdateRole && (seg.segment_kind ?? 'narration') === 'dialogue' && (
-                <label className={styles.rolePicker}>
-                  <span>Cast</span>
-                  <span className={styles.roleNamePreview} title={selectedCastRole?.name ?? '未选择'}>
-                    {selectedCastRole?.name ?? '未选择'}
-                  </span>
-                  <select
-                    aria-label="选择台词角色"
-                    value={seg.role_id ?? ''}
-                    onChange={(event) => {
-                      const nextRole = castRoles.find(role => role.id === event.target.value) ?? null;
-                      props.onUpdateRole?.(seg.id, nextRole?.id ?? null, nextRole ? toSnapshot(nextRole) : null);
-                    }}
-                  >
-                    <option value="">未选择</option>
-                    {castRoles.map(role => (
-                      <option key={role.id} value={role.id}>{role.name}</option>
-                    ))}
-                  </select>
-                </label>
+                <div className={styles.roleChipBar} role="group" aria-label="选择台词角色">
+                  {castRoles.map(role => {
+                    const isActive = seg.role_id === role.id;
+                    return (
+                      <button
+                        key={role.id}
+                        type="button"
+                        className={`${styles.roleChip} ${isActive ? styles.roleChipActive : ''}`}
+                        onClick={() => props.onUpdateRole?.(seg.id, role.id, toSnapshot(role))}
+                        title={role.name}
+                      >
+                        <VoiceAvatar avatar={role.avatar} name={role.name} engine={role.default_engine} size={20} />
+                        <span className={styles.roleChipName}>{role.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>}
             <SegmentRow {...rowProps(seg, i)} layout="vertical" />
