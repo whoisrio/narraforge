@@ -36,6 +36,8 @@ class SegmentedProject(Base):
     animation_theme = Column(String, nullable=True)
     # 默认关联的 Remotion 项目路径；导出音频优先写入其 public/audio 目录
     remotion_project_path = Column(String, nullable=True)
+    # P7: 源文档 markdown 内容
+    source_document = Column(Text, nullable=True)
     # P3: 默认旁白角色 (全局角色库引用) + 快照 (可复现生成)
     default_narrator_role_id = Column(
         String,

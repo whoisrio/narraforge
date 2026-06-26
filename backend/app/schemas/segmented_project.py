@@ -78,6 +78,8 @@ class ProjectIn(BaseModel):
     # P2 v3: 整体动画主题 (e.g. 'dark-botanical', 'tech-blueprint', 'warm-paper')
     animation_theme: str | None = None
     remotion_project_path: str | None = None
+    # P7: 源文档 markdown 内容
+    source_document: str | None = None
     # P3: 默认旁白角色 (全局角色库引用) + 快照
     default_narrator_role_id: str | None = None
     default_narrator_snapshot: dict[str, Any] | None = None
