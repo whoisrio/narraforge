@@ -72,6 +72,9 @@ export const voiceApi = {
     name: string;
     description?: string;
     avatar?: string;
+    project_id?: string;
+    voice_description?: string;
+    instruction?: string;
   }): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-from-design', params);
     return data;
@@ -83,18 +86,6 @@ export const voiceApi = {
       audio_base64: audioBase64,
       audio_format: audioFormat,
     });
-    return data;
-  },
-
-  /** 从音色设计的预览音频创建 VoiceProfile（MiMo voicedesign / VoxCPM design） */
-  createFromDesign: async (params: {
-    audio_base64: string;
-    engine: 'mimo' | 'voxcpm';
-    name: string;
-    description?: string;
-    avatar?: string;
-  }): Promise<VoiceProfile> => {
-    const { data } = await api.post<VoiceProfile>('/clone/create-from-design', params);
     return data;
   },
 
@@ -121,8 +112,12 @@ export const voiceApi = {
 
 // TTS API
 export const ttsApi = {
-  getVoices: async (): Promise<VoiceProfile[]> => {
-    const { data } = await api.get<{ voices: VoiceProfile[] }>('/tts/voices');
+  getVoices: async (params?: { voice_id?: string; project_id?: string }): Promise<VoiceProfile[]> => {
+    const searchParams = new URLSearchParams();
+    if (params?.voice_id) searchParams.set('voice_id', params.voice_id);
+    if (params?.project_id) searchParams.set('project_id', params.project_id);
+    const qs = searchParams.toString();
+    const { data } = await api.get<{ voices: VoiceProfile[] }>(`/tts/voices${qs ? '?' + qs : ''}`);
     return data.voices;
   },
 

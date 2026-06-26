@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Boolean
+from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -44,5 +44,18 @@ class VoiceProfile(Base):
     # 克隆音色的原始音频和试听音频
     original_audio_path = Column(String, nullable=True)   # 克隆前的原始音频
     cloned_preview_path = Column(String, nullable=True)   # 克隆后的试听音频
+
+    # 项目专属声音：NULL = 全局声音, 非空 = 仅该项目可用
+    project_id = Column(String, ForeignKey("segmented_projects.id", ondelete="SET NULL"), nullable=True)
+
+    # voices_engine: 音色来源与引擎信息
+    # voice_engine_type: 'model_default' | 'clone' | 'design'
+    voice_engine_type = Column(String, nullable=True)
+    # engine_type: 'CosyVoice' | 'Mimo' | 'VoxCpm' | 'EdgeTTS'
+    engine_type = Column(String, nullable=True)
+    # engine_sub_type: 'mimo-clone' | 'mimo-design' | 'voxcpm-clone' | 'voxcpm-ultimate' | 'voxcpm-design' | null
+    engine_sub_type = Column(String, nullable=True)
+    # engine_params: JSON — 引擎特有参数
+    engine_params = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)

@@ -82,3 +82,4 @@ playwright-report/
 .trae
 .superpowersbackend/db.sqlite3
 backend/*.db
+backend/uploads_bak

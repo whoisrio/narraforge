@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.system_config_service import is_frontend_storage
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_result import TTSResultRecord
+from app.api._voice_helpers import voice_to_dict
 from app.services.qwen_tts_service import get_tts_service, QwenTTSService
 from app.core.time_utils import utcnow
 
@@ -399,28 +400,34 @@ async def get_tts_audio(audio_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/voices")
-async def list_available_voices(db: Session = Depends(get_db)):
-    """获取可用的 CosyVoice 克隆声音列表（仅 Qwen 引擎）"""
-    cloned = (
-        db.query(VoiceProfile)
-        .filter(VoiceProfile.is_cloned == True, VoiceProfile.qwen_voice_id.isnot(None))
-        .all()
-    )
-    voices = [
-        {
-            "id": str(v.id),
-            "name": v.name,
-            "description": v.description,
-            "audio_url": v.external_audio_url or v.audio_path,
-            "qwen_voice_id": v.qwen_voice_id,
-            "clone_engine": v.clone_engine,
-            "is_cloned": v.is_cloned,
-            "created_at": v.created_at.isoformat() if v.created_at else None,
-        }
-        for v in cloned
-    ]
+async def list_available_voices(
+    voice_id: Optional[str] = None,
+    project_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """查询已克隆声音。
 
-    return {"voices": voices}
+    - 无参数: 返回全局声音 (project_id IS NULL)
+    - voice_id: 返回指定单个声音
+    - project_id: 返回全局声音 + 该项目专属声音
+    """
+    query = db.query(VoiceProfile).filter(VoiceProfile.is_cloned == True)
+
+    if voice_id:
+        voice = query.filter(VoiceProfile.id == voice_id).first()
+        if not voice:
+            raise HTTPException(status_code=404, detail="Voice not found")
+        return {"voices": [voice_to_dict(voice)]}
+
+    if project_id:
+        query = query.filter(
+            (VoiceProfile.project_id == None) | (VoiceProfile.project_id == project_id)
+        )
+    else:
+        query = query.filter(VoiceProfile.project_id == None)
+
+    voices = query.all()
+    return {"voices": [voice_to_dict(v) for v in voices]}
 
 
 @router.get("/edge-voices")
