@@ -11,6 +11,7 @@ export interface VoiceProfile {
   is_cloned?: boolean;
   cloned_at?: string;
   created_at: string;
+  avatar?: string | null;  // 头像（data URL 或外部 URL）
 }
 
 // TTS Config (model configurations)
@@ -231,10 +232,11 @@ export interface SegmentEngineParams {
   edge_volume?: string;
 
   // MiMo-TTS
-  mimo_mode?: 'preset' | 'voiceclone';
+  mimo_mode?: 'preset' | 'voiceclone' | 'voicedesign';
   mimo_preset_voice?: string;
   mimo_clone_voice_id?: string;
   mimo_instruction?: string;
+  mimo_voice_description?: string;
 
   // VoxCPM
   voxcpm_mode?: 'tts' | 'design' | 'clone' | 'ultimate';
@@ -394,6 +396,8 @@ export interface SegmentedProject {
   schema_version: 2;
   id: string;
   name: string;
+  /** Project logo as data URL or remote URL */
+  logo?: string | null;
   chapters: Chapter[];
   active_chapter_id?: string;
   layout: 'vertical' | 'horizontal';

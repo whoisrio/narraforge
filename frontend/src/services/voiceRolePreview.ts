@@ -38,6 +38,13 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
   }
 
   if (role.default_engine === 'mimo_tts') {
+    if ((params.mimo_mode ?? 'preset') === 'voicedesign') {
+      return mimoTtsApi.synthesizeVoiceDesign({
+        text: sampleText,
+        voice_description: params.mimo_voice_description || '',
+        format,
+      });
+    }
     if ((params.mimo_mode ?? 'preset') === 'voiceclone') {
       return mimoTtsApi.synthesizeVoiceClone({
         text: sampleText,
@@ -102,4 +109,15 @@ export async function playVoiceRolePreview(role: RoleSnapshot, sampleText: strin
   const audio = new Audio(audioSource);
   await audio.play();
   return result;
+}
+
+/**
+ * 只合成不播放，返回 TTSResult。
+ * 用于音色设计流程：试听后捕获 audio_base64，再调用 create-from-design 持久化。
+ */
+export async function fetchVoiceRolePreview(
+  role: RoleSnapshot,
+  sampleText: string,
+): Promise<TTSResult> {
+  return synthesizeVoiceRolePreview(role, sampleText);
 }
