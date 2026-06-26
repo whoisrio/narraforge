@@ -540,6 +540,7 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
     }
 
 
+
 @router.get("/list")
 def list_voices(db: Session = Depends(get_db)):
     """获取声音列表"""
