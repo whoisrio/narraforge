@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import MDEditor from '@uiw/react-md-editor';
 import styles from './SourceDocumentView.module.css';
 
@@ -14,6 +14,10 @@ function countChars(text: string): number {
 
 export function SourceDocumentView({ content, onChange, onCompare }: SourceDocumentViewProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    return () => clearTimeout(timerRef.current);
+  }, []);
 
   const handleChange = useCallback((value: string | undefined) => {
     const text = value ?? '';
