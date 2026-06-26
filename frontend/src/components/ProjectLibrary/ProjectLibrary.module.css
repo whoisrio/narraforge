@@ -1,5 +1,18 @@
 .root {
-  min-height: 620px;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-height, 60px) - 80px);
+  min-height: 500px;
+}
+
+.libraryHeader {
+  flex-shrink: 0;
+}
+
+.scrollContent {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .emptyRoot,

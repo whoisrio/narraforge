@@ -393,7 +393,7 @@ export function ProjectLibrary({
     <section className={styles.root}>
       <header className={styles.libraryHeader}>
         <div>
-          {activeTab === 'source' ? (
+          {/* {activeTab === 'source' ? (
             <input
               className={styles.sourceTitleInput}
               value={projectName ?? ''}
@@ -402,7 +402,7 @@ export function ProjectLibrary({
             />
           ) : (
             <h2>文本库</h2>
-          )}
+          )} */}
           <div className={styles.tabBar}>
             <button
               type="button"
@@ -446,24 +446,26 @@ export function ProjectLibrary({
         </div>
       </header>
 
-      {comparing ? (
-        <CompareView
-          sourceDocument={sourceDocument ?? ''}
-          narrationText={chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n')}
-          onBack={() => setComparing(false)}
-        />
-      ) : activeTab === 'source' ? (
-        <SourceDocumentView
-          content={sourceDocument ?? ''}
-          onChange={(text) => onUpdateSourceDocument?.(text)}
-          onCompare={() => setComparing(true)}
-          onBack={() => setActiveTab('narration')}
-          viewMode={sourceViewMode}
-          onViewModeChange={setSourceViewMode}
-        />
-      ) : (
-        narrationContent
-      )}
+      <div className={styles.scrollContent}>
+        {comparing ? (
+          <CompareView
+            sourceDocument={sourceDocument ?? ''}
+            narrationText={chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n')}
+            onBack={() => setComparing(false)}
+          />
+        ) : activeTab === 'source' ? (
+          <SourceDocumentView
+            content={sourceDocument ?? ''}
+            onChange={(text) => onUpdateSourceDocument?.(text)}
+            onCompare={() => setComparing(true)}
+            onBack={() => setActiveTab('narration')}
+            viewMode={sourceViewMode}
+            onViewModeChange={setSourceViewMode}
+          />
+        ) : (
+          narrationContent
+        )}
+      </div>
     </section>
   );
 }
