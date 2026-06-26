@@ -1,14 +1,21 @@
 import { useMemo, useState } from 'react';
+import Markdown from 'react-markdown';
 import type { Chapter } from '../../types';
+import { CompareView } from './CompareView';
+import { SourceDocumentView } from './SourceDocumentView';
 import styles from './ProjectLibrary.module.css';
 
 interface ProjectLibraryProps {
   chapters: Chapter[];
   activeChapterId?: string;
+  projectName?: string;
+  sourceDocument?: string | null;
   onSelectChapter: (id: string) => void;
   onRenameChapter: (id: string, name: string) => void;
+  onRenameProject?: (name: string) => void;
   onUpdateChapterText: (id: string, text: string) => void;
   onUpdateChapterDesignTitle: (id: string, designTitle: string) => void;
+  onUpdateSourceDocument?: (text: string) => void;
   onAddChapter: (name?: string) => void;
   onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
@@ -16,6 +23,7 @@ interface ProjectLibraryProps {
 }
 
 type LibraryMode = 'overview' | 'chapter' | 'fulltext';
+type LibraryTab = 'source' | 'narration';
 
 function chapterText(chapter: Chapter): string {
   return chapter.original_text ?? chapter.segments.map(segment => segment.text).join('\n');
@@ -61,16 +69,24 @@ function navigateChapter(chapters: Chapter[], currentId: string, direction: 'pre
 export function ProjectLibrary({
   chapters,
   activeChapterId,
+  sourceDocument,
   onSelectChapter,
   onRenameChapter,
   onUpdateChapterText,
   onUpdateChapterDesignTitle,
+  onUpdateSourceDocument,
   onAddChapter,
   onDeleteChapter,
   onEnterStudio,
   onModeChange,
+  projectName,
+  onRenameProject,
 }: ProjectLibraryProps) {
   const [mode, setMode] = useState<LibraryMode>('overview');
+  const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
+  const [comparing, setComparing] = useState(false);
+  const [sourceViewMode, setSourceViewMode] = useState<'edit' | 'view'>('edit');
+  const [showPreview, setShowPreview] = useState(false);
 
   const setLibraryMode = (next: LibraryMode) => {
     setMode(next);
@@ -156,13 +172,19 @@ export function ProjectLibrary({
           />
         </label>
 
-        <textarea
-          className={styles.manuscriptEditor}
-          aria-label="章节全文"
-          value={text}
-          onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
-          placeholder="在这里维护本章完整旁白稿。进入工作室后再切分为语音段落。"
-        />
+        {showPreview ? (
+          <div className={styles.markdownPreview}>
+            <Markdown>{text || '*尚未填写章节全文。*'}</Markdown>
+          </div>
+        ) : (
+          <textarea
+            className={styles.manuscriptEditor}
+            aria-label="章节全文"
+            value={text}
+            onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
+            placeholder="在这里维护本章完整旁白稿。进入工作室后再切分为语音段落。"
+          />
+        )}
 
         <div className={styles.bottomBar}>
           <button
@@ -179,6 +201,13 @@ export function ProjectLibrary({
             onClick={() => setLibraryMode('fulltext')}
           >
             查看全文
+          </button>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => setShowPreview(!showPreview)}
+          >
+            {showPreview ? '编辑' : '预览'}
           </button>
           <button
             type="button"
@@ -224,13 +253,9 @@ export function ProjectLibrary({
           </div>
         </header>
 
-        <textarea
-          className={styles.manuscriptEditor}
-          aria-label="文本库全文"
-          value={allText}
-          readOnly
-          placeholder="尚未填写任何章节全文。"
-        />
+        <div className={styles.markdownPreview}>
+          <Markdown>{allText || '*尚未填写任何章节全文。*'}</Markdown>
+        </div>
 
         <div className={styles.bottomBar}>
           <button
@@ -258,23 +283,8 @@ export function ProjectLibrary({
     );
   }
 
-  return (
-    <section className={styles.root}>
-      <header className={styles.libraryHeader}>
-        <div>
-          <span className={styles.kicker}>Library</span>
-          <h2>Chapter Library</h2>
-          <p>管理每个章节的整体旁白文本。打开文本进行沉浸式编辑，或直接进入工作室合成。</p>
-        </div>
-        <div className={styles.headerActions}>
-          <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
-          <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
-          <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
-          <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
-          <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
-        </div>
-      </header>
-
+  const narrationContent = (
+    <>
       <div className={styles.filterRow}>
         <span className={styles.filterChipActive}>Active <strong>{chapters.length}</strong></span>
         <span className={styles.filterChip}>Drafts</span>
@@ -375,6 +385,86 @@ export function ProjectLibrary({
             </article>
           );
         })}
+      </div>
+    </>
+  );
+
+  return (
+    <section className={styles.root}>
+      <header className={styles.libraryHeader}>
+        <div>
+          {/* {activeTab === 'source' ? (
+            <input
+              className={styles.sourceTitleInput}
+              value={projectName ?? ''}
+              onChange={(e) => onRenameProject?.(e.target.value)}
+              placeholder="源文档标题"
+            />
+          ) : (
+            <h2>文本库</h2>
+          )} */}
+          <div className={styles.tabBar}>
+            <button
+              type="button"
+              className={`${styles.tab} ${activeTab === 'source' ? styles.tabActive : ''}`}
+              onClick={() => { setActiveTab('source'); setComparing(false); }}
+            >
+              源文档
+            </button>
+            <button
+              type="button"
+              className={`${styles.tab} ${activeTab === 'narration' ? styles.tabActive : ''}`}
+              onClick={() => { setActiveTab('narration'); setComparing(false); }}
+            >
+              旁白文档
+            </button>
+          </div>
+        </div>
+        <div className={styles.headerActions}>
+          {activeTab === 'source' && !comparing && (
+            <>
+              <button
+                type="button"
+                className={styles.ghostButton}
+                onClick={() => setSourceViewMode(sourceViewMode === 'edit' ? 'view' : 'edit')}
+              >
+                {sourceViewMode === 'edit' ? '查看' : '编辑'}
+              </button>
+              <button type="button" className={styles.ghostButton} onClick={() => setComparing(true)}>对比查看</button>
+              <button type="button" className={styles.ghostButton} onClick={() => setActiveTab('narration')}>← 返回文档库</button>
+            </>
+          )}
+          {activeTab === 'narration' && !comparing && (
+            <>
+              <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
+              <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
+              <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
+              <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
+              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className={styles.scrollContent}>
+        {comparing ? (
+          <CompareView
+            sourceDocument={sourceDocument ?? ''}
+            narrationText={chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n')}
+            onBack={() => setComparing(false)}
+          />
+        ) : activeTab === 'source' ? (
+          <SourceDocumentView
+            content={sourceDocument ?? ''}
+            onChange={(text) => onUpdateSourceDocument?.(text)}
+            onCompare={() => setComparing(true)}
+            onBack={() => setActiveTab('narration')}
+            viewMode={sourceViewMode}
+            onViewModeChange={setSourceViewMode}
+          />
+        ) : (
+          narrationContent
+        )}
       </div>
     </section>
   );

@@ -20,7 +20,7 @@ interface ProjectVoicesProps {
   onSetDefaultNarrator: (roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
   onCreateDefaultNarrator?: () => void;
   onCreateCast?: () => void;
-  onSaveRole?: (role: RoleSnapshot) => void;
+  onSaveRole?: (role: RoleSnapshot) => void | Promise<void>;
   onDeleteRole?: (roleId: string) => void;
   onPreviewRole: (role: RoleSnapshot, sampleText: string) => void;
   onManageRoles: () => void;
@@ -132,12 +132,14 @@ function VoiceRoleEditor({
   onCancel,
   onSave,
   onPreview,
+  saving = false,
 }: {
   draft: RoleSnapshot;
   onChange: (draft: RoleSnapshot) => void;
   onCancel: () => void;
   onSave: (draft: RoleSnapshot) => void;
   onPreview: (draft: RoleSnapshot, sampleText: string) => void;
+  saving?: boolean;
 }) {
   const params = draft.default_engine_params;
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
@@ -312,7 +314,7 @@ function VoiceRoleEditor({
         </div>
         <div className={styles.editorActions}>
           <button type="button" className={styles.ghostButton} onClick={onCancel}>取消</button>
-          <button type="button" className={styles.primaryButton} onClick={() => onSave(normalizeDraftForSave(draft))}>保存角色</button>
+          <button type="button" className={styles.primaryButton} disabled={saving} onClick={() => onSave(normalizeDraftForSave(draft))}>{saving ? '保存中...' : '保存角色'}</button>
         </div>
       </div>
 
@@ -718,9 +720,19 @@ export function ProjectVoices({
   const narratorRoles = filterByEngine(roles.filter(r => isNarratorRole(r, defaultNarratorRoleId)));
   const castRoles = filterByEngine(roles.filter(r => !isNarratorRole(r, defaultNarratorRoleId)));
 
-  const saveEditingRole = (draft: RoleSnapshot) => {
-    onSaveRole?.(draft);
-    setEditingRole(null);
+  const [saving, setSaving] = useState(false);
+
+  const saveEditingRole = async (draft: RoleSnapshot) => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await onSaveRole?.(draft);
+      setEditingRole(null);
+    } catch {
+      // onSaveRole handles its own error toasts; keep editor open
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -756,6 +768,7 @@ export function ProjectVoices({
           onCancel={() => setEditingRole(null)}
           onSave={saveEditingRole}
           onPreview={onPreviewRole}
+          saving={saving}
         />
       )}
 

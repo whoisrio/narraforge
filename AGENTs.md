@@ -17,6 +17,9 @@ NarraForge is an AI narration workshop that integrates voice cloning, text-to-sp
 | Runbook | `docs/RUNBOOK.md` | Deployment and operations guide. |
 | Contributing guide | `docs/CONTRIBUTING.md` | Development conventions and contribution guidelines. |
 | design guide | `docs/design/stitch_narraforge_story_global_prj/DESIGN.md` | UI design guidelines. |
+| Test MAP | `backend/tests/TEST_MAP.md` | Test case and function map doc |
+
+**KEEP these documents updated by every PR**!
 
 ## Commands
 

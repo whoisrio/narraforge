@@ -206,6 +206,7 @@ export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
   | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path' | 'description' | 'project_type' | 'default_language' | 'export_directory' | 'export_naming_template'>> }
+  | { type: 'SET_SOURCE_DOCUMENT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
   | { type: 'ADD_CHAPTER'; name: string }
@@ -287,6 +288,8 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: { ...p, name: action.name, updated_at: new Date().toISOString() } };
     case 'SET_PROJECT_META':
       return { project: { ...p, ...action.meta, updated_at: new Date().toISOString() } };
+    case 'SET_SOURCE_DOCUMENT':
+      return { project: { ...p, source_document: action.text, updated_at: new Date().toISOString() } };
     case 'SET_LAYOUT':
       return { project: { ...p, layout: action.layout, updated_at: new Date().toISOString() } };
 
