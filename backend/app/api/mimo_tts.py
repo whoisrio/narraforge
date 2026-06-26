@@ -15,6 +15,7 @@ import uuid
 import os
 import base64
 import logging
+import tempfile
 from pathlib import Path
 
 from app.core.database import get_db
@@ -346,6 +347,7 @@ def synthesize_mimo_internal(
     mimo_mode: str = "preset",
     preset_voice: str | None = None,
     clone_voice_id: str | None = None,
+    voice_description: str | None = None,
     instruction: str = "",
     db: Session | None = None,
 ) -> tuple[bytes, str]:
@@ -354,6 +356,16 @@ def synthesize_mimo_internal(
 
     async def _run() -> bytes:
         service = await get_mimo_tts_service(db)
+
+        if mimo_mode == "voicedesign":
+            # 文本描述设计音色（mimo-v2.5-tts-voicedesign）
+            desc = voice_description or instruction or "默认音色"
+            return await service.synthesize_voice_design(
+                text=text,
+                voice_description=desc,
+                format="wav",
+            )
+
         if mimo_mode == "voiceclone":
             if not clone_voice_id:
                 raise ValueError("MiMo voiceclone mode requires clone_voice_id")
@@ -364,15 +376,37 @@ def synthesize_mimo_internal(
             voice = db.query(VoiceProfile).filter(VoiceProfile.id == clone_voice_id).first()
             if not voice:
                 raise ValueError("声音记录不存在")
+
+            # 优先读本地文件，回退到 external_audio_url
             audio_path = getattr(voice, "audio_path", None)
             if not audio_path or not os.path.exists(str(audio_path)):
+                ext_url = getattr(voice, "external_audio_url", None)
+                if ext_url:
+                    import urllib.request as url_req
+                    tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
+                    try:
+                        url_req.urlretrieve(ext_url, tmp.name)
+                        return await service.clone_from_file(
+                            text=text,
+                            audio_path=tmp.name,
+                            instruction=instruction,
+                            format="wav",
+                        )
+                    finally:
+                        try:
+                            os.unlink(tmp.name)
+                        except OSError:
+                            pass
                 raise ValueError("音频文件不存在")
+
             return await service.clone_from_file(
                 text=text,
                 audio_path=str(audio_path),
                 instruction=instruction,
                 format="wav",
             )
+
+        # 预置音色模式
         return await service.synthesize_preset(
             text=text,
             voice=preset_voice or "冰糖",

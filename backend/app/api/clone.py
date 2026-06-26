@@ -76,6 +76,7 @@ class RegisterRequest(BaseModel):
     voice_id: str
     name: str = None
     role: str = "custom"
+    avatar: str | None = None
 
 
 class UploadFromUrlRequest(BaseModel):
@@ -88,6 +89,15 @@ class UploadFromUrlRequest(BaseModel):
 class UpdateDescriptionRequest(BaseModel):
     description: str = ""
     prompt_text: Optional[str] = None
+
+
+class DesignVoiceRequest(BaseModel):
+    """从音色设计的预览音频创建 VoiceProfile"""
+    audio_base64: str
+    engine: str  # 'mimo' | 'voxcpm'
+    name: str
+    description: str = ""
+    avatar: str | None = None  # data URL 或外部 URL
 
 
 # ============ Routes ============
@@ -311,6 +321,8 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
 
         if request.name:
             voice.name = request.name
+        if request.avatar:
+            voice.avatar = request.avatar
 
         db.commit()
         db.refresh(voice)
@@ -323,6 +335,7 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
             "is_cloned": voice.is_cloned,
             "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
             "audio_url": f"/api/clone/audio/{voice.id}",
+            "avatar": voice.avatar,
         }
 
     except Exception as e:
@@ -354,6 +367,8 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
 
         if request.name:
             voice.name = request.name
+        if request.avatar:
+            voice.avatar = request.avatar
 
         db.commit()
         db.refresh(voice)
@@ -365,6 +380,7 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
             "is_cloned": voice.is_cloned,
             "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
             "audio_url": f"/api/clone/audio/{voice.id}",
+            "avatar": voice.avatar,
         }
 
     except Exception as e:
@@ -395,6 +411,8 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
 
         if request.name:
             voice.name = request.name
+        if request.avatar:
+            voice.avatar = request.avatar
 
         db.commit()
         db.refresh(voice)
@@ -406,11 +424,71 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
             "is_cloned": voice.is_cloned,
             "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
             "audio_url": f"/api/clone/audio/{voice.id}",
+            "avatar": voice.avatar,
         }
 
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"VoxCPM voice clone failed: {str(e)}")
+
+
+@router.post("/create-from-design")
+async def create_voice_from_design(request: DesignVoiceRequest, db: Session = Depends(get_db)):
+    """
+    从音色设计的预览音频创建 VoiceProfile。
+
+    用于 MiMo voicedesign 和 VoxCPM design 流程：
+    用户描述音色 → 试听 → 满意后调用此接口持久化音频为 VoiceProfile。
+    之后可通过 voiceclone 模式使用该声音。
+    """
+    import base64
+
+    try:
+        audio_bytes = base64.b64decode(request.audio_base64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 audio data")
+
+    if len(audio_bytes) < 100:
+        raise HTTPException(status_code=400, detail="Audio data too small")
+
+    # 根据引擎选择格式
+    audio_ext = "wav" if request.engine == "voxcpm" else "mp3"
+    voice_id = str(uuid.uuid4())
+    audio_path = str(settings.clone_voices_dir / f"design_{voice_id}.{audio_ext}")
+
+    # 保存音频文件
+    settings.clone_voices_dir.mkdir(parents=True, exist_ok=True)
+    with open(audio_path, "wb") as f:
+        f.write(audio_bytes)
+
+    # 创建 VoiceProfile 记录
+    voice = VoiceProfile(
+        id=voice_id,
+        name=request.name,
+        audio_path=audio_path,
+        description=request.description,
+        clone_engine=request.engine,
+        is_cloned=True,
+        cloned_at=utcnow(),
+        avatar=request.avatar,
+    )
+    db.add(voice)
+    db.commit()
+    db.refresh(voice)
+
+    logger.info(f"Created VoiceProfile from design: id={voice_id}, engine={request.engine}, name={request.name}")
+
+    return {
+        "id": voice.id,
+        "name": voice.name,
+        "audio_url": f"/api/clone/audio/{voice.id}",
+        "description": voice.description,
+        "clone_engine": voice.clone_engine,
+        "is_cloned": voice.is_cloned,
+        "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
+        "created_at": voice.created_at.isoformat(),
+        "avatar": voice.avatar,
+    }
 
 
 @router.get("/list")
@@ -430,6 +508,7 @@ def list_voices(db: Session = Depends(get_db)):
             "cloned_at": v.cloned_at.isoformat() if v.cloned_at else None,
             "created_at": v.created_at.isoformat(),
             "prompt_text": v.prompt_text,
+            "avatar": v.avatar,
         }
         for v in voices
     ]

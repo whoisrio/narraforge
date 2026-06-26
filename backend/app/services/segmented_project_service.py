@@ -518,6 +518,7 @@ def synthesize_with_engine(
             mimo_mode=params.get("mimo_mode", "preset"),
             preset_voice=params.get("mimo_preset_voice"),
             clone_voice_id=params.get("mimo_clone_voice_id"),
+            voice_description=params.get("mimo_voice_description"),
             instruction=params.get("mimo_instruction", ""),
             db=db,
         )
