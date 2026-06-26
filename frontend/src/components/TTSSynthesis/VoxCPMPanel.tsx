@@ -1,11 +1,12 @@
 /**
  * VoxCPM 本地 GPU TTS 面板组件
  *
- * 支持四种模式：
- * 1. TTS — 纯文本合成
- * 2. Voice Design — 文本描述生成全新音色
- * 3. Clone — 参考音频克隆 + 可选风格控制
- * 4. Ultimate Clone — 参考音频 + 转录文本最高保真克隆
+ * 支持两种模式：
+ * 1. Clone — 参考音频克隆 + 可选风格控制
+ * 2. Ultimate Clone — 参考音频 + 转录文本最高保真克隆
+ *
+ * 注：TTS（纯文本合成）和 Voice Design（音色设计）不在工作室提供。
+ * 音色设计仅在角色语音设计（VoiceRoleEditor）中可用。
  */
 import { useState, useEffect, useCallback } from 'react';
 import { voxcpmApi, voiceApi } from '../../services/api';
@@ -13,15 +14,12 @@ import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { VoxCPMStatus, VoiceProfile as CloneVoice } from '../../types';
 import styles from './VoxCPMPanel.module.css';
 
-/** VoxCPM 子模式 */
-export type VoxCPMMode = 'tts' | 'design' | 'clone' | 'ultimate';
+/** VoxCPM 子模式（工作室只保留 clone 和 ultimate） */
+export type VoxCPMMode = 'clone' | 'ultimate';
 
 interface VoxCPMPanelProps {
   mode: VoxCPMMode;
   onModeChange: (mode: VoxCPMMode) => void;
-  /** Voice Design 音色描述 */
-  voiceDescription: string;
-  onVoiceDescriptionChange: (desc: string) => void;
   /** Clone 风格控制 */
   styleControl: string;
   onStyleControlChange: (style: string) => void;
@@ -39,8 +37,6 @@ interface VoxCPMPanelProps {
 }
 
 const MODE_TABS: { value: VoxCPMMode; label: string; icon: string }[] = [
-  { value: 'tts', label: '文本合成', icon: '🗣️' },
-  { value: 'design', label: '音色设计', icon: '🎨' },
   { value: 'clone', label: '声音克隆', icon: '🎛️' },
   { value: 'ultimate', label: '极致克隆', icon: '🎙️' },
 ];
@@ -57,8 +53,6 @@ function getApiErrorMessage(error: unknown, fallback: string) {
 export function VoxCPMPanel({
   mode,
   onModeChange,
-  voiceDescription,
-  onVoiceDescriptionChange,
   styleControl,
   onStyleControlChange,
   promptText,
@@ -102,9 +96,8 @@ export function VoxCPMPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 加载声音列表（clone/ultimate 模式）
+  // 加载声音列表（clone/ultimate 模式共用）
   useEffect(() => {
-    if (mode !== 'clone' && mode !== 'ultimate') return;
     const loadVoices = async () => {
       setVoicesLoading(true);
       try {
@@ -209,27 +202,6 @@ export function VoxCPMPanel({
 
       {/* 模式内容 */}
       <div className={styles.modeContent}>
-        {/* TTS 模式 — 无额外字段，使用页面主文本框 */}
-        {mode === 'tts' && (
-          <div className={styles.hint} style={{ padding: '8px 0', color: 'var(--text-secondary, #6b7280)' }}>
-            在下方文本框输入要合成的文字
-          </div>
-        )}
-
-        {/* Voice Design 模式 */}
-        {mode === 'design' && (
-          <div className={styles.fieldGroup}>
-            <label className={styles.label}>音色描述</label>
-            <textarea
-              className={styles.textarea}
-              value={voiceDescription}
-              onChange={e => onVoiceDescriptionChange(e.target.value)}
-              placeholder="描述你想要的音色，如：年轻女性，温柔甜美，语速适中..."
-              rows={3}
-            />
-          </div>
-        )}
-
         {/* Clone 模式 */}
         {mode === 'clone' && (
           <>
