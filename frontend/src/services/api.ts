@@ -77,6 +77,15 @@ export const voiceApi = {
     return data;
   },
 
+  /** 保存克隆音色的试听音频 */
+  savePreviewAudio: async (voiceId: string, audioBase64: string, audioFormat: string = 'wav'): Promise<{ id: string; cloned_preview_path: string }> => {
+    const { data } = await api.patch(`/clone/${voiceId}/preview-audio`, {
+      audio_base64: audioBase64,
+      audio_format: audioFormat,
+    });
+    return data;
+  },
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/clone/${id}`);
   },

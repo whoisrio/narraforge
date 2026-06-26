@@ -3,6 +3,8 @@ export interface VoiceProfile {
   id: string;
   name: string;
   audio_url: string;
+  original_audio_url?: string;   // 克隆前的原始音频 URL
+  cloned_preview_url?: string;   // 克隆后的试听音频 URL
   description?: string;  // 用户自定义的声音描述
   prompt_text?: string;  // 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
   qwen_voice_id?: string;

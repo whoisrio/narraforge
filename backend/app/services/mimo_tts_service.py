@@ -98,16 +98,16 @@ class MiMoTTSService:
         self,
         text: str,
         voice_description: str,
-        optimize_text_preview: bool = True,
+        optimize_text_preview: bool = False,
         format: str = "wav",
     ) -> bytes:
         """
         使用文本描述设计音色进行语音合成（mimo-v2.5-tts-voicedesign）
 
         Parameters:
-            text: 待合成的文本（放在 assistant 消息中，如果 optimize_text_preview=True 可省略）
+            text: 待合成的文本（放在 assistant 消息中）
             voice_description: 音色描述文本（放在 user 消息中）
-            optimize_text_preview: 是否智能润色目标播报文本
+            optimize_text_preview: 是否智能润色目标播报文本（默认 False，严格使用传入文本）
             format: 输出格式
 
         Returns:

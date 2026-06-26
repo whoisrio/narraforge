@@ -34,6 +34,8 @@ interface VoxCPMPanelProps {
   onCfgValueChange: (v: number) => void;
   inferenceTimesteps: number;
   onInferenceTimestepsChange: (v: number) => void;
+  /** 允许的克隆引擎类型（默认 ['voxcpm']） */
+  allowedCloneEngines?: string[];
 }
 
 const MODE_TABS: { value: VoxCPMMode; label: string; icon: string }[] = [
@@ -63,6 +65,7 @@ export function VoxCPMPanel({
   onCfgValueChange,
   inferenceTimesteps,
   onInferenceTimestepsChange,
+  allowedCloneEngines = ['voxcpm'],
 }: VoxCPMPanelProps) {
   // ---- 模型状态 ----
   const [status, setStatus] = useState<VoxCPMStatus | null>(null);
@@ -96,15 +99,14 @@ export function VoxCPMPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 加载声音列表（clone/ultimate 模式共用）
+  // 加载声音列表（clone/ultimate 模式共用，按 allowedCloneEngines 过滤）
   useEffect(() => {
     const loadVoices = async () => {
       setVoicesLoading(true);
       try {
         const list = await voiceApi.list();
-        console.log('[VoxCPMPanel] loaded voices:', list.length, list.map(v => ({ id: v.id.slice(0,8), name: v.name, clone_engine: v.clone_engine, hasAudio: !!v.audio_url })));
-        // 显示所有已上传的声音（不限 clone_engine，因为 VoxCPM 可以用任何音频作为参考）
-        setVoices(list.filter(v => v.audio_url));
+        // 按 allowedCloneEngines 过滤
+        setVoices(list.filter(v => v.audio_url && allowedCloneEngines.includes(v.clone_engine || '')));
       } catch (err) {
         console.error('加载声音列表失败:', err);
       } finally {
@@ -112,7 +114,7 @@ export function VoxCPMPanel({
       }
     };
     loadVoices();
-  }, [mode]);
+  }, [mode, allowedCloneEngines]);
 
   // 选中声音变化时，自动加载其 prompt_text（ultimate 模式）
   useEffect(() => {

@@ -41,4 +41,8 @@ class VoiceProfile(Base):
     # 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
     prompt_text = Column(String, nullable=True)
 
+    # 克隆音色的原始音频和试听音频
+    original_audio_path = Column(String, nullable=True)   # 克隆前的原始音频
+    cloned_preview_path = Column(String, nullable=True)   # 克隆后的试听音频
+
     created_at = Column(DateTime, default=utcnow)
