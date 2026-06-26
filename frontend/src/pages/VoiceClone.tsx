@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AudioRecorder } from '../components/VoiceClone/AudioRecorder';
 import { AudioUploader } from '../components/VoiceClone/AudioUploader';
 import { AudioPreview } from '../components/VoiceClone/AudioPreview';
 import { UrlInput } from '../components/VoiceClone/UrlInput';
-import { VoiceList } from '../components/VoiceClone/VoiceList';
+import { ImageUploadZone } from '../components/ui/ImageUploadZone';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
+import { voiceApi } from '../services/api';
+import { VoiceAvatar } from '../components/ui/VoiceAvatar';
 import { t } from '../i18n';
 import type { TTSResult, VoiceProfile } from '../types';
 import styles from './VoiceClone.module.css';
@@ -13,371 +15,483 @@ import styles from './VoiceClone.module.css';
 /** 克隆引擎类型 */
 type CloneEngine = 'qwen' | 'mimo' | 'voxcpm';
 
-/** 克隆流程的三个步骤 */
+/** 克隆流程步骤 */
 type CloneStep = 'choose-method' | 'input' | 'preview-clone';
 
-/** 用户选择的输入方式 */
+/** 输入方式 */
 type InputMethod = 'record' | 'upload' | 'url' | null;
 
-/** 顶层功能区 */
-type Section = 'clone' | 'design';
+/** 活跃面板 */
+type ActivePanel = null | 'design' | 'clone';
+
+/** 设计流程阶段 */
+type DesignPhase = 'idle' | 'previewing' | 'previewed' | 'saving';
+
+/** 引擎标签 */
+function engineLabel(profile: VoiceProfile): string {
+  if (profile.clone_engine === 'mimo') return 'MiMo';
+  if (profile.clone_engine === 'voxcpm') return 'VoxCPM';
+  if (profile.clone_engine === 'qwen') return 'CosyVoice';
+  return 'Unknown';
+}
 
 export function VoiceClone() {
-  const [section, setSection] = useState<Section>('clone');
-  const [step, setStep] = useState<CloneStep>('choose-method');
-  const [method, setMethod] = useState<InputMethod>(null);
-  const [engine, setEngine] = useState<CloneEngine>('qwen');
-  const [designEngine, setDesignEngine] = useState<CloneEngine>('mimo');
-  const [designBrief, setDesignBrief] = useState('温暖、清晰、有纪录片感的中文旁白音色');
-  const [designIntensity, setDesignIntensity] = useState(72);
-  const [designStability, setDesignStability] = useState(68);
-  const [designPreview, setDesignPreview] = useState<TTSResult | null>(null);
-  const [designProfiles, setDesignProfiles] = useState<VoiceProfile[]>([]);
-  const [designStatus, setDesignStatus] = useState<string | null>(null);
-  const [designError, setDesignError] = useState<string | null>(null);
-  const [designPreviewing, setDesignPreviewing] = useState(false);
+  // ---- 声音列表 ----
+  const [voices, setVoices] = useState<VoiceProfile[]>([]);
+  const [voicesLoading, setVoicesLoading] = useState(true);
+  const { refreshCounter, triggerRefresh } = useVoiceRefresh();
 
-  /** 录制或上传后得到的 File 对象 */
+  // ---- 活跃面板 ----
+  const [activePanel, setActivePanel] = useState<ActivePanel>(null);
+
+  // ---- 克隆流程状态 ----
+  const [cloneStep, setCloneStep] = useState<CloneStep>('choose-method');
+  const [cloneMethod, setCloneMethod] = useState<InputMethod>(null);
+  const [cloneEngine, setCloneEngine] = useState<CloneEngine>('qwen');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
-
-  /** URL 模式确认后返回的声音信息 */
   const [urlVoice, setUrlVoice] = useState<VoiceProfile | null>(null);
 
-  const { triggerRefresh } = useVoiceRefresh();
+  // ---- 设计流程状态 ----
+  const [designEngine, setDesignEngine] = useState<'mimo' | 'voxcpm'>('mimo');
+  const [designName, setDesignName] = useState('');
+  const [designAvatar, setDesignAvatar] = useState<string | null>(null);
+  const [designBrief, setDesignBrief] = useState('');
+  const [designPhase, setDesignPhase] = useState<DesignPhase>('idle');
+  const [designPreview, setDesignPreview] = useState<TTSResult | null>(null);
+  const [designError, setDesignError] = useState('');
+  const [designStatus, setDesignStatus] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [designSampleText, setDesignSampleText] = useState('这是一段试听文本，用来确认这个音色是否适合你的项目。');
+  const [designIntensity, setDesignIntensity] = useState(72);
+  const [designStability, setDesignStability] = useState(68);
 
-  /** 克隆成功或取消后，回到方法选择步骤 */
-  const resetToChooseMethod = () => {
-    setStep('choose-method');
-    setMethod(null);
+  // ---- CosyVoice 同步状态 ----
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // ---- 加载声音列表 ----
+  const loadVoices = useCallback(async () => {
+    setVoicesLoading(true);
+    try {
+      const all = await voiceApi.list();
+      setVoices(all.filter(v => v.audio_url));
+    } catch (err) {
+      console.error('加载声音列表失败:', err);
+    } finally {
+      setVoicesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadVoices(); }, [loadVoices, refreshCounter]);
+
+  // ---- 克隆流程 ----
+  const resetClone = () => {
+    setCloneStep('choose-method');
+    setCloneMethod(null);
     setPendingFile(null);
     setUrlVoice(null);
   };
 
-  /** 克隆成功后需要刷新 VoiceList 和 TTS 声音列表 */
   const handleCloneSuccess = () => {
     triggerRefresh();
-    resetToChooseMethod();
+    resetClone();
+    setActivePanel(null);
   };
 
+  // ---- CosyVoice 同步云端音色 ----
+  const handleSyncQwen = async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const result = await voiceApi.syncFromQwen();
+      setSyncMessage({ type: 'success', text: result.message || '同步完成' });
+      loadVoices();
+      triggerRefresh();
+    } catch (err) {
+      setSyncMessage({ type: 'error', text: err instanceof Error ? err.message : '同步失败' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  // ---- 设计流程 ----
   const handleDesignPreview = async () => {
-    setDesignPreviewing(true);
-    setDesignError(null);
-    setDesignStatus(null);
+    setDesignPhase('previewing');
+    setDesignError('');
+    setDesignStatus('');
     try {
       const preview = await playVoiceDesignPreview({
         engine: designEngine as VoiceDesignEngine,
         voiceDescription: designBrief,
-        sampleText: '这是一段试听文本，用来确认这个 Voice Profile 是否适合项目旁白。',
+        sampleText: designSampleText || '这是一段试听文本。',
         intensity: designIntensity,
         stability: designStability,
       });
       setDesignPreview(preview);
+      setDesignPhase('previewed');
       setDesignStatus(`${t('voiceDesign.previewGenerated')} · ${preview.audio_format || (designEngine === 'voxcpm' ? 'wav' : 'mp3')}`);
     } catch (error) {
       console.error('[voice-design] preview failed:', error);
       setDesignError(error instanceof Error ? error.message : '后端试听失败，请检查模型配置');
-    } finally {
-      setDesignPreviewing(false);
+      setDesignPhase('idle');
     }
   };
 
-  const handleSaveDesignProfile = () => {
-    const id = designPreview?.audio_id || `design-${Date.now()}`;
-    const engineLabel = designEngine === 'mimo' ? 'mimo' : designEngine === 'voxcpm' ? 'voxcpm' : 'qwen';
-    const profile: VoiceProfile = {
-      id,
-      name: designBrief.trim() || 'Untitled Voice Profile',
-      audio_url: designPreview?.audio_url || '',
-      description: designBrief,
-      clone_engine: engineLabel,
-      is_cloned: false,
-      created_at: new Date().toISOString(),
-    };
-    setDesignProfiles(prev => [profile, ...prev.filter(item => item.id !== id)]);
-    setDesignStatus('已保存为 Voice Profile，可绑定到项目 Voice Role');
+  const handleDesignSave = async () => {
+    if (!designPreview?.audio_base64 && !designPreview?.audio_url) {
+      setDesignError('没有可保存的音频，请先试听');
+      return;
+    }
+    setDesignPhase('saving');
+    setDesignError('');
+    try {
+      // 如果只有 audio_url 没有 audio_base64，先获取并转换
+      let audioBase64 = designPreview.audio_base64 || '';
+      if (!audioBase64 && designPreview.audio_url) {
+        const resp = await fetch(designPreview.audio_url);
+        const blob = await resp.blob();
+        const reader = new FileReader();
+        audioBase64 = await new Promise<string>((resolve, reject) => {
+          reader.onload = () => {
+            const result = reader.result as string;
+            resolve(result.split(',')[1] || '');
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      }
+      if (!audioBase64) {
+        setDesignError('无法获取音频数据');
+        setDesignPhase('previewed');
+        return;
+      }
+      const saved = await voiceApi.createFromDesign({
+        audio_base64: audioBase64,
+        engine: designEngine,
+        name: designName.trim() || designBrief.trim().slice(0, 50) || 'Untitled Voice Profile',
+        description: designBrief,
+        avatar: designAvatar || undefined,
+      });
+      setVoices(prev => [saved, ...prev.filter(v => v.id !== saved.id)]);
+      setDesignStatus('已保存为 Voice Profile');
+      triggerRefresh();
+      // 关闭面板
+      setTimeout(() => {
+        setActivePanel(null);
+        setDesignPhase('idle');
+        setDesignName('');
+        setDesignAvatar(null);
+        setDesignBrief('');
+        setDesignPreview(null);
+        setDesignStatus('');
+      }, 1200);
+    } catch (err) {
+      setDesignError(err instanceof Error ? err.message : '保存失败');
+      setDesignPhase('previewed');
+    }
   };
 
-  // ---- 步骤 1: 方法选择 ----
-  const renderMethodSelector = () => (
-    <div className={styles.methodSelector}>
-      <h2>选择声音来源</h2>
-      <p className={styles.methodSelectorHint}>
-        {engine === 'mimo'
-          ? '录制或上传音频，MiMo 会即时复刻音色'
-          : engine === 'voxcpm'
-          ? '录制或上传音频，VoxCPM 会在本地 GPU 上克隆音色'
-          : '请选择一种方式提供声音样本'}
-      </p>
+  const resetDesign = () => {
+    setActivePanel(null);
+    setDesignPhase('idle');
+    setDesignName('');
+    setDesignAvatar(null);
+    setDesignBrief('');
+    setDesignPreview(null);
+    setDesignError('');
+    setDesignStatus('');
+  };
 
-      <div className={styles.methodCards}>
-        <button
-          className={styles.methodCard}
-          onClick={() => { setMethod('record'); setStep('input'); }}
-        >
-          <span className={styles.methodIcon}>🎙️</span>
-          <span className={styles.methodTitle}>实时录制</span>
-          <span className={styles.methodDesc}>使用麦克风录制语音样本</span>
-        </button>
-
-        <button
-          className={styles.methodCard}
-          onClick={() => { setMethod('upload'); setStep('input'); }}
-        >
-          <span className={styles.methodIcon}>📁</span>
-          <span className={styles.methodTitle}>上传文件</span>
-          <span className={styles.methodDesc}>上传 MP3、WAV、WebM 音频文件</span>
-        </button>
-
-        {/* MiMo 和 VoxCPM 不需要公网地址，它们直接读取本地音频 */}
-        {engine === 'qwen' && (
-          <button
-            className={styles.methodCard}
-            onClick={() => { setMethod('url'); setStep('input'); }}
-          >
-            <span className={styles.methodIcon}>🌐</span>
-            <span className={styles.methodTitle}>公网地址</span>
-            <span className={styles.methodDesc}>提供已有音频文件的公网 URL</span>
-          </button>
-        )}
-      </div>
-    </div>
-  );
-
-  // ---- 步骤 2: 输入音频 ----
-  const renderInput = () => (
-    <div className={styles.inputStep}>
-      <button
-        className={styles.backButton}
-        onClick={() => { setStep('choose-method'); setMethod(null); }}
-      >
-        ← 返回选择方式
-      </button>
-
-      <div className={styles.methodPanel}>
-        <h3>
-          {method === 'record' && '🎙️ 实时录制'}
-          {method === 'upload' && '📁 上传音频文件'}
-          {method === 'url' && '🌐 公网音频地址'}
-        </h3>
-
-        {method === 'record' && (
-          <AudioRecorder onRecordComplete={(file) => { setPendingFile(file); setStep('preview-clone'); }} />
-        )}
-        {method === 'upload' && (
-          <AudioUploader onFileSelected={(file) => { setPendingFile(file); setStep('preview-clone'); }} />
-        )}
-        {method === 'url' && (
-          <UrlInput
-            onUrlConfirmed={(voice) => { setUrlVoice(voice); setStep('preview-clone'); }}
-            onBack={() => { setStep('choose-method'); setMethod(null); }}
-          />
-        )}
-      </div>
-    </div>
-  );
-
-  // ---- 步骤 3: 预览并克隆 ----
-  const renderPreview = () => (
-    <div className={styles.previewStep}>
-      <button
-        className={styles.backButton}
-        onClick={resetToChooseMethod}
-      >
-        ← 返回选择方式
-      </button>
-
-      {pendingFile && (
-        <AudioPreview
-          file={pendingFile}
-          engine={engine}
-          onCloneSuccess={handleCloneSuccess}
-          onCancel={resetToChooseMethod}
-        />
-      )}
-
-      {urlVoice && (
-        <AudioPreview
-          voiceId={urlVoice.id}
-          audioUrl={urlVoice.audio_url}
-          engine={engine}
-          onCloneSuccess={handleCloneSuccess}
-          onCancel={resetToChooseMethod}
-        />
-      )}
-    </div>
-  );
-
-  // ---- 音色设计区（占位） ----
-  const renderDesignSection = () => (
-    <>
-      {/* 设计引擎选择 */}
-      <div className={styles.engineSwitch}>
-        <button
-          className={`${styles.engineOption} ${designEngine === 'qwen' ? styles.active : ''}`}
-          onClick={() => setDesignEngine('qwen')}
-        >
-          CosyVoice (Qwen)
-        </button>
-        <button
-          className={`${styles.engineOption} ${designEngine === 'mimo' ? styles.active : ''}`}
-          onClick={() => setDesignEngine('mimo')}
-        >
-          MiMo-TTS
-        </button>
-        <button
-          className={`${styles.engineOption} ${designEngine === 'voxcpm' ? styles.active : ''}`}
-          onClick={() => setDesignEngine('voxcpm')}
-        >
-          VoxCPM (本地)
-        </button>
-      </div>
-
-      <div className={styles.designWorkspace}>
-        <section className={styles.profileLibraryPanel}>
-          <span className={styles.kicker}>{t('voiceDesign.profileLibrary')}</span>
-          <h3>{t('voiceDesign.profileLibrary')}</h3>
-          <p>把克隆、设计、调参后的 Voice Profile 作为全局资产管理，再交给项目内 Voice Role 绑定。</p>
-          <div className={styles.profileCards}>
-            {designProfiles.map(profile => (
-              <article key={profile.id}>
-                <strong>{profile.name}</strong>
-                <span>{profile.clone_engine === 'mimo' ? 'MiMo' : profile.clone_engine === 'voxcpm' ? 'VoxCPM' : 'CosyVoice'} · design</span>
-                <em>{t('voiceDesign.projectRoleReady')}</em>
-              </article>
-            ))}
-            <article>
-              <strong>Documentary Narrator</strong>
-              <span>MiMo · design</span>
-              <em>可绑定到项目 Voice Role</em>
-            </article>
-            <article>
-              <strong>Warm Cast Voice</strong>
-              <span>VoxCPM · tune</span>
-              <em>Project Role Ready</em>
-            </article>
-          </div>
-        </section>
-
-        <section className={styles.designBriefPanel}>
-          <span className={styles.kicker}>{t('voiceDesign.designBrief')}</span>
-          <h3>{t('voiceDesign.designBrief')}</h3>
-          <label>
-            音色描述
-            <textarea
-              aria-label="音色描述"
-              value={designBrief}
-              onChange={(event) => setDesignBrief(event.target.value)}
-              placeholder="例如：温暖、沉稳、有纪录片感的中文男声"
-            />
-          </label>
-          <div className={styles.previewPrompt}>
-            <strong>当前 Brief</strong>
-            <p>{designBrief}</p>
-          </div>
-        </section>
-
-        <section className={styles.tuneLabPanel}>
-          <span className={styles.kicker}>{t('voiceDesign.tuneLab')}</span>
-          <h3>{t('voiceDesign.tuneLab')}</h3>
-          <label>
-            表现强度
-            <input aria-label="表现强度" type="range" min="0" max="100" value={designIntensity} onChange={(event) => setDesignIntensity(Number(event.target.value))} />
-          </label>
-          <label>
-            稳定性
-            <input aria-label="稳定性" type="range" min="0" max="100" value={designStability} onChange={(event) => setDesignStability(Number(event.target.value))} />
-          </label>
-          <button type="button" className={styles.backendPreviewBtn} onClick={handleDesignPreview} disabled={designPreviewing || !designBrief.trim()}>
-            {designPreviewing ? '后端试听中...' : t('voiceDesign.backendPreview')}
-          </button>
-          <button type="button" className={styles.saveProfileBtn} onClick={handleSaveDesignProfile} disabled={!designPreview}>
-            {t('voiceDesign.saveProfile')}
-          </button>
-          {designStatus && <div className={styles.designStatus}>{designStatus}</div>}
-          {designError && <div className={styles.designError}>{designError}</div>}
-        </section>
-      </div>
-    </>
-  );
+  // ============================================================
+  //  Render
+  // ============================================================
 
   return (
     <div className={styles.container}>
-      <section className={styles.hero} data-visual="thin-global-header">
-        <div>
-          <span className={styles.kicker}>Voice Design</span>
+      {/* Header */}
+      <section className={styles.headerBar}>
+        <div className={styles.headerText}>
           <h1>音色设计</h1>
-          <p>管理可复用 Voice Profile，支持克隆、设计、调参，并交给项目 Voice Role 使用。</p>
+          <p>管理可复用的全局音色资产，支持克隆和文本描述设计，可绑定到项目角色。</p>
         </div>
-        <div className={styles.heroPills} aria-label="voice design workflow">
-          <span>Voice Profile Library</span>
-          <span>Clone / Design / Tune</span>
-          <span>Project Role Ready</span>
+        <div className={styles.headerActions}>
+          <button
+            type="button"
+            className={styles.actionButton}
+            onClick={() => { setActivePanel('design'); setDesignPhase('idle'); }}
+          >
+            设计新音色
+          </button>
+          <button
+            type="button"
+            className={styles.actionButton}
+            onClick={() => { setActivePanel('clone'); resetClone(); }}
+          >
+            克隆声音
+          </button>
         </div>
       </section>
 
-      {/* 顶层功能区切换 */}
-      <div className={styles.sectionTabs}>
-        <button
-          className={`${styles.sectionTab} ${section === 'clone' ? styles.active : ''}`}
-          onClick={() => setSection('clone')}
-        >
-          🎙️ 声音克隆
-        </button>
-        <button
-          className={`${styles.sectionTab} ${section === 'design' ? styles.active : ''}`}
-          onClick={() => setSection('design')}
-        >
-          🎨 音色设计
-        </button>
-      </div>
-
-      <div className={styles.content}>
-        {/* 左侧：功能区 */}
-        <div className={styles.inputSection}>
-          <div className={styles.card}>
-            {section === 'clone' ? (
-              <>
-                {/* 克隆引擎选择 */}
-                <div className={styles.engineSwitch}>
-                  <button
-                    className={`${styles.engineOption} ${engine === 'qwen' ? styles.active : ''}`}
-                    onClick={() => setEngine('qwen')}
-                  >
-                    CosyVoice (Qwen)
-                  </button>
-                  <button
-                    className={`${styles.engineOption} ${engine === 'mimo' ? styles.active : ''}`}
-                    onClick={() => setEngine('mimo')}
-                  >
-                    MiMo-TTS
-                  </button>
-                  <button
-                    className={`${styles.engineOption} ${engine === 'voxcpm' ? styles.active : ''}`}
-                    onClick={() => setEngine('voxcpm')}
-                  >
-                    VoxCPM (本地)
-                  </button>
-                </div>
-
-                {step === 'choose-method' && renderMethodSelector()}
-                {step === 'input' && renderInput()}
-                {step === 'preview-clone' && renderPreview()}
-              </>
-            ) : (
-              renderDesignSection()
-            )}
+      {/* 内联面板：设计流程 */}
+      {activePanel === 'design' && (
+        <section className={styles.inlinePanel}>
+          <div className={styles.inlinePanelHeader}>
+            <h3>设计新音色</h3>
+            <button type="button" className={styles.closeBtn} onClick={resetDesign}>✕</button>
           </div>
-        </div>
 
-        {/* 右侧：声音列表（仅声音克隆时显示） */}
-        {section === 'clone' && (
-          <div className={styles.listSection}>
-            <div className={styles.card}>
-              <VoiceList engine={engine} />
+          {/* 音色身份：头像 + 名称 */}
+          <div className={styles.identityRow}>
+            <ImageUploadZone
+              value={designAvatar}
+              onChange={(dataUrl) => setDesignAvatar(dataUrl)}
+              size="md"
+            />
+            <div className={styles.identityFields}>
+              <label className={styles.designLabel}>
+                音色名称
+                <input
+                  className={styles.designInput}
+                  value={designName}
+                  onChange={e => setDesignName(e.target.value)}
+                  placeholder="如：纪录片旁白、温柔女声..."
+                />
+              </label>
             </div>
           </div>
+
+          {/* 引擎选择 */}
+          <div className={styles.engineSwitch}>
+            <button
+              className={`${styles.engineOption} ${designEngine === 'mimo' ? styles.active : ''}`}
+              onClick={() => setDesignEngine('mimo')}
+            >
+              MiMo-TTS
+            </button>
+            <button
+              className={`${styles.engineOption} ${designEngine === 'voxcpm' ? styles.active : ''}`}
+              onClick={() => setDesignEngine('voxcpm')}
+            >
+              VoxCPM (本地)
+            </button>
+          </div>
+
+          {/* 音色描述 */}
+          <label className={styles.designLabel}>
+            音色描述
+            <textarea
+              className={styles.designTextarea}
+              value={designBrief}
+              onChange={e => setDesignBrief(e.target.value)}
+              placeholder="描述你想要的音色，如：年轻女性，温柔甜美，语速适中..."
+              rows={3}
+            />
+          </label>
+
+          {/* 试听文本 */}
+          <label className={styles.designLabel}>
+            试听文本
+            <textarea
+              className={styles.designTextarea}
+              value={designSampleText}
+              onChange={e => setDesignSampleText(e.target.value)}
+              placeholder="输入用于试听的文本内容..."
+              rows={2}
+            />
+          </label>
+
+          {/* 高级参数（折叠） */}
+          <div className={styles.advancedToggle} onClick={() => setShowAdvanced(!showAdvanced)}>
+            <span>{showAdvanced ? '▼' : '▶'} 高级参数</span>
+          </div>
+          {showAdvanced && (
+            <div className={styles.advancedPanel}>
+              <label className={styles.sliderLabel}>
+                表现强度
+                <input type="range" min={0} max={100} value={designIntensity} onChange={e => setDesignIntensity(Number(e.target.value))} />
+                <span>{designIntensity}</span>
+              </label>
+              <label className={styles.sliderLabel}>
+                稳定性
+                <input type="range" min={0} max={100} value={designStability} onChange={e => setDesignStability(Number(e.target.value))} />
+                <span>{designStability}</span>
+              </label>
+            </div>
+          )}
+
+          {/* 操作按钮 */}
+          <div className={styles.designActions}>
+            {designPhase === 'idle' && (
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                onClick={handleDesignPreview}
+                disabled={!designBrief.trim()}
+              >
+                试听音色
+              </button>
+            )}
+            {designPhase === 'previewing' && (
+              <button type="button" className={styles.primaryBtn} disabled>生成中...</button>
+            )}
+            {designPhase === 'previewed' && (
+              <>
+                <button type="button" className={styles.ghostBtn} onClick={handleDesignPreview}>重新生成</button>
+                <button type="button" className={styles.primaryBtn} onClick={handleDesignSave}>确认保存</button>
+              </>
+            )}
+            {designPhase === 'saving' && (
+              <button type="button" className={styles.primaryBtn} disabled>保存中...</button>
+            )}
+          </div>
+
+          {/* 试听音频播放器（可重复播放） */}
+          {(designPreview?.audio_base64 || designPreview?.audio_url) && (
+            <audio
+              controls
+              className={styles.designAudioPlayer}
+              src={designPreview.audio_base64
+                ? `data:audio/${designPreview.audio_format || (designEngine === 'voxcpm' ? 'wav' : 'mp3')};base64,${designPreview.audio_base64}`
+                : designPreview.audio_url!}
+            />
+          )}
+
+          {designStatus && <div className={styles.statusMsg}>{designStatus}</div>}
+          {designError && <div className={styles.errorMsg}>{designError}</div>}
+        </section>
+      )}
+
+      {/* 内联面板：克隆流程 */}
+      {activePanel === 'clone' && (
+        <section className={styles.inlinePanel}>
+          <div className={styles.inlinePanelHeader}>
+            <h3>克隆声音</h3>
+            <button type="button" className={styles.closeBtn} onClick={() => { setActivePanel(null); resetClone(); }}>✕</button>
+          </div>
+
+          {/* 引擎选择 */}
+          <div className={styles.engineSwitch}>
+            {(['qwen', 'mimo', 'voxcpm'] as CloneEngine[]).map(e => (
+              <button
+                key={e}
+                className={`${styles.engineOption} ${cloneEngine === e ? styles.active : ''}`}
+                onClick={() => setCloneEngine(e)}
+              >
+                {e === 'qwen' ? 'CosyVoice' : e === 'mimo' ? 'MiMo-TTS' : 'VoxCPM'}
+              </button>
+            ))}
+          </div>
+
+          {/* CosyVoice 同步云端音色 */}
+          {cloneEngine === 'qwen' && (
+            <div className={styles.syncSection}>
+              <button
+                type="button"
+                className={styles.ghostBtn}
+                onClick={handleSyncQwen}
+                disabled={syncing}
+              >
+                {syncing ? '同步中...' : '同步云端音色'}
+              </button>
+              {syncMessage && (
+                <div className={syncMessage.type === 'success' ? styles.statusMsg : styles.errorMsg}>
+                  {syncMessage.text}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 克隆步骤 */}
+          {cloneStep === 'choose-method' && (
+            <div className={styles.methodCards}>
+              <button className={styles.methodCard} onClick={() => { setCloneMethod('record'); setCloneStep('input'); }}>
+                <span className={styles.methodTitle}>新建声音</span>
+                <span className={styles.methodDesc}>录制或上传音频，创建新的克隆声音</span>
+              </button>
+              <button className={styles.methodCard} onClick={() => { setCloneMethod('upload'); setCloneStep('input'); }}>
+                <span className={styles.methodTitle}>上传文件</span>
+                <span className={styles.methodDesc}>上传 MP3、WAV、WebM 音频文件</span>
+              </button>
+              {cloneEngine === 'qwen' && (
+                <button className={styles.methodCard} onClick={() => { setCloneMethod('url'); setCloneStep('input'); }}>
+                  <span className={styles.methodTitle}>公网地址</span>
+                  <span className={styles.methodDesc}>提供已有音频文件的公网 URL</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {cloneStep === 'input' && (
+            <div className={styles.inputStep}>
+              <button className={styles.backButton} onClick={() => { setCloneStep('choose-method'); setCloneMethod(null); }}>
+                ← 返回选择方式
+              </button>
+              {cloneMethod === 'record' && (
+                <AudioRecorder onRecordComplete={file => { setPendingFile(file); setCloneStep('preview-clone'); }} />
+              )}
+              {cloneMethod === 'upload' && (
+                <AudioUploader onFileSelected={file => { setPendingFile(file); setCloneStep('preview-clone'); }} />
+              )}
+              {cloneMethod === 'url' && (
+                <UrlInput
+                  onUrlConfirmed={voice => { setUrlVoice(voice); setCloneStep('preview-clone'); }}
+                  onBack={() => { setCloneStep('choose-method'); setCloneMethod(null); }}
+                />
+              )}
+            </div>
+          )}
+
+          {cloneStep === 'preview-clone' && (
+            <div className={styles.inputStep}>
+              <button className={styles.backButton} onClick={resetClone}>← 返回选择方式</button>
+              {pendingFile && (
+                <AudioPreview file={pendingFile} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
+              )}
+              {urlVoice && (
+                <AudioPreview voiceId={urlVoice.id} audioUrl={urlVoice.audio_url} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 声音卡片网格 */}
+      <section className={styles.voiceSection}>
+        <div className={styles.sectionHeader}>
+          <h2>Voice Profiles</h2>
+          <span className={styles.voiceCount}>{voices.length} 个音色</span>
+        </div>
+
+        {voicesLoading ? (
+          <div className={styles.loading}>加载中...</div>
+        ) : voices.length === 0 ? (
+          <div className={styles.emptyState}>
+            <p>还没有音色，点击上方按钮设计或克隆第一个音色。</p>
+          </div>
+        ) : (
+          <div className={styles.voiceGrid}>
+            {voices.map(v => (
+              <article key={v.id} className={styles.voiceCard}>
+                <VoiceAvatar
+                  avatar={v.avatar ?? null}
+                  name={v.name}
+                  engine={v.clone_engine || 'edge_tts'}
+                  size={40}
+                />
+                <div className={styles.voiceCardBody}>
+                  <strong className={styles.voiceCardName}>{v.name || v.description || '未命名'}</strong>
+                  <div className={styles.voiceCardChips}>
+                    <span className={styles.chipEngine}>{engineLabel(v)}</span>
+                    {v.description && v.description !== v.name && (
+                      <span className={styles.chipDesc}>{v.description.slice(0, 30)}</span>
+                    )}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

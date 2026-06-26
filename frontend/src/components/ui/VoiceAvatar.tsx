@@ -1,9 +1,13 @@
 import { getVoiceAvatarSrc } from '../../services/voiceAvatar';
+import styles from './VoiceAvatar.module.css';
 
 interface VoiceAvatarProps {
   name: string;
+  /** Custom avatar URL (data URL or remote URL). Takes precedence over voice avatar lookup. */
+  avatar?: string | null;
   size?: number;
   gender?: string;
+  engine?: string;
   /** 第一行：音色名称 */
   label?: string;
   /** 第二行：模型名称 */
@@ -11,33 +15,47 @@ interface VoiceAvatarProps {
   className?: string;
 }
 
+const ENGINE_COLORS: Record<string, string> = {
+  edge_tts: '#6366f1',
+  cosyvoice: '#f59e0b',
+  mimo_tts: '#10b981',
+  voxcpm: '#ec4899',
+};
+
 /**
  * 音色头像组件
- * 使用本地 PNG 头像，圆形裁剪，可选标签
+ * 优先使用自定义 avatar，其次使用本地 PNG 头像，最后使用首字母 + 引擎色
  */
-export function VoiceAvatar({ name, size = 40, gender, label, sublabel, className }: VoiceAvatarProps) {
-  const src = getVoiceAvatarSrc(name, gender);
+export function VoiceAvatar({ name, avatar, size = 40, gender, engine, label, sublabel, className }: VoiceAvatarProps) {
+  // Priority: custom avatar > voice avatar map > initial + engine color
+  const voiceSrc = !avatar ? getVoiceAvatarSrc(name, gender) : null;
+  const hasImage = !!avatar || !!voiceSrc;
 
-  const avatar = (
-    <img
-      src={src}
-      alt={name}
+  const avatarEl = (
+    <div
+      className={styles.avatar}
+      style={{ width: size, height: size }}
       title={name}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: '50%',
-        objectFit: 'cover',
-        flexShrink: 0,
-        border: '2px solid rgba(255,255,255,0.8)',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        userSelect: 'none',
-      }}
-      draggable={false}
-    />
+    >
+      {hasImage ? (
+        <img
+          src={avatar ?? voiceSrc!}
+          alt={name}
+          className={styles.image}
+          draggable={false}
+        />
+      ) : (
+        <span
+          className={styles.initial}
+          style={{ backgroundColor: ENGINE_COLORS[engine ?? ''] ?? '#867467', fontSize: size * 0.4 }}
+        >
+          {(name || '?').slice(0, 1).toUpperCase()}
+        </span>
+      )}
+    </div>
   );
 
-  if (!label && !sublabel) return avatar;
+  if (!label && !sublabel) return avatarEl;
 
   return (
     <div
@@ -50,7 +68,7 @@ export function VoiceAvatar({ name, size = 40, gender, label, sublabel, classNam
         maxWidth: size * 1.8,
       }}
     >
-      {avatar}
+      {avatarEl}
       {label && (
         <span style={{
           fontSize: Math.max(10, size * 0.24),
