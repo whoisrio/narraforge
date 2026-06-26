@@ -389,9 +389,7 @@ export function ProjectLibrary({
       <header className={styles.libraryHeader}>
         <div>
           <span className={styles.kicker}>Library</span>
-          <h2>文本库</h2>
-        </div>
-        <div className={styles.headerActions}>
+          <h2>{activeTab === 'source' ? '源文档' : '文本库'}</h2>
           <div className={styles.tabBar}>
             <button
               type="button"
@@ -408,16 +406,16 @@ export function ProjectLibrary({
               旁白文档
             </button>
           </div>
-          {activeTab === 'narration' && !comparing && (
-            <>
-              <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
-              <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
-              <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
-              <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
-              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
-            </>
-          )}
         </div>
+        {activeTab === 'narration' && !comparing && (
+          <div className={styles.headerActions}>
+            <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
+            <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
+            <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
+            <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
+            <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
+          </div>
+        )}
       </header>
 
       {comparing ? (
@@ -431,6 +429,7 @@ export function ProjectLibrary({
           content={sourceDocument ?? ''}
           onChange={(text) => onUpdateSourceDocument?.(text)}
           onCompare={() => setComparing(true)}
+          onBack={() => setActiveTab('narration')}
         />
       ) : (
         narrationContent

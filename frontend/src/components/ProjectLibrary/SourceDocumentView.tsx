@@ -6,13 +6,14 @@ interface SourceDocumentViewProps {
   content: string;
   onChange: (text: string) => void;
   onCompare: () => void;
+  onBack: () => void;
 }
 
 function countChars(text: string): number {
   return text.replace(/\s/g, '').length;
 }
 
-export function SourceDocumentView({ content, onChange, onCompare }: SourceDocumentViewProps) {
+export function SourceDocumentView({ content, onChange, onCompare, onBack }: SourceDocumentViewProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -31,17 +32,20 @@ export function SourceDocumentView({ content, onChange, onCompare }: SourceDocum
         <MDEditor
           value={content}
           onChange={handleChange}
-          preview="live"
+          preview="edit"
           height="100%"
           visibleDragbar={false}
           hideToolbar={false}
         />
       </div>
       <div className={styles.bottomBar}>
-        <button type="button" className={styles.ghostButton} onClick={onCompare}>
-          对比查看
+        <button type="button" className={styles.ghostButton} onClick={onBack}>
+          ← 返回文档库
         </button>
         <div className={styles.stats}>
+          <button type="button" className={styles.ghostButton} onClick={onCompare}>
+            对比查看
+          </button>
           <span>{countChars(content)} 字</span>
         </div>
       </div>
