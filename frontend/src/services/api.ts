@@ -77,6 +77,27 @@ export const voiceApi = {
     return data;
   },
 
+  /** 保存克隆音色的试听音频 */
+  savePreviewAudio: async (voiceId: string, audioBase64: string, audioFormat: string = 'wav'): Promise<{ id: string; cloned_preview_path: string }> => {
+    const { data } = await api.patch(`/clone/${voiceId}/preview-audio`, {
+      audio_base64: audioBase64,
+      audio_format: audioFormat,
+    });
+    return data;
+  },
+
+  /** 从音色设计的预览音频创建 VoiceProfile（MiMo voicedesign / VoxCPM design） */
+  createFromDesign: async (params: {
+    audio_base64: string;
+    engine: 'mimo' | 'voxcpm';
+    name: string;
+    description?: string;
+    avatar?: string;
+  }): Promise<VoiceProfile> => {
+    const { data } = await api.post<VoiceProfile>('/clone/create-from-design', params);
+    return data;
+  },
+
   delete: async (id: string): Promise<void> => {
     await api.delete(`/clone/${id}`);
   },

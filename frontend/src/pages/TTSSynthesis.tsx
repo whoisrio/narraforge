@@ -84,6 +84,7 @@ export function TTSSynthesis({
 }) {
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
+  const initialLoadDoneRef = useRef(false);
   const [engine, setEngine] = useState<Engine>('edge_tts');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [params, setParams] = useState<Partial<TTSRequest>>({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
@@ -121,13 +122,14 @@ export function TTSSynthesis({
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>('narration');
-  const [projectSection, setProjectSection] = useState<ProjectSectionId>('studio');
+  const [projectSection, setProjectSection] = useState<ProjectSectionId>('overview');
   const [panelOpen, setPanelOpen] = useState(true);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
 
   // Sidebar accordion state — engine open by default, others collapsed
   const [sidebarOpen, setSidebarOpen] = useState({ voiceMode: false, narrator: false, engine: true });
+  const [libraryFulltext, setLibraryFulltext] = useState(false);
   const toggleSidebarSection = (section: keyof typeof sidebarOpen) => {
     setSidebarOpen(prev => ({ ...prev, [section]: !prev[section] }));
   };
@@ -243,7 +245,10 @@ export function TTSSynthesis({
       }
       const localDraft = await getDraft(full.id);
       console.log('[TTSSynthesis] draft check:', { projectId: full.id, hasDraft: !!localDraft, dirty: localDraft?.dirty, base_updated_at: localDraft?.base_updated_at, project_updated_at: full.updated_at });
-      if (localDraft && localDraft.base_updated_at && localDraft.base_updated_at < full.updated_at && localDraft.dirty) {
+      // 时间容差：2 秒内视为同一版本，避免亚秒级时间差误判冲突
+      const isRealConflict = localDraft && localDraft.base_updated_at && localDraft.dirty
+        && (new Date(full.updated_at).getTime() - new Date(localDraft.base_updated_at).getTime() > 2000);
+      if (isRealConflict) {
         console.log(`[TTSSynthesis] conflict detected for ${full.id}`);
         if (full.id === SCRATCHPAD_PROJECT_ID) {
           const migratedDraft = migrateV1(localDraft.draft);
@@ -258,11 +263,13 @@ export function TTSSynthesis({
       }
       const migrated = migrateV1(full);
       console.log(`[TTSSynthesis] setting project: ${migrated.name} (id=${migrated.id}, chapters=${migrated.chapters?.length})`);
+      initialLoadDoneRef.current = false; // 暂停自动保存，防止初始加载触发 markDirty
       setProject(migrated);
       dispatch({ type: 'LOAD_PROJECT', project: migrated });
       const ch = getActiveChapter(migrated);
       if (ch) restoreChapterSettings(ch);
       await draftSync.adoptBackendVersion(migrated);
+      initialLoadDoneRef.current = true; // 初始加载完成，后续变更可触发自动保存
 
       if (storageMode === 'backend') {
         const localProjects = await indexedDBStorage.listProjects();
@@ -284,6 +291,8 @@ export function TTSSynthesis({
 
   // Auto-save: debounce PUT in backend mode; IndexedDB direct in frontend mode
   useEffect(() => {
+    // 初始加载期间不触发自动保存，避免 markDirty 导致误判冲突
+    if (!initialLoadDoneRef.current) return;
     if (storageMode === 'backend') {
       void draftSync.markDirty(project);
     } else {
@@ -456,13 +465,16 @@ export function TTSSynthesis({
     const p = await projectStorage.getProject(projectId);
     if (!p) return;
     const migrated = migrateV1(p);
+    initialLoadDoneRef.current = false;
     dispatch({ type: 'LOAD_PROJECT', project: migrated });
     setProject(migrated);
+    setProjectSection('overview');
     const ch = getActiveChapter(migrated);
     if (ch) restoreChapterSettings(ch);
     if (storageMode === 'backend') {
       await draftSync.adoptBackendVersion(migrated);
     }
+    initialLoadDoneRef.current = true;
   }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
 
   const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
@@ -1315,8 +1327,13 @@ export function TTSSynthesis({
           generatedCount={generatedSegmentCount}
           durationSec={activeChapterDuration}
           chapters={project.chapters}
-          activeChapterId={activeChapter.id}
-          onSelectChapter={handleSelectChapter}
+          activeChapterId={libraryFulltext && projectSection === 'library' ? undefined : activeChapter.id}
+          onSelectChapter={(id) => {
+            if (libraryFulltext && projectSection === 'library') {
+              setLibraryFulltext(false);
+            }
+            handleSelectChapter(id);
+          }}
           onAddChapter={handleAddChapter}
           onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
           onDeleteChapter={handleDeleteChapter}
@@ -1424,7 +1441,7 @@ export function TTSSynthesis({
                     ) : engine === 'edge_tts' ? (
                       <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
                     ) : engine === 'mimo_tts' ? (
-                      <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} />
+                      <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} excludeCloneEngines={['qwen']} />
                     ) : (
                       <VoxCPMPanel
                         mode={voxcpmMode} onModeChange={setVoxcpmMode}
@@ -1433,6 +1450,7 @@ export function TTSSynthesis({
                         selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
                         cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
                         inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
+                        allowedCloneEngines={['voxcpm']}
                       />
                     )}
                   </div>
@@ -1566,6 +1584,7 @@ export function TTSSynthesis({
             chapters={project.chapters}
             activeChapterId={project.active_chapter_id}
             onSelectChapter={handleSelectChapter}
+            onModeChange={(mode) => setLibraryFulltext(mode === 'fulltext')}
             onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
             onUpdateChapterText={(id, text) => {
               dispatch({ type: 'SET_CHAPTER_META_BY_ID', id, meta: { original_text: text } });

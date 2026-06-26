@@ -47,7 +47,7 @@ class MiMoVoiceDesignRequest(BaseModel):
     """文本设计音色合成请求"""
     voice_description: str = Field(..., min_length=1, description="音色描述文本，如 '年轻的男性声音，低沉有磁性'")
     text: str = Field(default="", description="待合成的文本，为空时自动生成适配文本")
-    optimize_text_preview: bool = Field(default=True, description="是否智能润色目标播报文本")
+    optimize_text_preview: bool = Field(default=False, description="是否智能润色目标播报文本（默认 False，严格使用传入文本）")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
 
 class MiMoVoiceCloneRequest(BaseModel):

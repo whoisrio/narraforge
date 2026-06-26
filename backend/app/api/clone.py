@@ -318,6 +318,7 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         voice.is_cloned = True
         voice.cloned_at = utcnow()
         voice.clone_engine = "qwen"
+        voice.original_audio_path = voice.audio_path  # 保存原始音频路径
 
         if request.name:
             voice.name = request.name
@@ -364,6 +365,7 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
         voice.cloned_at = utcnow()
         voice.clone_engine = "mimo"
         voice.mimo_voice_id = "mimo_voiceclone"  # 标记使用 MiMo voiceclone
+        voice.original_audio_path = voice.audio_path  # 保存原始音频路径
 
         if request.name:
             voice.name = request.name
@@ -408,6 +410,7 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
         voice.is_cloned = True
         voice.cloned_at = utcnow()
         voice.clone_engine = "voxcpm"
+        voice.original_audio_path = voice.audio_path  # 保存原始音频路径
 
         if request.name:
             voice.name = request.name
@@ -491,6 +494,53 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
     }
 
 
+class PreviewAudioRequest(BaseModel):
+    audio_base64: str
+    audio_format: str = "wav"
+
+
+@router.patch("/{voice_id}/preview-audio")
+async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Session = Depends(get_db)):
+    """
+    保存克隆音色的试听音频。
+
+    用于克隆流程：用户录制/上传原始音频 → 克隆 → 试听合成 → 保存试听音频。
+    始终使用 original_audio_path 作为克隆参考。
+    """
+    import base64
+
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
+
+    try:
+        audio_bytes = base64.b64decode(request.audio_base64)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 audio data")
+
+    if len(audio_bytes) < 100:
+        raise HTTPException(status_code=400, detail="Audio data too small")
+
+    audio_ext = request.audio_format or "wav"
+    preview_path = str(settings.clone_voices_dir / f"preview_{voice_id}.{audio_ext}")
+
+    settings.clone_voices_dir.mkdir(parents=True, exist_ok=True)
+    with open(preview_path, "wb") as f:
+        f.write(audio_bytes)
+
+    voice.cloned_preview_path = preview_path
+    db.commit()
+    db.refresh(voice)
+
+    logger.info(f"Saved preview audio for voice {voice_id}: {preview_path}")
+
+    return {
+        "id": voice.id,
+        "cloned_preview_path": voice.cloned_preview_path,
+    }
+
+
+
 @router.get("/list")
 def list_voices(db: Session = Depends(get_db)):
     """获取声音列表"""
@@ -501,6 +551,8 @@ def list_voices(db: Session = Depends(get_db)):
             "description": v.description,
             "name": v.name,
             "audio_url": f"/api/clone/audio/{v.id}",
+            "original_audio_url": f"/api/clone/audio/{v.id}?field=original" if v.original_audio_path else None,
+            "cloned_preview_url": f"/api/clone/audio/{v.id}?field=preview" if v.cloned_preview_path else None,
             "qwen_voice_id": v.qwen_voice_id,
             "role": v.role,
             "clone_engine": v.clone_engine,
@@ -640,13 +692,21 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
 
 
 @router.get("/audio/{voice_id}")
-async def get_voice_audio(voice_id: str, db: Session = Depends(get_db)):
-    """获取声音音频文件"""
+async def get_voice_audio(voice_id: str, field: str = None, db: Session = Depends(get_db)):
+    """获取声音音频文件。field='original' 返回原始音频，field='preview' 返回克隆试听音频，默认返回主音频。"""
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
-    if not voice or not os.path.exists(voice.audio_path):
-        raise HTTPException(status_code=404, detail="Audio not found")
+    if not voice:
+        raise HTTPException(status_code=404, detail="Voice not found")
 
     from fastapi.responses import FileResponse
+
+    if field == "original" and voice.original_audio_path and os.path.exists(voice.original_audio_path):
+        return FileResponse(voice.original_audio_path, media_type="audio/wav")
+    if field == "preview" and voice.cloned_preview_path and os.path.exists(voice.cloned_preview_path):
+        return FileResponse(voice.cloned_preview_path, media_type="audio/wav")
+
+    if not os.path.exists(voice.audio_path):
+        raise HTTPException(status_code=404, detail="Audio not found")
     return FileResponse(voice.audio_path, media_type="audio/wav")
 
 
@@ -661,6 +721,8 @@ def get_voice(voice_id: str, db: Session = Depends(get_db)):
         "id": voice.id,
         "name": voice.name,
         "audio_url": f"/api/clone/audio/{voice.id}",
+        "original_audio_url": f"/api/clone/audio/{voice.id}?field=original" if voice.original_audio_path else None,
+        "cloned_preview_url": f"/api/clone/audio/{voice.id}?field=preview" if voice.cloned_preview_path else None,
         "qwen_voice_id": voice.qwen_voice_id,
         "role": voice.role,
         "clone_engine": voice.clone_engine,
@@ -691,6 +753,10 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
 
     if voice.audio_path and os.path.exists(voice.audio_path):
         os.remove(voice.audio_path)
+    if voice.original_audio_path and os.path.exists(voice.original_audio_path) and voice.original_audio_path != voice.audio_path:
+        os.remove(voice.original_audio_path)
+    if voice.cloned_preview_path and os.path.exists(voice.cloned_preview_path):
+        os.remove(voice.cloned_preview_path)
 
     db.delete(voice)
     db.commit()

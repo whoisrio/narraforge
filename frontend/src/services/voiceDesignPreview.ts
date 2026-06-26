@@ -7,8 +7,8 @@ export interface VoiceDesignPreviewRequest {
   engine: VoiceDesignEngine;
   voiceDescription: string;
   sampleText: string;
-  intensity: number;
-  stability: number;
+  intensity?: number;  // VoxCPM only (mapped to cfg_value)
+  stability?: number;  // VoxCPM only (mapped to inference_timesteps)
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -31,7 +31,7 @@ export async function synthesizeVoiceDesignPreview(request: VoiceDesignPreviewRe
     return mimoTtsApi.synthesizeVoiceDesign({
       voice_description: description,
       text: sampleText,
-      optimize_text_preview: true,
+      optimize_text_preview: false,
       format: 'mp3',
     });
   }

@@ -12,9 +12,10 @@ interface ProjectLibraryProps {
   onAddChapter: (name?: string) => void;
   onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
+  onModeChange?: (mode: 'overview' | 'chapter' | 'fulltext') => void;
 }
 
-type LibraryMode = 'overview' | 'chapter';
+type LibraryMode = 'overview' | 'chapter' | 'fulltext';
 
 function chapterText(chapter: Chapter): string {
   return chapter.original_text ?? chapter.segments.map(segment => segment.text).join('\n');
@@ -67,8 +68,14 @@ export function ProjectLibrary({
   onAddChapter,
   onDeleteChapter,
   onEnterStudio,
+  onModeChange,
 }: ProjectLibraryProps) {
   const [mode, setMode] = useState<LibraryMode>('overview');
+
+  const setLibraryMode = (next: LibraryMode) => {
+    setMode(next);
+    onModeChange?.(next);
+  };
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   const [chapterNameDraft, setChapterNameDraft] = useState('');
   const [creatingChapter, setCreatingChapter] = useState(false);
@@ -161,11 +168,18 @@ export function ProjectLibrary({
           <button
             type="button"
             className={styles.ghostButton}
-            onClick={() => setMode('overview')}
+            onClick={() => setLibraryMode('overview')}
           >
             ← 返回文本库
           </button>
           <div className={styles.bottomBarDivider} />
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => setLibraryMode('fulltext')}
+          >
+            查看全文
+          </button>
           <button
             type="button"
             className={styles.bottomBarNav}
@@ -195,6 +209,55 @@ export function ProjectLibrary({
     );
   }
 
+  if (mode === 'fulltext') {
+    const allText = chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n');
+    const allChars = countTextChars(allText);
+    const allDuration = estimateDurationSec(allText);
+    return (
+      <section className={styles.chapterEditorRoot}>
+        <header className={styles.editorHeader}>
+          <h2 className={styles.chapterTitleInput} style={{ border: 'none', background: 'none', cursor: 'default' }}>文本库全文</h2>
+          <div className={styles.editorMetrics}>
+            <span>{allChars} 字</span>
+            <span>预计 {formatSeconds(allDuration)}</span>
+            <span>{chapters.length} 章</span>
+          </div>
+        </header>
+
+        <textarea
+          className={styles.manuscriptEditor}
+          aria-label="文本库全文"
+          value={allText}
+          readOnly
+          placeholder="尚未填写任何章节全文。"
+        />
+
+        <div className={styles.bottomBar}>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => setLibraryMode('overview')}
+          >
+            ← 返回文本库
+          </button>
+          <div className={styles.bottomBarDivider} />
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => {
+              if (activeChapter) {
+                onSelectChapter(activeChapter.id);
+                setLibraryMode('chapter');
+              }
+            }}
+          >
+            按章节查看
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className={styles.root}>
       <header className={styles.libraryHeader}>
@@ -207,6 +270,7 @@ export function ProjectLibrary({
           <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
           <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
           <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
+          <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
           <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
         </div>
       </header>
@@ -304,7 +368,7 @@ export function ProjectLibrary({
                 </div>
                 <div className={styles.progressTrack}><span style={{ width: `${progress.percent}%` }} /></div>
                 <div className={styles.cardActions}>
-                  <button type="button" onClick={() => { onSelectChapter(chapter.id); setMode('chapter'); }}>打开文本</button>
+                  <button type="button" onClick={() => { onSelectChapter(chapter.id); setLibraryMode('chapter'); }}>打开文本</button>
                   <button type="button" onClick={() => onEnterStudio(chapter.id)}>进入工作室</button>
                 </div>
               </div>

@@ -31,6 +31,8 @@ interface MiMoTTSPanelProps {
   onCloneVoiceSelect: (voiceId: string) => void;
   /** 当前选中的克隆声音ID */
   selectedCloneVoiceId: string;
+  /** 排除的克隆引擎类型（默认 ['qwen']，CosyVoice 远端存储 MiMo 无法访问） */
+  excludeCloneEngines?: string[];
 }
 
 const MODE_TABS: { value: MiMoMode; label: string }[] = [
@@ -47,6 +49,7 @@ export function MiMoTTSPanel({
   instruction,
   onCloneVoiceSelect,
   selectedCloneVoiceId,
+  excludeCloneEngines = ['qwen'],
 }: MiMoTTSPanelProps) {
   const [presetVoices, setPresetVoices] = useState<MiMoPresetVoice[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
@@ -79,23 +82,23 @@ export function MiMoTTSPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 加载克隆声音列表 (用于 voiceclone 模式，显示所有有音频的声音)
+  // 加载克隆声音列表 (用于 voiceclone 模式，按 clone_engine 过滤)
   const loadCloneVoices = useCallback(async () => {
     setCloneVoicesLoading(true);
     try {
       const all = await voiceApi.list();
-      // 显示所有有音频的声音（不限 clone_engine，支持跨引擎复刻）
-      const availableVoices = all.filter(v => v.audio_url);
+      // 过滤：有音频 且 clone_engine 不在排除列表中
+      const availableVoices = all.filter(v => v.audio_url && !excludeCloneEngines.includes(v.clone_engine || ''));
       setCloneVoices(availableVoices);
-      if (!selectedCloneVoiceId && mimoVoices.length > 0) {
-        onCloneVoiceSelect(mimoVoices[0].id);
+      if (!selectedCloneVoiceId && availableVoices.length > 0) {
+        onCloneVoiceSelect(availableVoices[0].id);
       }
     } catch (err) {
       console.error('Failed to load clone voices:', err);
     } finally {
       setCloneVoicesLoading(false);
     }
-  }, [selectedCloneVoiceId, onCloneVoiceSelect]);
+  }, [selectedCloneVoiceId, onCloneVoiceSelect, excludeCloneEngines]);
 
   useEffect(() => {
     if (mode === 'voiceclone') {
