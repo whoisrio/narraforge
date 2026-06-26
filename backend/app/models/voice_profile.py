@@ -35,6 +35,9 @@ class VoiceProfile(Base):
     # 用户自定义的声音描述，用于替代无意义的 voice_id 显示
     description = Column(String, nullable=True)
 
+    # 头像（data URL 或外部 URL）
+    avatar = Column(String, nullable=True)
+
     # 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
     prompt_text = Column(String, nullable=True)
 
