@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import MDEditor from '@uiw/react-md-editor';
+import Markdown from 'react-markdown';
 import styles from './SourceDocumentView.module.css';
 
 interface SourceDocumentViewProps {
@@ -15,6 +16,7 @@ function countChars(text: string): number {
 
 export function SourceDocumentView({ content, onChange, onCompare, onBack }: SourceDocumentViewProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const [viewMode, setViewMode] = useState<'edit' | 'view'>('edit');
 
   useEffect(() => {
     return () => clearTimeout(timerRef.current);
@@ -29,20 +31,33 @@ export function SourceDocumentView({ content, onChange, onCompare, onBack }: Sou
   return (
     <div className={styles.container} data-color-mode="light">
       <div className={styles.editor}>
-        <MDEditor
-          value={content}
-          onChange={handleChange}
-          preview="edit"
-          height="100%"
-          visibleDragbar={false}
-          hideToolbar={false}
-        />
+        {viewMode === 'edit' ? (
+          <MDEditor
+            value={content}
+            onChange={handleChange}
+            preview="edit"
+            height="100%"
+            visibleDragbar={false}
+            hideToolbar
+          />
+        ) : (
+          <div className={styles.previewArea}>
+            <Markdown>{content || '*（空文档）*'}</Markdown>
+          </div>
+        )}
       </div>
       <div className={styles.bottomBar}>
         <button type="button" className={styles.ghostButton} onClick={onBack}>
           ← 返回文档库
         </button>
         <div className={styles.stats}>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => setViewMode(viewMode === 'edit' ? 'view' : 'edit')}
+          >
+            {viewMode === 'edit' ? '查看' : '编辑'}
+          </button>
           <button type="button" className={styles.ghostButton} onClick={onCompare}>
             对比查看
           </button>

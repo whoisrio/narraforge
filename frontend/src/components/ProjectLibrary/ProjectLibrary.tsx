@@ -8,9 +8,11 @@ import styles from './ProjectLibrary.module.css';
 interface ProjectLibraryProps {
   chapters: Chapter[];
   activeChapterId?: string;
+  projectName?: string;
   sourceDocument?: string | null;
   onSelectChapter: (id: string) => void;
   onRenameChapter: (id: string, name: string) => void;
+  onRenameProject?: (name: string) => void;
   onUpdateChapterText: (id: string, text: string) => void;
   onUpdateChapterDesignTitle: (id: string, designTitle: string) => void;
   onUpdateSourceDocument?: (text: string) => void;
@@ -77,6 +79,8 @@ export function ProjectLibrary({
   onDeleteChapter,
   onEnterStudio,
   onModeChange,
+  projectName,
+  onRenameProject,
 }: ProjectLibraryProps) {
   const [mode, setMode] = useState<LibraryMode>('overview');
   const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
@@ -388,8 +392,19 @@ export function ProjectLibrary({
     <section className={styles.root}>
       <header className={styles.libraryHeader}>
         <div>
-          <span className={styles.kicker}>Library</span>
-          <h2>{activeTab === 'source' ? '源文档' : '文本库'}</h2>
+          {activeTab === 'source' ? (
+            <input
+              className={styles.sourceTitleInput}
+              value={projectName ?? ''}
+              onChange={(e) => onRenameProject?.(e.target.value)}
+              placeholder="源文档标题"
+            />
+          ) : (
+            <>
+              <span className={styles.kicker}>Library</span>
+              <h2>文本库</h2>
+            </>
+          )}
           <div className={styles.tabBar}>
             <button
               type="button"
