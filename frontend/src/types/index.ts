@@ -412,6 +412,8 @@ export interface SegmentedProject {
   active_narration_version?: string | null;
   /** 默认关联的 Remotion 项目路径；导出文件优先写入其 public/audio */
   remotion_project_path?: string | null;
+  /** Source document file path or identifier */
+  source_document?: string | null;
   /** Backend list endpoint summary for project-card stats when chapters are not hydrated. */
   summary_stats?: {
     chapter_count: number;
