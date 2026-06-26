@@ -400,10 +400,7 @@ export function ProjectLibrary({
               placeholder="源文档标题"
             />
           ) : (
-            <>
-              <span className={styles.kicker}>Library</span>
-              <h2>文本库</h2>
-            </>
+            <h2>文本库</h2>
           )}
           <div className={styles.tabBar}>
             <button
