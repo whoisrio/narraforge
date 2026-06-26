@@ -1,14 +1,18 @@
 import { useMemo, useState } from 'react';
 import type { Chapter } from '../../types';
+import { CompareView } from './CompareView';
+import { SourceDocumentView } from './SourceDocumentView';
 import styles from './ProjectLibrary.module.css';
 
 interface ProjectLibraryProps {
   chapters: Chapter[];
   activeChapterId?: string;
+  sourceDocument?: string | null;
   onSelectChapter: (id: string) => void;
   onRenameChapter: (id: string, name: string) => void;
   onUpdateChapterText: (id: string, text: string) => void;
   onUpdateChapterDesignTitle: (id: string, designTitle: string) => void;
+  onUpdateSourceDocument?: (text: string) => void;
   onAddChapter: (name?: string) => void;
   onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
@@ -16,6 +20,7 @@ interface ProjectLibraryProps {
 }
 
 type LibraryMode = 'overview' | 'chapter' | 'fulltext';
+type LibraryTab = 'source' | 'narration';
 
 function chapterText(chapter: Chapter): string {
   return chapter.original_text ?? chapter.segments.map(segment => segment.text).join('\n');
@@ -61,16 +66,20 @@ function navigateChapter(chapters: Chapter[], currentId: string, direction: 'pre
 export function ProjectLibrary({
   chapters,
   activeChapterId,
+  sourceDocument,
   onSelectChapter,
   onRenameChapter,
   onUpdateChapterText,
   onUpdateChapterDesignTitle,
+  onUpdateSourceDocument,
   onAddChapter,
   onDeleteChapter,
   onEnterStudio,
   onModeChange,
 }: ProjectLibraryProps) {
   const [mode, setMode] = useState<LibraryMode>('overview');
+  const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
+  const [comparing, setComparing] = useState(false);
 
   const setLibraryMode = (next: LibraryMode) => {
     setMode(next);
@@ -258,23 +267,8 @@ export function ProjectLibrary({
     );
   }
 
-  return (
-    <section className={styles.root}>
-      <header className={styles.libraryHeader}>
-        <div>
-          <span className={styles.kicker}>Library</span>
-          <h2>Chapter Library</h2>
-          <p>管理每个章节的整体旁白文本。打开文本进行沉浸式编辑，或直接进入工作室合成。</p>
-        </div>
-        <div className={styles.headerActions}>
-          <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
-          <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
-          <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
-          <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
-          <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
-        </div>
-      </header>
-
+  const narrationContent = (
+    <>
       <div className={styles.filterRow}>
         <span className={styles.filterChipActive}>Active <strong>{chapters.length}</strong></span>
         <span className={styles.filterChip}>Drafts</span>
@@ -376,6 +370,60 @@ export function ProjectLibrary({
           );
         })}
       </div>
+    </>
+  );
+
+  return (
+    <section className={styles.root}>
+      <header className={styles.libraryHeader}>
+        <div>
+          <span className={styles.kicker}>Library</span>
+          <h2>文本库</h2>
+        </div>
+        <div className={styles.headerActions}>
+          <div className={styles.tabBar}>
+            <button
+              type="button"
+              className={`${styles.tab} ${activeTab === 'source' ? styles.tabActive : ''}`}
+              onClick={() => { setActiveTab('source'); setComparing(false); }}
+            >
+              源文档
+            </button>
+            <button
+              type="button"
+              className={`${styles.tab} ${activeTab === 'narration' ? styles.tabActive : ''}`}
+              onClick={() => { setActiveTab('narration'); setComparing(false); }}
+            >
+              旁白文档
+            </button>
+          </div>
+          {activeTab === 'narration' && !comparing && (
+            <>
+              <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
+              <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
+              <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
+              <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
+              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
+            </>
+          )}
+        </div>
+      </header>
+
+      {comparing ? (
+        <CompareView
+          sourceDocument={sourceDocument ?? ''}
+          narrationText={chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n')}
+          onBack={() => setComparing(false)}
+        />
+      ) : activeTab === 'source' ? (
+        <SourceDocumentView
+          content={sourceDocument ?? ''}
+          onChange={(text) => onUpdateSourceDocument?.(text)}
+          onCompare={() => setComparing(true)}
+        />
+      ) : (
+        narrationContent
+      )}
     </section>
   );
 }

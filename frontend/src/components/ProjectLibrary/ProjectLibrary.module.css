@@ -67,6 +67,36 @@
   color: var(--color-primary-dark);
 }
 
+.tabBar {
+  display: flex;
+  gap: 2px;
+  background: var(--color-surface-container);
+  border-radius: var(--radius-md);
+  padding: 2px;
+}
+
+.tab {
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.tab:hover {
+  color: var(--color-text-primary);
+}
+
+.tabActive {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
 .libraryHeader {
   display: flex;
   justify-content: space-between;
