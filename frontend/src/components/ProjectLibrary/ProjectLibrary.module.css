@@ -608,9 +608,11 @@
 .markdownPreview {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
-  font-size: 0.9rem;
-  line-height: 1.7;
+  padding: 20px 24px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1.8;
+  letter-spacing: -0.01em;
   color: var(--color-text-primary);
 }
 

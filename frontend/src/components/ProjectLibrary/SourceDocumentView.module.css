@@ -8,12 +8,13 @@
 .editor {
   flex: 1;
   min-height: 400px;
-  padding: 24px 32px;
+  padding: 20px 24px;
   border: none;
-  background: var(--color-surface);
-  font-family: inherit;
-  font-size: 0.9rem;
-  line-height: 1.7;
+  background: rgba(255, 248, 241, 0.72);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1.8;
+  letter-spacing: -0.01em;
   color: var(--color-text-primary);
   resize: none;
   outline: none;
@@ -26,11 +27,13 @@
 .previewArea {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
-  font-size: 0.9rem;
-  line-height: 1.7;
+  padding: 20px 24px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 18px;
+  line-height: 1.8;
+  letter-spacing: -0.01em;
   color: var(--color-text-primary);
-  background: var(--color-surface);
+  background: rgba(255, 248, 241, 0.72);
   min-height: 400px;
 }
 
