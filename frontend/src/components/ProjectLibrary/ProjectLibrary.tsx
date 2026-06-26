@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import Markdown from 'react-markdown';
 import type { Chapter } from '../../types';
 import { CompareView } from './CompareView';
 import { SourceDocumentView } from './SourceDocumentView';
@@ -80,6 +81,7 @@ export function ProjectLibrary({
   const [mode, setMode] = useState<LibraryMode>('overview');
   const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
   const [comparing, setComparing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   const setLibraryMode = (next: LibraryMode) => {
     setMode(next);
@@ -165,13 +167,19 @@ export function ProjectLibrary({
           />
         </label>
 
-        <textarea
-          className={styles.manuscriptEditor}
-          aria-label="章节全文"
-          value={text}
-          onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
-          placeholder="在这里维护本章完整旁白稿。进入工作室后再切分为语音段落。"
-        />
+        {showPreview ? (
+          <div className={styles.markdownPreview}>
+            <Markdown>{text || '*尚未填写章节全文。*'}</Markdown>
+          </div>
+        ) : (
+          <textarea
+            className={styles.manuscriptEditor}
+            aria-label="章节全文"
+            value={text}
+            onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
+            placeholder="在这里维护本章完整旁白稿。进入工作室后再切分为语音段落。"
+          />
+        )}
 
         <div className={styles.bottomBar}>
           <button
@@ -188,6 +196,13 @@ export function ProjectLibrary({
             onClick={() => setLibraryMode('fulltext')}
           >
             查看全文
+          </button>
+          <button
+            type="button"
+            className={styles.ghostButton}
+            onClick={() => setShowPreview(!showPreview)}
+          >
+            {showPreview ? '编辑' : '预览'}
           </button>
           <button
             type="button"
@@ -233,13 +248,9 @@ export function ProjectLibrary({
           </div>
         </header>
 
-        <textarea
-          className={styles.manuscriptEditor}
-          aria-label="文本库全文"
-          value={allText}
-          readOnly
-          placeholder="尚未填写任何章节全文。"
-        />
+        <div className={styles.markdownPreview}>
+          <Markdown>{allText || '*尚未填写任何章节全文。*'}</Markdown>
+        </div>
 
         <div className={styles.bottomBar}>
           <button
