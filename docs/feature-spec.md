@@ -1,266 +1,261 @@
-# Voice Studio — Feature Specification
+# NarraForge — Feature Specification
 
-**Version**: 1.0  
-**Date**: 2026-06-07  
+**Version**: 2.0
+**Date**: 2026-06-26
 **Status**: Current
 
 ---
 
 ## 1. Overview
 
-Voice Studio is an AI audio workstation that combines voice cloning, text-to-speech synthesis, and speech-to-text transcription into a unified workflow. It is built on Qwen CosyVoice, MiMo TTS, Edge-TTS, Faster-Whisper, and FunASR.
+NarraForge is an AI narration workshop that integrates voice cloning, text-to-speech synthesis, speech-to-text transcription, and a segmented project editor for producing multi-chapter audio narrations. It supports four TTS engines (Edge-TTS, CosyVoice, MiMo-TTS, VoxCPM) and two STT engines (Whisper, FunASR).
 
-**Tech Stack**: React 19 + TypeScript + Vite (frontend), Python 3.12+ / FastAPI (backend), IndexedDB + SQLite for persistence.
+**Tech Stack**: React 19 + TypeScript + Vite (frontend), Python 3.12+ / FastAPI / SQLAlchemy (backend), IndexedDB + SQLite for persistence.
 
 ---
 
 ## 2. Navigation Structure
 
-The application has four top-level tabs plus a landing page:
+The application uses a two-tier navigation architecture:
 
-| Tab             | Route Key          | Description                      |
-|-----------------|--------------------|----------------------------------|
-| Landing         | —                  | Hero page with feature cards     |
-| Voice Clone     | `voice-clone`      | Voice cloning and design         |
-| Text to Speech  | `tts-synthesis`    | Single and segmented TTS         |
-| Speech to Text  | `speech-to-text`   | Audio/video transcription        |
-| Model Config    | `model-config`     | Provider API key management      |
+### Global Sidebar
+
+A fixed left sidebar (`AppShell`) provides top-level navigation:
+
+| Item | Internal View | Description |
+|------|---------------|-------------|
+| Projects | `tts-synthesis` | ProjectHub project list → project workspace |
+| Subtitles | `speech-to-text` | Transcription Hub |
+| Voice Design | `voice-clone` | Voice cloning and design |
+| Settings | `model-config` | Provider API key management |
+
+The sidebar **hides** when a project workspace is active, giving full width to the editor.
+
+### ProjectHub (Default View)
+
+When no project is open, the Projects tab shows **ProjectHub** — a card grid of all saved projects with:
+- Project name, chapter/segment counts, generated progress
+- Quick actions: open, delete, create new
+- Scratchpad project for quick drafts
+
+### Project Workspace
+
+Opening a project enters the workspace with a left rail (`ProjectShell`) containing:
+- Project identity (name + subtitle)
+- "Back to projects" button
+- Section navigation (5 sections, see below)
+- Chapter list (visible in Library/Studio sections)
 
 ---
 
-## 3. Voice Clone (`/voice-clone`)
+## 3. Voice Design (`/voice-clone`)
 
-### 3.1 Sections
+### 3.1 Page Structure
 
-The page has two top-level sections toggled by tabs:
+The page title is "音色设计". It has two inline panels triggered by action buttons, plus a voice profile grid:
 
-| Section       | Description                                    |
-|---------------|------------------------------------------------|
-| Voice Clone   | Upload/record audio and register a voice       |
-| Voice Design  | Text-described voice style design (MiMo / VoxCPM) |
+| Element | Description |
+|---------|-------------|
+| "设计新音色" button | Opens the voice design panel |
+| "克隆声音" button | Opens the voice clone panel |
+| Voice Profile Grid | Card grid of all saved voices with preview buttons |
 
-### 3.2 Clone Engine Support
+Panels expand inline below the header — there are no tabs.
+
+### 3.2 Clone Engines
+
+Three clone engines are supported:
 
 | Engine | Method | Registration | Lifecycle |
 |--------|--------|--------------|-----------|
 | **CosyVoice (Qwen)** | Upload/record/URL → cloud register → `voice_id` | Persistent; reuse `voice_id` indefinitely | Best for batch synthesis |
-| **MiMo-TTS** | Upload/record → local base64, stateless | No registration; audio sent each time | Best for quick one-off tests |
+| **MiMo-TTS** | Upload/record → local base64, stateless | No registration; audio sent each time | Best for quick tests |
+| **VoxCPM** | Upload/record → local GPU inference | No registration; uses local audio path | Best for local high-fidelity clone |
 
-### 3.3 Clone Flow (3 Steps)
+### 3.3 Clone Flow
 
-1. **Choose Method** — Select input source:
-   - Real-time recording (microphone)
-   - File upload (MP3, WAV, WebM)
-   - Public URL input (CosyVoice only — MiMo reads local audio as base64)
-2. **Input Audio** — Capture or upload the audio sample
-3. **Preview & Clone** — Review the sample, name the voice, and submit for cloning
+1. **Choose Engine** — CosyVoice / MiMo / VoxCPM
+2. **Input Audio** — Record (microphone), upload (MP3/WAV/WebM), or URL (CosyVoice only)
+3. **Preview & Clone** — Review sample, name the voice, submit for cloning
+4. **Voice Profile Created** — Saved with `original_audio_path` (source audio) and engine metadata
 
-### 3.4 Voice List
+CosyVoice clones register with Qwen cloud and store `qwen_voice_id`. MiMo/VoxCPM clones are stateless — the audio file is read and sent at synthesis time.
 
-- Right-side panel shows all registered voices
-- Filtered by current clone engine (`qwen` or `mimo`)
-- Supports deleting voices and manual sync from Qwen cloud
+### 3.4 Voice Design Flow
 
-### 3.5 Voice Design
-
-Two-step flow: **design → confirm → save**.
+Two sub-engines for voice design from text descriptions:
 
 | Sub-engine | Method | Output |
 |------------|--------|--------|
 | **MiMo** | Text description → `/api/mimo-tts/voicedesign` | MP3 audio preview |
 | **VoxCPM** | Text description → VoxCPM design endpoint | WAV audio preview |
 
-#### Design Flow
+Flow:
+1. **Describe** — Enter a natural-language voice description
+2. **Preview** — System synthesizes a sample. MiMo voicedesign uses `optimize_text_preview=false` for verbatim text
+3. **Save** — Persists audio as a `VoiceProfile` via `/api/clone/create-from-design`
 
-1. **Describe** — Enter a natural-language voice description (e.g. "年轻女性，温柔甜美，语速适中")
-2. **Preview** — System synthesizes a sample audio using the selected engine. MiMo voicedesign calls pass `optimize_text_preview=false` to ensure the preview text is used verbatim without LLM rephrasing.
-3. **Confirm** — "确认保存音色" persists the audio as a `VoiceProfile` via `/api/clone/create-from-design` without leaving the design UI
-4. **Save Role** — "保存角色" links the `VoiceProfile` to the role as a `voiceclone` reference (`mimo_clone_voice_id` / `voice_id`)
+### 3.5 Voice Profile Cards
 
-#### Project Role Editor Integration
-
-- Roles designed via voice design are saved with `mimo_mode: 'voiceclone'` (or `voxcpm_mode: 'clone'`) and the `VoiceProfile` ID
-- Reopening a designed role shows the **clone** tab with the voice pre-selected
-- CharacterCard "试听" button plays the saved preview audio directly (no re-synthesis)
-- Designed voices appear in the clone voice dropdown alongside manually cloned voices
+Each card shows:
+- VoiceAvatar (40px), name, engine label chip, description chip
+- "试听" button — plays the saved audio directly via `audio_url`
+- Click to expand for editing/deleting
 
 ### 3.6 Voice Refresh
 
-- A shared `useVoiceRefresh` hook triggers cross-component refresh after clone success
-- Both the voice list and TTS voice selectors update automatically
+A shared `useVoiceRefresh` hook triggers cross-component refresh after clone/design success. Both the voice list and TTS voice selectors update automatically.
 
 ---
 
-## 4. Text to Speech (`/tts-synthesis`)
+## 4. Projects (`/tts-synthesis`)
 
-### 4.1 Mode Switch
+### 4.1 Project Structure
 
-Two primary modes:
+A project is the primary organizational unit. It contains chapters, which contain segments. There is **no single mode** — all TTS work happens within a project.
 
-| Mode | Description |
-|------|-------------|
-| **Single** | Input text, pick voice/params, generate one audio clip |
-| **Segmented** | Professional timeline editor for long-form multi-segment synthesis |
+```
+Project
+├── Chapters[]
+│   ├── original_text (narration manuscript)
+│   ├── segments[] (TTS units)
+│   └── default_params (engine/voice settings)
+├── source_document (raw source markdown)
+├── default_narrator_role_id
+└── roles (narrator + cast)
+```
 
-### 4.2 Engine Switch
+### 4.2 ProjectShell Sections
 
-Three TTS engines available in both modes:
+The project workspace has 5 sections accessible via the left rail:
+
+| Section | Component | Description |
+|---------|-----------|-------------|
+| **Overview** | `ProjectOverview` | Project summary, chapter list, narrator info, quick navigation |
+| **Library** | `ProjectLibrary` | Source document + narration chapters with fulltext view |
+| **Studio** | `VoiceStudioLayout` | Main segmented TTS editor with chapter sidebar |
+| **Voices** | `ProjectVoices` | Role management: narrator + cast roles with voice configuration |
+| **Settings** | `ProjectSettings` | Project metadata, export config, Remotion path |
+
+### 4.3 TTS Engines
+
+Four TTS engines are available:
 
 | Engine | Source | Features |
 |--------|--------|----------|
-| **Edge-TTS** | Microsoft, offline | Free, multi-language, no API key required |
+| **Edge-TTS** | Microsoft, online | Free, multi-language, no API key required |
 | **CosyVoice (Qwen)** | Cloud API | Uses cloned voice IDs, SSML support |
 | **MiMo-TTS** | Cloud API | Preset voices, voice design, voice clone modes |
+| **VoxCPM** | Local GPU | Clone, ultimate clone, design modes; CFG/timestep params |
 
-### 4.3 Single Mode
+### 4.4 Studio — Segmented Editor
 
-#### Controls per Engine
+The Studio section is a professional timeline editor for multi-segment synthesis.
 
-| Engine | Parameters |
-|--------|-----------|
-| CosyVoice | Voice selector, speed (0.5–2.0), volume (0–100), pitch (0.5–2.0), language (Chinese/English/Japanese/Korean), instruction text, SSML toggle, markdown filter toggle |
-| Edge-TTS | Voice selector (filtered by language/gender), rate adjustment (±%), volume adjustment (±%) |
-| MiMo-TTS | Mode toggle (preset / voiceclone), preset voice selector, clone voice selector, instruction text |
-
-#### Workflow
-
-1. Select engine and configure voice/params
-2. Enter text (with character count)
-3. Optionally use SSML toolbar (CosyVoice with SSML enabled)
-4. Click "Generate" → audio player appears
-5. Result saved to IndexedDB (frontend storage mode) or backend DB
-
-#### History
-
-- Synthesis history list with play, delete actions
-- Supports both frontend (IndexedDB with Blob storage) and backend storage modes
-
-### 4.4 Segmented Editor
-
-A professional timeline editor for long-form TTS projects.
-
-#### 4.4.1 Project Management
-
-- **Auto-save**: Projects persist to IndexedDB with 1-second debounce
-- **Multi-project**: Dropdown selector lists all projects with segment counts
-- **New project**: Create fresh project via dropdown option
-- **Rename**: Inline project name editing
-- **Restore on load**: Last-used project auto-loads on page mount
-
-#### 4.4.2 Text Input & Split
-
-Two split modes configured per project:
+#### Text Input & Split
 
 | Mode | Description |
 |------|-------------|
 | **Rule** | Split by punctuation delimiters (default: `，`, `。`, `！`, `？`), customizable |
 | **LLM** | LLM-powered semantic splitting with emotion analysis per segment |
 
-#### 4.4.3 Emotion System
+#### Emotion System
 
-- Emotions returned by LLM analysis during smart split
 - Six emotion types: `happy`, `sad`, `angry`, `calm`, `neutral`, `excited`
 - Chinese labels: 欣喜, 沉重, 愤怒, 沉稳, 中性, 激昂
-- Each emotion maps to a distinct card color (CSS class `emoHappy`, `emoSad`, etc.)
-- Manual override: users can change emotion per segment via `UPDATE_EMOTION` action
-- Emotion tag displayed as a colored badge on each segment card
+- Each emotion maps to a distinct card color
+- Manual override per segment
 
-#### 4.4.4 Segment Lifecycle
-
-Each segment has a status state machine:
+#### Segment Lifecycle
 
 ```
 idle → queued → pending → ready
                      ↘ failed → (retry) → pending
 ```
 
-| Status | Description |
-|--------|-------------|
-| `idle` | Not yet generated |
-| `queued` | Marked for batch generation |
-| `pending` | Currently generating audio |
-| `ready` | Audio generated successfully |
-| `failed` | Generation failed (with error message) |
+#### Per-Segment Features
 
-#### 4.4.5 Per-Segment Features
+- Text editing, SSML annotation (CosyVoice), engine/voice override
+- Override tracking via `overrides` array
+- Undo regenerate (swap current/previous audio)
+- Insert/delete/reorder segments
+- Role assignment (narrator or cast)
 
-- **Text editing**: Edit segment text inline
-- **SSML**: Optional SSML annotation per segment (CosyVoice only), LLM batch annotation supported
-- **Engine override**: Each segment can override the global voice/params
-- **Override tracking**: The `overrides` array records which params are explicitly overridden (`voice`, `speed`, `volume`, `pitch`, `instruction`, `language`)
-- **Undo regenerate**: Swap current and previous audio (keeps the old audio)
-- **Insert/delete**: Add segments after any position, delete individual segments
-- **Reorder**: Drag segments to reorder (via `REORDER` action)
+#### Stale Detection
 
-#### 4.4.6 Stale Detection
+When the global voice changes, segments generated with the old voice are flagged as stale with a warning.
 
-- When the global voice is changed, segments already generated with the old voice are flagged as **stale**
-- Detection logic: `isReady && !hasOverride && generated_voice_id !== currentGlobalVoice`
-- Stale segments display a warning: "音色已变更...建议重新生成"
-- Visual indicator: CSS class `stale` applied to stale segment cards
-
-#### 4.4.7 Play-by-Character Animation
-
-- When a segment is playing, each character highlights in sequence
-- Timing: `duration_sec / text.length` milliseconds per character
-- Characters transition from dim (`charDim`) to lit (`charLit`)
-- Auto-resets 600ms after the last character highlights
-
-#### 4.4.8 Global Voice Management
-
-- Global control bar at the top sets default voice/params for all segments
-- Three engine-specific control bars:
-  - CosyVoice: voice selector + speed/volume/pitch/language
-  - Edge-TTS: voice selector + rate/volume
-  - MiMo-TTS: mode + preset/clone voice + instruction
-- Global params are inherited by new segments; per-segment overrides take precedence
-- Override indicator: a colored dot (`●`) appears when a segment has a voice override
-
-#### 4.4.9 Batch Operations
+#### Batch Operations
 
 | Action | Description |
 |--------|-------------|
 | Generate All | Synthesize all idle/failed segments (3 concurrent workers) |
 | Play All | Sequential playback of all ready segments |
-| SSML Annotate | LLM batch SSML annotation for CosyVoice segments |
-| Export | Opens export dialog |
+| Export | WAV/JSON/SRT/bilingual SRT export |
 
-#### 4.4.10 Export Options
+### 4.5 Library — Source & Narration Documents
 
-| Format | Description |
-|--------|-------------|
-| **WAV** | Concatenated audio from all ready segments, resampled to highest sample rate |
-| **JSON** | Script export with segments, timestamps, SSML, and params |
-| **SRT** | Subtitle file with timecodes calculated from segment durations |
-| **Bilingual SRT** | SRT translated to target language (English/Japanese/Korean) via LLM |
-
-#### 4.4.11 Project Library Tabs
-
-The Project Library (`ProjectLibrary` component) organizes project content into two tabs:
+The Library organizes project content into two tabs:
 
 | Tab | Description |
 |-----|-------------|
-| **Source Document** | Raw source text imported into the project. Displays a textarea for editing (`edit` mode) or a `react-markdown` rendered view (`view` mode). Debounced 500ms auto-save on change. Supports toggling between edit and view modes via a header button. |
-| **Narration Document** | Chapter grid showing all chapters with progress stats, segment counts, estimated duration, and quick actions (rename, delete, open text, enter studio). |
+| **Source Document** | Raw source text. Textarea editing + react-markdown view mode. 500ms debounced auto-save. |
+| **Narration Document** | Chapter grid with progress stats, segment counts, estimated duration. |
 
-**Compare View**: Available from the source document tab. Renders a side-by-side two-column layout comparing the source document (left) against the narration text (right). Both columns render via `react-markdown`. Accessed via a "对比查看" button; dismissed with a "← 返回" back button.
+**Compare View**: Side-by-side two-column layout comparing source (left) vs narration (right). Both render via react-markdown.
 
 **Additional modes**:
-- **Full-text view**: Reads all chapters into a single `react-markdown` preview with aggregate character count and estimated duration.
-- **Chapter editor**: Single-chapter immersive text editor with textarea/markdown preview toggle, design title field, and chapter navigation.
+- **Full-text view**: All chapters concatenated, react-markdown rendered
+- **Chapter editor**: Single-chapter immersive editor with edit/preview toggle
+
+### 4.6 Voices — Role Management
+
+The Voices section manages narrator and cast roles:
+
+| Feature | Description |
+|---------|-------------|
+| Default Narrator | Project-wide default narration voice |
+| Cast Roles | Dialogue characters with individual voice configs |
+| Voice Source Categories | Model Presets (Edge/MiMo), Clone Voices (CosyVoice/MiMo/VoxCPM), Design New (MiMo/VoxCPM) |
+| Preview | Each role has a "试听" button for auditioning |
+| Persistence | Roles saved to global role library, reusable across projects |
+
+### 4.7 Narrator Mode Voice Selection
+
+When in the Studio sidebar, each engine has specific voice source restrictions:
+
+| Engine | Available Voice Sources |
+|--------|------------------------|
+| **CosyVoice** | Only CosyVoice-cloned voices (`clone_engine='qwen'`) |
+| **Edge-TTS** | System default voices |
+| **MiMo** | System preset voices OR MiMo/VoxCPM cloned voices (excludes CosyVoice) |
+| **VoxCPM** | Only VoxCPM-cloned voices (`clone_engine='voxcpm'`) |
+
+### 4.8 Project Auto-Save & Conflict Detection
+
+- Backend mode: debounce PUT via `useSegmentedDraftSync`
+- IndexedDB as draft cache with `base_updated_at` for conflict detection
+- 2000ms tolerance: only triggers conflict when backend `updated_at` exceeds local by >2 seconds
+- Initial load does not trigger `markDirty` to prevent false conflicts
 
 ---
 
-## 5. Speech to Text (`/speech-to-text`)
+## 5. Transcription Hub (`/speech-to-text`)
 
-### 5.1 Engine Support
+### 5.1 Layout
+
+Two-column layout:
+- **Main column**: AudioDropzone (multi-file), TranscriptEditor, CorrectionPanel, TranscriptionHistory
+- **Sidebar**: SidebarConfig (engine/model/VAD), QualityReport, ExportPanel, BilingualCard
+
+### 5.2 Engine Support
 
 | Engine | Model Options | Strengths |
 |--------|--------------|-----------|
 | **Whisper (Faster-Whisper)** | tiny, base, small, medium, large-v3 | 100+ languages, CUDA GPU acceleration |
 | **FunASR (Paraformer-ZH)** | paraformer-zh, paraformer-zh-streaming | Chinese-optimized, 3x faster CPU, built-in VAD + punctuation |
 
-### 5.2 Transcription Parameters
+### 5.3 Transcription Parameters
 
 | Parameter | Whisper | FunASR | Description |
 |-----------|---------|--------|-------------|
@@ -268,97 +263,51 @@ The Project Library (`ProjectLibrary` component) organizes project content into 
 | Beam size | 1–10 (default 5) | — | Search beam width |
 | VAD | — | Toggle (default on) | Voice Activity Detection via FSMN-VAD |
 
-### 5.3 Input Methods
+### 5.4 Input Methods
 
-- **Single file**: Drag-and-drop or click to upload (.wav, .mp3)
-- **Multi-audio merge**: Select multiple files, concatenated in order before transcription
-
-### 5.4 GPU Detection
-
-- Whisper: Auto-detects CUDA GPU, uses float16
-- FunASR: Auto-detects CUDA > MPS > CPU fallback
+- Single file: drag-and-drop or click (.wav, .mp3)
+- Multi-audio merge: select multiple files, concatenated before transcription
 
 ### 5.5 Results
 
 - Editable SRT preview in textarea
 - Language detection with confidence score
 - Device/compute type badge (GPU/CPU)
-- Download SRT file with auto-generated filename
+- Download SRT file
 
 ### 5.6 LLM Subtitle Correction
 
-Two correction modes:
-
-| Mode | Description |
-|------|-------------|
-| **Smart** | Local pre-filtering: only suspected errors sent to LLM (saves 90%+ tokens) |
-| **Full** | All lines sent to LLM for correction |
-
-Workflow:
-1. Provide original script text
-2. LLM compares ASR output against original
-3. Returns correction suggestions with character-level diff
-4. User accepts/rejects individual suggestions
-5. Apply accepted corrections to SRT content
+Two modes: **Smart** (local pre-filtering, only suspected errors sent to LLM) and **Full** (all lines sent). Workflow: provide original script → LLM compares → character-level diff → accept/reject → apply.
 
 ### 5.7 Bilingual Subtitle Translation
 
-- Target languages: English, Japanese, Korean, French, German, Spanish
-- Generates dual-language SRT with original + translation per line
-- Downloadable as bilingual SRT file
-
-### 5.8 History
-
-- Transcription history with playback and download
-- Supports both frontend (IndexedDB) and backend storage modes
-- Stores original audio blob for history playback
+Target languages: English, Japanese, Korean, French, German, Spanish. Generates dual-language SRT.
 
 ---
 
 ## 6. Model Configuration (`/model-config`)
 
-### 6.1 Purpose
+Manage API keys and connection settings through a web UI instead of editing `.env`.
 
-Manage API keys and connection settings for model providers through a web UI, instead of editing `.env` files directly.
+### Provider Cards
 
-### 6.2 Provider Cards
+Each provider is an expandable card with label, icon, status ("已配置" / "使用默认值" / "未配置").
 
-Each provider displays as an expandable card:
+### Behavior
 
-| Field | Description |
-|-------|-------------|
-| Label | Human-readable provider name |
-| Icon | Provider icon/emoji |
-| Status | "已配置" / "使用默认值" / "未配置" |
+- UI values override `.env` defaults
+- Empty UI fields fall back to `.env` automatically
+- Password toggle for sensitive fields
+- Dirty tracking — only modified fields submitted on save
 
-### 6.3 Configuration Fields
-
-Each field has metadata:
-
-| Property | Description |
-|----------|-------------|
-| `label` | Display name |
-| `type` | `text` or `password` |
-| `sensitive` | Whether the field contains secrets (masked with `********`) |
-| `description` | Help text |
-| `has_env_default` | Whether `.env` provides a fallback value |
-
-### 6.4 Behavior
-
-- **Priority**: UI values override `.env` defaults
-- **Fallback**: Empty UI fields fall back to `.env` values automatically
-- **Password toggle**: Show/hide sensitive field values
-- **Dirty tracking**: Only modified fields are submitted on save
-- **Reset**: Revert all fields to server-reported values
-- **Validation**: Save disabled until at least one field is modified
-
-### 6.5 Providers
+### Providers
 
 | Provider | Key Fields |
 |----------|-----------|
 | Qwen (CosyVoice) | `QWEN_API_KEY`, `QWEN_MODEL` |
 | MiMo TTS | `MIMO_API_KEY`, `MIMO_BASE_URL` |
 | LLM (Subtitle correction) | `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL` |
+| FunASR | `FUNASR_MODEL`, `FUNASR_DEVICE` |
 
 ---
 
@@ -366,7 +315,7 @@ Each field has metadata:
 
 ### 7.1 Storage Mode
 
-A global toggle (`useStorageMode` hook) switches between:
+A global toggle switches between:
 
 | Mode | TTS History | STT History | Audio Storage |
 |------|-------------|-------------|---------------|
@@ -375,16 +324,11 @@ A global toggle (`useStorageMode` hook) switches between:
 
 ### 7.2 Audio Caching
 
-- TTS results stored as `TTSLocalRecord` in IndexedDB with full `Blob`
-- STT results stored as `STTLocalRecord` with original audio + SRT content
-- Segmented editor audio stored via the same TTS IndexedDB store (tagged with `source: 'segmented_tts'`)
+- TTS results stored as `TTSLocalRecord` in IndexedDB with full Blob
+- STT results stored as `STTLocalRecord` with original audio + SRT
+- Segmented editor audio tagged with `source: 'segmented_tts'`
 
-### 7.3 Voice Description Enrichment
-
-- Voice descriptions from the voice list are mapped to voice IDs
-- Displayed in synthesis history and segment cards instead of raw voice IDs
-
-### 7.4 Responsive Layout
+### 7.3 Responsive Layout
 
 - Segmented editor supports vertical (card list) and horizontal (compact block) layouts
 - Toggleable via `SET_LAYOUT` action
@@ -397,15 +341,13 @@ A global toggle (`useStorageMode` hook) switches between:
 
 | Type | Key Fields |
 |------|-----------|
-| `VoiceProfile` | id, name, audio_url, original_audio_path, cloned_preview_path, qwen_voice_id, mimo_voice_id, clone_engine (`qwen`/`mimo`/`voxcpm`), description, prompt_text, avatar |
-| `TTSRequest` | text, engine, voice_id, speed, volume, pitch, language, edge_voice, mimo_voice, mimo_audio_base64 |
-| `TTSResult` | audio_id, audio_url/audio_base64, text, params |
-| `Segment` | id, text, ssml, params (SegmentEngineParams), status, emotion, overrides, generated_voice_id, duration_sec |
-| `Chapter` | id, name, engine, voice_id, edge_voice, mimo_mode, mimo_preset_voice, mimo_clone_voice_id, voxcpm_mode, segments[], default_params, split_config, original_text, design_title |
-| `SegmentedProject` | id, name, chapters[], source_document, default_params, split_config, layout, active_narration_version, remotion_project_path |
+| `VoiceProfile` | id, name, audio_url, original_audio_url, cloned_preview_url, qwen_voice_id, mimo_voice_id, clone_engine (`qwen`/`mimo`/`voxcpm`), description, prompt_text, avatar |
+| `Segment` | id, text, ssml, params (SegmentEngineParams), status, emotion, role_id, role_snapshot, segment_kind, prosody_marks, overrides, generated_voice_id, duration_sec |
+| `Chapter` | id, name, engine, voice params, segments[], default_params, split_config, original_text, design_title |
+| `SegmentedProject` | id, name, chapters[], source_document, default_narrator_role_id, default_narrator_snapshot, active_narration_version, remotion_project_path |
+| `Role` | id, name, avatar, description, role_kind (`narrator`/`cast`), default_engine, default_voice, default_engine_params, favorite_styles |
 | `EmotionType` | happy, sad, angry, calm, neutral, excited |
 | `SegmentStatus` | idle, queued, pending, ready, failed |
-| `ModelConfigs` | Record of provider → { label, icon, fields } |
 
 ### Segment Engine Params
 
@@ -419,7 +361,7 @@ interface SegmentEngineParams {
   // MiMo-TTS
   mimo_mode? ('preset'|'voiceclone'|'voicedesign'), mimo_preset_voice?, mimo_clone_voice_id?, mimo_instruction?, mimo_voice_description?;
   // VoxCPM
-  voxcpm_mode? ('tts'|'design'|'clone'|'ultimate'), voxcpm_voice_description?, voxcpm_style_control?, voxcpm_prompt_text?, voxcpm_cfg_value?, voxcpm_inference_timesteps?;
+  voxcpm_mode? ('tts'|'design'|'clone'|'ultimate'), voice_id?, voxcpm_voice_description?, voxcpm_style_control?, voxcpm_prompt_text?, voxcpm_cfg_value?, voxcpm_inference_timesteps?;
 }
 ```
 
@@ -427,87 +369,63 @@ interface SegmentEngineParams {
 
 ## 9. Environment Configuration
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `QWEN_API_KEY` | Yes | — | Qwen CosyVoice API key |
-| `QWEN_MODEL` | No | `cosyvoice-v3.5-plus` | CosyVoice model |
-| `MIMO_API_KEY` | No | — | MiMo TTS API key |
-| `MIMO_BASE_URL` | No | `https://api.xiaomimimo.com/v1` | MiMo API endpoint |
-| `LLM_API_KEY` | No | Falls back to `MIMO_API_KEY` | LLM correction key |
-| `LLM_BASE_URL` | No | Falls back to `MIMO_BASE_URL` | LLM endpoint |
-| `LLM_MODEL` | No | `mimo-v2.5-pro` | LLM model for correction |
-| `DATABASE_URL` | No | `sqlite:///./voice_clone.db` | Backend database |
-| `FUNASR_MODEL` | No | `paraformer-zh` | FunASR model |
-| `FUNASR_DEVICE` | No | Auto-detect | cuda > mps > cpu |
+See `docs/ENV.md` for the full list of 27 environment variables. Key variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `sqlite:///./voice_clone.db` | Backend database |
+| `QWEN_API_KEY` | — | Qwen CosyVoice API key |
+| `MIMO_API_KEY` | — | MiMo TTS API key |
+| `MIMO_BASE_URL` | `https://api.xiaomimimo.com/v1` | MiMo API endpoint |
+| `LLM_API_KEY` | Falls back to `MIMO_API_KEY` | LLM correction key |
+| `LLM_MODEL` | `mimo-v2.5-pro` | LLM model |
+| `FUNASR_MODEL` | `paraformer-zh` | FunASR model |
+| `FUNASR_DEVICE` | Auto-detect | cuda > mps > cpu |
+| `VOXCPM_MODEL_PATH` | `openbmb/VoxCPM2` | VoxCPM HuggingFace model |
+| `VOXCPM_DEVICE` | `auto` | VoxCPM compute device |
 
 ---
 
 ## 10. API Endpoints Summary
 
+See `docs/api-reference.md` for full request/response documentation.
+
 | Group | Endpoint | Method | Purpose |
 |-------|----------|--------|---------|
 | Clone | `/api/clone/upload` | POST | Upload audio file |
+| Clone | `/api/clone/upload-from-url` | POST | Download audio from URL |
 | Clone | `/api/clone/create-clone` | POST | CosyVoice register |
 | Clone | `/api/clone/create-clone-mimo` | POST | MiMo mark for clone |
-| Clone | `/api/clone/create-from-design` | POST | Create VoiceProfile from design preview audio |
+| Clone | `/api/clone/create-clone-voxcpm` | POST | VoxCPM mark for clone |
+| Clone | `/api/clone/create-from-design` | POST | Create VoiceProfile from design |
+| Clone | `/api/clone/{id}/preview-audio` | PATCH | Save clone preview audio |
 | Clone | `/api/clone/list` | GET | List voices |
 | TTS | `/api/tts/synthesize` | POST | CosyVoice/Edge synthesis |
-| TTS | `/api/tts/voices` | GET | Cloned voices with scoping (see below) |
+| TTS | `/api/tts/voices` | GET | Cloned voices |
 | TTS | `/api/tts/edge-voices` | GET | Edge-TTS voices |
 | MiMo | `/api/mimo-tts/preset` | POST | Preset voice synthesis |
-| MiMo | `/api/mimo-tts/voicedesign` | POST | Text-described voice |
+| MiMo | `/api/mimo-tts/voicedesign` | POST | Text-described voice (`optimize_text_preview=false`) |
 | MiMo | `/api/mimo-tts/voiceclone` | POST | Clone synthesis |
+| VoxCPM | `/api/voxcpm/tts` | POST | Basic TTS |
+| VoxCPM | `/api/voxcpm/design` | POST | Voice design |
+| VoxCPM | `/api/voxcpm/clone` | POST | Controllable clone |
+| VoxCPM | `/api/voxcpm/ultimate-clone` | POST | Ultimate clone |
 | Split | `/api/text-split/rule` | POST | Rule-based split |
 | Split | `/api/text-split/llm` | POST | LLM semantic split |
-| Split | `/api/text-split/ssml-annotate` | POST | LLM SSML annotation |
 | STT | `/api/speech-to-text/transcribe` | POST | Single transcription |
-| STT | `/api/speech-to-text/multi-transcribe` | POST | Multi-audio merge |
 | LLM | `/api/subtitle-llm/correct` | POST | Subtitle correction |
 | LLM | `/api/subtitle-llm/translate` | POST | Bilingual translation |
-| Config | `/api/model-config` | GET/PUT | Model configuration |
+| Roles | `/api/roles` | CRUD | Role management |
+| Projects | `/api/segmented-projects` | CRUD | Project management |
 
-### `/api/tts/voices` Query Parameters
+---
 
-| Param | Type | Description |
-|-------|------|-------------|
-| `voice_id` | string? | Return a single voice by ID (any scope) |
-| `project_id` | string? | Return global voices (`project_id IS NULL`) + project-specific voices |
+## 11. Backend Storage
 
-- No params → global voices only (`project_id IS NULL`, `is_cloned = True`)
-- `voice_id` → single voice lookup, 404 if not found
-- `project_id` → global + project-specific voices
+When `storageMode = backend`:
 
-Response envelope: `{"voices": [VoiceProfileOut, ...]}`
-
-Each voice object returns 15 fields: `id`, `name`, `description`, `audio_url`, `original_audio_url`, `cloned_preview_url`, `qwen_voice_id`, `role`, `clone_engine`, `is_cloned`, `cloned_at`, `created_at`, `prompt_text`, `avatar`, `voices_engine`.
-
-`voices_engine` structure:
-```json
-{
-  "type": "design",           // "model_default" | "clone" | "design"
-  "engine": {
-    "type": "Mimo",           // "CosyVoice" | "Mimo" | "VoxCpm" | "EdgeTTS"
-    "sub_type": "mimo-design" // "mimo-clone" | "mimo-design" | "voxcpm-clone" | "voxcpm-ultimate" | "voxcpm-design" | null
-  },
-  "prompt_text": null,
-  "parameters": {
-    "voice_description": "年轻女性，温柔甜美，语速适中",
-    "instruction": ""
-  }
-}
-```
-
-Voice scoping model:
-- `VoiceProfile.project_id = NULL` → global voice (available in all projects)
-- `VoiceProfile.project_id = <id>` → project-specific voice (only visible in that project)
-- Project voices are created via `/api/clone/create-from-design` with `project_id` parameter
-
-## 分段项目后端存储
-
-当 `storageMode = backend` 时，分段项目、章节、段落、参数、生成快照与音频全部由后端管理：
-
-- 数据库三张表：`segmented_projects` / `segmented_project_chapters` / `segmented_project_segments`
-- 每个项目一个目录 `uploads/segmented/{project_id}/`，存放 `original.txt`、章节文本、分片 `mp3`、`manifest.json`
-- 后端为权威来源；IndexedDB 只作为草稿缓存，记录 `base_updated_at` 做冲突检测（2000ms 容差：仅当后端 `updated_at` 超出本地 `base_updated_at` 超过 2 秒时才判定为冲突）
-- 切换到后端模式时若本地 IndexedDB 仍有项目，提示一键迁移
-- 音频由 ffmpeg 转码为 mp3
+- Three tables: `segmented_projects` / `segmented_project_chapters` / `segmented_project_segments`
+- Audio stored in `uploads/segmented/{project_id}/`
+- Backend is authoritative; IndexedDB is draft cache with `base_updated_at` conflict detection (2000ms tolerance)
+- Migration from IndexedDB prompted when switching to backend mode
+- Audio transcoded via ffmpeg to mp3
