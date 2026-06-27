@@ -1,5 +1,4 @@
 import type { Chapter, Role } from '../../types';
-import { isNarratorRole } from '../../services/voiceRoleKind';
 import { roleVoiceLabelFromParams } from '../../services/voiceRoleDefaults';
 import styles from './ProjectOverview.module.css';
 
@@ -7,10 +6,8 @@ interface ProjectOverviewProps {
   projectName: string;
   chapters: Chapter[];
   activeChapterId?: string;
-  defaultNarratorName?: string | null;
   remotionPath?: string | null;
   roles?: Role[];
-  defaultNarratorRoleId?: string | null;
   onEnterLibrary: () => void;
   onEnterStudio: () => void;
   onOpenVoices: () => void;
@@ -78,27 +75,12 @@ function voiceLabel(role: Role): string {
   return roleVoiceLabelFromParams(role.default_engine_params, role.default_voice);
 }
 
-function partitionRoles(roles: Role[], defaultNarratorRoleId?: string | null): { narrators: Role[]; cast: Role[] } {
-  const narrators: Role[] = [];
-  const cast: Role[] = [];
-  for (const role of roles) {
-    if (isNarratorRole(role, defaultNarratorRoleId)) {
-      narrators.push(role);
-    } else {
-      cast.push(role);
-    }
-  }
-  return { narrators, cast };
-}
-
 export function ProjectOverview(props: ProjectOverviewProps) {
   const {
     chapters,
     activeChapterId,
-    defaultNarratorName,
     remotionPath,
     roles = [],
-    defaultNarratorRoleId,
     onEnterLibrary,
     onOpenVoices,
   } = props;
@@ -108,7 +90,6 @@ export function ProjectOverview(props: ProjectOverviewProps) {
     0,
   );
   const progress = segmentCount === 0 ? 0 : Math.round((generatedCount / segmentCount) * 100);
-  const { narrators, cast } = partitionRoles(roles, defaultNarratorRoleId);
 
   return (
     <section className={styles.root}>
@@ -188,44 +169,13 @@ export function ProjectOverview(props: ProjectOverviewProps) {
             </div>
           </div>
 
-          {/* Narrators */}
+          {/* Roles */}
           <div className={styles.castSection}>
-            <h4 className={styles.castLabel}>Narrators</h4>
-            {narrators.length === 0 && !defaultNarratorName ? (
-              <p className={styles.emptyHint}>No narrator assigned.</p>
+            {roles.length === 0 ? (
+              <p className={styles.emptyHint}>No roles assigned.</p>
             ) : (
-              <>
-                {defaultNarratorName && narrators.length === 0 && (
-                  <div className={styles.castMember}>
-                    <div className={styles.castAvatar}>{defaultNarratorName.slice(0, 1)}</div>
-                    <div className={styles.castInfo}>
-                      <strong>{defaultNarratorName}</strong>
-                      <small>Default narrator</small>
-                    </div>
-                  </div>
-                )}
-                {narrators.map(role => (
-                  <div key={role.id} className={styles.castMember}>
-                    <div className={styles.castAvatar}>{role.name.slice(0, 1)}</div>
-                    <div className={styles.castInfo}>
-                      <strong>{role.name}</strong>
-                      <small>{engineLabel(role.default_engine)} · {voiceLabel(role)}</small>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-
-          {/* Divider */}
-          {cast.length > 0 && <div className={styles.castDivider} />}
-
-          {/* Cast */}
-          {cast.length > 0 && (
-            <div className={styles.castSection}>
-              <h4 className={styles.castLabel}>Cast</h4>
               <div className={styles.castList}>
-                {cast.map(role => (
+                {roles.map(role => (
                   <div key={role.id} className={styles.castMember}>
                     <div className={styles.castAvatar}>{role.name.slice(0, 1)}</div>
                     <div className={styles.castInfo}>
@@ -235,8 +185,8 @@ export function ProjectOverview(props: ProjectOverviewProps) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           <button type="button" className={styles.assignButton} onClick={onOpenVoices}>
             + ASSIGN CHARACTER

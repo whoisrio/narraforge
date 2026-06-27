@@ -1,8 +1,8 @@
 import type { Role, RoleSnapshot, SegmentKind } from '../types';
 
-export type SplitVoiceMode = 'narration' | 'dialogue' | 'mixed';
+export type SplitVoiceMode = 'narration' | 'dialogue';
 
-const SPEAKER_PREFIX_RE = /^([\u4e00-\u9fa5A-Za-z0-9_·]{1,12})[：:]\s*.+/;
+const SPEAKER_PREFIX_RE = /^([一-龥A-Za-z0-9_·]{1,12})[：:]\s*.+/;
 const QUOTED_RE = /^[“"「『].+/;
 const QA_RE = /^(Q|A|问|答)[：:]\s*.+/i;
 
@@ -34,6 +34,7 @@ export function roleToSnapshot(role: Role): RoleSnapshot {
     name: role.name,
     avatar: role.avatar,
     description: role.description,
+    role_kind: role.role_kind ?? null,
     default_engine: role.default_engine,
     default_voice: role.default_voice,
     default_engine_params: { ...role.default_engine_params },
@@ -45,29 +46,32 @@ function normalizeName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, '');
 }
 
-function findRoleById(roles: Role[], roleId?: string | null): Role | undefined {
-  if (!roleId) return undefined;
-  return roles.find(role => role.id === roleId);
-}
-
-function findCastRoleBySpeaker(roles: Role[], speakerName: string | null, narratorRoleId?: string | null): Role | undefined {
+function findCastRoleBySpeaker(roles: Role[], speakerName: string | null): Role | undefined {
   if (!speakerName) return undefined;
   const normalized = normalizeName(speakerName);
-  return roles.find(role => role.id !== narratorRoleId && normalizeName(role.name) === normalized);
+  return roles.find(role => normalizeName(role.name) === normalized);
 }
 
 export function assignRoleForSplitItem(
   text: string,
   mode: SplitVoiceMode,
   roles: Role[],
-  narratorRoleId?: string | null,
 ): AssignedSplitRole {
   const segmentKind = inferSegmentKind(text, mode);
   const speakerName = inferSpeakerName(text);
 
-  const role = segmentKind === 'narration'
-    ? findRoleById(roles, narratorRoleId)
-    : findCastRoleBySpeaker(roles, speakerName, narratorRoleId);
+  // Narration segments use the global Engine panel voice — no role assigned
+  if (segmentKind === 'narration') {
+    return {
+      segment_kind: segmentKind,
+      role_id: null,
+      role_snapshot: null,
+      speaker_name: speakerName,
+    };
+  }
+
+  // Dialogue segments get a matching CAST role by speaker name
+  const role = findCastRoleBySpeaker(roles, speakerName);
 
   return {
     segment_kind: segmentKind,

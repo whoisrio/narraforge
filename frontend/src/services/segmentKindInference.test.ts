@@ -27,43 +27,42 @@ const castA = {
 describe('segmentKindInference', () => {
   it('keeps all segments as narration in narration mode', () => {
     expect(inferSegmentKind('嘉宾A：你好', 'narration')).toBe('narration');
-    expect(inferSegmentKind('“你好。”', 'narration')).toBe('narration');
+    expect(inferSegmentKind('"你好。"', 'narration')).toBe('narration');
   });
 
   it('detects dialogue in dialogue mode from speaker prefixes, quotes, and QA markers', () => {
     expect(inferSegmentKind('嘉宾A：你好', 'dialogue')).toBe('dialogue');
-    expect(inferSegmentKind('“你好。”', 'dialogue')).toBe('dialogue');
+    expect(inferSegmentKind('"你好。"', 'dialogue')).toBe('dialogue');
     expect(inferSegmentKind('Q: 你怎么看？', 'dialogue')).toBe('dialogue');
     expect(inferSegmentKind('旁白继续推进故事。', 'dialogue')).toBe('narration');
-  });
-
-  it('uses mixed mode as narration by default but marks obvious dialogue', () => {
-    expect(inferSegmentKind('旁白继续推进故事。', 'mixed')).toBe('narration');
-    expect(inferSegmentKind('嘉宾A：你好', 'mixed')).toBe('dialogue');
   });
 
   it('extracts speaker names from prefixed dialogue', () => {
     expect(inferSpeakerName('嘉宾A：你好')).toBe('嘉宾A');
     expect(inferSpeakerName('Alice: hello')).toBe('Alice');
-    expect(inferSpeakerName('“你好。”')).toBeNull();
+    expect(inferSpeakerName('"你好。"')).toBeNull();
   });
 
-  it('assigns narrator role to narration and matching cast role to dialogue', () => {
+  it('narration segments get no role (voice from global Engine panel)', () => {
     const roles = [narrator, castA];
 
-    const narration = assignRoleForSplitItem('旁白继续。', 'narration', roles, narrator.id);
+    const narration = assignRoleForSplitItem('旁白继续。', 'narration', roles);
     expect(narration.segment_kind).toBe('narration');
-    expect(narration.role_id).toBe('role-narrator');
-    expect(narration.role_snapshot?.name).toBe('默认旁白');
+    expect(narration.role_id).toBeNull();
+    expect(narration.role_snapshot).toBeNull();
+  });
 
-    const dialogue = assignRoleForSplitItem('嘉宾A：你好。', 'dialogue', roles, narrator.id);
+  it('assigns matching cast role to dialogue segments', () => {
+    const roles = [narrator, castA];
+
+    const dialogue = assignRoleForSplitItem('嘉宾A：你好。', 'dialogue', roles);
     expect(dialogue.segment_kind).toBe('dialogue');
     expect(dialogue.role_id).toBe('role-guest-a');
     expect(dialogue.role_snapshot?.name).toBe('嘉宾A');
   });
 
   it('leaves unmatched dialogue without a cast role', () => {
-    const dialogue = assignRoleForSplitItem('陌生人：你好。', 'dialogue', [narrator, castA], narrator.id);
+    const dialogue = assignRoleForSplitItem('陌生人：你好。', 'dialogue', [narrator, castA]);
     expect(dialogue.segment_kind).toBe('dialogue');
     expect(dialogue.role_id).toBeNull();
     expect(dialogue.role_snapshot).toBeNull();

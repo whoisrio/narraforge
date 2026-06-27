@@ -218,7 +218,9 @@ The Voices section manages narrator and cast roles:
 | Cast Roles | Dialogue characters with individual voice configs |
 | Voice Source Categories | Model Presets (Edge/MiMo), Clone Voices (CosyVoice/MiMo/VoxCPM), Design New (MiMo/VoxCPM) |
 | Preview | Each role has a "试听" button for auditioning |
-| Persistence | Roles saved to global role library, reusable across projects |
+| Persistence | Roles created in project saved to project role library |
+
+global voices(role) can be used in project , but can not be edit.
 
 ### 4.7 Narrator Mode Voice Selection
 

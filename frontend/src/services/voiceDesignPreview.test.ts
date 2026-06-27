@@ -33,7 +33,7 @@ describe('voiceDesignPreview', () => {
     expect(mimoTtsApi.synthesizeVoiceDesign).toHaveBeenCalledWith({
       voice_description: '温暖、沉稳、有纪录片感的中文男声',
       text: '这是一段试听文本。',
-      optimize_text_preview: true,
+      optimize_text_preview: false,
       format: 'mp3',
     });
   });

@@ -13,7 +13,6 @@ describe('ProjectSettings', () => {
       <ProjectSettings
         projectName="草稿项目"
         remotionPath="/tmp/remotion"
-        defaultNarratorName="默认旁白"
         storageMode="frontend"
         chapterCount={2}
         projectDescription="给 DeepSeek 视频做旁白"
@@ -31,7 +30,6 @@ describe('ProjectSettings', () => {
     expect(screen.getByText('Project Settings')).toBeInTheDocument();
     expect(screen.getByLabelText('项目名称')).toHaveValue('草稿项目');
     expect(screen.getByLabelText('Remotion 项目路径')).toHaveValue('/tmp/remotion');
-    expect(screen.getAllByText('默认旁白').length).toBeGreaterThan(0);
     expect(screen.getByText('frontend')).toBeInTheDocument();
     expect(screen.getByText('2 章')).toBeInTheDocument();
     expect(screen.getByText('Studio 导出')).toBeInTheDocument();

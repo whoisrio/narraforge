@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { t } from '../../i18n';
 import { textSplitApi } from '../../services/api';
 import { stripMarkdownForTTS } from '../../utils/stripMarkdownForTTS';
 import type { Chapter } from '../../types';
@@ -170,13 +171,11 @@ export function TextInputPanel({
           </div>
 
           <div className={styles.actionBar}>
-            {showVoiceModeSwitch && <div className={styles.voiceModeSwitch} aria-label="配音模式">
+            {showVoiceModeSwitch && <div className={styles.voiceModeSwitch} aria-label={t('studio.voiceMode')}>
               <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'narration' ? styles.active : ''}`}
-                onClick={() => setSplitVoiceMode('narration')}>旁白为主</button>
+                onClick={() => setSplitVoiceMode('narration')}>{t('studio.narration')}</button>
               <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'dialogue' ? styles.active : ''}`}
-                onClick={() => setSplitVoiceMode('dialogue')}>对话/剧本</button>
-              <button className={`${styles.voiceModeBtn} ${splitVoiceMode === 'mixed' ? styles.active : ''}`}
-                onClick={() => setSplitVoiceMode('mixed')}>混合模式</button>
+                onClick={() => setSplitVoiceMode('dialogue')}>{t('studio.dialogue')}</button>
             </div>}
 
             <button className={styles.settingsToggle} onClick={() => setShowSettings(!showSettings)}>

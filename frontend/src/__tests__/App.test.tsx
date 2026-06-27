@@ -5,7 +5,7 @@ import { indexedDBStorage } from '../services/segmentedProjectStorage';
 
 vi.mock('../services/api', () => ({
   configApi: {
-    getStorageMode: vi.fn(() => new Promise(() => {})),
+    getStorageMode: vi.fn().mockResolvedValue({ storage_mode: 'frontend' }),
     setStorageMode: vi.fn().mockResolvedValue({ storage_mode: 'frontend' }),
   },
 }));

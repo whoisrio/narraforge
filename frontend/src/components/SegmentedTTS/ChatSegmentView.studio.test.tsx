@@ -144,7 +144,7 @@ describe('ChatSegmentView studio script flow', () => {
     expect(onAppend).toHaveBeenCalledWith('narration');
   });
 
-  it('filters dialogue role choices to Cast roles only', () => {
+  it('shows all roles for dialogue segments (no narrator/cast filter)', () => {
     const onUpdateRole = vi.fn();
     const segment = makeSegment('s1', 'dialogue', '台词内容');
     segment.role_id = null;
@@ -168,10 +168,11 @@ describe('ChatSegmentView studio script flow', () => {
     const options = Array.from(screen.getByLabelText('选择角色').querySelectorAll('option')).map(option => option.textContent);
     expect(options).toContain('嘉宾A');
     expect(options).toContain('嘉宾B');
-    expect(options).not.toContain('默认旁白');
+    // All roles are shown — no narrator/cast filter
+    expect(options).toContain('默认旁白');
   });
 
-  it('can switch segment kind and assigns the first matching role snapshot', () => {
+  it('can switch segment kind to narration with null role (voice from global Engine)', () => {
     const onUpdateKind = vi.fn();
     const segment = makeSegment('s1', 'dialogue', '台词内容');
 
@@ -193,9 +194,7 @@ describe('ChatSegmentView studio script flow', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /改为旁白/ }));
 
-    expect(onUpdateKind).toHaveBeenCalledWith('s1', 'narration', expect.objectContaining({
-      id: 'role-narrator',
-      name: '默认旁白',
-    }));
+    // Narration segments get null role — voice comes from global Engine panel
+    expect(onUpdateKind).toHaveBeenCalledWith('s1', 'narration', null);
   });
 });

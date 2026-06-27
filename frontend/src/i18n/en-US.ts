@@ -53,6 +53,10 @@ export const enUS: Messages = {
     listView: 'List View',
     dialogueView: 'Dialogue View',
     batchSynthesize: 'Batch Synthesize',
+    voiceMode: 'Voice Mode',
+    narration: 'Narration',
+    dialogue: 'Dialogue',
+    narrationVoice: 'Narration Voice',
   },
   voiceRole: {
     label: 'Voice Role',

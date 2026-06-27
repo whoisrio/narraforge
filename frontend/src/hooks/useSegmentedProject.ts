@@ -434,12 +434,33 @@ export function segmentedReducer(state: State, action: Action): State {
       };
     case 'SET_SEGMENT_ROLE':
       return {
-        project: updateSegment(p, action.id, seg => ({
-          ...seg,
-          role_id: action.roleId,
-          role_snapshot: action.roleSnapshot,
-          updated_at: new Date().toISOString(),
-        })),
+        project: updateSegment(p, action.id, seg => {
+          const roleParams = action.roleSnapshot?.default_engine_params;
+          const overrides = [...(seg.overrides || [])];
+          if (action.roleId && roleParams) {
+            // Apply role voice to segment params and lock
+            const hasVoice = overrides.includes('voice');
+            if (!hasVoice) overrides.push('voice');
+            return {
+              ...seg,
+              role_id: action.roleId,
+              role_snapshot: action.roleSnapshot,
+              params: { ...seg.params, ...roleParams },
+              overrides,
+              updated_at: new Date().toISOString(),
+            };
+          }
+          // Clearing role: unlock voice to follow global
+          const idx = overrides.indexOf('voice');
+          if (idx >= 0) overrides.splice(idx, 1);
+          return {
+            ...seg,
+            role_id: null,
+            role_snapshot: null,
+            overrides,
+            updated_at: new Date().toISOString(),
+          };
+        }),
       };
     case 'SET_SEGMENT_KIND':
       return {

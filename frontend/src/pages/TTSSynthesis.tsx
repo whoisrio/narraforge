@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { t } from '../i18n';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
 import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSPanel';
@@ -24,7 +25,6 @@ import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Se
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
-import { RolePicker } from '../components/SegmentedTTS/RolePicker';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
 import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
 import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
@@ -32,7 +32,6 @@ import { ProjectOverview } from '../components/ProjectOverview/ProjectOverview';
 import { ProjectSettings } from '../components/ProjectSettings/ProjectSettings';
 import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
-import { createVoiceRoleDraft, roleVoiceLabelFromParams } from '../services/voiceRoleDefaults';
 import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
@@ -128,7 +127,7 @@ export function TTSSynthesis({
   const [projectSidebarCollapsed, setProjectSidebarCollapsed] = useState(() => localStorage.getItem('narraforge.projectSidebarCollapsed') === 'true');
 
   // Sidebar accordion state — engine open by default, others collapsed
-  const [sidebarOpen, setSidebarOpen] = useState({ voiceMode: false, narrator: false, engine: true });
+  const [sidebarOpen, setSidebarOpen] = useState({ voiceMode: false, engine: true });
   const [libraryFulltext, setLibraryFulltext] = useState(false);
   const toggleSidebarSection = (section: keyof typeof sidebarOpen) => {
     setSidebarOpen(prev => ({ ...prev, [section]: !prev[section] }));
@@ -642,62 +641,8 @@ export function TTSSynthesis({
     voiceMode: SplitVoiceMode,
   ) => items.map(item => ({
     ...item,
-    ...assignRoleForSplitItem(item.text, voiceMode, roles, project.default_narrator_role_id),
-  })), [roles, project.default_narrator_role_id]);
-
-  const createRoleDraft = useCallback((name: string, description: 'Narrator' | 'Cast'): RoleSnapshot => createVoiceRoleDraft({
-    name,
-    roleKind: description,
-    currentParams: buildCurrentParams(),
-  }), [buildCurrentParams]);
-
-  const handleCreateDefaultNarrator = useCallback(async () => {
-    try {
-      const saved = await roleApi.createRole(createRoleDraft('默认旁白', 'Narrator'));
-      setRoles(prev => [saved, ...prev.filter(role => role.id !== saved.id)]);
-      dispatch({
-        type: 'SET_PROJECT_NARRATOR',
-        roleId: saved.id,
-        roleSnapshot: {
-          id: saved.id,
-          name: saved.name,
-          avatar: saved.avatar,
-          description: saved.description,
-          default_engine: saved.default_engine,
-          default_voice: saved.default_voice,
-          default_engine_params: { ...saved.default_engine_params },
-          favorite_styles: [...saved.favorite_styles],
-        },
-      });
-      showToast('默认旁白已创建');
-    } catch (error) {
-      console.error('Create narrator role failed:', error);
-      showToast('创建默认旁白失败', 'error');
-    }
-  }, [createRoleDraft, dispatch, showToast]);
-
-  const handleCreateCastRole = useCallback(async () => {
-    const castCount = roles.filter(role => !`${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') && !`${role.name} ${role.description ?? ''}`.includes('旁白')).length;
-    try {
-      const saved = await roleApi.createRole(createRoleDraft(`嘉宾${castCount + 1}`, 'Cast'));
-      setRoles(prev => [saved, ...prev.filter(role => role.id !== saved.id)]);
-      showToast('Cast 角色已创建');
-    } catch (error) {
-      console.error('Create cast role failed:', error);
-      showToast('创建 Cast 失败', 'error');
-    }
-  }, [createRoleDraft, roles, showToast]);
-
-  const roleSnapshotFromRole = useCallback((role: Role): RoleSnapshot => ({
-    id: role.id,
-    name: role.name,
-    avatar: role.avatar,
-    description: role.description,
-    default_engine: role.default_engine,
-    default_voice: role.default_voice,
-    default_engine_params: { ...role.default_engine_params },
-    favorite_styles: [...role.favorite_styles],
-  }), []);
+    ...assignRoleForSplitItem(item.text, voiceMode, roles),
+  })), [roles]);
 
   const handleSaveRole = useCallback(async (draft: RoleSnapshot) => {
     try {
@@ -708,52 +653,29 @@ export function TTSSynthesis({
       setRoles(prev => exists
         ? prev.map(role => role.id === saved.id ? saved : role)
         : [saved, ...prev.filter(role => role.id !== saved.id)]);
-      const isNarrator = `${saved.name} ${saved.description ?? ''}`.toLowerCase().includes('narrator') || `${saved.name} ${saved.description ?? ''}`.includes('旁白');
-      if (isNarrator || project.default_narrator_role_id === saved.id) {
-        dispatch({
-          type: 'SET_PROJECT_NARRATOR',
-          roleId: saved.id,
-          roleSnapshot: roleSnapshotFromRole(saved),
-        });
-      }
       showToast(exists ? '角色已更新' : '角色已创建');
     } catch (error) {
       console.error('Save role failed:', error);
       showToast('角色保存失败', 'error');
       throw error;
     }
-  }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
+  }, [roles, showToast]);
 
   const handleDeleteRole = useCallback(async (roleId: string) => {
     const target = roles.find(role => role.id === roleId);
     if (!target) return;
-    const isNarrator = `${target.name} ${target.description ?? ''}`.toLowerCase().includes('narrator') || `${target.name} ${target.description ?? ''}`.includes('旁白');
-    const remainingNarrators = roles.filter(role => role.id !== roleId && (`${role.name} ${role.description ?? ''}`.toLowerCase().includes('narrator') || `${role.name} ${role.description ?? ''}`.includes('旁白')));
-    if (isNarrator && remainingNarrators.length === 0) {
-      showToast('至少保留一个旁白音色', 'error');
-      return;
-    }
     try {
       // 仅从当前项目移除，不全局删除
       // 1. 清除所有引用该角色的 segment 的 role_id 和 role_snapshot
       dispatch({ type: 'CLEAR_ROLE_FROM_SEGMENTS', roleId });
       // 2. 从本地角色列表移除（不调用 roleApi.deleteRole）
       setRoles(prev => prev.filter(role => role.id !== roleId));
-      // 3. 如果是默认旁白，重新指定
-      if (project.default_narrator_role_id === roleId) {
-        const nextNarrator = remainingNarrators[0] ?? null;
-        dispatch({
-          type: 'SET_PROJECT_NARRATOR',
-          roleId: nextNarrator?.id ?? null,
-          roleSnapshot: nextNarrator ? roleSnapshotFromRole(nextNarrator) : null,
-        });
-      }
       showToast('角色已从项目移除');
     } catch (error) {
       console.error('Remove role from project failed:', error);
       showToast('移除角色失败', 'error');
     }
-  }, [roles, project.default_narrator_role_id, dispatch, roleSnapshotFromRole, showToast]);
+  }, [roles, dispatch, showToast]);
 
   const handlePreviewRole = useCallback(async (role: RoleSnapshot, sampleText: string) => {
     setPreviewingRoleId(role.id);
@@ -777,11 +699,11 @@ export function TTSSynthesis({
       const overrides = seg.overrides || [];
       const gp = buildCurrentParams();
 
-      // Effective engine: global when unlocked, stored when locked
+      // Effective engine: locked → stored; unlocked → current global
       const hasVoiceLock = overrides.includes('voice');
       const effectiveEngine = hasVoiceLock ? (sp.engine || gp.engine) : gp.engine;
 
-      // Params: locked → use stored; unlocked → use CURRENT global, fallback to stored for CosyVoice-specific fields
+      // Params: locked → stored; unlocked → current global, fallback to stored
       const voiceId = hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id);
       const speed = overrides.includes('speed') ? sp.speed : (gp.speed ?? 1.0);
       const volume = overrides.includes('volume') ? sp.volume : (gp.volume ?? 80);
@@ -1290,19 +1212,6 @@ export function TTSSynthesis({
   // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
   const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.duration_sec ?? 0), 0);
   const generatedSegmentCount = activeChapter.segments.filter(segment => segment.status === 'ready').length;
-  const voiceRoleLabel = project.default_narrator_snapshot?.name
-    || selectedVoice?.description
-    || selectedVoice?.name
-    || edgeVoice
-    || mimoPresetVoice
-    || '默认旁白';
-  const narratorDraftPreview = createVoiceRoleDraft({
-    name: '默认旁白',
-    roleKind: 'Narrator',
-    currentParams: buildCurrentParams(),
-  });
-  const defaultNarratorPreviewLabel = `${({ cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM' } as Record<Engine, string>)[narratorDraftPreview.default_engine] || narratorDraftPreview.default_engine} · ${roleVoiceLabelFromParams(narratorDraftPreview.default_engine_params, narratorDraftPreview.default_voice)}`;
-
   return (
     <div className={styles.container}>
       <div className={styles.workbenchLayout}>
@@ -1356,61 +1265,35 @@ export function TTSSynthesis({
               {/* Voice Mode */}
               <div className={`${styles.sidebarSection} ${sidebarOpen.voiceMode ? styles.open : ''}`}>
                 <div className={styles.sidebarSectionHeader} onClick={() => toggleSidebarSection('voiceMode')}>
-                  <span className={styles.sidebarSectionTitle}>Voice Mode</span>
+                  <span className={styles.sidebarSectionTitle}>{t('studio.voiceMode')}</span>
                   <span className={styles.sidebarSectionCaret}>›</span>
                 </div>
                 <div className={styles.sidebarSectionBody}>
                   <div className={styles.sidebarSectionBodyInner}>
-                    <div className={styles.sidebarModeSwitch} aria-label="配音模式">
+                    <div className={styles.sidebarModeSwitch} aria-label={t('studio.voiceMode')}>
                       <button
                         type="button"
                         className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'narration' ? styles.sidebarModeBtnActive : ''}`}
                         onClick={e => { e.stopPropagation(); setSplitVoiceMode('narration'); }}
                       >
-                        旁白
+                        {t('studio.narration')}
                       </button>
                       <button
                         type="button"
                         className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'dialogue' ? styles.sidebarModeBtnActive : ''}`}
                         onClick={e => { e.stopPropagation(); setSplitVoiceMode('dialogue'); }}
                       >
-                        对话
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'mixed' ? styles.sidebarModeBtnActive : ''}`}
-                        onClick={e => { e.stopPropagation(); setSplitVoiceMode('mixed'); }}
-                      >
-                        混合
+                        {t('studio.dialogue')}
                       </button>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Narrator */}
-              <div className={`${styles.sidebarSection} ${sidebarOpen.narrator ? styles.open : ''}`}>
-                <div className={styles.sidebarSectionHeader} onClick={() => toggleSidebarSection('narrator')}>
-                  <span className={styles.sidebarSectionTitle}>Narrator</span>
-                  <span className={styles.sidebarSectionCaret}>›</span>
-                </div>
-                <div className={styles.sidebarSectionBody}>
-                  <div className={styles.sidebarSectionBodyInner}>
-                    <RolePicker
-                      roles={roles}
-                      label="旁白角色"
-                      value={project.default_narrator_role_id}
-                      onChange={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
-                      onManage={() => setRoleLibraryOpen(true)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Engine */}
+              {/* Narration Voice */}
               <div className={`${styles.sidebarSection} ${sidebarOpen.engine ? styles.open : ''}`}>
                 <div className={styles.sidebarSectionHeader} onClick={() => toggleSidebarSection('engine')}>
-                  <span className={styles.sidebarSectionTitle}>Engine</span>
+                  <span className={styles.sidebarSectionTitle}>{t('studio.narrationVoice')}</span>
                   <span className={styles.sidebarSectionCaret}>›</span>
                 </div>
                 <div className={styles.sidebarSectionBody}>
@@ -1609,25 +1492,18 @@ export function TTSSynthesis({
           <ProjectVoices
             roles={roles}
             projectId={project.id}
-            defaultNarratorRoleId={project.default_narrator_role_id}
-            onSetDefaultNarrator={(roleId, roleSnapshot) => dispatch({ type: 'SET_PROJECT_NARRATOR', roleId, roleSnapshot })}
-            onCreateDefaultNarrator={handleCreateDefaultNarrator}
-            onCreateCast={handleCreateCastRole}
             onSaveRole={handleSaveRole}
             onDeleteRole={handleDeleteRole}
             onPreviewRole={handlePreviewRole}
             onManageRoles={() => setRoleLibraryOpen(true)}
-            defaultNarratorPreviewLabel={defaultNarratorPreviewLabel}
           />
         ) : projectSection === 'overview' ? (
           <ProjectOverview
             projectName={project.name}
             chapters={project.chapters}
             activeChapterId={project.active_chapter_id}
-            defaultNarratorName={project.default_narrator_snapshot?.name ?? null}
             remotionPath={project.remotion_project_path}
             roles={roles}
-            defaultNarratorRoleId={project.default_narrator_role_id}
             onEnterLibrary={() => setProjectSection('library')}
             onEnterStudio={() => setProjectSection('studio')}
             onOpenVoices={() => setProjectSection('voices')}
@@ -1636,7 +1512,6 @@ export function TTSSynthesis({
           <ProjectSettings
             projectName={project.name}
             remotionPath={project.remotion_project_path}
-            defaultNarratorName={voiceRoleLabel}
             storageMode={storageMode}
             chapterCount={project.chapters.length}
             projectDescription={project.description}

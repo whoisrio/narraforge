@@ -51,6 +51,10 @@ export const zhCN = {
     listView: '列表视图',
     dialogueView: '对话视图',
     batchSynthesize: '批量合成',
+    voiceMode: '配音模式',
+    narration: '旁白',
+    dialogue: '对话',
+    narrationVoice: '旁白音色',
   },
   voiceRole: {
     label: '声音角色',

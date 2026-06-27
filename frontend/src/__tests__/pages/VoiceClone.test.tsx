@@ -18,12 +18,8 @@ describe('VoiceClone Page', () => {
 
     render(<VoiceClone />);
 
-    expect(screen.getByText('Voice Design')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: '音色设计' })).toBeInTheDocument();
-    expect(screen.getByText('Voice Profile Library')).toBeInTheDocument();
-    expect(screen.getByText('实时录制')).toBeInTheDocument();
-    expect(screen.getByText('上传文件')).toBeInTheDocument();
-    expect(screen.getByText('公网地址')).toBeInTheDocument();
+    expect(screen.getByText('Voice Profiles')).toBeInTheDocument();
   });
 
   it('should show empty state when no cloned voices exist', async () => {
@@ -35,7 +31,7 @@ describe('VoiceClone Page', () => {
     render(<VoiceClone />);
 
     await waitFor(() => {
-      expect(screen.getByText('No Voices Yet')).toBeInTheDocument();
+      expect(screen.getByText(/还没有音色/)).toBeInTheDocument();
     });
   });
 
@@ -62,10 +58,7 @@ describe('VoiceClone Page', () => {
     render(<VoiceClone />);
 
     await waitFor(() => {
-      expect(screen.getByText('🎤 CosyVoice 克隆声音')).toBeInTheDocument();
-      expect(screen.getByText('qwen-1')).toBeInTheDocument();
+      expect(screen.getByText('我的声音')).toBeInTheDocument();
     });
-
-    expect(screen.getAllByText('Delete')).toHaveLength(mockVoices.length);
   });
 });

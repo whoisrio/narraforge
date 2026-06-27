@@ -1,6 +1,7 @@
 import type { Segment, SegmentEngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
-import { isNarratorRole } from '../../services/voiceRoleKind';
+import { inferSpeakerName } from '../../services/segmentKindInference';
+import { t } from '../../i18n';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { SegmentRow } from './SegmentRow';
 import { SegmentEditPanel } from './SegmentEditPanel';
@@ -48,12 +49,17 @@ interface SegmentListProps {
   onSplit?: (id: string, position: number) => void;
 }
 
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '');
+}
+
 function toSnapshot(role: Role): RoleSnapshot {
   return {
     id: role.id,
     name: role.name,
     avatar: role.avatar,
     description: role.description,
+    role_kind: role.role_kind ?? null,
     default_engine: role.default_engine,
     default_voice: role.default_voice,
     default_engine_params: { ...role.default_engine_params },
@@ -62,9 +68,8 @@ function toSnapshot(role: Role): RoleSnapshot {
 }
 
 export function SegmentList(props: SegmentListProps) {
-  const { segments, layout, selectedId, playingId, isPaused, compact, voiceMode = 'mixed', voices, globalVoiceId, globalVoiceName, globalEdgeVoice, globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId, onAppend, onEdit, onPlay } = props;
-  const narratorRoles = (props.roles ?? []).filter(role => isNarratorRole(role, undefined));
-  const castRoles = (props.roles ?? []).filter(role => !isNarratorRole(role, undefined));
+  const { segments, layout, selectedId, playingId, isPaused, compact, voiceMode = 'narration', voices, globalVoiceId, globalVoiceName, globalEdgeVoice, globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId, onAppend, onEdit, onPlay } = props;
+  const allRoles = props.roles ?? [];
   const showKindControls = voiceMode !== 'narration';
   // Compute cumulative time ranges for each segment (starting from chapter offset)
   const timeRanges: { start: number; end?: number }[] = [];
@@ -113,23 +118,26 @@ export function SegmentList(props: SegmentListProps) {
         return (
           <div key={seg.id} className={styles.segmentGroup}>
             {showKindControls && <div className={styles.roleStrip}>
-              <span className={styles.kindBadge}>{(seg.segment_kind ?? 'narration') === 'dialogue' ? '台词' : '旁白'}</span>
+              <span className={styles.kindBadge}>{(seg.segment_kind ?? 'narration') === 'dialogue' ? t('studio.dialogue') : t('studio.narration')}</span>
               {props.onUpdateKind && (
                 <button
                   type="button"
                   className={styles.kindSwitch}
                   onClick={() => {
                     const nextKind: SegmentKind = (seg.segment_kind ?? 'narration') === 'dialogue' ? 'narration' : 'dialogue';
-                    const nextRole = (nextKind === 'dialogue' ? castRoles : narratorRoles)[0] ?? null;
+                    // Narration → no role (voice from global Engine); Dialogue → first matching role
+                    const nextRole = nextKind === 'dialogue'
+                      ? (inferSpeakerName(seg.text) ? allRoles.find(r => normalizeName(r.name) === normalizeName(inferSpeakerName(seg.text)!)) : allRoles[0]) ?? allRoles[0] ?? null
+                      : null;
                     props.onUpdateKind?.(seg.id, nextKind, nextRole ? toSnapshot(nextRole) : null);
                   }}
                 >
-                  {(seg.segment_kind ?? 'narration') === 'dialogue' ? '改为旁白' : '改为台词'}
+                  {(seg.segment_kind ?? 'narration') === 'dialogue' ? t('studio.narration') : t('studio.dialogue')}
                 </button>
               )}
               {props.onUpdateRole && (seg.segment_kind ?? 'narration') === 'dialogue' && (
                 <div className={styles.roleChipBar} role="group" aria-label="选择台词角色">
-                  {castRoles.map(role => {
+                  {allRoles.map(role => {
                     const isActive = seg.role_id === role.id;
                     return (
                       <button

@@ -1,7 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Chapter } from '../../types';
+import type { Chapter, Role } from '../../types';
 import { ProjectOverview } from './ProjectOverview';
+
+const roles: Role[] = [
+  {
+    id: 'role-narrator',
+    name: '默认旁白',
+    description: 'Narrator',
+    default_engine: 'edge_tts',
+    default_voice: 'Yunxi',
+    default_engine_params: { engine: 'edge_tts', edge_voice: 'zh-CN-YunxiNeural' },
+    favorite_styles: [],
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  },
+];
 
 const chapters: Chapter[] = [
   {
@@ -41,8 +55,8 @@ describe('ProjectOverview', () => {
         projectName="草稿项目"
         chapters={chapters}
         activeChapterId="ch-1"
-        defaultNarratorName="默认旁白"
         remotionPath="/tmp/remotion"
+        roles={roles}
         onEnterLibrary={onEnterLibrary}
         onEnterStudio={onEnterStudio}
         onOpenVoices={onOpenVoices}

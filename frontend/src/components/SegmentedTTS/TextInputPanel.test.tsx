@@ -49,12 +49,12 @@ describe('TextInputPanel split voice mode', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText('粘贴整段文本，拆分为多个语音段落...'), {
-      target: { value: '“你好。”' },
+      target: { value: '”你好。”' },
     });
-    fireEvent.click(screen.getByRole('button', { name: /混合/ }));
+    fireEvent.click(screen.getByRole('button', { name: /对话/ }));
     fireEvent.click(screen.getByRole('button', { name: /^拆分$/ }));
 
-    await waitFor(() => expect(onLLMSplit).toHaveBeenCalledWith('“你好。”', 'mixed'));
+    await waitFor(() => expect(onLLMSplit).toHaveBeenCalledWith('”你好。”', 'dialogue'));
   });
 });
 

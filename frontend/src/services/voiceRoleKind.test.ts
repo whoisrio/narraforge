@@ -6,9 +6,14 @@ describe('voiceRoleKind', () => {
     expect(getVoiceRoleKind({ id: 'r1', name: '嘉宾A', description: 'Cast' }, 'r1')).toBe('narrator');
   });
 
-  it('classifies English and Chinese narrator labels as narrator', () => {
-    expect(isNarratorRole({ id: 'r1', name: 'Default Narrator', description: null })).toBe(true);
-    expect(isNarratorRole({ id: 'r2', name: '主旁白', description: '项目解说' })).toBe(true);
+  it('classifies roles with explicit role_kind as narrator', () => {
+    expect(isNarratorRole({ id: 'r1', name: 'Default Narrator', description: null, role_kind: 'narrator' })).toBe(true);
+    expect(isNarratorRole({ id: 'r2', name: '主旁白', description: '项目解说', role_kind: 'narrator' })).toBe(true);
+  });
+
+  it('classifies roles without explicit role_kind as cast by default', () => {
+    expect(isNarratorRole({ id: 'r1', name: 'Default Narrator', description: null })).toBe(false);
+    expect(isNarratorRole({ id: 'r2', name: '主旁白', description: '项目解说' })).toBe(false);
   });
 
   it('classifies normal dialogue roles as cast', () => {

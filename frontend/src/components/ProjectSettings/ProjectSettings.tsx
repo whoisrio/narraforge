@@ -6,7 +6,6 @@ type ProjectSettingsMeta = Pick<SegmentedProject, 'description' | 'project_type'
 interface ProjectSettingsProps {
   projectName: string;
   remotionPath?: string | null;
-  defaultNarratorName?: string | null;
   storageMode: string;
   chapterCount: number;
   projectDescription?: string | null;
@@ -23,7 +22,6 @@ interface ProjectSettingsProps {
 export function ProjectSettings({
   projectName,
   remotionPath,
-  defaultNarratorName,
   storageMode,
   chapterCount,
   projectDescription,
@@ -93,7 +91,6 @@ export function ProjectSettings({
           <div className={styles.metaList}>
             <div><span>章节数量</span><strong>{chapterCount} 章</strong></div>
             <div><span>存储模式</span><strong>{storageMode}</strong></div>
-            <div><span>默认旁白</span><strong>{defaultNarratorName || '未设置默认旁白'}</strong></div>
           </div>
         </section>
 
@@ -135,7 +132,6 @@ export function ProjectSettings({
         <section className={styles.card}>
           <span className={styles.kicker}>Defaults</span>
           <div className={styles.metaList}>
-            <div><span>默认声音角色</span><strong>{defaultNarratorName || '未设置'}</strong></div>
             <div><span>默认导出命名</span><strong>{exportNamingTemplate || '{project}-{chapter}-{date}'}</strong></div>
             <div><span>默认导出目录</span><strong>{exportDirectory || 'public/audio'}</strong></div>
             <div><span>项目语言</span><strong>{defaultLanguage || 'zh-CN'}</strong></div>

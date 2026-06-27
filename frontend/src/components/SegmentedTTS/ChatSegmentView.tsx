@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { Role, RoleSnapshot, Segment, SegmentKind } from '../../types';
 import { isSegmentAudioStale } from '../../services/segmentGenerationInputs';
-import { isNarratorRole } from '../../services/voiceRoleKind';
 import { ChatBubble } from './ChatBubble';
 import { NarrationBlock } from './NarrationBlock';
 import { ProsodyMarkEditor } from './ProsodyMarkEditor';
@@ -28,6 +27,7 @@ function toSnapshot(role: Role): RoleSnapshot {
     name: role.name,
     avatar: role.avatar,
     description: role.description,
+    role_kind: role.role_kind ?? null,
     default_engine: role.default_engine,
     default_voice: role.default_voice,
     default_engine_params: { ...role.default_engine_params },
@@ -50,8 +50,6 @@ export function ChatSegmentView({
   onUpdateProsodyMarks,
 }: ChatSegmentViewProps) {
   const [selection, setSelection] = useState<{ segmentId: string; start: number; end: number; text: string } | null>(null);
-  const narratorRoles = roles.filter(isNarratorRole);
-  const castRoles = roles.filter(role => !isNarratorRole(role));
 
   const handleTextSelection = (segmentId: string, start: number, end: number, text: string) => {
     setSelection({ segmentId, start, end, text });
@@ -87,7 +85,7 @@ export function ChatSegmentView({
                 onSelect={onSelect}
                 onTextSelection={handleTextSelection}
                 onUpdateKind={onUpdateKind ? (id) => {
-                  const nextRole = castRoles[0] ?? null;
+                  const nextRole = roles[0] ?? null;
                   onUpdateKind(id, 'dialogue', nextRole ? toSnapshot(nextRole) : null);
                 } : undefined}
               />
@@ -98,8 +96,8 @@ export function ChatSegmentView({
               key={segment.id}
               segment={segment}
               index={index + 1}
-              role={castRoles.find(role => role.id === segment.role_id)}
-              roles={castRoles}
+              role={roles.find(role => role.id === segment.role_id)}
+              roles={roles}
               isSelected={segment.id === selectedId}
               isPlaying={segment.id === playingId}
               isStale={isSegmentAudioStale(segment, segment.role_snapshot?.default_engine_params ?? segment.params)}
@@ -108,8 +106,8 @@ export function ChatSegmentView({
               onPlay={onPlay}
               onUpdateRole={onUpdateRole}
               onUpdateKind={onUpdateKind ? (id) => {
-                const nextRole = narratorRoles[0] ?? null;
-                onUpdateKind(id, 'narration', nextRole ? toSnapshot(nextRole) : null);
+                // Narration segments use global Engine voice — no role assigned
+                onUpdateKind(id, 'narration', null);
               } : undefined}
               onTextSelection={handleTextSelection}
             />

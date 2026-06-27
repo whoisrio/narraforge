@@ -12,13 +12,13 @@ describe('i18n', () => {
     expect(zh('nav.subtitles')).toBe('字幕识别');
     expect(zh('nav.voiceDesign')).toBe('音色设计');
     expect(zh('projectNav.library')).toBe('文本库');
-    expect(zh('projectNav.voices')).toBe('声音角色');
+    expect(zh('projectNav.voices')).toBe('角色');
 
     expect(en('nav.projects')).toBe('Projects');
     expect(en('nav.subtitles')).toBe('Subtitles');
     expect(en('nav.voiceDesign')).toBe('Voice Design');
     expect(en('projectNav.library')).toBe('Library');
-    expect(en('projectNav.voices')).toBe('Voices');
+    expect(en('projectNav.voices')).toBe('Characters');
   });
 
   it('translates redesigned Subtitle Studio and Voice Design workspace copy', () => {

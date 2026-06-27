@@ -180,9 +180,6 @@ export function SegmentEditPanel({
               size={28}
             />
             <span className={styles.roleInfoName}>{segment.role_snapshot.name}</span>
-            <span className={styles.roleInfoKind}>
-              {segment.role_snapshot.role_kind === 'narrator' ? '旁白' : '角色'}
-            </span>
           </div>
         )}
 

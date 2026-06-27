@@ -197,6 +197,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         active_narration_version=getattr(p, "active_narration_version", None),
         animation_theme=getattr(p, "animation_theme", None),
         remotion_project_path=getattr(p, "remotion_project_path", None),
+        source_document=getattr(p, "source_document", None),
         default_narrator_role_id=getattr(p, "default_narrator_role_id", None),
         default_narrator_snapshot=getattr(p, "default_narrator_snapshot", None),
         created_at=_to_iso(p.created_at),
@@ -261,6 +262,8 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     p.layout = project.layout
     p.active_chapter_id = project.active_chapter_id
     p.original_text = project.original_text
+    # P7: 源文档 markdown 内容
+    p.source_document = project.source_document
     # P2 v2: 旁白文档当前活跃版本
     setattr(p, "active_narration_version", project.active_narration_version)
     # P2 v3: 整体动画主题

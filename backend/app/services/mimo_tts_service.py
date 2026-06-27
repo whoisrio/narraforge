@@ -259,7 +259,7 @@ class MiMoTTSService:
         )
 
         try:
-            logger.info(f"Calling MiMo TTS API: model={model}, audio_params={audio_params}")
+            logger.info(f"Calling MiMo TTS API: model={model}, messages={messages}")
             with urllib.request.urlopen(req, timeout=120) as resp:
                 resp_data = json.loads(resp.read().decode("utf-8"))
 

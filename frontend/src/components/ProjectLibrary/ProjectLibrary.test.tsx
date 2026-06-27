@@ -55,7 +55,6 @@ describe('ProjectLibrary', () => {
       />,
     );
 
-    expect(screen.getByText('文本库')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /新建章节/ })).toBeInTheDocument();
     const firstChapterSelect = screen.getByRole('button', { name: /选择第一章/ });
     expect(firstChapterSelect.closest('article')).toHaveAttribute('data-chapter-card', 'compact');

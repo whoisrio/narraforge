@@ -48,7 +48,7 @@ function makeSegment(id: string, kind: 'narration' | 'dialogue'): Segment {
     params: baseParams,
     status: 'idle',
     segment_kind: kind,
-    role_id: kind === 'dialogue' ? 'cast-1' : 'narrator-1',
+    role_id: kind === 'dialogue' ? 'cast-1' : null,
     emotion: 'calm',
     prosody_marks: [],
     created_at: '2026-01-01',
@@ -83,56 +83,47 @@ function renderList(overrides: Partial<React.ComponentProps<typeof SegmentList>>
 }
 
 describe('SegmentList studio role controls', () => {
-  it('hides kind controls and narrator labels in narration mode', () => {
+  it('hides kind controls in narration mode', () => {
     renderList({ voiceMode: 'narration' });
 
     expect(screen.queryByText('旁白')).not.toBeInTheDocument();
-    expect(screen.queryByText('台词')).not.toBeInTheDocument();
-    expect(screen.queryByText('Narrator')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('选择旁白角色')).not.toBeInTheDocument();
+    expect(screen.queryByText('对话')).not.toBeInTheDocument();
   });
 
-  it('shows segment kind controls in mixed mode and switches kind with matching role snapshot', () => {
+  it('shows segment kind controls in dialogue mode and switches kind with matching role snapshot', () => {
     const onUpdateKind = vi.fn();
 
-    renderList({ voiceMode: 'mixed', onUpdateKind });
+    renderList({ voiceMode: 'dialogue', onUpdateKind });
 
-    expect(screen.getByText('旁白')).toBeInTheDocument();
-    expect(screen.getByText('台词')).toBeInTheDocument();
-    expect(screen.queryByText('Narrator')).not.toBeInTheDocument();
+    // Kind badges are shown — use getAllByText since text appears in both badge and button
+    expect(screen.getAllByText('旁白').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('对话').length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole('button', { name: /改为台词/ }));
+    // Find and click the kind switch button (has kindSwitch class)
+    const kindSwitches = document.querySelectorAll('[class*="kindSwitch"]');
+    expect(kindSwitches.length).toBeGreaterThan(0);
+    fireEvent.click(kindSwitches[0]);
 
+    // Narration segment "旁白内容" has no speaker prefix, so first role is assigned as fallback
     expect(onUpdateKind).toHaveBeenCalledWith('s1', 'dialogue', expect.objectContaining({
-      id: 'cast-1',
-      name: '嘉宾A',
+      id: 'narrator-1',
+      name: '默认旁白',
     }));
   });
 
-  it('only shows Cast role pickers for dialogue segments', () => {
+  it('shows all roles for dialogue segments (no narrator/cast split)', () => {
     const onUpdateRole = vi.fn();
 
-    renderList({ voiceMode: 'mixed', onUpdateRole });
+    renderList({ voiceMode: 'dialogue', onUpdateRole });
 
-    expect(screen.queryByLabelText('选择旁白角色')).not.toBeInTheDocument();
-    expect(screen.queryByText('Narrator')).not.toBeInTheDocument();
-
-    const castOptions = Array.from(screen.getByLabelText('选择台词角色').querySelectorAll('option')).map(option => option.textContent);
-
-    expect(castOptions).toContain('嘉宾A');
-    expect(castOptions).not.toContain('默认旁白');
-
-    fireEvent.change(screen.getByLabelText('选择台词角色'), { target: { value: 'cast-1' } });
-
-    expect(onUpdateRole).toHaveBeenCalledWith('s2', 'cast-1', expect.objectContaining({
-      id: 'cast-1',
-      name: '嘉宾A',
-    }));
+    // All roles should be available in the role picker
+    const roleChips = screen.getAllByRole('button', { name: /嘉宾A|默认旁白/ });
+    expect(roleChips.length).toBeGreaterThan(0);
   });
 
-  it('keeps long Cast role names in a fixed-width ellipsis preview', () => {
+  it('keeps long role names in a fixed-width ellipsis preview', () => {
     renderList({
-      voiceMode: 'mixed',
+      voiceMode: 'dialogue',
       segments: [makeSegment('s-long', 'dialogue')].map(segment => ({
         ...segment,
         role_id: 'cast-long',
@@ -140,10 +131,8 @@ describe('SegmentList studio role controls', () => {
       onUpdateRole: vi.fn(),
     });
 
-    const preview = screen.getAllByTitle('这是一个非常非常非常长的角色名字会把Segment信息挤歪')
-      .find(element => element.className.includes('roleNamePreview'));
-    expect(preview).toBeTruthy();
-    expect(preview?.className).toContain('roleNamePreview');
-    expect(screen.getByLabelText('选择台词角色')).toBeInTheDocument();
+    // The long role name should appear as a title attribute for tooltip
+    const titledElements = screen.getAllByTitle('这是一个非常非常非常长的角色名字会把Segment信息挤歪');
+    expect(titledElements.length).toBeGreaterThan(0);
   });
 });

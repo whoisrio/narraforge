@@ -179,7 +179,9 @@
 }
 
 .cloneVoiceItem.selected {
+  border: 1.5px solid var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  box-shadow: 0 0 0 2px var(--glow-primary);
 }
 
 .cloneVoiceName {

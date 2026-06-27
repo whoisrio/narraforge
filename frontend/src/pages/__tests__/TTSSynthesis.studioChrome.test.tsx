@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TTSSynthesis } from '../TTSSynthesis';
 
@@ -127,20 +127,23 @@ describe('TTSSynthesis Studio chrome', () => {
   it('keeps Studio chrome minimal and places production controls below Source Text', async () => {
     render(<TTSSynthesis hideProjectSidebar />);
 
+    // Navigate to studio mode (component starts in overview)
+    const studioButton = await screen.findByRole('button', { name: /工作室/ });
+    fireEvent.click(studioButton);
+
     await waitFor(() => expect(screen.getByTestId('voice-studio-layout')).toBeInTheDocument());
 
     expect(screen.queryByText('分段配音工作台')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '列表视图' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '对话视图' })).not.toBeInTheDocument();
-    expect(screen.getByTestId('voice-studio-sidebar')).toHaveTextContent('Voice Mode');
-    expect(screen.getByRole('button', { name: '旁白模式' })).toBeInTheDocument();
+    expect(screen.getByTestId('voice-studio-sidebar')).toHaveTextContent('配音模式');
+    expect(screen.getByRole('button', { name: '旁白' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /批量合成/ })).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /全部播放/ })).toHaveLength(1);
     expect(screen.getByLabelText('segment 时间呈现')).toHaveTextContent('章节时间');
     expect(screen.getByLabelText('segment 卡片呈现')).toHaveTextContent('紧凑');
     expect(screen.getAllByRole('button', { name: /导出/ })).toHaveLength(1);
     expect(screen.queryByRole('button', { name: /全部生成/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /管理/ })).toBeInTheDocument();
     expect(screen.getByTestId('edge-tts-panel')).toBeInTheDocument();
   });
 });

@@ -4,7 +4,6 @@ import { ttsApi, voiceApi } from '../../services/api';
 import { fetchVoiceRolePreview } from '../../services/voiceRolePreview';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
-import { isNarratorRole } from '../../services/voiceRoleKind';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
@@ -17,23 +16,18 @@ import styles from './ProjectVoices.module.css';
 interface ProjectVoicesProps {
   roles: Role[];
   projectId?: string;
-  defaultNarratorRoleId?: string | null;
-  onSetDefaultNarrator: (roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
-  onCreateDefaultNarrator?: () => void;
-  onCreateCast?: () => void;
+  onCreateRole?: () => void;
   onSaveRole?: (role: RoleSnapshot) => void | Promise<void>;
   onDeleteRole?: (roleId: string) => void;
   onPreviewRole: (role: RoleSnapshot, sampleText: string) => void;
   onManageRoles: () => void;
-  defaultNarratorPreviewLabel?: string;
 }
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const NARRATOR_SAMPLE = '这是一段默认旁白试听，用于确认叙述声音是否沉稳、清晰，并适合长时间解说。';
-const CAST_SAMPLE = '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。';
+const ROLE_SAMPLE = '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。';
 const MIMO_PRESET_VOICES = ['冰糖', '星辰', '雪梨', '琥珀', '青云', '紫霞'];
 const COMMON_EDGE_VOICES = [
   { short_name: DEFAULT_EDGE_NARRATOR_VOICE, display_name: 'Yunxi', gender: 'Male' },
@@ -79,16 +73,15 @@ function isConfigured(role: Role): boolean {
     || role.default_engine_params.mimo_clone_voice_id);
 }
 
-function createRoleDraft(kind: 'Narrator' | 'Cast'): RoleSnapshot {
-  const edgeVoice = kind === 'Narrator' ? DEFAULT_EDGE_NARRATOR_VOICE : DEFAULT_EDGE_CAST_VOICE;
+function createRoleDraft(): RoleSnapshot {
   return {
-    id: `role-${kind.toLowerCase()}-${Date.now()}`,
-    name: kind === 'Narrator' ? '默认旁白' : '新 Cast',
+    id: `role-cast-${Date.now()}`,
+    name: '新角色',
     avatar: '',
-    description: kind,
+    description: 'Cast',
     default_engine: 'edge_tts',
-    default_voice: edgeVoice,
-    default_engine_params: { engine: 'edge_tts', edge_voice: edgeVoice, edge_rate: '+0%', edge_volume: '+0%' },
+    default_voice: DEFAULT_EDGE_CAST_VOICE,
+    default_engine_params: { engine: 'edge_tts', edge_voice: DEFAULT_EDGE_CAST_VOICE, edge_rate: '+0%', edge_volume: '+0%' },
     favorite_styles: [],
   };
 }
@@ -399,7 +392,7 @@ function VoiceRoleEditor({
         <div>
           <span className={styles.kicker}>Voice Role</span>
           <h3>{draft.name || '声音角色配置'}</h3>
-          <p>{draft.description === 'Narrator' ? '默认旁白声音' : 'Cast 对话角色'} · 选择音色来源和参数。</p>
+          <p>选择音色来源和参数。</p>
         </div>
         <div className={styles.editorActions}>
           <button type="button" className={styles.ghostButton} onClick={onCancel}>取消</button>
@@ -443,12 +436,6 @@ function VoiceRoleEditor({
               <div className={styles.identityFields}>
                 <label>角色名
                   <input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
-                </label>
-                <label>角色类型
-                  <select value={draft.description ?? 'Cast'} onChange={(event) => onChange({ ...draft, description: event.target.value })}>
-                    <option value="Narrator">Narrator</option>
-                    <option value="Cast">Cast</option>
-                  </select>
                 </label>
               </div>
             </div>
@@ -506,10 +493,14 @@ function VoiceRoleEditor({
                         </select>
                       </label>
                       <label className={styles.paramField}>语速
-                        <input className={styles.paramInput} value={params.edge_rate ?? '+0%'} onChange={(event) => setParams({ edge_rate: event.target.value })} />
+                        <select className={styles.paramSelect} value={params.edge_rate ?? '+0%'} onChange={(event) => setParams({ edge_rate: event.target.value })}>
+                          {['-50%', '-30%', '-20%', '-10%', '+0%', '+10%', '+20%', '+30%', '+50%', '+80%', '+100%'].map(r => <option key={r} value={r}>{r}</option>)}
+                        </select>
                       </label>
                       <label className={styles.paramField}>音量
-                        <input className={styles.paramInput} value={params.edge_volume ?? '+0%'} onChange={(event) => setParams({ edge_volume: event.target.value })} />
+                        <select className={styles.paramSelect} value={params.edge_volume ?? '+0%'} onChange={(event) => setParams({ edge_volume: event.target.value })}>
+                          {['-50%', '-30%', '-20%', '-10%', '+0%', '+10%', '+20%', '+30%', '+50%', '+80%', '+100%'].map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
                       </label>
                     </>
                   )}
@@ -604,6 +595,26 @@ function VoiceRoleEditor({
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                         <StyleInstructionPicker value={params.instruction ?? ''} onChange={(value) => setParams({ instruction: value })} label="风格指令" placeholder="选择预设或直接输入..." dense />
                       </div>
+                      <label className={styles.paramField}>语言
+                        <select className={styles.paramSelect} value={params.language || 'Chinese'} onChange={(event) => setParams({ language: event.target.value as SegmentEngineParams['language'] })}>
+                          <option value="Chinese">中文</option>
+                          <option value="English">English</option>
+                          <option value="Japanese">日本語</option>
+                          <option value="Korean">한국어</option>
+                        </select>
+                      </label>
+                      <label className={styles.paramField}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <input type="checkbox" checked={params.enable_ssml ?? false} onChange={(event) => setParams({ enable_ssml: event.target.checked })} />
+                          SSML
+                        </span>
+                      </label>
+                      <label className={styles.paramField}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <input type="checkbox" checked={params.enable_markdown_filter ?? false} onChange={(event) => setParams({ enable_markdown_filter: event.target.checked })} />
+                          Markdown 过滤
+                        </span>
+                      </label>
                     </>
                   )}
 
@@ -682,6 +693,14 @@ function VoiceRoleEditor({
                           })()}
                         </div>
                       )}
+                      <label className={styles.paramField}>CFG 强度
+                        <input className={styles.range} aria-label="CFG 强度" type="range" min={1} max={5} step={0.1} value={params.voxcpm_cfg_value ?? 2} onChange={(event) => setParams({ voxcpm_cfg_value: Number(event.target.value) })} />
+                        <span className={styles.sliderVal}>{(params.voxcpm_cfg_value ?? 2).toFixed(1)}</span>
+                      </label>
+                      <label className={styles.paramField}>去噪步数
+                        <input className={styles.range} aria-label="去噪步数" type="range" min={1} max={50} step={1} value={params.voxcpm_inference_timesteps ?? 10} onChange={(event) => setParams({ voxcpm_inference_timesteps: Number(event.target.value) })} />
+                        <span className={styles.sliderVal}>{params.voxcpm_inference_timesteps ?? 10}</span>
+                      </label>
                     </>
                   )}
                 </>
@@ -794,14 +813,12 @@ function VoiceRoleEditor({
 function CharacterCard({
   role,
   isDefault,
-  kind,
   onEdit,
   onPreview,
   onDelete,
 }: {
   role: Role;
   isDefault: boolean;
-  kind: 'narrator' | 'cast';
   onEdit: () => void;
   onPreview: () => void;
   onDelete?: () => void;
@@ -810,7 +827,6 @@ function CharacterCard({
   const cardClass = [
     styles.charCard,
     isDefault ? styles.charCardDefault : '',
-    kind === 'narrator' ? styles.charCardNarrator : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -835,9 +851,7 @@ function CharacterCard({
           {isDefault && <span className={styles.defaultBadge}>默认</span>}
         </strong>
         <div className={styles.chipRow}>
-          <span className={`${styles.chip} ${kind === 'narrator' ? styles.chipNarrator : styles.chipCast}`}>
-            {kind === 'narrator' ? '旁白' : '角色'}
-          </span>
+          <span className={`${styles.chip} ${styles.chipCast}`}>角色</span>
           <span className={`${styles.chip} ${styles.chipEngine}`}>{engineLabel(role)}</span>
           <span className={`${styles.chip} ${styles.chipEngine}`}>{role.default_voice || '未设置'}</span>
           <span className={styles.chip} title={configured ? '已配置音色' : '待配置'}>
@@ -875,7 +889,7 @@ type EngineFilter = 'all' | EngineKey;
 export function ProjectVoices({
   roles,
   projectId,
-  defaultNarratorRoleId,
+  onCreateRole,
   onSaveRole,
   onDeleteRole,
   onPreviewRole,
@@ -887,8 +901,7 @@ export function ProjectVoices({
   const filterByEngine = (list: Role[]) =>
     engineFilter === 'all' ? list : list.filter(r => r.default_engine === engineFilter);
 
-  const narratorRoles = filterByEngine(roles.filter(r => isNarratorRole(r, defaultNarratorRoleId)));
-  const castRoles = filterByEngine(roles.filter(r => !isNarratorRole(r, defaultNarratorRoleId)));
+  const filteredRoles = filterByEngine(roles);
 
   const [saving, setSaving] = useState(false);
 
@@ -909,8 +922,8 @@ export function ProjectVoices({
         }
       } catch { /* fall through to live synthesis */ }
     }
-    onPreviewRole(roleToSnapshot(role), isNarratorRole(role, defaultNarratorRoleId) ? NARRATOR_SAMPLE : CAST_SAMPLE);
-  }, [onPreviewRole, defaultNarratorRoleId]);
+    onPreviewRole(roleToSnapshot(role), ROLE_SAMPLE);
+  }, [onPreviewRole]);
 
   const saveEditingRole = async (draft: RoleSnapshot) => {
     if (saving) return;
@@ -932,7 +945,7 @@ export function ProjectVoices({
         <div className={styles.headerText}>
           <span className={styles.kicker}>Characters</span>
           <h2>角色管理</h2>
-          <p className={styles.headerDesc}>管理项目中的旁白与对话角色，配置音色、引擎和参数。</p>
+          <p className={styles.headerDesc}>管理项目中的角色，配置音色、引擎和参数。</p>
         </div>
         <div className={styles.filterBar}>
           <select
@@ -963,60 +976,20 @@ export function ProjectVoices({
         />
       )}
 
-      {/* Narrator Group */}
+      {/* Roles */}
       <section className={styles.roleGroup}>
-        <div className={styles.roleGroupHeader}>
-          <span className={styles.kicker}>Narrator</span>
-          <h3>旁白</h3>
-        </div>
-        <div className={styles.cardGrid} data-testid="narrator-list">
-          {narratorRoles.length === 0 && (
+        <div className={styles.cardGrid} data-testid="role-list">
+          {filteredRoles.length === 0 && (
             <div className={styles.emptyState}>
-              <strong>还没有旁白角色</strong>
-              <p>创建一个旁白角色，用于所有叙述段落。</p>
+              <strong>还没有角色</strong>
+              <p>创建角色，配置音色用于旁白和对话段落。</p>
             </div>
           )}
-          {narratorRoles.map(role => (
-            <CharacterCard
-              key={role.id}
-              role={role}
-              isDefault={role.id === defaultNarratorRoleId}
-              kind="narrator"
-              onEdit={() => setEditingRole(roleToSnapshot(role))}
-              onPreview={() => handleCardPreview(role)}
-              onDelete={narratorRoles.length > 1 ? () => onDeleteRole?.(role.id) : undefined}
-            />
-          ))}
-          <button
-            type="button"
-            className={styles.placeholderCard}
-            onClick={() => setEditingRole(createRoleDraft('Narrator'))}
-          >
-            <span className={styles.placeholderIcon}>+</span>
-            <span className={styles.placeholderLabel}>新增旁白</span>
-          </button>
-        </div>
-      </section>
-
-      {/* Cast Group */}
-      <section className={styles.roleGroup}>
-        <div className={styles.roleGroupHeader}>
-          <span className={styles.kicker}>Cast</span>
-          <h3>角色</h3>
-        </div>
-        <div className={styles.cardGrid} data-testid="cast-list">
-          {castRoles.length === 0 && (
-            <div className={styles.emptyState}>
-              <strong>还没有对话角色</strong>
-              <p>创建对话/剧本角色，用于台词段落。</p>
-            </div>
-          )}
-          {castRoles.map(role => (
+          {filteredRoles.map(role => (
             <CharacterCard
               key={role.id}
               role={role}
               isDefault={false}
-              kind="cast"
               onEdit={() => setEditingRole(roleToSnapshot(role))}
               onPreview={() => handleCardPreview(role)}
               onDelete={() => onDeleteRole?.(role.id)}
@@ -1025,10 +998,16 @@ export function ProjectVoices({
           <button
             type="button"
             className={styles.placeholderCard}
-            onClick={() => setEditingRole(createRoleDraft('Cast'))}
+            onClick={() => {
+              if (onCreateRole) {
+                onCreateRole();
+              } else {
+                setEditingRole(createRoleDraft());
+              }
+            }}
           >
             <span className={styles.placeholderIcon}>+</span>
-            <span className={styles.placeholderLabel}>新增角色</span>
+            <span className={styles.placeholderLabel}>创建角色</span>
           </button>
         </div>
       </section>
