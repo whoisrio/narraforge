@@ -25,8 +25,10 @@ export const voiceApi = {
     return data;
   },
 
-  list: async (): Promise<VoiceProfile[]> => {
-    const { data } = await api.get<VoiceProfile[]>('/clone/list');
+  list: async (projectId?: string): Promise<VoiceProfile[]> => {
+    const { data } = await api.get<VoiceProfile[]>('/clone/list', {
+      params: projectId ? { project_id: projectId } : undefined,
+    });
     return data;
   },
 

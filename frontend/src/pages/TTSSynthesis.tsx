@@ -1442,7 +1442,7 @@ export function TTSSynthesis({
                     ) : engine === 'edge_tts' ? (
                       <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
                     ) : engine === 'mimo_tts' ? (
-                      <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} excludeCloneEngines={['qwen']} />
+                      <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} excludeCloneEngines={['qwen']} projectId={project.id} />
                     ) : (
                       <VoxCPMPanel
                         mode={voxcpmMode} onModeChange={setVoxcpmMode}
@@ -1452,6 +1452,7 @@ export function TTSSynthesis({
                         cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
                         inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
                         allowedCloneEngines={['voxcpm']}
+                        projectId={project.id}
                       />
                     )}
                   </div>

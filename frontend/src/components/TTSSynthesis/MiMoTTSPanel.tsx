@@ -33,6 +33,8 @@ interface MiMoTTSPanelProps {
   selectedCloneVoiceId: string;
   /** 排除的克隆引擎类型（默认 ['qwen']，CosyVoice 远端存储 MiMo 无法访问） */
   excludeCloneEngines?: string[];
+  /** 项目ID，用于加载项目内的设计声音 */
+  projectId?: string;
 }
 
 const MODE_TABS: { value: MiMoMode; label: string }[] = [
@@ -50,6 +52,7 @@ export function MiMoTTSPanel({
   onCloneVoiceSelect,
   selectedCloneVoiceId,
   excludeCloneEngines = ['qwen'],
+  projectId,
 }: MiMoTTSPanelProps) {
   const [presetVoices, setPresetVoices] = useState<MiMoPresetVoice[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
@@ -86,7 +89,7 @@ export function MiMoTTSPanel({
   const loadCloneVoices = useCallback(async () => {
     setCloneVoicesLoading(true);
     try {
-      const all = await voiceApi.list();
+      const all = await voiceApi.list(projectId);
       // 过滤：有音频 且 clone_engine 不在排除列表中
       const availableVoices = all.filter(v => v.audio_url && !excludeCloneEngines.includes(v.clone_engine || ''));
       setCloneVoices(availableVoices);
@@ -98,7 +101,7 @@ export function MiMoTTSPanel({
     } finally {
       setCloneVoicesLoading(false);
     }
-  }, [selectedCloneVoiceId, onCloneVoiceSelect, excludeCloneEngines]);
+  }, [selectedCloneVoiceId, onCloneVoiceSelect, excludeCloneEngines, projectId]);
 
   useEffect(() => {
     if (mode === 'voiceclone') {

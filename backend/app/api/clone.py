@@ -536,14 +536,15 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
 
 
 @router.get("/list")
-def list_voices(db: Session = Depends(get_db)):
-    """获取全局声音列表 (仅 project_id IS NULL)"""
-    voices = (
-        db.query(VoiceProfile)
-        .filter(VoiceProfile.project_id == None)
-        .order_by(VoiceProfile.created_at.desc())
-        .all()
-    )
+def list_voices(project_id: str | None = None, db: Session = Depends(get_db)):
+    """获取声音列表。无 project_id 时返回全局声音；有 project_id 时返回全局 + 该项目的声音。"""
+    from sqlalchemy import or_
+    query = db.query(VoiceProfile)
+    if project_id:
+        query = query.filter(or_(VoiceProfile.project_id == None, VoiceProfile.project_id == project_id))
+    else:
+        query = query.filter(VoiceProfile.project_id == None)
+    voices = query.order_by(VoiceProfile.created_at.desc()).all()
     return [voice_to_dict(v) for v in voices]
 
 

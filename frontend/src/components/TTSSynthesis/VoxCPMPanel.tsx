@@ -36,6 +36,8 @@ interface VoxCPMPanelProps {
   onInferenceTimestepsChange: (v: number) => void;
   /** 允许的克隆引擎类型（默认 ['voxcpm']） */
   allowedCloneEngines?: string[];
+  /** 项目ID，用于加载项目内的设计声音 */
+  projectId?: string;
 }
 
 const MODE_TABS: { value: VoxCPMMode; label: string; icon: string }[] = [
@@ -66,6 +68,7 @@ export function VoxCPMPanel({
   inferenceTimesteps,
   onInferenceTimestepsChange,
   allowedCloneEngines = ['voxcpm'],
+  projectId,
 }: VoxCPMPanelProps) {
   // ---- 模型状态 ----
   const [status, setStatus] = useState<VoxCPMStatus | null>(null);
@@ -104,7 +107,7 @@ export function VoxCPMPanel({
     const loadVoices = async () => {
       setVoicesLoading(true);
       try {
-        const list = await voiceApi.list();
+        const list = await voiceApi.list(projectId);
         // 按 allowedCloneEngines 过滤
         setVoices(list.filter(v => v.audio_url && allowedCloneEngines.includes(v.clone_engine || '')));
       } catch (err) {
@@ -114,7 +117,7 @@ export function VoxCPMPanel({
       }
     };
     loadVoices();
-  }, [mode, allowedCloneEngines]);
+  }, [mode, allowedCloneEngines, projectId]);
 
   // 选中声音变化时，自动加载其 prompt_text（ultimate 模式）
   useEffect(() => {
