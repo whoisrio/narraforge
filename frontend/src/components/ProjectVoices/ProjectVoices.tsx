@@ -370,9 +370,13 @@ function VoiceRoleEditor({
         } as SegmentEngineParams,
       });
     } else {
-      // design — 保留已有的 voice_description
-      setDesignSubEngine(draft.default_engine === 'voxcpm' ? 'voxcpm' : 'mimo');
-      // 如果已有设计音色，保持 confirmed 状态
+      // design — 保留已有的 voice_description，更新引擎为设计模式
+      const subEngine = draft.default_engine === 'voxcpm' ? 'voxcpm' : 'mimo';
+      setDesignSubEngine(subEngine);
+      setEngine(subEngine === 'mimo' ? 'mimo_tts' : 'voxcpm');
+      setParams(subEngine === 'mimo'
+        ? { mimo_mode: 'voicedesign', mimo_voice_description: params.mimo_voice_description || '' }
+        : { voxcpm_mode: 'design', voxcpm_voice_description: params.voxcpm_voice_description || '' });
       if (!clonePreviewAudioSrc) {
         setDesignPhase('idle');
         setDesignAudioBase64('');
