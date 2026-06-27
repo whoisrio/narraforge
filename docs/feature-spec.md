@@ -73,7 +73,7 @@ Two-step flow: **design → confirm → save**.
 #### Design Flow
 
 1. **Describe** — Enter a natural-language voice description (e.g. "年轻女性，温柔甜美，语速适中")
-2. **Preview** — System synthesizes a sample audio using the selected engine
+2. **Preview** — System synthesizes a sample audio using the selected engine. MiMo voicedesign calls pass `optimize_text_preview=false` to ensure the preview text is used verbatim without LLM rephrasing.
 3. **Confirm** — "确认保存音色" persists the audio as a `VoiceProfile` via `/api/clone/create-from-design` without leaving the design UI
 4. **Save Role** — "保存角色" links the `VoiceProfile` to the role as a `voiceclone` reference (`mimo_clone_voice_id` / `voice_id`)
 
@@ -234,6 +234,21 @@ idle → queued → pending → ready
 | **SRT** | Subtitle file with timecodes calculated from segment durations |
 | **Bilingual SRT** | SRT translated to target language (English/Japanese/Korean) via LLM |
 
+#### 4.4.11 Project Library Tabs
+
+The Project Library (`ProjectLibrary` component) organizes project content into two tabs:
+
+| Tab | Description |
+|-----|-------------|
+| **Source Document** | Raw source text imported into the project. Displays a textarea for editing (`edit` mode) or a `react-markdown` rendered view (`view` mode). Debounced 500ms auto-save on change. Supports toggling between edit and view modes via a header button. |
+| **Narration Document** | Chapter grid showing all chapters with progress stats, segment counts, estimated duration, and quick actions (rename, delete, open text, enter studio). |
+
+**Compare View**: Available from the source document tab. Renders a side-by-side two-column layout comparing the source document (left) against the narration text (right). Both columns render via `react-markdown`. Accessed via a "对比查看" button; dismissed with a "← 返回" back button.
+
+**Additional modes**:
+- **Full-text view**: Reads all chapters into a single `react-markdown` preview with aggregate character count and estimated duration.
+- **Chapter editor**: Single-chapter immersive text editor with textarea/markdown preview toggle, design title field, and chapter navigation.
+
 ---
 
 ## 5. Speech to Text (`/speech-to-text`)
@@ -382,11 +397,12 @@ A global toggle (`useStorageMode` hook) switches between:
 
 | Type | Key Fields |
 |------|-----------|
-| `VoiceProfile` | id, name, audio_url, qwen_voice_id, clone_engine (`qwen`/`mimo`), description |
+| `VoiceProfile` | id, name, audio_url, original_audio_path, cloned_preview_path, qwen_voice_id, mimo_voice_id, clone_engine (`qwen`/`mimo`/`voxcpm`), description, prompt_text, avatar |
 | `TTSRequest` | text, engine, voice_id, speed, volume, pitch, language, edge_voice, mimo_voice, mimo_audio_base64 |
 | `TTSResult` | audio_id, audio_url/audio_base64, text, params |
 | `Segment` | id, text, ssml, params (SegmentEngineParams), status, emotion, overrides, generated_voice_id, duration_sec |
-| `SegmentedProject` | id, name, segments[], default_params, split_config, layout |
+| `Chapter` | id, name, engine, voice_id, edge_voice, mimo_mode, mimo_preset_voice, mimo_clone_voice_id, voxcpm_mode, segments[], default_params, split_config, original_text, design_title |
+| `SegmentedProject` | id, name, chapters[], source_document, default_params, split_config, layout, active_narration_version, remotion_project_path |
 | `EmotionType` | happy, sad, angry, calm, neutral, excited |
 | `SegmentStatus` | idle, queued, pending, ready, failed |
 | `ModelConfigs` | Record of provider → { label, icon, fields } |
@@ -395,13 +411,15 @@ A global toggle (`useStorageMode` hook) switches between:
 
 ```typescript
 interface SegmentEngineParams {
-  engine: 'cosyvoice' | 'edge_tts' | 'mimo_tts';
+  engine: 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
   // CosyVoice
   voice_id?, instruction?, speed?, volume?, pitch?, language?, enable_ssml?, enable_markdown_filter?;
   // Edge-TTS
   edge_voice?, edge_rate?, edge_volume?;
   // MiMo-TTS
-  mimo_mode? ('preset'|'voiceclone'), mimo_preset_voice?, mimo_clone_voice_id?, mimo_instruction?;
+  mimo_mode? ('preset'|'voiceclone'|'voicedesign'), mimo_preset_voice?, mimo_clone_voice_id?, mimo_instruction?, mimo_voice_description?;
+  // VoxCPM
+  voxcpm_mode? ('tts'|'design'|'clone'|'ultimate'), voxcpm_voice_description?, voxcpm_style_control?, voxcpm_prompt_text?, voxcpm_cfg_value?, voxcpm_inference_timesteps?;
 }
 ```
 
@@ -490,6 +508,6 @@ Voice scoping model:
 
 - 数据库三张表：`segmented_projects` / `segmented_project_chapters` / `segmented_project_segments`
 - 每个项目一个目录 `uploads/segmented/{project_id}/`，存放 `original.txt`、章节文本、分片 `mp3`、`manifest.json`
-- 后端为权威来源；IndexedDB 只作为草稿缓存，记录 `base_updated_at` 做冲突检测
+- 后端为权威来源；IndexedDB 只作为草稿缓存，记录 `base_updated_at` 做冲突检测（2000ms 容差：仅当后端 `updated_at` 超出本地 `base_updated_at` 超过 2 秒时才判定为冲突）
 - 切换到后端模式时若本地 IndexedDB 仍有项目，提示一键迁移
 - 音频由 ffmpeg 转码为 mp3
