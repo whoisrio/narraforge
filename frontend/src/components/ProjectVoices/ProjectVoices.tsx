@@ -373,10 +373,18 @@ function VoiceRoleEditor({
       // design — 保留已有的 voice_description，更新引擎为设计模式
       const subEngine = draft.default_engine === 'voxcpm' ? 'voxcpm' : 'mimo';
       setDesignSubEngine(subEngine);
-      setEngine(subEngine === 'mimo' ? 'mimo_tts' : 'voxcpm');
-      setParams(subEngine === 'mimo'
-        ? { mimo_mode: 'voicedesign', mimo_voice_description: params.mimo_voice_description || '' }
-        : { voxcpm_mode: 'design', voxcpm_voice_description: params.voxcpm_voice_description || '' });
+      const designEngine = subEngine === 'mimo' ? 'mimo_tts' : 'voxcpm';
+      onChange({
+        ...draft,
+        default_engine: designEngine,
+        default_engine_params: {
+          ...draft.default_engine_params,
+          engine: designEngine,
+          ...(subEngine === 'mimo'
+            ? { mimo_mode: 'voicedesign' as const, mimo_voice_description: params.mimo_voice_description || '' }
+            : { voxcpm_mode: 'design' as const, voxcpm_voice_description: params.voxcpm_voice_description || '' }),
+        } as SegmentEngineParams,
+      });
       if (!clonePreviewAudioSrc) {
         setDesignPhase('idle');
         setDesignAudioBase64('');
