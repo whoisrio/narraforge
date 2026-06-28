@@ -120,11 +120,16 @@ export function VoxCPMPanel({
   }, [mode, allowedCloneEngines, projectId]);
 
   // 选中声音变化时，自动加载其 prompt_text（ultimate 模式）
+  // design 声音用 audition_text（试听音频转录），clone 声音用 prompt_text（录音转录）
   useEffect(() => {
     if (mode !== 'ultimate' || !selectedVoiceId) return;
     const voice = voices.find(v => v.id === selectedVoiceId);
-    if (voice?.prompt_text) {
-      onPromptTextChange(voice.prompt_text);
+    if (!voice) return;
+    const params = voice.voices_engine?.parameters as Record<string, unknown> | undefined;
+    const auditionText = typeof params?.audition_text === 'string' ? params.audition_text : '';
+    const prompt = auditionText || voice.prompt_text || '';
+    if (prompt) {
+      onPromptTextChange(prompt);
     }
   }, [selectedVoiceId, voices, mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
