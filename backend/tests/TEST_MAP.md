@@ -58,7 +58,7 @@ db_session.commit()
 | LLM client | `app/services/llm_client.py` | `tests/test_llm_client.py` | Covers config fallback, JSON extraction, structured calls, and validation retries. |
 | Markdown chapter split | Markdown split API/service code | `tests/test_markdown_split_api.py` | Covers heading detection, slicing, front matter, and chapter merge behavior. |
 | Segmented project assets | `app/core/segmented_assets.py` | `tests/test_segmented_assets.py` | Filesystem layout, manifest, text/SSML files, and cleanup. |
-| Segmented project CRUD/service | `app/api/segmented_projects.py`, `app/services/segmented_project_service.py` | `tests/test_segmented_projects_api.py`, `tests/test_segmented_projects_service.py` | Project/chapter/segment persistence and orphan cleanup. |
+| Segmented project CRUD/service | `app/api/segmented_projects.py`, `app/services/segmented_project_service.py` | `tests/test_segmented_projects_api.py`, `tests/test_segmented_projects_service.py` | Project/chapter/segment persistence, orphan cleanup, voice_ref save/load and auto-migration. |
 | Segmented synthesis | `app/services/segmented_project_service.py`, `app/api/tts.py` bridge | `tests/test_segmented_synthesis.py`, `tests/test_synthesize_speech_internal.py` | Guards real synthesis bridge behavior and generated audio metadata. |
 | Silent/missing segment marking | Segment maintenance scripts/services | `tests/test_mark_silent_segments.py` | Ensures missing/silent audio is marked without deleting files. |
 | Source library | `app/api/sources.py`, source models/services | `tests/test_sources_api.py`, `tests/test_narration_models.py` | Source documents are project-level data. |

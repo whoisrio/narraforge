@@ -177,3 +177,61 @@ def test_save_project_persists_role_snapshot_and_prosody_marks(db_session, tmp_p
     assert segment.role_snapshot["name"] == "林夏"
     assert segment.segment_kind == "dialogue"
     assert segment.prosody_marks[0]["id"] == "mark-1"
+
+
+def test_save_project_persists_voice_ref(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+
+    project = _seed_project("p-vref")
+    project.chapters[0].segments[0].voice_ref = {
+        "name": "旁白",
+        "source": "role",
+        "voice_id": "zh-CN-YunxiNeural",
+        "engine": "edge_tts",
+        "role_id": "role-narrator",
+    }
+
+    save_project(db_session, project)
+    db_session.commit()
+
+    detail = get_project_detail(db_session, "p-vref")
+    assert detail is not None
+    seg = detail.chapters[0].segments[0]
+    assert seg.voice_ref is not None
+    assert seg.voice_ref["name"] == "旁白"
+    assert seg.voice_ref["source"] == "role"
+    assert seg.voice_ref["voice_id"] == "zh-CN-YunxiNeural"
+    assert seg.voice_ref["engine"] == "edge_tts"
+    assert seg.voice_ref["role_id"] == "role-narrator"
+
+
+def test_get_project_detail_migrates_voice_ref_for_old_segments(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+
+    # Save a project without voice_ref (simulating old data)
+    project = _seed_project("p-migrate")
+    project.chapters[0].segments[0].role_id = "role-x"
+    project.chapters[0].segments[0].role_snapshot = {
+        "id": "role-x",
+        "name": "角色X",
+        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+    }
+    project.chapters[0].segments[0].segment_kind = "dialogue"
+    save_project(db_session, project)
+    db_session.commit()
+
+    # Clear voice_ref in DB to simulate old segment
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p-migrate").one()
+    seg.voice_ref = None
+    db_session.commit()
+
+    # get_project_detail should auto-migrate
+    detail = get_project_detail(db_session, "p-migrate")
+    assert detail is not None
+    migrated_seg = detail.chapters[0].segments[0]
+    assert migrated_seg.voice_ref is not None
+    assert migrated_seg.voice_ref["source"] == "role"
+    assert migrated_seg.voice_ref["name"] == "角色X"
+    assert migrated_seg.voice_ref["role_id"] == "role-x"

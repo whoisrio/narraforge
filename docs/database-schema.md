@@ -191,6 +191,7 @@ Segmented TTS project containers (three-tier: project -> chapter -> segment).
 | `source_document` | Text | Yes | `NULL` | Source document markdown content |
 | `default_narrator_role_id` | String | Yes | `NULL` | **FK** -> `roles.id` (SET NULL). Default narrator role |
 | `default_narrator_snapshot` | JSON | Yes | `NULL` | Snapshot of narrator role for reproducibility |
+| `configs` | JSON | Yes | `NULL` | Project-level configuration (split_voice_mode, etc.) |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update timestamp (auto-updates) |
 
@@ -239,6 +240,7 @@ Individual text segments within a chapter. Each segment holds its own text, emot
 | `segment_kind` | String | No | `"narration"` | Segment kind: `narration` / `dialogue` / etc. |
 | `prosody_marks` | JSON | No | `[]` | Prosody annotations list |
 | `params` | JSON | No | `{}` | Segment-specific TTS parameters |
+| `voice_ref` | JSON | Yes | `NULL` | Explicit voice reference (name, source, voice_id, engine, role_id) |
 | `locked_params` | JSON | No | `[]` | Parameters locked against global voice changes |
 | `generated_params` | JSON | Yes | `NULL` | Parameters used during last generation |
 | `current_audio_path` | String | Yes | `NULL` | Current audio file path |
