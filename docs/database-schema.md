@@ -348,3 +348,4 @@ Tables `voice_profiles`, `tts_configs`, `tts_results`, `transcription_records`, 
 - `tts_results.instruction` has a Chinese-language default value describing an energetic advertising voiceover style.
 - The segmented project models use a three-tier hierarchy: `project -> chapter -> segment`. Segments carry a denormalized `project_id` for direct querying.
 - `voice_profiles.project_id` allows project-scoped voices (NULL = global). `segments.role_id` and `projects.default_narrator_role_id` reference the global `roles` table.
+- `voice_profiles.engine_params` is a JSON column that stores engine-specific parameters. Common keys include `input_method` (`record`/`upload`/`url`) for clone voices, and engine-specific TTS parameters (speed, volume, pitch, etc.).

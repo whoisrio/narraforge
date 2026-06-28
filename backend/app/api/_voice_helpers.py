@@ -16,7 +16,7 @@ def _build_voices_engine(v: VoiceProfile) -> dict | None:
                     "sub_type": None,
                 },
                 "prompt_text": v.prompt_text,
-                "parameters": {},
+                "parameters": v.engine_params or {},
             }
         return None
 
@@ -34,13 +34,22 @@ def _build_voices_engine(v: VoiceProfile) -> dict | None:
 def voice_to_dict(v: VoiceProfile) -> dict:
     """Serialize a VoiceProfile to the standard API response dict."""
     voices_engine = _build_voices_engine(v)
+    # 主音频：克隆/设计试听优先，否则源音频
+    has_preview = bool(v.cloned_preview_path)
+    has_source = bool(v.source_audio_path)
+    if has_preview:
+        audio_url = f"/api/clone/audio/{v.id}?field=preview"
+    elif has_source:
+        audio_url = f"/api/clone/audio/{v.id}?field=source"
+    else:
+        audio_url = f"/api/clone/audio/{v.id}"
     return {
         "id": str(v.id),
         "name": v.name,
         "description": v.description,
-        "audio_url": f"/api/clone/audio/{v.id}",
-        "original_audio_url": f"/api/clone/audio/{v.id}?field=original" if v.original_audio_path else None,
-        "cloned_preview_url": f"/api/clone/audio/{v.id}?field=preview" if v.cloned_preview_path else None,
+        "audio_url": audio_url,
+        "source_audio_url": f"/api/clone/audio/{v.id}?field=source" if has_source else None,
+        "cloned_preview_url": f"/api/clone/audio/{v.id}?field=preview" if has_preview else None,
         "qwen_voice_id": v.qwen_voice_id,
         "role": v.role,
         "clone_engine": v.clone_engine,
@@ -50,4 +59,5 @@ def voice_to_dict(v: VoiceProfile) -> dict:
         "prompt_text": v.prompt_text,
         "avatar": v.avatar,
         "voices_engine": voices_engine,
+        "project_id": v.project_id,
     }

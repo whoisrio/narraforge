@@ -370,7 +370,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <div style={voiceNameStyle}>
-                          {voice.description || voice.qwen_voice_id || voice.name || 'N/A'}
+                          {voice.name || voice.qwen_voice_id || 'N/A'}
                         </div>
                         {voice.clone_engine && (
                           <span style={engineBadgeStyle(voice.clone_engine)}>

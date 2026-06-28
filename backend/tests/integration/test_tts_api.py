@@ -145,7 +145,7 @@ class TestTTSAPI:
         voice = VoiceProfile(
             id="voice-row-1",
             name="Narrator",
-            audio_path="/tmp/narrator.wav",
+            source_audio_path="/tmp/narrator.wav",
             is_cloned=True,
             qwen_voice_id="cosyvoice-v3-narrator",
             clone_engine="qwen",

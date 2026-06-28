@@ -68,18 +68,22 @@ Three clone engines are supported:
 
 | Engine | Method | Registration | Lifecycle |
 |--------|--------|--------------|-----------|
-| **CosyVoice (Qwen)** | Upload/record/URL → cloud register → `voice_id` | Persistent; reuse `voice_id` indefinitely | Best for batch synthesis |
+| **CosyVoice (Qwen)** | URL → cloud register → `voice_id` (record/upload only in global VoiceClone page) | Persistent; reuse `voice_id` indefinitely | Best for batch synthesis |
 | **MiMo-TTS** | Upload/record → local base64, stateless | No registration; audio sent each time | Best for quick tests |
 | **VoxCPM** | Upload/record → local GPU inference | No registration; uses local audio path | Best for local high-fidelity clone |
+
+> **Note:** Project roles (ProjectVoices) restrict CosyVoice to URL-only input. The global VoiceClone page still supports record/upload/URL for CosyVoice.
 
 ### 3.3 Clone Flow
 
 1. **Choose Engine** — CosyVoice / MiMo / VoxCPM
-2. **Input Audio** — Record (microphone), upload (MP3/WAV/WebM), or URL (CosyVoice only)
+2. **Input Audio** — Record (microphone), upload (MP3/WAV/WebM), or URL. The chosen input method is stored in `engine_params.input_method` for later restoration
 3. **Preview & Clone** — Review sample, name the voice, submit for cloning
-4. **Voice Profile Created** — Saved with `original_audio_path` (source audio) and engine metadata
+4. **Voice Profile Created** — Saved with `source_audio_path` (source audio) and engine metadata including `input_method`
 
 CosyVoice clones register with Qwen cloud and store `qwen_voice_id`. MiMo/VoxCPM clones are stateless — the audio file is read and sent at synthesis time.
+
+**Edit & Delete:** Existing voices can be edited (re-recorded/re-uploaded) or deleted from both the global VoiceClone page and ProjectVoices role cards. Editing replaces the old voice on success.
 
 ### 3.4 Voice Design Flow
 
@@ -98,9 +102,10 @@ Flow:
 ### 3.5 Voice Profile Cards
 
 Each card shows:
-- VoiceAvatar (40px), name, engine label chip, description chip
+- VoiceAvatar (40px), name, engine label chip, input method chip (录制/上传/URL), description chip
 - "试听" button — plays the saved audio directly via `audio_url`
-- Click to expand for editing/deleting
+- "编辑" button — opens clone panel for re-recording/re-uploading
+- "删除" button — removes the voice profile
 
 ### 3.6 Voice Refresh
 
@@ -364,6 +369,8 @@ interface SegmentEngineParams {
   mimo_mode? ('preset'|'voiceclone'|'voicedesign'), mimo_preset_voice?, mimo_clone_voice_id?, mimo_instruction?, mimo_voice_description?;
   // VoxCPM
   voxcpm_mode? ('tts'|'design'|'clone'|'ultimate'), voice_id?, voxcpm_voice_description?, voxcpm_style_control?, voxcpm_prompt_text?, voxcpm_cfg_value?, voxcpm_inference_timesteps?;
+  // Clone input method
+  input_method?: 'record' | 'upload' | 'url';
 }
 ```
 

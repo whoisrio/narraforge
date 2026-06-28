@@ -19,6 +19,14 @@ from app.services.qwen_tts_service import get_tts_service
 from app.services.qiniu_service import is_qiniu_configured, upload_to_qiniu
 from app.core.time_utils import utcnow
 
+
+def _resolve(db_path: str | None) -> str | None:
+    """将 DB 中的路径（相对或绝对）解析为绝对路径。不存在则返回 None。"""
+    if not db_path:
+        return None
+    p = settings.resolve_path(db_path)
+    return str(p) if p.exists() else None
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -79,6 +87,8 @@ class RegisterRequest(BaseModel):
     name: str = None
     role: str = "custom"
     avatar: str | None = None
+    project_id: str | None = None
+    engine_params: dict | None = None
 
 
 class UploadFromUrlRequest(BaseModel):
@@ -86,6 +96,7 @@ class UploadFromUrlRequest(BaseModel):
     name: str = None
     role: str = "custom"
     prompt_text: Optional[str] = None
+    project_id: str | None = None
 
 
 class UpdateDescriptionRequest(BaseModel):
@@ -103,6 +114,8 @@ class DesignVoiceRequest(BaseModel):
     project_id: str | None = None  # 项目专属声音 (NULL = 全局)
     voice_description: str | None = None  # 音色设计描述
     instruction: str | None = None  # 合成指令
+    preview_text: str | None = None  # 试听文本（存为 audition_text）
+    original_prompt_text: str | None = None  # 原始语音转录（ultimate clone 的 prompt_text）
 
 
 # ============ Routes ============
@@ -111,6 +124,7 @@ class DesignVoiceRequest(BaseModel):
 async def upload_voice(
     file: UploadFile = File(...),
     prompt_text: str = Form(None),
+    project_id: str = Form(None),
     db: Session = Depends(get_db),
 ):
     """上传音频文件 - 支持 WebM/MP3/WAV/OGG，WebM 会自动转换为 MP3"""
@@ -125,13 +139,17 @@ async def upload_voice(
         )
 
     file_id = str(uuid.uuid4())
+    # 文件名：角色名_时间戳（可读性好）
+    base_name = os.path.splitext(file.filename or "voice")[0]
+    safe_name = base_name.replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     # 如果是 WebM 格式，先保存到临时文件，然后转换为 MP3
     if file_ext == "webm":
         # 保存原始 webm 到临时文件
         temp_dir = tempfile.gettempdir()
         temp_webm_path = os.path.join(temp_dir, f"{file_id}.webm")
-        final_mp3_path = settings.voices_dir / f"{file_id}.mp3"
+        final_mp3_path = settings.voices_dir / f"{safe_name}_{ts}.mp3"
 
         try:
             # 保存上传的文件
@@ -159,7 +177,7 @@ async def upload_voice(
     else:
         # 直接保存其他格式
         file_extension = file_ext
-        file_path = settings.voices_dir / f"{file_id}.{file_extension}"
+        file_path = settings.voices_dir / f"{safe_name}_{ts}.{file_extension}"
 
         async with aiofiles.open(file_path, "wb") as f:
             content = await file.read()
@@ -168,9 +186,10 @@ async def upload_voice(
     voice = VoiceProfile(
         id=file_id,
         name=file.filename or "Unnamed Voice",
-        audio_path=str(file_path),
+        source_audio_path=settings.to_relative(file_path),
         role="custom",
         prompt_text=prompt_text or None,
+        project_id=project_id or None,
     )
     db.add(voice)
     db.commit()
@@ -221,9 +240,11 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
 
     # 下载音频文件（禁用代理）
     file_id = str(uuid.uuid4())
+    safe_name = (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_dir = tempfile.gettempdir()
     temp_audio_path = os.path.join(temp_dir, f"{file_id}.mp3")
-    final_audio_path = settings.voices_dir / f"{file_id}.mp3"
+    final_audio_path = settings.voices_dir / f"{safe_name}_{ts}.mp3"
 
     try:
         # 下载音频（禁用代理）
@@ -261,10 +282,11 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
     voice = VoiceProfile(
         id=file_id,
         name=request.name or f"Voice_{file_id[:8]}",
-        audio_path=str(final_audio_path),
+        source_audio_path=settings.to_relative(final_audio_path),
         role="custom",
         external_audio_url=audio_url,  # 保存原始 URL
         prompt_text=request.prompt_text or None,
+        project_id=request.project_id or None,
     )
     db.add(voice)
     db.commit()
@@ -288,7 +310,8 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
 
     # 优先使用外部音频 URL（如果有），否则上传本地文件到七牛云
     if not voice.external_audio_url:
-        if not os.path.exists(voice.audio_path):
+        resolved_src = _resolve(voice.source_audio_path)
+        if not resolved_src:
             raise HTTPException(status_code=404, detail="Audio file not found")
         if not is_qiniu_configured(db):
             raise HTTPException(
@@ -296,8 +319,8 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
                 detail="Qiniu not configured; cannot generate public URL for cloning",
             )
         try:
-            key = os.path.basename(voice.audio_path)
-            qiniu_url = upload_to_qiniu(voice.audio_path, key, db=db)
+            key = os.path.basename(resolved_src)
+            qiniu_url = upload_to_qiniu(resolved_src, key, db=db)
             voice.external_audio_url = qiniu_url
             db.commit()
             db.refresh(voice)
@@ -323,16 +346,17 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         voice.is_cloned = True
         voice.cloned_at = utcnow()
         voice.clone_engine = "qwen"
-        voice.original_audio_path = voice.audio_path  # 保存原始音频路径
         voice.voice_engine_type = "clone"
         voice.engine_type = "CosyVoice"
         voice.engine_sub_type = None
-        voice.engine_params = {}
+        voice.engine_params = request.engine_params or {}
 
         if request.name:
             voice.name = request.name
         if request.avatar:
             voice.avatar = request.avatar
+        if request.project_id and not voice.project_id:
+            voice.project_id = request.project_id
 
         db.commit()
         db.refresh(voice)
@@ -357,7 +381,8 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    if not voice.audio_path or not os.path.exists(voice.audio_path):
+    resolved_src = _resolve(voice.source_audio_path)
+    if not resolved_src:
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
@@ -365,16 +390,17 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
         voice.cloned_at = utcnow()
         voice.clone_engine = "mimo"
         voice.mimo_voice_id = "mimo_voiceclone"  # 标记使用 MiMo voiceclone
-        voice.original_audio_path = voice.audio_path  # 保存原始音频路径
         voice.voice_engine_type = "clone"
         voice.engine_type = "Mimo"
         voice.engine_sub_type = "mimo-clone"
-        voice.engine_params = {}
+        voice.engine_params = request.engine_params or {}
 
         if request.name:
             voice.name = request.name
         if request.avatar:
             voice.avatar = request.avatar
+        if request.project_id and not voice.project_id:
+            voice.project_id = request.project_id
 
         db.commit()
         db.refresh(voice)
@@ -399,23 +425,27 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    if not voice.audio_path or not os.path.exists(voice.audio_path):
+    resolved_src = _resolve(voice.source_audio_path)
+    if not resolved_src:
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
         voice.is_cloned = True
         voice.cloned_at = utcnow()
         voice.clone_engine = "voxcpm"
-        voice.original_audio_path = voice.audio_path  # 保存原始音频路径
         voice.voice_engine_type = "clone"
         voice.engine_type = "VoxCpm"
-        voice.engine_sub_type = "voxcpm-clone"
-        voice.engine_params = {}
+        engine_params = request.engine_params or {}
+        voxcpm_mode = engine_params.get("voxcpm_mode", "clone")
+        voice.engine_sub_type = "voxcpm-ultimate" if voxcpm_mode == "ultimate" else "voxcpm-clone"
+        voice.engine_params = engine_params
 
         if request.name:
             voice.name = request.name
         if request.avatar:
             voice.avatar = request.avatar
+        if request.project_id and not voice.project_id:
+            voice.project_id = request.project_id
 
         db.commit()
         db.refresh(voice)
@@ -432,11 +462,12 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
     """
     从音色设计的预览音频创建 VoiceProfile。
 
-    用于 MiMo voicedesign 和 VoxCPM design 流程：
+    用于 MiMo voicedesign、VoxCPM design 和预置音色流程：
     用户描述音色 → 试听 → 满意后调用此接口持久化音频为 VoiceProfile。
     之后可通过 voiceclone 模式使用该声音。
     """
     import base64
+    from datetime import datetime
 
     try:
         audio_bytes = base64.b64decode(request.audio_base64)
@@ -449,7 +480,10 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
     # 根据引擎选择格式
     audio_ext = "wav" if request.engine == "voxcpm" else "mp3"
     voice_id = str(uuid.uuid4())
-    audio_path = str(settings.clone_voices_dir / f"design_{voice_id}.{audio_ext}")
+    # 文件名：角色名_时间戳（可读性好）
+    safe_name = (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    audio_path = settings.clone_voices_dir / f"{safe_name}_{ts}.{audio_ext}"
 
     # 保存音频文件
     settings.clone_voices_dir.mkdir(parents=True, exist_ok=True)
@@ -457,27 +491,40 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
         f.write(audio_bytes)
 
     # 创建 VoiceProfile 记录
-    engine_sub_type = "mimo-design" if request.engine == "mimo" else "voxcpm-design"
-    engine_params = {}
+    if request.engine == "preset":
+        engine_sub_type = "preset-clone"
+        engine_type = "Mimo"  # 默认 MiMo，后续可扩展
+    elif request.engine == "mimo":
+        engine_sub_type = "mimo-design"
+        engine_type = "Mimo"
+    else:
+        engine_sub_type = "voxcpm-design"
+        engine_type = "VoxCpm"
+    engine_params: dict = {}
     if request.voice_description:
         engine_params["voice_description"] = request.voice_description
     if request.instruction:
         engine_params["instruction"] = request.instruction
+    if request.preview_text:
+        engine_params["audition_text"] = request.preview_text
+    if request.original_prompt_text:
+        engine_params["original_prompt_text"] = request.original_prompt_text
 
     voice = VoiceProfile(
         id=voice_id,
         name=request.name,
-        audio_path=audio_path,
+        source_audio_path=settings.to_relative(audio_path),
         description=request.description,
         clone_engine=request.engine,
         is_cloned=True,
         cloned_at=utcnow(),
         avatar=request.avatar,
         project_id=request.project_id,
-        voice_engine_type="design",
-        engine_type="Mimo" if request.engine == "mimo" else "VoxCpm",
+        voice_engine_type="design" if request.engine != "preset" else "clone",
+        engine_type=engine_type,
         engine_sub_type=engine_sub_type,
         engine_params=engine_params,
+        prompt_text=request.original_prompt_text or request.preview_text or request.voice_description,
     )
     db.add(voice)
     db.commit()
@@ -499,7 +546,6 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
     保存克隆音色的试听音频。
 
     用于克隆流程：用户录制/上传原始音频 → 克隆 → 试听合成 → 保存试听音频。
-    始终使用 original_audio_path 作为克隆参考。
     """
     import base64
 
@@ -516,13 +562,15 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
         raise HTTPException(status_code=400, detail="Audio data too small")
 
     audio_ext = request.audio_format or "wav"
-    preview_path = str(settings.clone_voices_dir / f"preview_{voice_id}.{audio_ext}")
+    safe_name = (voice.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    preview_path = settings.clone_voices_dir / f"{safe_name}_{ts}.{audio_ext}"
 
     settings.clone_voices_dir.mkdir(parents=True, exist_ok=True)
     with open(preview_path, "wb") as f:
         f.write(audio_bytes)
 
-    voice.cloned_preview_path = preview_path
+    voice.cloned_preview_path = settings.to_relative(preview_path)
     db.commit()
     db.refresh(voice)
 
@@ -606,7 +654,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                     is_cloned=True,
                     cloned_at=utcnow(),
                     clone_engine="qwen",
-                    audio_path="",  # 从 Qwen 同步的没有本地音频文件
+                    source_audio_path=None,  # 从 Qwen 同步的没有本地音频文件
                 )
                 db.add(new_voice)
                 db.commit()
@@ -675,43 +723,38 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
 
 @router.get("/audio/{voice_id}")
 async def get_voice_audio(voice_id: str, field: str = None, db: Session = Depends(get_db)):
-    """获取声音音频文件。field='original' 返回原始音频，field='preview' 返回克隆试听音频，默认返回主音频。"""
+    """获取声音音频文件。field='source' 返回源音频，field='preview' 返回克隆/设计试听音频。"""
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
     from fastapi.responses import FileResponse
 
-    if field == "original" and voice.original_audio_path and os.path.exists(voice.original_audio_path):
-        return FileResponse(voice.original_audio_path, media_type="audio/wav")
-    if field == "preview" and voice.cloned_preview_path and os.path.exists(voice.cloned_preview_path):
-        return FileResponse(voice.cloned_preview_path, media_type="audio/wav")
+    resolved_src = _resolve(voice.source_audio_path)
+    resolved_preview = _resolve(voice.cloned_preview_path)
 
-    if not os.path.exists(voice.audio_path):
-        raise HTTPException(status_code=404, detail="Audio not found")
-    return FileResponse(voice.audio_path, media_type="audio/wav")
+    if field == "source" and resolved_src:
+        return FileResponse(resolved_src, media_type="audio/wav")
+    if field == "preview" and resolved_preview:
+        return FileResponse(resolved_preview, media_type="audio/wav")
+
+    # Fallback: preview 优先，否则 source
+    if resolved_preview:
+        return FileResponse(resolved_preview, media_type="audio/wav")
+    if resolved_src:
+        return FileResponse(resolved_src, media_type="audio/wav")
+    raise HTTPException(status_code=404, detail="Audio not found")
 
 
 @router.get("/{voice_id}")
 def get_voice(voice_id: str, db: Session = Depends(get_db)):
     """获取单个声音详情"""
+    from app.api._voice_helpers import voice_to_dict
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    return {
-        "id": voice.id,
-        "name": voice.name,
-        "audio_url": f"/api/clone/audio/{voice.id}",
-        "original_audio_url": f"/api/clone/audio/{voice.id}?field=original" if voice.original_audio_path else None,
-        "cloned_preview_url": f"/api/clone/audio/{voice.id}?field=preview" if voice.cloned_preview_path else None,
-        "qwen_voice_id": voice.qwen_voice_id,
-        "role": voice.role,
-        "clone_engine": voice.clone_engine,
-        "is_cloned": voice.is_cloned,
-        "cloned_at": voice.cloned_at.isoformat() if voice.cloned_at else None,
-        "created_at": voice.created_at.isoformat(),
-    }
+    return voice_to_dict(voice)
 
 
 @router.delete("/{voice_id}")
@@ -733,12 +776,12 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
                 detail=f"Failed to delete cloned voice on Qwen: {str(e)}",
             )
 
-    if voice.audio_path and os.path.exists(voice.audio_path):
-        os.remove(voice.audio_path)
-    if voice.original_audio_path and os.path.exists(voice.original_audio_path) and voice.original_audio_path != voice.audio_path:
-        os.remove(voice.original_audio_path)
-    if voice.cloned_preview_path and os.path.exists(voice.cloned_preview_path):
-        os.remove(voice.cloned_preview_path)
+    resolved_src = _resolve(voice.source_audio_path)
+    resolved_preview = _resolve(voice.cloned_preview_path)
+    if resolved_src:
+        os.remove(resolved_src)
+    if resolved_preview:
+        os.remove(resolved_preview)
 
     db.delete(voice)
     db.commit()

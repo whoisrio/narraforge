@@ -79,7 +79,8 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
   "voice_id": "已上传音频的ID",
   "name": "我的声音",
   "role": "custom",
-  "avatar": "data:image/png;base64,..."
+  "avatar": "data:image/png;base64,...",
+  "engine_params": { "input_method": "upload" }
 }
 ```
 
@@ -91,6 +92,7 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 | `name` | string | `null` | 声音名称 |
 | `role` | string | `"custom"` | 角色标签 |
 | `avatar` | string | `null` | 头像（data URL 或外部 URL） |
+| `engine_params` | object | `{}` | 引擎特有参数，前端透传存储。常用字段：`input_method`（`record`/`upload`/`url`） |
 
 **Response:** `VoiceProfile` 对象（见下方通用 VoiceProfile 响应格式）
 
@@ -187,7 +189,7 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
       "type": "clone",
       "engine": { "type": "CosyVoice", "sub_type": null },
       "prompt_text": "参考文本",
-      "parameters": {}
+      "parameters": { "input_method": "url" }
     }
   }
 ]
@@ -998,7 +1000,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
     "type": "clone",
     "engine": { "type": "CosyVoice", "sub_type": null },
     "prompt_text": "参考文本",
-    "parameters": {}
+    "parameters": { "input_method": "url" }
   }
 }
 ```

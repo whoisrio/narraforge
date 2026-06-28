@@ -66,13 +66,13 @@ class TestCloneAPI:
         voice1 = VoiceProfile(
             id=str(uuid.uuid4()),
             name="Voice 1",
-            audio_path="/tmp/voice1.wav",
+            source_audio_path="/tmp/voice1.wav",
             created_at=datetime.now(timezone.utc)
         )
         voice2 = VoiceProfile(
             id=str(uuid.uuid4()),
             name="Voice 2",
-            audio_path="/tmp/voice2.wav",
+            source_audio_path="/tmp/voice2.wav",
             is_cloned=True,
             qwen_voice_id="cloned_123",
             cloned_at=datetime.now(timezone.utc),
@@ -113,7 +113,7 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Test Voice",
-            audio_path="/tmp/test.wav",
+            source_audio_path="/tmp/test.wav",
             is_cloned=True,
             qwen_voice_id="cloned_456",
             cloned_at=datetime.now(timezone.utc),
@@ -129,7 +129,7 @@ class TestCloneAPI:
 
         assert data["id"] == voice_id
         assert data["name"] == "Test Voice"
-        assert data["audio_url"] == f"/api/clone/audio/{voice_id}"
+        assert data["audio_url"] == f"/api/clone/audio/{voice_id}?field=source"
         assert data["is_cloned"] is True
         assert data["qwen_voice_id"] == "cloned_456"
         assert data["cloned_at"] is not None
@@ -150,7 +150,7 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Delete Test",
-            audio_path=audio_path,
+            source_audio_path=audio_path,
         )
 
         db_session.add(voice)
@@ -186,7 +186,7 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Clone Test",
-            audio_path=audio_path,
+            source_audio_path=audio_path,
         )
 
         db_session.add(voice)
@@ -202,7 +202,8 @@ class TestCloneAPI:
         request_data = {
             "voice_id": voice_id,
             "name": "Cloned Voice Name",
-            "role": "custom"
+            "role": "custom",
+            "engine_params": {"speed": 1, "language": "Chinese", "volume": 80}
         }
 
         with patch("app.api.clone.is_qiniu_configured", return_value=True), \
@@ -218,6 +219,13 @@ class TestCloneAPI:
         assert data["role"] == "custom"
         assert data["is_cloned"] is True
         assert data["cloned_at"] is not None
+
+        # 验证 voices_engine 和 engine_params 正确写入
+        assert data["voices_engine"]["type"] == "clone"
+        assert data["voices_engine"]["engine"]["type"] == "CosyVoice"
+        ve_params = data["voices_engine"]["parameters"]
+        assert ve_params["speed"] == 1
+        assert ve_params["language"] == "Chinese"
 
         mock_tts_service.register_cloned_voice.assert_called_once_with(
             reference_audio_path=public_url,
@@ -245,7 +253,7 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Missing Audio",
-            audio_path=os.path.join(tempfile.gettempdir(), f"nonexistent_{voice_id}.wav"),
+            source_audio_path=os.path.join(tempfile.gettempdir(), f"nonexistent_{voice_id}.wav"),
         )
 
         db_session.add(voice)
@@ -261,4 +269,183 @@ class TestCloneAPI:
 
     def test_get_cloned_audio_not_found(self, client: TestClient):
         response = client.get("/api/clone/cloned_audio/nonexistent_audio")
+        assert response.status_code == 404
+
+    def test_create_clone_mimo_engine_params(self, client: TestClient, db_session):
+        """MiMo 克隆后 engine_params 保存传入的参数"""
+        from app.models.voice_profile import VoiceProfile
+        import uuid
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"mimo_test_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        voice = VoiceProfile(id=voice_id, name="MiMo Clone", source_audio_path=audio_path)
+        db_session.add(voice)
+        db_session.commit()
+
+        params = {"mimo_mode": "voiceclone", "mimo_instruction": "温柔"}
+        response = client.post("/api/clone/create-clone-mimo", json={"voice_id": voice_id, "engine_params": params})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["voices_engine"]["engine"]["type"] == "Mimo"
+        assert data["voices_engine"]["engine"]["sub_type"] == "mimo-clone"
+        assert data["voices_engine"]["parameters"]["mimo_instruction"] == "温柔"
+
+        # 验证 DB 直接读取
+        db_session.expire_all()
+        updated = db_session.query(VoiceProfile).filter_by(id=voice_id).first()
+        assert updated.engine_params == {"mimo_mode": "voiceclone", "mimo_instruction": "温柔"}
+
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_create_clone_voxcpm_engine_params(self, client: TestClient, db_session):
+        """VoxCPM 克隆后 engine_params 保存传入的参数"""
+        from app.models.voice_profile import VoiceProfile
+        import uuid
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"voxcpm_test_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        voice = VoiceProfile(id=voice_id, name="VoxCPM Clone", source_audio_path=audio_path)
+        db_session.add(voice)
+        db_session.commit()
+
+        params = {"voxcpm_mode": "clone", "cfg_value": 3, "inference_timesteps": 15, "voxcpm_style_control": "happy"}
+        response = client.post("/api/clone/create-clone-voxcpm", json={"voice_id": voice_id, "engine_params": params})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["voices_engine"]["engine"]["type"] == "VoxCpm"
+        assert data["voices_engine"]["engine"]["sub_type"] == "voxcpm-clone"
+        ve_params = data["voices_engine"]["parameters"]
+        assert ve_params["voxcpm_mode"] == "clone"
+        assert ve_params["cfg_value"] == 3
+        assert ve_params["inference_timesteps"] == 15
+        assert ve_params["voxcpm_style_control"] == "happy"
+
+        # 验证 DB 直接读取
+        db_session.expire_all()
+        updated = db_session.query(VoiceProfile).filter_by(id=voice_id).first()
+        assert updated.engine_params["cfg_value"] == 3
+        assert updated.engine_params["voxcpm_style_control"] == "happy"
+
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_create_clone_voxcpm_ultimate_sub_type(self, client: TestClient, db_session):
+        """VoxCPM 极致克隆时 engine_sub_type 应为 voxcpm-ultimate"""
+        from app.models.voice_profile import VoiceProfile
+        import uuid
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"voxcpm_ultimate_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        voice = VoiceProfile(id=voice_id, name="VoxCPM Ultimate", source_audio_path=audio_path)
+        db_session.add(voice)
+        db_session.commit()
+
+        params = {"voxcpm_mode": "ultimate", "cfg_value": 2, "inference_timesteps": 10}
+        response = client.post("/api/clone/create-clone-voxcpm", json={"voice_id": voice_id, "engine_params": params})
+        assert response.status_code == 200
+        data = response.json()
+
+        assert data["voices_engine"]["engine"]["sub_type"] == "voxcpm-ultimate"
+        assert data["voices_engine"]["parameters"]["voxcpm_mode"] == "ultimate"
+
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_create_clone_engine_params_default_empty(self, client: TestClient, db_session):
+        """不传 engine_params 时默认为空 dict"""
+        from app.models.voice_profile import VoiceProfile
+        import uuid
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"empty_params_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        voice = VoiceProfile(id=voice_id, name="Empty Params", source_audio_path=audio_path)
+        db_session.add(voice)
+        db_session.commit()
+
+        response = client.post("/api/clone/create-clone-voxcpm", json={"voice_id": voice_id})
+        assert response.status_code == 200
+
+        db_session.expire_all()
+        updated = db_session.query(VoiceProfile).filter_by(id=voice_id).first()
+        assert updated.engine_params == {}
+
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_save_preview_audio(self, client: TestClient, db_session):
+        """保存试听音频到 cloned_preview_path"""
+        from app.models.voice_profile import VoiceProfile
+        import uuid
+        import base64
+
+        voice_id = str(uuid.uuid4())
+        voice = VoiceProfile(
+            id=voice_id,
+            name="Preview Test",
+            source_audio_path="/tmp/source.wav",
+        )
+        db_session.add(voice)
+        db_session.commit()
+
+        # 生成一个足够大的 WAV 数据（超过 100 字节的最小阈值）
+        wav_header = b'RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x44\xac\x00\x00\x88X\x01\x00\x02\x00\x10\x00data\x00\x01\x00\x00'
+        wav_data = wav_header + b'\x00' * 256  # pad to exceed 100 bytes
+        audio_b64 = base64.b64encode(wav_data).decode()
+
+        response = client.patch(
+            f"/api/clone/{voice_id}/preview-audio",
+            json={"audio_base64": audio_b64, "audio_format": "wav"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["id"] == voice_id
+        assert "Preview_Test" in data["cloned_preview_path"]
+
+        # 验证数据库已更新
+        db_session.expire_all()
+        updated = db_session.query(VoiceProfile).filter_by(id=voice_id).first()
+        assert updated.cloned_preview_path is not None
+        assert os.path.exists(updated.cloned_preview_path)
+
+        # 清理
+        if os.path.exists(updated.cloned_preview_path):
+            os.unlink(updated.cloned_preview_path)
+
+    def test_save_preview_audio_invalid_base64(self, client: TestClient, db_session):
+        """无效 base64 数据应返回 400"""
+        from app.models.voice_profile import VoiceProfile
+        import uuid
+
+        voice_id = str(uuid.uuid4())
+        voice = VoiceProfile(id=voice_id, name="Bad Base64 Test")
+        db_session.add(voice)
+        db_session.commit()
+
+        response = client.patch(
+            f"/api/clone/{voice_id}/preview-audio",
+            json={"audio_base64": "not-valid-base64!!!", "audio_format": "wav"},
+        )
+        assert response.status_code == 400
+
+    def test_save_preview_audio_nonexistent_voice(self, client: TestClient):
+        """不存在的声音 ID 应返回 404"""
+        response = client.patch(
+            "/api/clone/nonexistent-id/preview-audio",
+            json={"audio_base64": "dGVzdA==", "audio_format": "wav"},
+        )
         assert response.status_code == 404

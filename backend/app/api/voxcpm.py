@@ -85,22 +85,30 @@ class VoxCPMUltimateCloneRequest(BaseModel):
 # ============ 辅助函数 ============
 
 
-def _resolve_voice_audio_path(voice_id: str, db: Session) -> str:
+def _resolve_voice_audio_path(voice_id: str, db: Session, prefer: str = "preview") -> str:
     """
     根据 voice_id 查找本地音频文件路径。
-    优先使用 external_audio_url（云存储），否则使用 audio_path（本地文件）。
+    prefer="source": 优先 source_audio_path（原始录音），用于 clone 声音
+    prefer="preview": 优先 cloned_preview_path（试听音频），用于 design 声音
     """
+    from app.core.config import settings
+
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail=f"声音不存在: {voice_id}")
 
-    # 优先本地路径
-    if voice.audio_path and os.path.isfile(voice.audio_path):
-        return voice.audio_path
+    if prefer == "source":
+        candidates = [voice.source_audio_path, voice.cloned_preview_path]
+    else:
+        candidates = [voice.cloned_preview_path, voice.source_audio_path]
+
+    for raw_path in candidates:
+        if raw_path:
+            resolved = settings.resolve_path(raw_path)
+            if resolved.is_file():
+                return str(resolved)
 
     # uploads/voices/ 目录下查找
-    from app.core.config import settings
-
     voices_dir = settings.voices_dir
     for ext in [".wav", ".mp3", ".ogg", ".webm", ".m4a"]:
         candidate = voices_dir / f"{voice_id}{ext}"
@@ -109,7 +117,7 @@ def _resolve_voice_audio_path(voice_id: str, db: Session) -> str:
 
     raise HTTPException(
         status_code=404,
-        detail=f"声音 {voice_id} 的音频文件不存在: audio_path={voice.audio_path}",
+        detail=f"声音 {voice_id} 的音频文件不存在: source_audio_path={voice.source_audio_path}",
     )
 
 
@@ -214,7 +222,7 @@ def synthesize_voxcpm_internal(
             )
 
         if mode == "clone":
-            audio_path = _resolve_voice_audio_path(voice_id, session)
+            audio_path = _resolve_voice_audio_path(voice_id, session, prefer="source")
             return await service.synthesize(
                 text=text,
                 mode="clone",
@@ -225,9 +233,20 @@ def synthesize_voxcpm_internal(
             )
 
         if mode == "ultimate":
-            audio_path = _resolve_voice_audio_path(voice_id, session)
             voice = session.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
-            stored_prompt = getattr(voice, "prompt_text", None) if voice else None
+            ep = getattr(voice, "engine_params", None) or {} if voice else {}
+
+            # 根据声音类型选择音频和对应的 prompt text
+            # clone 声音：source_audio_path + prompt_text（原始录音 + 转录）
+            # design 声音：cloned_preview_path + audition_text（试听音频 + 试听文本）
+            has_audition = bool(ep.get("audition_text"))
+            if has_audition:
+                audio_path = _resolve_voice_audio_path(voice_id, session, prefer="preview")
+                stored_prompt = ep.get("audition_text")
+            else:
+                audio_path = _resolve_voice_audio_path(voice_id, session, prefer="source")
+                stored_prompt = ep.get("original_prompt_text") or (voice.prompt_text if voice else None)
+
             effective_prompt = prompt_text or (stored_prompt if isinstance(stored_prompt, str) else None)
             if not effective_prompt:
                 raise ValueError("ultimate 模式需要 prompt_text")
@@ -374,7 +393,7 @@ async def clone(request: VoxCPMCloneRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=500, detail=f"模型加载失败: {load_result.get('error')}")
 
     # 查找参考音频
-    audio_path = _resolve_voice_audio_path(request.voice_id, db)
+    audio_path = _resolve_voice_audio_path(request.voice_id, db, prefer="source")
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
 
     try:
@@ -418,14 +437,25 @@ async def ultimate_clone(
         if not load_result.get("success"):
             raise HTTPException(status_code=500, detail=f"模型加载失败: {load_result.get('error')}")
 
-    # 查找参考音频
-    audio_path = _resolve_voice_audio_path(request.voice_id, db)
+    # 查找参考音频和对应的 prompt text
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    ep = getattr(voice, "engine_params", None) or {} if voice else {}
 
-    # prompt_text 优先使用请求中提供的，否则从 VoiceProfile 读取
+    # clone 声音：source_audio_path + prompt_text（原始录音 + 转录）
+    # design 声音：cloned_preview_path + audition_text（试听音频 + 试听文本）
+    has_audition = bool(ep.get("audition_text"))
+    if has_audition:
+        audio_path = _resolve_voice_audio_path(request.voice_id, db, prefer="preview")
+    else:
+        audio_path = _resolve_voice_audio_path(request.voice_id, db, prefer="source")
+
+    # prompt_text 优先使用请求中提供的，否则根据声音类型从 VoiceProfile 读取
     prompt_text = request.prompt_text
     if not prompt_text and voice:
-        prompt_text = voice.prompt_text
+        if has_audition:
+            prompt_text = ep.get("audition_text")
+        else:
+            prompt_text = ep.get("original_prompt_text") or voice.prompt_text
     if not prompt_text:
         raise HTTPException(
             status_code=400,

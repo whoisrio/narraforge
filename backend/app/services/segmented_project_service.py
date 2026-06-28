@@ -82,6 +82,110 @@ def _dump_animation_spec(spec: dict[str, Any] | None) -> str | None:
     return json.dumps(spec, ensure_ascii=False)
 
 
+def _build_voice_ref_for_segment(
+    seg: SegmentedProjectSegment,
+    default_params: dict[str, Any],
+    voice_profiles: dict[str, Any],
+) -> dict[str, Any] | None:
+    """为旧 segment 构建 voice_ref（如果没有的话）。
+
+    Args:
+        seg: segment 记录
+        default_params: chapter 的 default_params
+        voice_profiles: {voice_id: {name, qwen_voice_id, id}} 映射
+    """
+    if seg.voice_ref:
+        return seg.voice_ref
+
+    params = seg.params or {}
+    role_snapshot = seg.role_snapshot
+    role_id = getattr(seg, "role_id", None)
+
+    # 有角色 → 使用角色信息
+    if role_id and role_snapshot:
+        return {
+            "name": role_snapshot.get("name", "角色"),
+            "source": "role",
+            "voice_id": role_snapshot.get("default_voice", ""),
+            "engine": role_snapshot.get("default_engine", "edge_tts"),
+            "role_id": role_id,
+        }
+
+    # 无角色 → 根据引擎构建
+    engine = params.get("engine") or default_params.get("engine", "edge_tts")
+
+    if engine == "edge_tts":
+        edge_voice = params.get("edge_voice") or default_params.get("edge_voice", "")
+        parts = edge_voice.split("-")
+        name = parts[-1].replace("Neural", "").replace("V2", "") if parts else edge_voice
+        return {"name": name or "未选择", "source": "global", "voice_id": edge_voice, "engine": "edge_tts"}
+
+    if engine == "mimo_tts":
+        mode = params.get("mimo_mode") or default_params.get("mimo_mode", "preset")
+        if mode == "voiceclone":
+            clone_id = params.get("mimo_clone_voice_id") or default_params.get("mimo_clone_voice_id", "")
+            v = voice_profiles.get(clone_id)
+            name = v["name"] if v else "自定义音色"
+            return {"name": name, "source": "global", "voice_id": clone_id, "engine": "mimo_tts"}
+        preset = params.get("mimo_preset_voice") or default_params.get("mimo_preset_voice", "冰糖")
+        return {"name": preset, "source": "global", "voice_id": preset, "engine": "mimo_tts"}
+
+    if engine == "voxcpm":
+        voice_id = params.get("voice_id") or default_params.get("voice_id", "")
+        v = voice_profiles.get(voice_id)
+        name = v["name"] if v else "VoxCPM 音色"
+        return {"name": name, "source": "global", "voice_id": voice_id, "engine": "voxcpm"}
+
+    # cosyvoice (default)
+    voice_id = params.get("voice_id") or default_params.get("voice_id", "")
+    v = voice_profiles.get(voice_id) or voice_profiles.get(
+        next((k for k, vp in voice_profiles.items() if vp.get("qwen_voice_id") == voice_id), None)
+    )
+    name = v["name"] if v else "CosyVoice 音色"
+    return {"name": name, "source": "global", "voice_id": voice_id, "engine": "cosyvoice"}
+
+
+def _migrate_voice_refs(db: Session, project: SegmentedProject) -> bool:
+    """批量为旧 segment 填充 voice_ref. 返回是否有更新."""
+    from app.models.voice_profile import VoiceProfile
+
+    # 收集所有需要迁移的 segment
+    segments_to_migrate = []
+    for ch in project.chapters:
+        for seg in ch.segments:
+            if not seg.voice_ref:
+                segments_to_migrate.append(seg)
+
+    if not segments_to_migrate:
+        return False
+
+    # 加载所有 voice profiles（用于查找名称）
+    profiles = db.query(VoiceProfile).filter(VoiceProfile.is_cloned == True).all()
+    voice_map = {}
+    for vp in profiles:
+        voice_map[vp.id] = {"name": vp.name, "qwen_voice_id": vp.qwen_voice_id, "id": vp.id}
+        if vp.qwen_voice_id:
+            voice_map[vp.qwen_voice_id] = {"name": vp.name, "qwen_voice_id": vp.qwen_voice_id, "id": vp.id}
+
+    # 构建 chapter default_params 映射
+    chapter_params = {ch.id: (ch.default_params or {}) for ch in project.chapters}
+
+    # 迁移
+    updated = False
+    for seg in segments_to_migrate:
+        dp = chapter_params.get(seg.chapter_id, {})
+        voice_ref = _build_voice_ref_for_segment(seg, dp, voice_map)
+        if voice_ref:
+            seg.voice_ref = voice_ref
+            updated = True
+
+    if updated:
+        db.flush()
+        logger.info(f"[migration] voice_ref: migrated {len(segments_to_migrate)} segments in project {project.id}")
+
+    return updated
+
+
 # ----- serialization -----
 
 def project_to_summary(p: SegmentedProject) -> ProjectSummary:
@@ -153,6 +257,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 role_snapshot=getattr(s, "role_snapshot", None),
                 segment_kind=getattr(s, "segment_kind", None) or "narration",
                 prosody_marks=getattr(s, "prosody_marks", None) or [],
+                voice_ref=getattr(s, "voice_ref", None),
                 locked_params=s.locked_params or [],
                 generated_params=s.generated_params,
                 current_audio_path=s.current_audio_path,
@@ -200,6 +305,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         source_document=getattr(p, "source_document", None),
         default_narrator_role_id=getattr(p, "default_narrator_role_id", None),
         default_narrator_snapshot=getattr(p, "default_narrator_snapshot", None),
+        configs=getattr(p, "configs", None),
         created_at=_to_iso(p.created_at),
         updated_at=_to_iso(p.updated_at),
         chapters=chapters,
@@ -221,6 +327,8 @@ def get_project_detail(db: Session, project_id: str) -> ProjectDetail | None:
     p = db.query(SegmentedProject).filter_by(id=project_id).first()
     if p is None:
         return None
+    # 自动迁移旧 segment 的 voice_ref
+    _migrate_voice_refs(db, p)
     return project_to_detail(p)
 
 
@@ -271,6 +379,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     setattr(p, "remotion_project_path", project.remotion_project_path)
     # P3: 默认旁白角色 + 快照
     setattr(p, "default_narrator_role_id", project.default_narrator_role_id)
+    setattr(p, "configs", project.configs)
     setattr(p, "default_narrator_snapshot", project.default_narrator_snapshot)
     if project.created_at:
         p.created_at = _parse_iso(project.created_at)
@@ -322,6 +431,9 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             setattr(seg, "segment_kind", s_in.segment_kind or "narration")
             setattr(seg, "prosody_marks", s_in.prosody_marks or [])
             seg.params = s_in.params or {}
+            # 显式的音色引用
+            if s_in.voice_ref is not None:
+                seg.voice_ref = s_in.voice_ref
             seg.locked_params = s_in.locked_params or []
             if s_in.generated_params is not None:
                 seg.generated_params = s_in.generated_params
@@ -492,6 +604,7 @@ def synthesize_with_engine(
     engine: str, text: str, params: dict[str, Any], db: Session | None = None
 ) -> tuple[bytes, str]:
     """Dispatch to the existing TTS service. Returns (audio_bytes, native_format)."""
+    logger.info(f"[synthesize_with_engine] engine={engine}, mimo_mode={params.get('mimo_mode')}, mimo_clone_voice_id={params.get('mimo_clone_voice_id')}, voxcpm_mode={params.get('voxcpm_mode')}, voice_id={params.get('voice_id')}")
     if engine == "edge_tts":
         from app.api.tts import synthesize_speech_internal
         return synthesize_speech_internal(
@@ -595,6 +708,8 @@ def synthesize_segment(
     role_snapshot = getattr(seg, "role_snapshot", None)
     role_params = role_snapshot.get("default_engine_params") if isinstance(role_snapshot, dict) else None
     effective = _merge_params(chapter.default_params, role_params, seg.params, request_params)
+    logger.info(f"[synthesize_segment] role_params={role_params}, request_params={request_params}, merged engine={effective.get('engine')}, mimo_mode={effective.get('mimo_mode')}, mimo_clone_voice_id={effective.get('mimo_clone_voice_id')}, voxcpm_mode={effective.get('voxcpm_mode')}, voice_id={effective.get('voice_id')}")
+
     # P3: 把角色 / 局部语气元数据写入 generated_params (可复现 + 前端 stale 检测)
     role_id = getattr(seg, "role_id", None)
     prosody_marks = getattr(seg, "prosody_marks", None) or []

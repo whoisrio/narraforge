@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button, Card } from '../ui';
 
 interface AudioRecorderProps {
@@ -10,6 +10,7 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [volumeLevel, setVolumeLevel] = useState(0);
   const [recordTime, setRecordTime] = useState(0);
+  const [playbackUrl, setPlaybackUrl] = useState<string | null>(null);
 
   // 用普通变量存引用，避免闭包问题
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -100,7 +101,7 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
         const allChunks = [...chunksRef.current];
         const blob = new Blob(allChunks, { type: 'audio/webm' });
         setAudioBlob(blob);
-        console.log(`[AudioRecorder] stopped, chunks=${allChunks.length}, blob=${blob.size} bytes`);
+        setPlaybackUrl(URL.createObjectURL(blob));
         stopAll();
       };
 
@@ -127,11 +128,17 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
     setRecording(false);
   };
 
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => { if (playbackUrl) URL.revokeObjectURL(playbackUrl); };
+  }, [playbackUrl]);
+
   const confirmRecording = () => {
     if (!audioBlob || audioBlob.size === 0) return;
     const file = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
     onRecordComplete?.(file);
     setAudioBlob(null);
+    // Don't revoke playbackUrl here — AudioPreview needs the file, not the URL
   };
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`;
@@ -148,6 +155,9 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
           <span>音量 {volumeLevel}%</span>
           <span>{fmt(recordTime)}</span>
         </div>
+        {playbackUrl && !recording && (
+          <audio controls src={playbackUrl} style={{ width: '100%' }} />
+        )}
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {!recording ? (
             <Button onClick={startRecording}>开始录制</Button>

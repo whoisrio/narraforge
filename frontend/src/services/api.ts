@@ -7,20 +7,22 @@ const api = axios.create({
 
 // Voice Clone API
 export const voiceApi = {
-  upload: async (file: File, promptText?: string): Promise<VoiceProfile> => {
+  upload: async (file: File, promptText?: string, projectId?: string): Promise<VoiceProfile> => {
     const formData = new FormData();
     formData.append('file', file);
     if (promptText) formData.append('prompt_text', promptText);
+    if (projectId) formData.append('project_id', projectId);
     const { data } = await api.post<VoiceProfile>('/clone/upload', formData);
     return data;
   },
 
   /** 从公网 URL 下载音频并创建声音记录，后端会校验 URL 可访问性并下载到 uploads 目录 */
-  uploadFromUrl: async (audioUrl: string, name?: string, promptText?: string): Promise<VoiceProfile> => {
+  uploadFromUrl: async (audioUrl: string, name?: string, promptText?: string, projectId?: string): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/upload-from-url', {
       audio_url: audioUrl,
       name,
       prompt_text: promptText,
+      project_id: projectId,
     });
     return data;
   },
@@ -38,31 +40,37 @@ export const voiceApi = {
     return all.filter(v => v.is_cloned && v.qwen_voice_id);
   },
 
-  createClone: async (voiceId: string, name?: string, avatar?: string): Promise<VoiceProfile> => {
+  createClone: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone', {
       voice_id: voiceId,
       name,
       avatar,
+      project_id: projectId,
+      engine_params: engineParams,
     });
     return data;
   },
 
   /** MiMo 声音复刻 - 仅标记为 MiMo 复刻，无需云端注册 */
-  createCloneMiMo: async (voiceId: string, name?: string, avatar?: string): Promise<VoiceProfile> => {
+  createCloneMiMo: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone-mimo', {
       voice_id: voiceId,
       name,
       avatar,
+      project_id: projectId,
+      engine_params: engineParams,
     });
     return data;
   },
 
   /** VoxCPM 声音复刻 - 仅标记为 VoxCPM 复刻，本地 GPU 推理无需云端注册 */
-  createCloneVoxCPM: async (voiceId: string, name?: string, avatar?: string): Promise<VoiceProfile> => {
+  createCloneVoxCPM: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone-voxcpm', {
       voice_id: voiceId,
       name,
       avatar,
+      project_id: projectId,
+      engine_params: engineParams,
     });
     return data;
   },
@@ -70,13 +78,15 @@ export const voiceApi = {
   /** 从音色设计的预览音频创建 VoiceProfile（MiMo voicedesign / VoxCPM design） */
   createFromDesign: async (params: {
     audio_base64: string;
-    engine: 'mimo' | 'voxcpm';
+    engine: 'mimo' | 'voxcpm' | 'preset';
     name: string;
     description?: string;
     avatar?: string;
     project_id?: string;
     voice_description?: string;
     instruction?: string;
+    preview_text?: string;
+    original_prompt_text?: string;
   }): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-from-design', params);
     return data;

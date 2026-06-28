@@ -87,6 +87,7 @@ function enrichSegment(raw: RawSegment, defaultParams: SegmentEngineParams): Seg
     text: raw.text ?? '',
     ssml: raw.ssml,
     params: { ...defaultParams, ...raw.params },
+    voice_ref: raw.voice_ref,
     status: raw.status ?? (hasAudio ? 'ready' : 'idle'),
     error: raw.error,
     current_audio_id: raw.current_audio_id,
@@ -219,9 +220,9 @@ export type Action =
   | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
   // Segment operations (on active chapter)
-  | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[] }
-  | { type: 'APPEND_SEGMENT'; text?: string }
-  | { type: 'INSERT_SEGMENT'; afterId: string; text?: string }
+  | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null; voice_ref?: import('../types').VoiceRef }[] }
+  | { type: 'APPEND_SEGMENT'; text?: string; voice_ref?: import('../types').VoiceRef }
+  | { type: 'INSERT_SEGMENT'; afterId: string; text?: string; voice_ref?: import('../types').VoiceRef }
   | { type: 'DELETE_SEGMENT'; id: string }
   | { type: 'UPDATE_TEXT'; id: string; text: string }
   | { type: 'UPDATE_SSML'; id: string; ssml: string; by_llm?: boolean }
@@ -329,6 +330,7 @@ export function segmentedReducer(state: State, action: Action): State {
           if (item.emotion && isEmotionType(item.emotion)) seg.emotion = item.emotion;
           if (item.role_id !== undefined) seg.role_id = item.role_id;
           if (item.role_snapshot !== undefined) seg.role_snapshot = item.role_snapshot;
+          if (item.voice_ref !== undefined) seg.voice_ref = item.voice_ref;
           return seg;
         });
         return { ...ch, segments: newSegs, selected_segment_id: undefined, updated_at: new Date().toISOString() };
@@ -337,7 +339,9 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPEND_SEGMENT': {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
-        s.push(makeSegment(action.text ?? '', ch.default_params));
+        const seg = makeSegment(action.text ?? '', ch.default_params);
+        if (action.voice_ref) seg.voice_ref = action.voice_ref;
+        s.push(seg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }
@@ -345,7 +349,11 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const idx = s.findIndex(x => x.id === action.afterId);
-        if (idx >= 0) s.splice(idx + 1, 0, makeSegment(action.text ?? '', ch.default_params));
+        if (idx >= 0) {
+          const seg = makeSegment(action.text ?? '', ch.default_params);
+          if (action.voice_ref) seg.voice_ref = action.voice_ref;
+          s.splice(idx + 1, 0, seg);
+        }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }
@@ -438,9 +446,20 @@ export function segmentedReducer(state: State, action: Action): State {
           const roleParams = action.roleSnapshot?.default_engine_params;
           const overrides = [...(seg.overrides || [])];
           if (action.roleId && roleParams) {
-            // Apply role voice to segment params and lock
-            const hasVoice = overrides.includes('voice');
-            if (!hasVoice) overrides.push('voice');
+            // Only lock voice if the role has a specific voice configured
+            const rEngine = roleParams.engine || seg.params.engine;
+            const roleHasVoice = rEngine === 'edge_tts'
+              ? !!roleParams.edge_voice
+              : rEngine === 'mimo_tts'
+                ? !!(roleParams.mimo_clone_voice_id || roleParams.mimo_preset_voice)
+                : !!(roleParams.voice_id);
+            if (roleHasVoice) {
+              if (!overrides.includes('voice')) overrides.push('voice');
+            } else {
+              // Role has no voice — remove voice lock so segment follows global
+              const idx = overrides.indexOf('voice');
+              if (idx >= 0) overrides.splice(idx, 1);
+            }
             return {
               ...seg,
               role_id: action.roleId,
@@ -647,7 +666,14 @@ export function segmentedReducer(state: State, action: Action): State {
       })};
     }
     case 'SELECT_SEGMENT': {
-      return { project: updateActive(p, ch => ({ ...ch, selected_segment_id: action.id })) };
+      const activeCh = getActiveChapter(p);
+      if (!activeCh) return p;
+      return {
+        project: {
+          ...p,
+          chapters: p.chapters.map(c => c.id === activeCh.id ? { ...c, selected_segment_id: action.id } : c),
+        },
+      };
     }
     case 'CLEAR_ROLE_FROM_SEGMENTS': {
       const now = new Date().toISOString();

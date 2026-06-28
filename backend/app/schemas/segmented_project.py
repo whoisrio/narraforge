@@ -17,6 +17,8 @@ class SegmentIn(BaseModel):
     segment_kind: str = "narration"
     prosody_marks: list[dict[str, Any]] = Field(default_factory=list)
     params: dict[str, Any] = Field(default_factory=dict)
+    # 显式的音色引用 — 描述 segment 当前激活的音色来源
+    voice_ref: dict[str, Any] | None = None
     locked_params: list[str] = Field(default_factory=list)
     generated_params: dict[str, Any] | None = None
     current_audio_path: str | None = None
@@ -83,6 +85,7 @@ class ProjectIn(BaseModel):
     # P3: 默认旁白角色 (全局角色库引用) + 快照
     default_narrator_role_id: str | None = None
     default_narrator_snapshot: dict[str, Any] | None = None
+    configs: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None
     chapters: list[ChapterIn] = Field(default_factory=list)

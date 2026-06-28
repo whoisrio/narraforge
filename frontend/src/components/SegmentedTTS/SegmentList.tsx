@@ -2,7 +2,6 @@ import type { Segment, SegmentEngineParams, VoiceProfile, Role, RoleSnapshot, Se
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import { inferSpeakerName } from '../../services/segmentKindInference';
 import { t } from '../../i18n';
-import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { SegmentRow } from './SegmentRow';
 import { SegmentEditPanel } from './SegmentEditPanel';
 import styles from './SegmentList.module.css';
@@ -136,23 +135,20 @@ export function SegmentList(props: SegmentListProps) {
                 </button>
               )}
               {props.onUpdateRole && (seg.segment_kind ?? 'narration') === 'dialogue' && (
-                <div className={styles.roleChipBar} role="group" aria-label="选择台词角色">
-                  {allRoles.map(role => {
-                    const isActive = seg.role_id === role.id;
-                    return (
-                      <button
-                        key={role.id}
-                        type="button"
-                        className={`${styles.roleChip} ${isActive ? styles.roleChipActive : ''}`}
-                        onClick={() => props.onUpdateRole?.(seg.id, role.id, toSnapshot(role))}
-                        title={role.name}
-                      >
-                        <VoiceAvatar avatar={role.avatar} name={role.name} engine={role.default_engine} size={20} />
-                        <span className={styles.roleChipName}>{role.name}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <select
+                  className={styles.roleSelect}
+                  value={seg.role_id ?? ''}
+                  onChange={(e) => {
+                    const role = allRoles.find(r => r.id === e.target.value);
+                    if (role) props.onUpdateRole?.(seg.id, role.id, toSnapshot(role));
+                  }}
+                  aria-label="选择台词角色"
+                >
+                  <option value="" disabled>选择角色</option>
+                  {allRoles.map(role => (
+                    <option key={role.id} value={role.id}>{role.name}</option>
+                  ))}
+                </select>
               )}
             </div>}
             <SegmentRow {...rowProps(seg, i)} layout="vertical" />
@@ -160,6 +156,7 @@ export function SegmentList(props: SegmentListProps) {
               <div className={styles.accordionWrapper}>
                 <SegmentEditPanel
                   segment={editingSegment}
+                  voices={props.voices}
                   globalVoiceName={props.globalVoiceName}
                   onClose={() => onEdit('')}
                   onUpdateText={props.onUpdateText || (() => {})}

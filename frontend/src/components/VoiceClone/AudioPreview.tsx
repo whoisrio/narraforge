@@ -12,12 +12,16 @@ interface AudioPreviewProps {
   audioUrl?: string;
   /** 复刻引擎：qwen（千问CosyVoice）、mimo（MiMo TTS）或 voxcpm（本地GPU） */
   engine?: 'qwen' | 'mimo' | 'voxcpm';
+  /** 项目 ID，传入时创建的声音归属该项目 */
+  projectId?: string;
+  /** 引擎参数，克隆时写入 VoiceProfile.engine_params */
+  engineParams?: Record<string, unknown>;
   onCloneSuccess: () => void;
   onCancel: () => void;
 }
 
 /** 录音/上传完成后展示音频预览，依次执行 upload → clone（失败则回滚删除）。URL 模式下跳过 upload 直接 clone */
-export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onCloneSuccess, onCancel }: AudioPreviewProps) {
+export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', projectId, engineParams, onCloneSuccess, onCancel }: AudioPreviewProps) {
   const [isCloning, setIsCloning] = useState(false);
   const [step, setStep] = useState<'idle' | 'uploading' | 'cloning'>('idle');
   const [error, setError] = useState('');
@@ -49,7 +53,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
       } else if (file) {
         // 文件模式：先上传再克隆（现有逻辑）
         setStep('uploading');
-        const uploadResult = await voiceApi.upload(file, engine === 'voxcpm' ? promptText : undefined);
+        const uploadResult = await voiceApi.upload(file, engine === 'voxcpm' ? promptText : undefined, projectId);
         targetVoiceId = uploadResult.id;
         setUploadedVoiceId(targetVoiceId);
         setStep('cloning');
@@ -62,11 +66,11 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', onClone
       const name = voiceName.trim() || undefined;
       const avatar = voiceAvatar || undefined;
       if (engine === 'mimo') {
-        await voiceApi.createCloneMiMo(targetVoiceId, name, avatar);
+        await voiceApi.createCloneMiMo(targetVoiceId, name, avatar, projectId, engineParams);
       } else if (engine === 'voxcpm') {
-        await voiceApi.createCloneVoxCPM(targetVoiceId, name, avatar);
+        await voiceApi.createCloneVoxCPM(targetVoiceId, name, avatar, projectId, engineParams);
       } else {
-        await voiceApi.createClone(targetVoiceId, name, avatar);
+        await voiceApi.createClone(targetVoiceId, name, avatar, projectId, engineParams);
       }
 
       // 成功，清理 blob URL 并通知父组件

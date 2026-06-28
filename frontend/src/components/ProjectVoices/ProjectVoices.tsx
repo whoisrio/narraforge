@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Role, RoleSnapshot, SegmentEngineParams, VoiceProfile } from '../../types';
-import { ttsApi, voiceApi } from '../../services/api';
-import { fetchVoiceRolePreview } from '../../services/voiceRolePreview';
+import { ttsApi, voiceApi, mimoTtsApi, voxcpmApi } from '../../services/api';
+import { fetchVoiceRolePreview, synthesizeVoiceRolePreview } from '../../services/voiceRolePreview';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
+import { AudioRecorder, AudioUploader, AudioPreview, UrlInput } from '../VoiceClone';
 import styles from './ProjectVoices.module.css';
 
 /* ------------------------------------------------------------------ */
@@ -65,6 +66,14 @@ function engineLabel(role: Role): string {
   return ENGINE_META[role.default_engine as EngineKey]?.label ?? role.default_engine;
 }
 
+function inputMethodLabel(role: Role): string {
+  const method = role.default_engine_params?.input_method as string | undefined;
+  if (method === 'record') return '录制';
+  if (method === 'upload') return '上传';
+  if (method === 'url') return 'URL';
+  return '';
+}
+
 function isConfigured(role: Role): boolean {
   return !!(role.default_voice
     || role.default_engine_params.edge_voice
@@ -87,14 +96,43 @@ function createRoleDraft(): RoleSnapshot {
 }
 
 function normalizeDraftForSave(draft: RoleSnapshot): RoleSnapshot {
-  const params = { ...draft.default_engine_params, engine: draft.default_engine } as SegmentEngineParams;
-  const defaultVoice = draft.default_engine === 'edge_tts'
-    ? params.edge_voice ?? ''
-    : draft.default_engine === 'cosyvoice'
-      ? params.voice_id ?? ''
-      : draft.default_engine === 'mimo_tts'
-        ? params.mimo_clone_voice_id || params.mimo_preset_voice || params.mimo_voice_description || ''
-        : params.voice_id || params.voxcpm_voice_description || '';
+  const engine = draft.default_engine;
+  const p = draft.default_engine_params;
+  let params: SegmentEngineParams;
+  let defaultVoice: string;
+
+  if (engine === 'edge_tts') {
+    params = { engine: 'edge_tts', edge_voice: p.edge_voice ?? '', edge_rate: p.edge_rate ?? '+0%', edge_volume: p.edge_volume ?? '+0%' };
+    defaultVoice = params.edge_voice ?? '';
+  } else if (engine === 'cosyvoice') {
+    params = { engine: 'cosyvoice', voice_id: p.voice_id ?? '', speed: p.speed ?? 1, volume: p.volume ?? 80, pitch: p.pitch ?? 1, language: p.language || 'Chinese', instruction: p.instruction || '' };
+    defaultVoice = params.voice_id ?? '';
+  } else if (engine === 'mimo_tts') {
+    const mode = p.mimo_mode || 'preset';
+    if (mode === 'voicedesign') {
+      params = { engine: 'mimo_tts', mimo_mode: 'voicedesign', mimo_clone_voice_id: p.mimo_clone_voice_id || '', mimo_voice_description: p.mimo_voice_description || '', mimo_instruction: p.mimo_instruction || '' };
+      defaultVoice = params.mimo_voice_description ?? '';
+    } else if (mode === 'voiceclone') {
+      params = { engine: 'mimo_tts', mimo_mode: 'voiceclone', mimo_clone_voice_id: p.mimo_clone_voice_id || '', mimo_instruction: p.mimo_instruction || '' };
+      defaultVoice = params.mimo_clone_voice_id ?? '';
+    } else {
+      params = { engine: 'mimo_tts', mimo_mode: 'preset', mimo_preset_voice: p.mimo_preset_voice || '冰糖', mimo_instruction: p.mimo_instruction || '' };
+      defaultVoice = params.mimo_preset_voice ?? '';
+    }
+  } else {
+    // voxcpm
+    const mode = p.voxcpm_mode || 'clone';
+    if (mode === 'design') {
+      params = { engine: 'voxcpm', voxcpm_mode: 'design', voice_id: p.voice_id || '', voxcpm_voice_description: p.voxcpm_voice_description || '', voxcpm_cfg_value: p.voxcpm_cfg_value ?? 2, voxcpm_inference_timesteps: p.voxcpm_inference_timesteps ?? 10 };
+      defaultVoice = params.voxcpm_voice_description ?? '';
+    } else {
+      // clone / ultimate
+      params = { engine: 'voxcpm', voxcpm_mode: mode as 'clone' | 'ultimate', voice_id: p.voice_id || '', voxcpm_style_control: p.voxcpm_style_control || '', voxcpm_cfg_value: p.voxcpm_cfg_value ?? 2, voxcpm_inference_timesteps: p.voxcpm_inference_timesteps ?? 10 };
+      if (mode === 'ultimate') params.voxcpm_prompt_text = p.voxcpm_prompt_text || '';
+      defaultVoice = params.voice_id ?? '';
+    }
+  }
+
   return { ...draft, default_voice: defaultVoice, default_engine_params: params };
 }
 
@@ -142,9 +180,8 @@ function VoiceRoleEditor({
   projectId?: string;
 }) {
   const params = draft.default_engine_params;
-  const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>(COMMON_EDGE_VOICES);
-  const { refreshCounter, triggerRefresh } = useVoiceRefresh();
+  const { triggerRefresh } = useVoiceRefresh();
 
   // 音色来源分类
   const [voiceCategory, setVoiceCategory] = useState<VoiceSourceCategory>(() => detectCategory(draft));
@@ -159,9 +196,8 @@ function VoiceRoleEditor({
   const [voxcpmCloneMode, setVoxcpmCloneMode] = useState<'clone' | 'ultimate'>(() =>
     draft.default_engine === 'voxcpm' && draft.default_engine_params.voxcpm_mode === 'ultimate' ? 'ultimate' : 'clone',
   );
-  const [cloneUrl, setCloneUrl] = useState('');
-  const [cloneStep, setCloneStep] = useState<'select' | 'input' | 'cloning'>('select');
-  const [cloneError, setCloneError] = useState('');
+  const [cloneInputMethod, setCloneInputMethod] = useState<'record' | 'upload' | 'url'>('record');
+  const [clonePendingFile, setClonePendingFile] = useState<File | null>(null);
 
   // 音色设计流程状态
   const [designSubEngine, setDesignSubEngine] = useState<'mimo' | 'voxcpm'>(
@@ -175,7 +211,12 @@ function VoiceRoleEditor({
 
   // 已保存的设计音色预览（从 VoiceProfile 加载）
   const [clonePreviewAudioSrc, setClonePreviewAudioSrc] = useState('');
+  const [cloneOriginalAudioSrc, setCloneOriginalAudioSrc] = useState('');
   const [cloneVoiceDescription, setCloneVoiceDescription] = useState('');
+  const [clonePromptText, setClonePromptText] = useState('');
+  // Clone preview generation status
+  const [clonePreviewStatus, setClonePreviewStatus] = useState<'idle' | 'generating' | 'done' | 'error'>('idle');
+  const [clonePreviewError, setClonePreviewError] = useState('');
 
   const isDesignMode = voiceCategory === 'design';
 
@@ -249,6 +290,7 @@ function VoiceRoleEditor({
       const instruction = designSubEngine === 'mimo'
         ? (params.mimo_instruction ?? '')
         : (params.voxcpm_style_control ?? '');
+      const auditionText = '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。';
       const profile = await voiceApi.createFromDesign({
         audio_base64: audioBase64,
         engine,
@@ -257,6 +299,8 @@ function VoiceRoleEditor({
         project_id: projectId,
         voice_description: voiceDescription,
         instruction,
+        preview_text: auditionText,
+        original_prompt_text: voiceDescription,
       });
       setDesignProfileId(profile.id);
       setDesignPhase('confirmed');
@@ -278,14 +322,18 @@ function VoiceRoleEditor({
   const voiceEngineAppliedRef = useRef(false);
   useEffect(() => {
     const voiceId = params.mimo_clone_voice_id || params.voice_id || '';
-    if (!voiceId) { setClonePreviewAudioSrc(''); setCloneVoiceDescription(''); return; }
+    if (!voiceId) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
     let cancelled = false;
     ttsApi.getVoices({ voice_id: voiceId }).then(list => {
       if (cancelled) return;
       const profile = list[0];
-      if (!profile) { setClonePreviewAudioSrc(''); setCloneVoiceDescription(''); return; }
-      setClonePreviewAudioSrc(profile.audio_url ?? '');
+      if (!profile) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
+      const previewSrc = profile.cloned_preview_url || profile.audio_url || '';
+      setClonePreviewAudioSrc(previewSrc);
+      if (previewSrc) setClonePreviewStatus('done');
+      setCloneOriginalAudioSrc(profile.source_audio_url ?? '');
       setCloneVoiceDescription(profile.description ?? '');
+      setClonePromptText(profile.prompt_text ?? '');
 
       const ve = profile.voices_engine;
       if (!ve || voiceEngineAppliedRef.current) return;
@@ -311,20 +359,22 @@ function VoiceRoleEditor({
         else if (ve.engine.type === 'VoxCpm') setCloneSubEngine('voxcpm');
         else setCloneSubEngine('mimo');
         if (ve.engine.sub_type === 'voxcpm-ultimate') setVoxcpmCloneMode('ultimate');
-        setCloneStep('select');
+        const savedMethod = ve.parameters.input_method as string | undefined;
+        if (savedMethod === 'upload' || savedMethod === 'url') {
+          setCloneInputMethod(savedMethod as 'upload' | 'url');
+        } else {
+          setCloneInputMethod('record');
+        }
+        // 将 input_method 同步到角色 params，列表展示用
+        if (savedMethod === 'record' || savedMethod === 'upload' || savedMethod === 'url') {
+          setParams({ input_method: savedMethod });
+        }
       }
     }).catch(() => {
-      if (!cancelled) { setClonePreviewAudioSrc(''); setCloneVoiceDescription(''); }
+      if (!cancelled) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); }
     });
     return () => { cancelled = true; };
   }, [params.mimo_clone_voice_id, params.voice_id]);
-
-  // 按 clone_engine 过滤声音列表
-  const cosyVoiceCloneVoices = voices.filter(v => v.clone_engine === 'qwen');
-  const mimoCloneVoices = voices.filter(v => v.clone_engine === 'mimo');
-  const voxcpmCloneVoices = voices.filter(v => v.clone_engine === 'voxcpm');
-  // MiMo voiceclone 也可选 VoxCPM 设计的声音
-  const mimoAvailableCloneVoices = voices.filter(v => v.clone_engine === 'mimo' || v.clone_engine === 'voxcpm');
 
   const setEngine = (engine: SegmentEngineParams['engine']) => {
     const base = draft.default_engine_params;
@@ -347,11 +397,13 @@ function VoiceRoleEditor({
   const switchCategory = (cat: VoiceSourceCategory) => {
     setVoiceCategory(cat);
     setDesignError('');
-    setCloneError('');
+    setCloneInputMethod('record');
+    setClonePendingFile(null);
+    setClonePreviewStatus('idle');
+    setClonePreviewError('');
     if (cat === 'preset') {
       setEngine('edge_tts');
     } else if (cat === 'clone') {
-      setCloneStep('select');
       // 保留已有的 mimo_instruction 等参数
       onChange({
         ...draft,
@@ -386,6 +438,130 @@ function VoiceRoleEditor({
     }
   };
 
+  /** 克隆成功后自动绑定新声音到角色 */
+  const handleCloneSuccess = async (engine: 'cosyvoice' | 'mimo' | 'voxcpm') => {
+    setCloneInputMethod('record');
+    setClonePendingFile(null);
+    triggerRefresh();
+    try {
+      const list = await voiceApi.list(projectId);
+      const sorted = [...list].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      let matchedVoice: VoiceProfile | undefined;
+
+      if (engine === 'cosyvoice') {
+        matchedVoice = sorted.find(v => v.clone_engine === 'qwen' && v.is_cloned);
+        if (matchedVoice) setParams({ voice_id: matchedVoice.qwen_voice_id || matchedVoice.id });
+      } else if (engine === 'mimo') {
+        matchedVoice = sorted.find(v => v.is_cloned && (v.clone_engine === 'mimo' || v.clone_engine === 'voxcpm'));
+        if (matchedVoice) setParams({ mimo_clone_voice_id: matchedVoice.id });
+      } else {
+        matchedVoice = sorted.find(v => v.clone_engine === 'voxcpm' && v.is_cloned);
+        if (matchedVoice) setParams({ voice_id: matchedVoice.id });
+      }
+
+      // Generate TTS preview and save to cloned_preview_path
+      if (matchedVoice) {
+        setClonePreviewStatus('generating');
+        setClonePreviewError('');
+        try {
+          await generateAndSavePreview(engine, matchedVoice);
+          setClonePreviewStatus('done');
+        } catch (err) {
+          setClonePreviewStatus('error');
+          setClonePreviewError(err instanceof Error ? err.message : '试听音频生成失败');
+        }
+      }
+    } catch { /* ignore refresh errors */ }
+  };
+
+  /** Generate a TTS preview using the cloned voice and save it to the voice profile */
+  const generateAndSavePreview = async (engine: 'cosyvoice' | 'mimo' | 'voxcpm', voice: VoiceProfile) => {
+    const previewText = SAMPLE_TEXT;
+
+    try {
+      let ttsResult;
+      if (engine === 'cosyvoice') {
+        ttsResult = await ttsApi.synthesize({ text: previewText, engine: 'cosyvoice', voice_id: voice.qwen_voice_id || voice.id, language: 'Chinese', speed: 1, volume: 80, pitch: 1, format: 'mp3' });
+      } else if (engine === 'mimo') {
+        ttsResult = await mimoTtsApi.synthesizeVoiceClone({ text: previewText, voice_id: voice.id, format: 'wav' });
+      } else {
+        const voxcpmMode = voice.voices_engine?.parameters?.voxcpm_mode as string | undefined;
+        if (voxcpmMode === 'ultimate') {
+          ttsResult = await voxcpmApi.ultimateClone({ text: previewText, voice_id: voice.id, prompt_text: voice.prompt_text || undefined, format: 'wav' });
+        } else {
+          ttsResult = await voxcpmApi.clone({ text: previewText, voice_id: voice.id, format: 'wav' });
+        }
+      }
+
+      const { base64, format } = await resolveAudioBase64(ttsResult);
+      const saveResult = await voiceApi.savePreviewAudio(voice.id, base64, format);
+      if (!saveResult.cloned_preview_path) throw new Error('后端未返回试听文件路径');
+      setClonePreviewAudioSrc(`data:audio/${format};base64,${base64}`);
+    } catch (err) {
+      console.warn('Failed to generate/save clone preview:', err);
+      throw err;
+    }
+  };
+
+  const SAMPLE_TEXT = '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。';
+
+  /** 从当前 draft 提取引擎参数，用于克隆时写入 VoiceProfile.engine_params */
+  const cloneEngineParams = (engine: 'cosyvoice' | 'mimo' | 'voxcpm'): Record<string, unknown> => {
+    const p = draft.default_engine_params;
+    if (engine === 'cosyvoice') return { speed: p.speed ?? 1, volume: p.volume ?? 80, pitch: p.pitch ?? 1, language: p.language || 'Chinese', instruction: p.instruction || '', input_method: cloneInputMethod };
+    if (engine === 'mimo') return { mimo_mode: 'voiceclone', mimo_instruction: p.mimo_instruction || '', input_method: cloneInputMethod };
+    return { voxcpm_mode: voxcpmCloneMode, voxcpm_style_control: p.voxcpm_style_control || '', cfg_value: p.voxcpm_cfg_value ?? 2, inference_timesteps: p.voxcpm_inference_timesteps ?? 10, input_method: cloneInputMethod };
+  };
+
+  /** 从 TTS 结果中提取 base64 音频数据；后端存储模式下仅返回 audio_url，需 fetch 转换 */
+  const resolveAudioBase64 = async (result: { audio_base64?: string; audio_url?: string; audio_format?: string }): Promise<{ base64: string; format: string }> => {
+    const format = result.audio_format || 'mp3';
+    if (result.audio_base64) return { base64: result.audio_base64, format };
+    if (result.audio_url) {
+      const resp = await fetch(result.audio_url);
+      if (!resp.ok) throw new Error(`获取音频失败: ${resp.status}`);
+      const blob = await resp.blob();
+      const buf = await blob.arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      return { base64: btoa(binary), format };
+    }
+    throw new Error('合成未返回音频');
+  };
+
+  /** Clone mode: synthesize preview, play it, and save to cloned_preview_path */
+  const [clonePreviewing, setClonePreviewing] = useState(false);
+  const handleClonePreview = useCallback(async () => {
+    setClonePreviewing(true);
+    setClonePreviewError('');
+    try {
+      const normalized = normalizeDraftForSave(draft);
+      const result = await synthesizeVoiceRolePreview(normalized, SAMPLE_TEXT);
+      const { base64, format } = await resolveAudioBase64(result);
+
+      // Play
+      const src = `data:audio/${format};base64,${base64}`;
+      const audio = new Audio(src);
+      await audio.play();
+
+      // Save to cloned_preview_path (skip if voice not yet persisted)
+      const voiceId = params.mimo_clone_voice_id || params.voice_id || '';
+      if (voiceId) {
+        const saveResult = await voiceApi.savePreviewAudio(voiceId, base64, format);
+        if (!saveResult.cloned_preview_path) throw new Error('后端未返回试听文件路径');
+      }
+      setClonePreviewAudioSrc(src);
+      setClonePreviewStatus('done');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '试听失败';
+      setClonePreviewError(msg);
+      setClonePreviewStatus('error');
+    } finally {
+      setClonePreviewing(false);
+    }
+  }, [draft, params.mimo_clone_voice_id, params.voice_id]);
+
   return (
     <section className={styles.editorPanel} aria-label="声音角色编辑器">
       <div className={styles.editorBar}>
@@ -399,7 +575,7 @@ function VoiceRoleEditor({
           <button type="button" className={styles.primaryButton} disabled={saving || designPhase === 'saving'} onClick={async () => {
             if (isDesignMode) {
               // 如果还没确认过音色，先自动确认
-              let profileId = designProfileId;
+              let profileId: string | null = designProfileId;
               if (!profileId) {
                 if (!designAudioBase64 && !designAudioSrc) {
                   setDesignError('请先试听音色，再保存角色');
@@ -408,14 +584,54 @@ function VoiceRoleEditor({
                 profileId = await handleDesignConfirmSave();
                 if (!profileId) return;
               }
-              // 将 VoiceProfile 绑定到角色参数，切换为克隆模式后保存
-              // 保留设计阶段的描述等参数，方便再次打开时回显
+              // 保持 design 模式不变，合成时再自动转为对应的 clone 方式
+              // voice_id / mimo_clone_voice_id 存储 design VoiceProfile 的 ID，用于查找参考音频
               const updatedParams: SegmentEngineParams = designSubEngine === 'mimo'
-                ? { engine: 'mimo_tts', mimo_mode: 'voiceclone', mimo_clone_voice_id: profileId, mimo_voice_description: params.mimo_voice_description || voiceDescription, mimo_instruction: params.mimo_instruction || '' }
-                : { engine: 'voxcpm', voxcpm_mode: 'clone', voice_id: profileId, voxcpm_voice_description: params.voxcpm_voice_description || voiceDescription, voxcpm_style_control: params.voxcpm_style_control || '', voxcpm_cfg_value: params.voxcpm_cfg_value ?? 2, voxcpm_inference_timesteps: params.voxcpm_inference_timesteps ?? 10 };
+                ? { ...params, engine: 'mimo_tts', mimo_mode: 'voicedesign', mimo_clone_voice_id: profileId }
+                : { ...params, engine: 'voxcpm', voxcpm_mode: 'design', voice_id: profileId };
               const updatedDraft = { ...draft, default_engine: updatedParams.engine, default_engine_params: updatedParams };
               onSave(normalizeDraftForSave(updatedDraft));
               return;
+            }
+            // Preset voice: 生成音频文件并创建 VoiceProfile
+            if (voiceCategory === 'preset') {
+              try {
+                const normalized = normalizeDraftForSave(draft);
+                const result = await fetchVoiceRolePreview(normalized, SAMPLE_TEXT);
+                const { base64, format } = await resolveAudioBase64(result);
+                const profile = await voiceApi.createFromDesign({
+                  audio_base64: base64,
+                  engine: 'preset',
+                  name: draft.name,
+                  description: draft.description || '',
+                  project_id: projectId,
+                  preview_text: SAMPLE_TEXT,
+                  instruction: params.mimo_instruction || '',
+                });
+                // MiMo 预置音色：转为 voiceclone 模式使用 VoiceProfile 参考音频
+                // Edge-TTS：保持 edge_tts 引擎，VoiceProfile 仅存储音频文件
+                let updatedParams: SegmentEngineParams;
+                if (params.mimo_preset_voice) {
+                  updatedParams = { ...params, engine: 'mimo_tts', mimo_mode: 'voiceclone', mimo_clone_voice_id: profile.id };
+                } else {
+                  updatedParams = { ...params, voice_id: profile.id };
+                }
+                onSave({ ...draft, default_engine: updatedParams.engine, default_engine_params: updatedParams });
+              } catch (err) {
+                setDesignError(err instanceof Error ? err.message : '预置音色保存失败');
+              }
+              return;
+            }
+            // Clone mode: verify preview audio was saved
+            if (voiceCategory === 'clone') {
+              if (clonePreviewStatus === 'generating') {
+                setClonePreviewError('请等待试听音频生成完成');
+                return;
+              }
+              if (clonePreviewStatus === 'error' || !clonePreviewAudioSrc) {
+                setClonePreviewError('试听音频尚未生成，请先点击「生成试听」');
+                return;
+              }
             }
             onSave(normalizeDraftForSave(draft));
           }}>{saving ? '保存中...' : '保存角色'}</button>
@@ -526,9 +742,11 @@ function VoiceRoleEditor({
                 <>
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                     <div className={styles.enginePills} style={{ marginBottom: '0.5rem' }}>
-                      <button type="button" className={`${styles.enginePill} ${cloneSubEngine === 'cosyvoice' ? styles.enginePillActive : ''}`} onClick={() => { setCloneSubEngine('cosyvoice'); setEngine('cosyvoice'); }}>CosyVoice</button>
+                      <button type="button" className={`${styles.enginePill} ${cloneSubEngine === 'cosyvoice' ? styles.enginePillActive : ''}`} onClick={() => { setCloneSubEngine('cosyvoice'); setEngine('cosyvoice'); setCloneInputMethod('record'); setClonePendingFile(null); }}>CosyVoice</button>
                       <button type="button" className={`${styles.enginePill} ${cloneSubEngine === 'mimo' ? styles.enginePillActive : ''}`} onClick={() => {
                         setCloneSubEngine('mimo');
+                        setCloneInputMethod('record');
+                        setClonePendingFile(null);
                         onChange({
                           ...draft,
                           default_engine: 'mimo_tts',
@@ -537,6 +755,8 @@ function VoiceRoleEditor({
                       }}>MiMo</button>
                       <button type="button" className={`${styles.enginePill} ${cloneSubEngine === 'voxcpm' ? styles.enginePillActive : ''}`} onClick={() => {
                         setCloneSubEngine('voxcpm');
+                        setCloneInputMethod('record');
+                        setClonePendingFile(null);
                         onChange({
                           ...draft,
                           default_engine: 'voxcpm',
@@ -549,37 +769,31 @@ function VoiceRoleEditor({
                   {/* CosyVoice 克隆 */}
                   {cloneSubEngine === 'cosyvoice' && (
                     <>
-                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>已有 CosyVoice 克隆声音
-                        <select className={styles.paramSelect} value={params.voice_id ?? ''} onChange={(event) => setParams({ voice_id: event.target.value })}>
-                          <option value="">-- 选择已克隆的声音 --</option>
-                          {cosyVoiceCloneVoices.map(v => {
-                            const key = v.qwen_voice_id || v.id;
-                            return <option key={v.id} value={key}>{v.description || v.name}</option>;
-                          })}
-                        </select>
-                      </label>
-                      <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                        <span className={styles.paramLabel}>或输入公网音频 URL 克隆</span>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
-                          <input className={styles.paramInput} value={cloneUrl} onChange={(e) => setCloneUrl(e.target.value)} placeholder="https://example.com/audio.wav" style={{ flex: 1 }} />
-                          <button type="button" className={styles.ghostButton} disabled={!cloneUrl.trim()} onClick={async () => {
-                            setCloneStep('cloning');
-                            setCloneError('');
-                            try {
-                              const uploaded = await voiceApi.uploadFromUrl(cloneUrl.trim(), draft.name);
-                              await voiceApi.createClone(uploaded.id, draft.name);
-                              setParams({ voice_id: uploaded.qwen_voice_id || uploaded.id });
-                              setCloneStep('select');
-                              setCloneUrl('');
-                            } catch (err) {
-                              setCloneError(err instanceof Error ? err.message : '克隆失败');
-                              setCloneStep('select');
-                            }
-                          }}>提交克隆</button>
-                        </div>
-                        {cloneStep === 'cloning' && <span className={styles.configHint}>克隆中...</span>}
-                        {cloneError && <span style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.8rem' }}>{cloneError}</span>}
+                      <div style={{ gridColumn: '1 / -1' }}>
+                        {cloneOriginalAudioSrc && !clonePendingFile ? (
+                          <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                            <span className={styles.paramLabel}>原始音频</span>
+                            <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
+                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                              <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新输入 URL</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <UrlInput
+                            projectId={projectId}
+                            onUrlConfirmed={async (voice) => {
+                              try {
+                                await voiceApi.createClone(voice.id, draft.name, undefined, projectId, cloneEngineParams('cosyvoice'));
+                                setParams({ voice_id: voice.qwen_voice_id || voice.id });
+                                triggerRefresh();
+                              } catch { /* error handled below */ }
+                              setCloneInputMethod('url');
+                            }}
+                            onBack={() => setCloneInputMethod('url')}
+                          />
+                        )}
                       </div>
+
                       <label className={styles.paramField}>语速
                         <input className={styles.range} aria-label="语速" type="range" min={0.5} max={2} step={0.01} value={params.speed ?? 1} onChange={(event) => setParams({ speed: Number(event.target.value) })} />
                         <span className={styles.sliderVal}>{(params.speed ?? 1).toFixed(2)}×</span>
@@ -603,42 +817,86 @@ function VoiceRoleEditor({
                           <option value="Korean">한국어</option>
                         </select>
                       </label>
-                      <label className={styles.paramField}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <input type="checkbox" checked={params.enable_ssml ?? false} onChange={(event) => setParams({ enable_ssml: event.target.checked })} />
-                          SSML
-                        </span>
-                      </label>
-                      <label className={styles.paramField}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                          <input type="checkbox" checked={params.enable_markdown_filter ?? false} onChange={(event) => setParams({ enable_markdown_filter: event.target.checked })} />
-                          Markdown 过滤
-                        </span>
-                      </label>
                     </>
                   )}
 
                   {/* MiMo 克隆 */}
                   {cloneSubEngine === 'mimo' && (
                     <>
-                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>已有 MiMo 克隆声音
-                        <select className={styles.paramSelect} value={params.mimo_clone_voice_id ?? ''} onChange={(event) => setParams({ mimo_clone_voice_id: event.target.value })}>
-                          <option value="">-- 选择已克隆的声音 --</option>
-                          {mimoAvailableCloneVoices.map(v => (
-                            <option key={v.id} value={v.id}>{v.name} {v.clone_engine === 'voxcpm' ? '(VoxCPM)' : ''}</option>
+                      <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                        <div className={styles.enginePills} style={{ marginBottom: '0.5rem' }}>
+                          {(['record', 'upload'] as const).map(m => (
+                            <button key={m} type="button"
+                              className={`${styles.enginePill} ${cloneInputMethod === m ? styles.enginePillActive : ''}`}
+                              onClick={() => { setCloneInputMethod(m); setClonePendingFile(null); }}>
+                              {m === 'record' ? '录制' : '上传'}
+                            </button>
                           ))}
-                        </select>
-                      </label>
+                        </div>
+                      </div>
+
+                      {cloneInputMethod === 'record' && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          {cloneOriginalAudioSrc && !clonePendingFile ? (
+                            <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                              <span className={styles.paramLabel}>原始录音</span>
+                              <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新录制</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('upload'); setCloneOriginalAudioSrc(''); }}>重新上传</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <AudioRecorder onRecordComplete={file => setClonePendingFile(file)} />
+                              {clonePendingFile && (
+                                <AudioPreview
+                                  file={clonePendingFile}
+                                  engine="mimo"
+                                  projectId={projectId}
+                                  engineParams={cloneEngineParams('mimo')}
+                                  onCloneSuccess={() => handleCloneSuccess('mimo')}
+                                  onCancel={() => { setClonePendingFile(null); setCloneInputMethod('record'); }}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {cloneInputMethod === 'upload' && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          {cloneOriginalAudioSrc && !clonePendingFile ? (
+                            <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                              <span className={styles.paramLabel}>原始录音</span>
+                              <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('record'); setCloneOriginalAudioSrc(''); }}>重新录制</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新上传</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <AudioUploader onFileSelected={file => setClonePendingFile(file)} />
+                              {clonePendingFile && (
+                                <AudioPreview
+                                  file={clonePendingFile}
+                                  engine="mimo"
+                                  projectId={projectId}
+                                  engineParams={cloneEngineParams('mimo')}
+                                  onCloneSuccess={() => handleCloneSuccess('mimo')}
+                                  onCancel={() => { setClonePendingFile(null); setCloneInputMethod('record'); }}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+
                       {(params.mimo_voice_description || cloneVoiceDescription) && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                           <span className={styles.paramLabel}>音色描述（设计来源）</span>
                           <p className={styles.configHint} style={{ marginTop: '0.25rem' }}>{params.mimo_voice_description || cloneVoiceDescription}</p>
-                        </div>
-                      )}
-                      {clonePreviewAudioSrc && (
-                        <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                          <span className={styles.paramLabel}>试听音频</span>
-                          <audio controls className={styles.designAudioPlayer} src={clonePreviewAudioSrc} />
                         </div>
                       )}
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
@@ -656,24 +914,79 @@ function VoiceRoleEditor({
                           <button type="button" className={`${styles.enginePill} ${voxcpmCloneMode === 'ultimate' ? styles.enginePillActive : ''}`} onClick={() => { setVoxcpmCloneMode('ultimate'); setParams({ voxcpm_mode: 'ultimate' }); }}>极致克隆</button>
                         </div>
                       </div>
-                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>参考音频
-                        <select className={styles.paramSelect} value={params.voice_id ?? ''} onChange={(event) => setParams({ voice_id: event.target.value })}>
-                          <option value="">-- 选择已克隆的声音 --</option>
-                          {voxcpmCloneVoices.map(v => (
-                            <option key={v.id} value={v.id}>{v.name}</option>
+                      <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                        <div className={styles.enginePills} style={{ marginBottom: '0.5rem' }}>
+                          {(['record', 'upload'] as const).map(m => (
+                            <button key={m} type="button"
+                              className={`${styles.enginePill} ${cloneInputMethod === m ? styles.enginePillActive : ''}`}
+                              onClick={() => { setCloneInputMethod(m); setClonePendingFile(null); }}>
+                              {m === 'record' ? '录制' : '上传'}
+                            </button>
                           ))}
-                        </select>
-                      </label>
+                        </div>
+                      </div>
+
+                      {cloneInputMethod === 'record' && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          {cloneOriginalAudioSrc && !clonePendingFile ? (
+                            <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                              <span className={styles.paramLabel}>原始录音</span>
+                              <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新录制</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('upload'); setCloneOriginalAudioSrc(''); }}>重新上传</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <AudioRecorder onRecordComplete={file => setClonePendingFile(file)} />
+                              {clonePendingFile && (
+                                <AudioPreview
+                                  file={clonePendingFile}
+                                  engine="voxcpm"
+                                  projectId={projectId}
+                                  engineParams={cloneEngineParams('voxcpm')}
+                                  onCloneSuccess={() => handleCloneSuccess('voxcpm')}
+                                  onCancel={() => { setClonePendingFile(null); setCloneInputMethod('record'); }}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {cloneInputMethod === 'upload' && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          {cloneOriginalAudioSrc && !clonePendingFile ? (
+                            <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
+                              <span className={styles.paramLabel}>原始录音</span>
+                              <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('record'); setCloneOriginalAudioSrc(''); }}>重新录制</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新上传</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <AudioUploader onFileSelected={file => setClonePendingFile(file)} />
+                              {clonePendingFile && (
+                                <AudioPreview
+                                  file={clonePendingFile}
+                                  engine="voxcpm"
+                                  projectId={projectId}
+                                  engineParams={cloneEngineParams('voxcpm')}
+                                  onCloneSuccess={() => handleCloneSuccess('voxcpm')}
+                                  onCancel={() => { setClonePendingFile(null); setCloneInputMethod('record'); }}
+                                />
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
                       {(params.voxcpm_voice_description || cloneVoiceDescription) && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                           <span className={styles.paramLabel}>音色描述（设计来源）</span>
                           <p className={styles.configHint} style={{ marginTop: '0.25rem' }}>{params.voxcpm_voice_description || cloneVoiceDescription}</p>
-                        </div>
-                      )}
-                      {clonePreviewAudioSrc && (
-                        <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                          <span className={styles.paramLabel}>试听音频</span>
-                          <audio controls className={styles.designAudioPlayer} src={clonePreviewAudioSrc} />
                         </div>
                       )}
                       {voxcpmCloneMode === 'clone' && (
@@ -684,13 +997,11 @@ function VoiceRoleEditor({
                       {voxcpmCloneMode === 'ultimate' && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                           <span className={styles.paramLabel}>参考音频文本</span>
-                          {(() => {
-                            const selectedVoice = voxcpmCloneVoices.find(v => v.id === params.voice_id);
-                            if (selectedVoice?.prompt_text) {
-                              return <span className={styles.configHint} style={{ display: 'block', marginTop: '0.25rem' }}>{selectedVoice.prompt_text}</span>;
-                            }
-                            return <span style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>⚠ 该声音未填写参考音频文本，极致克隆无法使用</span>;
-                          })()}
+                          {clonePromptText ? (
+                            <span className={styles.configHint} style={{ display: 'block', marginTop: '0.25rem' }}>{clonePromptText}</span>
+                          ) : (
+                            <span style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>⚠ 该声音未填写参考音频文本，极致克隆无法使用</span>
+                          )}
                         </div>
                       )}
                       <label className={styles.paramField}>CFG 强度
@@ -798,7 +1109,23 @@ function VoiceRoleEditor({
               )}
             </div>
           ) : (
-            <button type="button" className={styles.ghostButton} onClick={() => onPreview(normalizeDraftForSave(draft), '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。')}>生成试听</button>
+            <>
+              {clonePreviewing ? (
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <span className={styles.paramLabel}>克隆试听音色</span>
+                  <p className={styles.designHint}>正在生成试听音频...</p>
+                </div>
+              ) : clonePreviewAudioSrc ? (
+                <div style={{ marginBottom: '0.75rem' }}>
+                  <span className={styles.paramLabel}>克隆试听音色</span>
+                  <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={clonePreviewAudioSrc} />
+                </div>
+              ) : null}
+              {clonePreviewError && (
+                <p className={styles.designHint} style={{ color: '#d32f2f' }}>{clonePreviewError}</p>
+              )}
+              <button type="button" className={styles.ghostButton} disabled={clonePreviewing} onClick={handleClonePreview}>{clonePreviewing ? '生成中...' : '生成试听'}</button>
+            </>
           )}
         </aside>
       </div>
@@ -853,6 +1180,9 @@ function CharacterCard({
         <div className={styles.chipRow}>
           <span className={`${styles.chip} ${styles.chipCast}`}>角色</span>
           <span className={`${styles.chip} ${styles.chipEngine}`}>{engineLabel(role)}</span>
+          {inputMethodLabel(role) && (
+            <span className={`${styles.chip} ${styles.chipEngine}`}>{inputMethodLabel(role)}</span>
+          )}
           <span className={`${styles.chip} ${styles.chipEngine}`}>{role.default_voice || '未设置'}</span>
           <span className={styles.chip} title={configured ? '已配置音色' : '待配置'}>
             <span className={`${styles.statusDot} ${configured ? styles.statusReady : styles.statusDraft}`} />
@@ -904,8 +1234,6 @@ export function ProjectVoices({
   const filteredRoles = filterByEngine(roles);
 
   const [saving, setSaving] = useState(false);
-
-  const { triggerRefresh } = useVoiceRefresh();
 
   /** 试听角色：按 voice_id 查询已保存的音频，找不到再实时合成 */
   const handleCardPreview = useCallback(async (role: Role) => {

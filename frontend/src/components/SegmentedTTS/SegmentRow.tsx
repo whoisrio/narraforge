@@ -118,13 +118,17 @@ export function SegmentRow({
   const effectiveEngine = hasOverride ? segment.params.engine : (engine || segment.params.engine);
 
   // Resolve voice display:
-  // - Locked segments → always show stored voice
-  // - Unlocked + already generated → show the voice used at generation time (stored params)
-  // - Unlocked + not yet generated (idle/failed) → show current global voice
+  // 优先使用 voice_ref 字段（显式存储的音色引用）
+  // 回退到旧的推断逻辑（兼容旧数据）
   const resolveVoiceDisplay = (): { engine: string; voice: string } => {
+    // 优先使用 voice_ref
+    if (segment.voice_ref) {
+      const eng = ENGINE_LABELS[segment.voice_ref.engine] || segment.voice_ref.engine;
+      return { engine: eng, voice: segment.voice_ref.name || '未选择' };
+    }
+
+    // 回退到旧的推断逻辑
     const p = segment.params;
-    // For display, use the engine that was active when the segment was generated (if ready),
-    // otherwise use the effective (would-be) engine.
     const dispEngine = (isReady || isGenerating) ? p.engine : effectiveEngine;
     const eng = ENGINE_LABELS[dispEngine] || dispEngine;
     const useGlobal = !hasOverride && !isReady && !isGenerating;
@@ -143,9 +147,18 @@ export function SegmentRow({
       const mode = useGlobal ? globalMimoMode : p.mimo_mode;
       if (mode === 'voiceclone') {
         const cloneId = useGlobal ? globalMimoCloneVoiceId : p.mimo_clone_voice_id;
-        return { engine: eng, voice: cloneId ? '自定义音色' : '未选择' };
+        if (cloneId) {
+          const vObj = voices.find(v => v.id === cloneId);
+          return { engine: eng, voice: vObj?.name || '自定义音色' };
+        }
+        return { engine: eng, voice: '未选择' };
       }
       if (mode === 'voicedesign') {
+        const cloneId = p.mimo_clone_voice_id;
+        if (cloneId) {
+          const vObj = voices.find(v => v.id === cloneId);
+          return { engine: eng, voice: vObj?.name || '音色设计' };
+        }
         const desc = p.mimo_voice_description || '';
         return { engine: eng, voice: desc ? desc.slice(0, 20) : '音色设计' };
       }
@@ -154,11 +167,15 @@ export function SegmentRow({
       return { engine: eng, voice: preset || '未选择' };
     }
 
-    // CosyVoice
+    // CosyVoice / VoxCPM
     const vid = useGlobal ? globalVoiceId : p.voice_id;
     if (vid) {
       const vObj = voices.find(v => (v.qwen_voice_id || v.id) === vid);
-      return { engine: eng, voice: vObj?.description || vObj?.name || vid };
+      if (vObj?.name) return { engine: eng, voice: vObj.name };
+      // Fallback: extract a readable label from the voice ID
+      if (vid.startsWith('cosyvoice-')) return { engine: eng, voice: 'CosyVoice 音色' };
+      if (vid.startsWith('voxcpm-')) return { engine: eng, voice: 'VoxCPM 音色' };
+      return { engine: eng, voice: vid.length > 20 ? `${vid.slice(0, 8)}…` : vid };
     }
     if (!hasOverride && globalVoiceName) return { engine: eng, voice: globalVoiceName };
     return { engine: eng, voice: '未选择' };

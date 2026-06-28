@@ -45,6 +45,8 @@ class SegmentedProject(Base):
         nullable=True,
     )
     default_narrator_snapshot = Column(JSON, nullable=True)
+    # 项目级配置 (JSON): split_voice_mode, 未来可扩展其他配置
+    configs = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -126,6 +128,8 @@ class SegmentedProjectSegment(Base):
     segment_kind = Column(String, nullable=False, default="narration")
     prosody_marks = Column(JSON, nullable=False, default=list)
     params = Column(JSON, nullable=False, default=dict)
+    # 显式的音色引用 — 描述 segment 当前激活的音色来源
+    voice_ref = Column(JSON, nullable=True)
     locked_params = Column(JSON, nullable=False, default=list)
     generated_params = Column(JSON, nullable=True)
     current_audio_path = Column(String, nullable=True)

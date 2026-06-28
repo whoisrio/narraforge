@@ -1,7 +1,42 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Role, RoleSnapshot } from '../../types';
 import { ProjectVoices } from './ProjectVoices';
+
+// Mock API modules
+vi.mock('../../services/api', () => ({
+  ttsApi: {
+    getVoices: vi.fn().mockResolvedValue([]),
+    getEdgeVoices: vi.fn().mockResolvedValue([]),
+    synthesize: vi.fn(),
+  },
+  voiceApi: {
+    list: vi.fn().mockResolvedValue([]),
+    savePreviewAudio: vi.fn(),
+    createFromDesign: vi.fn().mockResolvedValue({ id: 'new-profile-id' }),
+  },
+  mimoTtsApi: {
+    synthesizeVoiceClone: vi.fn(),
+    synthesizePreset: vi.fn(),
+    synthesizeVoiceDesign: vi.fn(),
+  },
+  voxcpmApi: {
+    clone: vi.fn(),
+  },
+}));
+
+vi.mock('../../services/voiceRolePreview', () => ({
+  fetchVoiceRolePreview: vi.fn().mockResolvedValue({
+    audio_base64: btoa('fake-audio-data'),
+    audio_format: 'mp3',
+  }),
+  synthesizeVoiceRolePreview: vi.fn(),
+  playVoiceRolePreview: vi.fn(),
+}));
+
+vi.mock('../../hooks/useVoiceRefresh', () => ({
+  useVoiceRefresh: () => ({ triggerRefresh: vi.fn(), refreshKey: 0 }),
+}));
 
 const narrator: Role = {
   id: 'role-narrator',
@@ -103,7 +138,7 @@ describe('ProjectVoices', () => {
     expect(screen.getByLabelText('角色名')).toHaveValue('新角色');
   });
 
-  it('saves edited role with correct params', () => {
+  it('saves edited role with correct params', async () => {
     const onSaveRole = vi.fn();
 
     render(
@@ -126,15 +161,17 @@ describe('ProjectVoices', () => {
     // Save
     fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
 
-    expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
-      name: '新旁白名',
-      default_engine: 'edge_tts',
-      default_voice: 'zh-CN-XiaoxiaoNeural',
-      default_engine_params: expect.objectContaining({
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        edge_rate: '+10%',
-      }),
-    }));
+    await waitFor(() => {
+      expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
+        name: '新旁白名',
+        default_engine: 'edge_tts',
+        default_engine_params: expect.objectContaining({
+          edge_voice: 'zh-CN-XiaoxiaoNeural',
+          edge_rate: '+10%',
+          voice_id: 'new-profile-id',
+        }),
+      }));
+    });
   });
 
   it('cancels editing and closes editor', () => {
@@ -218,7 +255,7 @@ describe('ProjectVoices', () => {
     expect(screen.getByText('Cosy角色')).toBeInTheDocument();
   });
 
-  it('opens Edge-TTS editor with correct params', () => {
+  it('opens Edge-TTS editor with correct params', async () => {
     const onSaveRole = vi.fn();
 
     render(
@@ -239,15 +276,180 @@ describe('ProjectVoices', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
 
-    expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
-      default_engine: 'edge_tts',
-      default_voice: 'zh-CN-XiaoxiaoNeural',
-      default_engine_params: expect.objectContaining({
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        edge_rate: '+20%',
-        edge_volume: '+10%',
-      }),
-    }));
+    await waitFor(() => {
+      expect(onSaveRole).toHaveBeenCalledWith(expect.objectContaining({
+        default_engine: 'edge_tts',
+        default_engine_params: expect.objectContaining({
+          engine: 'edge_tts',
+          edge_voice: 'zh-CN-XiaoxiaoNeural',
+          edge_rate: '+20%',
+          edge_volume: '+10%',
+          voice_id: 'new-profile-id',
+        }),
+      }));
+    });
+  });
+});
+
+describe('ProjectVoices – input method label', () => {
+  it('renders input method chip when role has input_method in engine_params', () => {
+    const recordRole: Role = {
+      ...cast,
+      id: 'role-record',
+      name: '录制角色',
+      default_engine: 'mimo_tts',
+      default_voice: 'voice-abc',
+      default_engine_params: {
+        engine: 'mimo_tts',
+        mimo_mode: 'voiceclone',
+        mimo_clone_voice_id: 'voice-abc',
+        input_method: 'record',
+      },
+    };
+
+    render(
+      <ProjectVoices
+        roles={[recordRole]}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('录制')).toBeInTheDocument();
+  });
+
+  it('renders URL chip for url input method', () => {
+    const urlRole: Role = {
+      ...cast,
+      id: 'role-url',
+      name: 'URL角色',
+      default_engine: 'cosyvoice',
+      default_voice: 'voice-xyz',
+      default_engine_params: {
+        engine: 'cosyvoice',
+        voice_id: 'voice-xyz',
+        input_method: 'url',
+      },
+    };
+
+    render(
+      <ProjectVoices
+        roles={[urlRole]}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('URL')).toBeInTheDocument();
+  });
+
+  it('does not render input method chip when input_method is absent', () => {
+    render(
+      <ProjectVoices
+        roles={[narrator]}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    // narrator has no input_method in default_engine_params
+    expect(screen.queryByText('录制')).not.toBeInTheDocument();
+    expect(screen.queryByText('上传')).not.toBeInTheDocument();
+    expect(screen.queryByText('URL')).not.toBeInTheDocument();
+  });
+});
+
+describe('ProjectVoices – clone preview validation', () => {
+  const cloneRole: Role = {
+    id: 'role-clone-1',
+    name: '克隆角色',
+    default_engine: 'mimo_tts',
+    default_voice: 'voice-abc',
+    default_engine_params: {
+      engine: 'mimo_tts',
+      mimo_mode: 'voiceclone',
+      mimo_clone_voice_id: 'voice-abc',
+    },
+    favorite_styles: [],
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('blocks save when clone preview has not been generated', async () => {
+    const onSaveRole = vi.fn();
+    const { voiceApi, ttsApi } = await import('../../services/api');
+    // Voice profile loaded by useEffect has no cloned_preview_url
+    (ttsApi.getVoices as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      id: 'voice-abc',
+      name: 'cloned voice',
+      audio_url: '',
+      source_audio_url: '',
+      cloned_preview_url: '',
+      is_cloned: true,
+      clone_engine: 'mimo',
+      voices_engine: { type: 'clone', engine: { type: 'Mimo', sub_type: 'mimo-clone' }, parameters: {} },
+      created_at: '2026-01-01T00:00:00.000Z',
+    }]);
+
+    render(
+      <ProjectVoices
+        roles={[cloneRole]}
+        onSaveRole={onSaveRole}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /编辑 克隆角色/ }));
+
+    // Wait for voice profile to load
+    await waitFor(() => {
+      expect(ttsApi.getVoices).toHaveBeenCalled();
+    });
+
+    // Click save — should be blocked because no preview
+    fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
+
+    expect(onSaveRole).not.toHaveBeenCalled();
+    expect(screen.getByText('试听音频尚未生成，请先点击「生成试听」')).toBeInTheDocument();
+  });
+
+  it('shows error message when clone preview generation fails', async () => {
+    const { synthesizeVoiceRolePreview } = await import('../../services/voiceRolePreview');
+    (synthesizeVoiceRolePreview as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('TTS 服务不可用'));
+
+    const { voiceApi, ttsApi } = await import('../../services/api');
+    (ttsApi.getVoices as ReturnType<typeof vi.fn>).mockResolvedValue([{
+      id: 'voice-abc',
+      name: 'cloned voice',
+      audio_url: '',
+      source_audio_url: '',
+      cloned_preview_url: '',
+      is_cloned: true,
+      clone_engine: 'mimo',
+      voices_engine: { type: 'clone', engine: { type: 'Mimo', sub_type: 'mimo-clone' }, parameters: {} },
+      created_at: '2026-01-01T00:00:00.000Z',
+    }]);
+
+    render(
+      <ProjectVoices
+        roles={[cloneRole]}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /编辑 克隆角色/ }));
+
+    await waitFor(() => {
+      expect(ttsApi.getVoices).toHaveBeenCalled();
+    });
+
+    // Click "生成试听"
+    fireEvent.click(screen.getByRole('button', { name: /生成试听/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText('TTS 服务不可用')).toBeInTheDocument();
+    });
   });
 });
