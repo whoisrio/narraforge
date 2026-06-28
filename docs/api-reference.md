@@ -882,6 +882,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "prosody_marks": [],
   "params": {},
   "locked_params": [],
+  "voice_ref": null,
   "generated_params": null,
   "current_audio_path": null,
   "previous_audio_path": null,
@@ -902,6 +903,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 - `segment.role_snapshot`：分片生成时使用的角色音色配置快照（保证可复现）。
 - `segment.segment_kind`：分片类型，`dialogue`（台词）或 `narration`（旁白）。
 - `segment.prosody_marks`：子句级局部语气标注，每项含 `start`、`end`、`emotion`、`style_tags`、`instruction`、`intensity`。
+- `segment.voice_ref`：当前分片激活的音色来源信息。含 `name`（显示名称）、`source`（`role`/`global`/`custom`）、`voice_id`、`engine`、`role_id`（可选）。`source=role` 表示来自角色分配，`source=global` 表示跟随全局参数，`source=custom` 表示分片自定义覆盖。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize`
 
