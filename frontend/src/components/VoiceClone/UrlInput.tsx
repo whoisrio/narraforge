@@ -8,6 +8,8 @@ interface UrlInputProps {
   onUrlConfirmed: (voice: VoiceProfile) => void;
   /** 用户点击返回 */
   onBack: () => void;
+  /** 项目 ID，传入时创建的声音归属该项目 */
+  projectId?: string;
 }
 
 function getErrorDetail(error: unknown, fallback: string) {
@@ -25,7 +27,7 @@ function getErrorDetail(error: unknown, fallback: string) {
  * 用户输入公网可访问的音频 URL，确认后调用后端 upload-from-url 接口。
  * 后端负责：HEAD 校验 URL 可达性 → 下载音频到 uploads 目录 → 保存 external_audio_url。
  */
-export function UrlInput({ onUrlConfirmed, onBack }: UrlInputProps) {
+export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,7 +51,7 @@ export function UrlInput({ onUrlConfirmed, onBack }: UrlInputProps) {
     setError('');
 
     try {
-      const result = await voiceApi.uploadFromUrl(trimmed);
+      const result = await voiceApi.uploadFromUrl(trimmed, undefined, undefined, projectId);
       onUrlConfirmed(result);
     } catch (err: unknown) {
       const msg = getErrorDetail(err, '下载失败');

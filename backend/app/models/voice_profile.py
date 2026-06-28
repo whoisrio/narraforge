@@ -15,7 +15,9 @@ class VoiceProfile(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
-    audio_path = Column(String, nullable=False)
+
+    # 用于克隆的源音频文件路径（用户录制/上传的原始音频）
+    source_audio_path = Column(String, nullable=True)
 
     # 外部音频 URL（七牛云、AWS S3 等云存储）
     external_audio_url = Column(String, nullable=True)
@@ -41,9 +43,8 @@ class VoiceProfile(Base):
     # 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
     prompt_text = Column(String, nullable=True)
 
-    # 克隆音色的原始音频和试听音频
-    original_audio_path = Column(String, nullable=True)   # 克隆前的原始音频
-    cloned_preview_path = Column(String, nullable=True)   # 克隆后的试听音频
+    # 克隆/设计音色的试听音频（TTS 合成结果，用于角色预览）
+    cloned_preview_path = Column(String, nullable=True)
 
     # 项目专属声音：NULL = 全局声音, 非空 = 仅该项目可用
     project_id = Column(String, ForeignKey("segmented_projects.id", ondelete="SET NULL"), nullable=True)

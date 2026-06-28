@@ -37,6 +37,21 @@ class Settings(BaseSettings):
     clone_voices_dir: Path = output_dir / "clone_voices"
     logs_dir: Path = base_dir / "logs"
 
+    def to_relative(self, abs_path: str | Path) -> str:
+        """绝对路径 → 相对路径（相对于 base_dir）"""
+        p = Path(abs_path)
+        try:
+            return str(p.relative_to(self.base_dir)).replace("\\", "/")
+        except ValueError:
+            return str(p).replace("\\", "/")
+
+    def resolve_path(self, rel_path: str | Path) -> Path:
+        """相对路径 → 绝对路径（拼接 base_dir）"""
+        p = Path(rel_path)
+        if p.is_absolute():
+            return p
+        return self.base_dir / p
+
     # Database
     database_url: str = "sqlite:///./voice_clone.db"
 

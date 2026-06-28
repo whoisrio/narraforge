@@ -35,6 +35,15 @@ function engineLabel(profile: VoiceProfile): string {
   return 'Unknown';
 }
 
+/** 输入方式标签 */
+function inputMethodLabel(profile: VoiceProfile): string {
+  const method = profile.voices_engine?.parameters?.input_method as string | undefined;
+  if (method === 'record') return '录制';
+  if (method === 'upload') return '上传';
+  if (method === 'url') return 'URL';
+  return '';
+}
+
 export function VoiceClone() {
   // ---- 声音列表 ----
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
@@ -65,6 +74,10 @@ export function VoiceClone() {
   const [designIntensity, setDesignIntensity] = useState(72);
   const [designStability, setDesignStability] = useState(68);
 
+  // ---- 编辑/删除状态 ----
+  const [editingVoice, setEditingVoice] = useState<VoiceProfile | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   // ---- CosyVoice 同步状态 ----
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -92,12 +105,6 @@ export function VoiceClone() {
     setUrlVoice(null);
   };
 
-  const handleCloneSuccess = () => {
-    triggerRefresh();
-    resetClone();
-    setActivePanel(null);
-  };
-
   // ---- CosyVoice 同步云端音色 ----
   const handleSyncQwen = async () => {
     setSyncing(true);
@@ -111,6 +118,41 @@ export function VoiceClone() {
       setSyncMessage({ type: 'error', text: err instanceof Error ? err.message : '同步失败' });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // ---- 编辑/删除 ----
+  const handleStartEdit = (voice: VoiceProfile) => {
+    setEditingVoice(voice);
+    setCloneEngine((voice.clone_engine as CloneEngine) || 'qwen');
+    setActivePanel('clone');
+    setCloneStep('choose-method');
+    setCloneMethod(null);
+    setPendingFile(null);
+    setUrlVoice(null);
+  };
+
+  const handleCloneSuccess = async () => {
+    // 编辑模式：克隆成功后删除旧声音
+    if (editingVoice) {
+      try { await voiceApi.delete(editingVoice.id); } catch { /* ignore */ }
+    }
+    setEditingVoice(null);
+    triggerRefresh();
+    resetClone();
+    setActivePanel(null);
+  };
+
+  const handleDelete = async (voiceId: string) => {
+    setDeletingId(voiceId);
+    try {
+      await voiceApi.delete(voiceId);
+      setVoices(prev => prev.filter(v => v.id !== voiceId));
+      triggerRefresh();
+    } catch (err) {
+      console.error('Failed to delete voice:', err);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -171,6 +213,8 @@ export function VoiceClone() {
         name: designName.trim() || designBrief.trim().slice(0, 50) || 'Untitled Voice Profile',
         description: designBrief,
         avatar: designAvatar || undefined,
+        preview_text: designSampleText || '这是一段试听文本。',
+        original_prompt_text: designBrief,
       });
       setVoices(prev => [saved, ...prev.filter(v => v.id !== saved.id)]);
       setDesignStatus('已保存为 Voice Profile');
@@ -365,9 +409,14 @@ export function VoiceClone() {
       {activePanel === 'clone' && (
         <section className={styles.inlinePanel}>
           <div className={styles.inlinePanelHeader}>
-            <h3>克隆声音</h3>
-            <button type="button" className={styles.closeBtn} onClick={() => { setActivePanel(null); resetClone(); }}>✕</button>
+            <h3>{editingVoice ? '编辑音色' : '克隆声音'}</h3>
+            <button type="button" className={styles.closeBtn} onClick={() => { setActivePanel(null); setEditingVoice(null); resetClone(); }}>✕</button>
           </div>
+          {editingVoice && (
+            <div style={{ padding: '0.5rem 0', fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
+              替换「{editingVoice.name || editingVoice.description || '未命名'}」的音频，克隆成功后旧声音将被删除。
+            </div>
+          )}
 
           {/* 引擎选择 */}
           <div className={styles.engineSwitch}>
@@ -401,8 +450,33 @@ export function VoiceClone() {
             </div>
           )}
 
-          {/* 克隆步骤 */}
-          {cloneStep === 'choose-method' && (
+          {/* 编辑模式：展示已有音频 + 重新操作 */}
+          {editingVoice && cloneStep === 'choose-method' && (
+            <div className={styles.inputStep}>
+              {editingVoice.source_audio_url && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>原始音频</div>
+                  <audio controls style={{ width: '100%' }} src={editingVoice.source_audio_url} />
+                </div>
+              )}
+              {editingVoice.cloned_preview_url && (
+                <div style={{ marginBottom: '1rem' }}>
+                  <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>克隆试听</div>
+                  <audio controls style={{ width: '100%' }} src={editingVoice.cloned_preview_url} />
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button type="button" className={styles.ghostBtn} onClick={() => { setCloneMethod('record'); setCloneStep('input'); }}>重新录制</button>
+                <button type="button" className={styles.ghostBtn} onClick={() => { setCloneMethod('upload'); setCloneStep('input'); }}>重新上传</button>
+                {cloneEngine === 'qwen' && (
+                  <button type="button" className={styles.ghostBtn} onClick={() => { setCloneMethod('url'); setCloneStep('input'); }}>重新输入 URL</button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 克隆步骤：新建 或 编辑模式点击重新操作后 */}
+          {cloneStep === 'choose-method' && !editingVoice && (
             <div className={styles.methodCards}>
               <button className={styles.methodCard} onClick={() => { setCloneMethod('record'); setCloneStep('input'); }}>
                 <span className={styles.methodTitle}>新建声音</span>
@@ -482,6 +556,9 @@ export function VoiceClone() {
                   <strong className={styles.voiceCardName}>{v.name || v.description || '未命名'}</strong>
                   <div className={styles.voiceCardChips}>
                     <span className={styles.chipEngine}>{engineLabel(v)}</span>
+                    {inputMethodLabel(v) && (
+                      <span className={styles.chipDesc}>{inputMethodLabel(v)}</span>
+                    )}
                     {v.description && v.description !== v.name && (
                       <span className={styles.chipDesc}>{v.description.slice(0, 30)}</span>
                     )}
@@ -497,6 +574,19 @@ export function VoiceClone() {
                       audio.play().catch(() => {});
                     }}
                   >试听</button>
+                  <button
+                    type="button"
+                    className={styles.previewBtn}
+                    onClick={(e) => { e.stopPropagation(); handleStartEdit(v); }}
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >编辑</button>
+                  <button
+                    type="button"
+                    className={styles.previewBtn}
+                    onClick={(e) => { e.stopPropagation(); handleDelete(v.id); }}
+                    disabled={deletingId === v.id}
+                    style={{ color: 'var(--color-danger, #ef4444)' }}
+                  >{deletingId === v.id ? '删除中...' : '删除'}</button>
                 </div>
               </article>
             ))}

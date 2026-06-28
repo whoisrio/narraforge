@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { ttsApi } from '../../services/api';
-import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { VoiceProfile } from '../../types';
 import styles from './GlobalControlBar.module.css';
 
 interface GlobalControlBarProps {
+  voices: VoiceProfile[];
   selectedVoiceId: string;
   onVoiceSelect: (voiceId: string) => void;
   speed: number;
@@ -27,22 +26,16 @@ interface GlobalControlBarProps {
 }
 
 export function GlobalControlBar({
-  selectedVoiceId, onVoiceSelect,
+  voices, selectedVoiceId, onVoiceSelect,
   speed, volume, pitch, language,
   instruction, enableSsml, enableMarkdownFilter,
   onSpeedChange, onVolumeChange, onPitchChange, onLanguageChange,
   onInstructionChange, onSsmlToggle, onMarkdownFilterToggle,
   onNavigateToClone,
 }: GlobalControlBarProps) {
-  const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [showVoiceDropdown, setShowVoiceDropdown] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const { refreshCounter } = useVoiceRefresh();
-
-  useEffect(() => {
-    ttsApi.getVoices().then(setVoices).catch(() => {});
-  }, [refreshCounter]);
 
   // Auto-select first voice
   useEffect(() => {
@@ -75,9 +68,9 @@ export function GlobalControlBar({
       <label className={styles.fieldLabel}>全局音色</label>
       <div className={styles.voiceSelectWrap} ref={dropdownRef}>
         <button className={styles.voiceSelect} onClick={() => setShowVoiceDropdown(!showVoiceDropdown)}>
-          <VoiceAvatar name={selectedVoice?.description || selectedVoice?.name || '?'} size={24} />
+          <VoiceAvatar name={selectedVoice?.name || '?'} size={24} />
           <span className={styles.voiceName}>
-            {selectedVoice?.description || selectedVoice?.name || '请选择声音'}
+            {selectedVoice?.name || '请选择声音'}
           </span>
           <span className={styles.arrow}>▾</span>
         </button>
@@ -104,9 +97,9 @@ export function GlobalControlBar({
                   className={`${styles.dropdownItem} ${isSelected ? styles.dropdownItemSelected : ''}`}
                   onClick={() => handleVoicePick(voiceKey)}
                 >
-                  <VoiceAvatar name={v.description || v.name} size={28} />
+                  <VoiceAvatar name={v.name} size={28} />
                   <div className={styles.dropdownInfo}>
-                    <span className={styles.dropdownName}>{v.description || v.name}</span>
+                    <span className={styles.dropdownName}>{v.name}</span>
                     <span className={styles.dropdownMeta}>克隆</span>
                   </div>
                   {isSelected && <span className={styles.checkmark}>✓</span>}

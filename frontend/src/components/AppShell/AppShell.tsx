@@ -44,14 +44,6 @@ export function AppShell({
           </div>
         </div>
 
-        <div className={styles.headerCenter}>
-          <span className={styles.headerPill}>Warm amber theme</span>
-          <span className={styles.headerStatus}>
-            <span className={styles.statusDot} />
-            本地工作区
-          </span>
-        </div>
-
         <div className={styles.headerActions}>{rightSlot}</div>
       </header>
 

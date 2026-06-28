@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Segment, SegmentEngineParams, EmotionType, VoiceProfile } from '../../types';
 import { ttsApi } from '../../services/api';
-import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import styles from './SegmentEditPanel.module.css';
@@ -17,6 +16,7 @@ const EMOTION_LABELS: Record<EmotionType, string> = {
 
 interface SegmentEditPanelProps {
   segment: Segment | null;
+  voices: VoiceProfile[];
   globalVoiceName?: string;
   onClose: () => void;
   onUpdateText: (id: string, text: string) => void;
@@ -41,16 +41,14 @@ const ALL_EMOTIONS: { key: string; label: string; color: string; bg: string }[] 
 const MIMO_PRESET_VOICES = ['冰糖', '星辰', '雪梨', '琥珀', '青云', '紫霞'];
 
 export function SegmentEditPanel({
-  segment, globalVoiceName, onClose, onUpdateText,
+  segment, voices, globalVoiceName, onClose, onUpdateText,
   onUpdateParams, onUpdateOverrides, onUpdateEmotion, onRegenerate, onAnnotateSSML, onSplit,
 }: SegmentEditPanelProps) {
   const [localText, setLocalText] = useState(segment?.text ?? '');
   const [showParams, setShowParams] = useState(false);
-  const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>([]);
   const [edgeLang] = useState('Chinese');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { refreshCounter } = useVoiceRefresh();
 
   useEffect(() => {
     if (segment) {
@@ -67,11 +65,6 @@ export function SegmentEditPanel({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segment?.text]);
-
-  // Load voices
-  useEffect(() => {
-    ttsApi.getVoices().then(setVoices).catch(() => {});
-  }, [refreshCounter]);
 
   // Load Edge-TTS voices when engine is edge_tts
   useEffect(() => {
@@ -144,10 +137,10 @@ export function SegmentEditPanel({
       overrideSummary.push(`音色: ${segment.params.mimo_preset_voice || '自定义'}`);
     } else if (isVoxCPM) {
       const v = voices.find(v => v.id === segment.params.voice_id);
-      overrideSummary.push(`音色: ${v?.description || v?.name || '自定义'}`);
+      overrideSummary.push(`音色: ${v?.name || '自定义'}`);
     } else {
       const v = voices.find(v => (v.qwen_voice_id || v.id) === segment.params.voice_id);
-      overrideSummary.push(`音色: ${v?.description || v?.name || '自定义'}`);
+      overrideSummary.push(`音色: ${v?.name || '自定义'}`);
     }
   }
   if (segment.overrides?.includes('speed')) overrideSummary.push(`语速: ${(segment.params.speed ?? 1).toFixed(1)}×`);
@@ -280,7 +273,7 @@ export function SegmentEditPanel({
                     <option value="">🌐 跟随全局 — {globalVoiceName || '全局音色'}</option>
                     {voices.map(v => {
                       const key = v.qwen_voice_id || v.id;
-                      return <option key={v.id} value={key}>⭐ {v.description || v.name}</option>;
+                      return <option key={v.id} value={key}>⭐ {v.name}</option>;
                     })}
                   </select>
                 )}
@@ -312,7 +305,7 @@ export function SegmentEditPanel({
                     onChange={e => handleParamChange('voice_id', e.target.value)}>
                     <option value="">🌐 跟随全局</option>
                     {voices.map(v => (
-                      <option key={v.id} value={v.id}>⭐ {v.description || v.name}</option>
+                      <option key={v.id} value={v.id}>⭐ {v.name}</option>
                     ))}
                   </select>
                 )}

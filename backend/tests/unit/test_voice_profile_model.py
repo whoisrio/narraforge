@@ -18,7 +18,7 @@ class TestVoiceProfileModel:
         voice_data = {
             "id": "test_voice_001",
             "name": "Test Voice",
-            "audio_path": "/tmp/test_audio.wav",
+            "source_audio_path": "/tmp/test_audio.wav",
             "role": "custom",
         }
 
@@ -30,7 +30,7 @@ class TestVoiceProfileModel:
         # 验证
         assert voice.id == "test_voice_001"
         assert voice.name == "Test Voice"
-        assert voice.audio_path == "/tmp/test_audio.wav"
+        assert voice.source_audio_path == "/tmp/test_audio.wav"
         assert voice.role == "custom"
         assert voice.is_cloned is False
         assert voice.qwen_voice_id is None
@@ -38,33 +38,33 @@ class TestVoiceProfileModel:
         assert isinstance(voice.created_at, datetime)
 
     def test_voice_profile_required_fields(self, db_session):
-        """测试必填字段验证"""
+        """测试必填字段验证 — name 是唯一必填字段"""
         # 测试缺少 name
         with pytest.raises(IntegrityError):
             voice = VoiceProfile(
                 id="test_voice_002",
-                audio_path="/tmp/test_audio.wav",
+                source_audio_path="/tmp/test_audio.wav",
             )
             db_session.add(voice)
             db_session.commit()
 
         db_session.rollback()
 
-        # 测试缺少 audio_path
-        with pytest.raises(IntegrityError):
-            voice = VoiceProfile(
-                id="test_voice_003",
-                name="Test Voice",
-            )
-            db_session.add(voice)
-            db_session.commit()
+        # source_audio_path 可以为 None（如仅通过设计方式创建的音色）
+        voice = VoiceProfile(
+            id="test_voice_003",
+            name="Design Only Voice",
+        )
+        db_session.add(voice)
+        db_session.commit()
+        assert voice.source_audio_path is None
 
     def test_voice_profile_default_values(self, db_session):
         """测试默认值"""
         voice = VoiceProfile(
             id="test_voice_004",
             name="Test Voice",
-            audio_path="/tmp/test_audio.wav",
+            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
@@ -80,7 +80,7 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_005",
             name="Test Voice",
-            audio_path="/tmp/test_audio.wav",
+            source_audio_path="/tmp/test_audio.wav",
             is_cloned=True,
             qwen_voice_id="cloned_voice_123",
             cloned_at=utcnow(),
@@ -97,7 +97,7 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_006",
             name="Test Voice",
-            audio_path="/tmp/test_audio.wav",
+            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
@@ -112,14 +112,14 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_007",
             name="Original Name",
-            audio_path="/tmp/original_audio.wav",
+            source_audio_path="/tmp/original_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
 
         # 更新
         voice.name = "Updated Name"
-        voice.audio_path = "/tmp/updated_audio.wav"
+        voice.source_audio_path = "/tmp/updated_audio.wav"
         voice.is_cloned = True
         voice.qwen_voice_id = "updated_clone_id"
         voice.cloned_at = utcnow()
@@ -128,7 +128,7 @@ class TestVoiceProfileModel:
         # 验证更新
         updated_voice = db_session.query(VoiceProfile).filter_by(id="test_voice_007").first()
         assert updated_voice.name == "Updated Name"
-        assert updated_voice.audio_path == "/tmp/updated_audio.wav"
+        assert updated_voice.source_audio_path == "/tmp/updated_audio.wav"
         assert updated_voice.is_cloned is True
         assert updated_voice.qwen_voice_id == "updated_clone_id"
         assert updated_voice.cloned_at is not None
@@ -138,7 +138,7 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_008",
             name="Test Voice",
-            audio_path="/tmp/test_audio.wav",
+            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
@@ -159,7 +159,7 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id=f"test_voice_{role}",
             name=f"Test Voice {role}",
-            audio_path="/tmp/test_audio.wav",
+            source_audio_path="/tmp/test_audio.wav",
             role=role,
         )
         db_session.add(voice)
@@ -177,7 +177,7 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_009",
             name="Test Voice",
-            audio_path="/tmp/test_audio.wav",
+            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
@@ -187,3 +187,58 @@ class TestVoiceProfileModel:
 
         assert voice.created_at is not None
         assert before_create < voice.created_at < after_create
+
+    def test_voice_profile_cloned_preview_path(self, db_session):
+        """cloned_preview_path 存储试听音频路径"""
+        voice = VoiceProfile(
+            id="test_preview_001",
+            name="Preview Voice",
+            source_audio_path="/tmp/source.wav",
+            cloned_preview_path="/tmp/preview.wav",
+        )
+        db_session.add(voice)
+        db_session.commit()
+
+        retrieved = db_session.query(VoiceProfile).filter_by(id="test_preview_001").first()
+        assert retrieved.cloned_preview_path == "/tmp/preview.wav"
+
+    def test_voice_profile_all_paths_nullable(self, db_session):
+        """仅 name 必填，所有音频路径均可为 NULL"""
+        voice = VoiceProfile(id="test_all_null", name="Minimal")
+        db_session.add(voice)
+        db_session.commit()
+
+        assert voice.source_audio_path is None
+        assert voice.cloned_preview_path is None
+        assert voice.external_audio_url is None
+
+    def test_voice_profile_project_id(self, db_session):
+        """project_id 设置项目专属声音"""
+        voice = VoiceProfile(
+            id="test_proj_voice",
+            name="Project Voice",
+            project_id="proj-123",
+        )
+        db_session.add(voice)
+        db_session.commit()
+
+        retrieved = db_session.query(VoiceProfile).filter_by(id="test_proj_voice").first()
+        assert retrieved.project_id == "proj-123"
+
+    def test_voice_profile_engine_fields(self, db_session):
+        """引擎元数据字段"""
+        voice = VoiceProfile(
+            id="test_engine_001",
+            name="Engine Voice",
+            voice_engine_type="clone",
+            engine_type="CosyVoice",
+            engine_sub_type=None,
+            engine_params={"instruction": "warm"},
+        )
+        db_session.add(voice)
+        db_session.commit()
+
+        retrieved = db_session.query(VoiceProfile).filter_by(id="test_engine_001").first()
+        assert retrieved.voice_engine_type == "clone"
+        assert retrieved.engine_type == "CosyVoice"
+        assert retrieved.engine_params == {"instruction": "warm"}

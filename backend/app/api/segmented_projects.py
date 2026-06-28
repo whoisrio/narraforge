@@ -172,7 +172,9 @@ def get_segment_audio(
         db.commit()
         raise HTTPException(status_code=409, detail="audio_missing")
     media_type = "audio/mpeg" if seg.audio_format == "mp3" else f"audio/{seg.audio_format}"
-    return FileResponse(abs_path, media_type=media_type)
+    response = FileResponse(abs_path, media_type=media_type)
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @router.get(

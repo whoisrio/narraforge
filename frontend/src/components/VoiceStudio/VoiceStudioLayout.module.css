@@ -108,6 +108,29 @@
   margin: 0 auto;
 }
 
+.collapseButton {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(216, 194, 180, 0.5);
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.collapseButton:hover {
+  background: rgba(255, 220, 195, 0.34);
+  border-color: rgba(196, 122, 58, 0.35);
+}
+
 /* ---- Transport Bar ---- */
 
 .transportBar {

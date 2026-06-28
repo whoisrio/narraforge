@@ -101,6 +101,24 @@
   white-space: nowrap;
 }
 
+.roleSelect {
+  padding: 2px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+  min-height: 26px;
+  max-width: 120px;
+  cursor: pointer;
+}
+
+.roleSelect:focus {
+  border-color: var(--color-primary);
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
 /* Accordion edit panel */
 .accordionWrapper {
   animation: accordionOpen 0.25s ease-out;

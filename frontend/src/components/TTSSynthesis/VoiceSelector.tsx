@@ -64,7 +64,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
           const voiceKey = voice.qwen_voice_id || voice.id;
           return (
             <option key={voice.id} value={voiceKey}>
-              {voice.description || voice.name} · 克隆
+              {voice.name} · 克隆
             </option>
           );
         })}

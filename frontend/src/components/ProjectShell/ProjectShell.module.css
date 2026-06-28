@@ -382,6 +382,14 @@
   color: var(--color-text-secondary);
   font-size: 13px;
   font-weight: 800;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.collapseButton:hover {
+  background: rgba(255, 220, 195, 0.34);
+  border-color: rgba(196, 122, 58, 0.35);
 }
 
 .workspace {

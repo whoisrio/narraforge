@@ -84,6 +84,7 @@ export function TTSSynthesis({
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
   const initialLoadDoneRef = useRef(false);
+  const lastSavedUpdatedAtRef = useRef<string | null>(null);
   const [engine, setEngine] = useState<Engine>('edge_tts');
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [params, setParams] = useState<Partial<TTSRequest>>({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
@@ -120,7 +121,15 @@ export function TTSSynthesis({
   const [, setPreviewingRoleId] = useState<string | null>(null);
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
-  const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>('narration');
+  const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>(() => project.configs?.split_voice_mode ?? 'narration');
+  // Sync splitVoiceMode when project changes (e.g., loading a different project)
+  useEffect(() => {
+    setSplitVoiceMode(project.configs?.split_voice_mode ?? 'narration');
+  }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleSplitVoiceModeChange = useCallback((mode: SplitVoiceMode) => {
+    setSplitVoiceMode(mode);
+    setProject(prev => ({ ...prev, configs: { ...prev.configs, split_voice_mode: mode } }));
+  }, []);
   const [projectSection, setProjectSection] = useState<ProjectSectionId>('overview');
   const [panelOpen, setPanelOpen] = useState(true);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -145,6 +154,9 @@ export function TTSSynthesis({
 
   // Derived: active chapter
   const activeChapter = useMemo(() => getActiveChapter(project)!, [project]);
+  // Stable array refs for panel engine filters (avoid re-fetching voice list on every render)
+  const excludeQwen = useMemo(() => ['qwen'], []);
+  const allowVoxcpm = useMemo(() => ['voxcpm'], []);
   // Sum total duration of all chapters BEFORE the active one (used as time offset)
   const chapterStartOffset = useMemo(() => {
     const activeIdx = project.chapters.findIndex(c => c.id === activeChapter.id);
@@ -269,6 +281,7 @@ export function TTSSynthesis({
       if (ch) restoreChapterSettings(ch);
       await draftSync.adoptBackendVersion(migrated);
       initialLoadDoneRef.current = true; // 初始加载完成，后续变更可触发自动保存
+      lastSavedUpdatedAtRef.current = migrated.updated_at; // 跳过首次无变更的自动保存
 
       if (storageMode === 'backend') {
         const localProjects = await indexedDBStorage.listProjects();
@@ -292,6 +305,9 @@ export function TTSSynthesis({
   useEffect(() => {
     // 初始加载期间不触发自动保存，避免 markDirty 导致误判冲突
     if (!initialLoadDoneRef.current) return;
+    // 跳过纯 UI 状态变更（如 SELECT_SEGMENT 不 bump updated_at）
+    if (project.updated_at === lastSavedUpdatedAtRef.current) return;
+    lastSavedUpdatedAtRef.current = project.updated_at;
     if (storageMode === 'backend') {
       void draftSync.markDirty(project);
     } else {
@@ -441,6 +457,32 @@ export function TTSSynthesis({
     };
   }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps]);
 
+  // 构建当前全局音色的 VoiceRef（用于新创建的 segment）
+  const buildGlobalVoiceRef = useCallback((): import('../types').VoiceRef => {
+    // Edge-TTS
+    if (engine === 'edge_tts') {
+      const parts = (edgeVoice || '').split('-');
+      const name = (parts[parts.length - 1] || edgeVoice || '').replace(/Neural$|V\d+$/i, '');
+      return { name: name || '未选择', source: 'global', voice_id: edgeVoice, engine: 'edge_tts' };
+    }
+    // MiMo
+    if (engine === 'mimo_tts') {
+      if (mimoMode === 'voiceclone') {
+        const vObj = voices.find(v => v.id === mimoCloneVoiceId);
+        return { name: vObj?.name || '自定义音色', source: 'global', voice_id: mimoCloneVoiceId, engine: 'mimo_tts' };
+      }
+      return { name: mimoPresetVoice || '未选择', source: 'global', voice_id: mimoPresetVoice, engine: 'mimo_tts' };
+    }
+    // VoxCPM
+    if (engine === 'voxcpm') {
+      const vObj = voices.find(v => v.id === selectedVoiceId);
+      return { name: vObj?.name || 'VoxCPM 音色', source: 'global', voice_id: selectedVoiceId, engine: 'voxcpm' };
+    }
+    // CosyVoice (default)
+    const vObj = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
+    return { name: vObj?.name || 'CosyVoice 音色', source: 'global', voice_id: selectedVoiceId, engine: 'cosyvoice' };
+  }, [engine, selectedVoiceId, voices, edgeVoice, mimoMode, mimoPresetVoice, mimoCloneVoiceId]);
+
   const resetGlobalSettings = useCallback(() => {
     setEngine('edge_tts');
     setSelectedVoiceId('');
@@ -474,6 +516,7 @@ export function TTSSynthesis({
       await draftSync.adoptBackendVersion(migrated);
     }
     initialLoadDoneRef.current = true;
+    lastSavedUpdatedAtRef.current = migrated.updated_at;
   }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
 
   const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
@@ -617,11 +660,28 @@ export function TTSSynthesis({
       .flatMap(s => [s.current_audio_id, s.previous_audio_id])
       .filter((id): id is string => !!id);
 
+    // 构建带 voice_ref 的 items
+    const globalVoiceRef = buildGlobalVoiceRef();
+    const itemsWithVoiceRef = items.map(item => {
+      // 如果有角色，使用角色的音色信息
+      if (item.role_id && item.role_snapshot) {
+        const roleVoiceRef: import('../types').VoiceRef = {
+          name: item.role_snapshot.name,
+          source: 'role',
+          voice_id: item.role_snapshot.default_voice || '',
+          engine: item.role_snapshot.default_engine,
+          role_id: item.role_id,
+        };
+        return { ...item, voice_ref: roleVoiceRef };
+      }
+      return { ...item, voice_ref: globalVoiceRef };
+    });
+
     const apply = async () => {
       for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch { /* ignore */ } }
       dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
       dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
-      dispatch({ type: 'APPLY_SPLIT', items });
+      dispatch({ type: 'APPLY_SPLIT', items: itemsWithVoiceRef });
     };
 
     if (oldAudioIds.length > 0) {
@@ -634,7 +694,7 @@ export function TTSSynthesis({
     } else {
       apply();
     }
-  }, [activeChapter.segments, dispatch, buildCurrentParams, selectedVoiceId, edgeVoice, engine]);
+  }, [activeChapter.segments, dispatch, buildCurrentParams, buildGlobalVoiceRef, selectedVoiceId, edgeVoice, engine]);
 
   const buildSplitItemsWithRoles = useCallback((
     items: { text: string; emotion?: string }[],
@@ -695,46 +755,52 @@ export function TTSSynthesis({
     const segIdx = activeChapter.segments.findIndex(s => s.id === id);
     dispatch({ type: 'GENERATE_START', id });
     try {
-      const sp = seg.params;
       const overrides = seg.overrides || [];
+      const hasVoiceLock = overrides.includes('voice');
+      // Find role whenever segment has one (not only when voice-locked)
+      const currentRole = seg.role_id ? roles.find(r => r.id === seg.role_id) : undefined;
+      // Merge role params on top of segment params
+      const sp: SegmentEngineParams = currentRole?.default_engine_params
+        ? { ...seg.params, ...currentRole.default_engine_params }
+        : seg.params;
       const gp = buildCurrentParams();
 
-      // Effective engine: locked → stored; unlocked → current global
-      const hasVoiceLock = overrides.includes('voice');
-      const effectiveEngine = hasVoiceLock ? (sp.engine || gp.engine) : gp.engine;
+      // When a role exists, use role's engine and all role engine params (sp).
+      // When no role, fall back to global (gp).
+      // Voice lock only matters when there's no role — it controls stored vs global.
+      const effectiveEngine = currentRole ? (sp.engine || gp.engine) : (hasVoiceLock ? (sp.engine || gp.engine) : gp.engine);
 
-      // Params: locked → stored; unlocked → current global, fallback to stored
-      const voiceId = hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id);
-      const speed = overrides.includes('speed') ? sp.speed : (gp.speed ?? 1.0);
-      const volume = overrides.includes('volume') ? sp.volume : (gp.volume ?? 80);
-      const pitch = overrides.includes('pitch') ? sp.pitch : (gp.pitch ?? 1.0);
-      const instruction = overrides.includes('instruction') ? sp.instruction : (gp.instruction || sp.instruction || '');
-      const language = overrides.includes('language') ? sp.language : (gp.language || sp.language || 'Chinese');
+      const voiceId = currentRole ? (sp.voice_id || '') : (hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id));
+      const speed = overrides.includes('speed') ? sp.speed : (currentRole ? sp.speed : gp.speed) ?? 1.0;
+      const volume = overrides.includes('volume') ? sp.volume : (currentRole ? sp.volume : gp.volume) ?? 80;
+      const pitch = overrides.includes('pitch') ? sp.pitch : (currentRole ? sp.pitch : gp.pitch) ?? 1.0;
+      const instruction = overrides.includes('instruction') ? sp.instruction : (currentRole ? sp.instruction : gp.instruction) || '';
+      const language = overrides.includes('language') ? sp.language : (currentRole ? sp.language : gp.language) || 'Chinese';
 
-      // Edge-TTS: locked → stored; unlocked → current global
-      const effectiveEdgeVoice = hasVoiceLock ? sp.edge_voice : (gp.edge_voice || '');
-      const effectiveEdgeRate = hasVoiceLock ? sp.edge_rate : (gp.edge_rate ?? '+0%');
-      const effectiveEdgeVolume = hasVoiceLock ? sp.edge_volume : (gp.edge_volume ?? '+0%');
+      // Edge-TTS: role params when role exists, otherwise voice lock → global
+      const effectiveEdgeVoice = currentRole ? (sp.edge_voice || '') : (hasVoiceLock ? sp.edge_voice : (gp.edge_voice || ''));
+      const effectiveEdgeRate = currentRole ? (sp.edge_rate ?? '+0%') : (hasVoiceLock ? sp.edge_rate : (gp.edge_rate ?? '+0%'));
+      const effectiveEdgeVolume = currentRole ? (sp.edge_volume ?? '+0%') : (hasVoiceLock ? sp.edge_volume : (gp.edge_volume ?? '+0%'));
 
-      // MiMo: locked → stored; unlocked → current global
-      const effectiveMimoMode = hasVoiceLock ? sp.mimo_mode : (gp.mimo_mode || 'preset');
-      const effectiveMimoPreset = hasVoiceLock ? sp.mimo_preset_voice : (gp.mimo_preset_voice || '');
-      const effectiveMimoCloneId = hasVoiceLock ? sp.mimo_clone_voice_id : (gp.mimo_clone_voice_id || '');
-      const effectiveMimoVoiceDesc = hasVoiceLock ? (sp.mimo_voice_description || '') : (gp.mimo_voice_description || '');
-      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : (gp.mimo_instruction || '');
+      // MiMo: role params when role exists, otherwise voice lock → global
+      const effectiveMimoMode = currentRole ? (sp.mimo_mode || 'preset') : (hasVoiceLock ? sp.mimo_mode : (gp.mimo_mode || 'preset'));
+      const effectiveMimoPreset = currentRole ? (sp.mimo_preset_voice || '') : (hasVoiceLock ? sp.mimo_preset_voice : (gp.mimo_preset_voice || ''));
+      const effectiveMimoCloneId = currentRole ? (sp.mimo_clone_voice_id || '') : (hasVoiceLock ? sp.mimo_clone_voice_id : (gp.mimo_clone_voice_id || ''));
+      const effectiveMimoVoiceDesc = currentRole ? (sp.mimo_voice_description || '') : (hasVoiceLock ? (sp.mimo_voice_description || '') : (gp.mimo_voice_description || ''));
+      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : (currentRole ? (sp.mimo_instruction || '') : (gp.mimo_instruction || ''));
 
-      // VoxCPM: locked → stored; unlocked → current global
-      const effectiveVoxcpmMode = hasVoiceLock ? (sp.voxcpm_mode || 'tts') : (gp.voxcpm_mode || 'tts');
-      const effectiveVoxcpmCfg = hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : (gp.voxcpm_cfg_value ?? 2.0);
-      const effectiveVoxcpmTimesteps = hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : (gp.voxcpm_inference_timesteps ?? 10);
-      const effectiveVoxcpmDesc = hasVoiceLock ? (sp.voxcpm_voice_description || '') : (gp.voxcpm_voice_description || '');
-      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : (gp.voxcpm_style_control || '');
-      const effectiveVoxcpmPrompt = hasVoiceLock ? (sp.voxcpm_prompt_text || '') : (gp.voxcpm_prompt_text || '');
+      // VoxCPM: role params when role exists, otherwise voice lock → global
+      const effectiveVoxcpmMode = currentRole ? (sp.voxcpm_mode || 'tts') : (hasVoiceLock ? (sp.voxcpm_mode || 'tts') : (gp.voxcpm_mode || 'tts'));
+      const effectiveVoxcpmCfg = currentRole ? (sp.voxcpm_cfg_value ?? 2.0) : (hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : (gp.voxcpm_cfg_value ?? 2.0));
+      const effectiveVoxcpmTimesteps = currentRole ? (sp.voxcpm_inference_timesteps ?? 10) : (hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : (gp.voxcpm_inference_timesteps ?? 10));
+      const effectiveVoxcpmDesc = currentRole ? (sp.voxcpm_voice_description || '') : (hasVoiceLock ? (sp.voxcpm_voice_description || '') : (gp.voxcpm_voice_description || ''));
+      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : (currentRole ? (sp.voxcpm_style_control || '') : (gp.voxcpm_style_control || ''));
+      const effectiveVoxcpmPrompt = currentRole ? (sp.voxcpm_prompt_text || '') : (hasVoiceLock ? (sp.voxcpm_prompt_text || '') : (gp.voxcpm_prompt_text || ''));
 
       const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
 
       // Voice identifier & params snapshot — shared by both backend and frontend paths
-      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoMode === 'voicedesign' ? effectiveMimoVoiceDesc : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
+      let usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoMode === 'voicedesign' ? effectiveMimoVoiceDesc : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
       const updatedParams: Partial<SegmentEngineParams> = { engine: effectiveEngine };
       if (effectiveEngine === 'edge_tts') {
         updatedParams.edge_voice = effectiveEdgeVoice;
@@ -760,6 +826,30 @@ export function TTSSynthesis({
         updatedParams.pitch = pitch;
         updatedParams.language = language;
         updatedParams.instruction = instruction;
+      }
+
+      // Design voice detection: design modes need to use clone APIs at synthesis time.
+      // Roles store mimo_mode='voicedesign' or voxcpm_mode='design' to indicate design voices.
+      // We convert to the corresponding clone mode (voiceclone/ultimate) so the backend
+      // uses stored reference audio instead of re-synthesizing from text description.
+      let designDetected = false;
+      if (effectiveEngine === 'mimo_tts' && effectiveMimoMode === 'voicedesign' && effectiveMimoCloneId) {
+        updatedParams.mimo_mode = 'voiceclone';
+        designDetected = true;
+      }
+      if (effectiveEngine === 'voxcpm' && effectiveVoxcpmMode === 'design' && voiceId) {
+        updatedParams.voxcpm_mode = 'ultimate';
+        // 不设置 voxcpm_prompt_text，由后端从 VoiceProfile.engine_params 中解析
+        designDetected = true;
+      }
+
+      // Final modes after design detection
+      const finalMimoMode = (updatedParams.mimo_mode as string) || effectiveMimoMode;
+      const finalVoxcpmMode = (updatedParams.voxcpm_mode as string) || effectiveVoxcpmMode;
+      const finalVoxcpmPromptText = (updatedParams.voxcpm_prompt_text as string) || effectiveVoxcpmPrompt;
+      // Update usedVoiceId when design detection changes the mode
+      if (designDetected && effectiveEngine === 'mimo_tts' && finalMimoMode === 'voiceclone') {
+        usedVoiceId = effectiveMimoCloneId;
       }
 
       let resp: TTSResult;
@@ -792,6 +882,15 @@ export function TTSSynthesis({
           requestParams.pitch = pitch;
           requestParams.language = language;
           requestParams.instruction = instruction;
+        }
+        // Apply design detection overrides to backend request
+        if (designDetected) {
+          if (effectiveEngine === 'voxcpm') {
+            requestParams.voxcpm_mode = finalVoxcpmMode;
+            requestParams.voxcpm_prompt_text = finalVoxcpmPromptText;
+          } else if (effectiveEngine === 'mimo_tts') {
+            requestParams.mimo_mode = finalMimoMode;
+          }
         }
         const { segmentedProjectApi } = await import('../services/api');
         const updated = await segmentedProjectApi.synthesizeSegment(
@@ -828,20 +927,20 @@ export function TTSSynthesis({
       if (effectiveEngine === 'edge_tts') {
         resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
       } else if (effectiveEngine === 'mimo_tts') {
-        if (effectiveMimoMode === 'voicedesign') {
+        if (finalMimoMode === 'voicedesign') {
           resp = await mimoTtsApi.synthesizeVoiceDesign({ text: textToSend, voice_description: effectiveMimoVoiceDesc || '', format: 'wav' });
-        } else if (effectiveMimoMode === 'voiceclone') {
+        } else if (finalMimoMode === 'voiceclone') {
           resp = await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
         } else {
           resp = await mimoTtsApi.synthesizePreset({ text: textToSend, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
         }
       } else if (effectiveEngine === 'voxcpm') {
-        if (effectiveVoxcpmMode === 'design') {
+        if (finalVoxcpmMode === 'design') {
           resp = await voxcpmApi.design({ voice_description: effectiveVoxcpmDesc, text: textToSend || undefined, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
-        } else if (effectiveVoxcpmMode === 'clone') {
+        } else if (finalVoxcpmMode === 'clone') {
           resp = await voxcpmApi.clone({ text: textToSend, voice_id: voiceId ?? '', style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
-        } else if (effectiveVoxcpmMode === 'ultimate') {
-          resp = await voxcpmApi.ultimateClone({ text: textToSend, voice_id: voiceId ?? '', prompt_text: effectiveVoxcpmPrompt, style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+        } else if (finalVoxcpmMode === 'ultimate') {
+          resp = await voxcpmApi.ultimateClone({ text: textToSend, voice_id: voiceId ?? '', prompt_text: finalVoxcpmPromptText, style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else {
           resp = await voxcpmApi.tts({ text: textToSend, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         }
@@ -879,7 +978,7 @@ export function TTSSynthesis({
     } catch (error: unknown) {
       dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error) });
     }
-  }, [activeChapter.segments, dispatch, buildCurrentParams, showToast]);
+  }, [activeChapter.segments, dispatch, buildCurrentParams, showToast, roles]);
 
   // Keep ref in sync
   handleRegenerateRef.current = handleRegenerate;
@@ -1033,7 +1132,7 @@ export function TTSSynthesis({
       // Backend mode: fetch audio as blob, then play via blob URL
       if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
         const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-        const resp = await fetch(url);
+        const resp = await fetch(url, { cache: 'no-store' });
         if (!resp.ok) {
           // Try to extract backend error detail (FastAPI's `detail` field)
           let detail = `HTTP ${resp.status}`;
@@ -1130,7 +1229,7 @@ export function TTSSynthesis({
         // Backend mode: fetch audio as blob, then play
         if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
           const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-          const resp = await fetch(url);
+          const resp = await fetch(url, { cache: 'no-store' });
           if (!resp.ok) {
             let detail = `HTTP ${resp.status}`;
             try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch { /* ignore */ }
@@ -1274,14 +1373,14 @@ export function TTSSynthesis({
                       <button
                         type="button"
                         className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'narration' ? styles.sidebarModeBtnActive : ''}`}
-                        onClick={e => { e.stopPropagation(); setSplitVoiceMode('narration'); }}
+                        onClick={e => { e.stopPropagation(); handleSplitVoiceModeChange('narration'); }}
                       >
                         {t('studio.narration')}
                       </button>
                       <button
                         type="button"
                         className={`${styles.sidebarModeBtn} ${splitVoiceMode === 'dialogue' ? styles.sidebarModeBtnActive : ''}`}
-                        onClick={e => { e.stopPropagation(); setSplitVoiceMode('dialogue'); }}
+                        onClick={e => { e.stopPropagation(); handleSplitVoiceModeChange('dialogue'); }}
                       >
                         {t('studio.dialogue')}
                       </button>
@@ -1310,7 +1409,7 @@ export function TTSSynthesis({
                     </select>
                     {engine === 'cosyvoice' ? (
                       <GlobalControlBar
-                        selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+                        voices={voices} selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
                         speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
                         instruction={params.instruction} enableSsml={params.enable_ssml} enableMarkdownFilter={params.enable_markdown_filter}
                         onSpeedChange={v => setParams(p => ({ ...p, speed: v }))}
@@ -1325,7 +1424,7 @@ export function TTSSynthesis({
                     ) : engine === 'edge_tts' ? (
                       <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
                     ) : engine === 'mimo_tts' ? (
-                      <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} excludeCloneEngines={['qwen']} projectId={project.id} />
+                      <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} excludeCloneEngines={excludeQwen} projectId={project.id} />
                     ) : (
                       <VoxCPMPanel
                         mode={voxcpmMode} onModeChange={setVoxcpmMode}
@@ -1334,7 +1433,7 @@ export function TTSSynthesis({
                         selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
                         cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
                         inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
-                        allowedCloneEngines={['voxcpm']}
+                        allowedCloneEngines={allowVoxcpm}
                         projectId={project.id}
                       />
                     )}
@@ -1362,7 +1461,7 @@ export function TTSSynthesis({
               chapterId={activeChapter.id}
               chapterName={activeChapter.design_title || activeChapter.name}
               splitVoiceMode={splitVoiceMode}
-              onSplitVoiceModeChange={setSplitVoiceMode}
+              onSplitVoiceModeChange={handleSplitVoiceModeChange}
               showVoiceModeSwitch={false}
             />
 
@@ -1407,7 +1506,7 @@ export function TTSSynthesis({
                 voices={voices}
                 roles={roles}
                 globalVoiceId={selectedVoiceId}
-                globalVoiceName={selectedVoice?.description || selectedVoice?.name}
+                globalVoiceName={selectedVoice?.name}
                 globalEdgeVoice={edgeVoice}
                 engine={engine}
                 globalMimoMode={mimoMode}
@@ -1419,8 +1518,8 @@ export function TTSSynthesis({
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
                 }}
                 onDelete={handleDeleteSegment}
-                onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId })}
-                onAppend={() => dispatch({ type: 'APPEND_SEGMENT' })}
+                onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId, voice_ref: buildGlobalVoiceRef() })}
+                onAppend={() => dispatch({ type: 'APPEND_SEGMENT', voice_ref: buildGlobalVoiceRef() })}
                 onReorder={(from, to) => dispatch({ type: 'REORDER', fromIndex: from, toIndex: to })}
                 onEdit={(id) => {
                   const currentSelected = activeChapter.selected_segment_id;
@@ -1432,7 +1531,7 @@ export function TTSSynthesis({
                 onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
                 onDuplicate={(id) => {
                   const seg = activeChapter.segments.find(s => s.id === id);
-                  if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text });
+                  if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text, voice_ref: seg.voice_ref || buildGlobalVoiceRef() });
                 }}
                 onAnnotateSSML={(id) => handleAnnotateSSML([id])}
                 onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}

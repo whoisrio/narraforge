@@ -111,28 +111,32 @@ describe('SegmentList studio role controls', () => {
     }));
   });
 
-  it('shows all roles for dialogue segments (no narrator/cast split)', () => {
+  it('shows all roles for dialogue segments as dropdown options', () => {
     const onUpdateRole = vi.fn();
 
     renderList({ voiceMode: 'dialogue', onUpdateRole });
 
-    // All roles should be available in the role picker
-    const roleChips = screen.getAllByRole('button', { name: /嘉宾A|默认旁白/ });
-    expect(roleChips.length).toBeGreaterThan(0);
+    // All roles should be available as select options
+    const select = screen.getByRole('combobox', { name: '选择台词角色' });
+    expect(select).toBeInTheDocument();
+    const options = select.querySelectorAll('option');
+    // 1 placeholder + 3 roles
+    expect(options.length).toBe(4);
+    expect(screen.getByRole('option', { name: '嘉宾A' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '默认旁白' })).toBeInTheDocument();
   });
 
-  it('keeps long role names in a fixed-width ellipsis preview', () => {
-    renderList({
-      voiceMode: 'dialogue',
-      segments: [makeSegment('s-long', 'dialogue')].map(segment => ({
-        ...segment,
-        role_id: 'cast-long',
-      })),
-      onUpdateRole: vi.fn(),
-    });
+  it('selecting a role from dropdown calls onUpdateRole', () => {
+    const onUpdateRole = vi.fn();
 
-    // The long role name should appear as a title attribute for tooltip
-    const titledElements = screen.getAllByTitle('这是一个非常非常非常长的角色名字会把Segment信息挤歪');
-    expect(titledElements.length).toBeGreaterThan(0);
+    renderList({ voiceMode: 'dialogue', onUpdateRole });
+
+    const select = screen.getByRole('combobox', { name: '选择台词角色' });
+    fireEvent.change(select, { target: { value: 'narrator-1' } });
+
+    expect(onUpdateRole).toHaveBeenCalledWith('s2', 'narrator-1', expect.objectContaining({
+      id: 'narrator-1',
+      name: '默认旁白',
+    }));
   });
 });

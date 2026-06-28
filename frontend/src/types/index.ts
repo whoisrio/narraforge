@@ -15,8 +15,8 @@ export interface VoiceProfile {
   id: string;
   name: string;
   audio_url: string;
-  original_audio_url?: string;   // 克隆前的原始音频 URL
-  cloned_preview_url?: string;   // 克隆后的试听音频 URL
+  source_audio_url?: string;     // 用于克隆的源音频 URL
+  cloned_preview_url?: string;   // 克隆/设计后的试听音频 URL
   description?: string;  // 用户自定义的声音描述
   prompt_text?: string;  // 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
   qwen_voice_id?: string;
@@ -27,6 +27,7 @@ export interface VoiceProfile {
   created_at: string;
   avatar?: string | null;  // 头像（data URL 或外部 URL）
   voices_engine?: VoicesEngine | null;  // 音色来源与引擎信息
+  project_id?: string | null;  // null = 全局, 非空 = 项目专属
 }
 
 // TTS Config (model configurations)
@@ -260,6 +261,9 @@ export interface SegmentEngineParams {
   voxcpm_prompt_text?: string;
   voxcpm_cfg_value?: number;
   voxcpm_inference_timesteps?: number;
+
+  // 克隆输入方式
+  input_method?: 'record' | 'upload' | 'url';
 }
 
 export type SegmentStatus = 'idle' | 'queued' | 'pending' | 'ready' | 'failed';
@@ -324,11 +328,27 @@ export interface ProsodyCapability {
   requiresSplitFallback: boolean;
 }
 
+/** 显式的音色引用 — 描述 segment 当前激活的音色来源 */
+export interface VoiceRef {
+  /** 显示名称（角色名、音色名、或全局音色名） */
+  name: string;
+  /** 音色来源：role=角色, global=跟随全局, custom=独立覆盖 */
+  source: 'role' | 'global' | 'custom';
+  /** 音色标识符（VoiceProfile.id, qwen_voice_id, edge_voice, mimo_preset_voice 等） */
+  voice_id: string;
+  /** 使用的引擎 */
+  engine: SegmentEngineParams['engine'];
+  /** 角色 ID（仅 source='role' 时有值） */
+  role_id?: string;
+}
+
 export interface Segment {
   id: string;
   text: string;
   ssml?: string;
   params: SegmentEngineParams;
+  /** 当前激活的音色引用（显式存储，避免复杂推断） */
+  voice_ref?: VoiceRef;
   status: SegmentStatus;
   error?: string;
   current_audio_id?: string;
@@ -436,6 +456,7 @@ export interface SegmentedProject {
   } | null;
   default_narrator_role_id?: string | null;
   default_narrator_snapshot?: RoleSnapshot | null;
+  configs?: { split_voice_mode?: 'narration' | 'dialogue'; [key: string]: unknown } | null;
   created_at: string;
   updated_at: string;
 }

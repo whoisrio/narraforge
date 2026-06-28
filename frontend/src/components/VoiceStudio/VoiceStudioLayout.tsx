@@ -59,32 +59,22 @@ export function VoiceStudioLayout({
           <>
             <div className={styles.sidePanelHeader}>
               <span className={styles.sidePanelTitle}>语音设置</span>
-              <button
-                type="button"
-                className={styles.sidePanelCollapseBtn}
-                data-testid="voice-studio-side-panel-toggle"
-                aria-label="收起右侧面板"
-                onClick={() => toggleCollapsed(true)}
-              >
-                ›
-              </button>
             </div>
             <div className={styles.sidePanelBody}>
               {sidebarContent}
             </div>
           </>
         )}
-        {sidePanelCollapsed && (
-          <button
-            type="button"
-            className={styles.sidePanelExpandBtn}
-            data-testid="voice-studio-side-panel-toggle"
-            aria-label="展开右侧面板"
-            onClick={() => toggleCollapsed(false)}
-          >
-            ‹
-          </button>
-        )}
+        <button
+          type="button"
+          className={styles.collapseButton}
+          data-testid="voice-studio-side-panel-toggle"
+          aria-label={sidePanelCollapsed ? '展开右侧面板' : '收起右侧面板'}
+          onClick={() => toggleCollapsed(!sidePanelCollapsed)}
+        >
+          <span>{sidePanelCollapsed ? '‹' : '›'}</span>
+          {!sidePanelCollapsed && <span>收起</span>}
+        </button>
       </aside>
 
       <footer className={styles.transportBar} data-testid="voice-studio-transport-bar" style={transportBarStyle}>

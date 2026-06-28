@@ -13,7 +13,7 @@ def test_list_cloned_qwen_voices(client, db_session):
     voice = VoiceProfile(
         id="v1",
         name="Narrator",
-        audio_path="/tmp/narrator.wav",
+        source_audio_path="/tmp/narrator.wav",
         is_cloned=True,
         qwen_voice_id="cosyvoice-v3-narrator",
         clone_engine="qwen",

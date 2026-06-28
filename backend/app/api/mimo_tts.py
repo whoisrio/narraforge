@@ -246,7 +246,8 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
     if not voice:
         raise HTTPException(status_code=404, detail="声音记录不存在")
 
-    if not voice.audio_path or not os.path.exists(voice.audio_path):
+    resolved_src = str(settings.resolve_path(voice.source_audio_path)) if voice.source_audio_path else None
+    if not resolved_src or not os.path.exists(resolved_src):
         # 尝试外部 URL
         if voice.external_audio_url:
             tmp_path = None
@@ -286,7 +287,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
         service = await get_mimo_tts_service(db)
         audio_bytes = await service.clone_from_file(
             text=request.text,
-            audio_path=voice.audio_path,
+            audio_path=resolved_src,
             instruction=request.instruction,
             format=request.format,
         )
@@ -375,11 +376,12 @@ def synthesize_mimo_internal(
                 raise ValueError("MiMo voiceclone mode requires db session")
             voice = db.query(VoiceProfile).filter(VoiceProfile.id == clone_voice_id).first()
             if not voice:
-                raise ValueError("声音记录不存在")
+                raise ValueError(f"声音记录不存在 (clone_voice_id={clone_voice_id})")
 
-            # 优先读本地文件，回退到 external_audio_url
-            audio_path = getattr(voice, "audio_path", None)
-            if not audio_path or not os.path.exists(str(audio_path)):
+            # 优先读试听音频（cloned_preview_path），回退到源音频（source_audio_path）
+            raw_path = getattr(voice, "cloned_preview_path", None) or getattr(voice, "source_audio_path", None)
+            audio_path = str(settings.resolve_path(raw_path)) if raw_path else None
+            if not audio_path or not os.path.exists(audio_path):
                 ext_url = getattr(voice, "external_audio_url", None)
                 if ext_url:
                     import urllib.request as url_req
@@ -397,7 +399,7 @@ def synthesize_mimo_internal(
                             os.unlink(tmp.name)
                         except OSError:
                             pass
-                raise ValueError("音频文件不存在")
+                raise ValueError(f"音频文件不存在 (path={audio_path})")
 
             return await service.clone_from_file(
                 text=text,
