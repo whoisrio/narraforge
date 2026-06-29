@@ -40,8 +40,8 @@
   align-items: center;
   gap: 10px;
   padding: 16px 20px;
-  background: color-mix(in srgb, #c47a3a 8%, var(--color-surface));
-  border-bottom: 2px solid color-mix(in srgb, #c47a3a 25%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  border-bottom: 2px solid color-mix(in srgb, var(--color-primary) 25%, var(--color-border));
 }
 
 .headerDanger {
@@ -111,8 +111,8 @@
   padding: 6px 16px;
   border: none;
   border-radius: var(--radius-sm);
-  background: #c47a3a;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-surface);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -121,7 +121,7 @@
 }
 
 .confirmWarning:hover {
-  background: #b0692d;
+  background: var(--color-primary);
 }
 
 .confirmDanger {
@@ -129,7 +129,7 @@
   border: none;
   border-radius: var(--radius-sm);
   background: var(--color-error);
-  color: #fff;
+  color: var(--color-surface);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -138,5 +138,5 @@
 }
 
 .confirmDanger:hover {
-  background: #a53225;
+  background: var(--color-error);
 }

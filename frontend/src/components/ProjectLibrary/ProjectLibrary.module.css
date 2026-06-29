@@ -124,7 +124,7 @@
 }
 
 .sourceTitleInput:focus {
-  border-bottom: 2px solid var(--color-primary, #c47a3a);
+  border-bottom: 2px solid var(--color-primary, var(--color-primary));
 }
 
 .libraryHeader {

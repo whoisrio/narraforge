@@ -7,7 +7,7 @@
   border-radius: 12px;
   padding: 8px 10px;
   background: rgba(196, 122, 58, 0.08);
-  color: #7a4a1f;
+  color: var(--color-primary-dark);
   font-size: 12px;
 }
 
@@ -15,7 +15,7 @@
   border: 0;
   border-radius: 999px;
   padding: 4px 8px;
-  background: #c47a3a;
+  background: var(--color-primary);
   color: white;
   cursor: pointer;
 }

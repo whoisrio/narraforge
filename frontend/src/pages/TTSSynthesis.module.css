@@ -608,9 +608,10 @@
 .projectSectionPlaceholder h2 {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: 30px;
-  line-height: 1.08;
-  letter-spacing: -0.05em;
+  font-size: var(--font-size-3xl);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
 }
 
 .projectSectionPlaceholder p {
@@ -690,7 +691,7 @@
 
 .viewSwitch button[aria-pressed="true"] {
   background: rgba(196, 122, 58, 0.14);
-  color: #8a4f1f;
+  color: var(--color-primary-dark);
 }
 
 .roleControls {

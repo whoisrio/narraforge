@@ -83,7 +83,7 @@ function enrichSegment(raw: RawSegment, defaultParams: SegmentEngineParams): Seg
   const now = new Date().toISOString();
   const hasAudio = !!(raw.current_audio_path || raw.current_audio_id);
   return {
-    id: raw.id,
+    id: raw.id ?? uid(),
     text: raw.text ?? '',
     ssml: raw.ssml,
     params: { ...defaultParams, ...raw.params },
@@ -130,48 +130,51 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
       chapters,
     } as SegmentedProject;
   }
+  // Legacy v1 format — raw may be missing fields, use loose typing
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = raw as any;
   const now = new Date().toISOString();
   const ch: Chapter = {
     id: uid(),
     name: '第一章',
-    engine: raw.engine,
-    voice_id: raw.voice_id,
-    edge_voice: raw.edge_voice,
-    edge_rate: raw.edge_rate,
-    edge_volume: raw.edge_volume,
-    mimo_mode: raw.mimo_mode,
-    mimo_preset_voice: raw.mimo_preset_voice,
-    mimo_instruction: raw.mimo_instruction,
-    mimo_clone_voice_id: raw.mimo_clone_voice_id,
-    voxcpm_mode: raw.voxcpm_mode,
-    voxcpm_voice_description: raw.voxcpm_voice_description,
-    voxcpm_style_control: raw.voxcpm_style_control,
-    voxcpm_prompt_text: raw.voxcpm_prompt_text,
-    voxcpm_cfg_value: raw.voxcpm_cfg_value,
-    voxcpm_inference_timesteps: raw.voxcpm_inference_timesteps,
-    language: raw.language,
-    speed: raw.speed,
-    volume: raw.volume,
-    pitch: raw.pitch,
-    original_text: raw.original_text,
-    segments: raw.segments || [],
-    selected_segment_id: raw.selected_segment_id,
-    default_params: raw.default_params || { engine: 'edge_tts' } as SegmentEngineParams,
-    split_config: raw.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
-    created_at: raw.created_at || now,
-    updated_at: raw.updated_at || now,
+    engine: r.engine,
+    voice_id: r.voice_id,
+    edge_voice: r.edge_voice,
+    edge_rate: r.edge_rate,
+    edge_volume: r.edge_volume,
+    mimo_mode: r.mimo_mode,
+    mimo_preset_voice: r.mimo_preset_voice,
+    mimo_instruction: r.mimo_instruction,
+    mimo_clone_voice_id: r.mimo_clone_voice_id,
+    voxcpm_mode: r.voxcpm_mode,
+    voxcpm_voice_description: r.voxcpm_voice_description,
+    voxcpm_style_control: r.voxcpm_style_control,
+    voxcpm_prompt_text: r.voxcpm_prompt_text,
+    voxcpm_cfg_value: r.voxcpm_cfg_value,
+    voxcpm_inference_timesteps: r.voxcpm_inference_timesteps,
+    language: r.language,
+    speed: r.speed,
+    volume: r.volume,
+    pitch: r.pitch,
+    original_text: r.original_text,
+    segments: r.segments || [],
+    selected_segment_id: r.selected_segment_id,
+    default_params: r.default_params || { engine: 'edge_tts' } as SegmentEngineParams,
+    split_config: r.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    created_at: r.created_at || now,
+    updated_at: r.updated_at || now,
   };
   return {
     schema_version: 2,
-    id: raw.id,
-    name: raw.name || '未命名项目',
+    id: r.id ?? uid(),
+    name: r.name || '未命名项目',
     chapters: [ch],
     active_chapter_id: ch.id,
-    layout: raw.layout || 'vertical',
-    remotion_project_path: raw.remotion_project_path ?? null,
-    default_narrator_role_id: raw.default_narrator_role_id ?? null,
-    default_narrator_snapshot: raw.default_narrator_snapshot ?? null,
-    created_at: raw.created_at || now,
+    layout: r.layout || 'vertical',
+    remotion_project_path: r.remotion_project_path ?? null,
+    default_narrator_role_id: r.default_narrator_role_id ?? null,
+    default_narrator_snapshot: r.default_narrator_snapshot ?? null,
+    created_at: r.created_at || now,
     updated_at: now,
   };
 }
@@ -667,7 +670,7 @@ export function segmentedReducer(state: State, action: Action): State {
     }
     case 'SELECT_SEGMENT': {
       const activeCh = getActiveChapter(p);
-      if (!activeCh) return p;
+      if (!activeCh) return { project: p };
       return {
         project: {
           ...p,

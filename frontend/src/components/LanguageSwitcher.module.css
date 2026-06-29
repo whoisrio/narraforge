@@ -21,7 +21,7 @@
 
 .select:hover {
   border-color: rgba(255, 255, 255, 0.3);
-  color: #fff;
+  color: var(--color-surface);
 }
 
 .select:focus {
@@ -31,6 +31,6 @@
 }
 
 .select option {
-  background: #1a1814;
-  color: #fff;
+  background: var(--color-text-primary);
+  color: var(--color-surface);
 }

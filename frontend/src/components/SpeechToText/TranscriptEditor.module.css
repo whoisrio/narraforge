@@ -72,7 +72,7 @@
 }
 
 .gpuBadge {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success) 100%);
   color: white;
   border-color: transparent;
 }

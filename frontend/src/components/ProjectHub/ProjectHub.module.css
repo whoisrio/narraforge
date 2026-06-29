@@ -30,9 +30,10 @@
 .hero h1 {
   margin: 0;
   color: var(--color-primary-dark);
-  font-size: 20px;
-  line-height: 1.1;
-  letter-spacing: -0.04em;
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
 }
 
 .hero p {
@@ -347,7 +348,7 @@
 .menuButton:hover,
 .menuButton[aria-expanded='true'] {
   background: var(--color-primary);
-  color: #fffdf8;
+  color: var(--color-surface)df8;
   transform: translateY(-1px);
 }
 
@@ -383,7 +384,7 @@
 }
 
 .actionMenu .menuDanger {
-  color: #a33a20;
+  color: var(--color-error);
 }
 
 .renameActions button {
@@ -441,9 +442,11 @@
 }
 
 .emptyState h2 {
-  margin: 0 0 6px;
+  margin: 0 0 var(--spacing-sm);
   color: var(--color-text-primary);
-  font-size: 20px;
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .emptyState p {
