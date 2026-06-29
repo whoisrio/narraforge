@@ -87,4 +87,5 @@ playwright-report/
 .superpowers
 .superpowersbackend/db.sqlite3
 backend/*.db
+backend/voice_clone.db*
 backend/uploads_bak
