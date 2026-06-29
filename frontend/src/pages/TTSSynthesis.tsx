@@ -46,7 +46,7 @@ function endsWithSentencePeriod(text: string): boolean {
   return /[。．.](?:[”"』」》）)]*)\s*$/.test(text.trim());
 }
 
-function getErrorMessage(error: unknown, fallback = '生成失败'): string {
+function getErrorMessage(error: unknown, fallback = t('common.generationFailed')): string {
   return error instanceof Error ? error.message : String(error || fallback);
 }
 
@@ -56,7 +56,7 @@ function createScratchpadProject(): SegmentedProject {
   return {
     ...project,
     id: SCRATCHPAD_PROJECT_ID,
-    name: '草稿项目',
+    name: t('common.draftProject'),
     created_at: project.created_at || now,
     updated_at: project.updated_at || now,
   };
@@ -122,7 +122,6 @@ export function TTSSynthesis({
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>(() => project.configs?.split_voice_mode ?? 'narration');
-  // Sync splitVoiceMode when project changes (e.g., loading a different project)
   useEffect(() => {
     setSplitVoiceMode(project.configs?.split_voice_mode ?? 'narration');
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -251,7 +250,7 @@ export function TTSSynthesis({
           full = scratchpad!;
         } else {
           full = createInitialProject();
-          full.name = '临时项目';
+          full.name = t('project.draftProject');
         }
       }
       const localDraft = await getDraft(full.id);
@@ -583,6 +582,7 @@ export function TTSSynthesis({
       variant: 'danger', confirmLabel: '删除',
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); void doDeleteProject(projectId); },
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, project, projectList, doDeleteProject, showToast]);
 
   const handleToggleIndependentVoice = useCallback((id: string) => {
@@ -978,6 +978,7 @@ export function TTSSynthesis({
     } catch (error: unknown) {
       dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error) });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, dispatch, buildCurrentParams, showToast, roles]);
 
   // Keep ref in sync
@@ -1026,6 +1027,7 @@ export function TTSSynthesis({
         await doRegenerateAll(toRegenerate);
       },
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating, activeChapter.segments, showToast]);
 
   const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments) => {
@@ -1059,6 +1061,7 @@ export function TTSSynthesis({
     } finally {
       setGenerating(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, showToast]);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
@@ -1195,6 +1198,7 @@ export function TTSSynthesis({
       setIsPaused(false);
       setPlayAllActive(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, playingId, stopCurrentAudio, storageMode, project, activeChapter, showToast]);
 
   const handlePlayAll = useCallback(async () => {
@@ -1268,6 +1272,7 @@ export function TTSSynthesis({
     setPlayingId(undefined);
     setIsPaused(false);
     setPlayAllActive(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, storageMode, project, activeChapter]);
 
   const handleStopAll = useCallback(() => {

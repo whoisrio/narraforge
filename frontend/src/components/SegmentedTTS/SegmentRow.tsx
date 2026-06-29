@@ -3,6 +3,7 @@ import type { Segment, EmotionType, VoiceProfile } from '../../types';
 import { isSegmentAudioStale, isSegmentVoiceStale } from '../../services/segmentGenerationInputs';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { MergeMenu } from './MergeMenu';
+import { useTranslation } from '../../i18n';
 import styles from './SegmentRow.module.css';
 
 interface SegmentRowProps {
@@ -55,8 +56,8 @@ const ENGINE_LABELS: Record<string, string> = {
 };
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
-  happy: '欣喜', sad: '沉重', angry: '愤怒',
-  calm: '沉稳', neutral: '中性', excited: '激昂',
+  happy: 'segment.segmentRow.happy', sad: 'segment.segmentRow.sad', angry: 'segment.segmentRow.angry',
+  calm: 'segment.segmentRow.calm', neutral: 'segment.segmentRow.neutral', excited: 'segment.segmentRow.excited',
 };
 
 const WF_SHAPES: number[][] = [
@@ -76,9 +77,10 @@ function getWaveform(id: string): number[] {
 export function SegmentRow({
   segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine,
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
- layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
- onMerge, isLast,
+  layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
+  onMerge, isLast,
 }: SegmentRowProps) {
+  const { t } = useTranslation();
   const [charIdx, setCharIdx] = useState(-1);
   const timerRef = useRef<number | null>(null);
   const textLen = segment.text.length;
@@ -124,7 +126,7 @@ export function SegmentRow({
     // 优先使用 voice_ref
     if (segment.voice_ref) {
       const eng = ENGINE_LABELS[segment.voice_ref.engine] || segment.voice_ref.engine;
-      return { engine: eng, voice: segment.voice_ref.name || '未选择' };
+      return { engine: eng, voice: segment.voice_ref.name || t('segment.segmentRow.voiceNotSelected') };
     }
 
     // 回退到旧的推断逻辑
@@ -140,7 +142,7 @@ export function SegmentRow({
         const name = (parts[parts.length - 1] || ev).replace(/Neural$|V\d+$/i, '');
         return { engine: eng, voice: name };
       }
-      return { engine: eng, voice: '未选择' };
+      return { engine: eng, voice: t('segment.segmentRow.voiceNotSelected') };
     }
 
     if (dispEngine === 'mimo_tts') {
@@ -149,22 +151,22 @@ export function SegmentRow({
         const cloneId = useGlobal ? globalMimoCloneVoiceId : p.mimo_clone_voice_id;
         if (cloneId) {
           const vObj = voices.find(v => v.id === cloneId);
-          return { engine: eng, voice: vObj?.name || '自定义音色' };
+          return { engine: eng, voice: vObj?.name || t('segment.segmentRow.customVoice') };
         }
-        return { engine: eng, voice: '未选择' };
+        return { engine: eng, voice: t('segment.segmentRow.voiceNotSelected') };
       }
       if (mode === 'voicedesign') {
         const cloneId = p.mimo_clone_voice_id;
         if (cloneId) {
           const vObj = voices.find(v => v.id === cloneId);
-          return { engine: eng, voice: vObj?.name || '音色设计' };
+          return { engine: eng, voice: vObj?.name || t('segment.segmentRow.voiceDesigned') };
         }
         const desc = p.mimo_voice_description || '';
-        return { engine: eng, voice: desc ? desc.slice(0, 20) : '音色设计' };
+        return { engine: eng, voice: desc ? desc.slice(0, 20) : t('segment.segmentRow.voiceDesigned') };
       }
       // preset mode (default)
       const preset = useGlobal ? globalMimoPresetVoice : p.mimo_preset_voice;
-      return { engine: eng, voice: preset || '未选择' };
+      return { engine: eng, voice: preset || t('segment.segmentRow.voiceNotSelected') };
     }
 
     // CosyVoice / VoxCPM
@@ -173,12 +175,12 @@ export function SegmentRow({
       const vObj = voices.find(v => (v.qwen_voice_id || v.id) === vid);
       if (vObj?.name) return { engine: eng, voice: vObj.name };
       // Fallback: extract a readable label from the voice ID
-      if (vid.startsWith('cosyvoice-')) return { engine: eng, voice: 'CosyVoice 音色' };
-      if (vid.startsWith('voxcpm-')) return { engine: eng, voice: 'VoxCPM 音色' };
+      if (vid.startsWith('cosyvoice-')) return { engine: eng, voice: t('segment.segmentRow.cosyVoice') };
+      if (vid.startsWith('voxcpm-')) return { engine: eng, voice: t('segment.segmentRow.voxcpmVoice') };
       return { engine: eng, voice: vid.length > 20 ? `${vid.slice(0, 8)}…` : vid };
     }
     if (!hasOverride && globalVoiceName) return { engine: eng, voice: globalVoiceName };
-    return { engine: eng, voice: '未选择' };
+    return { engine: eng, voice: t('segment.segmentRow.voiceNotSelected') };
   };
 
   const { engine: displayEngine, voice: voiceDisplayName } = resolveVoiceDisplay();
@@ -204,7 +206,7 @@ export function SegmentRow({
   // Use the shared helper so role snapshots and prosody marks participate in
   // staleness alongside engine/voice. The helper compares the segment's
   // effective generation inputs against generated_params.
-
+  
   const generatedEngine = segment.params.engine;
 
   // Engine changed → stale (unless locked). Kept for the warning label below.
@@ -249,7 +251,7 @@ export function SegmentRow({
         return (parts[parts.length - 1] || globalEdgeVoice || '').replace(/Neural$|V\d+$/i, '');
       })()
     : effectiveEngine === 'mimo_tts'
-      ? (globalMimoMode === 'voiceclone' ? '自定义音色' : (globalMimoPresetVoice || ''))
+      ? (globalMimoMode === 'voiceclone' ? t('segment.segmentRow.customVoice') : (globalMimoPresetVoice || ''))
       : (globalVoiceName || currentGlobalVoice || '');
 
   const dur = isReady && segment.duration_sec
@@ -310,12 +312,12 @@ export function SegmentRow({
           </button>
         )}
         {isReady && isStale && (
-          <span className={styles.compactStale} title="音色已变更，建议重新生成">⚠</span>
+          <span className={styles.compactStale} title={t('segment.segmentRow.voiceChanged')}>⚠</span>
         )}
         {isReady && (
           <button
             className={`${styles.compactVoiceLock} ${useIndependentVoice ? styles.compactVoiceLockActive : ''}`}
-            title={useIndependentVoice ? '独立音色（点击跟随全局）' : '跟随全局（点击锁定独立音色）'}
+            title={t(useIndependentVoice ? 'segment.segmentRow.unlockTooltip' : 'segment.segmentRow.lockTooltip')}
             onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
           >
             {useIndependentVoice ? '🔒' : '🔗'}
@@ -325,12 +327,12 @@ export function SegmentRow({
           <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} compact />
         )}
         {isReady && (
-          <button className={styles.compactPlayBtn} title={isPlaying && !isPaused ? '暂停' : '播放'}
+          <button className={styles.compactPlayBtn} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
             onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
             {isPlaying && !isPaused ? '⏸' : '▶'}
           </button>
         )}
-        <button className={styles.compactDelBtn} title="删除" disabled={isGenerating}
+        <button className={styles.compactDelBtn} title={t('common.delete')} disabled={isGenerating}
           onClick={(e) => { e.stopPropagation(); onDelete(segment.id); }}>
           ✕
         </button>
@@ -345,10 +347,10 @@ export function SegmentRow({
       onClick={() => onSelect(segment.id)}
     >
       <div className={styles.avatarCol}>
-<VoiceAvatar name={voiceDisplayName} size={48} gender={voiceGender}
+        <VoiceAvatar name={voiceDisplayName} size={48} gender={voiceGender}
           label={voiceDisplayName}
           sublabel={displayEngine} />
-        {isSelected && <span className={styles.editingBadge}>编辑中</span>}
+        {isSelected && <span className={styles.editingBadge}>{t('segment.segmentRow.editing')}</span>}
       </div>
 
       <div className={styles.body}>
@@ -364,7 +366,7 @@ export function SegmentRow({
         {/* Stale warning */}
         {isStale && (
           <div className={styles.staleWarn}>
-            ⚠ {engineChanged ? '模型已切换' : '音色已变更'}（当前全局: {ENGINE_LABELS[effectiveEngine] || effectiveEngine}{currentGlobalVoiceLabel ? ` · ${currentGlobalVoiceLabel}` : ''}），建议重新生成
+            ⚠ {engineChanged ? t('segment.segmentRow.engineChanged') : t('segment.segmentRow.voiceChangedText')}（当前全局: {ENGINE_LABELS[effectiveEngine] || effectiveEngine}{currentGlobalVoiceLabel ? ` · ${currentGlobalVoiceLabel}` : ''}），{t('segment.segmentRow.suggestRegenerate')}
           </div>
         )}
 
@@ -386,29 +388,29 @@ export function SegmentRow({
         <div className={styles.metaRow}>
           <div className={styles.badges}>
             {segment.emotion && (
-              <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{EMOTION_LABELS[emotion]}</span>
+              <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{t(EMOTION_LABELS[emotion])}</span>
             )}
             {hasOverride && (
               <button
                 className={styles.indVoiceToggle}
-                title="点击取消独立音色，跟随全局"
+                title={t('segment.segmentRow.clickToCancelIndependent')}
                 onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
               >
-                🔒 独立音色
+                {t('segment.segmentRow.locked')}
               </button>
             )}
             {!hasOverride && isReady && (
               <button
                 className={styles.indVoiceToggleOff}
-                title="点击锁定为独立音色，不再跟随全局"
+                title={t('segment.segmentRow.clickToLockIndependent')}
                 onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
               >
-                🔗 跟随全局
+                {t('segment.segmentRow.global')}
               </button>
             )}
             {isReady && !isStale && <span className={styles.readyMark}>✓</span>}
             {isFailed && <span className={styles.failMark}>✕ {segment.error || ''}</span>}
-            {isIdle && <span className={styles.idleText}>待生成</span>}
+            {isIdle && <span className={styles.idleText}>{t('segment.segmentRow.idle')}</span>}
             {segment.ssml && <span className={styles.ssmlMark}>SSML</span>}
           </div>
           <div className={styles.actions}>
@@ -416,30 +418,30 @@ export function SegmentRow({
             {(isIdle || isFailed) && (
               <button className={isFailed ? styles.genBtnFail : styles.genBtn} disabled={isGenerating}
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>
-                {isGenerating ? '⏳' : '▶ 生成'}
+                {isGenerating ? '⏳' : `▶ ${t('segment.segmentRow.generate')}`}
               </button>
             )}
             {isGenerating && <span className={styles.genBadge}>⏳</span>}
             {isReady && (
-              <button className={styles.actPlay} title={isPlaying && !isPaused ? '暂停' : '播放'}
+              <button className={styles.actPlay} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
                 onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
                 {isPlaying && !isPaused ? '⏸' : '▶'}
               </button>
             )}
-            <button className={styles.actBtn} title="编辑"
+            <button className={styles.actBtn} title={t('segment.segmentRow.edit')}
               onClick={(e) => { e.stopPropagation(); onEdit(segment.id); }}>✎</button>
             {isReady && (
-              <button className={styles.actBtn} title="重新生成"
+              <button className={styles.actBtn} title={t('segment.segmentRow.regenerate')}
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>↻</button>
             )}
             {isReady && onTrimSilence && (
-              <button className={styles.actBtn} title="裁剪静音"
+              <button className={styles.actBtn} title={t('segment.segmentRow.trim')}
                 onClick={(e) => { e.stopPropagation(); onTrimSilence(segment.id); }}>✂</button>
             )}
             {onMerge && (
               <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} />
             )}
-            <button className={styles.actBtnDanger} title="删除" disabled={isGenerating}
+            <button className={styles.actBtnDanger} title={t('common.delete')} disabled={isGenerating}
               onClick={(e) => { e.stopPropagation(); onDelete(segment.id); }}>✕</button>
           </div>
         </div>

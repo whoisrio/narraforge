@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { EmotionType, ProsodyMark } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './ProsodyMarkEditor.module.css';
 
 interface ProsodyMarkEditorProps {
@@ -9,23 +10,24 @@ interface ProsodyMarkEditorProps {
 }
 
 const STYLE_OPTIONS: { value: string; label: string }[] = [
-  { value: 'low_voice', label: '低声' },
-  { value: 'emphasis', label: '重读' },
-  { value: 'pause', label: '停顿' },
-  { value: 'slow', label: '放慢' },
-  { value: 'fast', label: '加快' },
+  { value: 'low_voice', label: 'segment.prosody.lowVoice' },
+  { value: 'emphasis', label: 'segment.prosody.emphasis' },
+  { value: 'pause', label: 'segment.prosody.pause' },
+  { value: 'slow', label: 'segment.prosody.slow' },
+  { value: 'fast', label: 'segment.prosody.fast' },
 ];
 
 const EMOTIONS: { value: EmotionType; label: string }[] = [
-  { value: 'neutral', label: '中性' },
-  { value: 'happy', label: '开心' },
-  { value: 'sad', label: '悲伤' },
-  { value: 'angry', label: '愤怒' },
-  { value: 'calm', label: '平静' },
-  { value: 'excited', label: '兴奋' },
+  { value: 'neutral', label: 'segment.prosody.neutral' },
+  { value: 'happy', label: 'segment.prosody.happy' },
+  { value: 'sad', label: 'segment.prosody.sad' },
+  { value: 'angry', label: 'segment.prosody.angry' },
+  { value: 'calm', label: 'segment.prosody.calm' },
+  { value: 'excited', label: 'segment.prosody.excited' },
 ];
 
 export function ProsodyMarkEditor({ selection, onSave, onCancel }: ProsodyMarkEditorProps) {
+  const { t } = useTranslation();
   const [emotion, setEmotion] = useState<EmotionType>('neutral');
   const [styleTags, setStyleTags] = useState<string[]>([]);
   const [instruction, setInstruction] = useState('');
@@ -52,9 +54,9 @@ export function ProsodyMarkEditor({ selection, onSave, onCancel }: ProsodyMarkEd
   return (
     <div className={styles.root}>
       <div className={styles.selection}>“{selection.text}”</div>
-      <label>情绪
+      <label>{t('segment.prosody.emotion')}
         <select value={emotion} onChange={event => setEmotion(event.target.value as EmotionType)}>
-          {EMOTIONS.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}
+          {EMOTIONS.map(item => <option key={item.value} value={item.value}>{t(item.label)}</option>)}
         </select>
       </label>
       <div className={styles.styles}>
@@ -65,19 +67,19 @@ export function ProsodyMarkEditor({ selection, onSave, onCancel }: ProsodyMarkEd
             aria-pressed={styleTags.includes(option.value)}
             onClick={() => toggleStyle(option.value)}
           >
-            {option.label}
+            {t(option.label)}
           </button>
         ))}
       </div>
-      <label>强度
+      <label>{t('segment.prosody.intensity')}
         <input type="range" min="0" max="1" step="0.1" value={intensity} onChange={event => setIntensity(Number(event.target.value))} />
       </label>
-      <label>高级指令
-        <input value={instruction} onChange={event => setInstruction(event.target.value)} placeholder="例如：压低声音，带一点犹豫" />
+      <label>{t('segment.prosody.advancedInstruction')}
+        <input value={instruction} onChange={event => setInstruction(event.target.value)} placeholder={t('segment.prosody.placeholder')} />
       </label>
       <div className={styles.actions}>
-        <button type="button" onClick={save}>保存标注</button>
-        <button type="button" onClick={onCancel}>取消</button>
+        <button type="button" onClick={save}>{t('segment.prosody.save')}</button>
+        <button type="button" onClick={onCancel}>{t('segment.prosody.cancel')}</button>
       </div>
     </div>
   );

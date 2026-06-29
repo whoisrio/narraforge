@@ -1,5 +1,6 @@
 import type { Role, RoleSnapshot } from '../../types';
 import { isRoleSnapshotOutdated } from './roleSnapshotSync';
+import { useTranslation } from '../../i18n';
 import styles from './RoleSyncPrompt.module.css';
 
 interface RoleSyncPromptProps {
@@ -11,16 +12,17 @@ interface RoleSyncPromptProps {
 }
 
 export function RoleSyncPrompt({ role, snapshot, onSyncSegment, onSyncChapter, onSyncProject }: RoleSyncPromptProps) {
+  const { t } = useTranslation();
   if (!role && snapshot) {
-    return <div className={styles.deleted}>全局角色已删除，当前使用项目快照。</div>;
+    return <div className={styles.deleted}>{t('roleSync.roleDeleted')}</div>;
   }
   if (!isRoleSnapshotOutdated(role, snapshot)) return null;
   return (
     <div className={styles.root}>
-      <span>全局角色“{role?.name}”有更新。</span>
-      <button type="button" onClick={onSyncSegment}>同步当前段</button>
-      <button type="button" onClick={onSyncChapter}>同步本章</button>
-      <button type="button" onClick={onSyncProject}>同步全项目</button>
+      <span>{t('roleSync.roleUpdated', { name: role?.name ?? '' })}</span>
+      <button type="button" onClick={onSyncSegment}>{t('roleSync.syncCurrent')}</button>
+      <button type="button" onClick={onSyncChapter}>{t('roleSync.syncChapter')}</button>
+      <button type="button" onClick={onSyncProject}>{t('roleSync.syncProject')}</button>
     </div>
   );
 }

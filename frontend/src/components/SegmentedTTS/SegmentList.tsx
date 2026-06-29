@@ -142,9 +142,9 @@ export function SegmentList(props: SegmentListProps) {
                     const role = allRoles.find(r => r.id === e.target.value);
                     if (role) props.onUpdateRole?.(seg.id, role.id, toSnapshot(role));
                   }}
-                  aria-label="选择台词角色"
+                  aria-label={t('segmentList.selectRole')}
                 >
-                  <option value="" disabled>选择角色</option>
+                  <option value="" disabled>{t('segmentList.selectRolePlaceholder')}</option>
                   {allRoles.map(role => (
                     <option key={role.id} value={role.id}>{role.name}</option>
                   ))}
@@ -178,7 +178,7 @@ export function SegmentList(props: SegmentListProps) {
           </div>
         );
       })}
-      <button className={styles.appendBtn} onClick={onAppend}>+ 追加新段</button>
+      <button className={styles.appendBtn} onClick={onAppend}>{t('segment.segmentList.append')}</button>
     </div>
   );
 }

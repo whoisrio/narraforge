@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Role, RoleSnapshot, Segment, SegmentKind } from '../../types';
+import { useTranslation } from '../../i18n';
 import { isSegmentAudioStale } from '../../services/segmentGenerationInputs';
 import { ChatBubble } from './ChatBubble';
 import { NarrationBlock } from './NarrationBlock';
@@ -49,6 +50,7 @@ export function ChatSegmentView({
   onUpdateKind,
   onUpdateProsodyMarks,
 }: ChatSegmentViewProps) {
+  const { t } = useTranslation();
   const [selection, setSelection] = useState<{ segmentId: string; start: number; end: number; text: string } | null>(null);
 
   const handleTextSelection = (segmentId: string, start: number, end: number, text: string) => {
@@ -59,17 +61,17 @@ export function ChatSegmentView({
     <div className={styles.root}>
       <div className={styles.header}>
         <span className={styles.kicker}>Script Production Flow</span>
-        <p>旁白与台词按生产顺序排列，保留生成、播放和局部语气标记。</p>
+        <p>{t('segment.chatSegmentView.description')}</p>
       </div>
       {!hasNarratorVoice && (
-        <div className={styles.narratorWarning}>多角色项目需要设置旁白音色。请在角色库中创建旁白角色并设为项目旁白。</div>
+        <div className={styles.narratorWarning}>{t('segment.chatSegmentView.narratorWarning')}</div>
       )}
       <div className={styles.flow}>
         {segments.length === 0 && (
           <div className={styles.emptyState}>
             <span className={styles.emptyIcon}>◎</span>
-            <h3>暂无分段</h3>
-            <p>先从文本库进入章节，或在这里新增旁白/台词，开始构建可合成的脚本流。</p>
+            <h3>{t('segment.chatSegmentView.noSegments')}</h3>
+            <p>{t('segment.chatSegmentView.noSegmentsHint')}</p>
           </div>
         )}
         {segments.map((segment, index) => {
@@ -126,8 +128,8 @@ export function ChatSegmentView({
         }}
       />
       <div className={styles.actions}>
-        <button type="button" onClick={() => onAppend('dialogue')}>+ 新增台词</button>
-        <button type="button" onClick={() => onAppend('narration')}>+ 新增旁白</button>
+        <button type="button" onClick={() => onAppend('dialogue')}>{t('segment.chatSegmentView.addDialogue')}</button>
+        <button type="button" onClick={() => onAppend('narration')}>{t('segment.chatSegmentView.addNarration')}</button>
       </div>
     </div>
   );

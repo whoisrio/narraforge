@@ -33,6 +33,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
       }
     };
     loadVoices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshCounter]);
 
   if (isLoading) {

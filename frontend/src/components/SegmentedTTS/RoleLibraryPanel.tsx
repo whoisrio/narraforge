@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Role, RoleSnapshot, SegmentEngineParams } from '../../types';
 import { roleApi } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import styles from './RoleLibraryPanel.module.css';
 
 interface RoleLibraryPanelProps {
@@ -12,7 +13,7 @@ interface RoleLibraryPanelProps {
 function createEmptyRole(): RoleSnapshot {
   return {
     id: `role-${Date.now()}`,
-    name: '新角色',
+    name: '',
     avatar: '',
     description: '',
     default_engine: 'edge_tts',
@@ -36,6 +37,7 @@ function roleToDraft(role: Role): RoleSnapshot {
 }
 
 export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryPanelProps) {
+  const { t } = useTranslation();
   const [roles, setRoles] = useState<Role[]>([]);
   const [draft, setDraft] = useState<RoleSnapshot>(createEmptyRole);
   const [error, setError] = useState<string | null>(null);
@@ -48,14 +50,14 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
         setRoles(items);
         onRolesChanged(items);
       })
-      .catch(() => setError('角色库加载失败'));
-  }, [open, onRolesChanged]);
+      .catch(() => setError(t('segment.roleLibrary.loadFailed')));
+  }, [open, onRolesChanged, t]);
 
   if (!open) return null;
 
   const saveDraft = async () => {
     if (!draft.name.trim()) {
-      setError('角色名不能为空');
+      setError(t('segment.roleLibrary.nameEmpty'));
       return;
     }
     setSaving(true);
@@ -72,7 +74,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
       onRolesChanged(next);
       setDraft(createEmptyRole());
     } catch {
-      setError('角色保存失败');
+      setError(t('segment.roleLibrary.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -86,7 +88,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
       setRoles(next);
       onRolesChanged(next);
     } catch {
-      setError('角色删除失败');
+      setError(t('segment.roleLibrary.deleteFailed'));
     }
   };
 
@@ -98,26 +100,26 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
   };
 
   return (
-    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="角色库">
+    <div className={styles.overlay} role="dialog" aria-modal="true" aria-label={t('segment.roleLibrary.title')}>
       <div className={styles.panel}>
         <header className={styles.header}>
-          <h2>全局角色库</h2>
-          <button type="button" onClick={onClose}>关闭</button>
+          <h2>{t('segment.roleLibrary.title')}</h2>
+          <button type="button" onClick={onClose}>{t('segment.roleLibrary.close')}</button>
         </header>
 
         {error && <div className={styles.error}>{error}</div>}
 
         <section className={styles.editor}>
-          <label>角色名
+          <label>{t('segment.roleLibrary.name')}
             <input value={draft.name} onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} />
           </label>
-          <label>头像
+          <label>{t('segment.roleLibrary.avatar')}
             <input value={draft.avatar ?? ''} onChange={(event) => setDraft((prev) => ({ ...prev, avatar: event.target.value }))} />
           </label>
-          <label>描述
+          <label>{t('segment.roleLibrary.description')}
             <input value={draft.description ?? ''} onChange={(event) => setDraft((prev) => ({ ...prev, description: event.target.value }))} />
           </label>
-          <label>引擎
+          <label>{t('segment.roleLibrary.engine')}
             <select
               value={draft.default_engine}
               onChange={(event) => {
@@ -131,13 +133,13 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
               <option value="voxcpm">VoxCPM</option>
             </select>
           </label>
-          <label>默认音色
+          <label>{t('segment.roleLibrary.defaultVoice')}
             <input value={draft.default_voice ?? ''} onChange={(event) => setDraft((prev) => ({ ...prev, default_voice: event.target.value }))} />
           </label>
           <label>Edge voice
             <input value={draft.default_engine_params.edge_voice ?? ''} onChange={(event) => setEngineParams({ edge_voice: event.target.value })} />
           </label>
-          <button type="button" disabled={saving} onClick={() => void saveDraft()}>{saving ? '保存中...' : '保存角色'}</button>
+          <button type="button" disabled={saving} onClick={() => void saveDraft()}>{saving ? t('common.saving') : t('segment.roleLibrary.save')}</button>
         </section>
 
         <section className={styles.list}>
@@ -145,11 +147,11 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
             <article key={role.id} className={styles.roleCard}>
               <div>
                 <strong>{role.name}</strong>
-                <p>{role.default_engine} · {role.default_voice || '未设置音色'}</p>
+                <p>{role.default_engine} · {role.default_voice || t('segment.roleLibrary.noVoiceSet')}</p>
               </div>
               <div className={styles.actions}>
-                <button type="button" onClick={() => setDraft(roleToDraft(role))}>编辑</button>
-                <button type="button" onClick={() => void removeRole(role.id)}>删除</button>
+                <button type="button" onClick={() => setDraft(roleToDraft(role))}>{t('common.edit')}</button>
+                <button type="button" onClick={() => void removeRole(role.id)}>{t('segment.roleLibrary.delete')}</button>
               </div>
             </article>
           ))}

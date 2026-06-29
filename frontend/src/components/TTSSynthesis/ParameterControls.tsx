@@ -76,6 +76,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
         enable_markdown_filter: persisted.enable_markdown_filter,
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // 仅在挂载时执行一次
 
   // 每次值变更时持久化

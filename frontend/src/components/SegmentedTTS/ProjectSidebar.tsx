@@ -1,4 +1,5 @@
 import type { SegmentedProject, SourceDocument } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './ProjectSidebar.module.css';
 
 interface ProjectSidebarProps {
@@ -30,7 +31,7 @@ function getProjectStats(project: SegmentedProject) {
   return { segments, ready, duration };
 }
 
-function formatDuration(seconds: number) {
+function formatDuration(seconds: number): string {
   if (seconds <= 0) return '0s';
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
   const minutes = Math.floor(seconds / 60);
@@ -38,7 +39,7 @@ function formatDuration(seconds: number) {
   return `${minutes}m ${rest}s`;
 }
 
-function formatAudioBadge(seconds: number) {
+function formatAudioBadge(seconds: number): string {
   // 短音频用 mm:ss (如 "4:32"), 与项目元信息区分
   const m = Math.floor(seconds / 60);
   const s = Math.round(seconds % 60);
@@ -58,6 +59,7 @@ export function ProjectSidebar({
   onAddSource,
   onGenerateNarration,
 }: ProjectSidebarProps) {
+  const { t } = useTranslation();
   const scratchpad = projects.find(project => project.id === scratchpadId);
   const regularProjects = projects.filter(project => project.id !== scratchpadId);
 
@@ -77,15 +79,15 @@ export function ProjectSidebar({
           className={styles.projectSelectButton}
           onClick={() => onSelectProject(project.id)}
         >
-          <span className={styles.projectIcon}>{isScratchpad ? '草' : '稿'}</span>
+          <span className={styles.projectIcon}>{isScratchpad ? t('segment.projectSidebar.scratchpadIcon') : t('segment.projectSidebar.projectIcon')}</span>
           {!collapsed && (
             <span className={styles.projectBody}>
               <span className={styles.projectTopline}>
                 <span className={styles.projectName}>{project.name}</span>
-                {isScratchpad && <span className={styles.pinBadge}>默认</span>}
+                {isScratchpad && <span className={styles.pinBadge}>{t('segment.projectSidebar.default')}</span>}
               </span>
               <span className={styles.projectMeta}>
-                {stats.segments} 段 · {stats.ready}/{stats.segments} 已生成 · {formatDuration(stats.duration)}
+                {t('segment.projectSidebar.stats', { segments: stats.segments, ready: stats.ready, duration: formatDuration(stats.duration) })}
               </span>
             </span>
           )}
@@ -94,8 +96,8 @@ export function ProjectSidebar({
           <button
             type="button"
             className={styles.deleteButton}
-            title="删除项目"
-            aria-label={`删除项目 ${project.name}`}
+            title={t('segment.projectSidebar.deleteProject')}
+            aria-label={`${t('segment.projectSidebar.deleteProject')} ${project.name}`}
             onClick={(event) => {
               event.stopPropagation();
               onDeleteProject(project.id);
@@ -113,8 +115,8 @@ export function ProjectSidebar({
       <div className={styles.header}>
         {!collapsed && (
           <div className={styles.titleBlock}>
-            <div className={styles.eyebrow}>Projects</div>
-            <h2 className={styles.title}>项目</h2>
+            <div className={styles.eyebrow}>{t('segment.projectSidebar.projects')}</div>
+            <h2 className={styles.title}>{t('segment.projectSidebar.projects')}</h2>
           </div>
         )}
         <div className={styles.headerActions}>
@@ -122,8 +124,8 @@ export function ProjectSidebar({
             type="button"
             className={styles.iconButton}
             onClick={onCreateProject}
-            aria-label="新建项目"
-            title="新建项目"
+            aria-label={t('segment.projectSidebar.newProject')}
+            title={t('segment.projectSidebar.newProject')}
           >
             +
           </button>
@@ -131,8 +133,8 @@ export function ProjectSidebar({
             type="button"
             className={styles.iconButton}
             onClick={onToggleCollapse}
-            aria-label={collapsed ? '展开项目侧栏' : '收起项目侧栏'}
-            title={collapsed ? '展开项目侧栏' : '收起项目侧栏'}
+            aria-label={collapsed ? t('segment.projectSidebar.expand') : t('segment.projectSidebar.collapse')}
+            title={collapsed ? t('segment.projectSidebar.expand') : t('segment.projectSidebar.collapse')}
           >
             {collapsed ? '›' : '‹'}
           </button>
@@ -142,7 +144,7 @@ export function ProjectSidebar({
       <div className={styles.projectList}>
         {scratchpad && (
           <div className={styles.section}>
-            {!collapsed && <div className={styles.sectionLabel}>草稿</div>}
+            {!collapsed && <div className={styles.sectionLabel}>{t('segment.projectSidebar.draft')}</div>}
             {renderProject(scratchpad, 'scratchpad')}
           </div>
         )}
@@ -150,7 +152,7 @@ export function ProjectSidebar({
         <div className={styles.section}>
           {!collapsed && (
             <div className={styles.sectionLabelRow}>
-              <span className={styles.sectionLabel}>项目</span>
+              <span className={styles.sectionLabel}>{t('segment.projectSidebar.projects')}</span>
               <span className={styles.projectCount}>{regularProjects.length}</span>
             </div>
           )}
@@ -158,8 +160,8 @@ export function ProjectSidebar({
             regularProjects.map(project => renderProject(project, 'project'))
           ) : !collapsed ? (
             <button type="button" className={styles.emptyState} onClick={onCreateProject}>
-              <span>还没有正式项目</span>
-              <strong>创建一个项目 →</strong>
+              <span>{t('segment.projectSidebar.noProjects')}</span>
+              <strong>{t('segment.projectSidebar.createProject')}</strong>
             </button>
           ) : null}
         </div>
@@ -168,7 +170,7 @@ export function ProjectSidebar({
         {!collapsed && (
           <div className={styles.section}>
             <div className={styles.sectionLabelRow}>
-              <span className={styles.sectionLabel}>源</span>
+              <span className={styles.sectionLabel}>{t('segment.projectSidebar.sources')}</span>
               <span className={styles.projectCount}>{activeSources.length}</span>
             </div>
             {activeSources.length > 0 ? (
@@ -183,7 +185,7 @@ export function ProjectSidebar({
                       {src.source_type === 'audio' && src.duration_sec
                         ? formatAudioBadge(src.duration_sec)
                         : src.source_type === 'paste' && src.pasted_text
-                          ? `${src.pasted_text.length}字`
+                          ? t('segment.projectSidebar.pasteText', { count: src.pasted_text.length })
                           : src.source_type}
                     </span>
                   </div>
@@ -191,13 +193,13 @@ export function ProjectSidebar({
               </div>
             ) : (
               <button type="button" className={styles.emptyState} onClick={onAddSource}>
-                <span>暂无源</span>
-                <strong>添加第一个源 →</strong>
+                <span>{t('segment.projectSidebar.noSources')}</span>
+                <strong>{t('segment.projectSidebar.addFirstSource')}</strong>
               </button>
             )}
             {activeSources.length > 0 && onGenerateNarration && (
               <button type="button" className={styles.narrateBtn} onClick={onGenerateNarration}>
-                🧠 基于 {activeSources.length} 个源生成旁白
+                🧠 {t('segment.projectSidebar.generateNarration', { count: activeSources.length })}
               </button>
             )}
           </div>

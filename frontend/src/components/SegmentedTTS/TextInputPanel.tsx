@@ -75,7 +75,7 @@ export function TextInputPanel({
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
 
-  const getErrorMessage = (error: unknown, fallback = '请重试') => {
+  const getErrorMessage = (error: unknown, fallback = t('common.pleaseRetry')) => {
     if (error instanceof Error) return error.message;
     if (typeof error === 'object' && error !== null) {
       const response = (error as { response?: { data?: { detail?: unknown } } }).response;
@@ -103,11 +103,11 @@ export function TextInputPanel({
           onSplit(segments, text, splitVoiceMode);
           setDetailsOpen(false);
         } catch (fallbackError: unknown) {
-          alert(`智能拆分失败，规则拆分也失败: ${getErrorMessage(error) || getErrorMessage(fallbackError)}`);
+          alert(`${t('textInput.modeLLM')}失败，{t('textInput.modeRule')}也失败: ${getErrorMessage(error) || getErrorMessage(fallbackError)}`);
         }
       } else {
         console.error('Rule split failed:', error);
-        alert(`拆分失败: ${getErrorMessage(error)}`);
+        alert(`${t('textInput.split')}失败: ${getErrorMessage(error)}`);
       }
     } finally {
       setIsSplitting(false);
@@ -137,14 +137,14 @@ export function TextInputPanel({
             {chapterName && <span className={styles.chapterLabel}>{chapterName}</span>}
           </div>
           <div className={styles.summaryRight}>
-            {hasSegments && <span className={styles.segmentMeta}>{segmentCount} 段 · {text.length} 字</span>}
+            {hasSegments && <span className={styles.segmentMeta}>{segmentCount} {t('common.segment')} · {text.length} {t('common.chars')}</span>}
             <button
               type="button"
               className={styles.smartSegmentBtn}
               onClick={(e) => { e.preventDefault(); handleSplit(); }}
               disabled={isSplitting || !text.trim()}
             >
-              {isSplitting ? '拆分中...' : 'SMART SEGMENT'}
+              {isSplitting ? t('textInput.splitting') : t('textInput.smartSegment')}
             </button>
           </div>
         </summary>
@@ -153,17 +153,17 @@ export function TextInputPanel({
           {isSourceStale && (
             <div className={styles.staleNotice}>
               <div>
-                <strong>文本库已更新，建议重新拆分</strong>
-                <span>不会自动覆盖已有段落与音频；确认后可用章节全文生成新的拆分草稿。</span>
+                <strong>{t('textInput.staleTitle')}</strong>
+                <span>{t('textInput.staleDesc')}</span>
               </div>
-              <button className={styles.sourceBtn} onClick={useLibrarySourceText}>使用文本库全文</button>
+              <button className={styles.sourceBtn} onClick={useLibrarySourceText}>{t('textInput.useLibrary')}</button>
             </div>
           )}
           <div className={styles.textareaWrap}>
             <textarea
               ref={textareaRef}
               className={styles.textarea}
-              placeholder="粘贴整段文本，拆分为多个语音段落..."
+              placeholder={t('textInput.placeholder')}
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={hasSegments ? 3 : 6}
@@ -183,32 +183,32 @@ export function TextInputPanel({
                 <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
                 <circle cx="12" cy="12" r="3"/>
               </svg>
-              {showSettings ? '收起设置' : '拆分设置'}
+              {showSettings ? t('textInput.settingsCollapse') : t('textInput.settings')}
             </button>
 
             <div className={styles.modeSwitch}>
               <button className={`${styles.modeBtn} ${mode === 'rule' ? styles.active : ''}`}
-                onClick={() => onSplitConfigChange({ ...splitConfig, mode: 'rule' })}>规则</button>
+                onClick={() => onSplitConfigChange({ ...splitConfig, mode: 'rule' })}>{t('textInput.modeRule')}</button>
               <button className={`${styles.modeBtn} ${mode === 'llm' ? styles.active : ''}`}
-                onClick={() => onSplitConfigChange({ ...splitConfig, mode: 'llm' })}>智能</button>
+                onClick={() => onSplitConfigChange({ ...splitConfig, mode: 'llm' })}>{t('textInput.modeLLM')}</button>
             </div>
 
             {hasMarkdown && (
-              <button className={styles.stripMdBtn} onClick={handleStripMarkdown} title="清除 Markdown 格式，转为口语化纯文本">
-                📝 清除格式
+              <button className={styles.stripMdBtn} onClick={handleStripMarkdown} title={t('textInput.stripMarkdownTitle')}>
+                📝 {t('textInput.stripMarkdown')}
               </button>
             )}
 
             <button className={styles.splitBtn} onClick={handleSplit} disabled={isSplitting || !text.trim()}>
-              {isSplitting ? '拆分中...' : hasSegments ? '重新拆分' : '拆分'}
+              {isSplitting ? t('textInput.splitting') : hasSegments ? t('textInput.reSplit') : t('textInput.split')}
             </button>
-            <span className={styles.charCount}>{text.length} 字</span>
+            <span className={styles.charCount}>{text.length} {t('common.chars')}</span>
           </div>
 
           {showSettings && (
             <div className={styles.settingsPanel}>
               <div className={styles.settingRow}>
-                <span className={styles.settingLabel}>分隔符</span>
+                <span className={styles.settingLabel}>{t('segment.textInput.separator')}</span>
                 <div className={styles.delimiters}>
                   {DELIMITER_OPTIONS.map(d => (
                     <label key={d} className={`${styles.delimChip} ${splitConfig.delimiters.includes(d) ? styles.delimActive : ''}`}>

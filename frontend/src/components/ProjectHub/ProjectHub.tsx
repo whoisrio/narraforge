@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { SegmentedProject } from '../../types';
+import { useTranslation } from '../../i18n';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import styles from './ProjectHub.module.css';
 
@@ -51,6 +52,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createLogo, setCreateLogo] = useState<string | null>(null);
+  const { t } = useTranslation();
   const totalSegments = projects.reduce((total, project) => total + projectStats(project).segments, 0);
   const totalGenerated = projects.reduce((total, project) => total + projectStats(project).generated, 0);
 
@@ -75,7 +77,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
   };
 
   const handleCreate = () => {
-    const name = createName.trim() || `新项目 ${projects.filter(p => !p.name.startsWith('临时')).length + 1}`;
+    const name = createName.trim() || `${t('projectHub.createDefault')} ${projects.filter(p => !p.name.startsWith(t('projectHub.tempProject'))).length + 1}`;
     onCreateProject(name, createLogo);
     setShowCreateDialog(false);
     setCreateName('');
@@ -87,21 +89,21 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
       <header className={styles.hero}>
         <div>
           <span className={styles.kicker}>Projects</span>
-          <h1>Project Hub</h1>
-          <p>项目总览 · 点击卡片进入项目工作区。</p>
+          <h1>{t('projectHub.title')}</h1>
+          <p>{t('projectHub.subtitle')}</p>
         </div>
         <div className={styles.heroStats}>
-          <div><span>项目</span><strong>{projects.length}</strong></div>
-          <div><span>分段</span><strong>{totalSegments}</strong></div>
-          <div><span>已生成</span><strong>{totalGenerated}</strong></div>
+          <div><span>{t('projectHub.stats.projects')}</span><strong>{projects.length}</strong></div>
+          <div><span>{t('projectHub.stats.segments')}</span><strong>{totalSegments}</strong></div>
+          <div><span>{t('projectHub.stats.generated')}</span><strong>{totalGenerated}</strong></div>
         </div>
       </header>
 
       <div className={styles.grid}>
         <button type="button" className={styles.createCard} onClick={() => setShowCreateDialog(true)}>
           <span className={styles.createIcon}>+</span>
-          <strong>新建项目</strong>
-          <small>创建新的旁白项目</small>
+          <strong>{t('projectHub.createCard.title')}</strong>
+          <small>{t('projectHub.createCard.description')}</small>
         </button>
 
         {projects.map(project => {
@@ -121,7 +123,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                     )}
                     <span className={styles.cardTitleBlock}>
                       <span className={styles.renameForm}>
-                        <label htmlFor={`project-name-${project.id}`}>项目名称</label>
+                        <label htmlFor={`project-name-${project.id}`}>{t('projectHub.rename.label')}</label>
                         <input
                           id={`project-name-${project.id}`}
                           value={renameDraft}
@@ -152,27 +154,29 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                   )}
                   <span className={styles.cardTitleBlock}>
                     <strong>{project.name}</strong>
-                    <small>{project.active_narration_version ?? '默认旁白版本'}</small>
+                    <small>{project.active_narration_version ?? t('projectHub.defaultVersion')}</small>
                   </span>
                   </button>
                 )}
-                <span className={styles.statusBadge}>{progress === 100 && stats.segments > 0 ? '完成' : '制作中'}</span>
+                <span className={styles.statusBadge}>
+                  {progress === 100 && stats.segments > 0 ? t('projectHub.status.completed') : t('projectHub.status.inProgress')}
+                </span>
               </div>
               <div className={styles.cardBody}>
                 {isEditing ? (
                   <div className={styles.renameActions}>
-                    <button type="button" onClick={() => saveRename(project)}>保存项目名称</button>
-                    <button type="button" onClick={() => { setEditingProjectId(null); setRenameDraft(''); }}>取消</button>
+                    <button type="button" onClick={() => saveRename(project)}>{t('projectHub.rename.save')}</button>
+                    <button type="button" onClick={() => { setEditingProjectId(null); setRenameDraft(''); }}>{t('projectHub.rename.cancel')}</button>
                   </div>
                 ) : null}
                 <div className={styles.cardStats}>
-                  <span>{stats.chapters} 章</span>
-                  <span>{stats.segments} 段</span>
+                  <span>{stats.chapters} {t('projectHub.stats_labels.chapters')}</span>
+                  <span>{stats.segments} {t('projectHub.stats_labels.segments')}</span>
                   <span>{formatDuration(stats.duration)}</span>
                 </div>
                 <div className={styles.progressBlock}>
                   <div className={styles.progressCopy}>
-                    <span>{stats.generated}/{stats.segments} 已生成</span>
+                    <span>{stats.generated}/{stats.segments} {t('projectHub.stats_labels.generated')}</span>
                     <strong>{progress}%</strong>
                   </div>
                   <div className={styles.progressTrack}>
@@ -192,16 +196,16 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                       ⋯
                     </button>
                     {isMenuOpen && (
-                      <div className={styles.actionMenu} role="menu" aria-label={`${project.name} 操作菜单`}>
-                        <button type="button" role="menuitem" onClick={() => onOpenProject(project.id)}>打开项目</button>
-                        <button type="button" role="menuitem" onClick={() => startRename(project)}>重命名</button>
+                      <div className={styles.actionMenu} role="menu" aria-label={`${project.name} ${t('projectHub.actions.delete')}`}>
+                        <button type="button" role="menuitem" onClick={() => onOpenProject(project.id)}>{t('projectHub.actions.open')}</button>
+                        <button type="button" role="menuitem" onClick={() => startRename(project)}>{t('projectHub.actions.rename')}</button>
                         <button
                           type="button"
                           role="menuitem"
                           className={styles.menuDanger}
                           onClick={() => { setOpenMenuProjectId(null); onDeleteProject(project.id); }}
                         >
-                          删除项目
+                          {t('projectHub.actions.delete')}
                         </button>
                       </div>
                     )}
@@ -215,8 +219,8 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
 
       {projects.length === 0 && (
         <div className={styles.emptyState}>
-          <h2>还没有项目</h2>
-          <p>先创建一个项目，再进入项目内的文本库和工作室。</p>
+          <h2>{t('projectHub.emptyState.title')}</h2>
+          <p>{t('projectHub.emptyState.description')}</p>
         </div>
       )}
 
@@ -224,7 +228,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
       {showCreateDialog && (
         <div className={styles.dialogOverlay} onClick={() => setShowCreateDialog(false)}>
           <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
-            <h3 className={styles.dialogTitle}>新建项目</h3>
+            <h3 className={styles.dialogTitle}>{t('projectHub.dialog.title')}</h3>
             <div className={styles.dialogBody}>
               <ImageUploadZone
                 value={createLogo}
@@ -232,20 +236,20 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                 size="lg"
               />
               <label className={styles.dialogLabel}>
-                项目名称
+                {t('projectHub.dialog.nameLabel')}
                 <input
                   className={styles.dialogInput}
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
-                  placeholder="输入项目名称..."
+                  placeholder={t('projectHub.dialog.namePlaceholder')}
                   autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
                 />
               </label>
             </div>
             <div className={styles.dialogActions}>
-              <button type="button" className={styles.dialogCancelBtn} onClick={() => setShowCreateDialog(false)}>取消</button>
-              <button type="button" className={styles.dialogCreateBtn} onClick={handleCreate}>创建项目</button>
+              <button type="button" className={styles.dialogCancelBtn} onClick={() => setShowCreateDialog(false)}>{t('projectHub.dialog.cancel')}</button>
+              <button type="button" className={styles.dialogCreateBtn} onClick={handleCreate}>{t('projectHub.dialog.create')}</button>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from '../../i18n';
 import styles from './StyleInstructionPicker.module.css';
 
 export interface StyleInstructionPreset {
@@ -19,11 +20,11 @@ const STORAGE_KEY = 'narraforge.styleInstructionPresets.v1';
 const CUSTOM_VALUE = '__custom__';
 
 const DEFAULT_PRESETS: StyleInstructionPreset[] = [
-  { id: 'broadcast', name: '播音主持', value: '吐字清晰，节奏稳健，字正腔圆，有专业播音主持的质感' },
-  { id: 'warm', name: '温柔治愈', value: '语速稍慢，语气温柔自然，像贴心朋友一样有安抚感' },
-  { id: 'energetic', name: '活力广告', value: '语调更有活力，节奏明快，情绪饱满但不要夸张' },
-  { id: 'calm-story', name: '沉稳叙事', value: '语气沉稳克制，节奏舒展，适合纪录片或深度讲述' },
-  { id: 'emotional', name: '情绪递进', value: '开头克制，关键句加强重音和停顿，整体有情绪递进' },
+  { id: 'broadcast', name: 'stylePresets.broadcast', value: '吐字清晰，节奏稳健，字正腔圆，有专业播音主持的质感' },
+  { id: 'warm', name: 'stylePresets.warm', value: '语速稍慢，语气温柔自然，像贴心朋友一样有安抚感' },
+  { id: 'energetic', name: 'stylePresets.energetic', value: '语调更有活力，节奏明快，情绪饱满但不要夸张' },
+  { id: 'calm-story', name: 'stylePresets.calmStory', value: '语气沉稳克制，节奏舒展，适合纪录片或深度讲述' },
+  { id: 'emotional', name: 'stylePresets.emotional', value: '开头克制，关键句加强重音和停顿，整体有情绪递进' },
 ];
 
 function makeId() {
@@ -37,9 +38,9 @@ function loadPresets(): StyleInstructionPreset[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return DEFAULT_PRESETS;
     const cleaned = parsed
-      .filter(item => item && typeof item.name === 'string' && typeof item.value === 'string')
-      .map(item => ({ id: String(item.id || makeId()), name: item.name.trim(), value: item.value.trim() }))
-      .filter(item => item.name && item.value);
+      .filter((item: { name?: unknown; value?: unknown }) => item && typeof item.name === 'string' && typeof item.value === 'string')
+      .map((item: { id?: unknown; name: string; value: string }) => ({ id: String(item.id || makeId()), name: item.name.trim(), value: item.value.trim() }))
+      .filter((item: { name: string; value: string }) => item.name && item.value);
     return cleaned.length > 0 ? cleaned : DEFAULT_PRESETS;
   } catch {
     return DEFAULT_PRESETS;
@@ -53,10 +54,11 @@ function savePresets(presets: StyleInstructionPreset[]) {
 export function StyleInstructionPicker({
   value,
   onChange,
-  label = '风格指令',
-  placeholder = '直接输入风格指令，或从预设中选择...',
+  label = 'stylePresets.label',
+  placeholder = 'stylePresets.placeholder',
   dense = false,
 }: StyleInstructionPickerProps) {
+  const { t } = useTranslation();
   const [presets, setPresetsState] = useState<StyleInstructionPreset[]>(() => loadPresets());
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -131,18 +133,28 @@ export function StyleInstructionPicker({
     setSelectedPresetId(CUSTOM_VALUE);
   };
 
+  const translateName = (name: string): string => {
+    // If the name is a translation key (contains '.'), try to translate it
+    // Otherwise return the name as-is
+    if (name.includes('.')) {
+      const result = t(name);
+      return result === name ? name : result;
+    }
+    return name;
+  };
+
   return (
     <div className={`${styles.picker} ${dense ? styles.dense : ''}`}>
       <div className={styles.topRow}>
-        <label className={styles.label}>{label}</label>
+        <label className={styles.label}>{t(label)}</label>
         <select
           className={styles.select}
           value={selectValue}
-          onChange={event => handleSelect(event.target.value)}
+          onChange={(event) => handleSelect(event.target.value)}
         >
-          <option value={CUSTOM_VALUE}>自定义输入</option>
+          <option value={CUSTOM_VALUE}>{t('stylePresets.customInput')}</option>
           {presets.map(preset => (
-            <option key={preset.id} value={preset.id}>{preset.name}</option>
+            <option key={preset.id} value={preset.id}>{translateName(preset.name)}</option>
           ))}
         </select>
         <button
@@ -153,14 +165,14 @@ export function StyleInstructionPicker({
             setDraftName(selectedPreset?.name || '');
           }}
         >
-          预设
+          {t('stylePresets.presets')}
         </button>
       </div>
 
       <textarea
         className={styles.textarea}
         value={value}
-        onChange={event => {
+        onChange={(event) => {
           if (selectedPresetId !== CUSTOM_VALUE) {
             setSelectedPresetId(CUSTOM_VALUE);
           }
@@ -168,7 +180,7 @@ export function StyleInstructionPicker({
           onChange(event.target.value);
         }}
         rows={dense ? 1 : 2}
-        placeholder={placeholder}
+        placeholder={t(placeholder)}
       />
 
       {editing && (
@@ -176,13 +188,13 @@ export function StyleInstructionPicker({
           <input
             className={styles.nameInput}
             value={draftName}
-            onChange={event => setDraftName(event.target.value)}
-            placeholder={selectedPreset ? '预设名称' : '新预设名称'}
+            onChange={(event) => setDraftName(event.target.value)}
+            placeholder={selectedPreset ? t('stylePresets.presetName') : t('stylePresets.newPresetName')}
           />
-          <button type="button" className={styles.actionBtn} disabled={!trimmedValue || !draftName.trim()} onClick={handleSaveNew}>新增</button>
-          <button type="button" className={styles.actionBtn} disabled={!selectedPreset || !trimmedValue} onClick={handleUpdate}>更新内容</button>
-          <button type="button" className={styles.actionBtn} disabled={!selectedPreset || !draftName.trim()} onClick={handleRename}>改名</button>
-          <button type="button" className={styles.deleteBtn} disabled={!selectedPreset} onClick={handleDelete}>删除</button>
+          <button type="button" className={styles.actionBtn} disabled={!trimmedValue || !draftName.trim()} onClick={handleSaveNew}>{t('stylePresets.add')}</button>
+          <button type="button" className={styles.actionBtn} disabled={!selectedPreset || !trimmedValue} onClick={handleUpdate}>{t('stylePresets.updateContent')}</button>
+          <button type="button" className={styles.actionBtn} disabled={!selectedPreset || !draftName.trim()} onClick={handleRename}>{t('stylePresets.rename')}</button>
+          <button type="button" className={styles.deleteBtn} disabled={!selectedPreset} onClick={handleDelete}>{t('stylePresets.delete')}</button>
         </div>
       )}
     </div>

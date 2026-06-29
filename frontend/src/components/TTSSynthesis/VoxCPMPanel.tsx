@@ -12,6 +12,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { voxcpmApi, voiceApi } from '../../services/api';
 import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { VoxCPMStatus, VoiceProfile as CloneVoice } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './VoxCPMPanel.module.css';
 
 /** VoxCPM 子模式（工作室只保留 clone 和 ultimate） */
@@ -40,9 +41,9 @@ interface VoxCPMPanelProps {
   projectId?: string;
 }
 
-const MODE_TABS: { value: VoxCPMMode; label: string; icon: string }[] = [
-  { value: 'clone', label: '声音克隆', icon: '🎛️' },
-  { value: 'ultimate', label: '极致克隆', icon: '🎙️' },
+const MODE_TABS: { value: VoxCPMMode; labelKey: string; icon: string }[] = [
+  { value: 'clone', labelKey: 'voxcpm.modes.clone', icon: '🎛️' },
+  { value: 'ultimate', labelKey: 'voxcpm.modes.ultimate', icon: '🎙️' },
 ];
 
 function getApiErrorMessage(error: unknown, fallback: string) {
@@ -70,6 +71,9 @@ export function VoxCPMPanel({
   allowedCloneEngines = ['voxcpm'],
   projectId,
 }: VoxCPMPanelProps) {
+  // ---- 国际化 ----
+  const { t } = useTranslation();
+
   // ---- 模型状态 ----
   const [status, setStatus] = useState<VoxCPMStatus | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -88,7 +92,7 @@ export function VoxCPMPanel({
       const s = await voxcpmApi.getStatus();
       setStatus(s);
     } catch (err) {
-      console.error('获取 VoxCPM 状态失败:', err);
+      console.error('Failed to get VoxCPM status:', err);
     }
   }, []);
 
@@ -111,7 +115,7 @@ export function VoxCPMPanel({
         // 按 allowedCloneEngines 过滤
         setVoices(list.filter(v => v.audio_url && allowedCloneEngines.includes(v.clone_engine || '')));
       } catch (err) {
-        console.error('加载声音列表失败:', err);
+        console.error('Failed to load voice list:', err);
       } finally {
         setVoicesLoading(false);
       }
@@ -141,7 +145,7 @@ export function VoxCPMPanel({
       await voxcpmApi.loadModel();
       await refreshStatus();
     } catch (err: unknown) {
-      setActionError(getApiErrorMessage(err, '加载失败'));
+      setActionError(getApiErrorMessage(err, t('voxcpm.actions.loadFailed')));
     } finally {
       setActionLoading(false);
     }
@@ -154,7 +158,7 @@ export function VoxCPMPanel({
       await voxcpmApi.unloadModel();
       await refreshStatus();
     } catch (err: unknown) {
-      setActionError(getApiErrorMessage(err, '释放失败'));
+      setActionError(getApiErrorMessage(err, t('voxcpm.actions.unloadFailed')));
     } finally {
       setActionLoading(false);
     }
@@ -170,25 +174,25 @@ export function VoxCPMPanel({
         <div className={styles.statusInfo}>
           <span className={`${styles.statusDot} ${isModelReady ? styles.loaded : styles.unloaded}`} />
           <span className={styles.statusText}>
-            {isModelLoading ? '模型加载中...' : isModelReady ? '模型已就绪' : '模型未加载'}
+            {isModelLoading ? t('voxcpm.status.loading') : isModelReady ? t('voxcpm.status.ready') : t('voxcpm.status.notLoaded')}
           </span>
           {isModelReady && status && (
             <span className={styles.vramBadge}>
-              GPU: {status.vram_used_mb}MB / {status.gpu_total_mb}MB
+              {t('voxcpm.vram', { used: String(status.vram_used_mb), total: String(status.gpu_total_mb) })}
             </span>
           )}
           {isModelReady && status?.load_time_sec ? (
-            <span className={styles.loadTime}>加载耗时 {status.load_time_sec}s</span>
+            <span className={styles.loadTime}>{t('voxcpm.loadTime', { seconds: String(status.load_time_sec) })}</span>
           ) : null}
         </div>
         <div className={styles.statusActions}>
           {isModelReady ? (
             <button className={styles.unloadBtn} onClick={handleUnload} disabled={isModelLoading}>
-              释放显存
+              {t('voxcpm.actions.unload')}
             </button>
           ) : (
             <button className={styles.loadBtn} onClick={handleLoad} disabled={isModelLoading}>
-              {isModelLoading ? '加载中...' : '加载模型'}
+              {isModelLoading ? t('voxcpm.actions.loading') : t('voxcpm.actions.load')}
             </button>
           )}
         </div>
@@ -205,7 +209,7 @@ export function VoxCPMPanel({
             onClick={() => onModeChange(tab.value)}
           >
             <span className={styles.modeIcon}>{tab.icon}</span>
-            <span>{tab.label}</span>
+            <span>{t(tab.labelKey)}</span>
           </button>
         ))}
       </div>
@@ -216,7 +220,7 @@ export function VoxCPMPanel({
         {mode === 'clone' && (
           <>
             <div className={styles.fieldGroup}>
-              <label className={styles.label}>参考音频</label>
+              <label className={styles.label}>{t('voxcpm.referenceAudio')}</label>
               <select
                 className={styles.select}
                 value={selectedVoiceId}
@@ -225,22 +229,26 @@ export function VoxCPMPanel({
                   onVoiceSelect(e.target.value);
                 }}
               >
-                <option value="">-- 选择已上传的声音 --</option>
+                <option value="">{t('voxcpm.selectVoice')}</option>
                 {voices.map(v => (
                   <option key={v.id} value={v.id}>
                     {v.name || v.description || v.id.slice(0, 8)}
                   </option>
                 ))}
               </select>
-              {voicesLoading && <span className={styles.hint}>加载中...</span>}
-              <span className={styles.hint}>已加载 {voices.length} 个声音 | 当前: {selectedVoiceId || '未选择'}</span>
+              {voicesLoading && <span className={styles.hint}>{t('voxcpm.loadingVoices')}</span>}
+              <span className={styles.hint}>
+                {t('voxcpm.voicesLoaded', { count: String(voices.length) })}
+                {' | '}
+                {t('voxcpm.currentVoice', { name: selectedVoiceId || t('voxcpm.noVoiceSelected') })}
+              </span>
             </div>
             <div className={styles.fieldGroup}>
               <StyleInstructionPicker
                 value={styleControl}
                 onChange={onStyleControlChange}
-                label="风格指令"
-                placeholder="选择预设，或直接输入新的风格指令..."
+                label={t('voxcpm.styleInstruction')}
+                placeholder={t('voxcpm.styleInstructionPlaceholder')}
                 dense
               />
             </div>
@@ -251,7 +259,7 @@ export function VoxCPMPanel({
         {mode === 'ultimate' && (
           <>
             <div className={styles.fieldGroup}>
-              <label className={styles.label}>参考音频</label>
+              <label className={styles.label}>{t('voxcpm.referenceAudio')}</label>
               <select
                 className={styles.select}
                 value={selectedVoiceId}
@@ -260,33 +268,33 @@ export function VoxCPMPanel({
                   onVoiceSelect(e.target.value);
                 }}
               >
-                <option value="">-- 选择已上传的声音 --</option>
+                <option value="">{t('voxcpm.selectVoice')}</option>
                 {voices.map(v => (
                   <option key={v.id} value={v.id}>
                     {v.name || v.description || v.id.slice(0, 8)}
                   </option>
                 ))}
               </select>
-              {voicesLoading && <span className={styles.hint}>加载中...</span>}
+              {voicesLoading && <span className={styles.hint}>{t('voxcpm.loadingVoices')}</span>}
               {promptText && (
                 <div className={styles.promptReadOnly}>
-                  <span className={styles.promptReadOnlyLabel}>文本：</span>
+                  <span className={styles.promptReadOnlyLabel}>{t('voxcpm.promptText')}</span>
                   <span className={styles.promptReadOnlyText}>{promptText}</span>
                 </div>
               )}
               {selectedVoiceId && !promptText && (
                 <span className={styles.hint} style={{ color: 'var(--color-danger, #ef4444)' }}>
-                  ⚠ 该声音未填写参考音频文本，Ultimate Clone 无法使用
+                  {t('voxcpm.warningNoPromptText')}
                 </span>
               )}
-              <span className={styles.hint}>已加载 {voices.length} 个声音</span>
+              <span className={styles.hint}>{t('voxcpm.voicesLoaded', { count: String(voices.length) })}</span>
             </div>
             <div className={styles.fieldGroup}>
               <StyleInstructionPicker
                 value={styleControl}
                 onChange={onStyleControlChange}
-                label="风格指令"
-                placeholder="选择预设，或直接输入新的风格指令..."
+                label={t('voxcpm.styleInstruction')}
+                placeholder={t('voxcpm.styleInstructionPlaceholder')}
                 dense
               />
             </div>
@@ -295,12 +303,12 @@ export function VoxCPMPanel({
 
         {/* 高级参数（折叠） */}
         <div className={styles.advancedToggle} onClick={() => setShowAdvanced(!showAdvanced)}>
-          <span>{showAdvanced ? '▼' : '▶'} 高级参数</span>
+          <span>{showAdvanced ? '▼' : '▶'} {t('voxcpm.advancedParams')}</span>
         </div>
         {showAdvanced && (
           <div className={styles.advancedPanel}>
             <div className={styles.paramRow}>
-              <label className={styles.paramLabel}>CFG 强度</label>
+              <label className={styles.paramLabel}>{t('voxcpm.cfgStrength')}</label>
               <input
                 type="range"
                 min="1"
@@ -313,7 +321,7 @@ export function VoxCPMPanel({
               <span className={styles.paramValue}>{cfgValue.toFixed(1)}</span>
             </div>
             <div className={styles.paramRow}>
-              <label className={styles.paramLabel}>去噪步数</label>
+              <label className={styles.paramLabel}>{t('voxcpm.denoisingSteps')}</label>
               <input
                 type="range"
                 min="1"
@@ -332,7 +340,7 @@ export function VoxCPMPanel({
       {/* 未加载提示 */}
       {!isModelReady && !isModelLoading && (
         <div className={styles.overlayHint}>
-          请先加载模型后再进行合成
+          {t('voxcpm.pleaseLoadModel')}
         </div>
       )}
     </div>

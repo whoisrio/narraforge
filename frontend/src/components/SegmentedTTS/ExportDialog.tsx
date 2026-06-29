@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import type { Segment } from '../../types';
+import { useTranslation } from '../../i18n';
 import { useStorageMode } from '../../hooks/useStorageMode';
 import { getTTSAudioBlob } from '../../services/indexedDB';
 import { segmentedProjectApi, subtitleLlmApi } from '../../services/api';
@@ -39,6 +40,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
   const [targetLang, setTargetLang] = useState('English');
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const toggleOpt = useCallback((opt: ExportOption) => {
     setOptions(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]);
@@ -71,7 +73,11 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
           s.status === 'ready' && (storageMode === 'backend' ? s.current_audio_path : s.current_audio_id)
         ));
         if (ready.length < segsWithTs.length) {
-          if (!confirm(`${segsWithTs.length - ready.length}/${segsWithTs.length} 段未生成，将跳过。继续？`)) {
+          const confirmMsg = t('segment.exportDialog.confirmSkip', { 
+            failed: String(segsWithTs.length - ready.length), 
+            total: String(segsWithTs.length) 
+          });
+          if (!confirm(confirmMsg)) {
             setExporting(false); return;
           }
         }
@@ -85,7 +91,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
             } catch {
               try { detail = `${resp.status} ${await resp.text()}`.slice(0, 200); } catch { /* ignore */ }
             }
-            throw new Error(`MP3 导出失败：${detail}`);
+            throw new Error(`${t('export.mp3ExportFailed')}${detail}`);
           }
           const blob = await resp.blob();
           if (!remotionProjectPath) {
@@ -142,38 +148,38 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
           const result = await subtitleLlmApi.translate(srt, targetLang, 'Chinese');
           await exportTextFile(`${sanitized}.bilingual.srt`, result.bilingual_srt, 'text/plain');
         } catch {
-          setError('双语 SRT 翻译失败，其他文件已下载。');
+          setError(t('export.errorTranslationFailed'));
           setTimeout(() => setError(null), 5000);
         }
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : '导出失败');
+      setError(e instanceof Error ? e.message : t('export.errorExportFailed'));
       setTimeout(() => setError(null), 5000);
     } finally {
       setExporting(false);
     }
-  }, [segments, name, options, targetLang, storageMode, projectId, chapterId, chapterDesignTitle, remotionProjectPath, srtUseGlobalTime, globalStartOffset]);
+  }, [segments, name, options, targetLang, storageMode, projectId, chapterId, chapterDesignTitle, remotionProjectPath, srtUseGlobalTime, globalStartOffset, t]);
 
   if (!open) return null;
 
   return (
     <div className={styles.overlay} onClick={onClose}>
       <div className={styles.dialog} onClick={e => e.stopPropagation()}>
-        <h3>导出选项</h3>
+        <h3>{t('segment.exportDialog.title')}</h3>
         <div className={styles.field}>
-          <label>名称</label>
+          <label>{t('segment.exportDialog.name')}</label>
           <input value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div className={styles.options}>
-          <label><input type="checkbox" checked={options.includes('audio')} onChange={() => toggleOpt('audio')} /> {storageMode === 'backend' ? 'MP3 音频' : 'WAV 音频'}</label>
-          <label><input type="checkbox" checked={options.includes('json')} onChange={() => toggleOpt('json')} /> 脚本 JSON</label>
-          <label><input type="checkbox" checked={options.includes('srt')} onChange={() => toggleOpt('srt')} /> SRT 字幕</label>
+          <label><input type="checkbox" checked={options.includes('audio')} onChange={() => toggleOpt('audio')} /> {storageMode === 'backend' ? t('export.audioMp3') : t('export.audioWav')}</label>
+          <label><input type="checkbox" checked={options.includes('json')} onChange={() => toggleOpt('json')} /> {t('export.scriptJson')}</label>
+          <label><input type="checkbox" checked={options.includes('srt')} onChange={() => toggleOpt('srt')} /> {t('export.srtSubtitle')}</label>
           {options.includes('srt') && globalStartOffset > 0 && (
             <label style={{ marginLeft: '20px', fontSize: '0.9em' }}>
-              <input type="checkbox" checked={srtUseGlobalTime} onChange={(e) => setSrtUseGlobalTime(e.target.checked)} /> 使用全局时间轴
+              <input type="checkbox" checked={srtUseGlobalTime} onChange={(e) => setSrtUseGlobalTime(e.target.checked)} /> {t('export.srtGlobalTime')}
             </label>
           )}
-          <label><input type="checkbox" checked={options.includes('bilingual_srt')} onChange={() => toggleOpt('bilingual_srt')} /> 双语 SRT 字幕</label>
+          <label><input type="checkbox" checked={options.includes('bilingual_srt')} onChange={() => toggleOpt('bilingual_srt')} /> {t('export.bilingualSrt')}</label>
         </div>
         {options.includes('bilingual_srt') && (
           <div className={styles.langRow}>
@@ -184,9 +190,9 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
         )}
         {error && <div className={styles.error}>{error}</div>}
         <div className={styles.buttons}>
-          <button className={styles.cancelBtn} onClick={onClose}>取消</button>
+          <button className={styles.cancelBtn} onClick={onClose}>{t('segment.exportDialog.cancel')}</button>
           <button className={styles.exportBtn} onClick={doExport} disabled={exporting}>
-            {exporting ? '导出中...' : '开始导出'}
+            {exporting ? t('export.exporting') : t('export.startExport')}
           </button>
         </div>
       </div>

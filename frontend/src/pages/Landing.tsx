@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import heroImage from '../assets/frontpage-2.png';
+import { useTranslation } from '../i18n';
 import styles from './Landing.module.css';
 
 interface LandingProps {
@@ -8,6 +9,7 @@ interface LandingProps {
 
 export default function Landing({ onNavigate }: LandingProps) {
   const [heroVisible, setHeroVisible] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setHeroVisible(true));
@@ -29,11 +31,11 @@ export default function Landing({ onNavigate }: LandingProps) {
         <div className={styles.heroCopy}>
           <h1 className={styles.heroTitle}>NarraForge</h1>
           <p className={styles.heroLead}>
-            基于 Qwen CosyVoice · MiMo TTS · Edge-TTS · Faster-Whisper 模型，将音色设计、文字转语音、语音转字幕融为一体的 AI 叙事工坊
+            {t('landing.heroDescription')}
           </p>
           <div className={styles.heroActions}>
             <button className={styles.btnPill} onClick={() => onNavigate('voice-clone')}>
-              开始使用
+              {t('landing.startUsing')}
             </button>
           </div>
         </div>
@@ -51,9 +53,9 @@ export default function Landing({ onNavigate }: LandingProps) {
               </svg>
             }
             label="Voice Design"
-            title="音色设计"
-            body="上传一段 30 秒的音频样本，AI 即可精准复刻说话人的音色、语调与情感韵律。支持 CosyVoice 与 MiMo 双引擎。"
-            action="体验音色设计"
+            title={t('landing.features.voiceDesign.title')}
+            body={t('landing.features.voiceDesign.body')}
+            action={t('landing.features.voiceDesign.action')}
             onAction={() => onNavigate('voice-clone')}
           />
           <FeatureCard
@@ -67,9 +69,9 @@ export default function Landing({ onNavigate }: LandingProps) {
               </svg>
             }
             label="Text to Speech"
-            title="文字转语音"
-            body="输入文字，即刻生成自然流畅的语音。三引擎切换，多语种支持，满足播客、配音等多样化场景。"
-            action="体验文字转语音"
+            title={t('landing.features.tts.title')}
+            body={t('landing.features.tts.body')}
+            action={t('landing.features.tts.action')}
             onAction={() => onNavigate('tts-synthesis')}
           />
           <FeatureCard
@@ -81,9 +83,9 @@ export default function Landing({ onNavigate }: LandingProps) {
               </svg>
             }
             label="Speech to Text"
-            title="语音转字幕"
-            body="将音频或视频智能转写为高精度字幕，支持多说话人识别与时间轴对齐，大幅提升后期效率。"
-            action="体验语音转字幕"
+            title={t('landing.features.stt.title')}
+            body={t('landing.features.stt.body')}
+            action={t('landing.features.stt.action')}
             onAction={() => onNavigate('speech-to-text')}
           />
         </div>
@@ -92,8 +94,8 @@ export default function Landing({ onNavigate }: LandingProps) {
       {/* ── Footer ── */}
       <footer className={styles.footer}>
         <span className={styles.footerBrand}>NarraForge</span>
-        <span>Powered by iamrio</span>
-        <span>© 2026</span>
+        <span>{t('landing.footer.poweredBy')}</span>
+        <span>{t('landing.footer.copyright')}</span>
       </footer>
     </div>
   );

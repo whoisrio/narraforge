@@ -1,12 +1,11 @@
 import { useState, type ReactNode } from 'react';
-import { createTranslator, navItems, type Locale } from '../../i18n';
+import { useTranslation, navItems } from '../../i18n';
 import styles from './AppShell.module.css';
 
 export type GlobalNavId = 'projects' | 'subtitles' | 'voice-design' | 'settings';
 
 interface AppShellProps {
   activeNavId: GlobalNavId;
-  locale?: Locale;
   children: ReactNode;
   rightSlot?: ReactNode;
   hideSidebar?: boolean;
@@ -22,14 +21,13 @@ const NAV_ICONS: Record<GlobalNavId, string> = {
 
 export function AppShell({
   activeNavId,
-  locale = 'zh-CN',
   children,
   rightSlot,
   hideSidebar = false,
   onNavigate,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const t = createTranslator(locale);
+  const { t } = useTranslation();
 
   return (
     <div className={styles.shell} data-collapsed={collapsed ? 'true' : 'false'} data-testid="app-shell">
@@ -40,7 +38,7 @@ export function AppShell({
           </button>
           <div className={styles.brandTextBlock}>
             <div className={styles.brandText}>NarraForge</div>
-            <div className={styles.brandSubtext}>Studio Workspace</div>
+            <div className={styles.brandSubtext}>{t('appShell.studioWorkspace')}</div>
           </div>
         </div>
 
@@ -51,7 +49,7 @@ export function AppShell({
       <aside className={styles.sidebar} aria-label="Global navigation">
         <div className={styles.sidebarTitle}>
           <span className={styles.sidebarIcon}>✦</span>
-          {!collapsed && <span>Workspace Hub</span>}
+          {!collapsed && <span>{t('appShell.workspaceHub')}</span>}
         </div>
 
         <nav className={styles.navList}>
@@ -78,11 +76,11 @@ export function AppShell({
         <button
           type="button"
           className={styles.collapseButton}
-          aria-label={collapsed ? '展开导航' : '收起导航'}
+          aria-label={collapsed ? t('appShell.expandNav') : t('appShell.collapseNav')}
           onClick={() => setCollapsed(value => !value)}
         >
           <span>{collapsed ? '›' : '‹'}</span>
-          {!collapsed && <span>收起</span>}
+          {!collapsed && <span>{t('appShell.collapseNav')}</span>}
         </button>
       </aside>
       )}

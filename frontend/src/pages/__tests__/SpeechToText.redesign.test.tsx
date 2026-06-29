@@ -1,7 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SpeechToText } from '../SpeechToText';
-import { speechToTextApi } from '../../services/api';
 
 vi.mock('../../hooks/useStorageMode', () => ({
   useStorageMode: () => ({ mode: 'frontend' }),

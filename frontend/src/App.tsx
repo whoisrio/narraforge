@@ -12,8 +12,11 @@ import { createInitialProject } from './hooks/useSegmentedProject';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/VoiceRefreshProvider';
 import { ThemeProvider } from './hooks/useTheme';
+import { TranslationProvider } from './i18n';
 import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
+import { LanguageSwitcher } from './components/LanguageSwitcher';
 import type { SegmentedProject } from './types';
+import { t } from './i18n';
 import styles from './App.module.css';
 
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
@@ -26,8 +29,8 @@ function SettingsSelect() {
   const { mode, setMode } = useStorageModeContext();
   return (
     <select value={mode} onChange={(e) => setMode(e.target.value as StorageMode)}>
-      <option value="backend">后端存储</option>
-      <option value="frontend">浏览器存储</option>
+      <option value="backend">{t('settings.backend')}</option>
+      <option value="frontend">{t('settings.frontend')}</option>
     </select>
   );
 }
@@ -99,7 +102,7 @@ function AppContent() {
 
   const handleCreateProject = async (name?: string, logo?: string | null) => {
     const project = createInitialProject();
-    project.name = name || `新项目 ${projects.length + 1}`;
+    project.name = name || `${t('project.createDefault')} ${projects.length + 1}`;
     if (logo) project.logo = logo;
     await projectStorage.saveProject(project, { mode: 'immediate' });
     await refreshProjects();
@@ -110,8 +113,9 @@ function AppContent() {
 
   const handleDeleteProjectFromHub = async (projectId: string) => {
     const target = projects.find(project => project.id === projectId);
-    const targetName = target?.name ?? '该项目';
-    if (!window.confirm(`确定删除项目「${targetName}」？\n此操作不可撤销，所有章节和音频将一并删除。`)) return;
+    const targetName = target?.name ?? t('project.unknownProject');
+    const confirmMessage = `${t('project.deleteConfirm', { name: targetName })}\n${t('project.deleteMessage')}`;
+    if (!window.confirm(confirmMessage)) return;
     await projectStorage.deleteProject(projectId);
     await refreshProjects();
     if (activeProjectId === projectId) {
@@ -150,8 +154,9 @@ function AppContent() {
 
   const settingsSlot = (
     <div className={styles.shellSettings}>
-      <span className={styles.storageLabel}>存储</span>
+      <span className={styles.storageLabel}>{t('settings.storage')}</span>
       <SettingsSelect />
+      <LanguageSwitcher />
     </div>
   );
 
@@ -211,7 +216,9 @@ function AppContent() {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <TranslationProvider>
+        <AppContent />
+      </TranslationProvider>
     </ThemeProvider>
   );
 }

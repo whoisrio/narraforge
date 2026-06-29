@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Role, RoleSnapshot } from '../../types';
+import type { Role } from '../../types';
 import { ProjectVoices } from './ProjectVoices';
 
 // Mock API modules
@@ -377,7 +377,7 @@ describe('ProjectVoices – clone preview validation', () => {
 
   it('blocks save when clone preview has not been generated', async () => {
     const onSaveRole = vi.fn();
-    const { voiceApi, ttsApi } = await import('../../services/api');
+    const { ttsApi } = await import('../../services/api');
     // Voice profile loaded by useEffect has no cloned_preview_url
     (ttsApi.getVoices as ReturnType<typeof vi.fn>).mockResolvedValue([{
       id: 'voice-abc',
@@ -418,7 +418,7 @@ describe('ProjectVoices – clone preview validation', () => {
     const { synthesizeVoiceRolePreview } = await import('../../services/voiceRolePreview');
     (synthesizeVoiceRolePreview as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('TTS 服务不可用'));
 
-    const { voiceApi, ttsApi } = await import('../../services/api');
+    const { ttsApi } = await import('../../services/api');
     (ttsApi.getVoices as ReturnType<typeof vi.fn>).mockResolvedValue([{
       id: 'voice-abc',
       name: 'cloned voice',

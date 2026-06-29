@@ -79,8 +79,6 @@ export function ProjectLibrary({
   onDeleteChapter,
   onEnterStudio,
   onModeChange,
-  projectName,
-  onRenameProject,
 }: ProjectLibraryProps) {
   const [mode, setMode] = useState<LibraryMode>('overview');
   const [activeTab, setActiveTab] = useState<LibraryTab>('narration');

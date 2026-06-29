@@ -1,3 +1,4 @@
+import { t } from '../../i18n';
 import styles from './ConfirmDialog.module.css';
 
 interface ConfirmDialogProps {
@@ -13,8 +14,8 @@ interface ConfirmDialogProps {
 
 export function ConfirmDialog({
   open, title, message,
-  confirmLabel = '确定',
-  cancelLabel = '取消',
+  confirmLabel = t('common.confirm'),
+  cancelLabel = t('common.cancel'),
   variant = 'warning',
   onConfirm, onCancel,
 }: ConfirmDialogProps) {

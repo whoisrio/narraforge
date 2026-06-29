@@ -1,4 +1,5 @@
 import type { TranscribeResult } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import { Loading } from '../ui/Loading';
 import styles from './TranscriptEditor.module.css';
 
@@ -10,6 +11,8 @@ interface TranscriptEditorProps {
 }
 
 export function TranscriptEditor({ result, processing, error, onContentChange }: TranscriptEditorProps) {
+  const { t } = useTranslation();
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -38,11 +41,11 @@ export function TranscriptEditor({ result, processing, error, onContentChange }:
       {processing && (
         <div className={styles.processing}>
           <Loading size="lg" />
-          <div className={styles.processingText}>正在识别语音，请耐心等待...</div>
+          <div className={styles.processingText}>{t('transcription.processing')}</div>
         </div>
       )}
 
-      {error && <div className={styles.errorBanner}>{error}</div>}
+      {error && <div className={styles.errorBanner}>{t(error)}</div>}
 
       {result && !processing ? (
         <textarea
@@ -54,8 +57,8 @@ export function TranscriptEditor({ result, processing, error, onContentChange }:
       ) : !processing && !error ? (
         <div className={styles.empty}>
           <span className="material-symbols-outlined" style={{ fontSize: 48, opacity: 0.3 }}>mic</span>
-          <strong>还没有 Transcript</strong>
-          <span>上传音频文件并启动识别，字幕会显示在这里。</span>
+          <strong>{t('transcription.emptyTitle')}</strong>
+          <span>{t('transcription.emptyHint')}</span>
         </div>
       ) : null}
 

@@ -68,6 +68,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
   useEffect(() => {
     setLoading(true);
     fetchVoices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, refreshCounter]);
 
   const handleSyncFromQwen = async () => {

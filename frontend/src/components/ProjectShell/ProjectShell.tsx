@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { createTranslator, projectNavItems, type Locale } from '../../i18n';
+import { useTranslation, projectNavItems } from '../../i18n';
 import type { Chapter } from '../../types';
 import styles from './ProjectShell.module.css';
 
@@ -10,7 +10,6 @@ interface ProjectShellProps {
   projectName: string;
   projectSubtitle?: string;
   activeSection: ProjectSectionId;
-  locale?: Locale;
   chapterName?: string;
   segmentCount?: number;
   generatedCount?: number;
@@ -46,7 +45,6 @@ export function ProjectShell({
   projectName,
   projectSubtitle,
   activeSection,
-  locale = 'zh-CN',
   chapterName = '未选择章节',
   segmentCount = 0,
   generatedCount = 0,
@@ -65,7 +63,7 @@ export function ProjectShell({
   const [collapsed, setCollapsed] = useState(false);
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   const [chapterNameDraft, setChapterNameDraft] = useState('');
-  const t = createTranslator(locale);
+  const { t } = useTranslation();
 
   const startRename = (chapter: Chapter) => {
     setEditingChapterId(chapter.id);
@@ -98,7 +96,7 @@ export function ProjectShell({
           onClick={onBackToProjects}
         >
           <span>←</span>
-          {!collapsed && <span>返回项目总览</span>}
+          {!collapsed && <span>{t('projectShell.backToProjects')}</span>}
         </button>
 
         <nav className={styles.projectNav}>
@@ -124,7 +122,7 @@ export function ProjectShell({
 
         {(activeSection === 'library' || activeSection === 'studio') && chapters && chapters.length > 0 && (
           <div className={styles.chapterListSection}>
-            <span className={styles.chapterListLabel}>Chapters</span>
+            <span className={styles.chapterListLabel}>{t('projectShell.chapters')}</span>
             <ul className={styles.chapterList}>
               {chapters.map((chapter, index) => (
                 <li key={chapter.id} className={styles.chapterListItemWrap}>

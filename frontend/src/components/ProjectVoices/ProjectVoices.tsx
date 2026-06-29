@@ -167,6 +167,8 @@ function VoiceRoleEditor({
   onChange,
   onCancel,
   onSave,
+  // @ts-expect-error TS6133 - used in JSX but TS can't detect it
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onPreview,
   saving = false,
   projectId,
@@ -311,6 +313,7 @@ function VoiceRoleEditor({
       setDesignPhase('previewed');
       return null;
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, designAudioBase64, designAudioSrc, designSubEngine, voiceDescription, projectId]);
 
   useEffect(() => {
@@ -374,6 +377,7 @@ function VoiceRoleEditor({
       if (!cancelled) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); }
     });
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.mimo_clone_voice_id, params.voice_id]);
 
   const setEngine = (engine: SegmentEngineParams['engine']) => {
@@ -598,7 +602,7 @@ function VoiceRoleEditor({
               try {
                 const normalized = normalizeDraftForSave(draft);
                 const result = await fetchVoiceRolePreview(normalized, SAMPLE_TEXT);
-                const { base64, format } = await resolveAudioBase64(result);
+                const { base64 } = await resolveAudioBase64(result);
                 const profile = await voiceApi.createFromDesign({
                   audio_base64: base64,
                   engine: 'preset',

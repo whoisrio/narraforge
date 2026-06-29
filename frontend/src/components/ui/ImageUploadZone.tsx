@@ -1,4 +1,5 @@
 import { useRef, useState, useCallback } from 'react';
+import { useTranslation } from '../../i18n';
 import styles from './ImageUploadZone.module.css';
 
 interface ImageUploadZoneProps {
@@ -20,15 +21,16 @@ export function ImageUploadZone({ value, onChange, size = 'md', placeholder }: I
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useTranslation();
 
   const processFile = useCallback((file: File) => {
     setError(null);
     if (!file.type.startsWith('image/')) {
-      setError('请上传图片文件');
+      setError(t('imageUpload.errorFileType'));
       return;
     }
     if (file.size > MAX_SIZE) {
-      setError('图片大小不能超过 2MB');
+      setError(t('imageUpload.errorFileSize'));
       return;
     }
     const reader = new FileReader();
@@ -36,7 +38,7 @@ export function ImageUploadZone({ value, onChange, size = 'md', placeholder }: I
       onChange(reader.result as string);
     };
     reader.readAsDataURL(file);
-  }, [onChange]);
+  }, [onChange, t]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -64,7 +66,7 @@ export function ImageUploadZone({ value, onChange, size = 'md', placeholder }: I
           type="button"
           className={styles.removeBtn}
           onClick={(e) => { e.stopPropagation(); onChange(null); }}
-          aria-label="移除图片"
+          aria-label={t('imageUpload.removeImage')}
         >
           ×
         </button>
@@ -85,7 +87,7 @@ export function ImageUploadZone({ value, onChange, size = 'md', placeholder }: I
         {placeholder ?? (
           <>
             <span className="material-symbols-outlined" style={{ fontSize: dimension * 0.35, opacity: 0.4 }}>add_photo_alternate</span>
-            <span className={styles.hint}>上传图片</span>
+            <span className={styles.hint}>{t('imageUpload.uploadImage')}</span>
           </>
         )}
       </div>
