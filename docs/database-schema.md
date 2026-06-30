@@ -300,6 +300,299 @@ Tables `voice_profiles`, `tts_configs`, `tts_results`, `transcription_records`, 
 
 ---
 
+## JSON Field Examples
+
+All JSON columns store data as SQLite `TEXT` (deserialized by SQLAlchemy `JSON` type). Below are real-world examples from the production database.
+
+---
+
+### `roles.voice` — EngineParams (discriminated union)
+
+The voice configuration for a role. Format depends on `engine`.
+
+**Edge-TTS (default):**
+```json
+{
+  "engine": "edge_tts",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "rate": "+10%",
+  "volume": "+0%"
+}
+```
+
+**MiMo (voice design):**
+```json
+{
+  "engine": "mimo_tts",
+  "mode": "voicedesign",
+  "voice_id": "a645dec1-73b9-42d4-8f21-ed164eb668e8",
+  "voice_description": "成年男性，语速较快",
+  "instruction": ""
+}
+```
+
+**MiMo (preset):**
+```json
+{
+  "engine": "mimo_tts",
+  "mode": "preset",
+  "voice_id": "冰糖",
+  "instruction": "活泼"
+}
+```
+
+**CosyVoice (clone):**
+```json
+{
+  "engine": "cosyvoice",
+  "voice_id": "cosyvoice-v3.5-plus-bailian-xxxxxx",
+  "speed": 1.0,
+  "volume": 80,
+  "pitch": 1.0,
+  "language": "Chinese",
+  "instruction": ""
+}
+```
+
+**VoxCPM (clone):**
+```json
+{
+  "engine": "voxcpm",
+  "mode": "clone",
+  "voice_id": "voxcpm-xxxx",
+  "style_control": "",
+  "cfg_value": 2.0,
+  "inference_timesteps": 10
+}
+```
+
+---
+
+### `roles.favorite_styles` — string array
+
+```json
+["活泼", "沉稳"]
+```
+
+Default: `[]`
+
+---
+
+### `segmented_projects.default_narrator_snapshot` — Role snapshot (deprecated)
+
+A frozen copy of the narrator role at assignment time. Fields are the legacy flat format.
+
+```json
+{
+  "id": "role-1782179309449",
+  "name": "林夏",
+  "avatar": "",
+  "description": "",
+  "default_engine": "edge_tts",
+  "default_voice": "zh-CN-XiaoxiaoNeural",
+  "default_engine_params": { "engine": "edge_tts" },
+  "favorite_styles": []
+}
+```
+
+> **Note:** This field is deprecated in V3. Use `roles.voice` for the source of truth.
+
+---
+
+### `segmented_projects.configs` — Project-level settings
+
+```json
+{
+  "split_voice_mode": "dialogue"
+}
+```
+
+`split_voice_mode`: `"narration"` | `"dialogue"`
+
+---
+
+### `segmented_project_chapters.default_params` — Chapter-level TTS defaults (flat SegmentEngineParams)
+
+```json
+{
+  "engine": "edge_tts",
+  "edge_voice": "zh-CN-YunxiNeural",
+  "edge_rate": 10,
+  "edge_volume": 0,
+  "voice_id": "",
+  "mimo_mode": "preset",
+  "mimo_preset_voice": "冰糖",
+  "mimo_instruction": "",
+  "mimo_clone_voice_id": "",
+  "language": "Chinese",
+  "speed": 1.0,
+  "volume": 80,
+  "pitch": 1.0,
+  "panel_open": true
+}
+```
+
+> **Note:** Uses legacy flat field names (`edge_voice`, `mimo_preset_voice`, etc.). These are the global defaults that segments without custom voice inherit.
+
+---
+
+### `segmented_project_chapters.split_config` — Text split rules
+
+```json
+{
+  "delimiters": ["。", "！", "？"],
+  "mode": "rule"
+}
+```
+
+`mode`: `"rule"` | `"llm"`
+
+---
+
+### `segmented_project_segments.voice` — VoiceSource (discriminated union)
+
+Determines how a segment's TTS voice parameters are resolved.
+
+**Follows role:**
+```json
+{
+  "source": "role",
+  "role_id": "role-1782179262767"
+}
+```
+
+**Follows chapter/global defaults:**
+```json
+{
+  "source": "chapter"
+}
+```
+
+**Custom (locked independent voice):**
+```json
+{
+  "source": "custom",
+  "engine": "edge_tts",
+  "params": {
+    "engine": "edge_tts",
+    "edge_voice": "zh-CN-YunjianNeural",
+    "edge_rate": "+0%",
+    "edge_volume": "+0%",
+    "mimo_mode": "preset",
+    "mimo_preset_voice": "冰糖",
+    "voice_id": ""
+  },
+  "role_id": "role-xxx"
+}
+```
+
+- `source`: `"chapter"` | `"role"` | `"custom"`
+- `engine` (custom only): `"edge_tts"` | `"cosyvoice"` | `"mimo_tts"` | `"voxcpm"`
+- `params` (custom only): full set of engine parameters (flat SegmentEngineParams format)
+- `role_id` (optional): retains the role association even after becoming custom
+
+---
+
+### `segmented_project_segments.generated_params` — Last synthesis params snapshot
+
+Records what params were actually used for the last synthesis. Used for staleness detection.
+
+```json
+{
+  "engine": "edge_tts",
+  "edge_voice": "zh-CN-YunxiNeural",
+  "edge_rate": "+10%",
+  "edge_volume": "+0%",
+  "voice_id": "",
+  "mimo_mode": "preset",
+  "mimo_preset_voice": "冰糖",
+  "speed": 1,
+  "volume": 80,
+  "pitch": 1,
+  "language": "Chinese"
+}
+```
+
+---
+
+### `segmented_project_segments.audio` — Audio metadata
+
+**Frontend mode (IndexedDB):**
+```json
+{
+  "format": "mp3",
+  "current": { "id": "1719950123456-abc123" },
+  "previous": null,
+  "duration_sec": 6.528
+}
+```
+
+**Backend mode (filesystem):**
+```json
+{
+  "format": "mp3",
+  "current": {
+    "id": null,
+    "path": "1781590441912-6-21esct/chapters/1781590441912-5-eycy3s/segments/1781590472414-15-x36xni.mp3"
+  },
+  "previous": {
+    "id": null,
+    "path": "1781590441912-6-21esct/chapters/1781590441912-5-eycy3s/segments/1781590472414-15-x36xni.mp3"
+  },
+  "duration_sec": 6.528
+}
+```
+
+- `format`: `"mp3"` | `"wav"`
+- `current.id` / `current.path`: mutually exclusive based on storage mode
+- `previous`: saved for undo (swaps with current)
+
+---
+
+### `voice_profiles.engine` — Voice profile engine metadata
+
+**CosyVoice (qwen):**
+```json
+{
+  "type": "qwen",
+  "qwen_voice_id": "cosyvoice-v3.5-plus-bailian-24dfc9059ecd4f0b907fcb5d5efe2852",
+  "is_cloned": true,
+  "cloned_at": "2026-06-16 06:08:51.012343"
+}
+```
+
+**MiMo:**
+```json
+{
+  "type": "mimo",
+  "is_cloned": true,
+  "cloned_at": "2026-06-25 08:18:48.544410"
+}
+```
+
+- `type`: `"qwen"` | `"mimo"` | `"voxcpm"` | `"design"` | `"preset"` (maps to `voices_engine.type` in API)
+- `is_cloned`: whether the voice has been cloned (used by `/api/tts/voices` filter)
+- `qwen_voice_id`: CosyVoice-specific voice identifier
+- `cloned_at`: ISO 8601 datetime of clone completion
+
+---
+
+### `voice_profiles.engine_params` — Engine-specific extra parameters
+
+```json
+{
+  "voice_description": "中年女性，声音沉稳，语速较快",
+  "input_method": "record"
+}
+```
+
+Common keys:
+- `voice_description`: text prompt for voice design
+- `input_method`: `"record"` | `"upload"` | `"url"` (for clone voices)
+- `instruction`: style/TTS instruction override
+
+---
+
 ## Notes
 
 - All primary keys are UUID strings (generated via `uuid.uuid4()`) except `system_configs` which uses a human-readable string key.
@@ -307,4 +600,4 @@ Tables `voice_profiles`, `tts_configs`, `tts_results`, `transcription_records`, 
 - `tts_results.instruction` has a Chinese-language default value describing an energetic advertising voiceover style.
 - The segmented project models use a three-tier hierarchy: `project -> chapter -> segment`. Segments carry a denormalized `project_id` for direct querying.
 - `voice_profiles.project_id` allows project-scoped voices (NULL = global). `segments.role_id` and `projects.default_narrator_role_id` reference the global `roles` table.
-- `voice_profiles.engine_params` is a JSON column that stores engine-specific parameters. Common keys include `input_method` (`record`/`upload`/`url`) for clone voices, and engine-specific TTS parameters (speed, volume, pitch, etc.).
+- `voice_profiles.engine` is a JSON column that stores engine type, clone metadata, and voice identifiers. The `type` field is exposed via the API as `voices_engine.type`.
