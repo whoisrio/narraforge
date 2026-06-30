@@ -37,7 +37,7 @@ export const voiceApi = {
   // 只获取已克隆的声音（从 Qwen 同步的）
   listCloned: async (): Promise<VoiceProfile[]> => {
     const all = await voiceApi.list();
-    return all.filter(v => v.is_cloned && v.qwen_voice_id);
+    return all.filter(v => v.engine?.is_cloned && v.engine?.qwen_voice_id);
   },
 
   createClone: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
@@ -195,8 +195,14 @@ export const mimoTtsApi = {
     text?: string;
     optimize_text_preview?: boolean;
     format?: string;
+    context?: string;
   }): Promise<TTSResult> => {
-    const { data } = await api.post<TTSResult>('/mimo-tts/voicedesign', params);
+    const { context, ...rest } = params;
+    const body: Record<string, unknown> = { ...rest };
+    if (context) {
+      body.context = [{ role: 'user', content: context }];
+    }
+    const { data } = await api.post<TTSResult>('/mimo-tts/voicedesign', body);
     return data;
   },
 
@@ -206,8 +212,14 @@ export const mimoTtsApi = {
     voice_id: string;
     instruction?: string;
     format?: string;
+    context?: string;
   }): Promise<TTSResult> => {
-    const { data } = await api.post<TTSResult>('/mimo-tts/voiceclone', params);
+    const { context, ...rest } = params;
+    const body: Record<string, unknown> = { ...rest };
+    if (context) {
+      body.context = [{ role: 'user', content: context }];
+    }
+    const { data } = await api.post<TTSResult>('/mimo-tts/voiceclone', body);
     return data;
   },
 
@@ -456,6 +468,34 @@ export const textSplitApi = {
     return data;
   },
 };
+// ---------------------------------------------------------------------------
+// Text Analysis API (script parsing: chapter/role/dialogue detection)
+// ---------------------------------------------------------------------------
+
+export interface TextAnalysisChapterItem {
+  title: string;
+  segments: { text: string; role: string | null; role_confidence: number }[];
+}
+
+export interface TextAnalysisDetectedRole {
+  name: string;
+  occurrences: number;
+  confidence: number;
+}
+
+export interface TextAnalysisSplitResult {
+  method: string;
+  chapters: TextAnalysisChapterItem[];
+  detected_roles: TextAnalysisDetectedRole[];
+}
+
+export const textAnalysisApi = {
+  splitScript: async (text: string, mode: string = 'auto'): Promise<TextAnalysisSplitResult> => {
+    const { data } = await api.post<TextAnalysisSplitResult>('/text-analysis/split', { text, mode });
+    return data;
+  },
+};
+
 export const segmentedProjectApi = {
   synthesizeSegment: async (
     projectId: string,

@@ -261,9 +261,9 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     # 跑 P2 v2 + v3 列迁移 (幂等)
     with engine.begin() as conn:
+        import logging
         for stmt in _P2_V2_ALTER_STMTS + _P2_V3_ALTER_STMTS + _P3_ROLE_PROSODY_ALTER_STMTS + _P4_ROLE_KIND_ALTER_STMTS + _P5_VOICE_AVATAR_ALTER_STMTS + _P6_CLONE_AUDIO_PATHS_ALTER_STMTS + _P7_SOURCE_DOCUMENT_ALTER_STMTS + _P8_PROMPT_TEXT_ALTER_STMTS + _P9_VOICE_PROJECT_SCOPE_ALTER_STMTS + _P10_VOICE_ENGINE_ALTER_STMTS + _P11_SOURCE_AUDIO_ALTER_STMTS + _P12_VOICE_REF_ALTER_STMTS:
             if _run_alter_or_skip(conn, stmt):
-                import logging
                 logging.getLogger(__name__).info(f"[migration] applied: {stmt}")
         # P11 data migration: copy audio_path → source_audio_path
         _migrate_source_audio_path(conn)
@@ -271,3 +271,217 @@ def init_db():
         _migrate_design_preview_and_drop_legacy(conn)
         # P13: convert absolute paths to relative paths
         _migrate_absolute_to_relative(conn)
+        # P9000: v3 schema migration (voice/audio/engine JSON + drop old columns)
+        _migrate_v3_reduce_schema(conn)
+
+
+def _migrate_v3_reduce_schema(conn):
+    """P9000: migrate segments/voice_profiles/roles to v3 schema.
+
+    Adds voice/audio JSON columns, migrates old flat data, drops old columns.
+    SQLite doesn't support DROP COLUMN in old versions, so we use table recreate.
+    """
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # ── Build column sets ──
+    seg_cols = {c["name"] for c in inspect(conn).get_columns("segmented_project_segments")}
+    vp_cols = {c["name"] for c in inspect(conn).get_columns("voice_profiles")}
+    role_cols = {c["name"] for c in inspect(conn).get_columns("roles")}
+
+    # ── segments: add voice + audio + drop old columns ──
+    _run_alter_or_skip(conn, "ALTER TABLE segmented_project_segments ADD COLUMN voice JSON NOT NULL DEFAULT '{\"source\":\"chapter\"}'")
+    _run_alter_or_skip(conn, "ALTER TABLE segmented_project_segments ADD COLUMN audio JSON")
+
+    # Migrate data if old columns still exist and voice data is empty
+    if "params" in seg_cols:
+        logger.info("[migration] P9000: migrating segment data to voice/audio")
+        seg_rows = conn.execute(text(
+            "SELECT id, params, voice_ref, locked_params, ssml, role_id, "
+            "current_audio_path, previous_audio_path, audio_format, duration_sec "
+            "FROM segmented_project_segments"
+        )).fetchall()
+        for s in seg_rows:
+            sid, sp, svr, slp, s_ssml, s_role_id, s_cur, s_prev, s_fmt, s_dur = s
+            sp_dict = json.loads(sp) if sp else {}
+            svr_dict = json.loads(svr) if svr else None
+            slp_list = json.loads(slp) if slp else []
+            voice = _build_voice_from_legacy(sp_dict, svr_dict, slp_list, s_ssml, s_role_id)
+            audio = None
+            if s_cur or s_prev or s_fmt or s_dur is not None:
+                audio = {"format": s_fmt or "mp3"}
+                if s_cur: audio["current"] = {"id": None, "path": s_cur}
+                if s_prev: audio["previous"] = {"id": None, "path": s_prev}
+                if s_dur is not None: audio["duration_sec"] = s_dur
+            conn.execute(text("UPDATE segmented_project_segments SET voice=:v, audio=:a WHERE id=:id"),
+                         {"v": json.dumps(voice), "a": json.dumps(audio) if audio else None, "id": sid})
+        logger.info(f"[migration] P9000: migrated {len(seg_rows)} segment rows")
+
+    _drop_columns_via_recreate(conn, "segmented_project_segments", [
+        "project_id", "ssml", "params", "voice_ref", "locked_params",
+        "current_audio_path", "previous_audio_path", "audio_format",
+        "duration_sec", "audio_missing", "ssml_annotated_by_llm",
+        "prosody_marks", "role_snapshot",
+    ])
+
+    # ── voice_profiles: add engine + drop old columns ──
+    _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN engine JSON NOT NULL DEFAULT '{}'")
+
+    if "qwen_voice_id" in vp_cols or "external_audio_url" in vp_cols:
+        logger.info("[migration] P9000: migrating voice_profile data to engine")
+        vp_rows = conn.execute(text(
+            "SELECT id, qwen_voice_id, external_audio_url, mimo_voice_id, prompt_text, "
+            "clone_engine, is_cloned, cloned_at FROM voice_profiles"
+        )).fetchall()
+        for v in vp_rows:
+            vid, vq, ve, vm, vp_text, vc, vi, vca = v
+            eng = {}
+            if vc: eng["type"] = vc
+            if vq: eng["qwen_voice_id"] = vq
+            if ve: eng["external_audio_url"] = ve
+            if vm: eng["mimo_voice_id"] = vm
+            if vp_text: eng["prompt_text"] = vp_text
+            if vi is not None: eng["is_cloned"] = bool(vi)
+            if vca: eng["cloned_at"] = vca
+            conn.execute(text("UPDATE voice_profiles SET engine=:e WHERE id=:id"),
+                         {"e": json.dumps(eng), "id": vid})
+        logger.info(f"[migration] P9000: migrated {len(vp_rows)} voice_profiles")
+
+    _drop_columns_via_recreate(conn, "voice_profiles", [
+        "qwen_voice_id", "external_audio_url", "mimo_voice_id", "prompt_text",
+        "clone_engine", "is_cloned", "cloned_at", "voice_engine_type",
+        "engine_type", "engine_sub_type", "role",
+    ])
+
+    # ── roles: add voice + drop old columns ──
+    _run_alter_or_skip(conn, "ALTER TABLE roles ADD COLUMN voice JSON NOT NULL DEFAULT '{\"engine\":\"edge_tts\",\"params\":{}}'")
+
+    if "default_engine" in role_cols:
+        logger.info("[migration] P9000: migrating role data to voice")
+        role_rows = conn.execute(text(
+            "SELECT id, default_engine, default_voice, default_engine_params FROM roles"
+        )).fetchall()
+        for r in role_rows:
+            rid, re, rv, rp = r
+            rp_dict = json.loads(rp) if rp else {}
+            voice = {"engine": re or "edge_tts", "params": rp_dict}
+            if rv:
+                engine = re or "edge_tts"
+                if engine in ("cosyvoice", "voxcpm", "mimo_tts"):
+                    voice["params"]["voice_id"] = rv
+                elif engine == "edge_tts":
+                    voice["params"]["voice"] = rv
+            conn.execute(text("UPDATE roles SET voice=:v WHERE id=:id"),
+                         {"v": json.dumps(voice), "id": rid})
+        logger.info(f"[migration] P9000: migrated {len(role_rows)} roles")
+
+    _drop_columns_via_recreate(conn, "roles", ["default_engine", "default_voice", "default_engine_params"])
+
+    # ── chapters: drop narration columns ──
+    if "narration_document_id" in {c["name"] for c in inspect(conn).get_columns("segmented_project_chapters")}:
+        _drop_columns_via_recreate(conn, "segmented_project_chapters", [
+            "narration_document_id", "narration_version",
+            "narration_slice_start", "narration_slice_end", "narration_synced_at",
+        ])
+        logger.info("[migration] P9000: dropped narration columns from chapters")
+
+    # ── projects: drop active_narration_version ──
+    if "active_narration_version" in {c["name"] for c in inspect(conn).get_columns("segmented_projects")}:
+        _drop_columns_via_recreate(conn, "segmented_projects", ["active_narration_version"])
+        logger.info("[migration] P9000: dropped active_narration_version from projects")
+
+    # ── P9001: fix segments whose voice.source should be 'role' but is 'custom' ──
+    _fix_role_source_segments(conn, logger)
+
+
+def _fix_role_source_segments(conn, logger):
+    """Fix segments that have role_id but voice.source = 'custom' (migration bug)."""
+    import json
+
+    rows = conn.execute(text(
+        "SELECT id, voice, role_id FROM segmented_project_segments "
+        "WHERE role_id IS NOT NULL AND json_extract(voice, '$.source') = 'custom'"
+    )).fetchall()
+
+    fixed = 0
+    for sid, sv, role_id in rows:
+        voice = json.loads(sv) if sv else {}
+        voice["source"] = "role"
+        voice["role_id"] = role_id
+        voice.pop("engine", None)
+        voice.pop("params", None)
+        conn.execute(text("UPDATE segmented_project_segments SET voice=:v WHERE id=:id"),
+                     {"v": json.dumps(voice), "id": sid})
+        fixed += 1
+
+    if fixed:
+        logger.info(f"[migration] P9001: fixed {fixed} segment(s) — changed voice.source from 'custom' to 'role'")
+
+
+def _build_voice_from_legacy(params_dict, voice_ref_dict, locked_params_list, ssml_text, role_id):
+    """Build VoiceSource JSON from legacy segment data."""
+    # If segment has a role, it's always role-source
+    if role_id:
+        return {"source": "role", "role_id": role_id}
+
+    overridden = any(k in (locked_params_list or []) for k in params_dict)
+
+    if overridden:
+        engine = params_dict.get("engine", "edge_tts")
+        result = {"source": "custom", "engine": engine, "params": {}}
+        # Convert old flat field names → new EngineParams format
+        if engine == "edge_tts":
+            result["params"]["voice"] = params_dict.get("edge_voice", "")
+            result["params"]["rate"] = params_dict.get("edge_rate", "+0%")
+            result["params"]["volume"] = params_dict.get("edge_volume", "+0%")
+        elif engine == "mimo_tts":
+            mode = params_dict.get("mimo_mode", "voiceclone")
+            result["params"]["mode"] = "preset" if mode == "preset" else mode
+            if mode == "preset":
+                result["params"]["voice_id"] = params_dict.get("mimo_preset_voice", "")
+            elif mode == "voiceclone":
+                result["params"]["voice_id"] = params_dict.get("mimo_clone_voice_id", "")
+            elif mode == "voicedesign":
+                result["params"]["voice_id"] = params_dict.get("mimo_clone_voice_id", "")
+                result["params"]["voice_description"] = params_dict.get("mimo_voice_description", "")
+            if params_dict.get("mimo_instruction"):
+                result["params"]["instruction"] = params_dict["mimo_instruction"]
+        elif engine == "cosyvoice":
+            result["params"]["voice_id"] = params_dict.get("voice_id", "")
+            if params_dict.get("instruction"):
+                result["params"]["instruction"] = params_dict["instruction"]
+            for k in ("speed", "volume", "pitch", "language"):
+                if params_dict.get(k) is not None:
+                    result["params"][k] = params_dict[k]
+        elif engine == "voxcpm":
+            voxcpm_mode = params_dict.get("voxcpm_mode", "tts_design")
+            mode_map = {"design": "tts_design", "clone": "clone", "ultimate": "ultimate"}
+            result["params"]["mode"] = mode_map.get(voxcpm_mode, "tts_design")
+            result["params"]["voice_id"] = params_dict.get("voice_id", "")
+            if params_dict.get("voxcpm_voice_description"):
+                result["params"]["voice_description"] = params_dict["voxcpm_voice_description"]
+        # Include ssml if cosyvoice
+        if engine == "cosyvoice" and ssml_text:
+            result["params"]["ssml"] = ssml_text
+        return result
+
+    return {"source": "chapter"}
+
+
+def _drop_columns_via_recreate(conn, table_name, columns_to_drop):
+    """Drop columns from a SQLite table by recreating it without those columns."""
+    col_info = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+    keep_cols = [(c[1], c[2]) for c in col_info if c[1] not in set(columns_to_drop)]
+
+    # 1. Create temp table
+    col_defs = ", ".join(f'"{n}" {t}' for n, t in keep_cols)
+    conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table_name}_tmp ({col_defs})"))
+
+    # 2. Copy data
+    col_names = ", ".join(f'"{n}"' for n, _ in keep_cols)
+    conn.execute(text(f"INSERT INTO {table_name}_tmp ({col_names}) SELECT {col_names} FROM {table_name}"))
+
+    # 3. Swap
+    conn.execute(text(f"DROP TABLE {table_name}"))
+    conn.execute(text(f"ALTER TABLE {table_name}_tmp RENAME TO {table_name}"))

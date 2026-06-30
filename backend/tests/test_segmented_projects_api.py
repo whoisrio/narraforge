@@ -24,7 +24,7 @@ def _payload(pid: str = "p1") -> dict:
             "original_text": "全文",
             "segments": [{
                 "id": "s1", "position": 0, "text": "hello",
-                "params": {"engine": "edge_tts"}, "locked_params": [],
+                "voice": {"source": "chapter"},
             }],
         }],
     }
@@ -63,12 +63,12 @@ def test_list_projects_includes_card_summary_stats(client, tmp_path, monkeypatch
         "default_params": {"engine": "edge_tts", "voice_id": "v1"},
         "split_config": {"delimiters": ["。"], "mode": "rule"},
         "segments": [
-            {"id": "s2", "position": 0, "text": "ready", "params": {"engine": "edge_tts"}, "current_audio_path": "p/c2/s2.mp3", "duration_sec": 3.4},
-            {"id": "s3", "position": 1, "text": "idle", "params": {"engine": "edge_tts"}},
+            {"id": "s2", "position": 0, "text": "ready", "voice": {"source": "chapter"},
+             "audio": {"current": {"path": "p/c2/s2.mp3", "format": "mp3", "duration_sec": 3.4}}},
+            {"id": "s3", "position": 1, "text": "idle", "voice": {"source": "chapter"}},
         ],
     })
-    payload["chapters"][0]["segments"][0]["current_audio_path"] = "p/c1/s1.mp3"
-    payload["chapters"][0]["segments"][0]["duration_sec"] = 2.2
+    payload["chapters"][0]["segments"][0]["audio"] = {"current": {"path": "p/c1/s1.mp3", "format": "mp3", "duration_sec": 2.2}}
 
     created = client.post("/api/segmented-projects", json=payload)
     assert created.status_code == 201, created.text
@@ -107,9 +107,11 @@ def test_synthesize_endpoint_writes_audio(client, tmp_path, monkeypatch):
         )
     assert r.status_code == 200, r.text
     seg = r.json()["chapters"][0]["segments"][0]
-    assert seg["current_audio_path"].endswith(".mp3")
-    assert seg["audio_format"] == "mp3"
-    full = tmp_path / seg["current_audio_path"]
+    audio = seg.get("audio") or {}
+    current = audio.get("current", {}) if isinstance(audio, dict) else {}
+    assert current.get("path", "").endswith(".mp3")
+    assert current.get("format") == "mp3"
+    full = tmp_path / current["path"]
     assert full.exists()
 
 
@@ -124,38 +126,23 @@ def test_migrate_endpoint_creates_projects(client, tmp_path, monkeypatch):
     assert {p["id"] for p in r.json()} == {"p-mig"}
 
 
-def test_project_round_trips_role_and_prosody_fields(client, tmp_path, monkeypatch):
+def test_project_round_trips_role_fields(client, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     payload = _payload("p-role")
     payload["default_narrator_role_id"] = "role-narrator"
     payload["default_narrator_snapshot"] = {
         "id": "role-narrator",
         "name": "旁白",
-        "default_engine": "edge_tts",
-        "default_voice": "zh-CN-YunjianNeural",
-        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-YunjianNeural"},
     }
     payload["chapters"][0]["segments"][0].update({
         "role_id": "role-linxia",
-        "role_snapshot": {
-            "id": "role-linxia",
-            "name": "林夏",
-            "default_engine": "edge_tts",
-            "default_voice": "zh-CN-XiaoxiaoNeural",
-            "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
-        },
         "segment_kind": "dialogue",
-        "prosody_marks": [
-            {
-                "id": "mark-1",
-                "start": 0,
-                "end": 2,
-                "emotion": "sad",
-                "style_tags": ["low_voice", "slow"],
-                "instruction": "压低声音",
-                "intensity": 0.7,
-            }
-        ],
+        "voice": {
+            "source": "role",
+            "name": "林夏",
+            "engine": "edge_tts",
+            "role_id": "role-linxia",
+        },
     })
 
     created = client.post("/api/segmented-projects", json=payload)
@@ -168,6 +155,6 @@ def test_project_round_trips_role_and_prosody_fields(client, tmp_path, monkeypat
     assert body["default_narrator_snapshot"]["name"] == "旁白"
     segment = body["chapters"][0]["segments"][0]
     assert segment["role_id"] == "role-linxia"
-    assert segment["role_snapshot"]["name"] == "林夏"
     assert segment["segment_kind"] == "dialogue"
-    assert segment["prosody_marks"][0]["style_tags"] == ["low_voice", "slow"]
+    assert segment["voice"]["source"] == "role"
+    assert segment["voice"]["name"] == "林夏"

@@ -24,9 +24,7 @@ def role_to_out(role: Role) -> RoleOut:
         avatar=role.avatar,
         description=role.description,
         role_kind=role.role_kind,
-        default_engine=role.default_engine,
-        default_voice=role.default_voice,
-        default_engine_params=role.default_engine_params or {},
+        voice=role.voice or {"engine": "edge_tts", "params": {}},
         favorite_styles=role.favorite_styles or [],
         created_at=_to_iso(role.created_at),
         updated_at=_to_iso(role.updated_at),
@@ -51,9 +49,7 @@ def create_role(db: Session, payload: RoleIn) -> Role:
         avatar=payload.avatar,
         description=payload.description,
         role_kind=payload.role_kind,
-        default_engine=payload.default_engine,
-        default_voice=payload.default_voice,
-        default_engine_params=payload.default_engine_params,
+        voice=payload.voice,
         favorite_styles=payload.favorite_styles,
     )
     db.add(role)

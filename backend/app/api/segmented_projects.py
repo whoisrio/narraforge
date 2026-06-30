@@ -160,18 +160,24 @@ def get_segment_audio(
     db: Session = Depends(get_db),
 ):
     seg = svc.get_segment_row(db, project_id, chapter_id, segment_id)
-    if seg is None or not seg.current_audio_path:
+    audio = seg.audio or {}
+    current = audio.get("current", {}) if isinstance(audio, dict) else {}
+    current_path = current.get("path")
+    if seg is None or not current_path:
         raise HTTPException(status_code=404, detail="audio_not_found")
-    # Note: current_audio_path is stored relative to settings.segmented_dir (root),
+    # Note: audio path is stored relative to settings.segmented_dir (root),
     # not project_dir, per the convention established in Task 7.
-    abs_path = (settings.segmented_dir / seg.current_audio_path).resolve()
+    abs_path = (settings.segmented_dir / current_path).resolve()
     if not abs_path.is_relative_to(settings.segmented_dir.resolve()):
         raise HTTPException(status_code=400, detail="invalid_audio_path")
     if not abs_path.exists():
-        seg.audio_missing = True
+        if isinstance(audio, dict):
+            audio["missing"] = True
+            seg.audio = audio
         db.commit()
         raise HTTPException(status_code=409, detail="audio_missing")
-    media_type = "audio/mpeg" if seg.audio_format == "mp3" else f"audio/{seg.audio_format}"
+    current_format = current.get("format", "mp3")
+    media_type = "audio/mpeg" if current_format == "mp3" else f"audio/{current_format}"
     response = FileResponse(abs_path, media_type=media_type)
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -272,7 +278,6 @@ def split_chapter(
         id=proj.id, name=proj.name, schema_version=proj.schema_version,
         layout=proj.layout, active_chapter_id=proj.active_chapter_id,
         original_text=proj.original_text,
-        active_narration_version=getattr(proj, "active_narration_version", None),
         animation_theme=getattr(proj, "animation_theme", None),
         remotion_project_path=getattr(proj, "remotion_project_path", None),
         chapters=[
@@ -282,11 +287,6 @@ def split_chapter(
                 "split_config": c.split_config or {},
                 "original_text": c.original_text,
                 "design_title": getattr(c, "design_title", None),
-                "narration_document_id": getattr(c, "narration_document_id", None),
-                "narration_version": getattr(c, "narration_version", None),
-                "narration_slice_start": getattr(c, "narration_slice_start", None),
-                "narration_slice_end": getattr(c, "narration_slice_end", None),
-                "narration_synced_at": svc._to_iso(getattr(c, "narration_synced_at", None)),
                 "segments": (
                     [
                         {
@@ -301,16 +301,10 @@ def split_chapter(
                     [
                         {
                             "id": s.id, "position": s.position, "text": s.text,
-                            "ssml": s.ssml, "emotion": s.emotion,
-                            "params": s.params or {},
-                            "locked_params": s.locked_params or [],
+                            "emotion": s.emotion,
+                            "voice": getattr(s, "voice", {"source": "chapter"}),
                             "generated_params": s.generated_params,
-                            "current_audio_path": s.current_audio_path,
-                            "previous_audio_path": s.previous_audio_path,
-                            "audio_format": s.audio_format or "mp3",
-                            "duration_sec": s.duration_sec,
-                            "audio_missing": bool(s.audio_missing),
-                            "ssml_annotated_by_llm": bool(s.ssml_annotated_by_llm),
+                            "audio": getattr(s, "audio", None),
                         }
                         for s in c.segments
                     ]
@@ -369,8 +363,8 @@ def _write_audio_blob(
     target.write_bytes(data)
     # Store path relative to settings.segmented_dir (root) for consistency with synth
     rel = target.relative_to(settings.segmented_dir).as_posix()
-    seg.current_audio_path = rel
-    seg.audio_format = "mp3"
+    audio_data = {"current": {"path": rel, "format": "mp3"}}
+    seg.audio = audio_data
     seg.updated_at = utcnow()
     seg.chapter.updated_at = utcnow()
     seg.chapter.project.updated_at = utcnow()

@@ -734,3 +734,36 @@
   from { opacity: 0; transform: translate(-50%, 8px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ---- Source Actions (智能拆分按钮) ---- */
+.sourceActions {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--spacing-sm, 8px) 0 0 0;
+}
+
+.splitBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  padding: 6px 14px;
+  border: 1px solid var(--color-border, #e8e1db);
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-surface-low, #f9f3eb);
+  color: var(--color-primary, #c47a3a);
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.splitBtn:hover:not(:disabled) {
+  background: var(--color-primary-container, #ffdcc3);
+  border-color: var(--color-primary, #c47a3a);
+}
+
+.splitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

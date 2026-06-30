@@ -6,7 +6,9 @@ import { SegmentRow } from './SegmentRow';
 const segment: Segment = {
   id: 's1',
   text: '这是一个生产卡片分段',
-  params: { engine: 'edge_tts', edge_voice: 'zh-CN-YunxiNeural' },
+  voice: { source: 'chapter' },
+  audio: { format: 'mp3' },
+  params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunxiNeural' },
   status: 'idle',
   segment_kind: 'narration',
   created_at: '2026-01-01',
@@ -26,6 +28,7 @@ function renderRow(overrides: Partial<React.ComponentProps<typeof SegmentRow>> =
       isPaused={false}
       compact
       voices={[]}
+      roles={[]}
       globalEdgeVoice="zh-CN-YunxiNeural"
       engine="edge_tts"
       layout="vertical"

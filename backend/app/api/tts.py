@@ -118,10 +118,11 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         audio_id = Path(audio_path).stem
 
         # 查询声音名称用于历史记录展示
-        voice = (
-            db.query(VoiceProfile)
-            .filter(VoiceProfile.qwen_voice_id == request.voice_id)
-            .first()
+        all_voices = db.query(VoiceProfile).all()
+        voice = next(
+            (v for v in all_voices
+             if v.engine and v.engine.get("qwen_voice_id") == request.voice_id),
+            None,
         )
         voice_name = voice.description or voice.name if voice else request.voice_id
 
@@ -175,8 +176,9 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                         target_mp3.write_bytes(f.read())
                     # Use segmented_dir as base for consistency with synth endpoint (Task 7 deviation)
                     rel = target_mp3.relative_to(settings.segmented_dir).as_posix()
-                    seg.current_audio_path = rel
-                    seg.audio_format = "mp3"
+                    audio = seg.audio or {}
+                    audio["current"] = {"path": rel, "format": "mp3"}
+                    seg.audio = audio
                     seg.generated_params = {
                         "engine": request.engine, "voice_id": request.voice_id,
                         "speed": request.speed, "volume": request.volume,
@@ -411,22 +413,27 @@ async def list_available_voices(
     - voice_id: 返回指定单个声音
     - project_id: 返回全局声音 + 该项目专属声音
     """
-    query = db.query(VoiceProfile).filter(VoiceProfile.is_cloned == True)
+    # Query all profiles; is_cloned is now inside engine JSON column, filter in Python
+    all_voices = db.query(VoiceProfile).all()
+
+    # Filter to cloned voices only
+    voices: list[VoiceProfile] = [
+        v for v in all_voices
+        if v.engine and v.engine.get("is_cloned")
+    ]
 
     if voice_id:
-        voice = query.filter(VoiceProfile.id == voice_id).first()
+        voice = next((v for v in voices if v.id == voice_id), None)
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
         return {"voices": [voice_to_dict(voice)]}
 
     if project_id:
-        query = query.filter(
-            (VoiceProfile.project_id == None) | (VoiceProfile.project_id == project_id)
-        )
+        voices = [v for v in voices
+                  if v.project_id is None or v.project_id == project_id]
     else:
-        query = query.filter(VoiceProfile.project_id == None)
+        voices = [v for v in voices if v.project_id is None]
 
-    voices = query.all()
     return {"voices": [voice_to_dict(v) for v in voices]}
 
 

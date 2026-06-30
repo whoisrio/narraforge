@@ -51,7 +51,7 @@ describe('ProjectHub', () => {
     expect(within(card).getByText('67%')).toBeInTheDocument();
     expect(within(card).getByText('制作中')).toBeInTheDocument();
     expect(within(card).queryByText(/Voice workshop|chapters ·|Production|Chapters|Segments/)).not.toBeInTheDocument();
-    expect(screen.getByText('Project Hub')).toBeInTheDocument();
+    expect(screen.getByText('项目工作台')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /新建项目/ })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: /打开 DeepSeek 解说/ })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: /项目操作 DeepSeek 解说/ })).toBeInTheDocument();

@@ -89,3 +89,5 @@ playwright-report/
 backend/*.db
 backend/voice_clone.db*
 backend/uploads_bak
+.playwright-cli
+home.yaml

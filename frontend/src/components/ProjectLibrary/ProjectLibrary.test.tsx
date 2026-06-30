@@ -23,9 +23,11 @@ function makeChapter(id: string, name: string, originalText: string, segments = 
     segments: Array.from({ length: segments }, (_, index) => ({
       id: `${id}-s-${index}`,
       text: `segment ${index}`,
+      voice: { source: 'chapter' as const },
+      audio: { format: 'mp3', duration_sec: index % 2 === 0 ? 6 : undefined },
+      segment_kind: 'narration' as const,
       params: baseParams,
       status: index % 2 === 0 ? 'ready' : 'idle',
-      duration_sec: index % 2 === 0 ? 6 : undefined,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
     })),
@@ -228,3 +230,4 @@ describe('ProjectLibrary', () => {
     expect(onAddChapter).toHaveBeenCalledWith('第三章：正式开场');
   });
 });
+

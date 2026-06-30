@@ -34,6 +34,7 @@ export function VoiceStudioLayout({
   onPlayAll,
 }: VoiceStudioLayoutProps) {
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
+  const [transportCollapsed, setTransportCollapsed] = useState(true);
 
   const toggleCollapsed = (next: boolean) => {
     setSidePanelCollapsed(next);
@@ -77,21 +78,36 @@ export function VoiceStudioLayout({
         </button>
       </aside>
 
-      <footer className={styles.transportBar} data-testid="voice-studio-transport-bar" style={transportBarStyle}>
+      <footer className={`${styles.transportBar} ${transportCollapsed ? styles.transportBarCollapsed : ''}`} data-testid="voice-studio-transport-bar" style={transportBarStyle}>
+        <button
+          type="button"
+          className={styles.transportToggle}
+          onClick={() => setTransportCollapsed(!transportCollapsed)}
+          aria-label={transportCollapsed ? '展开播放栏' : '收起播放栏'}
+        >
+          {transportCollapsed ? '▲' : '▼'}
+          {transportCollapsed && <span className={styles.transportToggleLabel}>播放栏</span>}
+        </button>
+        {!transportCollapsed && (
         <div className={styles.transportControls}>
           <button type="button" className={styles.roundButton}>‹</button>
           <button type="button" className={styles.playButton} onClick={onPlayAll}>播放</button>
           <button type="button" className={styles.roundButton}>›</button>
         </div>
+        )}
+        {!transportCollapsed && (
         <div className={styles.masterTimeline}>
           <span>Master Transport</span>
           <div className={styles.masterTrack}><span style={{ width: `${progress}%` }} /></div>
           <strong>{formatDuration(durationSec)}</strong>
         </div>
+        )}
+        {!transportCollapsed && (
         <div className={styles.exportGroup}>
           <span className={styles.remotionPath}>{remotionPath || '未设置 Remotion 路径'}</span>
           <button type="button" className={styles.primaryButton} onClick={onExport}>导出</button>
         </div>
+        )}
       </footer>
     </section>
   );

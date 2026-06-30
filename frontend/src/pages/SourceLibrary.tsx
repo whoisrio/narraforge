@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
 import type { SegmentedProject, SourceDocument, NarrationDocument } from '../types';
+import { textAnalysisApi, type TextAnalysisSplitResult } from '../services/api';
 import { GenerateNarrationModal } from '../components/SourceLibrary/GenerateNarrationModal';
 import { SourceUploadZone } from '../components/SourceLibrary/SourceUploadZone';
 import { NarrationFullView } from '../components/SourceLibrary/NarrationFullView';
+import { ScriptAnalysisModal } from '../components/SourceLibrary/ScriptAnalysisModal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import styles from './SourceLibrary.module.css';
 
@@ -100,6 +102,11 @@ export function SourceLibrary() {
   const [confirmDelete, setConfirmDelete] = useState<{ sourceId: string; title: string } | null>(null);
   const [activeVersion, setActiveVersion] = useState<Record<string, string>>({ 'p-deepseek': 'v2', 'p-ymtc': 'v1' });
 
+  // Script analysis state
+  const [analyzingSourceId, setAnalyzingSourceId] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<TextAnalysisSplitResult | null>(null);
+  const [, setAnalysisSourceTitle] = useState('');
+
   const activeProject = useMemo(
     () => MOCK_PROJECTS.find(p => p.id === activeProjectId) || MOCK_PROJECTS[0],
     [activeProjectId]
@@ -179,6 +186,26 @@ export function SourceLibrary() {
     MOCK_PROJECTS.push(newProj);
     setActiveProjectId(id);
     showToast(`已创建项目: ${name}`, 'success');
+  };
+
+  const handleAnalyzeSource = async (source: SourceDocument) => {
+    if (!source.pasted_text) return;
+    setAnalyzingSourceId(source.id);
+    setAnalysisResult(null);
+
+    try {
+      const result = await textAnalysisApi.splitScript(source.pasted_text, 'auto');
+      setAnalysisResult(result);
+    } catch {
+      setAnalysisResult(null);
+    } finally {
+      setAnalyzingSourceId(null);
+    }
+  };
+
+  const handleCloseAnalysis = () => {
+    setAnalysisResult(null);
+    setAnalysisSourceTitle('');
   };
 
   return (
@@ -286,10 +313,21 @@ export function SourceLibrary() {
                           </button>
                         </div>
                         {src.source_type === 'paste' && src.pasted_text && (
-                          <div className={styles.sourcePreview}>
-                            {src.pasted_text.slice(0, 100)}
-                            {src.pasted_text.length > 100 ? '...' : ''}
-                          </div>
+                          <>
+                            <div className={styles.sourcePreview}>
+                              {src.pasted_text.slice(0, 100)}
+                              {src.pasted_text.length > 100 ? '...' : ''}
+                            </div>
+                            <div className={styles.sourceActions}>
+                              <button
+                                className={styles.splitBtn}
+                                onClick={() => handleAnalyzeSource(src)}
+                                disabled={analyzingSourceId === src.id}
+                              >
+                                {analyzingSourceId === src.id ? '分析中...' : '🔍 智能拆分章节'}
+                              </button>
+                            </div>
+                          </>
                         )}
                         {src.source_type === 'audio' && (
                           <div className={styles.sourceAudioRow}>
@@ -462,6 +500,18 @@ export function SourceLibrary() {
           confirmLabel="删除"
           onConfirm={confirmDeleteAction}
           onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {(analysisResult !== null || analyzingSourceId !== null) && (
+        <ScriptAnalysisModal
+          result={analysisResult}
+          loading={analyzingSourceId !== null}
+          onClose={handleCloseAnalysis}
+          onConfirm={() => {
+            showToast('章节和角色已识别，后续可在 Studio 中使用', 'success');
+            handleCloseAnalysis();
+          }}
         />
       )}
     </div>

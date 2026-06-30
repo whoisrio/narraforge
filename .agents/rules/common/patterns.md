@@ -29,3 +29,10 @@ Use a consistent envelope for all API responses:
 - Include the data payload (nullable on error)
 - Include an error message field (nullable on success)
 - Include metadata for paginated responses (total, page, limit)
+
+### Data Model Rules (added 2026-06-30)
+
+- Engine-specific parameters use discriminated union types (`EngineParams`), not flat union with all engines' fields.
+- JSON columns store only current-state values; default/inherited values are resolved at read time (not duplicated in storage).
+- Data model fields that are derivable from other fields should not be stored (e.g. `project_id` on segment derivable from chapter, `default_engine` derivable from `voice.engine`).
+- UI state (like `overrides`, `locked_params`) belongs in component state or derived from data, not in persistent storage.

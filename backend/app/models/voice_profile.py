@@ -1,6 +1,5 @@
-from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, JSON
+from sqlalchemy import Column, String, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship
-from datetime import datetime
 import uuid
 
 from app.core.database import Base
@@ -16,47 +15,14 @@ class VoiceProfile(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
 
-    # 用于克隆的源音频文件路径（用户录制/上传的原始音频）
     source_audio_path = Column(String, nullable=True)
-
-    # 外部音频 URL（七牛云、AWS S3 等云存储）
-    external_audio_url = Column(String, nullable=True)
-
-    # 千问声音克隆相关字段
-    qwen_voice_id = Column(String, nullable=True)  # 千问返回的声音 ID
-    role = Column(String, default="custom")  # 角色：male/female/custom
-    is_cloned = Column(Boolean, default=False)  # 是否已完成克隆
-    cloned_at = Column(DateTime, nullable=True)  # 克隆完成时间
-
-    # 克隆引擎：'qwen'（千问CosyVoice）或 'mimo'（MiMo TTS）
-    clone_engine = Column(String, nullable=True)  # 区分复刻来源
-
-    # MiMo 声音复刻相关字段（预留）
-    mimo_voice_id = Column(String, nullable=True)  # MiMo 声音复刻的标记
-
-    # 用户自定义的声音描述，用于替代无意义的 voice_id 显示
     description = Column(String, nullable=True)
-
-    # 头像（data URL 或外部 URL）
     avatar = Column(String, nullable=True)
 
-    # 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
-    prompt_text = Column(String, nullable=True)
-
-    # 克隆/设计音色的试听音频（TTS 合成结果，用于角色预览）
     cloned_preview_path = Column(String, nullable=True)
-
-    # 项目专属声音：NULL = 全局声音, 非空 = 仅该项目可用
     project_id = Column(String, ForeignKey("segmented_projects.id", ondelete="SET NULL"), nullable=True)
 
-    # voices_engine: 音色来源与引擎信息
-    # voice_engine_type: 'model_default' | 'clone' | 'design'
-    voice_engine_type = Column(String, nullable=True)
-    # engine_type: 'CosyVoice' | 'Mimo' | 'VoxCpm' | 'EdgeTTS'
-    engine_type = Column(String, nullable=True)
-    # engine_sub_type: 'mimo-clone' | 'mimo-design' | 'voxcpm-clone' | 'voxcpm-ultimate' | 'voxcpm-design' | null
-    engine_sub_type = Column(String, nullable=True)
-    # engine_params: JSON — 引擎特有参数
+    engine = Column(JSON, nullable=False, default=dict)
     engine_params = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)

@@ -14,9 +14,11 @@ def test_list_cloned_qwen_voices(client, db_session):
         id="v1",
         name="Narrator",
         source_audio_path="/tmp/narrator.wav",
-        is_cloned=True,
-        qwen_voice_id="cosyvoice-v3-narrator",
-        clone_engine="qwen",
+        engine={
+            "is_cloned": True,
+            "qwen_voice_id": "cosyvoice-v3-narrator",
+            "clone_engine": "qwen",
+        },
     )
     db_session.add(voice)
     db_session.commit()

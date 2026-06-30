@@ -18,18 +18,8 @@ function emotionClass(emotion?: EmotionType): string {
 }
 
 function renderMarkedText(segment: Segment): ReactNode {
-  const text = segment.text || '空旁白';
-  const marks = [...(segment.prosody_marks ?? [])].sort((a, b) => a.start - b.start);
-  if (marks.length === 0) return text;
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  for (const mark of marks) {
-    if (mark.start > cursor) parts.push(<span key={`plain-${cursor}`}>{text.slice(cursor, mark.start)}</span>);
-    parts.push(<mark key={mark.id} className={styles.prosodyMark}>{text.slice(mark.start, mark.end)}</mark>);
-    cursor = Math.max(cursor, mark.end);
-  }
-  if (cursor < text.length) parts.push(<span key={`plain-${cursor}`}>{text.slice(cursor)}</span>);
-  return parts;
+  // prosody_marks removed in V3 — render plain text
+  return segment.text || '空旁白';
 }
 
 export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, onSelect, onUpdateKind, onTextSelection }: NarrationBlockProps) {

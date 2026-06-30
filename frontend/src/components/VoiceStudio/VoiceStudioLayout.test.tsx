@@ -34,6 +34,8 @@ describe('VoiceStudioLayout', () => {
 
     expect(screen.getByText('语音设置')).toBeInTheDocument();
     expect(screen.getByText('Available Roles')).toBeInTheDocument();
+    // Transport bar is collapsed by default — expand it first
+    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
     expect(screen.getByText('Master Transport')).toBeInTheDocument();
     expect(screen.getByText('/tmp/remotion')).toBeInTheDocument();
     expect(screen.getByTestId('studio-segment-content')).toBeInTheDocument();
@@ -42,8 +44,11 @@ describe('VoiceStudioLayout', () => {
   it('wires play all and export actions', () => {
     const { onExport, onPlayAll } = renderStudio();
 
-    fireEvent.click(screen.getByRole('button', { name: /播放/ }));
-    fireEvent.click(screen.getByRole('button', { name: /导出/ }));
+    // Transport bar is collapsed by default — expand it first
+    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '播放' }));
+    fireEvent.click(screen.getByRole('button', { name: '导出' }));
 
     expect(onPlayAll).toHaveBeenCalled();
     expect(onExport).toHaveBeenCalled();

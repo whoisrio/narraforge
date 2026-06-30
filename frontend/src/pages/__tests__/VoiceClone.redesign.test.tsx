@@ -19,6 +19,6 @@ describe('VoiceClone redesign shell', () => {
     render(<VoiceClone />);
 
     expect(screen.getByRole('heading', { name: '音色设计' })).toBeInTheDocument();
-    expect(screen.getByText('Voice Profiles')).toBeInTheDocument();
+    expect(screen.getByText('音色档案')).toBeInTheDocument();
   });
 });

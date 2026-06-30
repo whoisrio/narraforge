@@ -1,4 +1,4 @@
-import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, ProsodyMark, RoleSnapshot, SegmentKind, EmotionType } from '../types';
+import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, SegmentKind, EmotionType, VoiceSource, EngineParams } from '../types';
 
 let _idCounter = 0;
 function uid(): string {
@@ -56,12 +56,10 @@ export function createInitialProject(): SegmentedProject {
   };
 }
 
-/** Migrate v1 project (no chapters) to v2 */
-type RawSegment = Omit<Partial<Segment>, 'overrides'> & {
-  overrides?: unknown;
-  locked_params?: string[];
-  current_audio_path?: string;
-  current_audio_id?: string;
+type RawSegment = Omit<Partial<Segment>, 'voice' | 'audio'> & {
+  voice?: unknown;
+  audio?: unknown;
+  generated_params?: unknown;
 };
 
 type RawChapter = Partial<Chapter> & { segments?: RawSegment[] };
@@ -71,43 +69,27 @@ function isEmotionType(value: unknown): value is EmotionType {
   return typeof value === 'string' && ['happy', 'sad', 'angry', 'calm', 'neutral', 'excited'].includes(value);
 }
 
-function normalizeSegmentOverrides(value: unknown): Segment['overrides'] {
-  const valid = new Set(['voice', 'speed', 'volume', 'pitch', 'instruction', 'language']);
-  return Array.isArray(value)
-    ? value.filter((item): item is NonNullable<Segment['overrides']>[number] => typeof item === 'string' && valid.has(item))
-    : [];
-}
-
-/** Enrich a raw backend project/chapter/segment object with missing frontend-only fields. */
-function enrichSegment(raw: RawSegment, defaultParams: SegmentEngineParams): Segment {
+function enrichSegment(raw: RawSegment, defaultParams?: SegmentEngineParams): Segment {
   const now = new Date().toISOString();
-  const hasAudio = !!(raw.current_audio_path || raw.current_audio_id);
-  return {
+  const rawAudio = (raw as Record<string, unknown>).audio as Record<string, unknown> | undefined;
+  const hasAudio = !!(rawAudio?.current || rawAudio?.previous);
+  const voice: VoiceSource = ((raw as Record<string, unknown>).voice as VoiceSource) ?? { source: 'chapter' } as VoiceSource;
+  const audio: Segment['audio'] = (rawAudio as Segment['audio']) ?? { format: 'mp3' };
+  const base: Segment = {
     id: raw.id ?? uid(),
     text: raw.text ?? '',
-    ssml: raw.ssml,
-    params: { ...defaultParams, ...raw.params },
-    voice_ref: raw.voice_ref,
+    voice,
     status: raw.status ?? (hasAudio ? 'ready' : 'idle'),
     error: raw.error,
-    current_audio_id: raw.current_audio_id,
-    previous_audio_id: raw.previous_audio_id,
-    current_audio_path: raw.current_audio_path,
-    previous_audio_path: raw.previous_audio_path,
-    audio_format: raw.audio_format ?? 'mp3',
-    generated_params: raw.generated_params,
-    duration_sec: raw.duration_sec,
-    ssml_annotated_by_llm: raw.ssml_annotated_by_llm,
+    audio,
+    generated_params: (raw.generated_params as Partial<EngineParams>) ?? undefined,
     emotion: isEmotionType(raw.emotion) ? raw.emotion : undefined,
-    overrides: normalizeSegmentOverrides(raw.overrides ?? raw.locked_params),
-    generated_voice_id: raw.generated_voice_id,
     role_id: raw.role_id ?? null,
-    role_snapshot: raw.role_snapshot ?? null,
     segment_kind: raw.segment_kind ?? 'narration',
-    prosody_marks: raw.prosody_marks ?? [],
     created_at: raw.created_at || now,
     updated_at: raw.updated_at || now,
   };
+  return base;
 }
 
 export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
@@ -230,7 +212,7 @@ export type Action =
   | { type: 'UPDATE_TEXT'; id: string; text: string }
   | { type: 'UPDATE_SSML'; id: string; ssml: string; by_llm?: boolean }
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
-  | { type: 'UPDATE_PARAMS'; id: string; params: Partial<SegmentEngineParams> }
+  | { type: 'UPDATE_PARAMS'; id: string; params: Partial<SegmentEngineParams>; convertFromRole?: boolean }
   | { type: 'UPDATE_EMOTION'; id: string; emotion: string }
   | { type: 'SET_PROJECT_NARRATOR'; roleId: string | null; roleSnapshot: RoleSnapshot | null }
   | { type: 'SET_SEGMENT_ROLE'; id: string; roleId: string | null; roleSnapshot: RoleSnapshot | null }
@@ -251,15 +233,15 @@ export type Action =
 
 export interface State { project: SegmentedProject }
 
-function makeSegment(text: string, params: SegmentEngineParams, segmentKind: SegmentKind = 'narration'): Segment {
+function makeSegment(text: string, _params: SegmentEngineParams, segmentKind: SegmentKind = 'narration'): Segment {
   const now = new Date().toISOString();
   return {
     id: uid(),
     text,
-    params: { ...params },
+    voice: { source: 'chapter' },
     status: 'idle',
+    audio: { format: 'mp3' },
     segment_kind: segmentKind,
-    prosody_marks: [],
     created_at: now,
     updated_at: now,
   };
@@ -273,8 +255,7 @@ function updateSegment(
   return updateActive(p, ch => ({
     ...ch,
     segments: ch.segments.map(segment => {
-      const normalized: Segment = { ...segment, prosody_marks: segment.prosody_marks ?? [] };
-      return segment.id === segmentId ? updater(normalized) : normalized;
+      return segment.id === segmentId ? updater(segment) : segment;
     }),
     updated_at: new Date().toISOString(),
   }));
@@ -332,8 +313,15 @@ export function segmentedReducer(state: State, action: Action): State {
           const seg = makeSegment(item.text, ch.default_params, item.segment_kind ?? 'narration');
           if (item.emotion && isEmotionType(item.emotion)) seg.emotion = item.emotion;
           if (item.role_id !== undefined) seg.role_id = item.role_id;
-          if (item.role_snapshot !== undefined) seg.role_snapshot = item.role_snapshot;
-          if (item.voice_ref !== undefined) seg.voice_ref = item.voice_ref;
+          // Build voice from role_snapshot or voice_ref
+          if (item.role_snapshot && item.role_id) {
+            seg.voice = { source: 'role', role_id: item.role_id };
+          } else if ((item as Record<string, unknown>).voice_ref) {
+            const vr = (item as Record<string, unknown>).voice_ref as { source?: string; engine?: string; voice_id?: string } | undefined;
+            if (vr?.source === 'role') seg.voice = { source: 'role', role_id: item.role_id || '' };
+            else if (vr?.source === 'custom') seg.voice = { source: 'custom', engine: (vr.engine as EngineParams['engine']) || 'edge_tts', params: {} };
+            else seg.voice = { source: 'chapter' };
+          }
           return seg;
         });
         return { ...ch, segments: newSegs, selected_segment_id: undefined, updated_at: new Date().toISOString() };
@@ -343,7 +331,6 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const seg = makeSegment(action.text ?? '', ch.default_params);
-        if (action.voice_ref) seg.voice_ref = action.voice_ref;
         s.push(seg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
@@ -354,7 +341,6 @@ export function segmentedReducer(state: State, action: Action): State {
         const idx = s.findIndex(x => x.id === action.afterId);
         if (idx >= 0) {
           const seg = makeSegment(action.text ?? '', ch.default_params);
-          if (action.voice_ref) seg.voice_ref = action.voice_ref;
           s.splice(idx + 1, 0, seg);
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
@@ -375,52 +361,29 @@ export function segmentedReducer(state: State, action: Action): State {
       })};
     }
     case 'UPDATE_SSML': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (seg) { seg.ssml = action.ssml; if (action.by_llm) seg.ssml_annotated_by_llm = true; seg.updated_at = new Date().toISOString(); }
-        return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      // SSML is no longer stored on Segment in V3
+      return state;
     }
     case 'BATCH_SET_SSML': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        for (const u of action.updates) {
-          const seg = s.find(x => x.id === u.id);
-          if (seg) { seg.ssml = u.ssml; if (action.by_llm) seg.ssml_annotated_by_llm = true; seg.updated_at = new Date().toISOString(); }
-        }
-        return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      // SSML is no longer stored on Segment in V3
+      return state;
     }
     case 'UPDATE_PARAMS': {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
         if (seg) {
-          seg.params = { ...seg.params, ...action.params };
-          const overrides = [...(seg.overrides || [])];
-          const addOverride = (field: NonNullable<Segment['overrides']>[number]) => {
-            if (!overrides.includes(field)) overrides.push(field);
-          };
-          const removeOverride = (field: NonNullable<Segment['overrides']>[number]) => {
-            const idx = overrides.indexOf(field);
-            if (idx >= 0) overrides.splice(idx, 1);
-          };
-          const voiceParam = action.params.voice_id ?? action.params.edge_voice ?? action.params.mimo_preset_voice ?? action.params.mimo_clone_voice_id;
-          if (voiceParam !== undefined) {
-            if (voiceParam) addOverride('voice');
-            else removeOverride('voice');
+          if (action.convertFromRole) {
+            // Caller resolved effective params → convert to custom with full params (replace, don't merge)
+            const p = action.params as unknown as Record<string, unknown>;
+            const engine = (p.engine as string) || 'edge_tts';
+            seg.voice = { source: 'custom', engine: engine as 'edge_tts', params: p, role_id: seg.role_id || undefined } as Segment['voice'];
+          } else if (seg.voice.source === 'custom') {
+            seg.voice.params = { ...seg.voice.params, ...action.params as unknown as Record<string, unknown> };
+          } else {
+            // Fallback: create empty custom (will be incomplete — caller should use convertFromRole)
+            seg.voice = { source: 'custom', engine: 'edge_tts', params: action.params as unknown as Record<string, unknown> };
           }
-          if (action.params.speed !== undefined) addOverride('speed');
-          if (action.params.volume !== undefined) addOverride('volume');
-          if (action.params.pitch !== undefined) addOverride('pitch');
-          const instructionParam = action.params.instruction ?? action.params.mimo_instruction ?? action.params.voxcpm_style_control;
-          if (instructionParam !== undefined) {
-            if (instructionParam) addOverride('instruction');
-            else removeOverride('instruction');
-          }
-          if (action.params.language !== undefined) addOverride('language');
-          seg.overrides = overrides;
           seg.updated_at = new Date().toISOString();
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
@@ -446,40 +409,19 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'SET_SEGMENT_ROLE':
       return {
         project: updateSegment(p, action.id, seg => {
-          const roleParams = action.roleSnapshot?.default_engine_params;
-          const overrides = [...(seg.overrides || [])];
-          if (action.roleId && roleParams) {
-            // Only lock voice if the role has a specific voice configured
-            const rEngine = roleParams.engine || seg.params.engine;
-            const roleHasVoice = rEngine === 'edge_tts'
-              ? !!roleParams.edge_voice
-              : rEngine === 'mimo_tts'
-                ? !!(roleParams.mimo_clone_voice_id || roleParams.mimo_preset_voice)
-                : !!(roleParams.voice_id);
-            if (roleHasVoice) {
-              if (!overrides.includes('voice')) overrides.push('voice');
-            } else {
-              // Role has no voice — remove voice lock so segment follows global
-              const idx = overrides.indexOf('voice');
-              if (idx >= 0) overrides.splice(idx, 1);
-            }
+          if (action.roleId && action.roleSnapshot) {
             return {
               ...seg,
               role_id: action.roleId,
-              role_snapshot: action.roleSnapshot,
-              params: { ...seg.params, ...roleParams },
-              overrides,
+              voice: { source: 'role', role_id: action.roleId },
               updated_at: new Date().toISOString(),
             };
           }
-          // Clearing role: unlock voice to follow global
-          const idx = overrides.indexOf('voice');
-          if (idx >= 0) overrides.splice(idx, 1);
+          // Clearing role: go back to chapter defaults
           return {
             ...seg,
             role_id: null,
-            role_snapshot: null,
-            overrides,
+            voice: { source: 'chapter' },
             updated_at: new Date().toISOString(),
           };
         }),
@@ -530,29 +472,32 @@ export function segmentedReducer(state: State, action: Action): State {
         if (seg) {
           // Frontend mode: audio stored in IndexedDB via audio_id
           if (action.audio_id) {
-            seg.previous_audio_id = seg.current_audio_id;
-            seg.current_audio_id = action.audio_id;
+            seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+            seg.audio.current = { id: action.audio_id };
           }
           // Backend mode: audio stored on filesystem via audio_path
           if (action.current_audio_path !== undefined) {
-            seg.previous_audio_path = seg.current_audio_path;
-            seg.current_audio_path = action.current_audio_path;
+            seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+            seg.audio.current = { path: action.current_audio_path };
           }
           if (action.previous_audio_path !== undefined) {
-            seg.previous_audio_path = action.previous_audio_path;
+            seg.audio.previous = { path: action.previous_audio_path };
           }
-          if (action.audio_format) seg.audio_format = action.audio_format;
-          seg.duration_sec = action.duration_sec ?? seg.duration_sec;
+          if (action.audio_format) seg.audio.format = action.audio_format;
+          seg.audio.duration_sec = action.duration_sec ?? seg.audio.duration_sec;
           seg.status = 'ready';
           seg.error = undefined;
-          seg.generated_voice_id = action.generated_voice_id;
           seg.updated_at = new Date().toISOString();
-          // Update segment params with actually-used engine/voice
+          // Update segment voice with actually-used engine/voice
           if (action.updated_params) {
-            seg.params = { ...seg.params, ...action.updated_params };
+            const p = action.updated_params as Record<string, unknown>;
+            if (seg.voice.source === 'custom') {
+              seg.voice = { ...seg.voice, params: { ...seg.voice.params, ...p } };
+            }
+            // role/chapter segments: keep their source; generated_params handles staleness
           }
           if (action.generated_params) {
-            seg.generated_params = action.generated_params;
+            seg.generated_params = action.generated_params as Partial<EngineParams>;
           }
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
@@ -571,10 +516,12 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
         if (!seg) return ch;
-        // Frontend mode: swap IndexedDB audio_id
-        if (seg.previous_audio_id) { const tmp = seg.current_audio_id; seg.current_audio_id = seg.previous_audio_id; seg.previous_audio_id = tmp; }
-        // Backend mode: swap filesystem audio_path
-        if (seg.previous_audio_path) { const tmp = seg.current_audio_path; seg.current_audio_path = seg.previous_audio_path; seg.previous_audio_path = tmp; }
+        // Swap current/previous audio
+        if (seg.audio.previous) {
+          const tmp = seg.audio.current;
+          seg.audio.current = seg.audio.previous;
+          seg.audio.previous = tmp;
+        }
         seg.updated_at = new Date().toISOString();
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
@@ -584,9 +531,10 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
         if (seg) {
-          seg.previous_audio_id = seg.current_audio_id; seg.current_audio_id = undefined;
-          seg.previous_audio_path = seg.current_audio_path; seg.current_audio_path = undefined;
-          seg.duration_sec = undefined; seg.status = 'idle'; seg.generated_voice_id = undefined;
+          seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+          seg.audio.current = undefined;
+          seg.audio.duration_sec = undefined;
+          seg.status = 'idle';
         }
         return { ...ch, segments: s };
       })};
@@ -596,14 +544,14 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const seg = s.find(x => x.id === action.id);
         if (seg) {
-          const overrides = [...(seg.overrides || [])];
-          const idx = overrides.indexOf('voice');
-          if (idx >= 0) {
-            overrides.splice(idx, 1); // remove voice override → follow global
+          if (seg.voice.source === 'custom') {
+            // Remove custom voice → follow chapter (or restore role if assigned)
+            seg.voice = seg.role_id ? { source: 'role' as const, role_id: seg.role_id } : { source: 'chapter' as const };
           } else {
-            overrides.push('voice'); // add voice override → independent
+            // Enable independent voice: copy current effective params to custom source
+            // Source was 'chapter' or 'role' → now 'custom'
+            seg.voice = { source: 'custom' as const, engine: 'edge_tts', params: {} as Record<string, unknown> };
           }
-          seg.overrides = overrides;
           seg.updated_at = new Date().toISOString();
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
@@ -622,13 +570,8 @@ export function segmentedReducer(state: State, action: Action): State {
         const nxt = s[keepIdx + 1];
         // Merge text (no space — Chinese doesn't need it)
         cur.text = cur.text + nxt.text;
-        cur.ssml = undefined;
-        cur.ssml_annotated_by_llm = undefined;
         // Clear audio since text changed
-        cur.current_audio_id = undefined;
-        cur.previous_audio_id = undefined;
-        cur.duration_sec = undefined;
-        cur.generated_voice_id = undefined;
+        cur.audio = { format: 'mp3' };
         cur.status = 'idle';
         cur.error = undefined;
         cur.updated_at = new Date().toISOString();
@@ -651,19 +594,15 @@ export function segmentedReducer(state: State, action: Action): State {
         const textAfter = seg.text.slice(pos);
         // Update current segment with first half
         seg.text = textBefore;
-        seg.ssml = undefined;
-        seg.ssml_annotated_by_llm = undefined;
-        seg.current_audio_id = undefined;
-        seg.previous_audio_id = undefined;
-        seg.duration_sec = undefined;
-        seg.generated_voice_id = undefined;
+        seg.audio = { format: 'mp3' };
         seg.status = 'idle';
         seg.error = undefined;
         seg.updated_at = new Date().toISOString();
         // Create new segment for second half
-        const newSeg = makeSegment(textAfter, seg.params);
+        const newSeg = makeSegment(textAfter, {} as SegmentEngineParams);
         if (seg.emotion) newSeg.emotion = seg.emotion;
-        if (seg.overrides) newSeg.overrides = [...seg.overrides];
+        // Inherit voice
+        newSeg.voice = { ...seg.voice };
         s.splice(idx + 1, 0, newSeg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
@@ -687,7 +626,7 @@ export function segmentedReducer(state: State, action: Action): State {
             ...ch,
             segments: ch.segments.map(seg =>
               seg.role_id === action.roleId
-                ? { ...seg, role_id: null, role_snapshot: null, updated_at: now }
+                ? { ...seg, role_id: null, voice: { source: 'chapter' as const }, updated_at: now }
                 : seg
             ),
             updated_at: now,

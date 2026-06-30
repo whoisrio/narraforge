@@ -1,151 +1,68 @@
 import { describe, expect, it } from 'vitest';
-import type { Segment, SegmentEngineParams, RoleSnapshot } from '../types';
+import type { Segment, EngineParams, Role } from '../types';
 import { buildSegmentGenerationInputs, isSegmentAudioStale, isSegmentVoiceStale } from './segmentGenerationInputs';
 
-const defaultParams: SegmentEngineParams = { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' };
+const chapterDefaults: EngineParams = { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' };
 
 function makeSegment(overrides: Partial<Segment> = {}): Segment {
   return {
     id: 's1',
     text: '你好',
-    params: { engine: 'edge_tts' },
+    voice: { source: 'chapter' },
     status: 'ready',
+    audio: { format: 'mp3' },
+    segment_kind: 'narration',
     created_at: '',
     updated_at: '',
     ...overrides,
   };
 }
 
-const roleSnapshot: RoleSnapshot = {
+const sampleRole: Role = {
   id: 'role-linxia',
   name: '林夏',
-  default_engine: 'edge_tts',
-  default_voice: 'zh-CN-XiaoxiaoNeural',
-  default_engine_params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
+  role_kind: 'cast',
+  voice: { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' },
   favorite_styles: [],
+  created_at: '',
+  updated_at: '',
 };
 
 describe('segmentGenerationInputs', () => {
-  it('builds effective inputs from role snapshot before segment params', () => {
-    const inputs = buildSegmentGenerationInputs(makeSegment({ role_id: 'role-linxia', role_snapshot: roleSnapshot }), defaultParams);
+  it('builds effective inputs from chapter defaults when no role', () => {
+    const inputs = buildSegmentGenerationInputs(makeSegment(), undefined, chapterDefaults);
     expect(inputs.engine).toBe('edge_tts');
-    expect(inputs.edge_voice).toBe('zh-CN-XiaoxiaoNeural');
-    expect(inputs.role_id).toBe('role-linxia');
-    expect(inputs.role_snapshot?.name).toBe('林夏');
+    expect((inputs as Record<string, unknown>).voice).toBe('zh-CN-XiaoxiaoNeural');
+    expect(inputs.role_id).toBeNull();
   });
 
-  it('marks audio stale when prosody marks changed', () => {
-    const segment = makeSegment({
-      prosody_marks: [{ id: 'm1', start: 0, end: 1, style_tags: ['slow'] }],
-      generated_params: {
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        prosody_marks: [],
-      },
-    });
-    expect(isSegmentAudioStale(segment, defaultParams)).toBe(true);
+  it('builds effective inputs from role when segment has role', () => {
+    const seg = makeSegment({ role_id: 'role-linxia', voice: { source: 'role', role_id: 'role-linxia' } });
+    const inputs = buildSegmentGenerationInputs(seg, sampleRole, chapterDefaults);
+    expect(inputs.engine).toBe('edge_tts');
   });
 
   it('keeps audio fresh when effective inputs match generated params', () => {
-    const marks = [{ id: 'm1', start: 0, end: 1, style_tags: ['slow'] }];
-    const segment = makeSegment({
-      role_id: 'role-linxia',
-      role_snapshot: roleSnapshot,
-      prosody_marks: marks,
-      generated_params: {
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        role_id: 'role-linxia',
-        role_snapshot: roleSnapshot,
-        prosody_marks: marks,
-        segment_kind: 'narration',
-      },
+    const seg = makeSegment({
+      voice: { source: 'chapter' },
+      status: 'ready',
+      generated_params: { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' },
     });
-    expect(isSegmentAudioStale(segment, defaultParams)).toBe(false);
+    expect(isSegmentAudioStale(seg, undefined, chapterDefaults)).toBe(false);
   });
 
-  it('keeps legacy audio fresh when generated params predate role/prosody fields', () => {
-    const segment = makeSegment({
-      generated_params: {
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-      },
+  it('is stale when engine changes for follow-global segment', () => {
+    const seg = makeSegment({
+      voice: { source: 'chapter' },
+      status: 'ready',
+      generated_params: { engine: 'cosyvoice', voice_id: 'vc1' },
     });
-    expect(isSegmentAudioStale(segment, defaultParams)).toBe(false);
+    expect(isSegmentAudioStale(seg, undefined, { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' })).toBe(true);
   });
 
-  it('is NOT stale for an unchanged ready Edge-TTS segment with mixed undefined engine fields', () => {
-    // Mirrors SegmentRow's defaultParamsForStale: follow-global edge segment
-    // carries undefined voice_id / mimo_* keys that generated_params omits.
-    const segment = makeSegment({
-      params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
-      generated_params: {
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-      },
-    });
-    const followGlobalParams = {
-      engine: 'edge_tts',
-      edge_voice: 'zh-CN-XiaoxiaoNeural',
-      voice_id: undefined,
-      mimo_mode: undefined,
-      mimo_preset_voice: undefined,
-      mimo_clone_voice_id: undefined,
-    } as unknown as SegmentEngineParams;
-    expect(isSegmentAudioStale(segment, followGlobalParams)).toBe(false);
-  });
-
-  it('IS stale when the global edge voice changes for a follow-global segment', () => {
-    // The segment generated with Xiaoxiao but the live global edge voice is now
-    // Yunjian. defaultParams (effective/follow-global) must win over the voice
-    // stored in segment.params at generation time.
-    const segment = makeSegment({
-      params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
-      generated_params: {
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-      },
-    });
-    const liveGlobalParams: SegmentEngineParams = {
-      engine: 'edge_tts',
-      edge_voice: 'zh-CN-YunjianNeural',
-    };
-    expect(isSegmentAudioStale(segment, liveGlobalParams)).toBe(true);
-  });
-
-  it('is NOT stale when generated_params only differs by the backend-derived prosody_split_plan', () => {
-    // Backend-mode edge_tts segments with prosody marks store a derived
-    // prosody_split_plan in generated_params that the frontend never reproduces.
-    // It must be excluded from the comparison so the segment stays fresh.
-    const marks = [{ id: 'm1', start: 0, end: 1, style_tags: ['slow'] }];
-    const segment = makeSegment({
-      params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
-      prosody_marks: marks,
-      generated_params: {
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        prosody_marks: marks,
-        segment_kind: 'narration',
-        prosody_split_plan: [
-          { text: '你', prosody: marks[0] },
-          { text: '好', prosody: null },
-        ],
-      },
-    });
-    expect(isSegmentAudioStale(segment, defaultParams)).toBe(false);
-  });
-
-  it('is NOT stale when generated_params only differs by transient ssml/text keys', () => {
-    const segment = makeSegment({
-      params: { engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural' },
-      generated_params: {
-        engine: 'edge_tts',
-        edge_voice: 'zh-CN-XiaoxiaoNeural',
-        ssml: '<speak>你好</speak>',
-        text: '你好',
-      },
-    });
-    expect(isSegmentAudioStale(segment, defaultParams)).toBe(false);
+  it('is not stale when not ready', () => {
+    const seg = makeSegment({ status: 'idle' });
+    expect(isSegmentAudioStale(seg, undefined, chapterDefaults)).toBe(false);
   });
 });
 

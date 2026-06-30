@@ -187,8 +187,7 @@ async def upload_voice(
         id=file_id,
         name=file.filename or "Unnamed Voice",
         source_audio_path=settings.to_relative(file_path),
-        role="custom",
-        prompt_text=prompt_text or None,
+        engine={"prompt_text": prompt_text or None},
         project_id=project_id or None,
     )
     db.add(voice)
@@ -199,8 +198,8 @@ async def upload_voice(
         "id": voice.id,
         "name": voice.name,
         "audio_url": f"/api/clone/audio/{voice.id}",
-        "is_cloned": voice.is_cloned,
-        "prompt_text": voice.prompt_text,
+        "is_cloned": (voice.engine or {}).get("is_cloned", False),
+        "prompt_text": (voice.engine or {}).get("prompt_text"),
     }
 
 
@@ -283,9 +282,7 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
         id=file_id,
         name=request.name or f"Voice_{file_id[:8]}",
         source_audio_path=settings.to_relative(final_audio_path),
-        role="custom",
-        external_audio_url=audio_url,  # 保存原始 URL
-        prompt_text=request.prompt_text or None,
+        engine={"external_audio_url": audio_url, "prompt_text": request.prompt_text or None},
         project_id=request.project_id or None,
     )
     db.add(voice)
@@ -297,7 +294,7 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
         "name": voice.name,
         "audio_url": f"/api/clone/audio/{voice.id}",
         "external_audio_url": audio_url,
-        "is_cloned": voice.is_cloned,
+        "is_cloned": (voice.engine or {}).get("is_cloned", False),
     }
 
 
@@ -309,7 +306,9 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Voice not found")
 
     # 优先使用外部音频 URL（如果有），否则上传本地文件到七牛云
-    if not voice.external_audio_url:
+    engine = dict(voice.engine or {})
+    ext_audio_url = engine.get("external_audio_url")
+    if not ext_audio_url:
         resolved_src = _resolve(voice.source_audio_path)
         if not resolved_src:
             raise HTTPException(status_code=404, detail="Audio file not found")
@@ -321,34 +320,35 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         try:
             key = os.path.basename(resolved_src)
             qiniu_url = upload_to_qiniu(resolved_src, key, db=db)
-            voice.external_audio_url = qiniu_url
-            db.commit()
-            db.refresh(voice)
+            engine["external_audio_url"] = qiniu_url
+            audio_path_for_clone = qiniu_url
         except RuntimeError as e:
             raise HTTPException(status_code=500, detail=f"Qiniu upload failed: {e}")
+    else:
+        audio_path_for_clone = ext_audio_url
 
-    audio_path_for_clone = voice.external_audio_url
     logger.info(f"Using external audio URL for cloning: {audio_path_for_clone}")
 
     try:
         tts_service = await get_tts_service(db)
 
         # 调用千问声音克隆 API 进行注册
-        # register_cloned_voice 会自动检测 audio_path 是否为 URL
         result = await tts_service.register_cloned_voice(
             reference_audio_path=audio_path_for_clone,
             voice_name=request.name or voice.name,
         )
 
         # 更新数据库
-        voice.qwen_voice_id = result["voice_id"]
-        voice.role = result.get("role", request.role)
-        voice.is_cloned = True
-        voice.cloned_at = utcnow()
-        voice.clone_engine = "qwen"
-        voice.voice_engine_type = "clone"
-        voice.engine_type = "CosyVoice"
-        voice.engine_sub_type = None
+        engine = dict(voice.engine or {})
+        engine["qwen_voice_id"] = result["voice_id"]
+        engine["is_cloned"] = True
+        engine["cloned_at"] = utcnow().isoformat()
+        engine["clone_engine"] = "qwen"
+        engine["type"] = "clone"
+        engine["engine_type"] = "CosyVoice"
+        if audio_path_for_clone and audio_path_for_clone != engine.get("external_audio_url"):
+            engine["external_audio_url"] = audio_path_for_clone
+        voice.engine = engine
         voice.engine_params = request.engine_params or {}
 
         if request.name:
@@ -386,13 +386,15 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
-        voice.is_cloned = True
-        voice.cloned_at = utcnow()
-        voice.clone_engine = "mimo"
-        voice.mimo_voice_id = "mimo_voiceclone"  # 标记使用 MiMo voiceclone
-        voice.voice_engine_type = "clone"
-        voice.engine_type = "Mimo"
-        voice.engine_sub_type = "mimo-clone"
+        engine = dict(voice.engine or {})
+        engine["is_cloned"] = True
+        engine["cloned_at"] = utcnow().isoformat()
+        engine["clone_engine"] = "mimo"
+        engine["mimo_voice_id"] = "mimo_voiceclone"
+        engine["type"] = "clone"
+        engine["engine_type"] = "Mimo"
+        engine["engine_sub_type"] = "mimo-clone"
+        voice.engine = engine
         voice.engine_params = request.engine_params or {}
 
         if request.name:
@@ -430,14 +432,16 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
-        voice.is_cloned = True
-        voice.cloned_at = utcnow()
-        voice.clone_engine = "voxcpm"
-        voice.voice_engine_type = "clone"
-        voice.engine_type = "VoxCpm"
         engine_params = request.engine_params or {}
         voxcpm_mode = engine_params.get("voxcpm_mode", "clone")
-        voice.engine_sub_type = "voxcpm-ultimate" if voxcpm_mode == "ultimate" else "voxcpm-clone"
+        engine = dict(voice.engine or {})
+        engine["is_cloned"] = True
+        engine["cloned_at"] = utcnow().isoformat()
+        engine["clone_engine"] = "voxcpm"
+        engine["type"] = "clone"
+        engine["engine_type"] = "VoxCpm"
+        engine["engine_sub_type"] = "voxcpm-ultimate" if voxcpm_mode == "ultimate" else "voxcpm-clone"
+        voice.engine = engine
         voice.engine_params = engine_params
 
         if request.name:
@@ -515,16 +519,18 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
         name=request.name,
         source_audio_path=settings.to_relative(audio_path),
         description=request.description,
-        clone_engine=request.engine,
-        is_cloned=True,
-        cloned_at=utcnow(),
         avatar=request.avatar,
         project_id=request.project_id,
-        voice_engine_type="design" if request.engine != "preset" else "clone",
-        engine_type=engine_type,
-        engine_sub_type=engine_sub_type,
         engine_params=engine_params,
-        prompt_text=request.original_prompt_text or request.preview_text or request.voice_description,
+        engine={
+            "clone_engine": request.engine,
+            "is_cloned": True,
+            "cloned_at": utcnow().isoformat(),
+            "type": "design" if request.engine != "preset" else "clone",
+            "engine_type": engine_type,
+            "engine_sub_type": engine_sub_type,
+            "prompt_text": request.original_prompt_text or request.preview_text or request.voice_description,
+        },
     )
     db.add(voice)
     db.commit()
@@ -626,22 +632,28 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
             if status != "OK":
                 continue
 
-            # 检查是否已存在
-            existing = db.query(VoiceProfile).filter(
-                VoiceProfile.qwen_voice_id == voice_id
-            ).first()
+            # 检查是否已存在 (use Python filter since JSON column)
+            all_voices = db.query(VoiceProfile).all()
+            existing = None
+            for v in all_voices:
+                eng = v.engine or {}
+                if eng.get("qwen_voice_id") == voice_id:
+                    existing = v
+                    break
 
             if existing:
                 existing_count += 1
                 # 更新已有记录
                 existing.name = name
-                existing.role = qwen_voice.get("role", "custom")
+                eng = existing.engine or {}
+                eng["role"] = qwen_voice.get("role", "custom")
+                existing.engine = eng
                 db.commit()
                 db.refresh(existing)
                 results.append({
                     "id": existing.id,
                     "name": existing.name,
-                    "qwen_voice_id": existing.qwen_voice_id,
+                    "qwen_voice_id": (existing.engine or {}).get("qwen_voice_id"),
                     "action": "updated"
                 })
             else:
@@ -649,11 +661,12 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 new_voice = VoiceProfile(
                     id=str(uuid.uuid4()),
                     name=name,
-                    qwen_voice_id=voice_id,
-                    role=qwen_voice.get("role", "custom"),
-                    is_cloned=True,
-                    cloned_at=utcnow(),
-                    clone_engine="qwen",
+                    engine={
+                        "qwen_voice_id": voice_id,
+                        "is_cloned": True,
+                        "cloned_at": utcnow().isoformat(),
+                        "clone_engine": "qwen",
+                    },
                     source_audio_path=None,  # 从 Qwen 同步的没有本地音频文件
                 )
                 db.add(new_voice)
@@ -663,7 +676,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 results.append({
                     "id": new_voice.id,
                     "name": new_voice.name,
-                    "qwen_voice_id": new_voice.qwen_voice_id,
+                    "qwen_voice_id": voice_id,
                     "action": "created"
                 })
 
@@ -709,7 +722,9 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
 
     # 更新 prompt_text（如果提供了的话）
     if request.prompt_text is not None:
-        voice.prompt_text = request.prompt_text.strip() or None
+        engine = voice.engine or {}
+        engine["prompt_text"] = request.prompt_text.strip() or None
+        voice.engine = engine
 
     db.commit()
     db.refresh(voice)
@@ -717,7 +732,7 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
     return {
         "id": voice.id,
         "description": voice.description,
-        "prompt_text": voice.prompt_text,
+        "prompt_text": (voice.engine or {}).get("prompt_text"),
     }
 
 
@@ -765,10 +780,11 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Voice not found")
 
     # Qwen 声音需要删除云端音色；MiMo 声音无云端数据，跳过
-    if voice.clone_engine != "mimo" and voice.qwen_voice_id:
+    engine = voice.engine or {}
+    if engine.get("clone_engine") != "mimo" and engine.get("qwen_voice_id"):
         try:
             tts_service = await get_tts_service(db)
-            await tts_service.delete_cloned_voice(voice.qwen_voice_id)
+            await tts_service.delete_cloned_voice(engine["qwen_voice_id"])
         except Exception as e:
             logger.error(f"Failed to delete voice from Qwen: {e}")
             raise HTTPException(

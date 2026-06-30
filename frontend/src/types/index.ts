@@ -14,20 +14,104 @@ export interface VoicesEngine {
 export interface VoiceProfile {
   id: string;
   name: string;
-  audio_url: string;
-  source_audio_url?: string;     // 用于克隆的源音频 URL
-  cloned_preview_url?: string;   // 克隆/设计后的试听音频 URL
-  description?: string;  // 用户自定义的声音描述
-  prompt_text?: string;  // 参考音频的文字转录（VoxCPM Ultimate Clone 使用）
+  audio_url?: string;
+  source_audio_url?: string;
+  source_audio_path?: string;
+  cloned_preview_url?: string;
+  cloned_preview_path?: string;
+  description?: string;
+  avatar?: string | null;
+  project_id?: string | null;
+  role_kind?: string;
+  engine?: VoiceProfileEngine;
+  created_at: string;
+  updated_at?: string;
+
+  // ── V3 兼容层（后续移除）──
+  /** @deprecated Use engine?.qwen_voice_id */
   qwen_voice_id?: string;
+  /** @deprecated Use engine?.is_cloned */
+  is_cloned?: boolean;
+  /** @deprecated Use engine?.cloned_at */
+  cloned_at?: string;
+  /** @deprecated Use engine?.type */
+  clone_engine?: 'qwen' | 'mimo' | 'voxcpm';
+  /** @deprecated Use engine?.prompt_text */
+  prompt_text?: string;
+  /** @deprecated Use engine */
+  voices_engine?: VoicesEngine | null;
+  /** @deprecated No direct replacement */
   role?: string;
-  clone_engine?: 'qwen' | 'mimo' | 'voxcpm';  // 复刻引擎来源
+}
+
+// ── V3 Engine params (discriminated union) ──
+
+export interface EdgeTTSParams {
+  engine: 'edge_tts';
+  voice: string;
+  rate: string;
+  volume: string;
+}
+
+export interface MiMoParams {
+  engine: 'mimo_tts';
+  mode: 'preset' | 'voiceclone' | 'voicedesign';
+  voice_id: string;
+  instruction?: string;
+  voice_description?: string;
+}
+
+export interface CosyVoiceParams {
+  engine: 'cosyvoice';
+  voice_id: string;
+  instruction?: string;
+  ssml?: string;
+  speed?: number;
+  volume?: number;
+  pitch?: number;
+  language?: string;
+  enable_ssml?: boolean;
+}
+
+export interface VoxCPMParams {
+  engine: 'voxcpm';
+  mode: 'tts_design' | 'clone' | 'ultimate';
+  voice_id: string;
+  voice_description?: string;
+  style_control?: string;
+  prompt_text?: string;
+  cfg_value?: number;
+  inference_timesteps?: number;
+}
+
+export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams;
+
+// ── Voice source for segments ──
+
+export type VoiceSource =
+  | { source: 'chapter' }
+  | { source: 'role'; role_id: string }
+  | { source: 'custom'; engine: EngineParams['engine']; params: Record<string, unknown>; role_id?: string };
+
+// ── Voice engine for profiles ──
+
+export type VoiceProfileEngine = {
+  type: 'qwen' | 'mimo' | 'voxcpm';
+  qwen_voice_id?: string;
+  mimo_voice_id?: string;
+  external_audio_url?: string;
+  prompt_text?: string;
   is_cloned?: boolean;
   cloned_at?: string;
-  created_at: string;
-  avatar?: string | null;  // 头像（data URL 或外部 URL）
-  voices_engine?: VoicesEngine | null;  // 音色来源与引擎信息
-  project_id?: string | null;  // null = 全局, 非空 = 项目专属
+};
+
+// ── Audio container ──
+
+export interface SegmentAudio {
+  current?: { id?: string; path?: string };
+  previous?: { id?: string; path?: string };
+  format: string;
+  duration_sec?: number;
 }
 
 // TTS Config (model configurations)
@@ -288,10 +372,16 @@ export interface RoleSnapshot {
   avatar?: string | null;
   description?: string | null;
   role_kind?: 'narrator' | 'cast' | null;
-  default_engine: SegmentEngineParams['engine'];
-  default_voice?: string | null;
-  default_engine_params: SegmentEngineParams;
+  voice?: EngineParams;
   favorite_styles: FavoriteStyle[];
+
+  // ── V3 兼容层（后续移除）──
+  /** @deprecated Use voice.engine */
+  default_engine: SegmentEngineParams['engine'];
+  /** @deprecated Use voice */
+  default_voice: string | null;
+  /** @deprecated Use voice */
+  default_engine_params: SegmentEngineParams;
 }
 
 export interface Role extends RoleSnapshot {
@@ -304,10 +394,16 @@ export interface RoleUpdate {
   avatar?: string | null;
   description?: string | null;
   role_kind?: 'narrator' | 'cast' | null;
-  default_engine?: SegmentEngineParams['engine'];
-  default_voice?: string | null;
-  default_engine_params?: Partial<SegmentEngineParams>;
+  voice?: Partial<EngineParams>;
   favorite_styles?: FavoriteStyle[];
+
+  // ── V3 兼容层（后续移除）──
+  /** @deprecated Use voice */
+  default_engine?: SegmentEngineParams['engine'];
+  /** @deprecated Use voice */
+  default_voice?: string | null;
+  /** @deprecated Use voice */
+  default_engine_params?: Partial<SegmentEngineParams>;
 }
 
 export interface ProsodyMark {
@@ -345,35 +441,46 @@ export interface VoiceRef {
 export interface Segment {
   id: string;
   text: string;
-  ssml?: string;
-  params: SegmentEngineParams;
-  /** 当前激活的音色引用（显式存储，避免复杂推断） */
-  voice_ref?: VoiceRef;
+  voice: VoiceSource;
   status: SegmentStatus;
   error?: string;
-  current_audio_id?: string;
-  previous_audio_id?: string;
-  /** Backend-relative path to the audio file under the project asset directory (backend mode). */
-  current_audio_path?: string;
-  previous_audio_path?: string;
-  /** Generated audio format (mp3 / wav). */
-  audio_format?: string;
-  /** Effective params used to generate the current audio (for stale detection). */
-  generated_params?: Record<string, unknown>;
-  duration_sec?: number;
-  ssml_annotated_by_llm?: boolean;
-  /** Emotion label from LLM analysis */
+  audio: SegmentAudio;
+  generated_params?: Partial<EngineParams>;
   emotion?: EmotionType;
   role_id?: string | null;
-  role_snapshot?: RoleSnapshot | null;
-  segment_kind?: SegmentKind;
-  prosody_marks?: ProsodyMark[];
-  /** Which params have been explicitly overridden (vs inherited from global) */
-  overrides?: ('voice' | 'speed' | 'volume' | 'pitch' | 'instruction' | 'language')[];
-  /** The voice_id that was actually used when audio was generated (for stale detection) */
-  generated_voice_id?: string;
+  segment_kind: SegmentKind;
   created_at: string;
   updated_at: string;
+
+  // ── V3 兼容层（后续移除）──
+  /** @deprecated Use voice */
+  params?: SegmentEngineParams;
+  /** @deprecated Use voice.source === 'custom' */
+  overrides?: string[];
+  /** @deprecated Use voice */
+  voice_ref?: VoiceRef;
+  /** @deprecated Use audio.current?.id */
+  current_audio_id: string;
+  /** @deprecated Use audio.previous?.id */
+  previous_audio_id: string;
+  /** @deprecated Use audio.current?.path */
+  current_audio_path: string | undefined;
+  /** @deprecated Use audio.previous?.path */
+  previous_audio_path: string | undefined;
+  /** @deprecated Use audio.format */
+  audio_format: string;
+  /** @deprecated Use audio.duration_sec */
+  duration_sec: number;
+  /** @deprecated Removed in V3 */
+  ssml: string;
+  /** @deprecated Removed in V3 */
+  ssml_annotated_by_llm: boolean;
+  /** @deprecated Removed in V3 */
+  role_snapshot: RoleSnapshot | null;
+  /** @deprecated Removed in V3 */
+  prosody_marks: ProsodyMark[];
+  /** @deprecated Removed in V3 */
+  generated_voice_id: string;
 }
 
 /** 章节 — 每个章节有独立的模型、文本、片段 */

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import type { Segment } from '../../types';
 import { useTranslation } from '../../i18n';
 import { useStorageMode } from '../../hooks/useStorageMode';
-import { getTTSAudioBlob } from '../../services/indexedDB';
+import { segParams } from '../../services/segmentShims';
 import { segmentedProjectApi, subtitleLlmApi } from '../../services/api';
 import { buildSRTContent, concatAudioBuffers, encodeWAV } from '../../services/audioConcat';
 import styles from './ExportDialog.module.css';
@@ -62,7 +62,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
       let accumulated_ms = startOffset * 1000;
       const segsWithTs = segments.map((s) => {
         const start = accumulated_ms;
-        const end = start + (s.duration_sec ?? 0) * 1000;
+        const end = start + (s.audio.duration_sec ?? 0) * 1000;
         accumulated_ms = end;
         return { ...s, _startMs: start, _endMs: end };
       });
@@ -70,7 +70,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
       // Audio: backend storage exports MP3 from server; frontend storage keeps WAV concat.
       if (options.includes('audio')) {
         const ready = segsWithTs.filter(s => (
-          s.status === 'ready' && (storageMode === 'backend' ? s.current_audio_path : s.current_audio_id)
+          s.status === 'ready' && (storageMode === 'backend' ? s.audio.current?.path : s.audio.current?.id)
         ));
         if (ready.length < segsWithTs.length) {
           const confirmMsg = t('segment.exportDialog.confirmSkip', { 
@@ -100,8 +100,9 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
         } else {
           const buffers: AudioBuffer[] = [];
           for (const s of ready) {
-            const blob = await getTTSAudioBlob(s.current_audio_id!);
-            if (!blob) continue;
+            const current = s.audio.current;
+            if (!current?.id) continue;
+            const blob = await getTTSAudioBlob(current.id);
             try {
               const ac = new AudioContext();
               const ab = await ac.decodeAudioData(await blob.arrayBuffer());
@@ -122,10 +123,10 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
         const json = JSON.stringify({
           name, schema_version: 1, created_at: new Date().toISOString(),
           chapter_design_title: chapterDesignTitle,
-          total_duration_sec: segsWithTs.reduce((a, s) => a + (s.duration_sec ?? 0), 0),
+          total_duration_sec: segsWithTs.reduce((a, s) => a + (s.audio.duration_sec ?? 0), 0),
           segments: segsWithTs.map(s => ({
-            text: s.text, ssml: s.ssml, params: s.params,
-            start_ms: s._startMs, end_ms: s._endMs, duration_sec: s.duration_sec ?? 0,
+            text: s.text, ssml: '', params: segParams(s),
+            start_ms: s._startMs, end_ms: s._endMs, duration_sec: s.audio.duration_sec ?? 0,
           })),
         }, null, 2);
         await exportTextFile(`${sanitized}.script.json`, json, 'application/json');

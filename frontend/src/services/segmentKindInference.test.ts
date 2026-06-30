@@ -5,9 +5,7 @@ import { assignRoleForSplitItem, inferSegmentKind, inferSpeakerName } from './se
 const narrator = {
   id: 'role-narrator',
   name: '默认旁白',
-  default_engine: 'edge_tts',
-  default_voice: 'Yunxi',
-  default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunxiNeural' },
+  voice: { engine: 'edge_tts' as const, voice: 'Yunxi', rate: '+0%', volume: '+0%' },
   favorite_styles: [],
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
@@ -16,9 +14,7 @@ const narrator = {
 const castA = {
   id: 'role-guest-a',
   name: '嘉宾A',
-  default_engine: 'edge_tts',
-  default_voice: 'Yunyang',
-  default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunyangNeural' },
+  voice: { engine: 'edge_tts' as const, voice: 'Yunyang', rate: '+0%', volume: '+0%' },
   favorite_styles: [],
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
@@ -50,6 +46,7 @@ describe('segmentKindInference', () => {
     expect(narration.segment_kind).toBe('narration');
     expect(narration.role_id).toBeNull();
     expect(narration.role_snapshot).toBeNull();
+
   });
 
   it('assigns matching cast role to dialogue segments', () => {
@@ -59,6 +56,7 @@ describe('segmentKindInference', () => {
     expect(dialogue.segment_kind).toBe('dialogue');
     expect(dialogue.role_id).toBe('role-guest-a');
     expect(dialogue.role_snapshot?.name).toBe('嘉宾A');
+    expect(dialogue.role_snapshot?.voice?.engine).toBe('edge_tts');
   });
 
   it('leaves unmatched dialogue without a cast role', () => {

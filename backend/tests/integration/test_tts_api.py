@@ -146,9 +146,11 @@ class TestTTSAPI:
             id="voice-row-1",
             name="Narrator",
             source_audio_path="/tmp/narrator.wav",
-            is_cloned=True,
-            qwen_voice_id="cosyvoice-v3-narrator",
-            clone_engine="qwen",
+            engine={
+                "is_cloned": True,
+                "qwen_voice_id": "cosyvoice-v3-narrator",
+                "clone_engine": "qwen",
+            },
         )
         db_session.add(voice)
         db_session.commit()

@@ -35,6 +35,7 @@ interface SegmentListProps {
   onPlay: (id: string) => void;
   onTrimSilence?: (id: string) => void;
   onUndo: (id: string) => void;
+  onConfirmCustom?: (id: string, localParams: Record<string, unknown>) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
   onUpdateText?: (id: string, text: string) => void;
@@ -89,6 +90,7 @@ export function SegmentList(props: SegmentListProps) {
     compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine: props.engine,
     globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,
+    roles: allRoles, roleSnapshot: seg.role_snapshot ?? undefined,
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
@@ -157,12 +159,15 @@ export function SegmentList(props: SegmentListProps) {
                 <SegmentEditPanel
                   segment={editingSegment}
                   voices={props.voices}
+                  roles={props.roles}
                   globalVoiceName={props.globalVoiceName}
                   onClose={() => onEdit('')}
                   onUpdateText={props.onUpdateText || (() => {})}
                   onUpdateSSML={props.onUpdateSSML || (() => {})}
                   onUpdateParams={props.onUpdateParams || (() => {})}
                   onUpdateEmotion={props.onUpdateEmotion}
+                  onUndo={props.onUndo}
+                  onConfirmCustom={props.onConfirmCustom}
                   onRegenerate={props.onRegenerate}
                   onAnnotateSSML={(id) => props.onAnnotateSSML?.(id)}
                   onSplit={props.onSplit}

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Segment, SegmentEngineParams } from '../../types';
 import { useTranslation } from '../../i18n';
+import { segEngine, segEffectiveParams } from '../../services/segmentShims';
 import styles from './SegmentEditDrawer.module.css';
 
 interface SegmentEditDrawerProps {
@@ -20,10 +21,11 @@ interface SegmentEditDrawerContentProps extends Omit<SegmentEditDrawerProps, 'se
 function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML, onUpdateParams, onRegenerate, onAnnotateSSML }: SegmentEditDrawerContentProps) {
   const { t } = useTranslation();
   const [localText, setLocalText] = useState(segment.text);
-  const [localSSML, setLocalSSML] = useState(segment.ssml ?? '');
+  const [localSSML, setLocalSSML] = useState('');
   const [dirty, setDirty] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isCosyVoice = segment.params.engine === 'cosyvoice';
+  const isCosyVoice = segEngine(segment) === 'cosyvoice';
+  const eff = segEffectiveParams(segment);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -77,17 +79,17 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
           <div className={styles.paramGrid}>
             <label className={styles.label}>{t('segment.editDrawer.speed')}</label>
             <input type="range" min={0.5} max={2} step={0.1}
-              value={segment.params.speed ?? 1.0}
+              value={eff.speed ?? 1.0}
               onChange={(e) => onUpdateParams(segment.id, { speed: parseFloat(e.target.value) })} />
 
             <label className={styles.label}>{t('segment.editDrawer.pitch')}</label>
             <input type="range" min={0.5} max={2} step={0.1}
-              value={segment.params.pitch ?? 1.0}
+              value={eff.pitch ?? 1.0}
               onChange={(e) => onUpdateParams(segment.id, { pitch: parseFloat(e.target.value) })} />
 
             <label className={styles.label}>{t('segment.editDrawer.volume')}</label>
             <input type="range" min={0} max={100} step={1}
-              value={segment.params.volume ?? 80}
+              value={eff.volume ?? 80}
               onChange={(e) => onUpdateParams(segment.id, { volume: parseInt(e.target.value) })} />
           </div>
         </div>

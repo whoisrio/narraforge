@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import shutil
 from datetime import datetime, timezone
@@ -82,110 +83,6 @@ def _dump_animation_spec(spec: dict[str, Any] | None) -> str | None:
     return json.dumps(spec, ensure_ascii=False)
 
 
-def _build_voice_ref_for_segment(
-    seg: SegmentedProjectSegment,
-    default_params: dict[str, Any],
-    voice_profiles: dict[str, Any],
-) -> dict[str, Any] | None:
-    """为旧 segment 构建 voice_ref（如果没有的话）。
-
-    Args:
-        seg: segment 记录
-        default_params: chapter 的 default_params
-        voice_profiles: {voice_id: {name, qwen_voice_id, id}} 映射
-    """
-    if seg.voice_ref:
-        return seg.voice_ref
-
-    params = seg.params or {}
-    role_snapshot = seg.role_snapshot
-    role_id = getattr(seg, "role_id", None)
-
-    # 有角色 → 使用角色信息
-    if role_id and role_snapshot:
-        return {
-            "name": role_snapshot.get("name", "角色"),
-            "source": "role",
-            "voice_id": role_snapshot.get("default_voice", ""),
-            "engine": role_snapshot.get("default_engine", "edge_tts"),
-            "role_id": role_id,
-        }
-
-    # 无角色 → 根据引擎构建
-    engine = params.get("engine") or default_params.get("engine", "edge_tts")
-
-    if engine == "edge_tts":
-        edge_voice = params.get("edge_voice") or default_params.get("edge_voice", "")
-        parts = edge_voice.split("-")
-        name = parts[-1].replace("Neural", "").replace("V2", "") if parts else edge_voice
-        return {"name": name or "未选择", "source": "global", "voice_id": edge_voice, "engine": "edge_tts"}
-
-    if engine == "mimo_tts":
-        mode = params.get("mimo_mode") or default_params.get("mimo_mode", "preset")
-        if mode == "voiceclone":
-            clone_id = params.get("mimo_clone_voice_id") or default_params.get("mimo_clone_voice_id", "")
-            v = voice_profiles.get(clone_id)
-            name = v["name"] if v else "自定义音色"
-            return {"name": name, "source": "global", "voice_id": clone_id, "engine": "mimo_tts"}
-        preset = params.get("mimo_preset_voice") or default_params.get("mimo_preset_voice", "冰糖")
-        return {"name": preset, "source": "global", "voice_id": preset, "engine": "mimo_tts"}
-
-    if engine == "voxcpm":
-        voice_id = params.get("voice_id") or default_params.get("voice_id", "")
-        v = voice_profiles.get(voice_id)
-        name = v["name"] if v else "VoxCPM 音色"
-        return {"name": name, "source": "global", "voice_id": voice_id, "engine": "voxcpm"}
-
-    # cosyvoice (default)
-    voice_id = params.get("voice_id") or default_params.get("voice_id", "")
-    v = voice_profiles.get(voice_id) or voice_profiles.get(
-        next((k for k, vp in voice_profiles.items() if vp.get("qwen_voice_id") == voice_id), None)
-    )
-    name = v["name"] if v else "CosyVoice 音色"
-    return {"name": name, "source": "global", "voice_id": voice_id, "engine": "cosyvoice"}
-
-
-def _migrate_voice_refs(db: Session, project: SegmentedProject) -> bool:
-    """批量为旧 segment 填充 voice_ref. 返回是否有更新."""
-    from app.models.voice_profile import VoiceProfile
-
-    # 收集所有需要迁移的 segment
-    segments_to_migrate = []
-    for ch in project.chapters:
-        for seg in ch.segments:
-            if not seg.voice_ref:
-                segments_to_migrate.append(seg)
-
-    if not segments_to_migrate:
-        return False
-
-    # 加载所有 voice profiles（用于查找名称）
-    profiles = db.query(VoiceProfile).filter(VoiceProfile.is_cloned == True).all()
-    voice_map = {}
-    for vp in profiles:
-        voice_map[vp.id] = {"name": vp.name, "qwen_voice_id": vp.qwen_voice_id, "id": vp.id}
-        if vp.qwen_voice_id:
-            voice_map[vp.qwen_voice_id] = {"name": vp.name, "qwen_voice_id": vp.qwen_voice_id, "id": vp.id}
-
-    # 构建 chapter default_params 映射
-    chapter_params = {ch.id: (ch.default_params or {}) for ch in project.chapters}
-
-    # 迁移
-    updated = False
-    for seg in segments_to_migrate:
-        dp = chapter_params.get(seg.chapter_id, {})
-        voice_ref = _build_voice_ref_for_segment(seg, dp, voice_map)
-        if voice_ref:
-            seg.voice_ref = voice_ref
-            updated = True
-
-    if updated:
-        db.flush()
-        logger.info(f"[migration] voice_ref: migrated {len(segments_to_migrate)} segments in project {project.id}")
-
-    return updated
-
-
 # ----- serialization -----
 
 def project_to_summary(p: SegmentedProject) -> ProjectSummary:
@@ -196,9 +93,10 @@ def project_to_summary(p: SegmentedProject) -> ProjectSummary:
     for chapter in p.chapters:
         segment_count += len(chapter.segments)
         for segment in chapter.segments:
-            if segment.current_audio_path:
+            audio = segment.audio or {}
+            if audio.get("current", {}).get("path"):
                 generated_count += 1
-            duration_sec += float(segment.duration_sec or 0)
+            duration_sec += float(audio.get("current", {}).get("duration_sec", 0))
     return ProjectSummary(
         id=p.id,
         name=p.name,
@@ -251,23 +149,14 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         meta = _extract_chapter_meta(dp)
         segs = [
             SegmentIn(
-                id=s.id, position=s.position, text=s.text, ssml=s.ssml,
-                emotion=s.emotion, params=s.params or {},
+                id=s.id, position=s.position, text=s.text,
+                emotion=s.emotion,
                 role_id=getattr(s, "role_id", None),
-                role_snapshot=getattr(s, "role_snapshot", None),
                 segment_kind=getattr(s, "segment_kind", None) or "narration",
-                prosody_marks=getattr(s, "prosody_marks", None) or [],
-                voice_ref=getattr(s, "voice_ref", None),
-                locked_params=s.locked_params or [],
+                voice=getattr(s, "voice", {}) or {"source": "chapter"},
                 generated_params=s.generated_params,
-                current_audio_path=s.current_audio_path,
-                previous_audio_path=s.previous_audio_path,
-                audio_format=s.audio_format or "mp3",
-                duration_sec=s.duration_sec,
-                audio_missing=bool(s.audio_missing),
+                audio=getattr(s, "audio", None),
                 generated_at=_to_iso(s.generated_at),
-                ssml_annotated_by_llm=bool(s.ssml_annotated_by_llm),
-                # P2 v3: 解析 JSON 字符串回 dict (None 表示未设置)
                 animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
                 updated_at=_to_iso(s.updated_at),
@@ -282,12 +171,6 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
                 design_title=getattr(ch, "design_title", None),
-                # P2 v2: 旁白文档关联
-                narration_document_id=ch.narration_document_id,
-                narration_version=ch.narration_version,
-                narration_slice_start=ch.narration_slice_start,
-                narration_slice_end=ch.narration_slice_end,
-                narration_synced_at=_to_iso(ch.narration_synced_at),
                 created_at=_to_iso(ch.created_at),
                 updated_at=_to_iso(ch.updated_at),
                 segments=segs,
@@ -298,8 +181,6 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         id=p.id, name=p.name, schema_version=p.schema_version,
         layout=p.layout, active_chapter_id=p.active_chapter_id,
         original_text=p.original_text,
-        # Pyright 误判 Column[] 类型; 实际运行时值是 str | None
-        active_narration_version=getattr(p, "active_narration_version", None),
         animation_theme=getattr(p, "animation_theme", None),
         remotion_project_path=getattr(p, "remotion_project_path", None),
         source_document=getattr(p, "source_document", None),
@@ -327,8 +208,6 @@ def get_project_detail(db: Session, project_id: str) -> ProjectDetail | None:
     p = db.query(SegmentedProject).filter_by(id=project_id).first()
     if p is None:
         return None
-    # 自动迁移旧 segment 的 voice_ref
-    _migrate_voice_refs(db, p)
     return project_to_detail(p)
 
 
@@ -352,7 +231,7 @@ def get_segment_row(
 ) -> SegmentedProjectSegment | None:
     seg = (
         db.query(SegmentedProjectSegment)
-        .filter_by(id=segment_id, chapter_id=chapter_id, project_id=project_id)
+        .filter_by(id=segment_id, chapter_id=chapter_id)
         .first()
     )
     return seg
@@ -370,14 +249,9 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     p.layout = project.layout
     p.active_chapter_id = project.active_chapter_id
     p.original_text = project.original_text
-    # P7: 源文档 markdown 内容
     p.source_document = project.source_document
-    # P2 v2: 旁白文档当前活跃版本
-    setattr(p, "active_narration_version", project.active_narration_version)
-    # P2 v3: 整体动画主题
     setattr(p, "animation_theme", project.animation_theme)
     setattr(p, "remotion_project_path", project.remotion_project_path)
-    # P3: 默认旁白角色 + 快照
     setattr(p, "default_narrator_role_id", project.default_narrator_role_id)
     setattr(p, "configs", project.configs)
     setattr(p, "default_narrator_snapshot", project.default_narrator_snapshot)
@@ -400,12 +274,6 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.split_config = ch_in.split_config or {}
         ch.original_text = ch_in.original_text
         setattr(ch, "design_title", ch_in.design_title)
-        # P2 v2: 旁白文档关联 (绕过 Pyright 对 Column[] 类型的过度严格检查)
-        setattr(ch, "narration_document_id", ch_in.narration_document_id)
-        setattr(ch, "narration_version", ch_in.narration_version)
-        setattr(ch, "narration_slice_start", ch_in.narration_slice_start)
-        setattr(ch, "narration_slice_end", ch_in.narration_slice_end)
-        setattr(ch, "narration_synced_at", _parse_iso(ch_in.narration_synced_at))
         if ch_in.created_at:
             ch.created_at = _parse_iso(ch_in.created_at)
         ch.updated_at = utcnow()
@@ -418,37 +286,20 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             seg = existing_segments.get(s_in.id)
             if seg is None:
                 seg = SegmentedProjectSegment(
-                    id=s_in.id, chapter_id=ch.id, project_id=p.id,
+                    id=s_in.id, chapter_id=ch.id,
                 )
                 db.add(seg)
             seg.position = s_in.position if s_in.position is not None else seg_idx
             seg.text = s_in.text or ""
-            seg.ssml = s_in.ssml
             seg.emotion = s_in.emotion
-            # P3: 段落角色 + 快照 + 类型 + 局部语气标注
             setattr(seg, "role_id", s_in.role_id)
-            setattr(seg, "role_snapshot", s_in.role_snapshot)
             setattr(seg, "segment_kind", s_in.segment_kind or "narration")
-            setattr(seg, "prosody_marks", s_in.prosody_marks or [])
-            seg.params = s_in.params or {}
-            # 显式的音色引用
-            if s_in.voice_ref is not None:
-                seg.voice_ref = s_in.voice_ref
-            seg.locked_params = s_in.locked_params or []
+            setattr(seg, "voice", s_in.voice or {"source": "chapter"})
             if s_in.generated_params is not None:
                 seg.generated_params = s_in.generated_params
-            if s_in.current_audio_path is not None:
-                seg.current_audio_path = s_in.current_audio_path
-            if s_in.previous_audio_path is not None:
-                seg.previous_audio_path = s_in.previous_audio_path
-            seg.audio_format = s_in.audio_format or seg.audio_format or "mp3"
-            if s_in.duration_sec is not None:
-                seg.duration_sec = s_in.duration_sec
-            seg.audio_missing = bool(s_in.audio_missing)
+            if s_in.audio is not None:
+                setattr(seg, "audio", s_in.audio)
             seg.generated_at = _parse_iso(s_in.generated_at)
-            seg.ssml_annotated_by_llm = bool(s_in.ssml_annotated_by_llm)
-            # P2 v3: 动画规格. None 表示"未指定", 保留旧值 (避免误清).
-            # 显式清除请调 DELETE /api/.../segments/{id}/animation
             if s_in.animation_spec is not None:
                 setattr(seg, "animation_spec_json", _dump_animation_spec(s_in.animation_spec))
             if s_in.created_at:
@@ -480,8 +331,6 @@ def _mirror_to_filesystem(p: SegmentedProject, project: ProjectIn) -> None:
         assets.ensure_project_layout(p.id, ch.id)
         for s_in in ch_in.segments:
             assets.write_segment_text(p.id, ch.id, s_in.id, s_in.text or "")
-            if s_in.ssml is not None:
-                assets.write_segment_ssml(p.id, ch.id, s_in.id, s_in.ssml)
     assets.write_manifest(p.id, project_to_detail(p).model_dump(mode="json"))
 
 
@@ -489,10 +338,9 @@ def delete_project(db: Session, project_id: str) -> bool:
     p = db.query(SegmentedProject).filter_by(id=project_id).first()
     if p is None:
         return False
-    # P2 v2: 显式清理源 (FK CASCADE 在 SQLite 默认未启用, 不能依赖)
-    from app.models.narration import SourceDocument, NarrationDocument
+    # 显式清理源 (FK CASCADE 在 SQLite 默认未启用, 不能依赖)
+    from app.models.source_document import SourceDocument
     db.query(SourceDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
-    db.query(NarrationDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.delete(p)
     db.commit()
     assets.remove_project_dir(project_id)
@@ -570,20 +418,21 @@ def update_segment_after_synth(
     duration_sec: float | None,
     generated_params: dict[str, Any],
 ) -> None:
-    seg.current_audio_path = current_audio_path
-    seg.previous_audio_path = previous_audio_path
-    seg.audio_format = audio_format
-    seg.duration_sec = duration_sec
+    audio_data = {
+        "current": {"path": current_audio_path, "format": audio_format},
+    }
+    if duration_sec is not None:
+        audio_data["current"]["duration_sec"] = duration_sec
+    if previous_audio_path:
+        audio_data["previous"] = {"path": previous_audio_path}
+    seg.audio = audio_data
     seg.generated_params = generated_params
     seg.generated_at = utcnow()
-    seg.audio_missing = False
     seg.updated_at = utcnow()
     seg.chapter.updated_at = utcnow()
     seg.chapter.project.updated_at = utcnow()
     db.flush()
     assets.write_segment_text(seg.project_id, seg.chapter_id, seg.id, seg.text or "")
-    if seg.ssml is not None:
-        assets.write_segment_ssml(seg.project_id, seg.chapter_id, seg.id, seg.ssml)
     db.commit()
 
 
@@ -636,6 +485,7 @@ def synthesize_with_engine(
             clone_voice_id=params.get("mimo_clone_voice_id"),
             voice_description=params.get("mimo_voice_description"),
             instruction=params.get("mimo_instruction", ""),
+            context=params.get("context"),
             db=db,
         )
     if engine == "voxcpm":
@@ -663,35 +513,6 @@ def svc_get_segment(
     return seg
 
 
-def plan_prosody_subsegments(text: str, marks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Split text into plain and marked ranges for engines that need fallback generation."""
-    normalized = sorted(
-        [mark for mark in marks if isinstance(mark.get("start"), int) and isinstance(mark.get("end"), int)],
-        key=lambda mark: mark["start"],
-    )
-    parts: list[dict[str, Any]] = []
-    cursor = 0
-    text_length = len(text)
-    for mark in normalized:
-        start = max(0, min(mark["start"], text_length))
-        end = max(start, min(mark["end"], text_length))
-        if start > cursor:
-            parts.append({"text": text[cursor:start], "prosody": None})
-        if end > start:
-            parts.append({"text": text[start:end], "prosody": mark})
-        cursor = max(cursor, end)
-    if cursor < text_length:
-        parts.append({"text": text[cursor:], "prosody": None})
-    return [part for part in parts if part["text"]]
-
-
-def should_use_split_fallback(engine: str, prosody_marks: list[dict[str, Any]]) -> bool:
-    """Whether an engine needs the split-and-concat fallback for local prosody marks."""
-    if not prosody_marks:
-        return False
-    return engine == "edge_tts"
-
-
 def synthesize_segment(
     db: Session,
     project_id: str,
@@ -704,45 +525,38 @@ def synthesize_segment(
 ) -> SegmentedProjectSegment:
     seg = svc_get_segment(db, project_id, chapter_id, segment_id)
     chapter = seg.chapter
-    # P3: 角色快照的 default_engine_params 介于章节默认与段落 params 之间 (优先级正确性见 Task 7)
-    role_snapshot = getattr(seg, "role_snapshot", None)
-    role_params = role_snapshot.get("default_engine_params") if isinstance(role_snapshot, dict) else None
-    effective = _merge_params(chapter.default_params, role_params, seg.params, request_params)
-    logger.info(f"[synthesize_segment] role_params={role_params}, request_params={request_params}, merged engine={effective.get('engine')}, mimo_mode={effective.get('mimo_mode')}, mimo_clone_voice_id={effective.get('mimo_clone_voice_id')}, voxcpm_mode={effective.get('voxcpm_mode')}, voice_id={effective.get('voice_id')}")
 
-    # P3: 把角色 / 局部语气元数据写入 generated_params (可复现 + 前端 stale 检测)
+    # Get role voice parameters if role_id is set
     role_id = getattr(seg, "role_id", None)
-    prosody_marks = getattr(seg, "prosody_marks", None) or []
+    role_params: dict[str, Any] | None = None
+    if role_id:
+        from app.models.role import Role
+        role = db.query(Role).filter_by(id=role_id).first()
+        if role and role.voice:
+            role_params = role.voice.get("params", {}) if isinstance(role.voice, dict) else {}
+
+    effective = _merge_params(chapter.default_params, role_params, request_params)
+    logger.info(f"[synthesize_segment] role_params={role_params}, request_params={request_params}, merged engine={effective.get('engine')}, mimo_mode={effective.get('mimo_mode')}")
+
+    # Preserve role_id and segment_kind for reproducibility
     if role_id is not None:
         effective["role_id"] = role_id
-    if role_snapshot is not None:
-        effective["role_snapshot"] = role_snapshot
-    effective["prosody_marks"] = prosody_marks
     effective["segment_kind"] = getattr(seg, "segment_kind", None) or "narration"
+
     engine = effective.get("engine", "edge_tts")
     text_to_speak = text_override or seg.text or ""
-    if ssml_override is not None:
-        effective["ssml"] = ssml_override
 
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
 
-    if should_use_split_fallback(engine, prosody_marks):
-        # First version keeps UI and metadata ready for split fallback while continuing
-        # to generate one segment audio. The dedicated concat execution can replace
-        # this branch without changing API or stored fields.
-        effective["prosody_split_plan"] = plan_prosody_subsegments(text_to_speak, prosody_marks)
-
     audio_bytes, _native_fmt = synthesize_with_engine(engine, text_to_speak, effective, db=db)
     assets.ensure_project_layout(project_id, chapter_id)
 
-    prev_rel: str | None = seg.current_audio_path
+    existing_audio = seg.audio or {}
+    prev_rel: str | None = existing_audio.get("current", {}).get("path") if isinstance(existing_audio, dict) else None
 
     if is_ffmpeg_available():
         target_mp3 = assets.segment_audio_path(project_id, chapter_id, seg.id, "mp3")
-        # Store already-trimmed segment audio so single playback, play-all,
-        # and export share the same source audio. Default edge keep is 80ms;
-        # sentence-period endings keep 100ms at the tail.
         leading_keep_ms = 80
         trailing_keep_ms = 100 if _ends_with_sentence_period(str(text_to_speak)) else 80
         try:
@@ -756,8 +570,6 @@ def synthesize_segment(
         transcode_to_mp3(audio_bytes, target_mp3)
         new_rel = target_mp3.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "mp3"
-        # Probe the actual duration we just wrote. Never raise — None is fine
-        # (frontend falls back to a rough estimate from text length).
         try:
             duration_sec = probe_audio_duration(target_mp3)
         except Exception as e:  # noqa: BLE001
@@ -802,15 +614,19 @@ def export_chapter_audio_mp3(
     input_paths: list[Path] = []
     base = assets.settings.segmented_dir.resolve()
     for seg in sorted(chapter.segments, key=lambda s: s.position):
-        if not seg.current_audio_path or seg.audio_missing:
+        audio = seg.audio or {}
+        current = audio.get("current", {}) if isinstance(audio, dict) else {}
+        current_path = current.get("path")
+        if not current_path:
             continue
-        abs_path = (assets.settings.segmented_dir / seg.current_audio_path).resolve()
+        abs_path = (assets.settings.segmented_dir / current_path).resolve()
         if not abs_path.is_relative_to(base):
             raise ValueError("invalid_audio_path")
         if abs_path.exists():
             input_paths.append(abs_path)
         else:
-            seg.audio_missing = True
+            audio["missing"] = True
+            seg.audio = audio
 
     if not input_paths:
         db.commit()
@@ -886,7 +702,7 @@ def mark_silent_segments_as_missing(
     min_size_bytes: int = _SILENT_FILE_THRESHOLD_BYTES,
 ) -> dict[str, int]:
     """Scan every segment with a backend audio file and flag suspiciously
-    small files as ``audio_missing=True``.
+    small files as ``missing=True`` in the audio JSON.
 
     Idempotent: segments already marked are left alone. The audio file on
     disk is NOT deleted — the user may still want to inspect or recover it.
@@ -895,7 +711,6 @@ def mark_silent_segments_as_missing(
     ``file_missing`` counts so callers can log progress and tests can assert.
     """
     from app.core.config import settings
-    from app.models.segmented_project import SegmentedProjectSegment
 
     base = Path(base_dir) if base_dir else Path(settings.segmented_dir)
 
@@ -903,22 +718,25 @@ def mark_silent_segments_as_missing(
 
     segs = (
         db.query(SegmentedProjectSegment)
-        .filter(SegmentedProjectSegment.current_audio_path.isnot(None))
         .all()
     )
 
     for seg in segs:
+        audio_data = dict(seg.audio) if seg.audio else {}
+        current = audio_data.get("current", {}) if isinstance(audio_data, dict) else {}
+        rel_path = current.get("path")
+        if not rel_path:
+            continue
         scanned += 1
-        if seg.audio_missing:
+
+        if audio_data.get("missing"):
             already_missing += 1
             continue
 
-        rel = seg.current_audio_path
-        # current_audio_path is stored relative to settings.segmented_dir
-        # (see synthesize_segment / save_project).
-        abs_path = base / rel if not Path(rel).is_absolute() else Path(rel)
+        abs_path = base / rel_path if not Path(rel_path).is_absolute() else Path(rel_path)
         if not abs_path.exists():
-            seg.audio_missing = True
+            audio_data["missing"] = True
+            seg.audio = audio_data
             marked += 1
             file_missing += 1
             continue
@@ -926,16 +744,19 @@ def mark_silent_segments_as_missing(
         try:
             size = abs_path.stat().st_size
         except OSError:
-            seg.audio_missing = True
+            audio_data["missing"] = True
+            seg.audio = audio_data
             marked += 1
             file_missing += 1
             continue
 
         if size < min_size_bytes:
-            seg.audio_missing = True
+            audio_data["missing"] = True
+            seg.audio = audio_data
             marked += 1
 
     if marked:
+        db.flush()
         db.commit()
 
     return {

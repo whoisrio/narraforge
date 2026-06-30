@@ -40,3 +40,10 @@ class Point(NamedTuple):
 ## Reference
 
 See skill: `python-patterns` for comprehensive Python idioms and patterns.
+
+### SQLAlchemy JSON Columns (added 2026-06-30)
+
+- Engine-specific parameters belong in a single `voice` or `engine` JSON column, not flattened as individual columns.
+- Default values for JSON columns use `default=lambda: {"key": "value"}` (not `default=dict` for mutable defaults).
+- When reading JSON columns, always handle missing keys gracefully: `voice.get("engine", "edge_tts")`.
+- Derive properties via `@property` if they can be computed from other columns (e.g. `project_id` on Segment from `chapter.project_id`).

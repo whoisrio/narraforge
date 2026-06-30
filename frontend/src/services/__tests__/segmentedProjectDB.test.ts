@@ -64,8 +64,10 @@ describe('segmentedProjectDB', () => {
         default_params: { engine: 'cosyvoice' },
         split_config: { delimiters: ['，', '。'], mode: 'rule' },
         segments: [
-          { id: 's1', text: 'a', params: { engine: 'cosyvoice' }, status: 'ready',
-            current_audio_id: 'audio_a', previous_audio_id: 'audio_b',
+          { id: 's1', text: 'a', status: 'ready',
+            voice: { source: 'chapter' as const },
+            audio: { current: { id: 'audio_a' }, previous: { id: 'audio_b' }, format: 'wav' },
+            segment_kind: 'narration' as const,
             created_at: now, updated_at: now },
         ], created_at: now, updated_at: now,
       }],

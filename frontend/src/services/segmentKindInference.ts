@@ -34,10 +34,8 @@ export function roleToSnapshot(role: Role): RoleSnapshot {
     name: role.name,
     avatar: role.avatar,
     description: role.description,
-    role_kind: role.role_kind ?? null,
-    default_engine: role.default_engine,
-    default_voice: role.default_voice,
-    default_engine_params: { ...role.default_engine_params },
+    role_kind: role.role_kind ?? 'cast',
+    voice: role.voice as EngineParams,
     favorite_styles: [...role.favorite_styles],
   };
 }

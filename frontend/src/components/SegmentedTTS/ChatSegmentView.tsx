@@ -1,10 +1,7 @@
-import { useState } from 'react';
-import type { Role, RoleSnapshot, Segment, SegmentKind } from '../../types';
+import type { Role, Segment, SegmentKind } from '../../types';
 import { useTranslation } from '../../i18n';
-import { isSegmentAudioStale } from '../../services/segmentGenerationInputs';
 import { ChatBubble } from './ChatBubble';
 import { NarrationBlock } from './NarrationBlock';
-import { ProsodyMarkEditor } from './ProsodyMarkEditor';
 import styles from './ChatSegmentView.module.css';
 
 interface ChatSegmentViewProps {
@@ -17,23 +14,8 @@ interface ChatSegmentViewProps {
   onAppend: (kind: SegmentKind) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
-  onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
-  onUpdateKind?: (id: string, kind: SegmentKind, roleSnapshot: RoleSnapshot | null) => void;
-  onUpdateProsodyMarks: (id: string, marks: NonNullable<Segment['prosody_marks']>) => void;
-}
-
-function toSnapshot(role: Role): RoleSnapshot {
-  return {
-    id: role.id,
-    name: role.name,
-    avatar: role.avatar,
-    description: role.description,
-    role_kind: role.role_kind ?? null,
-    default_engine: role.default_engine,
-    default_voice: role.default_voice,
-    default_engine_params: { ...role.default_engine_params },
-    favorite_styles: [...role.favorite_styles],
-  };
+  onUpdateRole?: (id: string, roleId: string | null) => void;
+  onUpdateKind?: (id: string, kind: SegmentKind) => void;
 }
 
 export function ChatSegmentView({
@@ -48,13 +30,11 @@ export function ChatSegmentView({
   onPlay,
   onUpdateRole,
   onUpdateKind,
-  onUpdateProsodyMarks,
 }: ChatSegmentViewProps) {
   const { t } = useTranslation();
-  const [selection, setSelection] = useState<{ segmentId: string; start: number; end: number; text: string } | null>(null);
 
-  const handleTextSelection = (segmentId: string, start: number, end: number, text: string) => {
-    setSelection({ segmentId, start, end, text });
+  const handleTextSelection = () => {
+    // placeholder for future text selection feature
   };
 
   return (
@@ -87,8 +67,7 @@ export function ChatSegmentView({
                 onSelect={onSelect}
                 onTextSelection={handleTextSelection}
                 onUpdateKind={onUpdateKind ? (id) => {
-                  const nextRole = roles[0] ?? null;
-                  onUpdateKind(id, 'dialogue', nextRole ? toSnapshot(nextRole) : null);
+                  onUpdateKind(id, 'dialogue');
                 } : undefined}
               />
             );
@@ -102,31 +81,20 @@ export function ChatSegmentView({
               roles={roles}
               isSelected={segment.id === selectedId}
               isPlaying={segment.id === playingId}
-              isStale={isSegmentAudioStale(segment, segment.role_snapshot?.default_engine_params ?? segment.params)}
+              isStale={false}
               onSelect={onSelect}
               onRegenerate={onRegenerate}
               onPlay={onPlay}
               onUpdateRole={onUpdateRole}
               onUpdateKind={onUpdateKind ? (id) => {
                 // Narration segments use global Engine voice — no role assigned
-                onUpdateKind(id, 'narration', null);
+                onUpdateKind(id, 'narration');
               } : undefined}
               onTextSelection={handleTextSelection}
             />
           );
         })}
       </div>
-      <ProsodyMarkEditor
-        selection={selection}
-        onCancel={() => setSelection(null)}
-        onSave={(mark) => {
-          if (!selection) return;
-          const segment = segments.find(item => item.id === selection.segmentId);
-          const marks = [...(segment?.prosody_marks ?? []), mark];
-          onUpdateProsodyMarks(selection.segmentId, marks);
-          setSelection(null);
-        }}
-      />
       <div className={styles.actions}>
         <button type="button" onClick={() => onAppend('dialogue')}>{t('segment.chatSegmentView.addDialogue')}</button>
         <button type="button" onClick={() => onAppend('narration')}>{t('segment.chatSegmentView.addNarration')}</button>

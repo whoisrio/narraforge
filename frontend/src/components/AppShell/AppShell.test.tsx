@@ -2,10 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AppShell } from './AppShell';
 
-function renderShell(locale: 'zh-CN' | 'en-US' = 'zh-CN') {
+function renderShell() {
   const onNavigate = vi.fn();
   render(
-    <AppShell activeNavId="projects" locale={locale} onNavigate={onNavigate}>
+    <AppShell activeNavId="projects" onNavigate={onNavigate}>
       <div>Studio content</div>
     </AppShell>,
   );
@@ -14,7 +14,7 @@ function renderShell(locale: 'zh-CN' | 'en-US' = 'zh-CN') {
 
 describe('AppShell', () => {
   it('renders the global studio navigation in Chinese', () => {
-    renderShell('zh-CN');
+    renderShell();
 
     expect(screen.getByText('NarraForge')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /项目/ })).toBeInTheDocument();
@@ -24,17 +24,8 @@ describe('AppShell', () => {
     expect(screen.getByText('Studio content')).toBeInTheDocument();
   });
 
-  it('renders English navigation labels when locale is en-US', () => {
-    renderShell('en-US');
-
-    expect(screen.getByRole('button', { name: /Projects/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Subtitles/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Voice Design/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Settings/ })).toBeInTheDocument();
-  });
-
   it('calls onNavigate with the selected global destination', () => {
-    const { onNavigate } = renderShell('zh-CN');
+    const { onNavigate } = renderShell();
 
     fireEvent.click(screen.getByRole('button', { name: /字幕识别/ }));
 
@@ -42,7 +33,7 @@ describe('AppShell', () => {
   });
 
   it('collapses the sidebar while keeping icon-only navigation accessible', () => {
-    renderShell('zh-CN');
+    renderShell();
 
     fireEvent.click(screen.getByRole('button', { name: /收起导航/ }));
 

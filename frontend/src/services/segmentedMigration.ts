@@ -21,8 +21,8 @@ export async function migrateIndexedDBProjectsToBackend(): Promise<MigrationResu
   for (const p of localProjects) {
     for (const ch of p.chapters || []) {
       for (const seg of ch.segments || []) {
-        if (seg.current_audio_id) {
-          const blob = await getTTSAudioBlob(seg.current_audio_id);
+        if (seg.audio.current?.id) {
+          const blob = await getTTSAudioBlob(seg.audio.current.id);
           if (blob) {
             const buf = await blob.arrayBuffer();
             const bytes = new Uint8Array(buf);
@@ -42,8 +42,8 @@ export async function migrateIndexedDBProjectsToBackend(): Promise<MigrationResu
   for (const proj of projects) {
     for (const ch of proj.chapters || []) {
       for (const seg of ch.segments || []) {
-        delete seg.current_audio_id;
-        delete seg.previous_audio_id;
+        seg.audio.current = undefined;
+        seg.audio.previous = undefined;
       }
     }
   }

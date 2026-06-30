@@ -6,10 +6,12 @@ function previewFormat(role: RoleSnapshot): 'mp3' | 'wav' {
 }
 
 export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText: string): Promise<TTSResult> {
-  const params = role.default_engine_params;
+  // Use legacy compat params for backward compatibility
+  const engine = role.default_engine ?? 'edge_tts';
+  const params = role.default_engine_params!;
   const format = previewFormat(role);
 
-  if (role.default_engine === 'edge_tts') {
+  if (engine === 'edge_tts') {
     return ttsApi.synthesize({
       text: sampleText,
       engine: 'edge_tts',
@@ -21,7 +23,7 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
     });
   }
 
-  if (role.default_engine === 'cosyvoice') {
+  if (engine === 'cosyvoice') {
     return ttsApi.synthesize({
       text: sampleText,
       engine: 'cosyvoice',
@@ -32,12 +34,12 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
       pitch: params.pitch ?? 1,
       instruction: params.instruction ?? '',
       enable_ssml: params.enable_ssml ?? false,
-      enable_markdown_filter: params.enable_markdown_filter ?? false,
+      enable_markdown_filter: false,
       format,
     });
   }
 
-  if (role.default_engine === 'mimo_tts') {
+  if (engine === 'mimo_tts') {
     if ((params.mimo_mode ?? 'preset') === 'voicedesign') {
       return mimoTtsApi.synthesizeVoiceDesign({
         text: sampleText,
@@ -111,10 +113,6 @@ export async function playVoiceRolePreview(role: RoleSnapshot, sampleText: strin
   return result;
 }
 
-/**
- * 只合成不播放，返回 TTSResult。
- * 用于音色设计流程：试听后捕获 audio_base64，再调用 create-from-design 持久化。
- */
 export async function fetchVoiceRolePreview(
   role: RoleSnapshot,
   sampleText: string,

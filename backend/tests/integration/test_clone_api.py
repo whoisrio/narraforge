@@ -73,9 +73,12 @@ class TestCloneAPI:
             id=str(uuid.uuid4()),
             name="Voice 2",
             source_audio_path="/tmp/voice2.wav",
-            is_cloned=True,
-            qwen_voice_id="cloned_123",
-            cloned_at=datetime.now(timezone.utc),
+            engine={
+                "is_cloned": True,
+                "qwen_voice_id": "cloned_123",
+                "cloned_at": datetime.now(timezone.utc).isoformat(),
+                "clone_engine": "qwen",
+            },
             created_at=datetime.now(timezone.utc)
         )
 
@@ -114,9 +117,12 @@ class TestCloneAPI:
             id=voice_id,
             name="Test Voice",
             source_audio_path="/tmp/test.wav",
-            is_cloned=True,
-            qwen_voice_id="cloned_456",
-            cloned_at=datetime.now(timezone.utc),
+            engine={
+                "is_cloned": True,
+                "qwen_voice_id": "cloned_456",
+                "cloned_at": datetime.now(timezone.utc).isoformat(),
+                "clone_engine": "qwen",
+            },
             created_at=datetime.now(timezone.utc)
         )
 

@@ -24,16 +24,16 @@ async function collectAudioIds(project: SegmentedProject): Promise<Set<string>> 
   const ids = new Set<string>();
   for (const ch of project.chapters || []) {
     for (const seg of ch.segments || []) {
-      if (seg.current_audio_id) ids.add(seg.current_audio_id);
-      if (seg.previous_audio_id) ids.add(seg.previous_audio_id);
+      if (seg.audio.current?.id) ids.add(seg.audio.current.id);
+      if (seg.audio.previous?.id) ids.add(seg.audio.previous.id);
     }
   }
   // v1 fallback: top-level segments
   const legacyProject = project as LegacySegmentedProject;
   if (legacyProject.segments) {
     for (const seg of legacyProject.segments) {
-      if (seg.current_audio_id) ids.add(seg.current_audio_id);
-      if (seg.previous_audio_id) ids.add(seg.previous_audio_id);
+      if (seg.audio.current?.id) ids.add(seg.audio.current.id);
+      if (seg.audio.previous?.id) ids.add(seg.audio.previous.id);
     }
   }
   return ids;

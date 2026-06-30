@@ -30,6 +30,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _extract_context(ctx: list[dict] | None) -> str | None:
+    """[{role: "user", content: "..."}] → 纯文本，用于拼接到 MiMo user message"""
+    if not ctx:
+        return None
+    texts = [m.get("content", "") for m in ctx if m.get("role") == "user"]
+    return "\n".join(t for t in texts if t) or None
+
+
 # ============ Request Models ============
 
 class MiMoPresetRequest(BaseModel):
@@ -49,6 +57,7 @@ class MiMoVoiceDesignRequest(BaseModel):
     text: str = Field(default="", description="待合成的文本，为空时自动生成适配文本")
     optimize_text_preview: bool = Field(default=False, description="是否智能润色目标播报文本（默认 False，严格使用传入文本）")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
+    context: list[dict] | None = None  # [{role: "user", content: "..."}] 上下文对话
 
 class MiMoVoiceCloneRequest(BaseModel):
     """音频克隆合成请求 - 使用已上传的音频文件ID"""
@@ -56,6 +65,7 @@ class MiMoVoiceCloneRequest(BaseModel):
     voice_id: str = Field(..., description="本地数据库中已上传的声音ID")
     instruction: str = Field(default="", description="风格指令")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
+    context: list[dict] | None = None  # [{role: "user", content: "..."}] 上下文对话
 
 class MiMoVoiceCloneDirectRequest(BaseModel):
     """音频克隆合成请求 - 直接上传 Base64 编码音频"""
@@ -212,11 +222,14 @@ async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session =
     """使用文本描述设计音色进行语音合成"""
     try:
         service = await get_mimo_tts_service(db)
+        # Extract context text from [{role: "user", content: "..."}]
+        ctx = _extract_context(request.context)
         audio_bytes = await service.synthesize_voice_design(
             text=request.text,
             voice_description=request.voice_description,
             optimize_text_preview=request.optimize_text_preview,
             format=request.format,
+            context=ctx,
         )
         # 截取描述前30字作为标签
         label = request.voice_description[:30] + ("..." if len(request.voice_description) > 30 else "")
@@ -249,7 +262,9 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
     resolved_src = str(settings.resolve_path(voice.source_audio_path)) if voice.source_audio_path else None
     if not resolved_src or not os.path.exists(resolved_src):
         # 尝试外部 URL
-        if voice.external_audio_url:
+        engine_json = voice.engine or {}
+        ext_url = engine_json.get("external_audio_url")
+        if ext_url:
             tmp_path = None
             try:
                 service = await get_mimo_tts_service(db)
@@ -257,7 +272,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
                 import urllib.request as req
                 import tempfile
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-                    req.urlretrieve(voice.external_audio_url, tmp.name)
+                    req.urlretrieve(ext_url, tmp.name)
                     tmp_path = tmp.name
 
                 audio_bytes = await service.clone_from_file(
@@ -265,6 +280,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
                     audio_path=tmp_path,
                     instruction=request.instruction,
                     format=request.format,
+                    context=_extract_context(request.context),
                 )
                 os.unlink(tmp_path)
 
@@ -290,6 +306,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
             audio_path=resolved_src,
             instruction=request.instruction,
             format=request.format,
+            context=_extract_context(request.context),
         )
         return await _save_and_respond(
             audio_bytes=audio_bytes,
@@ -351,12 +368,14 @@ def synthesize_mimo_internal(
     voice_description: str | None = None,
     instruction: str = "",
     db: Session | None = None,
+    context: list[dict] | None = None,
 ) -> tuple[bytes, str]:
     """Synthesize for the segmented editor. Returns (audio_bytes, native_format)."""
     import asyncio
 
     async def _run() -> bytes:
         service = await get_mimo_tts_service(db)
+        ctx = _extract_context(context)
 
         if mimo_mode == "voicedesign":
             # 文本描述设计音色（mimo-v2.5-tts-voicedesign）
@@ -365,6 +384,7 @@ def synthesize_mimo_internal(
                 text=text,
                 voice_description=desc,
                 format="wav",
+                context=ctx,
             )
 
         if mimo_mode == "voiceclone":
@@ -382,7 +402,8 @@ def synthesize_mimo_internal(
             raw_path = getattr(voice, "cloned_preview_path", None) or getattr(voice, "source_audio_path", None)
             audio_path = str(settings.resolve_path(raw_path)) if raw_path else None
             if not audio_path or not os.path.exists(audio_path):
-                ext_url = getattr(voice, "external_audio_url", None)
+                eng = voice.engine or {}
+                ext_url = eng.get("external_audio_url")
                 if ext_url:
                     import urllib.request as url_req
                     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
@@ -393,6 +414,7 @@ def synthesize_mimo_internal(
                             audio_path=tmp.name,
                             instruction=instruction,
                             format="wav",
+                            context=ctx,
                         )
                     finally:
                         try:
@@ -406,6 +428,7 @@ def synthesize_mimo_internal(
                 audio_path=str(audio_path),
                 instruction=instruction,
                 format="wav",
+                context=ctx,
             )
 
         # 预置音色模式

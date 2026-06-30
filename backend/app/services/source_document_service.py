@@ -10,7 +10,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.narration import SourceDocument
+from app.models.source_document import SourceDocument
 from app.models.segmented_project import SegmentedProject
 from app.schemas.segmented_project import SourceDocumentIn, SourceDocumentOut
 

@@ -1,5 +1,4 @@
 import type { Chapter, Role } from '../../types';
-import { roleVoiceLabelFromParams } from '../../services/voiceRoleDefaults';
 import styles from './ProjectOverview.module.css';
 
 interface ProjectOverviewProps {
@@ -72,7 +71,11 @@ function engineLabel(engine: string): string {
 }
 
 function voiceLabel(role: Role): string {
-  return roleVoiceLabelFromParams(role.default_engine_params, role.default_voice);
+  const v = role.voice as Record<string, unknown>;
+  const params = (v?.params ?? {}) as Record<string, unknown>;
+  const engine = (v?.engine as string) ?? 'edge_tts';
+  if (engine === 'edge_tts') return (params.voice as string) || '';
+  return (params.voice_id as string) || '';
 }
 
 export function ProjectOverview(props: ProjectOverviewProps) {
@@ -180,7 +183,7 @@ export function ProjectOverview(props: ProjectOverviewProps) {
                     <div className={styles.castAvatar}>{role.name.slice(0, 1)}</div>
                     <div className={styles.castInfo}>
                       <strong>{role.name}</strong>
-                      <small>{engineLabel(role.default_engine)} · {voiceLabel(role)}</small>
+                      <small>{engineLabel((role.voice as Record<string, unknown>)?.engine as string ?? 'edge_tts')} · {voiceLabel(role)}</small>
                     </div>
                   </div>
                 ))}
