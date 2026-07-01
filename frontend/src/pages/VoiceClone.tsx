@@ -10,6 +10,7 @@ import { voiceApi } from '../services/api';
 import { VoiceAvatar } from '../components/ui/VoiceAvatar';
 import { t } from '../i18n';
 import type { TTSResult, VoiceProfile } from '../types';
+import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../types';
 import styles from './VoiceClone.module.css';
 
 /** 克隆引擎类型 */
@@ -91,7 +92,7 @@ export function VoiceClone() {
     setVoicesLoading(true);
     try {
       const all = await voiceApi.list();
-      setVoices(all.filter(v => v.audio_url));
+      setVoices(all.filter(v => v.has_preview || v.has_source));
     } catch (err) {
       console.error('加载声音列表失败:', err);
     } finally {
@@ -141,7 +142,7 @@ export function VoiceClone() {
       setActivePanel('design');
       setDesignPhase('previewed');
       // Load existing preview audio
-      const previewUrl = voice.preview_audio_url || voice.audio_url;
+      const previewUrl = voicePreviewAudioUrl(voice.id);
       if (previewUrl) {
         setDesignPreview({ audio_url: previewUrl, audio_format: 'wav' } as TTSResult);
       } else {
@@ -483,16 +484,16 @@ export function VoiceClone() {
           {/* 编辑模式：展示已有音频 + 重新操作 */}
           {editingVoice && cloneStep === 'choose-method' && (
             <div className={styles.inputStep}>
-              {editingVoice.source_audio_url && (
+              {editingVoice.has_source && (
                 <div style={{ marginBottom: '1rem' }}>
                   <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>{t('voiceDesign.originalAudio')}</div>
-                  <audio controls style={{ width: '100%' }} src={editingVoice.source_audio_url} />
+                  <audio controls style={{ width: '100%' }} src={voiceSourceAudioUrl(editingVoice.id)} />
                 </div>
               )}
-              {editingVoice.preview_audio_url && (
+              {editingVoice.has_preview && (
                 <div style={{ marginBottom: '1rem' }}>
                   <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>{t('voiceDesign.clonePreview')}</div>
-                  <audio controls style={{ width: '100%' }} src={editingVoice.preview_audio_url} />
+                  <audio controls style={{ width: '100%' }} src={voicePreviewAudioUrl(editingVoice.id)} />
                 </div>
               )}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -597,7 +598,7 @@ export function VoiceClone() {
                     className={styles.previewBtn}
                     onClick={(e) => {
                       e.stopPropagation();
-                      const audio = new Audio(v.audio_url);
+                      const audio = new Audio(voicePreviewAudioUrl(v.id));
                       audio.play().catch(() => {});
                     }}
                   >{t('common.listen')}</button>

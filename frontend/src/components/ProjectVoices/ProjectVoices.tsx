@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Role, RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, CosyVoiceParams, VoxCPMParams, VoiceProfile } from '../../types';
+import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../../types';
 import { ttsApi, voiceApi, mimoTtsApi, voxcpmApi } from '../../services/api';
 import { fetchVoiceRolePreview, synthesizeVoiceRolePreview } from '../../services/voiceRolePreview';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
@@ -315,10 +316,10 @@ function VoiceRoleEditor({
       if (cancelled) return;
       const profile = list[0];
       if (!profile) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
-      const previewSrc = profile.preview_audio_url || profile.audio_url || '';
+      const previewSrc = profile.has_preview ? voicePreviewAudioUrl(profile.id) : '';
       setClonePreviewAudioSrc(previewSrc);
       if (previewSrc) setClonePreviewStatus('done');
-      setCloneOriginalAudioSrc(profile.source_audio_url ?? '');
+      setCloneOriginalAudioSrc(profile.has_source ? voiceSourceAudioUrl(profile.id) : '');
       setCloneVoiceDescription(profile.description ?? '');
       setClonePromptText((profile.description ?? '').slice(0, 100));
 
@@ -1257,8 +1258,8 @@ export function ProjectVoices({
       try {
         const list = await ttsApi.getVoices({ voice_id: voiceId });
         const profile = list[0];
-        if (profile?.audio_url) {
-          const audio = new Audio(profile.audio_url);
+        if (profile?.has_preview) {
+          const audio = new Audio(voicePreviewAudioUrl(profile.id));
           audio.play().catch(() => {});
           return;
         }

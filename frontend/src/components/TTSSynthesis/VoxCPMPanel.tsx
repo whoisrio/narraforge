@@ -113,7 +113,7 @@ export function VoxCPMPanel({
       try {
         const list = await voiceApi.list(projectId);
         // 按 allowedCloneEngines 过滤
-        setVoices(list.filter(v => v.audio_url && allowedCloneEngines.includes(v.voice?.model || '')));
+        setVoices(list.filter(v => (v.has_preview || v.has_source) && allowedCloneEngines.includes(v.voice?.model || '')));
       } catch (err) {
         console.error('Failed to load voice list:', err);
       } finally {

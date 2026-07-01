@@ -20,11 +20,18 @@ export interface VoiceProfile {
   voice: VoiceProfileVoice;
   voice_params: Record<string, VoiceProfileModelParams>;
   preview?: VoiceProfilePreview;
-  audio_url?: string;
-  source_audio_url?: string;
-  preview_audio_url?: string;
+  has_preview?: boolean;
+  has_source?: boolean;
   created_at: string;
   updated_at?: string;
+}
+
+/** Construct audio URL for a voice profile preview or source audio */
+export function voicePreviewAudioUrl(voiceId: string): string {
+  return `/api/clone/audio/${voiceId}?field=preview`;
+}
+export function voiceSourceAudioUrl(voiceId: string): string {
+  return `/api/clone/audio/${voiceId}?field=source`;
 }
 
 export interface VoiceProfileVoice {

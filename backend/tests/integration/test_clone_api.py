@@ -125,7 +125,7 @@ class TestCloneAPI:
 
         assert data["id"] == voice_id
         assert data["name"] == "Test Voice"
-        assert data["audio_url"] == f"/api/clone/audio/{voice_id}?field=source"
+        assert data["has_source"] is True
         assert data["voice"]["voice_type"] == "clone"
         assert data["voice"]["model"] == "cosyvoice"
         assert data["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cloned_456"

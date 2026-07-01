@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { voiceApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import type { VoiceProfile } from '../../types';
+import { voicePreviewAudioUrl } from '../../types';
 import { Button, Modal, Input, Select, Loading, EmptyState, Card, Alert } from '../ui';
 
 interface VoiceListProps {
@@ -334,7 +335,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
             <Card key={voice.id} style={voiceCardStyle}>
               <div style={voiceContentStyle}>
                 <div style={voiceInfoStyle}>
-                  <audio src={voice.audio_url} controls style={{ height: '32px' }} />
+                  <audio src={voicePreviewAudioUrl(voice.id)} controls style={{ height: '32px' }} />
                   <div>
                     {editingId === voice.id ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>

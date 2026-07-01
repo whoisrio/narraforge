@@ -42,7 +42,7 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-1',
         name: '我的声音',
-        audio_url: '/api/clone/audio/voice-1',
+        has_preview: true,
         voice: { model: 'cosyvoice', voice_type: 'clone' },
         voice_params: { cosyvoice: { params: { voice_id: 'qwen-1' } } },
         created_at: new Date().toISOString(),
@@ -63,7 +63,7 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-upload',
         name: '上传声音',
-        audio_url: '/api/clone/audio/voice-upload',
+        has_preview: true,
         voice: { model: 'mimo_tts', voice_type: 'clone' },
         voice_params: { mimo_tts: { params: {} } },
         created_at: new Date().toISOString(),
@@ -85,7 +85,7 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-1',
         name: '测试声音',
-        audio_url: '/api/clone/audio/voice-1',
+        has_preview: true,
         voice: { model: 'cosyvoice', voice_type: 'clone' },
         voice_params: { cosyvoice: { params: {} } },
         created_at: new Date().toISOString(),
@@ -108,12 +108,12 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-1',
         name: '编辑测试',
-        audio_url: '/api/clone/audio/voice-1',
+        has_preview: true,
         voice: { model: 'mimo_tts', voice_type: 'clone' },
         voice_params: { mimo_tts: { params: {} } },
         created_at: new Date().toISOString(),
-        source_audio_url: '/api/clone/audio/voice-1?field=original',
-        preview_audio_url: '/api/clone/audio/voice-1?field=preview',
+        has_source: true,
+        has_preview: true,
       },
     ];
 
@@ -139,7 +139,7 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-del',
         name: '删除测试',
-        audio_url: '/api/clone/audio/voice-del',
+        has_preview: true,
         voice: { model: 'cosyvoice', voice_type: 'clone' },
         voice_params: { cosyvoice: { params: {} } },
         created_at: new Date().toISOString(),

@@ -19,8 +19,8 @@ describe('VoiceSelector', () => {
 
   it('should display cloned voices after loading', async () => {
     const mockVoices: VoiceProfile[] = [
-      { id: 'xiaoyun', name: '云溪', description: '云溪', voice: { model: 'cosyvoice', voice_type: 'clone' }, voice_params: { cosyvoice: { params: { voice_id: 'qwen-xiaoyun' } } }, audio_url: '/voices/xiaoyun.mp3', created_at: '2026-01-01T00:00:00.000Z' },
-      { id: 'xiaogang', name: '小刚', description: '小刚', voice: { model: 'cosyvoice', voice_type: 'clone' }, voice_params: { cosyvoice: { params: { voice_id: 'qwen-xiaogang' } } }, audio_url: '/voices/xiaogang.mp3', created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'xiaoyun', name: '云溪', description: '云溪', voice: { model: 'cosyvoice', voice_type: 'clone' }, voice_params: { cosyvoice: { params: { voice_id: 'qwen-xiaoyun' } } }, has_preview: true, created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'xiaogang', name: '小刚', description: '小刚', voice: { model: 'cosyvoice', voice_type: 'clone' }, voice_params: { cosyvoice: { params: { voice_id: 'qwen-xiaogang' } } }, has_preview: true, created_at: '2026-01-01T00:00:00.000Z' },
     ];
 
     vi.spyOn(ttsApi, 'getVoices').mockResolvedValue(mockVoices);
@@ -35,7 +35,7 @@ describe('VoiceSelector', () => {
 
   it('should call onVoiceSelect when a voice is selected', async () => {
     const mockVoices: VoiceProfile[] = [
-      { id: 'xiaoyun', name: '云溪', description: '云溪', voice: { model: 'cosyvoice', voice_type: 'clone' }, voice_params: { cosyvoice: { params: { voice_id: 'qwen-xiaoyun' } } }, audio_url: '/voices/xiaoyun.mp3', created_at: '2026-01-01T00:00:00.000Z' },
+      { id: 'xiaoyun', name: '云溪', description: '云溪', voice: { model: 'cosyvoice', voice_type: 'clone' }, voice_params: { cosyvoice: { params: { voice_id: 'qwen-xiaoyun' } } }, has_preview: true, created_at: '2026-01-01T00:00:00.000Z' },
     ];
 
     vi.spyOn(ttsApi, 'getVoices').mockResolvedValue(mockVoices);
