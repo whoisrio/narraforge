@@ -620,7 +620,7 @@ def _migrate_voice_profile(conn):
         new_voice = {"model": model, "voice_type": voice_type}
 
         vp_entry: dict = {"params": {}}
-        if src_path:
+        if voice_type == "clone" and src_path:
             vp_entry["source_audio_path"] = src_path
 
         pp = vp_entry["params"]
@@ -654,7 +654,7 @@ def _migrate_voice_profile(conn):
 
         preview = {}
         preview["audition_text"] = ep_data.get("audition_text", "") or engine_data.get("prompt_text", "") or ""
-        preview["preview_audio_path"] = cp_path
+        preview["preview_audio_path"] = cp_path or (src_path if voice_type != "clone" else "")
 
         conn.execute(text(
             "UPDATE voice_profiles SET voice=:v, voice_params=:vp, preview=:p WHERE id=:id"
@@ -665,6 +665,11 @@ def _migrate_voice_profile(conn):
             "id": vp_id,
         })
         updated += 1
+
+    # Drop old columns via SQLite table recreate
+    if updated > 0:
+        _drop_columns_via_recreate(conn, "voice_profiles", ["engine", "engine_params", "source_audio_path", "cloned_preview_path"])
+        logger.info("[migration] P9004: dropped old voice_profiles columns")
 
     logger.info(f"[migration] P9004: migrated {updated} voice_profiles")
 
