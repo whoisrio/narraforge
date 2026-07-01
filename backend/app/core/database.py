@@ -599,6 +599,15 @@ def _migrate_voice_profile(conn):
         logger.info("[migration] P9004: already migrated (no engine column), skipping")
         return
 
+    # Verify new columns have data (prevent re-migration on already-migrated DB)
+    if "voice" in cols:
+        populated = conn.execute(text(
+            "SELECT count(*) FROM voice_profiles WHERE voice IS NOT NULL AND json_extract(voice, '$.model') != ''"
+        )).fetchone()[0]
+        if populated > 0:
+            logger.info("[migration] P9004: voice column already populated (%d rows), skipping", populated)
+            return
+
     rows = conn.execute(text(
         "SELECT id, engine, engine_params, cloned_preview_path, source_audio_path FROM voice_profiles"
     )).fetchall()
@@ -676,8 +685,15 @@ def _migrate_voice_profile(conn):
 
     # Drop old columns via SQLite table recreate
     if updated > 0:
-        _drop_columns_via_recreate(conn, "voice_profiles", ["engine", "engine_params", "source_audio_path", "cloned_preview_path"])
-        logger.info("[migration] P9004: dropped old voice_profiles columns")
+        # Verify voice data survived before dropping old columns
+        check = conn.execute(text(
+            "SELECT count(*) FROM voice_profiles WHERE voice IS NOT NULL AND json_extract(voice, '$.model') != ''"
+        )).fetchone()[0]
+        if check > 0:
+            _drop_columns_via_recreate(conn, "voice_profiles", ["engine", "engine_params", "source_audio_path", "cloned_preview_path"])
+            logger.info("[migration] P9004: dropped old voice_profiles columns")
+        else:
+            logger.warning("[migration] P9004: voice data appears empty, skipping column drop to prevent data loss")
 
     logger.info(f"[migration] P9004: migrated {updated} voice_profiles")
 
