@@ -6,9 +6,9 @@ describe('voiceRoleDefaults', () => {
   it('creates a usable Edge-TTS narrator when the current voice is empty', () => {
     const currentParams: EngineParams = {
       engine: 'edge_tts',
-      edge_voice: '',
-      edge_rate: '+0%',
-      edge_volume: '+0%',
+      voice: '',
+      rate: '+0%',
+      volume: '+0%',
     };
 
     const draft = createVoiceRoleDraft({
@@ -22,9 +22,9 @@ describe('voiceRoleDefaults', () => {
     expect(draft.default_voice).toBe(DEFAULT_EDGE_NARRATOR_VOICE);
     expect(draft.default_engine_params).toMatchObject({
       engine: 'edge_tts',
-      edge_voice: DEFAULT_EDGE_NARRATOR_VOICE,
-      edge_rate: '+0%',
-      edge_volume: '+0%',
+      voice: DEFAULT_EDGE_NARRATOR_VOICE,
+      rate: '+0%',
+      volume: '+0%',
     });
   });
 
@@ -34,15 +34,15 @@ describe('voiceRoleDefaults', () => {
       roleKind: 'Cast',
       currentParams: {
         engine: 'edge_tts',
-        edge_voice: 'zh-CN-YunyangNeural',
-        edge_rate: '+8%',
-        edge_volume: '+0%',
+        voice: 'zh-CN-YunyangNeural',
+        rate: '+8%',
+        volume: '+0%',
       },
     });
 
     expect(draft.description).toBe('Cast');
     expect(draft.default_voice).toBe('zh-CN-YunyangNeural');
-    expect(draft.default_engine_params.edge_voice).toBe('zh-CN-YunyangNeural');
+    expect((draft.default_engine_params as { voice?: string }).voice).toBe('zh-CN-YunyangNeural');
   });
 
   it('falls back from unusable CosyVoice params to Edge-TTS for narrator creation', () => {
@@ -61,6 +61,6 @@ describe('voiceRoleDefaults', () => {
 
     expect(draft.default_engine).toBe('edge_tts');
     expect(draft.default_voice).toBe(DEFAULT_EDGE_NARRATOR_VOICE);
-    expect(draft.default_engine_params.edge_voice).toBe(DEFAULT_EDGE_NARRATOR_VOICE);
+    expect((draft.default_engine_params as { voice?: string }).voice).toBe(DEFAULT_EDGE_NARRATOR_VOICE);
   });
 });

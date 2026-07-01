@@ -8,6 +8,7 @@ vi.mock('./api', () => ({
   mimoTtsApi: {
     synthesizePreset: vi.fn(),
     synthesizeVoiceClone: vi.fn(),
+    synthesizeVoiceDesign: vi.fn(),
   },
   voxcpmApi: {
     tts: vi.fn(),
@@ -23,7 +24,7 @@ const baseRole: RoleSnapshot = {
   description: 'Cast',
   default_engine: 'edge_tts',
   default_voice: 'zh-CN-YunyangNeural',
-  default_engine_params: { engine: 'edge_tts', edge_voice: 'zh-CN-YunyangNeural', edge_rate: '+0%', edge_volume: '+0%' },
+  default_engine_params: { engine: 'edge_tts', voice: 'zh-CN-YunyangNeural', rate: '+0%', volume: '+0%' },
   favorite_styles: [],
 };
 
@@ -53,7 +54,7 @@ describe('synthesizeVoiceRolePreview', () => {
       ...baseRole,
       default_engine: 'mimo_tts',
       default_voice: '冰糖',
-      default_engine_params: { engine: 'mimo_tts', mimo_mode: 'preset', mimo_preset_voice: '冰糖', mimo_instruction: '活泼' },
+      default_engine_params: { engine: 'mimo_tts', mode: 'preset', voice_id: '冰糖', instruction: '活泼' },
     }, 'hello');
 
     expect(mimoTtsApi.synthesizePreset).toHaveBeenCalledWith({ text: 'hello', voice: '冰糖', instruction: '活泼', format: 'mp3' });
@@ -66,7 +67,7 @@ describe('synthesizeVoiceRolePreview', () => {
       ...baseRole,
       default_engine: 'voxcpm',
       default_voice: '低沉纪录片男声',
-      default_engine_params: { engine: 'voxcpm', voxcpm_mode: 'design', voxcpm_voice_description: '低沉纪录片男声', voxcpm_cfg_value: 2.2, voxcpm_inference_timesteps: 12 },
+      default_engine_params: { engine: 'voxcpm', mode: 'tts_design', voice_id: '', voice_description: '低沉纪录片男声', cfg_value: 2.2, inference_timesteps: 12 },
     }, 'hello');
 
     expect(voxcpmApi.design).toHaveBeenCalledWith({

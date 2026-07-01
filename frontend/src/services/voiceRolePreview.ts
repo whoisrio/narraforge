@@ -6,9 +6,8 @@ function previewFormat(role: RoleSnapshot): 'mp3' | 'wav' {
 }
 
 export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText: string): Promise<TTSResult> {
-  // Use legacy compat params for backward compatibility
   const engine = role.default_engine ?? 'edge_tts';
-  const params = role.default_engine_params!;
+  const params = (role.default_engine_params ?? {}) as Record<string, unknown>;
   const format = previewFormat(role);
 
   if (engine === 'edge_tts') {
@@ -16,9 +15,9 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
       text: sampleText,
       engine: 'edge_tts',
       voice_id: '',
-      edge_voice: params.edge_voice || role.default_voice || '',
-      edge_rate: params.edge_rate || '+0%',
-      edge_volume: params.edge_volume || '+0%',
+      edge_voice: (params.voice as string) || role.default_voice || '',
+      edge_rate: (params.rate as string) || '+0%',
+      edge_volume: (params.volume as string) || '+0%',
       format,
     });
   }
@@ -27,75 +26,81 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
     return ttsApi.synthesize({
       text: sampleText,
       engine: 'cosyvoice',
-      voice_id: params.voice_id || role.default_voice || '',
-      language: (params.language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean',
-      speed: params.speed ?? 1,
-      volume: params.volume ?? 80,
-      pitch: params.pitch ?? 1,
-      instruction: params.instruction ?? '',
-      enable_ssml: params.enable_ssml ?? false,
+      voice_id: (params.voice_id as string) || role.default_voice || '',
+      language: ((params.language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean'),
+      speed: (params.speed as number) ?? 1,
+      volume: (params.volume as number) ?? 80,
+      pitch: (params.pitch as number) ?? 1,
+      instruction: (params.instruction as string) ?? '',
+      enable_ssml: (params.enable_ssml as boolean) ?? false,
       enable_markdown_filter: false,
       format,
     });
   }
 
   if (engine === 'mimo_tts') {
-    if ((params.mimo_mode ?? 'preset') === 'voicedesign') {
+    const mode: string = (params.mode as string) ?? 'preset';
+    if (mode === 'voicedesign') {
       return mimoTtsApi.synthesizeVoiceDesign({
         text: sampleText,
-        voice_description: params.mimo_voice_description || '',
+        voice_description: (params.voice_description as string) || '',
         format,
       });
     }
-    if ((params.mimo_mode ?? 'preset') === 'voiceclone') {
+    if (mode === 'voiceclone') {
       return mimoTtsApi.synthesizeVoiceClone({
         text: sampleText,
-        voice_id: params.mimo_clone_voice_id || role.default_voice || '',
-        instruction: params.mimo_instruction,
+        voice_id: (params.voice_id as string) || role.default_voice || '',
+        instruction: (params.instruction as string),
         format,
       });
     }
     return mimoTtsApi.synthesizePreset({
       text: sampleText,
-      voice: params.mimo_preset_voice || role.default_voice || '冰糖',
-      instruction: params.mimo_instruction,
+      voice: (params.voice_id as string) || role.default_voice || '冰糖',
+      instruction: (params.instruction as string),
       format,
     });
   }
 
-  const common = {
-    cfg_value: params.voxcpm_cfg_value,
-    inference_timesteps: params.voxcpm_inference_timesteps,
+  const voxcpmCommon = {
+    cfg_value: (params.cfg_value as number),
+    inference_timesteps: (params.inference_timesteps as number),
     format,
   };
 
-  if ((params.voxcpm_mode ?? 'tts') === 'design') {
+  const voxcpmMode: string = (params.mode as string) ?? 'tts';
+  if (voxcpmMode === 'tts_design') {
     return voxcpmApi.design({
       text: sampleText,
-      voice_description: params.voxcpm_voice_description || role.default_voice || '',
-      ...common,
+      voice_description: (params.voice_description as string) || role.default_voice || '',
+      ...voxcpmCommon,
     });
   }
-  if (params.voxcpm_mode === 'clone') {
+  if (voxcpmMode === 'clone' || voxcpmMode === 'ultimate') {
     return voxcpmApi.clone({
       text: sampleText,
-      voice_id: params.voice_id || role.default_voice || '',
-      style_control: params.voxcpm_style_control,
-      ...common,
+      voice_id: (params.voice_id as string) || role.default_voice || '',
+      style_control: (params.style_control as string),
+      ...voxcpmCommon,
     });
   }
-  if (params.voxcpm_mode === 'ultimate') {
-    return voxcpmApi.ultimateClone({
+
+  // VoxCPM mode defaults to 'tts' — if no explicit mode set, do design for ones with
+  // voice_description, otherwise clone
+  if (params.voice_description) {
+    return voxcpmApi.design({
       text: sampleText,
-      voice_id: params.voice_id || role.default_voice || '',
-      prompt_text: params.voxcpm_prompt_text,
-      style_control: params.voxcpm_style_control,
-      ...common,
+      voice_description: (params.voice_description as string) || role.default_voice || '',
+      ...voxcpmCommon,
     });
   }
-  return voxcpmApi.tts({
+
+  return voxcpmApi.clone({
     text: sampleText,
-    ...common,
+    voice_id: (params.voice_id as string) || role.default_voice || '',
+    style_control: (params.style_control as string),
+    ...voxcpmCommon,
   });
 }
 

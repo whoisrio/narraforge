@@ -459,9 +459,19 @@ function VoiceRoleEditor({
       const eng = draft.voice?.engine;
       const sub = eng === 'voxcpm' ? 'voxcpm' : 'mimo';
       setDesignSubEngine(sub);
-      // Also switch the voice engine so setParams routes voice_description correctly
-      if (sub === 'voxcpm') setEngine('voxcpm');
-      else setEngine('mimo_tts');
+      // Directly set the voice object with voicedesign mode so params.route properly
+      if (sub === 'voxcpm') {
+        onChange({
+          ...draft,
+          voice: { engine: 'voxcpm', mode: 'tts_design' as const, voice_id: '' } as VoxCPMParams,
+        });
+      } else {
+        onChange({
+          ...draft,
+          voice: { engine: 'mimo_tts', mode: 'voicedesign' as const, voice_id: '' } as MiMoParams,
+        });
+      }
+      setVoiceCategory('design');
     }
   };
 
