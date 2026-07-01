@@ -505,7 +505,7 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
     # 创建 VoiceProfile 记录
     if request.engine == "preset":
         model = "mimo_tts"
-        voice_type = "clone"
+        voice_type = "preset"
     elif request.engine == "mimo":
         model = "mimo_tts"
         voice_type = "design"
