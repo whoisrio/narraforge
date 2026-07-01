@@ -1,7 +1,8 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Role, EngineParams } from '../../types';
+import type { Role, EngineParams, RoleSnapshot } from '../../types';
 import { ProjectVoices } from './ProjectVoices';
+import { normalizeDraftForSave } from './ProjectVoices';
 
 // Mock API modules
 vi.mock('../../services/api', () => ({
@@ -244,5 +245,53 @@ describe('ProjectVoices – clone preview validation', () => {
 
     expect(onSaveRole).not.toHaveBeenCalled();
     expect(screen.getByText('试听音频尚未生成，请先点击「生成试听」')).toBeInTheDocument();
+  });
+});
+
+describe('normalizeDraftForSave', () => {
+  it('populates legacy fields from Edge-TTS voice', () => {
+    const draft: RoleSnapshot = {
+      id: 'r1',
+      name: 'test',
+      voice: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural', rate: '+0%', volume: '+0%' },
+      favorite_styles: [],
+      default_engine: 'edge_tts',
+      default_voice: null,
+      default_engine_params: { engine: 'edge_tts' },
+    };
+    const result = normalizeDraftForSave(draft);
+    expect(result.default_engine).toBe('edge_tts');
+    expect(result.default_voice).toBe('zh-CN-YunxiNeural');
+    expect(result.default_engine_params).toEqual(draft.voice);
+  });
+
+  it('populates legacy fields from MiMo voice', () => {
+    const draft: RoleSnapshot = {
+      id: 'r2',
+      name: 'test-mimo',
+      voice: { engine: 'mimo_tts', mode: 'voiceclone', voice_id: 'v1' },
+      favorite_styles: [],
+      default_engine: 'mimo_tts',
+      default_voice: null,
+      default_engine_params: { engine: 'mimo_tts' },
+    };
+    const result = normalizeDraftForSave(draft);
+    expect(result.default_engine).toBe('mimo_tts');
+    expect(result.default_voice).toBeNull();
+    expect(result.default_engine_params).toEqual(draft.voice);
+  });
+
+  it('handles missing voice gracefully', () => {
+    const draft: RoleSnapshot = {
+      id: 'r3',
+      name: 'no-voice',
+      favorite_styles: [],
+      default_engine: 'edge_tts',
+      default_voice: null,
+      default_engine_params: { engine: 'edge_tts' },
+    };
+    const result = normalizeDraftForSave(draft);
+    expect(result.default_engine).toBe('edge_tts');
+    expect(result.default_voice).toBeNull();
   });
 });

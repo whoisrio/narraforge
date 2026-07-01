@@ -117,6 +117,18 @@ const VOICE_SOURCE_TABS: { value: VoiceSourceCategory; label: string; desc: stri
 ];
 
 /** 判断当前 draft 属于哪个音色来源分类 */
+export function normalizeDraftForSave(draft: RoleSnapshot): RoleSnapshot {
+  const voice = draft.voice;
+  if (!voice) return draft;
+  const engine = voice.engine;
+  return {
+    ...draft,
+    default_engine: engine,
+    default_voice: engine === 'edge_tts' ? (voice as EdgeTTSParams).voice || '' : null,
+    default_engine_params: voice,
+  };
+}
+
 function detectCategory(draft: RoleSnapshot): VoiceSourceCategory {
   const v = draft.voice;
   if (!v) return 'preset';
