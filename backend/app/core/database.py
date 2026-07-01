@@ -613,10 +613,13 @@ def _migrate_voice_profile(conn):
         model = (
             "cosyvoice" if old_type == "qwen"
             else "mimo_tts" if old_type == "mimo"
-            else "voxcpm" if old_type in ("voxcpm", "design", "clone")
+            else "voxcpm" if old_type in ("voxcpm",)
             else "edge_tts" if old_type == "preset"
             else old_type
         )
+        # Fallback for design/clone voices with no explicit engine type
+        if not model or model in ("design", "clone"):
+            model = "mimo_tts"
         voice_type = "preset" if old_type == "preset" else ("design" if old_type == "design" else "clone")
 
         new_voice = {"model": model, "voice_type": voice_type}
