@@ -352,10 +352,10 @@ export function TTSSynthesis({
   useEffect(() => { ttsApi.getVoices({ project_id: project.id }).then(setVoices).catch(() => {}); }, [refreshCounter, project.id]);
 
   useEffect(() => {
-    roleApi.listRoles()
+    roleApi.listRoles(project.id)
       .then(setRoles)
       .catch((error) => console.warn('Role list failed:', error));
-  }, []);
+  }, [project.id]);
 
   const projectStorage: SegmentedProjectStorage = storageMode === 'backend' ? backendStorage : indexedDBStorage;
   const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
@@ -1716,6 +1716,7 @@ export function TTSSynthesis({
         open={roleLibraryOpen}
         onClose={() => setRoleLibraryOpen(false)}
         onRolesChanged={setRoles}
+        projectId={project.id}
       />
     </div>
   );

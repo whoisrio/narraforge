@@ -8,14 +8,16 @@ interface RoleLibraryPanelProps {
   open: boolean;
   onClose: () => void;
   onRolesChanged: (roles: Role[]) => void;
+  projectId?: string | null;
 }
 
-function createEmptyRole(): RoleSnapshot {
+function createEmptyRole(projectId?: string | null): RoleSnapshot {
   return {
     id: `role-${Date.now()}`,
     name: '',
     avatar: '',
     description: '',
+    project_id: projectId ?? undefined,
     default_engine: 'edge_tts',
     default_voice: '',
     default_engine_params: { engine: 'edge_tts' },
@@ -36,16 +38,16 @@ function roleToDraft(role: Role): RoleSnapshot {
   };
 }
 
-export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryPanelProps) {
+export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: RoleLibraryPanelProps) {
   const { t } = useTranslation();
   const [roles, setRoles] = useState<Role[]>([]);
-  const [draft, setDraft] = useState<RoleSnapshot>(createEmptyRole);
+  const [draft, setDraft] = useState<RoleSnapshot>(() => createEmptyRole(projectId));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) return;
-    roleApi.listRoles()
+    roleApi.listRoles(projectId)
       .then((items) => {
         setRoles(items);
         onRolesChanged(items);
@@ -72,7 +74,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
         : [saved, ...roles];
       setRoles(next);
       onRolesChanged(next);
-      setDraft(createEmptyRole());
+      setDraft(createEmptyRole(projectId));
     } catch {
       setError(t('segment.roleLibrary.saveFailed'));
     } finally {

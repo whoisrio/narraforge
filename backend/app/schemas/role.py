@@ -11,6 +11,7 @@ class RoleIn(BaseModel):
     avatar: str | None = None
     description: str | None = None
     role_kind: str = "cast"
+    project_id: str | None = None
     voice: dict[str, Any] = Field(default_factory=lambda: {"engine": "edge_tts", "params": {}})
     favorite_styles: list[dict[str, Any]] = Field(default_factory=list)
 

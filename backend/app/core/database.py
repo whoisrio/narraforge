@@ -281,6 +281,8 @@ def init_db():
         _migrate_vp_v2_columns(conn)
         # P9004: migrate voice_profiles engine → voice, engine_params → voice_params
         _migrate_voice_profile(conn)
+        # P9005: add project_id to roles table
+        _migrate_add_role_project_id(conn)
 
 
 def _migrate_v3_reduce_schema(conn):
@@ -672,6 +674,21 @@ def _migrate_voice_profile(conn):
         logger.info("[migration] P9004: dropped old voice_profiles columns")
 
     logger.info(f"[migration] P9004: migrated {updated} voice_profiles")
+
+
+def _migrate_add_role_project_id(conn):
+    """P9005: add project_id column to roles table (nullable, FK to projects)."""
+    import logging
+    logger = logging.getLogger(__name__)
+    cols = [row[1] for row in conn.execute(text("PRAGMA table_info(roles)")).fetchall()]
+    if "project_id" in cols:
+        logger.info("[migration] P9005: project_id column already exists, skipping")
+        return
+    conn.execute(text(
+        "ALTER TABLE roles ADD COLUMN project_id VARCHAR "
+        "REFERENCES segmented_projects(id) ON DELETE SET NULL"
+    ))
+    logger.info("[migration] P9005: added project_id column to roles")
 
 
 def _fix_role_source_segments(conn, logger):

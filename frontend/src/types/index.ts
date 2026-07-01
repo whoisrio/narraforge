@@ -339,6 +339,7 @@ export interface RoleSnapshot {
 }
 
 export interface Role extends RoleSnapshot {
+  project_id?: string | null;
   created_at: string;
   updated_at: string;
 }

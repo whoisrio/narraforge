@@ -531,8 +531,10 @@ export const segmentedProjectApi = {
 };
 
 export const roleApi = {
-  listRoles: async (): Promise<import('../types').Role[]> => {
-    const { data } = await api.get<import('../types').Role[]>('/roles');
+  listRoles: async (projectId?: string): Promise<import('../types').Role[]> => {
+    const { data } = await api.get<import('../types').Role[]>('/roles', {
+      params: projectId ? { project_id: projectId } : undefined,
+    });
     return data;
   },
   createRole: async (role: import('../types').RoleSnapshot): Promise<import('../types').Role> => {
