@@ -312,19 +312,28 @@ function VoiceRoleEditor({
       voiceEngineAppliedRef.current = true;
 
       const model = vv.model || '';
-      if (model === 'cosyvoice') {
-        setVoiceCategory('clone');
-        setCloneSubEngine('cosyvoice');
-      } else if (model === 'mimo_tts') {
-        setVoiceCategory('clone');
-        setCloneSubEngine('mimo');
-      } else if (model === 'voxcpm') {
-        setVoiceCategory('clone');
-        setCloneSubEngine('voxcpm');
-      } else if (model === 'edge_tts') {
+      const voiceType = vv.voice_type || '';
+      if (voiceType === 'design') {
+        setVoiceCategory('design');
+        if (model === 'mimo_tts') setDesignSubEngine('mimo');
+        else if (model === 'voxcpm') setDesignSubEngine('voxcpm');
+        if (profile.voice_params) {
+          const mp = profile.voice_params[model];
+          if (mp?.params) {
+            const pp = mp.params as Record<string, unknown>;
+            if (pp.voice_description) setCloneVoiceDescription(pp.voice_description as string);
+            if (pp.instruction) setParams({ ...params, voiceDesignInstruction: pp.instruction as string });
+          }
+        }
+        setDesignProfileId(profile.id);
+      } else if (voiceType === 'preset') {
         setVoiceCategory('preset');
       } else {
-        setVoiceCategory('preset');
+        // clone
+        setVoiceCategory('clone');
+        if (model === 'cosyvoice') setCloneSubEngine('cosyvoice');
+        else if (model === 'mimo_tts') setCloneSubEngine('mimo');
+        else if (model === 'voxcpm') setCloneSubEngine('voxcpm');
       }
     }).catch(() => {
       if (!cancelled) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); }
