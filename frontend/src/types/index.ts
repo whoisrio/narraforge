@@ -562,7 +562,6 @@ export interface SegmentedProject {
     duration_sec: number;
   } | null;
   default_narrator_role_id?: string | null;
-  default_narrator_snapshot?: RoleSnapshot | null;
   configs?: { split_voice_mode?: 'narration' | 'dialogue'; [key: string]: unknown } | null;
   created_at: string;
   updated_at: string;

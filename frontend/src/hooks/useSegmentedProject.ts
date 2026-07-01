@@ -1,4 +1,4 @@
-import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, SegmentKind, EmotionType, VoiceSource, EngineParams } from '../types';
+import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, SegmentKind, EmotionType, VoiceSource, EngineParams, RoleSnapshot, ProsodyMark } from '../types';
 
 let _idCounter = 0;
 function uid(): string {
@@ -108,7 +108,6 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
     return {
       ...raw,
       default_narrator_role_id: raw.default_narrator_role_id ?? null,
-      default_narrator_snapshot: raw.default_narrator_snapshot ?? null,
       chapters,
     } as SegmentedProject;
   }
@@ -155,7 +154,6 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
     layout: r.layout || 'vertical',
     remotion_project_path: r.remotion_project_path ?? null,
     default_narrator_role_id: r.default_narrator_role_id ?? null,
-    default_narrator_snapshot: r.default_narrator_snapshot ?? null,
     created_at: r.created_at || now,
     updated_at: now,
   };
@@ -214,7 +212,7 @@ export type Action =
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
   | { type: 'UPDATE_PARAMS'; id: string; params: Partial<SegmentEngineParams>; convertFromRole?: boolean }
   | { type: 'UPDATE_EMOTION'; id: string; emotion: string }
-  | { type: 'SET_PROJECT_NARRATOR'; roleId: string | null; roleSnapshot: RoleSnapshot | null }
+  | { type: 'SET_PROJECT_NARRATOR'; roleId: string | null }
   | { type: 'SET_SEGMENT_ROLE'; id: string; roleId: string | null; roleSnapshot: RoleSnapshot | null }
   | { type: 'SET_SEGMENT_KIND'; id: string; segmentKind: SegmentKind }
   | { type: 'UPDATE_PROSODY_MARKS'; id: string; prosodyMarks: ProsodyMark[] }
@@ -402,7 +400,6 @@ export function segmentedReducer(state: State, action: Action): State {
         project: {
           ...p,
           default_narrator_role_id: action.roleId,
-          default_narrator_snapshot: action.roleSnapshot,
           updated_at: new Date().toISOString(),
         },
       };

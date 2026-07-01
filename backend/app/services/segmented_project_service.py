@@ -185,7 +185,6 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         remotion_project_path=getattr(p, "remotion_project_path", None),
         source_document=getattr(p, "source_document", None),
         default_narrator_role_id=getattr(p, "default_narrator_role_id", None),
-        default_narrator_snapshot=getattr(p, "default_narrator_snapshot", None),
         configs=getattr(p, "configs", None),
         created_at=_to_iso(p.created_at),
         updated_at=_to_iso(p.updated_at),
@@ -254,7 +253,6 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     setattr(p, "remotion_project_path", project.remotion_project_path)
     setattr(p, "default_narrator_role_id", project.default_narrator_role_id)
     setattr(p, "configs", project.configs)
-    setattr(p, "default_narrator_snapshot", project.default_narrator_snapshot)
     if project.created_at:
         p.created_at = _parse_iso(project.created_at)
     p.updated_at = utcnow()

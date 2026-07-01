@@ -321,22 +321,12 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments[0].text).toBe('旁白');
   });
 
-  it('SET_PROJECT_NARRATOR stores narrator role and snapshot', () => {
-    const roleSnapshot = {
-      id: 'role-narrator',
-      name: '旁白',
-      default_engine: 'edge_tts' as const,
-      default_voice: 'zh-CN-YunjianNeural',
-      default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunjianNeural' },
-      favorite_styles: [],
-    };
+  it('SET_PROJECT_NARRATOR stores narrator role', () => {
     const next = segmentedReducer({ project: makeProject() }, {
       type: 'SET_PROJECT_NARRATOR',
       roleId: 'role-narrator',
-      roleSnapshot,
     });
     expect(next.project.default_narrator_role_id).toBe('role-narrator');
-    expect(next.project.default_narrator_snapshot?.name).toBe('旁白');
   });
 });
 

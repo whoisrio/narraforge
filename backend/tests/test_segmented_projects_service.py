@@ -149,10 +149,6 @@ def test_save_project_persists_role_and_segment_kind(db_session, tmp_path, monke
 
     project = _seed_project("p-role")
     project.default_narrator_role_id = "role-narrator"
-    project.default_narrator_snapshot = {
-        "id": "role-narrator",
-        "name": "旁白",
-    }
     project.chapters[0].segments[0].role_id = "role-linxia"
     project.chapters[0].segments[0].segment_kind = "dialogue"
     project.chapters[0].segments[0].voice = {
@@ -168,7 +164,6 @@ def test_save_project_persists_role_and_segment_kind(db_session, tmp_path, monke
     detail = get_project_detail(db_session, "p-role")
     assert detail is not None
     assert detail.default_narrator_role_id == "role-narrator"
-    assert detail.default_narrator_snapshot["name"] == "旁白"
     segment = detail.chapters[0].segments[0]
     assert segment.role_id == "role-linxia"
     assert segment.segment_kind == "dialogue"

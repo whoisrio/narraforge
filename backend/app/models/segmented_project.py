@@ -36,7 +36,6 @@ class SegmentedProject(Base):
         ForeignKey("roles.id", ondelete="SET NULL"),
         nullable=True,
     )
-    default_narrator_snapshot = Column(JSON, nullable=True)
     configs = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)

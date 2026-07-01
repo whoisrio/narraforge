@@ -130,10 +130,6 @@ def test_project_round_trips_role_fields(client, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     payload = _payload("p-role")
     payload["default_narrator_role_id"] = "role-narrator"
-    payload["default_narrator_snapshot"] = {
-        "id": "role-narrator",
-        "name": "旁白",
-    }
     payload["chapters"][0]["segments"][0].update({
         "role_id": "role-linxia",
         "segment_kind": "dialogue",
@@ -152,7 +148,6 @@ def test_project_round_trips_role_fields(client, tmp_path, monkeypatch):
     assert fetched.status_code == 200
     body = fetched.json()
     assert body["default_narrator_role_id"] == "role-narrator"
-    assert body["default_narrator_snapshot"]["name"] == "旁白"
     segment = body["chapters"][0]["segments"][0]
     assert segment["role_id"] == "role-linxia"
     assert segment["segment_kind"] == "dialogue"

@@ -60,7 +60,6 @@ class ProjectIn(BaseModel):
     remotion_project_path: str | None = None
     source_document: str | None = None
     default_narrator_role_id: str | None = None
-    default_narrator_snapshot: dict[str, Any] | None = None
     configs: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None

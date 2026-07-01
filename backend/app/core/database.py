@@ -49,7 +49,6 @@ _P2_V3_ALTER_STMTS = (
 # P3: dialogue roles and local prosody marks.
 _P3_ROLE_PROSODY_ALTER_STMTS = (
     "ALTER TABLE segmented_projects ADD COLUMN default_narrator_role_id VARCHAR",
-    "ALTER TABLE segmented_projects ADD COLUMN default_narrator_snapshot JSON",
     "ALTER TABLE segmented_project_segments ADD COLUMN role_id VARCHAR",
     "ALTER TABLE segmented_project_segments ADD COLUMN role_snapshot JSON",
     "ALTER TABLE segmented_project_segments ADD COLUMN segment_kind VARCHAR DEFAULT 'narration'",
