@@ -76,7 +76,7 @@ export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPM
 export type VoiceSource =
   | { source: 'chapter' }
   | { source: 'role'; role_id: string }
-  | { source: 'custom'; engine: EngineParams['engine']; params: Record<string, unknown>; role_id?: string };
+  | { source: 'custom'; engine: EngineParams['engine']; params: EngineParams; role_id?: string };
 
 // ── Voice engine for profiles ──
 
@@ -298,42 +298,6 @@ export type ModelConfigs = Record<string, ModelConfigProvider>;
 // Segmented TTS Editor types
 // ---------------------------------------------------------------------------
 
-export interface SegmentEngineParams {
-  engine: 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
-
-  // CosyVoice
-  voice_id?: string;
-  instruction?: string;
-  speed?: number;
-  volume?: number;
-  pitch?: number;
-  language?: string;
-  enable_ssml?: boolean;
-  enable_markdown_filter?: boolean;
-
-  // Edge-TTS
-  edge_voice?: string;
-  edge_rate?: string;     // '+0%' style
-  edge_volume?: string;
-
-  // MiMo-TTS
-  mimo_mode?: 'preset' | 'voiceclone' | 'voicedesign';
-  mimo_preset_voice?: string;
-  mimo_clone_voice_id?: string;
-  mimo_instruction?: string;
-  mimo_voice_description?: string;
-
-  // VoxCPM
-  voxcpm_mode?: 'tts' | 'design' | 'clone' | 'ultimate';
-  voxcpm_voice_description?: string;
-  voxcpm_style_control?: string;
-  voxcpm_prompt_text?: string;
-  voxcpm_cfg_value?: number;
-  voxcpm_inference_timesteps?: number;
-
-  // 克隆输入方式
-  input_method?: 'record' | 'upload' | 'url';
-}
 
 export type SegmentStatus = 'idle' | 'queued' | 'pending' | 'ready' | 'failed';
 
@@ -362,11 +326,11 @@ export interface RoleSnapshot {
 
   // ── V3 兼容层（后续移除）──
   /** @deprecated Use voice.engine */
-  default_engine: SegmentEngineParams['engine'];
+  default_engine: EngineParams['engine'];
   /** @deprecated Use voice */
   default_voice: string | null;
   /** @deprecated Use voice */
-  default_engine_params: SegmentEngineParams;
+  default_engine_params: EngineParams;
 }
 
 export interface Role extends RoleSnapshot {
@@ -384,11 +348,11 @@ export interface RoleUpdate {
 
   // ── V3 兼容层（后续移除）──
   /** @deprecated Use voice */
-  default_engine?: SegmentEngineParams['engine'];
+  default_engine?: EngineParams['engine'];
   /** @deprecated Use voice */
   default_voice?: string | null;
   /** @deprecated Use voice */
-  default_engine_params?: Partial<SegmentEngineParams>;
+  default_engine_params?: Partial<EngineParams>;
 }
 
 export interface ProsodyMark {
@@ -418,7 +382,7 @@ export interface VoiceRef {
   /** 音色标识符（VoiceProfile.id, qwen_voice_id, edge_voice, mimo_preset_voice 等） */
   voice_id: string;
   /** 使用的引擎 */
-  engine: SegmentEngineParams['engine'];
+  engine: EngineParams['engine'];
   /** 角色 ID（仅 source='role' 时有值） */
   role_id?: string;
 }
@@ -439,7 +403,7 @@ export interface Segment {
 
   // ── V3 兼容层（后续移除）──
   /** @deprecated Use voice */
-  params?: SegmentEngineParams;
+  params?: EngineParams;
   /** @deprecated Use voice.source === 'custom' */
   overrides?: string[];
   /** @deprecated Use voice */

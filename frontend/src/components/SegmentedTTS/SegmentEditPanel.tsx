@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '../../i18n';
-import type { Segment, SegmentEngineParams, EmotionType, VoiceProfile, MiMoPresetVoice, Role } from '../../types';
+import type { Segment, EngineParams, EmotionType, VoiceProfile, MiMoPresetVoice, Role } from '../../types';
 import { ttsApi, mimoTtsApi } from '../../services/api';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import { segEngine, segEffectiveParams, segFieldOverridden, segOverrideFields } from '../../services/segmentShims';
 import styles from './SegmentEditPanel.module.css';
 
 type SegmentOverride = 'voice' | 'speed' | 'volume' | 'pitch' | 'language' | 'instruction';
-type SegmentParamField = keyof SegmentEngineParams;
-type SegmentParamValue = SegmentEngineParams[SegmentParamField];
+type SegmentParamField = keyof EngineParams;
+type SegmentParamValue = EngineParams[SegmentParamField];
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
   happy: 'segmentEdit.emotion.happy', sad: 'segmentEdit.emotion.sad', angry: 'segmentEdit.emotion.angry',
@@ -23,7 +23,7 @@ interface SegmentEditPanelProps {
   onClose: () => void;
   onUpdateText: (id: string, text: string) => void;
   onUpdateSSML: (id: string, ssml: string) => void;
-  onUpdateParams: (id: string, params: Partial<SegmentEngineParams>) => void;
+  onUpdateParams: (id: string, params: Partial<EngineParams>) => void;
   onUpdateOverrides?: (id: string, overrides: string[]) => void;
   onUpdateEmotion?: (id: string, emotion: string) => void;
   onUndo?: (id: string) => void;
@@ -114,9 +114,9 @@ export function SegmentEditPanel({
 
   const handleParamChange = useCallback((field: SegmentParamField, value: SegmentParamValue) => {
     if (!segment) return;
-    const params: Partial<SegmentEngineParams> = {};
+    const params: Partial<EngineParams> = {};
     if (field === 'engine') {
-      params.engine = value as SegmentEngineParams['engine'];
+      params.engine = value as EngineParams['engine'];
       if (value === 'edge_tts') { params.edge_voice = ''; }
       else if (value === 'mimo_tts') { params.mimo_mode = 'preset'; params.mimo_preset_voice = '冰糖'; }
       else if (value === 'voxcpm') { params.voxcpm_mode = 'clone'; }
@@ -127,11 +127,11 @@ export function SegmentEditPanel({
     else if (field === 'pitch') params.pitch = value as number;
     else if (field === 'voice_id') params.voice_id = value as string;
     else if (field === 'edge_voice') params.edge_voice = value as string;
-    else if (field === 'mimo_mode') params.mimo_mode = value as SegmentEngineParams['mimo_mode'];
+    else if (field === 'mimo_mode') params.mimo_mode = value as EngineParams['mimo_mode'];
     else if (field === 'mimo_preset_voice') params.mimo_preset_voice = value as string;
     else if (field === 'mimo_clone_voice_id') params.mimo_clone_voice_id = value as string;
     else if (field === 'mimo_instruction') params.mimo_instruction = value as string;
-    else if (field === 'voxcpm_mode') params.voxcpm_mode = value as SegmentEngineParams['voxcpm_mode'];
+    else if (field === 'voxcpm_mode') params.voxcpm_mode = value as EngineParams['voxcpm_mode'];
     else if (field === 'voxcpm_style_control') params.voxcpm_style_control = value as string;
     else if (field === 'language') params.language = value as string;
     else if (field === 'instruction') params.instruction = value as string;

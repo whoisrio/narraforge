@@ -90,7 +90,7 @@ export function vpPromptText(vp: VoiceProfile): string | undefined {
 
 // ---- Role accessors ----
 
-/** Convert EngineParams to old SegmentEngineParams shape (for display) */
+/** Convert EngineParams to old EngineParams shape (for display) */
 export function engineParamsToLegacy(v: EngineParams): Record<string, unknown> {
   if (v.engine === 'edge_tts') {
     const ev = v as EdgeTTSParams;

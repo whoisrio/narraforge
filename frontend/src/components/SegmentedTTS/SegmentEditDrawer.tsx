@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Segment, SegmentEngineParams } from '../../types';
+import type { Segment, EngineParams } from '../../types';
 import { useTranslation } from '../../i18n';
 import { segEngine, segEffectiveParams } from '../../services/segmentShims';
 import styles from './SegmentEditDrawer.module.css';
@@ -9,7 +9,7 @@ interface SegmentEditDrawerProps {
   onClose: () => void;
   onUpdateText: (id: string, text: string) => void;
   onUpdateSSML: (id: string, ssml: string) => void;
-  onUpdateParams: (id: string, params: Partial<SegmentEngineParams>) => void;
+  onUpdateParams: (id: string, params: Partial<EngineParams>) => void;
   onRegenerate: (id: string) => void;
   onAnnotateSSML: (id: string) => void;
 }

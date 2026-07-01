@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { Role, RoleSnapshot, SegmentEngineParams } from '../../types';
+import type { Role, RoleSnapshot, EngineParams } from '../../types';
 import { roleApi } from '../../services/api';
 import { useTranslation } from '../../i18n';
 import styles from './RoleLibraryPanel.module.css';
@@ -92,7 +92,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
     }
   };
 
-  const setEngineParams = (params: Partial<SegmentEngineParams>) => {
+  const setEngineParams = (params: Partial<EngineParams>) => {
     setDraft((prev) => ({
       ...prev,
       default_engine_params: { ...prev.default_engine_params, ...params },
@@ -123,7 +123,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged }: RoleLibraryP
             <select
               value={draft.default_engine}
               onChange={(event) => {
-                const engine = event.target.value as SegmentEngineParams['engine'];
+                const engine = event.target.value as EngineParams['engine'];
                 setDraft((prev) => ({ ...prev, default_engine: engine, default_engine_params: { ...prev.default_engine_params, engine } }));
               }}
             >

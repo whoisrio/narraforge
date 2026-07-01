@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { SegmentEngineParams } from '../types';
+import type { EngineParams } from '../types';
 import { createVoiceRoleDraft, DEFAULT_EDGE_NARRATOR_VOICE } from './voiceRoleDefaults';
 
 describe('voiceRoleDefaults', () => {
   it('creates a usable Edge-TTS narrator when the current voice is empty', () => {
-    const currentParams: SegmentEngineParams = {
+    const currentParams: EngineParams = {
       engine: 'edge_tts',
       edge_voice: '',
       edge_rate: '+0%',

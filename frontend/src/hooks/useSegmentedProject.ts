@@ -1,4 +1,4 @@
-import type { SegmentedProject, Chapter, Segment, SegmentEngineParams, SegmentKind, EmotionType, VoiceSource, EngineParams, RoleSnapshot, ProsodyMark } from '../types';
+import type { SegmentedProject, Chapter, Segment, EngineParams, SegmentKind, EmotionType, VoiceSource, RoleSnapshot, ProsodyMark } from '../types';
 
 let _idCounter = 0;
 function uid(): string {
@@ -171,7 +171,7 @@ export type Action =
   | { type: 'UPDATE_TEXT'; id: string; text: string }
   | { type: 'UPDATE_SSML'; id: string; ssml: string; by_llm?: boolean }
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
-  | { type: 'UPDATE_PARAMS'; id: string; params: Partial<SegmentEngineParams>; convertFromRole?: boolean }
+  | { type: 'UPDATE_PARAMS'; id: string; params: Partial<EngineParams>; convertFromRole?: boolean }
   | { type: 'UPDATE_EMOTION'; id: string; emotion: string }
   | { type: 'SET_PROJECT_NARRATOR'; roleId: string | null }
   | { type: 'SET_SEGMENT_ROLE'; id: string; roleId: string | null; roleSnapshot: RoleSnapshot | null }
@@ -180,7 +180,7 @@ export type Action =
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
-  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').SegmentEngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown> }
+  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').EngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown> }
   | { type: 'GENERATE_FAIL'; id: string; error: string }
   | { type: 'UNDO_REGENERATE'; id: string }
   | { type: 'CLEAR_SEGMENT_AUDIO'; id: string }
@@ -557,7 +557,7 @@ export function segmentedReducer(state: State, action: Action): State {
         seg.error = undefined;
         seg.updated_at = new Date().toISOString();
         // Create new segment for second half
-        const newSeg = makeSegment(textAfter, {} as SegmentEngineParams);
+        const newSeg = makeSegment(textAfter, {} as EngineParams);
         if (seg.emotion) newSeg.emotion = seg.emotion;
         // Inherit voice
         newSeg.voice = { ...seg.voice };

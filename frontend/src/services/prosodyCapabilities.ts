@@ -1,6 +1,6 @@
-import type { ProsodyCapability, SegmentEngineParams } from '../types';
+import type { ProsodyCapability, EngineParams } from '../types';
 
-const CAPABILITIES: Record<SegmentEngineParams['engine'], ProsodyCapability> = {
+const CAPABILITIES: Record<EngineParams['engine'], ProsodyCapability> = {
   edge_tts: {
     supportsEmotion: false,
     supportsStyleTags: true,
@@ -31,6 +31,6 @@ const CAPABILITIES: Record<SegmentEngineParams['engine'], ProsodyCapability> = {
   },
 };
 
-export function getProsodyCapability(engine: SegmentEngineParams['engine']): ProsodyCapability {
+export function getProsodyCapability(engine: EngineParams['engine']): ProsodyCapability {
   return CAPABILITIES[engine];
 }

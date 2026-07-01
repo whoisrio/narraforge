@@ -1,11 +1,11 @@
-import type { RoleSnapshot, SegmentEngineParams } from '../types';
+import type { RoleSnapshot, EngineParams } from '../types';
 
 export type VoiceRoleKind = 'Narrator' | 'Cast';
 
 export const DEFAULT_EDGE_NARRATOR_VOICE = 'zh-CN-YunxiNeural';
 export const DEFAULT_EDGE_CAST_VOICE = 'zh-CN-YunyangNeural';
 
-function hasUsableVoice(params: SegmentEngineParams): boolean {
+function hasUsableVoice(params: EngineParams): boolean {
   if (params.engine === 'edge_tts') return Boolean(params.edge_voice?.trim());
   if (params.engine === 'cosyvoice') return Boolean(params.voice_id?.trim());
   if (params.engine === 'mimo_tts') {
@@ -21,7 +21,7 @@ function hasUsableVoice(params: SegmentEngineParams): boolean {
   return false;
 }
 
-function fallbackEdgeParams(roleKind: VoiceRoleKind): SegmentEngineParams {
+function fallbackEdgeParams(roleKind: VoiceRoleKind): EngineParams {
   return {
     engine: 'edge_tts',
     edge_voice: roleKind === 'Narrator' ? DEFAULT_EDGE_NARRATOR_VOICE : DEFAULT_EDGE_CAST_VOICE,
@@ -30,7 +30,7 @@ function fallbackEdgeParams(roleKind: VoiceRoleKind): SegmentEngineParams {
   };
 }
 
-function normalizeParams(params: SegmentEngineParams, roleKind: VoiceRoleKind): SegmentEngineParams {
+function normalizeParams(params: EngineParams, roleKind: VoiceRoleKind): EngineParams {
   if (!hasUsableVoice(params)) return fallbackEdgeParams(roleKind);
 
   if (params.engine === 'edge_tts') {
@@ -45,7 +45,7 @@ function normalizeParams(params: SegmentEngineParams, roleKind: VoiceRoleKind): 
   return params;
 }
 
-function defaultVoiceFromParams(params: SegmentEngineParams): string {
+function defaultVoiceFromParams(params: EngineParams): string {
   return params.edge_voice
     || params.voice_id
     || params.mimo_clone_voice_id
@@ -61,7 +61,7 @@ export function createVoiceRoleDraft({
 }: {
   name: string;
   roleKind: VoiceRoleKind;
-  currentParams: SegmentEngineParams;
+  currentParams: EngineParams;
 }): RoleSnapshot {
   const roleParams = normalizeParams(currentParams, roleKind);
 
@@ -77,6 +77,6 @@ export function createVoiceRoleDraft({
   };
 }
 
-export function roleVoiceLabelFromParams(params: SegmentEngineParams, fallback?: string | null): string {
+export function roleVoiceLabelFromParams(params: EngineParams, fallback?: string | null): string {
   return defaultVoiceFromParams(params) || fallback || '未设置音色';
 }

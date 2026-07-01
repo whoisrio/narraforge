@@ -21,7 +21,7 @@ import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, SegmentEngineParams, EngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
@@ -630,7 +630,7 @@ export function TTSSynthesis({
     // Take all params from the panel display (effective + local edits)
     const eff = segEffectiveParams(seg) as Record<string, unknown>;
     const fullParams = { ...eff, ...localParams };
-    dispatch({ type: 'UPDATE_PARAMS', id, params: fullParams as Partial<SegmentEngineParams>, convertFromRole: true });
+    dispatch({ type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true });
     // Clear existing audio — was generated with old params
     if (seg.status === 'ready') dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id });
   }, [activeChapter.segments, dispatch]);
@@ -716,7 +716,7 @@ export function TTSSynthesis({
           name: item.role_snapshot.name,
           source: 'role',
           voice_id: (rsv?.voice_id || rsv?.voice || '') as string,
-          engine: (rsv?.engine || 'edge_tts') as SegmentEngineParams['engine'],
+          engine: (rsv?.engine || 'edge_tts') as EngineParams['engine'],
           role_id: item.role_id,
         };
         return { ...item, voice_ref: roleVoiceRef };
@@ -873,7 +873,7 @@ export function TTSSynthesis({
 
       // Voice identifier & params snapshot — shared by both backend and frontend paths
       let usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoMode === 'voicedesign' ? effectiveMimoVoiceDesc : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
-      const updatedParams: Partial<SegmentEngineParams> = { engine: effectiveEngine };
+      const updatedParams: Partial<EngineParams> = { engine: effectiveEngine };
       if (effectiveEngine === 'edge_tts') {
         updatedParams.edge_voice = effectiveEdgeVoice;
         updatedParams.edge_rate = effectiveEdgeRate;

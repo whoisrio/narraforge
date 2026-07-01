@@ -1,4 +1,4 @@
-import type { Segment, SegmentEngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
+import type { Segment, EngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import { inferSpeakerName } from '../../services/segmentKindInference';
 import { t } from '../../i18n';
@@ -40,7 +40,7 @@ interface SegmentListProps {
   onDuplicate?: (id: string) => void;
   onUpdateText?: (id: string, text: string) => void;
   onUpdateSSML?: (id: string, ssml: string) => void;
-  onUpdateParams?: (id: string, params: Partial<SegmentEngineParams>) => void;
+  onUpdateParams?: (id: string, params: Partial<EngineParams>) => void;
   onUpdateEmotion?: (id: string, emotion: string) => void;
   onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
   onUpdateKind?: (id: string, kind: SegmentKind, roleSnapshot: RoleSnapshot | null) => void;
