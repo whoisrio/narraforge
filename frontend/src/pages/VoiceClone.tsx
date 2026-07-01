@@ -128,7 +128,22 @@ export function VoiceClone() {
   // ---- 编辑/删除 ----
   const handleStartEdit = (voice: VoiceProfile) => {
     setEditingVoice(voice);
+    const vt = voice.voice?.voice_type;
     const model = voice.voice?.model;
+    
+    if (vt === 'design') {
+      // Open design panel with existing params pre-filled
+      if (model === 'mimo_tts') setDesignEngine('mimo');
+      else if (model === 'voxcpm') setDesignEngine('voxcpm');
+      const params = (voice.voice_params?.[model || '']?.params || {}) as Record<string, unknown>;
+      setDesignBrief((params.voice_description as string) || voice.description || '');
+      setDesignName(voice.name || '');
+      setActivePanel('design');
+      setDesignPhase('idle');
+      return;
+    }
+
+    // Clone/preset voices → open clone panel
     if (model === 'mimo_tts') setCloneEngine('mimo');
     else if (model === 'voxcpm') setCloneEngine('voxcpm');
     else if (model === 'cosyvoice') setCloneEngine('qwen');
