@@ -259,11 +259,13 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
     if not voice:
         raise HTTPException(status_code=404, detail="声音记录不存在")
 
-    resolved_src = str(settings.resolve_path(voice.source_audio_path)) if voice.source_audio_path else None
+    model = (voice.voice or {}).get("model", "")
+    source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+    resolved_src = str(settings.resolve_path(source_path)) if source_path else None
     if not resolved_src or not os.path.exists(resolved_src):
         # 尝试外部 URL
-        engine_json = voice.engine or {}
-        ext_url = engine_json.get("external_audio_url")
+        vp = (voice.voice_params or {}).get(model, {}) or {}
+        ext_url = vp.get("params", {}).get("external_audio_url")
         if ext_url:
             tmp_path = None
             try:
@@ -398,12 +400,15 @@ def synthesize_mimo_internal(
             if not voice:
                 raise ValueError(f"声音记录不存在 (clone_voice_id={clone_voice_id})")
 
-            # 优先读试听音频（cloned_preview_path），回退到源音频（source_audio_path）
-            raw_path = getattr(voice, "cloned_preview_path", None) or getattr(voice, "source_audio_path", None)
+            # 优先读试听音频（preview），回退到源音频（voice_params）
+            model = (voice.voice or {}).get("model", "")
+            preview_path = (voice.preview or {}).get("preview_audio_path", "")
+            source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+            raw_path = preview_path or source_path
             audio_path = str(settings.resolve_path(raw_path)) if raw_path else None
             if not audio_path or not os.path.exists(audio_path):
-                eng = voice.engine or {}
-                ext_url = eng.get("external_audio_url")
+                vp = (voice.voice_params or {}).get(model, {}) or {}
+                ext_url = vp.get("params", {}).get("external_audio_url")
                 if ext_url:
                     import urllib.request as url_req
                     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)

@@ -29,15 +29,17 @@ type DesignPhase = 'idle' | 'previewing' | 'previewed' | 'saving';
 
 /** 引擎标签 */
 function engineLabel(profile: VoiceProfile): string {
-  if (profile.clone_engine === 'mimo') return 'MiMo';
-  if (profile.clone_engine === 'voxcpm') return 'VoxCPM';
-  if (profile.clone_engine === 'qwen') return 'CosyVoice';
+  const model = profile.voice?.model;
+  if (model === 'mimo_tts') return 'MiMo';
+  if (model === 'voxcpm') return 'VoxCPM';
+  if (model === 'cosyvoice') return 'CosyVoice';
+  if (model === 'edge_tts') return 'Edge-TTS';
   return 'Unknown';
 }
 
 /** 输入方式标签 */
 function inputMethodLabel(profile: VoiceProfile): string {
-  const method = profile.engine_params?.input_method as string | undefined;
+  const method = profile.voice_params?.input_method as string | undefined;
   if (method === 'record') return t('voiceClone.record');
   if (method === 'upload') return t('voiceClone.upload');
   if (method === 'url') return t('voiceClone.url');
@@ -128,7 +130,11 @@ export function VoiceClone() {
   // ---- 编辑/删除 ----
   const handleStartEdit = (voice: VoiceProfile) => {
     setEditingVoice(voice);
-    setCloneEngine((voice.clone_engine as CloneEngine) || 'qwen');
+    const model = voice.voice?.model;
+    if (model === 'mimo_tts') setCloneEngine('mimo');
+    else if (model === 'voxcpm') setCloneEngine('voxcpm');
+    else if (model === 'cosyvoice') setCloneEngine('qwen');
+    else setCloneEngine('qwen');
     setActivePanel('clone');
     setCloneStep('choose-method');
     setCloneMethod(null);
@@ -463,10 +469,10 @@ export function VoiceClone() {
                   <audio controls style={{ width: '100%' }} src={editingVoice.source_audio_url} />
                 </div>
               )}
-              {editingVoice.cloned_preview_url && (
+              {editingVoice.preview_audio_url && (
                 <div style={{ marginBottom: '1rem' }}>
                   <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)', marginBottom: '0.25rem' }}>{t('voiceDesign.clonePreview')}</div>
-                  <audio controls style={{ width: '100%' }} src={editingVoice.cloned_preview_url} />
+                  <audio controls style={{ width: '100%' }} src={editingVoice.preview_audio_url} />
                 </div>
               )}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
@@ -553,7 +559,7 @@ export function VoiceClone() {
                 <VoiceAvatar
                   avatar={v.avatar ?? null}
                   name={v.name}
-                  engine={v.clone_engine || 'edge_tts'}
+                  engine={v.voice?.model || 'edge_tts'}
                   size={40}
                 />
                 <div className={styles.voiceCardBody}>

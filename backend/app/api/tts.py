@@ -121,7 +121,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         all_voices = db.query(VoiceProfile).all()
         voice = next(
             (v for v in all_voices
-             if v.engine and v.engine.get("qwen_voice_id") == request.voice_id),
+             if (v.voice_params or {}).get("cosyvoice", {}).get("params", {}).get("voice_id") == request.voice_id),
             None,
         )
         voice_name = voice.description or voice.name if voice else request.voice_id
@@ -419,7 +419,7 @@ async def list_available_voices(
     # Filter to cloned voices only
     voices: list[VoiceProfile] = [
         v for v in all_voices
-        if v.engine and v.engine.get("is_cloned")
+        if (v.voice or {}).get("voice_type") == "clone"
     ]
 
     if voice_id:

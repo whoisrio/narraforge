@@ -17,7 +17,6 @@ class TestVoiceProfileModel:
         voice_data = {
             "id": "test_voice_001",
             "name": "Test Voice",
-            "source_audio_path": "/tmp/test_audio.wav",
         }
 
         voice = VoiceProfile(**voice_data)
@@ -26,9 +25,8 @@ class TestVoiceProfileModel:
 
         assert voice.id == "test_voice_001"
         assert voice.name == "Test Voice"
-        assert voice.source_audio_path == "/tmp/test_audio.wav"
-        assert voice.engine == {}
-        assert voice.engine_params is None
+        assert voice.voice == {}
+        assert voice.voice_params == {}
         assert isinstance(voice.created_at, datetime)
 
     def test_voice_profile_required_fields(self, db_session):
@@ -36,7 +34,6 @@ class TestVoiceProfileModel:
         with pytest.raises(IntegrityError):
             voice = VoiceProfile(
                 id="test_voice_002",
-                source_audio_path="/tmp/test_audio.wav",
             )
             db_session.add(voice)
             db_session.commit()
@@ -49,20 +46,19 @@ class TestVoiceProfileModel:
         )
         db_session.add(voice)
         db_session.commit()
-        assert voice.source_audio_path is None
+        assert voice.preview is None
 
     def test_voice_profile_default_values(self, db_session):
         """测试默认值"""
         voice = VoiceProfile(
             id="test_voice_004",
             name="Test Voice",
-            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
 
-        assert voice.engine == {}
-        assert voice.engine_params is None
+        assert voice.voice == {}
+        assert voice.voice_params == {}
         assert voice.created_at is not None
 
     def test_voice_profile_string_representation(self, db_session):
@@ -70,7 +66,6 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_006",
             name="Test Voice",
-            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
@@ -83,28 +78,26 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_007",
             name="Original Name",
-            source_audio_path="/tmp/original_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
 
         voice.name = "Updated Name"
-        voice.source_audio_path = "/tmp/updated_audio.wav"
-        voice.engine = {"type": "qwen", "qwen_voice_id": "updated_clone_id", "is_cloned": True}
+        voice.voice_params = {"cosyvoice": {"source_audio_path": "/tmp/updated_audio.wav", "params": {}}}
+        voice.voice = {"model": "cosyvoice", "voice_type": "clone"}
         db_session.commit()
 
         updated_voice = db_session.query(VoiceProfile).filter_by(id="test_voice_007").first()
         assert updated_voice.name == "Updated Name"
-        assert updated_voice.source_audio_path == "/tmp/updated_audio.wav"
-        assert updated_voice.engine["is_cloned"] is True
-        assert updated_voice.engine["qwen_voice_id"] == "updated_clone_id"
+        assert updated_voice.voice_params.get("cosyvoice", {}).get("source_audio_path") == "/tmp/updated_audio.wav"
+        assert updated_voice.voice["voice_type"] == "clone"
+        assert updated_voice.voice["model"] == "cosyvoice"
 
     def test_voice_profile_delete(self, db_session):
         """测试删除 VoiceProfile"""
         voice = VoiceProfile(
             id="test_voice_008",
             name="Test Voice",
-            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
@@ -125,7 +118,6 @@ class TestVoiceProfileModel:
         voice = VoiceProfile(
             id="test_voice_009",
             name="Test Voice",
-            source_audio_path="/tmp/test_audio.wav",
         )
         db_session.add(voice)
         db_session.commit()
@@ -137,28 +129,27 @@ class TestVoiceProfileModel:
         assert before_create < voice.created_at < after_create
 
     def test_voice_profile_cloned_preview_path(self, db_session):
-        """cloned_preview_path 存储试听音频路径"""
+        """preview 字段存储试听音频路径"""
         voice = VoiceProfile(
             id="test_preview_001",
             name="Preview Voice",
-            source_audio_path="/tmp/source.wav",
-            cloned_preview_path="/tmp/preview.wav",
+            preview={"audition_text": "", "preview_audio_path": "/tmp/preview.wav"},
         )
         db_session.add(voice)
         db_session.commit()
 
         retrieved = db_session.query(VoiceProfile).filter_by(id="test_preview_001").first()
-        assert retrieved.cloned_preview_path == "/tmp/preview.wav"
+        assert retrieved.preview["preview_audio_path"] == "/tmp/preview.wav"
 
     def test_voice_profile_all_paths_nullable(self, db_session):
-        """仅 name 必填，所有音频路径均可为 NULL"""
+        """仅 name 必填，preview 可为 None，voice/voice_params 默认为空 dict"""
         voice = VoiceProfile(id="test_all_null", name="Minimal")
         db_session.add(voice)
         db_session.commit()
 
-        assert voice.source_audio_path is None
-        assert voice.cloned_preview_path is None
-        assert voice.engine == {}
+        assert voice.preview is None
+        assert voice.voice == {}
+        assert voice.voice_params == {}
 
     def test_voice_profile_project_id(self, db_session):
         """project_id 设置项目专属声音"""
@@ -174,21 +165,20 @@ class TestVoiceProfileModel:
         assert retrieved.project_id == "proj-123"
 
     def test_voice_profile_engine_json(self, db_session):
-        """引擎元数据存储在 engine JSON 字段"""
+        """引擎元数据存储在 voice/voice_params JSON 字段"""
         voice = VoiceProfile(
             id="test_engine_001",
             name="Engine Voice",
-            engine={
-                "type": "clone",
-                "engine_type": "CosyVoice",
-                "engine_sub_type": None,
+            voice={
+                "model": "cosyvoice",
+                "voice_type": "clone",
             },
-            engine_params={"instruction": "warm"},
+            voice_params={"cosyvoice": {"params": {"instruction": "warm"}}},
         )
         db_session.add(voice)
         db_session.commit()
 
         retrieved = db_session.query(VoiceProfile).filter_by(id="test_engine_001").first()
-        assert retrieved.engine["type"] == "clone"
-        assert retrieved.engine["engine_type"] == "CosyVoice"
-        assert retrieved.engine_params == {"instruction": "warm"}
+        assert retrieved.voice["model"] == "cosyvoice"
+        assert retrieved.voice["voice_type"] == "clone"
+        assert retrieved.voice_params == {"cosyvoice": {"params": {"instruction": "warm"}}}

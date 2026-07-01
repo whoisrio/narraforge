@@ -170,7 +170,10 @@ export function SegmentEditPanel({
       const v = voices.find(v => v.id === eff.voice_id);
       overrideSummary.push(`${t('segmentEdit.voice')}: ${v?.name || t('segmentEdit.custom')}`);
     } else {
-      const v = voices.find(v => (v.qwen_voice_id || v.id) === eff.voice_id);
+      const v = voices.find(v => {
+        const vid = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+        return (vid || v.id) === eff.voice_id;
+      });
       overrideSummary.push(`${t('segmentEdit.voice')}: ${v?.name || t('segmentEdit.custom')}`);
     }
   }
@@ -287,8 +290,8 @@ export function SegmentEditPanel({
                   <select className={styles.paramSelect} value={eff.voice_id || ''}
                     onChange={e => handleParamChange('voice_id', e.target.value)}>
                     {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
-                      {voices.filter(v => v.engine?.type === 'qwen').map(v => {
-                        const key = v.qwen_voice_id || v.id;
+                      {voices.filter(v => v.voice?.model === 'cosyvoice').map(v => {
+                        const key = (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || v.id;
                         return <option key={key} value={key}>⭐ {v.name || key}</option>;
                       })}
                   </select>
@@ -358,7 +361,7 @@ export function SegmentEditPanel({
                       <select className={styles.paramSelect} value={eff.mimo_clone_voice_id || ''}
                         onChange={e => handleParamChange('mimo_clone_voice_id', e.target.value)}>
                         {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
-                        {voices.filter(v => v.engine?.type === 'mimo' && v.id).map(v => (
+                        {voices.filter(v => v.voice?.model === 'mimo_tts' && v.id).map(v => (
                           <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
                         ))}
                       </select>
@@ -384,7 +387,7 @@ export function SegmentEditPanel({
                     <select className={styles.paramSelect} value={eff.voice_id || ''}
                       onChange={e => handleParamChange('voice_id', e.target.value)}>
                       {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
-                      {voices.filter(v => v.engine?.type === 'voxcpm').map(v => (
+                      {voices.filter(v => v.voice?.model === 'voxcpm').map(v => (
                           <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
                         ))}
                     </select>

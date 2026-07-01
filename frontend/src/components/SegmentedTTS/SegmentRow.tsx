@@ -182,7 +182,10 @@ export function SegmentRow({
       // CosyVoice / VoxCPM
       const vid = params.voice_id as string | undefined;
       if (vid) {
-        const vObj = voices.find(v => (v.qwen_voice_id || v.id) === vid);
+        const vObj = voices.find(v => {
+          const voiceVid = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+          return (voiceVid || v.id) === vid;
+        });
         if (vObj?.name) return vObj.name;
         if (vid.startsWith('cosyvoice-')) return t('segment.segmentRow.cosyVoice');
         if (vid.startsWith('voxcpm-')) return t('segment.segmentRow.voxcpmVoice');
@@ -241,7 +244,10 @@ export function SegmentRow({
     }
     return globalVoiceId;
   })();
-  const voiceObj = voices.find(v => (v.qwen_voice_id || v.id) === voiceVoiceId);
+  const voiceObj = voices.find(v => {
+    const voiceVid = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+    return (voiceVid || v.id) === voiceVoiceId;
+  });
 
   // Edge-TTS voice technical name for gender heuristic
   const edgeVoiceForGender: string = (() => {

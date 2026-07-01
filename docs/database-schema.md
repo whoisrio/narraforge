@@ -53,19 +53,18 @@ Used across the application for segment emotion tagging. The `tts_configs.emotio
 
 ## Table: `voice_profiles`
 
-Stores voice profiles used for voice cloning workflows.
+Stores voice profiles used for voice cloning and design workflows.
 
 | Column | Type | Nullable | Default | Notes |
 |---|---|---|---|---|
 | `id` | String | No | UUID4 | **Primary Key** |
 | `name` | String | No | — | Voice profile name |
-| `source_audio_path` | String | Yes | `NULL` | Source audio file for cloning |
-| `cloned_preview_path` | String | Yes | `NULL` | Post-cloning preview audio |
 | `description` | String | Yes | `NULL` | User-defined voice description |
 | `avatar` | String | Yes | `NULL` | Avatar data URL or external URL |
 | `project_id` | String | Yes | `NULL` | **FK** -> `segmented_projects.id` (SET NULL). NULL = global voice |
-| `engine` | JSON | No | `{}` | Engine config: `{type, external_audio_url?, is_cloned?, ...}` |
-| `engine_params` | JSON | Yes | `NULL` | Engine-specific legacy params (deprecated, use `engine`) |
+| `voice` | JSON | No | `{}` | Identity + routing: `{model, voice_type}` |
+| `voice_params` | JSON | No | `{}` | Per-model params: `{<model>: {mode?, source_audio_path?, params: {...}}}` |
+| `preview` | JSON | Yes | `NULL` | Audition data: `{audition_text, preview_audio_path}` |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
 
 ---
@@ -564,47 +563,79 @@ Records what params were actually used for the last synthesis. Used for stalenes
 
 ---
 
-### `voice_profiles.engine` — Voice profile engine metadata
+### `voice_profiles.voice` — Identity + routing
 
-**CosyVoice (qwen):**
+| Field | Values | Purpose |
+|---|---|---|
+| `model` | `edge_tts` / `cosyvoice` / `mimo_tts` / `voxcpm` | Which TTS model |
+| `voice_type` | `preset` / `clone` / `design` | How the voice was created |
+
+`voice_id` is NOT stored here — it lives in `voice_params.{model}.params.voice_id` when applicable (preset voices, CosyVoice cloned voices, MiMo design voices). For other clone/design voices, the VoiceProfile's own `id` is the identifier.
+
 ```json
-{
-  "type": "qwen",
-  "qwen_voice_id": "cosyvoice-v3.5-plus-bailian-24dfc9059ecd4f0b907fcb5d5efe2852",
-  "is_cloned": true,
-  "cloned_at": "2026-06-16 06:08:51.012343"
-}
+{ "model": "mimo_tts", "voice_type": "design" }
 ```
-
-**MiMo:**
-```json
-{
-  "type": "mimo",
-  "is_cloned": true,
-  "cloned_at": "2026-06-25 08:18:48.544410"
-}
-```
-
-- `type`: `"qwen"` | `"mimo"` | `"voxcpm"` | `"design"` | `"preset"` (maps to `voices_engine.type` in API)
-- `is_cloned`: whether the voice has been cloned (used by `/api/tts/voices` filter)
-- `qwen_voice_id`: CosyVoice-specific voice identifier
-- `cloned_at`: ISO 8601 datetime of clone completion
 
 ---
 
-### `voice_profiles.engine_params` — Engine-specific extra parameters
+### `voice_profiles.voice_params` — Per-model parameters
+
+Structure: `{ "<model>": { "mode"? , "source_audio_path"? , "params": {...} } }`
+
+- `source_audio_path` — only for `voice_type=clone`
+- `mode` — only for `mimo_tts` (`voiceclone` / `voicedesign`) and `voxcpm` (`clone` / `ultimate` / `design`)
+
+**params by model:**
+
+| Field | edge_tts | cosyvoice | mimo_tts | voxcpm | Notes |
+|-------|----------|-----------|----------|--------|-------|
+| `voice_id` | ✅ | ✅ | ✅ (preset) | — | Preset name / cloud ID |
+| `rate` | ✅ | — | — | — | `"+10%"` format |
+| `volume` | ✅ | ✅ | — | — | edge: `"+0%"`, cosy: `80` |
+| `speed` | — | ✅ | — | — |  |
+| `pitch` | — | ✅ | — | — |  |
+| `language` | — | ✅ | — | — |  |
+| `style_control` | — | — | — | ✅ | Style/tone instruction |
+| `instruction` | — | — | ✅ | — | MiMo 各模式共用 |
+| `voice_description` | — | — | ✅ (design) | ✅ (design) | 音色设计描述 |
+| `prompt_text` | — | — | — | ✅ (ultimate) | 完整音频转录 |
+| `cfg_value` | — | — | — | ✅ |  |
+| `inference_timesteps` | — | — | — | ✅ |  |
+
+**Examples:**
+
+```json
+// edge_tts (preset)
+{ "edge_tts": { "params": { "voice_id": "zh-CN-YunxiNeural", "rate": "+10%", "volume": "+0%" } } }
+
+// cosyvoice (clone)
+{ "cosyvoice": { "source_audio_path": "/voices/clone_xxx.wav", "params": { "voice_id": "cosyvoice-v3-xxx", "speed": 1.0, "volume": 80, "pitch": 1.0, "language": "Chinese" } } }
+
+// mimo_tts (clone)
+{ "mimo_tts": { "source_audio_path": "/voices/clone_xxx.mp3", "mode": "voiceclone", "params": { "instruction": "" } } }
+
+// mimo_tts (design)
+{ "mimo_tts": { "mode": "voicedesign", "params": { "voice_description": "年轻女性，声音清亮", "instruction": "" } } }
+
+// voxcpm (clone)
+{ "voxcpm": { "source_audio_path": "/voices/clone_xxx.wav", "mode": "clone", "params": { "style_control": "", "prompt_text": "", "cfg_value": 2.0, "inference_timesteps": 10 } } }
+
+// voxcpm (design)
+{ "voxcpm": { "mode": "design", "params": { "voice_description": "中年男性，嗓音沉稳", "cfg_value": 2.0, "inference_timesteps": 10 } } }
+```
+
+---
+
+### `voice_profiles.preview` — Audition data
 
 ```json
 {
-  "voice_description": "中年女性，声音沉稳，语速较快",
-  "input_method": "record"
+  "audition_text": "这是一段角色试听文本...",
+  "preview_audio_path": "/voices/preview_xxx.mp3"
 }
 ```
 
-Common keys:
-- `voice_description`: text prompt for voice design
-- `input_method`: `"record"` | `"upload"` | `"url"` (for clone voices)
-- `instruction`: style/TTS instruction override
+Temporary data, overwritten on each preview. Nothing stored here is used for synthesis.
 
 ---
 
@@ -612,7 +643,6 @@ Common keys:
 
 - All primary keys are UUID strings (generated via `uuid.uuid4()`) except `system_configs` which uses a human-readable string key.
 - Timestamps use `datetime.utcnow` (via `app.core.time_utils.utcnow`) and are not timezone-aware.
-- `tts_results.instruction` has a Chinese-language default value describing an energetic advertising voiceover style.
 - The segmented project models use a three-tier hierarchy: `project -> chapter -> segment`. Segments carry a denormalized `project_id` for direct querying.
 - `voice_profiles.project_id` allows project-scoped voices (NULL = global). `segments.role_id` and `projects.default_narrator_role_id` reference the global `roles` table.
-- `voice_profiles.engine` is a JSON column that stores engine type, clone metadata, and voice identifiers. The `type` field is exposed via the API as `voices_engine.type`.
+- `voice_profiles.voice` routes the frontend to the correct TTS panel. `voice_params` stores the actual parameters nested under the model key.

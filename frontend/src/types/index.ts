@@ -14,19 +14,33 @@ export interface VoicesEngine {
 export interface VoiceProfile {
   id: string;
   name: string;
-  audio_url?: string;
-  source_audio_url?: string;
-  source_audio_path?: string;
-  cloned_preview_url?: string;
-  cloned_preview_path?: string;
   description?: string;
   avatar?: string | null;
   project_id?: string | null;
-  role_kind?: string;
-  engine?: VoiceProfileEngine;
-  engine_params?: Record<string, unknown>;
+  voice: VoiceProfileVoice;
+  voice_params: Record<string, VoiceProfileModelParams>;
+  preview?: VoiceProfilePreview;
+  audio_url?: string;
+  source_audio_url?: string;
+  preview_audio_url?: string;
   created_at: string;
   updated_at?: string;
+}
+
+export interface VoiceProfileVoice {
+  model: 'edge_tts' | 'cosyvoice' | 'mimo_tts' | 'voxcpm';
+  voice_type: 'preset' | 'clone' | 'design';
+}
+
+export interface VoiceProfileModelParams {
+  source_audio_path?: string;
+  mode?: string;
+  params: Record<string, unknown>;
+}
+
+export interface VoiceProfilePreview {
+  audition_text: string;
+  preview_audio_path: string | null;
 }
 
 // ── V3 Engine params (discriminated union) ──
@@ -80,15 +94,6 @@ export type VoiceSource =
 
 // ── Voice engine for profiles ──
 
-export type VoiceProfileEngine = {
-  type: 'qwen' | 'mimo' | 'voxcpm';
-  qwen_voice_id?: string;
-  mimo_voice_id?: string;
-  external_audio_url?: string;
-  prompt_text?: string;
-  is_cloned?: boolean;
-  cloned_at?: string;
-};
 
 // ── Audio container ──
 

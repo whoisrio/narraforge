@@ -15,14 +15,13 @@ class VoiceProfile(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name = Column(String, nullable=False)
 
-    source_audio_path = Column(String, nullable=True)
     description = Column(String, nullable=True)
     avatar = Column(String, nullable=True)
 
-    cloned_preview_path = Column(String, nullable=True)
     project_id = Column(String, ForeignKey("segmented_projects.id", ondelete="SET NULL"), nullable=True)
 
-    engine = Column(JSON, nullable=False, default=dict)
-    engine_params = Column(JSON, nullable=True)
+    voice = Column(JSON, nullable=False, default=dict)
+    voice_params = Column(JSON, nullable=False, default=dict)
+    preview = Column(JSON, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)

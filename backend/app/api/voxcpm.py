@@ -97,10 +97,13 @@ def _resolve_voice_audio_path(voice_id: str, db: Session, prefer: str = "preview
     if not voice:
         raise HTTPException(status_code=404, detail=f"声音不存在: {voice_id}")
 
+    model = (voice.voice or {}).get("model", "")
+    source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+    preview_path = (voice.preview or {}).get("preview_audio_path", "")
     if prefer == "source":
-        candidates = [voice.source_audio_path, voice.cloned_preview_path]
+        candidates = [source_path, preview_path]
     else:
-        candidates = [voice.cloned_preview_path, voice.source_audio_path]
+        candidates = [preview_path, source_path]
 
     for raw_path in candidates:
         if raw_path:
@@ -117,7 +120,7 @@ def _resolve_voice_audio_path(voice_id: str, db: Session, prefer: str = "preview
 
     raise HTTPException(
         status_code=404,
-        detail=f"声音 {voice_id} 的音频文件不存在: source_audio_path={voice.source_audio_path}",
+        detail=f"声音 {voice_id} 的音频文件不存在: source_audio_path={source_path}",
     )
 
 
@@ -234,18 +237,23 @@ def synthesize_voxcpm_internal(
 
         if mode == "ultimate":
             voice = session.query(VoiceProfile).filter(VoiceProfile.id == voice_id).first()
-            ep = getattr(voice, "engine_params", None) or {} if voice else {}
+            vp = (voice.voice_params or {}) if voice else {}
+            voxcpm_vp = dict(vp.get("voxcpm", {}) or {})
+            voxcpm_params = dict(voxcpm_vp.get("params", {}) or {})
 
             # 根据声音类型选择音频和对应的 prompt text
-            # clone 声音：source_audio_path + prompt_text（原始录音 + 转录）
-            # design 声音：cloned_preview_path + audition_text（试听音频 + 试听文本）
-            has_audition = bool(ep.get("audition_text"))
+            # clone 声音：source_audio_path + original_prompt_text（原始录音 + 转录）
+            # design 声音：preview_audio_path + audition_text（试听音频 + 试听文本）
+            has_audition = bool(voxcpm_params.get("audition_text"))
             if has_audition:
                 audio_path = _resolve_voice_audio_path(voice_id, session, prefer="preview")
-                stored_prompt = ep.get("audition_text")
+                stored_prompt = voxcpm_params.get("audition_text")
             else:
                 audio_path = _resolve_voice_audio_path(voice_id, session, prefer="source")
-                stored_prompt = ep.get("original_prompt_text") or (voice.prompt_text if voice else None)
+                stored_prompt = voxcpm_params.get("original_prompt_text")
+                if not stored_prompt and voice:
+                    model = (voice.voice or {}).get("model", "")
+                    stored_prompt = (voice.voice_params or {}).get(model, {}).get("params", {}).get("prompt_text")
 
             effective_prompt = prompt_text or (stored_prompt if isinstance(stored_prompt, str) else None)
             if not effective_prompt:
@@ -439,11 +447,11 @@ async def ultimate_clone(
 
     # 查找参考音频和对应的 prompt text
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
-    ep = getattr(voice, "engine_params", None) or {} if voice else {}
+    vp = (voice.voice_params or {}) if voice else {}
+    voxcpm_vp = dict(vp.get("voxcpm", {}) or {})
+    voxcpm_params = dict(voxcpm_vp.get("params", {}) or {})
 
-    # clone 声音：source_audio_path + prompt_text（原始录音 + 转录）
-    # design 声音：cloned_preview_path + audition_text（试听音频 + 试听文本）
-    has_audition = bool(ep.get("audition_text"))
+    has_audition = bool(voxcpm_params.get("audition_text"))
     if has_audition:
         audio_path = _resolve_voice_audio_path(request.voice_id, db, prefer="preview")
     else:
@@ -453,9 +461,12 @@ async def ultimate_clone(
     prompt_text = request.prompt_text
     if not prompt_text and voice:
         if has_audition:
-            prompt_text = ep.get("audition_text")
+            prompt_text = voxcpm_params.get("audition_text")
         else:
-            prompt_text = ep.get("original_prompt_text") or voice.prompt_text
+            prompt_text = voxcpm_params.get("original_prompt_text")
+            if not prompt_text:
+                model = (voice.voice or {}).get("model", "")
+                prompt_text = (voice.voice_params or {}).get(model, {}).get("params", {}).get("prompt_text")
     if not prompt_text:
         raise HTTPException(
             status_code=400,

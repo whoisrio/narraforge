@@ -40,7 +40,8 @@ export function GlobalControlBar({
   // Auto-select first voice
   useEffect(() => {
     if (voices.length > 0 && !selectedVoiceId) {
-      onVoiceSelect(voices[0].qwen_voice_id || voices[0].id);
+      const voiceKey = (voices[0].voice_params?.[voices[0].voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string || voices[0].id;
+      onVoiceSelect(voiceKey);
     }
   }, [voices, selectedVoiceId, onVoiceSelect]);
 
@@ -55,7 +56,10 @@ export function GlobalControlBar({
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
+  const selectedVoice = voices.find(v => {
+    const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+    return (voiceId || v.id) === selectedVoiceId;
+  });
 
   const handleVoicePick = useCallback((voiceId: string) => {
     onVoiceSelect(voiceId);
@@ -89,7 +93,7 @@ export function GlobalControlBar({
               )
             )}
             {voices.map(v => {
-              const voiceKey = v.qwen_voice_id || v.id;
+              const voiceKey = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string || v.id;
               const isSelected = voiceKey === selectedVoiceId;
               return (
                 <button

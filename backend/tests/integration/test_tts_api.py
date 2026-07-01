@@ -145,12 +145,8 @@ class TestTTSAPI:
         voice = VoiceProfile(
             id="voice-row-1",
             name="Narrator",
-            source_audio_path="/tmp/narrator.wav",
-            engine={
-                "type": "qwen",
-                "is_cloned": True,
-                "qwen_voice_id": "cosyvoice-v3-narrator",
-            },
+            voice={"model": "cosyvoice", "voice_type": "clone"},
+            voice_params={"cosyvoice": {"source_audio_path": "/tmp/narrator.wav", "params": {"voice_id": "cosyvoice-v3-narrator"}}},
         )
         db_session.add(voice)
         db_session.commit()
@@ -160,8 +156,8 @@ class TestTTSAPI:
         voices = response.json()["voices"]
         assert len(voices) == 1
         assert voices[0]["id"] == "voice-row-1"
-        assert voices[0]["engine"]["qwen_voice_id"] == "cosyvoice-v3-narrator"
-        assert voices[0]["engine"]["type"] == "qwen"
+        assert voices[0]["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cosyvoice-v3-narrator"
+        assert voices[0]["voice"]["model"] == "cosyvoice"
 
     def test_batch_synthesize_requires_voice_id(self, client: TestClient):
         response = client.post("/api/tts/batch", json={

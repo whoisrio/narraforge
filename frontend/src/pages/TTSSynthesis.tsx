@@ -480,7 +480,10 @@ export function TTSSynthesis({
       return { name: vObj?.name || 'VoxCPM 音色', source: 'global', voice_id: selectedVoiceId, engine: 'voxcpm' };
     }
     // CosyVoice (default)
-    const vObj = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
+    const vObj = voices.find(v => {
+      const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+      return (voiceId || v.id) === selectedVoiceId;
+    });
     return { name: vObj?.name || 'CosyVoice 音色', source: 'global', voice_id: selectedVoiceId, engine: 'cosyvoice' };
   }, [engine, selectedVoiceId, voices, edgeVoice, mimoMode, mimoPresetVoice, mimoCloneVoiceId]);
 
@@ -842,8 +845,8 @@ export function TTSSynthesis({
 
       const textToSend = seg.text;
 
-      // Voice identifier for display
-      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice
+      // Voice identifier for display (may be updated below for design detection)
+      let usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice
         : effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId)
         : effectiveEngine === 'voxcpm' ? voiceId
         : voiceId;
@@ -1336,7 +1339,10 @@ export function TTSSynthesis({
     } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
 
-  const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
+  const selectedVoice = voices.find(v => {
+    const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+    return (voiceId || v.id) === selectedVoiceId;
+  });
   // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
   const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.audio.duration_sec ?? 0), 0);
   const generatedSegmentCount = activeChapter.segments.filter(segment => segment.status === 'ready').length;

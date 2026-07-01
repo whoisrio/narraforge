@@ -300,37 +300,31 @@ function VoiceRoleEditor({
       if (cancelled) return;
       const profile = list[0];
       if (!profile) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
-      const previewSrc = profile.cloned_preview_url || profile.audio_url || '';
+      const previewSrc = profile.preview_audio_url || profile.audio_url || '';
       setClonePreviewAudioSrc(previewSrc);
       if (previewSrc) setClonePreviewStatus('done');
       setCloneOriginalAudioSrc(profile.source_audio_url ?? '');
       setCloneVoiceDescription(profile.description ?? '');
-      setClonePromptText(profile.prompt_text ?? '');
+      setClonePromptText((profile.description ?? '').slice(0, 100));
 
-      const ve = profile.engine;
-      if (!ve || voiceEngineAppliedRef.current) return;
+      const vv = profile.voice;
+      if (!vv || voiceEngineAppliedRef.current) return;
       voiceEngineAppliedRef.current = true;
 
-      const veType = ve.type || '';
-      if (veType === 'qwen') {
+      const model = vv.model || '';
+      if (model === 'cosyvoice') {
         setVoiceCategory('clone');
         setCloneSubEngine('cosyvoice');
-      } else if (veType === 'mimo') {
+      } else if (model === 'mimo_tts') {
         setVoiceCategory('clone');
         setCloneSubEngine('mimo');
-      } else if (veType === 'voxcpm') {
+      } else if (model === 'voxcpm') {
         setVoiceCategory('clone');
         setCloneSubEngine('voxcpm');
-      } else if (veType === 'preset') {
+      } else if (model === 'edge_tts') {
         setVoiceCategory('preset');
-      } else if (veType === 'design') {
-        setVoiceCategory('design');
-        // Infer MiMo vs VoxCPM from params
-        if (ve.qwen_voice_id) {
-          setDesignSubEngine('mimo');  // only MiMo has qwen_voice_id for design
-        } else {
-          setDesignSubEngine('mimo');  // default
-        }
+      } else {
+        setVoiceCategory('preset');
       }
     }).catch(() => {
       if (!cancelled) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); }
@@ -450,13 +444,13 @@ function VoiceRoleEditor({
       let matchedVoice: VoiceProfile | undefined;
 
       if (engine === 'cosyvoice') {
-        matchedVoice = sorted.find(v => v.clone_engine === 'qwen' && v.is_cloned);
-        if (matchedVoice) setParams({ voice_id: matchedVoice.qwen_voice_id || matchedVoice.id });
+        matchedVoice = sorted.find(v => v.voice?.model === 'cosyvoice' && v.voice?.voice_type === 'clone');
+        if (matchedVoice) setParams({ voice_id: (matchedVoice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || matchedVoice.id });
       } else if (engine === 'mimo') {
-        matchedVoice = sorted.find(v => v.is_cloned && (v.clone_engine === 'mimo' || v.clone_engine === 'voxcpm'));
+        matchedVoice = sorted.find(v => v.voice?.voice_type === 'clone' && (v.voice?.model === 'mimo_tts' || v.voice?.model === 'voxcpm'));
         if (matchedVoice) setParams({ mimo_clone_voice_id: matchedVoice.id });
       } else {
-        matchedVoice = sorted.find(v => v.clone_engine === 'voxcpm' && v.is_cloned);
+        matchedVoice = sorted.find(v => v.voice?.model === 'voxcpm' && v.voice?.voice_type === 'clone');
         if (matchedVoice) setParams({ voice_id: matchedVoice.id });
       }
 
@@ -482,13 +476,14 @@ function VoiceRoleEditor({
     try {
       let ttsResult;
       if (engine === 'cosyvoice') {
-        ttsResult = await ttsApi.synthesize({ text: previewText, engine: 'cosyvoice', voice_id: voice.qwen_voice_id || voice.id, language: 'Chinese', speed: 1, volume: 80, pitch: 1, format: 'mp3' });
+        const voiceId = (voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || voice.id;
+        ttsResult = await ttsApi.synthesize({ text: previewText, engine: 'cosyvoice', voice_id: voiceId, language: 'Chinese', speed: 1, volume: 80, pitch: 1, format: 'mp3' });
       } else if (engine === 'mimo') {
         ttsResult = await mimoTtsApi.synthesizeVoiceClone({ text: previewText, voice_id: voice.id, format: 'wav' });
       } else {
-        const voxcpmMode = voice.engine_params?.voxcpm_mode as string | undefined;
+        const voxcpmMode = (voice.voice_params?.voxcpm?.params as Record<string, unknown>)?.mode as string | undefined;
         if (voxcpmMode === 'ultimate') {
-          ttsResult = await voxcpmApi.ultimateClone({ text: previewText, voice_id: voice.id, prompt_text: voice.prompt_text || undefined, format: 'wav' });
+          ttsResult = await voxcpmApi.ultimateClone({ text: previewText, voice_id: voice.id, prompt_text: undefined, format: 'wav' });
         } else {
           ttsResult = await voxcpmApi.clone({ text: previewText, voice_id: voice.id, format: 'wav' });
         }
@@ -787,7 +782,7 @@ function VoiceRoleEditor({
                             onUrlConfirmed={async (voice) => {
                               try {
                                 await voiceApi.createClone(voice.id, draft.name, undefined, projectId, cloneEngineParams('cosyvoice'));
-                                setParams({ voice_id: voice.qwen_voice_id || voice.id });
+                                setParams({ voice_id: (voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || voice.id });
                                 triggerRefresh();
                               } catch { /* error handled below */ }
                               setCloneInputMethod('url');

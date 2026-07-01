@@ -37,7 +37,7 @@ export const voiceApi = {
   // 只获取已克隆的声音（从 Qwen 同步的）
   listCloned: async (): Promise<VoiceProfile[]> => {
     const all = await voiceApi.list();
-    return all.filter(v => v.engine?.is_cloned && v.engine?.qwen_voice_id);
+    return all.filter(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
   },
 
   createClone: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {

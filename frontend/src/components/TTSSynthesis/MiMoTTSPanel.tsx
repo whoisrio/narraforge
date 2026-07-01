@@ -91,7 +91,7 @@ export function MiMoTTSPanel({
     try {
       const all = await voiceApi.list(projectId);
       // 过滤：有音频 且 clone_engine 不在排除列表中
-      const availableVoices = all.filter(v => v.audio_url && !excludeCloneEngines.includes(v.clone_engine || ''));
+      const availableVoices = all.filter(v => v.audio_url && !excludeCloneEngines.includes(v.voice?.model || ''));
       setCloneVoices(availableVoices);
       if (!selectedCloneVoiceId && availableVoices.length > 0) {
         onCloneVoiceSelect(availableVoices[0].id);

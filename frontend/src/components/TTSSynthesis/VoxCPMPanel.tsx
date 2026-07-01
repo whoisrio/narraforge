@@ -113,7 +113,7 @@ export function VoxCPMPanel({
       try {
         const list = await voiceApi.list(projectId);
         // 按 allowedCloneEngines 过滤
-        setVoices(list.filter(v => v.audio_url && allowedCloneEngines.includes(v.clone_engine || '')));
+        setVoices(list.filter(v => v.audio_url && allowedCloneEngines.includes(v.voice?.model || '')));
       } catch (err) {
         console.error('Failed to load voice list:', err);
       } finally {
@@ -129,9 +129,9 @@ export function VoxCPMPanel({
     if (mode !== 'ultimate' || !selectedVoiceId) return;
     const voice = voices.find(v => v.id === selectedVoiceId);
     if (!voice) return;
-    const params = voice.engine_params as Record<string, unknown> | undefined;
+    const params = voice.voice_params as Record<string, unknown> | undefined;
     const auditionText = typeof params?.audition_text === 'string' ? params.audition_text : '';
-    const prompt = auditionText || voice.prompt_text || '';
+    const prompt = auditionText || '';
     if (prompt) {
       onPromptTextChange(prompt);
     }

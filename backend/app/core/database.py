@@ -276,6 +276,11 @@ def init_db():
         _migrate_chapter_voice(conn)
         # P9003: migrate segment voice.params + generated_params to EngineParams format
         _migrate_segment_voice_params(conn)
+        # P9003.5: add voice_profiles.v2 columns (voice, voice_params, preview)
+        # Must run before P9004 which needs these columns to exist
+        _migrate_vp_v2_columns(conn)
+        # P9004: migrate voice_profiles engine → voice, engine_params → voice_params
+        _migrate_voice_profile(conn)
 
 
 def _migrate_v3_reduce_schema(conn):
@@ -564,6 +569,104 @@ def _migrate_segment_voice_params(conn):
                 updated_generated += 1
 
     logger.info(f"[migration] P9003: migrated {updated_voice} custom segment voice.params + cropped {updated_generated} generated_params")
+
+
+def _migrate_vp_v2_columns(conn):
+    """P9003.5: add voice/voice_params/preview columns to voice_profiles (v2 schema).
+
+    These columns are the replacement for the old engine/engine_params/cloned_preview_path
+    columns. They must be added BEFORE P9004 which migrates data into them.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN voice JSON NOT NULL DEFAULT '{}'")
+    _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN voice_params JSON NOT NULL DEFAULT '{}'")
+    _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN preview JSON")
+
+
+def _migrate_voice_profile(conn):
+    """P9004: migrate voice_profiles engine→voice, engine_params→voice_params, add preview."""
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Check if old columns exist (fresh DBs already have new schema)
+    cols = [row[1] for row in conn.execute(text("PRAGMA table_info(voice_profiles)")).fetchall()]
+    if "engine" not in cols:
+        logger.info("[migration] P9004: already migrated (no engine column), skipping")
+        return
+
+    rows = conn.execute(text(
+        "SELECT id, engine, engine_params, cloned_preview_path, source_audio_path FROM voice_profiles"
+    )).fetchall()
+
+    updated = 0
+    for row in rows:
+        vp_id, engine_json, ep_json, cp_path, src_path = row
+        engine_data = json.loads(engine_json) if isinstance(engine_json, str) else (engine_json or {})
+        ep_data = json.loads(ep_json) if isinstance(ep_json, str) else (ep_json or {})
+
+        old_type = engine_data.get("type", "")
+        model = (
+            "cosyvoice" if old_type == "qwen"
+            else "mimo_tts" if old_type == "mimo"
+            else "voxcpm" if old_type in ("voxcpm", "design", "clone")
+            else "edge_tts" if old_type == "preset"
+            else old_type
+        )
+        voice_type = "preset" if old_type == "preset" else ("design" if old_type == "design" else "clone")
+
+        new_voice = {"model": model, "voice_type": voice_type}
+
+        vp_entry: dict = {"params": {}}
+        if src_path:
+            vp_entry["source_audio_path"] = src_path
+
+        pp = vp_entry["params"]
+        if model == "edge_tts":
+            pp["voice_id"] = engine_data.get("qwen_voice_id", "")
+            pp["rate"] = "+0%"
+            pp["volume"] = "+0%"
+        elif model == "cosyvoice":
+            pp["voice_id"] = engine_data.get("qwen_voice_id", "")
+            pp["speed"] = 1.0
+            pp["volume"] = 80
+            pp["pitch"] = 1.0
+            pp["language"] = "Chinese"
+        elif model == "mimo_tts":
+            if voice_type == "design":
+                vp_entry["mode"] = "voicedesign"
+                pp["voice_description"] = ep_data.get("voice_description", "")
+                pp["instruction"] = ep_data.get("instruction", "")
+            else:
+                vp_entry["mode"] = "voiceclone"
+                pp["instruction"] = ep_data.get("instruction", "")
+        elif model == "voxcpm":
+            vp_entry["mode"] = "clone"
+            pp["style_control"] = ep_data.get("style_control", "")
+            pp["cfg_value"] = 2.0
+            pp["inference_timesteps"] = 10
+            if ep_data.get("prompt_text"):
+                pp["prompt_text"] = ep_data["prompt_text"]
+
+        new_voice_params = {model: vp_entry}
+
+        preview = {}
+        preview["audition_text"] = ep_data.get("audition_text", "") or engine_data.get("prompt_text", "") or ""
+        preview["preview_audio_path"] = cp_path
+
+        conn.execute(text(
+            "UPDATE voice_profiles SET voice=:v, voice_params=:vp, preview=:p WHERE id=:id"
+        ), {
+            "v": json.dumps(new_voice),
+            "vp": json.dumps(new_voice_params),
+            "p": json.dumps(preview) if any(preview.values()) else None,
+            "id": vp_id,
+        })
+        updated += 1
+
+    logger.info(f"[migration] P9004: migrated {updated} voice_profiles")
 
 
 def _fix_role_source_segments(conn, logger):

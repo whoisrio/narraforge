@@ -29,9 +29,9 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
     try {
       const list = await voiceApi.list();
       setVoices(list);
-      const clonedVoice = list.find(v => v.is_cloned && v.qwen_voice_id);
+      const clonedVoice = list.find(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
       if (clonedVoice) {
-        setSelectedVoiceId(clonedVoice.qwen_voice_id!);
+        setSelectedVoiceId(((clonedVoice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string)!);
         setUseClonedVoice(true);
       }
     } catch (err) {
@@ -77,10 +77,10 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
       setUseClonedVoice(false);
       setSelectedVoiceId('xiaoyun');
     } else {
-      const clonedVoice = voices.find(v => v.is_cloned && v.qwen_voice_id);
+      const clonedVoice = voices.find(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
       if (clonedVoice) {
         setUseClonedVoice(true);
-        setSelectedVoiceId(clonedVoice.qwen_voice_id!);
+        setSelectedVoiceId(((clonedVoice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string)!);
       }
     }
   };
@@ -94,9 +94,11 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
   ];
 
   const clonedVoiceOptions = voices
-    .filter(v => v.is_cloned && v.qwen_voice_id)
-    // 有描述时显示描述，无描述时回退到 voice_id（用于区分不同声音）
-    .map(voice => ({ value: voice.qwen_voice_id!, label: voice.description || voice.qwen_voice_id! }));
+    .filter(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id)
+    .map(voice => {
+      const voiceId = (voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string;
+      return { value: voiceId, label: voice.description || voiceId };
+    });
 
   const currentVoiceOptions = useClonedVoice ? clonedVoiceOptions : standardVoices;
 

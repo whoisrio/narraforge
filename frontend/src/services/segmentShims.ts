@@ -72,20 +72,57 @@ export function segGeneratedVoiceId(seg: Segment): string | undefined {
 
 // ---- VoiceProfile accessors ----
 
+/** Get the voice_id from voice_params based on the voice.model */
+export function vpVoiceId(vp: VoiceProfile): string | undefined {
+  const model = vp.voice?.model;
+  if (!model) return undefined;
+  const params = vp.voice_params?.[model]?.params;
+  return (params as Record<string, unknown>)?.voice_id as string | undefined;
+}
+
+/** @deprecated Use vpVoiceId instead */
 export function vpQwenVoiceId(vp: VoiceProfile): string | undefined {
-  return vp.engine?.qwen_voice_id;
+  return vpVoiceId(vp);
 }
+
 export function vpIsCloned(vp: VoiceProfile): boolean {
-  return vp.engine?.is_cloned ?? false;
+  return vp.voice?.voice_type === 'clone';
 }
+
 export function vpCloneEngine(vp: VoiceProfile): string | undefined {
-  return vp.engine?.type;
+  return vp.voice?.model;
 }
+
 export function vpClonedAt(vp: VoiceProfile): string | undefined {
-  return vp.engine?.cloned_at;
+  return vp.created_at;
 }
-export function vpPromptText(vp: VoiceProfile): string | undefined {
-  return vp.engine?.prompt_text;
+
+/** VoiceProfile no longer stores prompt_text directly; returns undefined for now */
+export function vpPromptText(_vp: VoiceProfile): string | undefined {
+  return undefined;
+}
+
+/** Map old engine.type values to new voice.model values */
+export function mapOldCloneEngine(oldEngine?: string): string | undefined {
+  if (!oldEngine) return undefined;
+  switch (oldEngine) {
+    case 'qwen': return 'cosyvoice';
+    case 'mimo': return 'mimo_tts';
+    case 'preset': return 'edge_tts';
+    default: return oldEngine;
+  }
+}
+
+/** Map new voice.model back to old display engine label */
+export function vpVoiceLabel(vp: VoiceProfile): string {
+  const model = vp.voice?.model;
+  switch (model) {
+    case 'cosyvoice': return 'CosyVoice';
+    case 'mimo_tts': return 'MiMo';
+    case 'voxcpm': return 'VoxCPM';
+    case 'edge_tts': return 'Edge-TTS';
+    default: return 'Unknown';
+  }
 }
 
 // ---- Role accessors ----
