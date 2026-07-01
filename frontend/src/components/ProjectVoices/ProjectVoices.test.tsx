@@ -295,3 +295,59 @@ describe('normalizeDraftForSave', () => {
     expect(result.default_voice).toBeNull();
   });
 });
+
+describe('design voice loading in editor', () => {
+  it('shows preview audio when editing a role with design voice', async () => {
+    const ttsApi = await import('../../services/api');
+    vi.mocked(ttsApi.ttsApi.getVoices).mockResolvedValue([
+      {
+        id: 'vp-design-1',
+        name: 'design-voice',
+        voice: { model: 'mimo_tts', voice_type: 'design' },
+        voice_params: { mimo_tts: { params: {} } },
+        preview: { preview_audio_path: 'output/test.mp3' },
+        has_preview: true,
+        has_source: false,
+        created_at: '2026-01-01T00:00:00.000Z',
+      } as any,
+    ]);
+
+    const designRole: Role = {
+      id: 'role-design',
+      name: 'Design角色',
+      description: null,
+      avatar: null,
+      role_kind: 'cast',
+      voice: { engine: 'mimo_tts', mode: 'voicedesign', voice_id: 'vp-design-1' } as any,
+      favorite_styles: [],
+      default_engine: 'mimo_tts',
+      default_voice: null,
+      default_engine_params: { engine: 'mimo_tts', mode: 'voicedesign', voice_id: 'vp-design-1' } as any,
+      created_at: '2026-01-01T00:00:00.000Z',
+      updated_at: '2026-01-01T00:00:00.000Z',
+      project_id: null,
+    };
+
+    render(
+      <ProjectVoices
+        roles={[designRole]}
+        onSaveRole={vi.fn()}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /编辑 Design角色/ }));
+
+    await waitFor(() => {
+      expect(ttsApi.ttsApi.getVoices).toHaveBeenCalledWith({ voice_id: 'vp-design-1' });
+    });
+
+    // After loading, the audio player should be visible (design phase = confirmed)
+    await waitFor(() => {
+      const audio = document.querySelector('audio');
+      expect(audio).toBeTruthy();
+      expect(audio?.getAttribute('src')).toContain('?field=preview');
+    });
+  });
+});
