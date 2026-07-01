@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import type { Role, RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, CosyVoiceParams, VoxCPMParams, VoiceProfile } from '../../types';
+import type { Role, RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, CosyVoiceParams, VoxCPMParams, VoiceProfile, MiMoPresetVoice } from '../../types';
 import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../../types';
 import { ttsApi, voiceApi, mimoTtsApi, voxcpmApi } from '../../services/api';
 import { fetchVoiceRolePreview, synthesizeVoiceRolePreview } from '../../services/voiceRolePreview';
@@ -30,8 +30,7 @@ interface ProjectVoicesProps {
 /* ------------------------------------------------------------------ */
 
 const ROLE_SAMPLE = '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。';
-const MIMO_PRESET_VOICES = ['冰糖', '星辰', '雪梨', '琥珀', '青云', '紫霞'];
-const COMMON_EDGE_VOICES = [
+const COMMON_EDGE_VOICES: { short_name: string; display_name: string; gender: string }[] = [
   { short_name: DEFAULT_EDGE_NARRATOR_VOICE, display_name: 'Yunxi', gender: 'Male' },
   { short_name: DEFAULT_EDGE_CAST_VOICE, display_name: 'Yunyang', gender: 'Male' },
   { short_name: 'zh-CN-XiaoxiaoNeural', display_name: 'Xiaoxiao', gender: 'Female' },
@@ -164,6 +163,7 @@ function VoiceRoleEditor({
 }) {
   const vox = draft.voice;
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>(COMMON_EDGE_VOICES);
+  const [mimoPresetVoices, setMimoPresetVoices] = useState<MiMoPresetVoice[]>([]);
   const { triggerRefresh } = useVoiceRefresh();
 
   // 音色来源分类
@@ -306,6 +306,7 @@ function VoiceRoleEditor({
 
   useEffect(() => {
     ttsApi.getEdgeVoices('Chinese').then(setEdgeVoices).catch(() => {});
+    mimoTtsApi.getPresetVoices().then(setMimoPresetVoices).catch(() => {});
   }, []);
 
   // 当已保存的角色有 clone voice id 时，按 ID 查询对应的 VoiceProfile
@@ -378,7 +379,7 @@ function VoiceRoleEditor({
       }
       case 'mimo_tts': {
         const existing = current?.engine === 'mimo_tts' ? current as MiMoParams : undefined;
-        voice = { engine: 'mimo_tts', mode: existing?.mode || 'preset', voice_id: existing?.voice_id || '冰糖', instruction: existing?.instruction, voice_description: existing?.voice_description } as MiMoParams;
+        voice = { engine: 'mimo_tts', mode: existing?.mode || 'preset', voice_id: existing?.voice_id || '', instruction: existing?.instruction, voice_description: existing?.voice_description } as MiMoParams;
         break;
       }
       case 'voxcpm': {
@@ -765,7 +766,7 @@ function VoiceRoleEditor({
                     <>
                       <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>预置音色
                         <select className={styles.paramSelect} value={(vox as MiMoParams).voice_id ?? ''} onChange={(event) => setParams({ mimo_preset_voice: event.target.value })}>
-                          {MIMO_PRESET_VOICES.map(name => <option key={name} value={name}>{name}</option>)}
+                          {mimoPresetVoices.map(v => <option key={v.voice_id} value={v.voice_id}>{v.name} ({v.gender === 'Female' ? '女' : '男'})</option>)}
                         </select>
                       </label>
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>

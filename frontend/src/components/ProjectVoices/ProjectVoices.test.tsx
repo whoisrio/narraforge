@@ -20,6 +20,7 @@ vi.mock('../../services/api', () => ({
     synthesizeVoiceClone: vi.fn(),
     synthesizePreset: vi.fn(),
     synthesizeVoiceDesign: vi.fn(),
+    getPresetVoices: vi.fn().mockResolvedValue([]),
   },
   voxcpmApi: {
     clone: vi.fn(),
