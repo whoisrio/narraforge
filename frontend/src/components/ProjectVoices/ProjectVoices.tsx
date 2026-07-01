@@ -204,11 +204,17 @@ function VoiceRoleEditor({
 
   const isDesignMode = voiceCategory === 'design';
 
-  const voiceDescription: string = designSubEngine === 'mimo'
-    ? ((vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_description : undefined) ?? '')
-    : ((vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_description : undefined) ?? '');
+  // Local editable state for design voice description (sync from vox on engine/voice change)
+  const [localDesignDesc, setLocalDesignDesc] = useState('');
+  useEffect(() => {
+    const desc = designSubEngine === 'mimo'
+      ? ((vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_description : undefined) ?? '')
+      : ((vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_description : undefined) ?? '');
+    setLocalDesignDesc(desc);
+  }, [vox?.engine, vox?.voice_description, designSubEngine]);
 
   const setVoiceDescription = (desc: string) => {
+    setLocalDesignDesc(desc);
     if (designSubEngine === 'mimo') {
       setParams({ mimo_voice_description: desc });
     } else {
@@ -279,12 +285,12 @@ function VoiceRoleEditor({
         audio_base64: audioBase64,
         engine,
         name: draft.name,
-        description: voiceDescription,
+        description: localDesignDesc,
         project_id: projectId,
-        voice_description: voiceDescription,
+        voice_description: localDesignDesc,
         instruction,
         preview_text: auditionText,
-        ...(engine === 'voxcpm' ? { original_prompt_text: voiceDescription } : {}),
+        ...(engine === 'voxcpm' ? { original_prompt_text: localDesignDesc } : {}),
       });
       setDesignProfileId(profile.id);
       setDesignPhase('confirmed');
@@ -296,7 +302,7 @@ function VoiceRoleEditor({
       return null;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, designAudioBase64, designAudioSrc, designSubEngine, voiceDescription, projectId]);
+  }, [draft, designAudioBase64, designAudioSrc, designSubEngine, localDesignDesc, projectId]);
 
   useEffect(() => {
     ttsApi.getEdgeVoices('Chinese').then(setEdgeVoices).catch(() => {});
@@ -1061,7 +1067,7 @@ function VoiceRoleEditor({
                   <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>音色描述
                     <textarea
                       className={styles.paramTextarea}
-                      value={voiceDescription}
+                      value={localDesignDesc}
                       onChange={(event) => setVoiceDescription(event.target.value)}
                       placeholder="描述你想要的音色，如：年轻女性，温柔甜美，语速适中..."
                       rows={3}
@@ -1094,7 +1100,7 @@ function VoiceRoleEditor({
                   type="button"
                   className={styles.primaryButton}
                   onClick={handleDesignPreview}
-                  disabled={!voiceDescription.trim()}
+                  disabled={!localDesignDesc.trim()}
                 >
                   试听音色
                 </button>
