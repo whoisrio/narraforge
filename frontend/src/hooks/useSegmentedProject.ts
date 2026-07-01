@@ -226,6 +226,12 @@ export function segmentedReducer(state: State, action: Action): State {
   switch (action.type) {
     case 'LOAD_PROJECT': {
       const migrated = migrateV1(action.project);
+      if (migrated.chapters.length === 0) {
+        // Project has no chapters — add a default one
+        const ch = makeChapter('第一章');
+        migrated.chapters = [ch];
+        migrated.active_chapter_id = ch.id;
+      }
       return { project: migrated };
     }
     case 'RENAME_PROJECT':
