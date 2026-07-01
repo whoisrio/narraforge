@@ -336,6 +336,9 @@ function VoiceRoleEditor({
         if (model === 'mimo_tts') setDesignSubEngine('mimo');
         else if (model === 'voxcpm') setDesignSubEngine('voxcpm');
         setDesignProfileId(profile.id);
+        setDesignPhase('confirmed');
+        // Set design audio from existing preview
+        if (previewSrc) setDesignAudioSrc(previewSrc);
       } else if (voiceType === 'preset') {
         setVoiceCategory('preset');
       } else {

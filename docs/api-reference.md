@@ -174,23 +174,28 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
     "id": "uuid",
     "name": "我的声音",
     "description": "温柔女声",
-    "audio_url": "/api/clone/audio/{id}",
-    "original_audio_url": "/api/clone/audio/{id}?field=original",
-    "cloned_preview_url": "/api/clone/audio/{id}?field=preview",
-    "qwen_voice_id": "xxx",
-    "role": "custom",
-    "clone_engine": "qwen",
-    "is_cloned": true,
-    "cloned_at": "2024-01-01T00:00:00",
-    "created_at": "2024-01-01T00:00:00",
-    "prompt_text": "参考文本",
     "avatar": null,
-    "voices_engine": {
-      "type": "clone",
-      "engine": { "type": "CosyVoice", "sub_type": null },
-      "prompt_text": "参考文本",
-      "parameters": { "input_method": "url" }
-    }
+    "project_id": null,
+    "voice": {
+      "model": "cosyvoice",
+      "voice_type": "clone"
+    },
+    "voice_params": {
+      "cosyvoice": {
+        "source_audio_path": "output/clone_voices/audio.mp3",
+        "params": {
+          "voice_id": "xxx",
+          "voice_description": "..."
+        }
+      }
+    },
+    "preview": {
+      "audition_text": "...",
+      "preview_audio_path": "output/clone_voices/preview.mp3"
+    },
+    "has_preview": true,
+    "has_source": true,
+    "created_at": "2024-01-01T00:00:00"
   }
 ]
 ```
@@ -309,18 +314,19 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
       "id": "uuid",
       "name": "我的声音",
       "description": "温柔女声",
-      "audio_url": "/api/clone/audio/{id}",
-      "original_audio_url": null,
-      "cloned_preview_url": null,
-      "qwen_voice_id": "xxx",
-      "role": "custom",
-      "clone_engine": "qwen",
-      "is_cloned": true,
-      "cloned_at": "2024-01-01T00:00:00",
-      "created_at": "2024-01-01T00:00:00",
-      "prompt_text": null,
       "avatar": null,
-      "voices_engine": { "type": "clone", "engine": { "type": "CosyVoice", "sub_type": null }, "prompt_text": null, "parameters": {} }
+      "project_id": null,
+      "voice": { "model": "cosyvoice", "voice_type": "clone" },
+      "voice_params": {
+        "cosyvoice": {
+          "source_audio_path": "output/clone_voices/audio.mp3",
+          "params": { "voice_id": "xxx" }
+        }
+      },
+      "preview": { "audition_text": "...", "preview_audio_path": "output/clone_voices/preview.mp3" },
+      "has_preview": true,
+      "has_source": true,
+      "created_at": "2024-01-01T00:00:00"
     }
   ]
 }
@@ -987,25 +993,27 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "id": "uuid",
   "name": "我的声音",
   "description": "温柔女声",
-  "audio_url": "/api/clone/audio/{id}",
-  "original_audio_url": "/api/clone/audio/{id}?field=original",
-  "cloned_preview_url": "/api/clone/audio/{id}?field=preview",
-  "qwen_voice_id": "xxx",
-  "role": "custom",
-  "clone_engine": "qwen",
-  "is_cloned": true,
-  "cloned_at": "2024-01-01T00:00:00",
-  "created_at": "2024-01-01T00:00:00",
-  "prompt_text": "参考文本",
   "avatar": null,
-  "voices_engine": {
-    "type": "clone",
-    "engine": { "type": "CosyVoice", "sub_type": null },
-    "prompt_text": "参考文本",
-    "parameters": { "input_method": "url" }
-  }
+  "project_id": null,
+  "voice": { "model": "cosyvoice", "voice_type": "clone" },
+  "voice_params": {
+    "cosyvoice": {
+      "source_audio_path": "output/clone_voices/audio.mp3",
+      "params": { "voice_id": "xxx", "voice_description": "..." }
+    }
+  },
+  "preview": {
+    "audition_text": "...",
+    "preview_audio_path": "output/clone_voices/preview.mp3"
+  },
+  "has_preview": true,
+  "has_source": true,
+  "created_at": "2024-01-01T00:00:00"
 }
 ```
+
+Audio playback: construct URL `/api/clone/audio/{id}?field=preview` when `has_preview` is true,
+or `/api/clone/audio/{id}?field=source` when `has_source` is true.
 
 ### 通用错误响应
 
