@@ -139,7 +139,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
             <input value={draft.default_voice ?? ''} onChange={(event) => setDraft((prev) => ({ ...prev, default_voice: event.target.value }))} />
           </label>
           <label>Edge voice
-            <input value={draft.default_engine_params.edge_voice ?? ''} onChange={(event) => setEngineParams({ edge_voice: event.target.value })} />
+            <input value={(draft.default_engine_params as { voice?: string }).voice ?? ''} onChange={(event) => setEngineParams({ voice: event.target.value } as Partial<EngineParams>)} />
           </label>
           <button type="button" disabled={saving} onClick={() => void saveDraft()}>{saving ? t('common.saving') : t('segment.roleLibrary.save')}</button>
         </section>
