@@ -283,7 +283,7 @@ def split_chapter(
         chapters=[
             {
                 "id": c.id, "position": c.position, "name": c.name,
-                "engine": c.engine, "default_params": c.default_params or {},
+                "voice": c.voice or {},
                 "split_config": c.split_config or {},
                 "original_text": c.original_text,
                 "design_title": getattr(c, "design_title", None),
@@ -292,7 +292,7 @@ def split_chapter(
                         {
                             "id": f"{c.id}-seg-{idx}",
                             "position": idx, "text": t,
-                            "params": c.default_params or {},
+                            "params": c.voice or {},
                             "locked_params": [],
                         }
                         for idx, t in enumerate(items)
