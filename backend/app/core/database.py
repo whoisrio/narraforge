@@ -621,6 +621,9 @@ def _migrate_voice_profile(conn):
         if not model or model in ("design", "clone"):
             model = "mimo_tts"
         voice_type = "preset" if old_type == "preset" else ("design" if old_type == "design" else "clone")
+        # Detect design voices: MiMo or VoxCPM with voice_description in engine_params
+        if voice_type == "clone" and model in ("mimo_tts", "voxcpm") and ep_data.get("voice_description"):
+            voice_type = "design"
 
         new_voice = {"model": model, "voice_type": voice_type}
 
