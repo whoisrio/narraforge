@@ -33,9 +33,9 @@ function emotionClass(emotion?: EmotionType): string {
 
 function voiceLabel(segment: Segment, t: (key: string) => string): string {
   const eff = segEffectiveParams(segment);
-  if (eff.edge_voice) return eff.edge_voice as string;
+  if (eff.voice) return eff.voice as string;
   if (eff.voice_id) return eff.voice_id as string;
-  if (eff.mimo_preset_voice) return eff.mimo_preset_voice as string;
+  if (eff.voice_description) return (eff.voice_description as string).slice(0, 20);
   return t('segment.chatBubble.noVoiceSelected');
 }
 

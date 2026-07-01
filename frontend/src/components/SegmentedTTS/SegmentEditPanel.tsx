@@ -64,12 +64,9 @@ export function SegmentEditPanel({
       const role = roles.find(r => r.id === segment.role_id);
       if (role?.voice) {
         const v = role.voice;
-        let roleFlat: Record<string, unknown> = { engine: v.engine };
-        if (v.engine === 'edge_tts') roleFlat = { engine: 'edge_tts', edge_voice: v.voice, edge_rate: v.rate, edge_volume: v.volume };
-        else if (v.engine === 'cosyvoice') roleFlat = { engine: 'cosyvoice', voice_id: v.voice_id, speed: v.speed ?? 1, volume: v.volume ?? 80, pitch: v.pitch ?? 1, language: v.language ?? 'Chinese' };
-        else if (v.engine === 'mimo_tts') roleFlat = { engine: 'mimo_tts', mimo_mode: v.mode || 'preset', ...(v.mode === 'preset' ? { mimo_preset_voice: v.voice_id } : v.mode === 'voiceclone' ? { mimo_clone_voice_id: v.voice_id } : {}), mimo_instruction: v.instruction ?? '' };
-        else if (v.engine === 'voxcpm') roleFlat = { engine: 'voxcpm', voxcpm_mode: v.mode || 'clone', voice_id: v.voice_id ?? '', voxcpm_style_control: v.style_control ?? '', voxcpm_cfg_value: v.cfg_value ?? 2, voxcpm_inference_timesteps: v.inference_timesteps ?? 10 };
-        setLocalParams({ ..._eff, ...roleFlat });
+        // Store EngineParams directly — no flat-key conversion
+        const roleParams: Record<string, unknown> = { engine: v.engine, ...v };
+        setLocalParams({ ..._eff, ...roleParams });
         return;
       }
     }
@@ -117,24 +114,20 @@ export function SegmentEditPanel({
     const params: Partial<EngineParams> = {};
     if (field === 'engine') {
       params.engine = value as EngineParams['engine'];
-      if (value === 'edge_tts') { params.edge_voice = ''; }
-      else if (value === 'mimo_tts') { params.mimo_mode = 'preset'; params.mimo_preset_voice = '冰糖'; }
-      else if (value === 'voxcpm') { params.voxcpm_mode = 'clone'; }
+      if (value === 'edge_tts') { params.voice = ''; }
+      else if (value === 'mimo_tts') { params.mode = 'preset'; params.voice_id = '冰糖'; }
+      else if (value === 'voxcpm') { params.mode = 'clone'; }
       else { params.voice_id = ''; }
     }
     else if (field === 'speed') params.speed = value as number;
     else if (field === 'volume') params.volume = value as number;
     else if (field === 'pitch') params.pitch = value as number;
     else if (field === 'voice_id') params.voice_id = value as string;
-    else if (field === 'edge_voice') params.edge_voice = value as string;
-    else if (field === 'mimo_mode') params.mimo_mode = value as EngineParams['mimo_mode'];
-    else if (field === 'mimo_preset_voice') params.mimo_preset_voice = value as string;
-    else if (field === 'mimo_clone_voice_id') params.mimo_clone_voice_id = value as string;
-    else if (field === 'mimo_instruction') params.mimo_instruction = value as string;
-    else if (field === 'voxcpm_mode') params.voxcpm_mode = value as EngineParams['voxcpm_mode'];
-    else if (field === 'voxcpm_style_control') params.voxcpm_style_control = value as string;
-    else if (field === 'language') params.language = value as string;
+    else if (field === 'voice') params.voice = value as string;
+    else if (field === 'mode') params.mode = value as string;
     else if (field === 'instruction') params.instruction = value as string;
+    else if (field === 'style_control') params.style_control = value as string;
+    else if (field === 'language') params.language = value as string;
 
     // All edits accumulate locally; only confirm button commits
     setLocalParams(prev => ({ ...prev, ...params as unknown as Record<string, unknown> }));
@@ -163,9 +156,9 @@ export function SegmentEditPanel({
   const overrideSummary: string[] = [];
   if (segFieldOverridden(segment, 'voice')) {
     if (isEdgeTTS) {
-      overrideSummary.push(`${t('segmentEdit.voice')}: ${eff.edge_voice || t('segmentEdit.custom')}`);
+      overrideSummary.push(`${t('segmentEdit.voice')}: ${(eff.voice as string) || t('segmentEdit.custom')}`);
     } else if (isMiMo) {
-      overrideSummary.push(`${t('segmentEdit.voice')}: ${eff.mimo_preset_voice || t('segmentEdit.custom')}`);
+      overrideSummary.push(`${t('segmentEdit.voice')}: ${(eff.voice_id as string) || t('segmentEdit.custom')}`);
     } else if (isVoxCPM) {
       const v = voices.find(v => v.id === eff.voice_id);
       overrideSummary.push(`${t('segmentEdit.voice')}: ${v?.name || t('segmentEdit.custom')}`);
@@ -303,8 +296,8 @@ export function SegmentEditPanel({
                 <>
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                     <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
-                    <select className={styles.paramSelect} value={eff.edge_voice || ''}
-                      onChange={e => handleParamChange('edge_voice', e.target.value)}>
+                    <select className={styles.paramSelect} value={(eff.voice as string) || ''}
+                      onChange={e => handleParamChange('voice', e.target.value)}>
                       {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
                       {edgeVoices.map(v => (
                         <option key={v.short_name} value={v.short_name}>
@@ -338,17 +331,17 @@ export function SegmentEditPanel({
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                     <div className={styles.paramLabel}>{t('segmentEdit.voiceMode')}</div>
                     <div className={styles.enginePills}>
-                      <button className={`${styles.enginePill} ${(eff.mimo_mode || 'preset') === 'preset' ? styles.enginePillActive : ''}`}
-                        onClick={() => handleParamChange('mimo_mode', 'preset')}>{t('segmentEdit.mimoPreset')}</button>
-                      <button className={`${styles.enginePill} ${eff.mimo_mode === 'voiceclone' ? styles.enginePillActive : ''}`}
-                        onClick={() => handleParamChange('mimo_mode', 'voiceclone')}>{t('segmentEdit.mimoClone')}</button>
+                      <button className={`${styles.enginePill} ${((eff.mode as string) || 'preset') === 'preset' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'preset')}>{t('segmentEdit.mimoPreset')}</button>
+                      <button className={`${styles.enginePill} ${(eff.mode as string) === 'voiceclone' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'voiceclone')}>{t('segmentEdit.mimoClone')}</button>
                     </div>
                   </div>
-                  {(eff.mimo_mode || 'preset') === 'preset' ? (
+                  {((eff.mode as string) || 'preset') === 'preset' ? (
                     <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                       <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
-                      <select className={styles.paramSelect} value={eff.mimo_preset_voice || ''}
-                        onChange={e => handleParamChange('mimo_preset_voice', e.target.value)}>
+                      <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
+                        onChange={e => handleParamChange('voice_id', e.target.value)}>
                         {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
                         {mimoPresets.map(v => (
                           <option key={v.voice_id} value={v.voice_id}>⭐ {v.name}</option>
@@ -358,8 +351,8 @@ export function SegmentEditPanel({
                   ) : (
                     <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                       <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
-                      <select className={styles.paramSelect} value={eff.mimo_clone_voice_id || ''}
-                        onChange={e => handleParamChange('mimo_clone_voice_id', e.target.value)}>
+                      <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
+                        onChange={e => handleParamChange('voice_id', e.target.value)}>
                         {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
                         {voices.filter(v => v.voice?.model === 'mimo_tts' && v.id).map(v => (
                           <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
@@ -376,10 +369,10 @@ export function SegmentEditPanel({
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                     <div className={styles.paramLabel}>{t('segmentEdit.voiceMode')}</div>
                     <div className={styles.enginePills}>
-                      <button className={`${styles.enginePill} ${(eff.voxcpm_mode || 'clone') === 'clone' ? styles.enginePillActive : ''}`}
-                        onClick={() => handleParamChange('voxcpm_mode', 'clone')}>{t('segmentEdit.voxcpmClone')}</button>
-                      <button className={`${styles.enginePill} ${eff.voxcpm_mode === 'ultimate' ? styles.enginePillActive : ''}`}
-                        onClick={() => handleParamChange('voxcpm_mode', 'ultimate')}>{t('segmentEdit.voxcpmUltimate')}</button>
+                      <button className={`${styles.enginePill} ${((eff.mode as string) || 'clone') === 'clone' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'clone')}>{t('segmentEdit.voxcpmClone')}</button>
+                      <button className={`${styles.enginePill} ${(eff.mode as string) === 'ultimate' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'ultimate')}>{t('segmentEdit.voxcpmUltimate')}</button>
                     </div>
                   </div>
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
@@ -400,8 +393,8 @@ export function SegmentEditPanel({
                 <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                   <div className={styles.paramLabel}>{t('segmentEdit.styleInstruction')}</div>
                   <StyleInstructionPicker
-                    value={isMiMo ? (eff.mimo_instruction || '') : isVoxCPM ? (eff.voxcpm_style_control || '') : (eff.instruction || '')}
-                    onChange={value => handleParamChange(isMiMo ? 'mimo_instruction' : isVoxCPM ? 'voxcpm_style_control' : 'instruction', value)}
+                    value={isMiMo ? ((eff.instruction as string) || '') : isVoxCPM ? ((eff.style_control as string) || '') : ((eff.instruction as string) || '')}
+                    onChange={value => handleParamChange(isMiMo ? 'instruction' : isVoxCPM ? 'style_control' : 'instruction', value)}
                     label="" placeholder={t('segmentEdit.styleHint')} dense
                   />
                 </div>

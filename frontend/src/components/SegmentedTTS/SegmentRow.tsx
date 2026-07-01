@@ -156,7 +156,7 @@ export function SegmentRow({
     /** Extract a human-readable voice name from engine params */
     const extractVoiceName = (srcEngine: string, params: Record<string, unknown>): string => {
       if (srcEngine === 'edge_tts') {
-        const ev = (params.voice || params.edge_voice || '') as string;
+        const ev = (params.voice || '') as string;
         if (ev) {
           const parts = ev.split('-');
           return (parts[parts.length - 1] || ev).replace(/Neural$|V\d+$/i, '');
@@ -164,20 +164,20 @@ export function SegmentRow({
         return t('segment.segmentRow.voiceNotSelected');
       }
       if (srcEngine === 'mimo_tts') {
-        const mode = (params.mimo_mode || params.mode || 'preset') as string;
+        const mode = (params.mode || 'preset') as string;
         if (mode === 'voiceclone' || mode === 'voicedesign') {
-          const cloneId = (params.mimo_clone_voice_id || params.voice_id) as string | undefined;
+          const cloneId = params.voice_id as string | undefined;
           if (cloneId) {
             const vObj = voices.find(v => v.id === cloneId);
             return vObj?.name || (mode === 'voicedesign' ? t('segment.segmentRow.voiceDesigned') : t('segment.segmentRow.customVoice'));
           }
           if (mode === 'voicedesign') {
-            const desc = (params.mimo_voice_description || params.voice_description || '') as string;
+            const desc = (params.voice_description || '') as string;
             return desc ? desc.slice(0, 20) : t('segment.segmentRow.voiceDesigned');
           }
           return t('segment.segmentRow.voiceNotSelected');
         }
-        return (params.mimo_preset_voice as string) || t('segment.segmentRow.voiceNotSelected');
+        return (params.voice_id as string) || t('segment.segmentRow.voiceNotSelected');
       }
       // CosyVoice / VoxCPM
       const vid = params.voice_id as string | undefined;
@@ -208,9 +208,8 @@ export function SegmentRow({
         if (effectiveEngine === 'edge_tts') {
           chapterParams.voice = globalEdgeVoice || '';
         } else if (effectiveEngine === 'mimo_tts') {
-          chapterParams.mimo_mode = globalMimoMode;
-          chapterParams.mimo_preset_voice = globalMimoPresetVoice;
-          chapterParams.mimo_clone_voice_id = globalMimoCloneVoiceId;
+          chapterParams.mode = globalMimoMode;
+          chapterParams.voice_id = globalMimoPresetVoice || globalMimoCloneVoiceId;
         } else {
           chapterParams.voice_id = globalVoiceId;
         }
@@ -254,7 +253,7 @@ export function SegmentRow({
     const vs = segment.voice;
     if (vs.source === 'custom') {
       return ((vs.params as Record<string, unknown>)?.voice as string
-        || (vs.params as Record<string, unknown>)?.edge_voice as string
+        || (vs.params as Record<string, unknown>)?.voice as string
         || '');
     }
     if (vs.source === 'role' && resolvedRole?.voice) {
@@ -306,11 +305,10 @@ export function SegmentRow({
   } else {
     // chapter source: inject global params per engine
     if (effectiveEngine === 'edge_tts') {
-      defaultParamsForStale.edge_voice = globalEdgeVoice;
+      defaultParamsForStale.voice = globalEdgeVoice;
     } else if (effectiveEngine === 'mimo_tts') {
-      defaultParamsForStale.mimo_mode = globalMimoMode;
-      defaultParamsForStale.mimo_preset_voice = globalMimoPresetVoice;
-      defaultParamsForStale.mimo_clone_voice_id = globalMimoCloneVoiceId;
+      defaultParamsForStale.mode = globalMimoMode;
+      defaultParamsForStale.voice_id = globalMimoPresetVoice || globalMimoCloneVoiceId;
     } else {
       defaultParamsForStale.voice_id = globalVoiceId;
     }
