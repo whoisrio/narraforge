@@ -37,15 +37,6 @@ function engineLabel(profile: VoiceProfile): string {
   return 'Unknown';
 }
 
-/** 音色来源标签 */
-function voiceTypeLabel(profile: VoiceProfile): string {
-  const vt = profile.voice?.voice_type;
-  if (vt === 'preset') return t('voiceClone.preset');
-  if (vt === 'clone') return t('voiceClone.clone');
-  if (vt === 'design') return t('voiceClone.design');
-  return '';
-}
-
 /** 音色描述标签 */
 function voiceDescriptionLabel(profile: VoiceProfile): string {
   const model = profile.voice?.model || '';
@@ -573,9 +564,6 @@ export function VoiceClone() {
                   <strong className={styles.voiceCardName}>{v.name || v.description || t('common.unnamed')}</strong>
                   <div className={styles.voiceCardChips}>
                     <span className={styles.chipEngine}>{engineLabel(v)}</span>
-                    {voiceTypeLabel(v) && (
-                      <span className={styles.chipDesc}>{voiceTypeLabel(v)}</span>
-                    )}
                     {v.description && v.description !== v.name && (
                       <span className={styles.chipDesc}>{v.description.slice(0, 30)}</span>
                     )}
