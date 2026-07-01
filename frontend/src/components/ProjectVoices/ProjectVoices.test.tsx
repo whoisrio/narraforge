@@ -350,4 +350,42 @@ describe('design voice loading in editor', () => {
       expect(audio?.getAttribute('src')).toContain('?field=preview');
     });
   });
+
+  it('switches engine to mimo_tts when clicking design tab on a new role', async () => {
+    // Render ProjectVoices with empty roles — the "创建角色" button creates a draft with edge_tts
+    const onSaveRole = vi.fn();
+    render(
+      <ProjectVoices
+        roles={[]}
+        onSaveRole={onSaveRole}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    // Click "创建角色" to open the editor with a new draft (engine=edge_tts)
+    fireEvent.click(screen.getByRole('button', { name: /创建角色/ }));
+
+    // Now the VoiceRoleEditor is visible. Click the "设计新音色" tab.
+    await waitFor(() => {
+      expect(screen.getByRole('radio', { name: '设计新音色' })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('radio', { name: '设计新音色' }));
+
+    // After clicking design, the textarea for voice description should be visible and enabled
+    await waitFor(() => {
+      const textarea = screen.getByPlaceholderText(/描述你想要的音色/);
+      expect(textarea).toBeInTheDocument();
+      expect(textarea).not.toBeDisabled();
+    });
+
+    // Type in the textarea
+    const textarea = screen.getByPlaceholderText(/描述你想要的音色/) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: '温柔女声' } });
+    expect(textarea.value).toBe('温柔女声');
+
+    // Type more — value should accumulate
+    fireEvent.change(textarea, { target: { value: '温柔女声，语速适中' } });
+    expect(textarea.value).toBe('温柔女声，语速适中');
+  });
 });

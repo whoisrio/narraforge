@@ -457,7 +457,11 @@ function VoiceRoleEditor({
       else setCloneSubEngine('mimo');
     } else if (cat === 'design') {
       const eng = draft.voice?.engine;
-      setDesignSubEngine(eng === 'voxcpm' ? 'voxcpm' : 'mimo');
+      const sub = eng === 'voxcpm' ? 'voxcpm' : 'mimo';
+      setDesignSubEngine(sub);
+      // Also switch the voice engine so setParams routes voice_description correctly
+      if (sub === 'voxcpm') setEngine('voxcpm');
+      else setEngine('mimo_tts');
     }
   };
 
