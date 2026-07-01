@@ -416,14 +416,14 @@ async def list_available_voices(
     # Query all profiles; is_cloned is now inside engine JSON column, filter in Python
     all_voices = db.query(VoiceProfile).all()
 
-    # Filter to cloned voices only
+    # Filter to cloned voices only (unless querying by specific voice_id)
     voices: list[VoiceProfile] = [
         v for v in all_voices
         if (v.voice or {}).get("voice_type") == "clone"
     ]
 
     if voice_id:
-        voice = next((v for v in voices if v.id == voice_id), None)
+        voice = db.query(VoiceProfile).filter_by(id=voice_id).first()
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
         return {"voices": [voice_to_dict(voice)]}
