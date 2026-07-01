@@ -14,17 +14,32 @@ This directory is reserved for cross-stack browser E2E tests and E2E-related man
 
 ## Generated Artifacts
 
-Generated screenshots, videos, traces, and HTML reports should not be committed here.
-
-Use ignored artifact directories instead:
+Generated screenshots, videos, traces, and HTML reports are output to:
 
 ```text
-test-results/
-playwright-report/
-.artifacts/e2e/
+test-results/{run_timestamp}/
 ```
 
-Only commit screenshots under `snapshots/` when they are intentional baselines or useful legacy references.
+Each E2E run creates a timestamped subdirectory. **Do not commit** anything under `test-results/`.
+
+### Output Convention
+
+- `test-results/{run}/` — all artifacts for that run
+- Traces, screenshots, and videos are nested per test file within the run directory
+- Set `PW_RUN` env to override the timestamp: `PW_RUN=project-pages/run-1 npx playwright test`
+
+### Running E2E Tests
+
+```bash
+# Full suite (timestamped output)
+npx playwright test
+
+# Single spec
+npx playwright test tests/e2e/specs/project-pages.spec.ts
+
+# Named run directory
+PW_RUN=studio-voice/run-2 npx playwright test
+```
 
 ## Legacy Assets
 

@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
+import path from 'node:path'
+
+const runDir = process.env.PW_RUN || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 
 export default defineConfig({
   testDir: './tests/e2e/specs',
@@ -6,9 +9,12 @@ export default defineConfig({
   expect: {
     timeout: 10_000,
   },
+  outputDir: path.join('test-results', runDir),
   use: {
     baseURL: 'http://127.0.0.1:5173',
     trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+    video: 'retain-on-failure',
   },
   webServer: [
     {
