@@ -38,38 +38,6 @@ import styles from './TTSSynthesis.module.css';
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
 
 /** 将角色 voice (EngineParams) 转换为 old flat 字段名，供 handleRegenerate 内部使用 */
-function roleVoiceToFlatParams(voice: EngineParams | undefined): Record<string, unknown> {
-  if (!voice) return {};
-  switch (voice.engine) {
-    case 'edge_tts':
-      return { engine: 'edge_tts', edge_voice: voice.voice, edge_rate: voice.rate, edge_volume: voice.volume };
-    case 'cosyvoice':
-      return { engine: 'cosyvoice', voice_id: voice.voice_id, instruction: voice.instruction ?? '', speed: voice.speed ?? 1, volume: voice.volume ?? 80, pitch: voice.pitch ?? 1, language: voice.language ?? 'Chinese' };
-    case 'mimo_tts': {
-      const mimoMode = voice.mode;
-      if (mimoMode === 'voicedesign') {
-        return { engine: 'mimo_tts', mimo_mode: 'voicedesign', mimo_clone_voice_id: voice.voice_id, mimo_voice_description: voice.voice_description ?? '', mimo_instruction: voice.instruction ?? '' };
-      }
-      if (mimoMode === 'voiceclone') {
-        return { engine: 'mimo_tts', mimo_mode: 'voiceclone', mimo_clone_voice_id: voice.voice_id, mimo_instruction: voice.instruction ?? '' };
-      }
-      return { engine: 'mimo_tts', mimo_mode: 'preset', mimo_preset_voice: voice.voice_id, mimo_instruction: voice.instruction ?? '' };
-    }
-    case 'voxcpm': {
-      const voxcpmMode = voice.mode;
-      if (voxcpmMode === 'tts_design') {
-        return { engine: 'voxcpm', voice_id: voice.voice_id, voxcpm_mode: 'design', voxcpm_voice_description: voice.voice_description ?? '', voxcpm_style_control: voice.style_control ?? '', voxcpm_cfg_value: voice.cfg_value ?? 2, voxcpm_inference_timesteps: voice.inference_timesteps ?? 10 };
-      }
-      if (voxcpmMode === 'ultimate') {
-        return { engine: 'voxcpm', voice_id: voice.voice_id, voxcpm_mode: 'ultimate', voxcpm_style_control: voice.style_control ?? '', voxcpm_prompt_text: voice.prompt_text ?? '', voxcpm_cfg_value: voice.cfg_value ?? 2, voxcpm_inference_timesteps: voice.inference_timesteps ?? 10 };
-      }
-      return { engine: 'voxcpm', voice_id: voice.voice_id, voxcpm_mode: 'clone', voxcpm_style_control: voice.style_control ?? '', voxcpm_cfg_value: voice.cfg_value ?? 2, voxcpm_inference_timesteps: voice.inference_timesteps ?? 10 };
-    }
-    default:
-      return {};
-  }
-}
-
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
 
 function toEdgeFormat(value: number) {
@@ -803,105 +771,85 @@ export function TTSSynthesis({
     dispatch({ type: 'GENERATE_START', id });
     try {
       const hasVoiceLock = segHasOverride(seg);
-      // Find role whenever segment has one
       const currentRole = seg.role_id ? roles.find(r => r.id === seg.role_id) : undefined;
-      // Global params — build from engine state, convert EngineParams to flat for legacy resolve()
-      const gp = roleVoiceToFlatParams(buildCurrentParams());
-      // Role voice params — EngineParams format
-      const rv = currentRole?.voice;
 
-      // Resolve effective engine
+      // Resolve effective EngineParams with priority: custom > role > global
+      let effectiveParams: EngineParams;
       let effectiveEngine: Engine;
-      if (rv) {
-        effectiveEngine = (rv.engine || gp.engine) as Engine;
-      } else if (hasVoiceLock) {
-        effectiveEngine = ((seg.voice as Record<string, unknown>).engine as Engine) || (gp.engine as Engine);
+      if (hasVoiceLock && seg.voice.source === 'custom') {
+        effectiveParams = seg.voice.params as unknown as EngineParams;
+        effectiveEngine = (effectiveParams.engine || seg.voice.engine) as Engine;
+      } else if (currentRole?.voice) {
+        effectiveParams = currentRole.voice;
+        effectiveEngine = effectiveParams.engine as Engine;
       } else {
-        effectiveEngine = gp.engine as Engine;
+        effectiveParams = buildCurrentParams();
+        effectiveEngine = effectiveParams.engine as Engine;
       }
 
-      // Extract params from role voice (new EngineParams format)
-      const rvParams = roleVoiceToFlatParams(rv);
+      // Extract engine-specific params from discriminated union
+      let effectiveEdgeVoice = '';
+      let effectiveEdgeRate = '+0%';
+      let effectiveEdgeVolume = '+0%';
+      let voiceId = '';
+      let speed = 1.0;
+      let volume: number = 80;
+      let pitch = 1.0;
+      let instruction = '';
+      let language = 'Chinese';
+      let effectiveMimoMode = 'preset';
+      let effectiveMimoPreset = '';
+      let effectiveMimoCloneId = '';
+      let effectiveMimoVoiceDesc = '';
+      let effectiveMimoInstruction = '';
+      let effectiveVoxcpmMode = 'tts';
+      let effectiveVoxcpmCfg = 2.0;
+      let effectiveVoxcpmTimesteps = 10;
+      let effectiveVoxcpmDesc = '';
+      let effectiveVoxcpmStyle = '';
+      let effectiveVoxcpmPrompt = '';
 
-      // Segment custom params — ensure flat format for resolve()
-      const segParamsRaw = hasVoiceLock ? segEffectiveParams(seg) : {};
-      const segParams: Record<string, unknown> = hasVoiceLock
-        ? ('edge_voice' in segParamsRaw || 'mimo_mode' in segParamsRaw || 'voxcpm_mode' in segParamsRaw
-            ? segParamsRaw  // already flat (old data)
-            : roleVoiceToFlatParams(segParamsRaw as unknown as EngineParams))  // EngineParams → flat
-        : {};
-
-      // sp = merged source params: role + seg overrides (when applicable), or just seg overrides
-      const sp = rv
-        ? { ...rvParams, ...(hasVoiceLock ? segParams : {}) }
-        : (hasVoiceLock ? segParams : {});
-
-      // Now extract effective params — use sp (role/seg) when role exists, otherwise gp (global)
-      const useRole = !!rv;
-      const resolve = (key: string, fallback: unknown = '') =>
-        useRole ? ((sp[key] !== undefined && sp[key] !== '') ? sp[key] : gp[key]) ?? fallback
-          : hasVoiceLock ? ((sp[key] !== undefined && sp[key] !== '') ? sp[key] : gp[key]) ?? fallback
-            : gp[key] ?? fallback;
-      const resolveNum = (key: string, fallback: number) =>
-        Number(resolve(key, fallback));
-
-      const voiceId = resolve('voice_id') as string;
-      const speed = resolveNum('speed', 1.0);
-      const volume = resolveNum('volume', 80);
-      const pitch = resolveNum('pitch', 1.0);
-      const instruction = resolve('instruction') as string;
-      const language = resolve('language', 'Chinese') as string;
-
-      // Edge-TTS
-      const effectiveEdgeVoice = resolve('edge_voice') as string;
-      const effectiveEdgeRate = resolve('edge_rate', '+0%') as string;
-      const effectiveEdgeVolume = resolve('edge_volume', '+0%') as string;
-
-      // MiMo
-      const effectiveMimoMode = resolve('mimo_mode', 'preset') as string;
-      const effectiveMimoPreset = resolve('mimo_preset_voice') as string;
-      const effectiveMimoCloneId = resolve('mimo_clone_voice_id') as string;
-      const effectiveMimoVoiceDesc = resolve('mimo_voice_description') as string;
-      const effectiveMimoInstruction = resolve('mimo_instruction') as string;
-
-      // VoxCPM
-      const effectiveVoxcpmMode = resolve('voxcpm_mode', 'tts') as string;
-      const effectiveVoxcpmCfg = resolveNum('voxcpm_cfg_value', 2.0);
-      const effectiveVoxcpmTimesteps = resolveNum('voxcpm_inference_timesteps', 10);
-      const effectiveVoxcpmDesc = resolve('voxcpm_voice_description') as string;
-      const effectiveVoxcpmStyle = resolve('voxcpm_style_control') as string;
-      const effectiveVoxcpmPrompt = resolve('voxcpm_prompt_text') as string;
+      if (effectiveEngine === 'edge_tts') {
+        const e = effectiveParams as EdgeTTSParams;
+        effectiveEdgeVoice = e.voice || '';
+        effectiveEdgeRate = e.rate || '+0%';
+        effectiveEdgeVolume = e.volume || '+0%';
+      } else if (effectiveEngine === 'mimo_tts') {
+        const m = effectiveParams as MiMoParams;
+        effectiveMimoMode = m.mode || 'preset';
+        effectiveMimoInstruction = m.instruction || '';
+        effectiveMimoVoiceDesc = m.voice_description || '';
+        if (m.mode === 'preset') effectiveMimoPreset = m.voice_id || '冰糖';
+        else effectiveMimoCloneId = m.voice_id || '';
+      } else if (effectiveEngine === 'voxcpm') {
+        const v = effectiveParams as VoxCPMParams;
+        effectiveVoxcpmMode = v.mode || 'clone';
+        voiceId = v.voice_id || '';
+        effectiveVoxcpmCfg = v.cfg_value ?? 2.0;
+        effectiveVoxcpmTimesteps = v.inference_timesteps ?? 10;
+        effectiveVoxcpmDesc = v.voice_description || '';
+        effectiveVoxcpmStyle = v.style_control || '';
+        effectiveVoxcpmPrompt = v.prompt_text || '';
+      } else {
+        const c = effectiveParams as CosyVoiceParams;
+        voiceId = c.voice_id || '';
+        speed = c.speed ?? 1.0;
+        volume = c.volume ?? 80;
+        pitch = c.pitch ?? 1.0;
+        language = c.language || 'Chinese';
+        instruction = c.instruction || '';
+      }
 
       const textToSend = seg.text;
 
-      // Voice identifier & params snapshot — shared by both backend and frontend paths
-      let usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoMode === 'voicedesign' ? effectiveMimoVoiceDesc : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
-      const updatedParams: Partial<EngineParams> = { engine: effectiveEngine };
-      if (effectiveEngine === 'edge_tts') {
-        updatedParams.voice = effectiveEdgeVoice;
-        updatedParams.rate = effectiveEdgeRate;
-        updatedParams.volume = effectiveEdgeVolume;
-      } else if (effectiveEngine === 'mimo_tts') {
-        updatedParams.mode = effectiveMimoMode;
-        updatedParams.voice_id = effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId;
-        updatedParams.voice_description = effectiveMimoVoiceDesc;
-        updatedParams.instruction = effectiveMimoInstruction;
-      } else if (effectiveEngine === 'voxcpm') {
-        updatedParams.mode = effectiveVoxcpmMode;
-        updatedParams.voice_id = voiceId;
-        updatedParams.cfg_value = effectiveVoxcpmCfg;
-        updatedParams.inference_timesteps = effectiveVoxcpmTimesteps;
-        updatedParams.style_control = effectiveVoxcpmStyle;
-        updatedParams.prompt_text = effectiveVoxcpmPrompt;
-        updatedParams.voice_description = effectiveVoxcpmDesc;
-      } else {
-        updatedParams.voice_id = voiceId;
-        updatedParams.speed = speed;
-        updatedParams.volume = volume;
-        updatedParams.pitch = pitch;
-        updatedParams.language = language;
-        updatedParams.instruction = instruction;
-      }
+      // Voice identifier for display
+      const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice
+        : effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId)
+        : effectiveEngine === 'voxcpm' ? voiceId
+        : voiceId;
+
+      // Use effectiveParams directly as the snapshot (already EngineParams)
+      const updatedParams = effectiveParams;
 
       // Design voice detection: design modes need to use clone APIs at synthesis time.
       // Roles store mimo_mode='voicedesign' or voxcpm_mode='design' to indicate design voices.
