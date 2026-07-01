@@ -8,33 +8,13 @@ function uid(): string {
 
 function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
   const now = new Date().toISOString();
-  const defaultParams = inheritFrom?.default_params || { engine: 'edge_tts' };
+  const defaultVoice = inheritFrom?.voice || { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' };
   return {
     id: uid(),
     name,
-    engine: defaultParams.engine,
-    voice_id: defaultParams.voice_id,
-    edge_voice: defaultParams.edge_voice,
-    edge_rate: typeof defaultParams.edge_rate === 'string' ? parseFloat(defaultParams.edge_rate) : defaultParams.edge_rate ?? 0,
-    edge_volume: typeof defaultParams.edge_volume === 'string' ? parseFloat(defaultParams.edge_volume) : defaultParams.edge_volume ?? 0,
-    mimo_mode: defaultParams.mimo_mode,
-    mimo_preset_voice: defaultParams.mimo_preset_voice,
-    mimo_instruction: defaultParams.mimo_instruction,
-    mimo_clone_voice_id: defaultParams.mimo_clone_voice_id,
-    voxcpm_mode: defaultParams.voxcpm_mode,
-    voxcpm_voice_description: defaultParams.voxcpm_voice_description,
-    voxcpm_style_control: defaultParams.voxcpm_style_control,
-    voxcpm_prompt_text: defaultParams.voxcpm_prompt_text,
-    voxcpm_cfg_value: defaultParams.voxcpm_cfg_value,
-    voxcpm_inference_timesteps: defaultParams.voxcpm_inference_timesteps,
-    language: defaultParams.language,
-    speed: defaultParams.speed,
-    volume: defaultParams.volume,
-    pitch: defaultParams.pitch,
+    voice: defaultVoice,
     segments: [],
-    default_params: defaultParams as SegmentEngineParams,
     split_config: inheritFrom?.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
-    panel_open: inheritFrom?.panel_open ?? true,
     created_at: now,
     updated_at: now,
   };
@@ -69,7 +49,7 @@ function isEmotionType(value: unknown): value is EmotionType {
   return typeof value === 'string' && ['happy', 'sad', 'angry', 'calm', 'neutral', 'excited'].includes(value);
 }
 
-function enrichSegment(raw: RawSegment, defaultParams?: SegmentEngineParams): Segment {
+function enrichSegment(raw: RawSegment, _defaultVoice?: Record<string, unknown>): Segment {
   const now = new Date().toISOString();
   const rawAudio = (raw as Record<string, unknown>).audio as Record<string, unknown> | undefined;
   const hasAudio = !!(rawAudio?.current || rawAudio?.previous);
@@ -96,13 +76,13 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
   if (raw.schema_version === 2 && raw.chapters) {
     // Enrich segments with frontend-only fields that the backend doesn't return
     const chapters: Chapter[] = raw.chapters.map((ch) => {
-      const defaultParams = ch.default_params || { engine: 'edge_tts' } as SegmentEngineParams;
+      const voice = ch.voice || { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' };
       return {
         ...ch,
-        default_params: defaultParams,
+        voice: voice,
         split_config: ch.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
         design_title: ch.design_title ?? ch.name,
-        segments: (ch.segments || []).map((s) => enrichSegment(s, defaultParams)),
+        segments: (ch.segments || []).map((s) => enrichSegment(s, voice)),
       };
     });
     return {
@@ -118,29 +98,10 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
   const ch: Chapter = {
     id: uid(),
     name: '第一章',
-    engine: r.engine,
-    voice_id: r.voice_id,
-    edge_voice: r.edge_voice,
-    edge_rate: r.edge_rate,
-    edge_volume: r.edge_volume,
-    mimo_mode: r.mimo_mode,
-    mimo_preset_voice: r.mimo_preset_voice,
-    mimo_instruction: r.mimo_instruction,
-    mimo_clone_voice_id: r.mimo_clone_voice_id,
-    voxcpm_mode: r.voxcpm_mode,
-    voxcpm_voice_description: r.voxcpm_voice_description,
-    voxcpm_style_control: r.voxcpm_style_control,
-    voxcpm_prompt_text: r.voxcpm_prompt_text,
-    voxcpm_cfg_value: r.voxcpm_cfg_value,
-    voxcpm_inference_timesteps: r.voxcpm_inference_timesteps,
-    language: r.language,
-    speed: r.speed,
-    volume: r.volume,
-    pitch: r.pitch,
+    voice: r.voice || { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' },
     original_text: r.original_text,
     segments: r.segments || [],
     selected_segment_id: r.selected_segment_id,
-    default_params: r.default_params || { engine: 'edge_tts' } as SegmentEngineParams,
     split_config: r.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
     created_at: r.created_at || now,
     updated_at: r.updated_at || now,
@@ -198,10 +159,10 @@ export type Action =
   | { type: 'SELECT_CHAPTER'; id: string }
   | { type: 'RENAME_CHAPTER'; id: string; name: string }
   // Per-chapter settings
-  | { type: 'SET_DEFAULT_PARAMS'; params: SegmentEngineParams }
+  | { type: 'SET_DEFAULT_PARAMS'; params: EngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
-  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
-  | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title' | 'engine' | 'voice_id' | 'edge_voice' | 'edge_rate' | 'edge_volume' | 'mimo_mode' | 'mimo_preset_voice' | 'mimo_instruction' | 'mimo_clone_voice_id' | 'voxcpm_mode' | 'voxcpm_voice_description' | 'voxcpm_style_control' | 'voxcpm_prompt_text' | 'voxcpm_cfg_value' | 'voxcpm_inference_timesteps' | 'language' | 'speed' | 'volume' | 'pitch' | 'panel_open'>> }
+  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> }
+  | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null; voice_ref?: import('../types').VoiceRef }[] }
   | { type: 'APPEND_SEGMENT'; text?: string; voice_ref?: import('../types').VoiceRef }
@@ -231,7 +192,7 @@ export type Action =
 
 export interface State { project: SegmentedProject }
 
-function makeSegment(text: string, _params: SegmentEngineParams, segmentKind: SegmentKind = 'narration'): Segment {
+function makeSegment(text: string, _params?: unknown, segmentKind: SegmentKind = 'narration'): Segment {
   const now = new Date().toISOString();
   return {
     id: uid(),
@@ -296,7 +257,7 @@ export function segmentedReducer(state: State, action: Action): State {
 
     // ---- Per-chapter settings ----
     case 'SET_DEFAULT_PARAMS':
-      return { project: updateActive(p, ch => ({ ...ch, default_params: action.params, updated_at: new Date().toISOString() })) };
+      return { project: updateActive(p, ch => ({ ...ch, voice: action.params, updated_at: new Date().toISOString() })) };
     case 'SET_SPLIT_CONFIG':
       return { project: updateActive(p, ch => ({ ...ch, split_config: action.config, updated_at: new Date().toISOString() })) };
     case 'SET_CHAPTER_META':
@@ -308,7 +269,7 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPLY_SPLIT': {
       return { project: updateActive(p, ch => {
         const newSegs = action.items.map(item => {
-          const seg = makeSegment(item.text, ch.default_params, item.segment_kind ?? 'narration');
+          const seg = makeSegment(item.text, ch.voice, item.segment_kind ?? 'narration');
           if (item.emotion && isEmotionType(item.emotion)) seg.emotion = item.emotion;
           if (item.role_id !== undefined) seg.role_id = item.role_id;
           // Build voice from role_snapshot or voice_ref
@@ -328,7 +289,7 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPEND_SEGMENT': {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
-        const seg = makeSegment(action.text ?? '', ch.default_params);
+        const seg = makeSegment(action.text ?? '', ch.voice);
         s.push(seg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
@@ -338,7 +299,7 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const idx = s.findIndex(x => x.id === action.afterId);
         if (idx >= 0) {
-          const seg = makeSegment(action.text ?? '', ch.default_params);
+          const seg = makeSegment(action.text ?? '', ch.voice);
           s.splice(idx + 1, 0, seg);
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };

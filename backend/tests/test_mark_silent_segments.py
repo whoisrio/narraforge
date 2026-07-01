@@ -30,7 +30,7 @@ def _seed_project(db_session, base_dir: Path) -> str:
     db_session.add(p)
     ch = SegmentedProjectChapter(
         id="c-silent", project_id="p-silent", name="C1", position=0,
-        default_params={"engine": "edge_tts", "voice_id": "v1"},
+        voice={"engine": "edge_tts", "voice_id": "v1"},
     )
     db_session.add(ch)
     db_session.flush()

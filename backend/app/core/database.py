@@ -272,6 +272,8 @@ def init_db():
         _migrate_absolute_to_relative(conn)
         # P9000: v3 schema migration (voice/audio/engine JSON + drop old columns)
         _migrate_v3_reduce_schema(conn)
+        # P9002: unify chapter voice params (default_params → voice EngineParams)
+        _migrate_chapter_voice(conn)
 
 
 def _migrate_v3_reduce_schema(conn):
@@ -392,6 +394,83 @@ def _migrate_v3_reduce_schema(conn):
 
     # ── P9001: fix segments whose voice.source should be 'role' but is 'custom' ──
     _fix_role_source_segments(conn, logger)
+
+
+def _migrate_chapter_voice(conn):
+    """P9002: unify chapter voice params into a single voice JSON (EngineParams format).
+
+    Combines chapter.engine + chapter.default_params into chapter.voice,
+    then drops the old engine and default_params columns.
+    """
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Check if voice column already exists
+    col_info = conn.execute(text("PRAGMA table_info(segmented_project_chapters)")).fetchall()
+    col_names = {c[1] for c in col_info}
+    if "voice" in col_names:
+        logger.info("[migration] P9002: voice column already exists, skipping")
+        return
+
+    # Add voice column
+    conn.execute(text("ALTER TABLE segmented_project_chapters ADD COLUMN voice JSON NOT NULL DEFAULT '{}'"))
+
+    # Migrate data: build EngineParams from engine + default_params
+    rows = conn.execute(text(
+        "SELECT id, engine, default_params FROM segmented_project_chapters"
+    )).fetchall()
+
+    migrated = 0
+    for row in rows:
+        ch_id, engine, default_params_json = row
+        engine_type = engine or "edge_tts"
+        dp = json.loads(default_params_json) if default_params_json else {}
+
+        # Build EngineParams dict based on engine type
+        voice: dict[str, object] = {"engine": engine_type}
+        if engine_type == "edge_tts":
+            voice["voice"] = dp.get("edge_voice", "")
+            voice["rate"] = str(dp.get("edge_rate", "+0%"))
+            voice["volume"] = str(dp.get("edge_volume", "+0%"))
+        elif engine_type == "cosyvoice":
+            voice["voice_id"] = dp.get("voice_id", "")
+            voice["speed"] = dp.get("speed", 1.0)
+            voice["volume"] = dp.get("volume", 80)
+            voice["pitch"] = dp.get("pitch", 1.0)
+            voice["language"] = dp.get("language", "Chinese")
+            voice["instruction"] = dp.get("instruction", "")
+        elif engine_type == "mimo_tts":
+            mode = dp.get("mimo_mode", "preset")
+            voice["mode"] = mode
+            if mode == "preset":
+                voice["voice_id"] = dp.get("mimo_preset_voice", "")
+            elif mode in ("voiceclone", "voicedesign"):
+                voice["voice_id"] = dp.get("mimo_clone_voice_id", "")
+            voice["instruction"] = dp.get("mimo_instruction", "")
+            if dp.get("mimo_voice_description"):
+                voice["voice_description"] = dp["mimo_voice_description"]
+        elif engine_type == "voxcpm":
+            voice["mode"] = dp.get("voxcpm_mode", "clone")
+            voice["voice_id"] = dp.get("voice_id", "")
+            if dp.get("voxcpm_style_control"):
+                voice["style_control"] = dp.get("voxcpm_style_control")
+            if dp.get("voxcpm_cfg_value"):
+                voice["cfg_value"] = dp["voxcpm_cfg_value"]
+            if dp.get("voxcpm_inference_timesteps"):
+                voice["inference_timesteps"] = dp["voxcpm_inference_timesteps"]
+
+        conn.execute(
+            text("UPDATE segmented_project_chapters SET voice = :voice WHERE id = :id"),
+            {"voice": json.dumps(voice), "id": ch_id},
+        )
+        migrated += 1
+
+    logger.info(f"[migration] P9002: migrated {migrated} chapter voice params")
+
+    # Drop engine and default_params columns via table recreate
+    _drop_columns_via_recreate(conn, "segmented_project_chapters", ["engine", "default_params"])
+    logger.info("[migration] P9002: dropped engine, default_params columns from chapters")
 
 
 def _fix_role_source_segments(conn, logger):

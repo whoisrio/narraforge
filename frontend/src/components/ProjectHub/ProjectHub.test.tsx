@@ -23,7 +23,7 @@ function makeProject(id: string, name: string, chapters: number, segmentsPerChap
         created_at: now,
         updated_at: now,
       })),
-      default_params: { engine: 'edge_tts', edge_voice: 'zh-CN-YunxiNeural', language: 'Chinese' },
+      voice: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural', rate: '+0%', volume: '+0%' },
       split_config: { delimiters: ['。'], mode: 'rule' },
       created_at: now,
       updated_at: now,

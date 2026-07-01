@@ -397,24 +397,31 @@ export function TTSSynthesis({
 
   // ---- Chapter management ----
 
-  /** Restore global state from a chapter's saved settings */
+  /** Restore global state from a chapter's saved voice */
   const restoreChapterSettings = useCallback((ch: Chapter) => {
-    if (ch.engine) setEngine(ch.engine as Engine); else setEngine('edge_tts');
-    setSelectedVoiceId(ch.voice_id || '');
-    setEdgeVoice(ch.edge_voice || '');
-    setEdgeRate(ch.edge_rate ?? 0);
-    setEdgeVolume(ch.edge_volume ?? 0);
-    setMimoMode((ch.mimo_mode as MiMoMode) || 'preset');
-    setMimoPresetVoice(ch.mimo_preset_voice || '冰糖');
-    setMimoInstruction(ch.mimo_instruction || '');
-    setMimoCloneVoiceId(ch.mimo_clone_voice_id || '');
-    setVoxcpmMode((ch.voxcpm_mode as VoxCPMMode) || 'clone');
-    setVoxcpmStyleControl(ch.voxcpm_style_control || '');
-    setVoxcpmPromptText(ch.voxcpm_prompt_text || '');
-    setVoxcpmCfgValue(ch.voxcpm_cfg_value ?? 2.0);
-    setVoxcpmInferenceTimesteps(ch.voxcpm_inference_timesteps ?? 10);
-    setParams({ language: (ch.language as TTSRequest['language']) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
-    setPanelOpen(ch.panel_open ?? true);
+    const v = ch.voice;
+    const engine = (v?.engine || 'edge_tts') as Engine;
+    setEngine(engine);
+    if (engine === 'edge_tts') {
+      setEdgeVoice((v as EdgeTTSParams).voice || '');
+      setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
+      setEdgeVolume(parseFloat((v as EdgeTTSParams).volume) || 0);
+    } else if (engine === 'cosyvoice') {
+      setSelectedVoiceId((v as CosyVoiceParams).voice_id || '');
+      setParams({ language: ((v as CosyVoiceParams).language || 'Chinese') as TTSRequest['language'], speed: (v as CosyVoiceParams).speed ?? 1.0, volume: (v as CosyVoiceParams).volume ?? 80, pitch: (v as CosyVoiceParams).pitch ?? 1.0 });
+    } else if (engine === 'mimo_tts') {
+      setMimoMode(((v as MiMoParams).mode || 'preset') as MiMoMode);
+      setMimoPresetVoice((v as MiMoParams).voice_id || '冰糖');
+      setMimoInstruction((v as MiMoParams).instruction || '');
+      setMimoCloneVoiceId((v as MiMoParams).voice_id || '');
+    } else if (engine === 'voxcpm') {
+      setVoxcpmMode(((v as VoxCPMParams).mode || 'clone') as VoxCPMMode);
+      setSelectedVoiceId((v as VoxCPMParams).voice_id || '');
+      setVoxcpmStyleControl((v as VoxCPMParams).style_control || '');
+      setVoxcpmPromptText((v as VoxCPMParams).prompt_text || '');
+      setVoxcpmCfgValue((v as VoxCPMParams).cfg_value ?? 2.0);
+      setVoxcpmInferenceTimesteps((v as VoxCPMParams).inference_timesteps ?? 10);
+    }
   }, []);
 
   const handleSelectChapter = useCallback((chapterId: string) => {
@@ -464,23 +471,16 @@ export function TTSSynthesis({
 
   // ---- Segmented mode handlers ----
 
-  /** Build SegmentEngineParams from current global state */
-  const buildCurrentParams = useCallback((): SegmentEngineParams => {
+  /** Build EngineParams from current global state */
+  const buildCurrentParams = useCallback((): EngineParams => {
     if (engine === 'edge_tts') {
-      return { engine: 'edge_tts', edge_voice: edgeVoice, edge_rate: toEdgeFormat(edgeRate), edge_volume: toEdgeFormat(edgeVolume) };
+      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume) } as EdgeTTSParams;
     }
     if (engine === 'mimo_tts') {
-      return { engine: 'mimo_tts', mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice, mimo_clone_voice_id: mimoCloneVoiceId, mimo_instruction: mimoInstruction };
+      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction } as MiMoParams;
     }
     if (engine === 'voxcpm') {
-      const params: SegmentEngineParams = {
-        engine: 'voxcpm', voice_id: selectedVoiceId, voxcpm_mode: voxcpmMode,
-        voxcpm_style_control: voxcpmStyleControl,
-        voxcpm_prompt_text: voxcpmPromptText, voxcpm_cfg_value: voxcpmCfgValue,
-        voxcpm_inference_timesteps: voxcpmInferenceTimesteps,
-      };
-      console.log('[buildCurrentParams] voxcpm:', params);
-      return params;
+      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps } as VoxCPMParams;
     }
     return {
       engine: 'cosyvoice', voice_id: selectedVoiceId,
@@ -727,7 +727,7 @@ export function TTSSynthesis({
     const apply = async () => {
       for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch { /* ignore */ } }
       dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
-      dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
+      dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText } });
       dispatch({ type: 'APPLY_SPLIT', items: itemsWithVoiceRef });
     };
 
@@ -805,9 +805,9 @@ export function TTSSynthesis({
       const hasVoiceLock = segHasOverride(seg);
       // Find role whenever segment has one
       const currentRole = seg.role_id ? roles.find(r => r.id === seg.role_id) : undefined;
-      // Global params (chapter defaults) — old flat format from buildCurrentParams
-      const gp = buildCurrentParams() as unknown as Record<string, unknown>;
-      // Role voice params — new EngineParams format
+      // Global params — build from engine state, convert EngineParams to flat for legacy resolve()
+      const gp = roleVoiceToFlatParams(buildCurrentParams());
+      // Role voice params — EngineParams format
       const rv = currentRole?.voice;
 
       // Resolve effective engine

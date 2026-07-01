@@ -31,7 +31,7 @@ def _seed(db_session, tmp_path, monkeypatch):
         id="p1", name="T", schema_version=2,
         chapters=[{
             "id": "c1", "position": 0, "name": "第一章", "engine": "edge_tts",
-            "default_params": {"engine": "edge_tts", "voice_id": "v1"},
+            "voice": {"engine": "edge_tts", "voice_id": "v1"},
             "split_config": {"delimiters": ["。"], "mode": "rule"},
             "segments": [{
                 "id": "s1", "position": 0, "text": "hello",
@@ -50,7 +50,7 @@ def test_synthesize_segment_with_edge_tts(db_session, tmp_path, monkeypatch):
         pytest.skip("ffmpeg not installed")
     _seed(db_session, tmp_path, monkeypatch)
     seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
-    seg.chapter.default_params = {"engine": "edge_tts", "voice_id": "v1"}
+    seg.chapter.voice = {"engine": "edge_tts", "voice_id": "v1"}
     db_session.commit()
 
     fake_audio = _silent_wav_bytes()
@@ -155,7 +155,7 @@ def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkey
             "position": 0,
             "name": "第一章",
             "engine": "edge_tts",
-            "default_params": {"engine": "edge_tts", "edge_voice": "zh-CN-YunjianNeural"},
+            "voice": {"engine": "edge_tts", "edge_voice": "zh-CN-YunjianNeural"},
             "split_config": {"delimiters": ["。"], "mode": "rule"},
             "segments": [{
                 "id": "s1",

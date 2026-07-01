@@ -23,7 +23,7 @@ def _seed_project(pid: str = "p1", name: str = "Test") -> ProjectIn:
         chapters=[
             {
                 "id": f"c-{pid}", "position": 0, "name": "第一章", "engine": "edge_tts",
-                "default_params": {"engine": "edge_tts"},
+                "voice": {"engine": "edge_tts"},
                 "split_config": {"delimiters": ["。"], "mode": "rule"},
                 "segments": [
                     {

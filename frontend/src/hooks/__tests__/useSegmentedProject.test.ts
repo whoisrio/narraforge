@@ -6,9 +6,9 @@ import { segmentedReducer, createInitialProject, migrateV1 } from '../useSegment
 function makeChapter(overrides: Partial<Chapter> = {}): Chapter {
   const now = new Date().toISOString();
   return {
-    id: 'ch1', name: '第一章', engine: 'cosyvoice',
+    id: 'ch1', name: '第一章',
+    voice: { engine: 'cosyvoice', voice_id: '', speed: 1, volume: 80, pitch: 1, language: 'Chinese' },
     segments: [],
-    default_params: { engine: 'cosyvoice' },
     split_config: { delimiters: ['，', '。'], mode: 'rule' },
     created_at: now, updated_at: now,
     ...overrides,
@@ -241,11 +241,10 @@ describe('segmentedReducer', () => {
   it('migrateV1 converts old project to v2 with chapters', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const v1: any = {
+      voice: { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' },
       schema_version: 1, id: 'old', name: 'Old Project',
       segments: [{ id: 's1', text: 'hello', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' }],
-      default_params: { engine: 'cosyvoice' },
       split_config: { delimiters: ['，'], mode: 'rule' },
-      layout: 'vertical', engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural',
       created_at: '', updated_at: '',
     };
     const migrated = migrateV1(v1);
@@ -253,15 +252,14 @@ describe('segmentedReducer', () => {
     expect(migrated.chapters).toHaveLength(1);
     expect(migrated.chapters[0].segments).toHaveLength(1);
     expect(migrated.chapters[0].segments[0].text).toBe('hello');
-    expect(migrated.chapters[0].engine).toBe('edge_tts');
-    expect(migrated.chapters[0].edge_voice).toBe('zh-CN-XiaoxiaoNeural');
+    expect(migrated.chapters[0].voice.engine).toBe('edge_tts');
+    expect(migrated.chapters[0].voice.voice).toBe('zh-CN-XiaoxiaoNeural');
     expect(migrated.active_chapter_id).toBe(migrated.chapters[0].id);
   });
 
   it('LOAD_PROJECT migrates v1 data automatically', () => {
     const v1: RawSegmentedProject = {
       schema_version: 1, id: 'old', name: 'Old',
-      segments: [], default_params: { engine: 'cosyvoice' },
       split_config: { delimiters: ['，'], mode: 'rule' },
       layout: 'vertical', created_at: '', updated_at: '',
     };

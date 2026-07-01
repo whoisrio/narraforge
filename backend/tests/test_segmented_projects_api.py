@@ -19,7 +19,7 @@ def _payload(pid: str = "p1") -> dict:
         "id": pid, "name": "Test", "schema_version": 2, "layout": "vertical",
         "chapters": [{
             "id": "c1", "position": 0, "name": "第一章", "engine": "edge_tts",
-            "default_params": {"engine": "edge_tts", "voice_id": "v1"},
+            "voice": {"engine": "edge_tts", "voice_id": "v1"},
             "split_config": {"delimiters": ["。"], "mode": "rule"},
             "original_text": "全文",
             "segments": [{
@@ -60,7 +60,7 @@ def test_list_projects_includes_card_summary_stats(client, tmp_path, monkeypatch
     payload = _payload("p-stats")
     payload["chapters"].append({
         "id": "c2", "position": 1, "name": "第二章", "engine": "edge_tts",
-        "default_params": {"engine": "edge_tts", "voice_id": "v1"},
+        "voice": {"engine": "edge_tts", "voice_id": "v1"},
         "split_config": {"delimiters": ["。"], "mode": "rule"},
         "segments": [
             {"id": "s2", "position": 0, "text": "ready", "voice": {"source": "chapter"},

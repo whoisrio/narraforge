@@ -98,8 +98,8 @@ describe('ProjectShell', () => {
         locale="zh-CN"
         chapterName="第一章"
         chapters={[
-          { id: 'ch-1', name: '第一章', segments: [], default_params: { engine: 'edge_tts' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
-          { id: 'ch-2', name: '第二章', segments: [], default_params: { engine: 'edge_tts' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+          { id: 'ch-1', name: '第一章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+          { id: 'ch-2', name: '第二章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
         ]}
         activeChapterId="ch-1"
         onSelectChapter={onSelectChapter}

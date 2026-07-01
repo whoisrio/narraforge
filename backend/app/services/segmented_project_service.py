@@ -115,38 +115,45 @@ def project_to_summary(p: SegmentedProject) -> ProjectSummary:
     )
 
 
-# Keys stored inside default_params that correspond to frontend chapter-level settings
-_CHAPTER_META_KEYS = (
-    "voice_id", "edge_voice", "edge_rate", "edge_volume",
-    "mimo_mode", "mimo_preset_voice", "mimo_instruction", "mimo_clone_voice_id",
-    "language", "speed", "volume", "pitch", "panel_open",
-)
+def _chapter_voice_to_api(voice: dict[str, Any]) -> dict[str, Any]:
+    """Return chapter voice as API-ready EngineParams dict."""
+    return dict(voice or {})
 
 
-def _extract_chapter_meta(default_params: dict[str, Any]) -> dict[str, Any]:
-    """Pull frontend chapter-level settings out of default_params into top-level fields."""
-    out: dict[str, Any] = {}
-    for k in _CHAPTER_META_KEYS:
-        if k in default_params:
-            out[k] = default_params[k]
-    return out
-
-
-def _merge_chapter_meta_to_params(ch_in: ChapterIn) -> dict[str, Any]:
-    """Merge frontend chapter-level fields into default_params for storage."""
-    dp = dict(ch_in.default_params or {})
-    for k in _CHAPTER_META_KEYS:
-        v = getattr(ch_in, k, None)
-        if v is not None:
-            dp[k] = v
-    return dp
+def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
+    """Convert EngineParams to flat dict for synthesis parameter merge."""
+    engine = voice.get("engine", "edge_tts")
+    flat: dict[str, Any] = {"engine": engine}
+    if engine == "edge_tts":
+        flat["edge_voice"] = voice.get("voice", "")
+        flat["edge_rate"] = voice.get("rate", "+0%")
+        flat["edge_volume"] = voice.get("volume", "+0%")
+    elif engine == "cosyvoice":
+        flat["voice_id"] = voice.get("voice_id", "")
+        flat["speed"] = voice.get("speed", 1.0)
+        flat["volume"] = voice.get("volume", 80)
+        flat["pitch"] = voice.get("pitch", 1.0)
+        flat["language"] = voice.get("language", "Chinese")
+        flat["instruction"] = voice.get("instruction", "")
+    elif engine == "mimo_tts":
+        flat["mimo_mode"] = voice.get("mode", "preset")
+        flat["mimo_preset_voice"] = voice.get("voice_id", "")
+        flat["mimo_clone_voice_id"] = voice.get("voice_id", "")
+        flat["mimo_instruction"] = voice.get("instruction", "")
+        flat["mimo_voice_description"] = voice.get("voice_description", "")
+    elif engine == "voxcpm":
+        flat["voxcpm_mode"] = voice.get("mode", "clone")
+        flat["voice_id"] = voice.get("voice_id", "")
+        flat["voxcpm_style_control"] = voice.get("style_control", "")
+        flat["voxcpm_cfg_value"] = voice.get("cfg_value", 2.0)
+        flat["voxcpm_inference_timesteps"] = voice.get("inference_timesteps", 10)
+    return flat
 
 
 def project_to_detail(p: SegmentedProject) -> ProjectDetail:
     chapters = []
     for ch in p.chapters:
-        dp = dict(ch.default_params or {})
-        meta = _extract_chapter_meta(dp)
+        voice = getattr(ch, "voice", None) or {}
         segs = [
             SegmentIn(
                 id=s.id, position=s.position, text=s.text,
@@ -166,15 +173,13 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         chapters.append(
             ChapterIn(
                 id=ch.id, position=ch.position, name=ch.name,
-                engine=ch.engine,
-                default_params=dp,
+                voice=voice,
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
                 design_title=getattr(ch, "design_title", None),
                 created_at=_to_iso(ch.created_at),
                 updated_at=_to_iso(ch.updated_at),
                 segments=segs,
-                **meta,
             )
         )
     return ProjectDetail(
@@ -267,8 +272,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             db.add(ch)
         ch.position = ch_in.position if ch_in.position is not None else ch_idx
         ch.name = ch_in.name
-        ch.engine = ch_in.engine
-        ch.default_params = _merge_chapter_meta_to_params(ch_in)
+        ch.voice = ch_in.voice or {}
         ch.split_config = ch_in.split_config or {}
         ch.original_text = ch_in.original_text
         setattr(ch, "design_title", ch_in.design_title)
@@ -533,7 +537,7 @@ def synthesize_segment(
         if role and role.voice:
             role_params = role.voice.get("params", {}) if isinstance(role.voice, dict) else {}
 
-    effective = _merge_params(chapter.default_params, role_params, request_params)
+    effective = _merge_params(_flatten_voice_for_synthesis(chapter.voice or {}), role_params, request_params)
     logger.info(f"[synthesize_segment] role_params={role_params}, request_params={request_params}, merged engine={effective.get('engine')}, mimo_mode={effective.get('mimo_mode')}")
 
     # Preserve role_id and segment_kind for reproducibility
