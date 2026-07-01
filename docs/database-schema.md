@@ -2,7 +2,7 @@
 
 **Project:** NarraForge
 **ORM:** SQLAlchemy (declarative base)
-**Updated:** 2026-06-30 (schema v3 — data model refactor)
+**Updated:** 2026-07-01 (schema v3.1 — Phase 1+2: remove dead snapshot, unify chapter voice)
 
 ---
 
@@ -175,7 +175,6 @@ Segmented TTS project containers (three-tier: project -> chapter -> segment).
 | `remotion_project_path` | String | Yes | `NULL` | Associated Remotion project path |
 | `source_document` | Text | Yes | `NULL` | Source document markdown content |
 | `default_narrator_role_id` | String | Yes | `NULL` | **FK** -> `roles.id` (SET NULL). Default narrator role |
-| `default_narrator_snapshot` | JSON | Yes | `NULL` | Snapshot of narrator role for reproducibility |
 | `configs` | JSON | Yes | `NULL` | Project-level configuration (split_voice_mode, etc.) |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update timestamp (auto-updates) |
@@ -192,8 +191,7 @@ Chapters within a segmented project. Each chapter groups segments with optional 
 | `project_id` | String | No | — | **FK** -> `segmented_projects.id` (CASCADE delete) |
 | `position` | Integer | No | — | Ordering position within project |
 | `name` | String | No | — | Chapter name |
-| `engine` | String | Yes | `NULL` | TTS engine override |
-| `default_params` | JSON | No | `{}` | Default TTS parameters for this chapter |
+| `voice` | JSON | No | `{}` | TTS voice configuration (EngineParams discriminated union) |
 | `split_config` | JSON | No | `{}` | Text splitting configuration |
 | `original_text` | String | Yes | `NULL` | Chapter-level original text |
 | `design_title` | String | Yes | `NULL` | Design/display title |
@@ -378,27 +376,6 @@ Default: `[]`
 
 ---
 
-### `segmented_projects.default_narrator_snapshot` — Role snapshot (deprecated)
-
-A frozen copy of the narrator role at assignment time. Fields are the legacy flat format.
-
-```json
-{
-  "id": "role-1782179309449",
-  "name": "林夏",
-  "avatar": "",
-  "description": "",
-  "default_engine": "edge_tts",
-  "default_voice": "zh-CN-XiaoxiaoNeural",
-  "default_engine_params": { "engine": "edge_tts" },
-  "favorite_styles": []
-}
-```
-
-> **Note:** This field is deprecated in V3. Use `roles.voice` for the source of truth.
-
----
-
 ### `segmented_projects.configs` — Project-level settings
 
 ```json
@@ -411,28 +388,66 @@ A frozen copy of the narrator role at assignment time. Fields are the legacy fla
 
 ---
 
-### `segmented_project_chapters.default_params` — Chapter-level TTS defaults (flat SegmentEngineParams)
+### `segmented_project_chapters.voice` — Chapter-level voice defaults (EngineParams)
 
+Stores the chapter-level TTS configuration in the same EngineParams discriminated union format as `roles.voice`. Narration segments without custom voice inherit this config.
+
+**Edge-TTS:**
 ```json
 {
   "engine": "edge_tts",
-  "edge_voice": "zh-CN-YunxiNeural",
-  "edge_rate": 10,
-  "edge_volume": 0,
-  "voice_id": "",
-  "mimo_mode": "preset",
-  "mimo_preset_voice": "冰糖",
-  "mimo_instruction": "",
-  "mimo_clone_voice_id": "",
-  "language": "Chinese",
-  "speed": 1.0,
-  "volume": 80,
-  "pitch": 1.0,
-  "panel_open": true
+  "voice": "zh-CN-YunxiNeural",
+  "rate": "+10%",
+  "volume": "+0%"
 }
 ```
 
-> **Note:** Uses legacy flat field names (`edge_voice`, `mimo_preset_voice`, etc.). These are the global defaults that segments without custom voice inherit.
+**CosyVoice:**
+```json
+{
+  "engine": "cosyvoice",
+  "voice_id": "cosyvoice-v3.5-plus-bailian-xxxxxx",
+  "speed": 1.0,
+  "volume": 80,
+  "pitch": 1.0,
+  "language": "Chinese",
+  "instruction": ""
+}
+```
+
+**MiMo (preset):**
+```json
+{
+  "engine": "mimo_tts",
+  "mode": "preset",
+  "voice_id": "冰糖",
+  "instruction": ""
+}
+```
+
+**MiMo (voiceclone):**
+```json
+{
+  "engine": "mimo_tts",
+  "mode": "voiceclone",
+  "voice_id": "a645dec1-73b9-42d4-8f21-ed164eb668e8",
+  "instruction": ""
+}
+```
+
+**VoxCPM (clone):**
+```json
+{
+  "engine": "voxcpm",
+  "mode": "clone",
+  "voice_id": "voxcpm-xxxx",
+  "style_control": "",
+  "cfg_value": 2.0,
+  "inference_timesteps": 10
+}
+```
+
+> **Note:** Replaces the old `engine` + `default_params` (SegmentEngineParams kitchen sink) columns. This is the same format as `roles.voice`.
 
 ---
 
