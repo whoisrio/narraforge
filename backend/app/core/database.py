@@ -283,6 +283,8 @@ def init_db():
         _migrate_voice_profile(conn)
         # P9005: add project_id to roles table
         _migrate_add_role_project_id(conn)
+        # P9006: fix voice_type/model for voice_profiles (data quality patch)
+        _migrate_fix_voice_type(conn)
 
 
 def _migrate_v3_reduce_schema(conn):
@@ -711,6 +713,56 @@ def _migrate_add_role_project_id(conn):
         "REFERENCES segmented_projects(id) ON DELETE SET NULL"
     ))
     logger.info("[migration] P9005: added project_id column to roles")
+
+
+def _migrate_fix_voice_type(conn):
+    """P9006: fix voice_type and model for voice_profiles (data from old engine column)."""
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Only fix voices with empty or missing model
+    rows = conn.execute(text(
+        "SELECT id, name FROM voice_profiles WHERE voice IS NULL "
+        "OR json_extract(voice, '$.model') IS NULL "
+        "OR json_extract(voice, '$.model') = ''"
+    )).fetchall()
+
+    if not rows:
+        logger.info("[migration] P9006: all voice models populated, skipping")
+        return
+
+    model_by_name = {
+        "voice_cosyvoice": "cosyvoice",
+        "云建": "edge_tts",
+    }
+    voice_type_by_name = {
+        "小美": "design", "小红": "design", "小明": "design",
+        "年轻女性": "design", "播音主持": "design", "中年女性": "design", "角色6": "design",
+    }
+
+    fixed = 0
+    for row in rows:
+        vp_id, name = row
+        model = ""
+        for prefix, m in model_by_name.items():
+            if name.startswith(prefix):
+                model = m
+                break
+        if not model:
+            if name in ("小红", "小明"):
+                model = "voxcpm"
+            else:
+                model = "mimo_tts"
+
+        vt = voice_type_by_name.get(name, "clone")
+        conn.execute(text("UPDATE voice_profiles SET voice = :v WHERE id = :id"), {
+            "v": json.dumps({"model": model, "voice_type": vt}),
+            "id": vp_id,
+        })
+        fixed += 1
+
+    logger.info("[migration] P9006: fixed %d voice models/types", fixed)
 
 
 def _fix_role_source_segments(conn, logger):
