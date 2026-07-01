@@ -591,9 +591,11 @@ function VoiceRoleEditor({
       const audio = new Audio(src);
       await audio.play();
 
-      // Save to cloned_preview_path (skip if voice not yet persisted)
+      // Save preview audio to VoiceProfile (only for clone/design voices with a UUID voice_id;
+      // MiMo preset voice_id is a name like "白桦", not a VoiceProfile UUID)
       const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : '') || '';
-      if (voiceId) {
+      const isPresetVoice = vox?.engine === 'mimo_tts' && ((vox as MiMoParams).mode ?? 'preset') === 'preset';
+      if (voiceId && !isPresetVoice) {
         const saveResult = await voiceApi.savePreviewAudio(voiceId, base64, format);
         if (!saveResult.preview_audio_path) throw new Error('后端未返回试听文件路径');
       }
