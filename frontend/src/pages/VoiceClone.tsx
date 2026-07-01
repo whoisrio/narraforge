@@ -139,7 +139,14 @@ export function VoiceClone() {
       setDesignBrief((params.voice_description as string) || voice.description || '');
       setDesignName(voice.name || '');
       setActivePanel('design');
-      setDesignPhase('idle');
+      setDesignPhase('previewed');
+      // Load existing preview audio
+      const previewUrl = voice.preview_audio_url || voice.audio_url;
+      if (previewUrl) {
+        setDesignPreview({ audio_url: previewUrl, audio_format: 'wav' } as TTSResult);
+      } else {
+        setDesignPreview(null);
+      }
       return;
     }
 
