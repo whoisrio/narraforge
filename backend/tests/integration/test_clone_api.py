@@ -77,7 +77,7 @@ class TestCloneAPI:
                 "is_cloned": True,
                 "qwen_voice_id": "cloned_123",
                 "cloned_at": datetime.now(timezone.utc).isoformat(),
-                "clone_engine": "qwen",
+                "type": "qwen",
             },
             created_at=datetime.now(timezone.utc)
         )
@@ -95,13 +95,13 @@ class TestCloneAPI:
         voice1_data = next(v for v in data if v["name"] == "Voice 1")
         voice2_data = next(v for v in data if v["name"] == "Voice 2")
 
-        assert voice1_data["is_cloned"] is False
-        assert voice1_data["qwen_voice_id"] is None
-        assert voice1_data["cloned_at"] is None
+        assert voice1_data["engine"]["is_cloned"] is False
+        assert voice1_data["engine"]["qwen_voice_id"] is None
+        assert voice1_data["engine"]["cloned_at"] is None
 
-        assert voice2_data["is_cloned"] is True
-        assert voice2_data["qwen_voice_id"] == "cloned_123"
-        assert voice2_data["cloned_at"] is not None
+        assert voice2_data["engine"]["is_cloned"] is True
+        assert voice2_data["engine"]["qwen_voice_id"] == "cloned_123"
+        assert voice2_data["engine"]["cloned_at"] is not None
 
     def test_get_voice_not_found(self, client: TestClient):
         response = client.get("/api/clone/nonexistent_voice_id")
@@ -121,7 +121,7 @@ class TestCloneAPI:
                 "is_cloned": True,
                 "qwen_voice_id": "cloned_456",
                 "cloned_at": datetime.now(timezone.utc).isoformat(),
-                "clone_engine": "qwen",
+                "type": "qwen",
             },
             created_at=datetime.now(timezone.utc)
         )
@@ -136,9 +136,9 @@ class TestCloneAPI:
         assert data["id"] == voice_id
         assert data["name"] == "Test Voice"
         assert data["audio_url"] == f"/api/clone/audio/{voice_id}?field=source"
-        assert data["is_cloned"] is True
-        assert data["qwen_voice_id"] == "cloned_456"
-        assert data["cloned_at"] is not None
+        assert data["engine"]["is_cloned"] is True
+        assert data["engine"]["qwen_voice_id"] == "cloned_456"
+        assert data["engine"]["cloned_at"] is not None
         assert data["created_at"] is not None
 
     def test_delete_voice_success(self, client: TestClient, db_session):
@@ -221,15 +221,15 @@ class TestCloneAPI:
 
         assert data["id"] == voice_id
         assert data["name"] == "Cloned Voice Name"
-        assert data["qwen_voice_id"] == "qwen_cloned_123"
-        assert data["role"] == "custom"
-        assert data["is_cloned"] is True
-        assert data["cloned_at"] is not None
+        assert data["engine"]["qwen_voice_id"] == "qwen_cloned_123"
+        assert data["engine"]["type"] == "qwen"
+        assert data["engine"]["is_cloned"] is True
+        assert data["engine"]["cloned_at"] is not None
 
         # 验证 voices_engine 和 engine_params 正确写入
-        assert data["voices_engine"]["type"] == "clone"
-        assert data["voices_engine"]["engine"]["type"] == "CosyVoice"
-        ve_params = data["voices_engine"]["parameters"]
+        assert data["engine"]["type"] == "qwen"
+        assert data["engine"]["type"] == "qwen"
+        ve_params = data["engine_params"]
         assert ve_params["speed"] == 1
         assert ve_params["language"] == "Chinese"
 
@@ -296,9 +296,9 @@ class TestCloneAPI:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["voices_engine"]["engine"]["type"] == "Mimo"
-        assert data["voices_engine"]["engine"]["sub_type"] == "mimo-clone"
-        assert data["voices_engine"]["parameters"]["mimo_instruction"] == "温柔"
+        assert data["engine"]["type"] == "mimo"
+        assert data["engine"]["type"] == "mimo"
+        assert data["engine_params"]["mimo_instruction"] == "温柔"
 
         # 验证 DB 直接读取
         db_session.expire_all()
@@ -327,9 +327,9 @@ class TestCloneAPI:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["voices_engine"]["engine"]["type"] == "VoxCpm"
-        assert data["voices_engine"]["engine"]["sub_type"] == "voxcpm-clone"
-        ve_params = data["voices_engine"]["parameters"]
+        assert data["engine"]["type"] == "voxcpm"
+        assert data["engine"]["type"] == "voxcpm"
+        ve_params = data["engine_params"]
         assert ve_params["voxcpm_mode"] == "clone"
         assert ve_params["cfg_value"] == 3
         assert ve_params["inference_timesteps"] == 15
@@ -363,8 +363,8 @@ class TestCloneAPI:
         assert response.status_code == 200
         data = response.json()
 
-        assert data["voices_engine"]["engine"]["sub_type"] == "voxcpm-ultimate"
-        assert data["voices_engine"]["parameters"]["voxcpm_mode"] == "ultimate"
+        assert data["engine"]["type"] == "voxcpm"
+        assert data["engine_params"]["voxcpm_mode"] == "ultimate"
 
         if os.path.exists(audio_path):
             os.unlink(audio_path)

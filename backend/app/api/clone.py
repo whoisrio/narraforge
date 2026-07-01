@@ -343,9 +343,7 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         engine["qwen_voice_id"] = result["voice_id"]
         engine["is_cloned"] = True
         engine["cloned_at"] = utcnow().isoformat()
-        engine["clone_engine"] = "qwen"
-        engine["type"] = "clone"
-        engine["engine_type"] = "CosyVoice"
+        engine["type"] = "qwen"
         if audio_path_for_clone and audio_path_for_clone != engine.get("external_audio_url"):
             engine["external_audio_url"] = audio_path_for_clone
         voice.engine = engine
@@ -389,11 +387,8 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
         engine = dict(voice.engine or {})
         engine["is_cloned"] = True
         engine["cloned_at"] = utcnow().isoformat()
-        engine["clone_engine"] = "mimo"
         engine["mimo_voice_id"] = "mimo_voiceclone"
-        engine["type"] = "clone"
-        engine["engine_type"] = "Mimo"
-        engine["engine_sub_type"] = "mimo-clone"
+        engine["type"] = "mimo"
         voice.engine = engine
         voice.engine_params = request.engine_params or {}
 
@@ -437,10 +432,7 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
         engine = dict(voice.engine or {})
         engine["is_cloned"] = True
         engine["cloned_at"] = utcnow().isoformat()
-        engine["clone_engine"] = "voxcpm"
-        engine["type"] = "clone"
-        engine["engine_type"] = "VoxCpm"
-        engine["engine_sub_type"] = "voxcpm-ultimate" if voxcpm_mode == "ultimate" else "voxcpm-clone"
+        engine["type"] = "voxcpm"
         voice.engine = engine
         voice.engine_params = engine_params
 
@@ -523,7 +515,6 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
         project_id=request.project_id,
         engine_params=engine_params,
         engine={
-            "clone_engine": request.engine,
             "is_cloned": True,
             "cloned_at": utcnow().isoformat(),
             "type": "design" if request.engine != "preset" else "clone",
@@ -665,7 +656,6 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                         "qwen_voice_id": voice_id,
                         "is_cloned": True,
                         "cloned_at": utcnow().isoformat(),
-                        "clone_engine": "qwen",
                     },
                     source_audio_path=None,  # 从 Qwen 同步的没有本地音频文件
                 )
@@ -779,9 +769,9 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    # Qwen 声音需要删除云端音色；MiMo 声音无云端数据，跳过
+    # Qwen 声音需要删除云端音色；MiMo/VoxCPM 声音无云端数据，跳过
     engine = voice.engine or {}
-    if engine.get("clone_engine") != "mimo" and engine.get("qwen_voice_id"):
+    if engine.get("type") == "qwen" and engine.get("qwen_voice_id"):
         try:
             tts_service = await get_tts_service(db)
             await tts_service.delete_cloned_voice(engine["qwen_voice_id"])

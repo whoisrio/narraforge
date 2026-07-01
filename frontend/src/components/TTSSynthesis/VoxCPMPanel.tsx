@@ -129,7 +129,7 @@ export function VoxCPMPanel({
     if (mode !== 'ultimate' || !selectedVoiceId) return;
     const voice = voices.find(v => v.id === selectedVoiceId);
     if (!voice) return;
-    const params = voice.voices_engine?.parameters as Record<string, unknown> | undefined;
+    const params = voice.engine_params as Record<string, unknown> | undefined;
     const auditionText = typeof params?.audition_text === 'string' ? params.audition_text : '';
     const prompt = auditionText || voice.prompt_text || '';
     if (prompt) {

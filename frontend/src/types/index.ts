@@ -24,24 +24,9 @@ export interface VoiceProfile {
   project_id?: string | null;
   role_kind?: string;
   engine?: VoiceProfileEngine;
+  engine_params?: Record<string, unknown>;
   created_at: string;
   updated_at?: string;
-
-  // ── V3 兼容层（后续移除）──
-  /** @deprecated Use engine?.qwen_voice_id */
-  qwen_voice_id?: string;
-  /** @deprecated Use engine?.is_cloned */
-  is_cloned?: boolean;
-  /** @deprecated Use engine?.cloned_at */
-  cloned_at?: string;
-  /** @deprecated Use engine?.type */
-  clone_engine?: 'qwen' | 'mimo' | 'voxcpm';
-  /** @deprecated Use engine?.prompt_text */
-  prompt_text?: string;
-  /** @deprecated Use engine */
-  voices_engine?: VoicesEngine | null;
-  /** @deprecated No direct replacement */
-  role?: string;
 }
 
 // ── V3 Engine params (discriminated union) ──

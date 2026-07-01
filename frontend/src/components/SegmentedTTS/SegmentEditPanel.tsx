@@ -287,7 +287,7 @@ export function SegmentEditPanel({
                   <select className={styles.paramSelect} value={eff.voice_id || ''}
                     onChange={e => handleParamChange('voice_id', e.target.value)}>
                     {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
-                      {voices.filter(v => v.voices_engine?.type === 'qwen').map(v => {
+                      {voices.filter(v => v.engine?.type === 'qwen').map(v => {
                         const key = v.qwen_voice_id || v.id;
                         return <option key={key} value={key}>⭐ {v.name || key}</option>;
                       })}
@@ -358,7 +358,7 @@ export function SegmentEditPanel({
                       <select className={styles.paramSelect} value={eff.mimo_clone_voice_id || ''}
                         onChange={e => handleParamChange('mimo_clone_voice_id', e.target.value)}>
                         {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
-                        {voices.filter(v => v.voices_engine?.type === 'mimo' && v.id).map(v => (
+                        {voices.filter(v => v.engine?.type === 'mimo' && v.id).map(v => (
                           <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
                         ))}
                       </select>
@@ -384,7 +384,7 @@ export function SegmentEditPanel({
                     <select className={styles.paramSelect} value={eff.voice_id || ''}
                       onChange={e => handleParamChange('voice_id', e.target.value)}>
                       {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
-                      {voices.filter(v => v.voices_engine?.type === 'voxcpm').map(v => (
+                      {voices.filter(v => v.engine?.type === 'voxcpm').map(v => (
                           <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
                         ))}
                     </select>

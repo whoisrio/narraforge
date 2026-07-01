@@ -147,9 +147,9 @@ class TestTTSAPI:
             name="Narrator",
             source_audio_path="/tmp/narrator.wav",
             engine={
+                "type": "qwen",
                 "is_cloned": True,
                 "qwen_voice_id": "cosyvoice-v3-narrator",
-                "clone_engine": "qwen",
             },
         )
         db_session.add(voice)
@@ -160,8 +160,8 @@ class TestTTSAPI:
         voices = response.json()["voices"]
         assert len(voices) == 1
         assert voices[0]["id"] == "voice-row-1"
-        assert voices[0]["qwen_voice_id"] == "cosyvoice-v3-narrator"
-        assert voices[0]["clone_engine"] == "qwen"
+        assert voices[0]["engine"]["qwen_voice_id"] == "cosyvoice-v3-narrator"
+        assert voices[0]["engine"]["type"] == "qwen"
 
     def test_batch_synthesize_requires_voice_id(self, client: TestClient):
         response = client.post("/api/tts/batch", json={

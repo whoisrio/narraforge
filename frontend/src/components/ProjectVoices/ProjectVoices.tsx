@@ -290,7 +290,7 @@ function VoiceRoleEditor({
   }, []);
 
   // 当已保存的角色有 clone voice id 时，按 ID 查询对应的 VoiceProfile
-  // 从 voices_engine 还原 UI 状态（音色来源分类、引擎、参数）
+  // 从 engine 还原 UI 状态（音色来源分类、引擎、参数）
   const voiceEngineAppliedRef = useRef(false);
   useEffect(() => {
     const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : '') || '';
@@ -307,39 +307,29 @@ function VoiceRoleEditor({
       setCloneVoiceDescription(profile.description ?? '');
       setClonePromptText(profile.prompt_text ?? '');
 
-      const ve = profile.voices_engine;
+      const ve = profile.engine;
       if (!ve || voiceEngineAppliedRef.current) return;
       voiceEngineAppliedRef.current = true;
 
-      // 根据 voices_engine 还原音色来源分类和引擎选择
-      if (ve.type === 'design' && ve.engine) {
-        setVoiceCategory('design');
-        const desc = (ve.parameters.voice_description as string) ?? profile.description ?? '';
-        const instr = (ve.parameters.instruction as string) ?? '';
-        if (ve.engine.sub_type?.startsWith('mimo')) {
-          setDesignSubEngine('mimo');
-          setParams({ mimo_voice_description: desc, mimo_instruction: instr });
-        } else if (ve.engine.sub_type?.startsWith('voxcpm')) {
-          setDesignSubEngine('voxcpm');
-          setParams({ voxcpm_voice_description: desc, voxcpm_style_control: instr });
-        }
-        setDesignPhase('confirmed');
-        setDesignProfileId(profile.id);
-      } else if (ve.type === 'clone' && ve.engine) {
+      const veType = ve.type || '';
+      if (veType === 'qwen') {
         setVoiceCategory('clone');
-        if (ve.engine.type === 'CosyVoice') setCloneSubEngine('cosyvoice');
-        else if (ve.engine.type === 'VoxCpm') setCloneSubEngine('voxcpm');
-        else setCloneSubEngine('mimo');
-        if (ve.engine.sub_type === 'voxcpm-ultimate') setVoxcpmCloneMode('ultimate');
-        const savedMethod = ve.parameters.input_method as string | undefined;
-        if (savedMethod === 'upload' || savedMethod === 'url') {
-          setCloneInputMethod(savedMethod as 'upload' | 'url');
+        setCloneSubEngine('cosyvoice');
+      } else if (veType === 'mimo') {
+        setVoiceCategory('clone');
+        setCloneSubEngine('mimo');
+      } else if (veType === 'voxcpm') {
+        setVoiceCategory('clone');
+        setCloneSubEngine('voxcpm');
+      } else if (veType === 'preset') {
+        setVoiceCategory('preset');
+      } else if (veType === 'design') {
+        setVoiceCategory('design');
+        // Infer MiMo vs VoxCPM from params
+        if (ve.qwen_voice_id) {
+          setDesignSubEngine('mimo');  // only MiMo has qwen_voice_id for design
         } else {
-          setCloneInputMethod('record');
-        }
-        // 将 input_method 同步到角色 params，列表展示用
-        if (savedMethod === 'record' || savedMethod === 'upload' || savedMethod === 'url') {
-          setParams({ input_method: savedMethod });
+          setDesignSubEngine('mimo');  // default
         }
       }
     }).catch(() => {
@@ -496,7 +486,7 @@ function VoiceRoleEditor({
       } else if (engine === 'mimo') {
         ttsResult = await mimoTtsApi.synthesizeVoiceClone({ text: previewText, voice_id: voice.id, format: 'wav' });
       } else {
-        const voxcpmMode = voice.voices_engine?.parameters?.voxcpm_mode as string | undefined;
+        const voxcpmMode = voice.engine_params?.voxcpm_mode as string | undefined;
         if (voxcpmMode === 'ultimate') {
           ttsResult = await voxcpmApi.ultimateClone({ text: previewText, voice_id: voice.id, prompt_text: voice.prompt_text || undefined, format: 'wav' });
         } else {

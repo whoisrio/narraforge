@@ -37,7 +37,7 @@ function engineLabel(profile: VoiceProfile): string {
 
 /** 输入方式标签 */
 function inputMethodLabel(profile: VoiceProfile): string {
-  const method = profile.voices_engine?.parameters?.input_method as string | undefined;
+  const method = profile.engine_params?.input_method as string | undefined;
   if (method === 'record') return t('voiceClone.record');
   if (method === 'upload') return t('voiceClone.upload');
   if (method === 'url') return t('voiceClone.url');

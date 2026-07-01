@@ -218,9 +218,8 @@ describe('ProjectVoices – clone preview validation', () => {
       audio_url: '',
       source_audio_url: '',
       cloned_preview_url: '',
-      is_cloned: true,
-      clone_engine: 'mimo',
-      voices_engine: { type: 'clone', engine: { type: 'Mimo', sub_type: 'mimo-clone' }, parameters: {} },
+      engine: { type: 'mimo', is_cloned: true },
+      engine_params: {},
       created_at: '2026-01-01T00:00:00.000Z',
     }]);
 

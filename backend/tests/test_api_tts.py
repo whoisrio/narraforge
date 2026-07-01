@@ -17,7 +17,7 @@ def test_list_cloned_qwen_voices(client, db_session):
         engine={
             "is_cloned": True,
             "qwen_voice_id": "cosyvoice-v3-narrator",
-            "clone_engine": "qwen",
+            "type": "qwen",
         },
     )
     db_session.add(voice)
@@ -28,7 +28,7 @@ def test_list_cloned_qwen_voices(client, db_session):
     voices = response.json()["voices"]
     assert len(voices) == 1
     assert voices[0]["id"] == "v1"
-    assert voices[0]["qwen_voice_id"] == "cosyvoice-v3-narrator"
+    assert voices[0]["engine"]["qwen_voice_id"] == "cosyvoice-v3-narrator"
 
 
 def test_list_edge_voices(client, mock_edge_tts_service):
