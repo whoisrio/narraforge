@@ -129,9 +129,10 @@ export function VoxCPMPanel({
     if (mode !== 'ultimate' || !selectedVoiceId) return;
     const voice = voices.find(v => v.id === selectedVoiceId);
     if (!voice) return;
-    const params = voice.voice_params as Record<string, unknown> | undefined;
-    const auditionText = typeof params?.audition_text === 'string' ? params.audition_text : '';
-    const prompt = auditionText || '';
+    const auditionText = typeof voice.preview?.audition_text === 'string' ? voice.preview.audition_text : '';
+    const params = (voice.voice_params?.[voice.voice?.model || '']?.params || {}) as Record<string, unknown>;
+    const promptText = typeof params?.prompt_text === 'string' ? params.prompt_text : '';
+    const prompt = auditionText || promptText || '';
     if (prompt) {
       onPromptTextChange(prompt);
     }

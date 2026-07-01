@@ -65,7 +65,7 @@ describe('VoiceClone Page', () => {
         name: '上传声音',
         audio_url: '/api/clone/audio/voice-upload',
         voice: { model: 'mimo_tts', voice_type: 'clone' },
-        voice_params: { input_method: 'upload', mimo_tts: { params: {} } },
+        voice_params: { mimo_tts: { params: { input_method: 'upload' } } },
         created_at: new Date().toISOString(),
       },
     ];

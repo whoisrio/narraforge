@@ -39,11 +39,20 @@ function engineLabel(profile: VoiceProfile): string {
 
 /** 输入方式标签 */
 function inputMethodLabel(profile: VoiceProfile): string {
-  const method = profile.voice_params?.input_method as string | undefined;
+  const model = profile.voice?.model || '';
+  const params = (profile.voice_params?.[model]?.params || {}) as Record<string, unknown>;
+  const method = params.input_method as string | undefined;
   if (method === 'record') return t('voiceClone.record');
   if (method === 'upload') return t('voiceClone.upload');
   if (method === 'url') return t('voiceClone.url');
   return '';
+}
+
+/** 音色描述标签 */
+function voiceDescriptionLabel(profile: VoiceProfile): string {
+  const model = profile.voice?.model || '';
+  const params = (profile.voice_params?.[model]?.params || {}) as Record<string, unknown>;
+  return (params.voice_description as string) || '';
 }
 
 export function VoiceClone() {
