@@ -274,6 +274,8 @@ def init_db():
         _migrate_v3_reduce_schema(conn)
         # P9002: unify chapter voice params (default_params → voice EngineParams)
         _migrate_chapter_voice(conn)
+        # P9003: migrate segment voice.params + generated_params to EngineParams format
+        _migrate_segment_voice_params(conn)
 
 
 def _migrate_v3_reduce_schema(conn):
@@ -431,8 +433,10 @@ def _migrate_chapter_voice(conn):
         voice: dict[str, object] = {"engine": engine_type}
         if engine_type == "edge_tts":
             voice["voice"] = dp.get("edge_voice", "")
-            voice["rate"] = str(dp.get("edge_rate", "+0%"))
-            voice["volume"] = str(dp.get("edge_volume", "+0%"))
+            raw_rate = dp.get("edge_rate", 0)
+            raw_vol = dp.get("edge_volume", 0)
+            voice["rate"] = f"+{raw_rate}%" if isinstance(raw_rate, (int, float)) else str(raw_rate)
+            voice["volume"] = f"+{raw_vol}%" if isinstance(raw_vol, (int, float)) else str(raw_vol)
         elif engine_type == "cosyvoice":
             voice["voice_id"] = dp.get("voice_id", "")
             voice["speed"] = dp.get("speed", 1.0)
@@ -471,6 +475,95 @@ def _migrate_chapter_voice(conn):
     # Drop engine and default_params columns via table recreate
     _drop_columns_via_recreate(conn, "segmented_project_chapters", ["engine", "default_params"])
     logger.info("[migration] P9002: dropped engine, default_params columns from chapters")
+
+
+def _migrate_segment_voice_params(conn):
+    """P9003: convert segment voice.params (custom) and generated_params to EngineParams format."""
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+
+    rows = conn.execute(text(
+        "SELECT id, voice, generated_params FROM segmented_project_segments"
+    )).fetchall()
+
+    updated_voice = 0
+    updated_generated = 0
+    for row in rows:
+        seg_id, voice_json, generated_json = row
+        voice = json.loads(voice_json) if voice_json else {}
+
+        # Only migrate custom segments with flat params
+        if voice.get("source") == "custom" and isinstance(voice.get("params"), dict):
+            p = voice["params"]
+            engine = voice.get("engine", p.get("engine", "edge_tts"))
+            new_params: dict[str, object] = {"engine": engine}
+
+            if engine == "edge_tts":
+                new_params["voice"] = p.get("edge_voice", "")
+                raw_rate = p.get("edge_rate", 0)
+                raw_vol = p.get("edge_volume", 0)
+                new_params["rate"] = f"+{raw_rate}%" if isinstance(raw_rate, (int, float)) else str(raw_rate)
+                new_params["volume"] = f"+{raw_vol}%" if isinstance(raw_vol, (int, float)) else str(raw_vol)
+            elif engine == "cosyvoice":
+                new_params["voice_id"] = p.get("voice_id", "")
+                new_params["speed"] = p.get("speed", 1.0)
+                new_params["volume"] = p.get("volume", 80)
+                new_params["pitch"] = p.get("pitch", 1.0)
+                new_params["language"] = p.get("language", "Chinese")
+                new_params["instruction"] = p.get("instruction", "")
+            elif engine == "mimo_tts":
+                mode = p.get("mimo_mode", "preset")
+                new_params["mode"] = mode
+                new_params["voice_id"] = p.get("mimo_preset_voice" if mode == "preset" else "mimo_clone_voice_id", "")
+                new_params["instruction"] = p.get("mimo_instruction", "")
+                if p.get("mimo_voice_description"):
+                    new_params["voice_description"] = p["mimo_voice_description"]
+            elif engine == "voxcpm":
+                new_params["mode"] = p.get("voxcpm_mode", "clone")
+                new_params["voice_id"] = p.get("voice_id", "")
+                if p.get("voxcpm_style_control"):
+                    new_params["style_control"] = p["voxcpm_style_control"]
+                if p.get("voxcpm_cfg_value"):
+                    new_params["cfg_value"] = p["voxcpm_cfg_value"]
+                if p.get("voxcpm_inference_timesteps"):
+                    new_params["inference_timesteps"] = p["voxcpm_inference_timesteps"]
+                if p.get("voxcpm_prompt_text"):
+                    new_params["prompt_text"] = p["voxcpm_prompt_text"]
+
+            voice["params"] = new_params
+            conn.execute(
+                text("UPDATE segmented_project_segments SET voice = :v WHERE id = :id"),
+                {"v": json.dumps(voice), "id": seg_id},
+            )
+            updated_voice += 1
+
+        # Crop generated_params to current-engine fields
+        if generated_json:
+            gp = json.loads(generated_json) if isinstance(generated_json, str) else generated_json
+            if isinstance(gp, dict) and "engine" in gp:
+                engine = gp["engine"]
+                cropped: dict[str, object] = {"engine": engine}
+                if engine == "edge_tts":
+                    for k in ("edge_voice", "edge_rate", "edge_volume"):
+                        if k in gp: cropped[k] = gp[k]
+                elif engine == "cosyvoice":
+                    for k in ("voice_id", "speed", "volume", "pitch", "language", "instruction"):
+                        if k in gp: cropped[k] = gp[k]
+                elif engine == "mimo_tts":
+                    for k in ("mimo_mode", "mimo_preset_voice", "mimo_clone_voice_id", "mimo_instruction", "mimo_voice_description"):
+                        if k in gp: cropped[k] = gp[k]
+                elif engine == "voxcpm":
+                    for k in ("voxcpm_mode", "voice_id", "voxcpm_style_control", "voxcpm_prompt_text", "voxcpm_cfg_value", "voxcpm_inference_timesteps", "voxcpm_voice_description"):
+                        if k in gp: cropped[k] = gp[k]
+
+                conn.execute(
+                    text("UPDATE segmented_project_segments SET generated_params = :g WHERE id = :id"),
+                    {"g": json.dumps(cropped), "id": seg_id},
+                )
+                updated_generated += 1
+
+    logger.info(f"[migration] P9003: migrated {updated_voice} custom segment voice.params + cropped {updated_generated} generated_params")
 
 
 def _fix_role_source_segments(conn, logger):

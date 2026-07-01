@@ -823,9 +823,12 @@ export function TTSSynthesis({
       // Extract params from role voice (new EngineParams format)
       const rvParams = roleVoiceToFlatParams(rv);
 
-      // Segment custom params
-      const segParams = hasVoiceLock
-        ? segEffectiveParams(seg) as Record<string, unknown>
+      // Segment custom params — ensure flat format for resolve()
+      const segParamsRaw = hasVoiceLock ? segEffectiveParams(seg) : {};
+      const segParams: Record<string, unknown> = hasVoiceLock
+        ? ('edge_voice' in segParamsRaw || 'mimo_mode' in segParamsRaw || 'voxcpm_mode' in segParamsRaw
+            ? segParamsRaw  // already flat (old data)
+            : roleVoiceToFlatParams(segParamsRaw as unknown as EngineParams))  // EngineParams → flat
         : {};
 
       // sp = merged source params: role + seg overrides (when applicable), or just seg overrides
@@ -875,22 +878,22 @@ export function TTSSynthesis({
       let usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoMode === 'voicedesign' ? effectiveMimoVoiceDesc : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
       const updatedParams: Partial<EngineParams> = { engine: effectiveEngine };
       if (effectiveEngine === 'edge_tts') {
-        updatedParams.edge_voice = effectiveEdgeVoice;
-        updatedParams.edge_rate = effectiveEdgeRate;
-        updatedParams.edge_volume = effectiveEdgeVolume;
+        updatedParams.voice = effectiveEdgeVoice;
+        updatedParams.rate = effectiveEdgeRate;
+        updatedParams.volume = effectiveEdgeVolume;
       } else if (effectiveEngine === 'mimo_tts') {
-        updatedParams.mimo_mode = effectiveMimoMode;
-        updatedParams.mimo_preset_voice = effectiveMimoPreset;
-        updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
-        updatedParams.mimo_voice_description = effectiveMimoVoiceDesc;
-        updatedParams.mimo_instruction = effectiveMimoInstruction;
+        updatedParams.mode = effectiveMimoMode;
+        updatedParams.voice_id = effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId;
+        updatedParams.voice_description = effectiveMimoVoiceDesc;
+        updatedParams.instruction = effectiveMimoInstruction;
       } else if (effectiveEngine === 'voxcpm') {
-        updatedParams.voxcpm_mode = effectiveVoxcpmMode;
-        updatedParams.voxcpm_cfg_value = effectiveVoxcpmCfg;
-        updatedParams.voxcpm_inference_timesteps = effectiveVoxcpmTimesteps;
-        updatedParams.voxcpm_voice_description = effectiveVoxcpmDesc;
-        updatedParams.voxcpm_style_control = effectiveVoxcpmStyle;
-        updatedParams.voxcpm_prompt_text = effectiveVoxcpmPrompt;
+        updatedParams.mode = effectiveVoxcpmMode;
+        updatedParams.voice_id = voiceId;
+        updatedParams.cfg_value = effectiveVoxcpmCfg;
+        updatedParams.inference_timesteps = effectiveVoxcpmTimesteps;
+        updatedParams.style_control = effectiveVoxcpmStyle;
+        updatedParams.prompt_text = effectiveVoxcpmPrompt;
+        updatedParams.voice_description = effectiveVoxcpmDesc;
       } else {
         updatedParams.voice_id = voiceId;
         updatedParams.speed = speed;
