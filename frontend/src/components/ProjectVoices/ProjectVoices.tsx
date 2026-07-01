@@ -292,9 +292,12 @@ function VoiceRoleEditor({
   // 当已保存的角色有 clone voice id 时，按 ID 查询对应的 VoiceProfile
   // 从 engine 还原 UI 状态（音色来源分类、引擎、参数）
   const voiceEngineAppliedRef = useRef(false);
+  const lastVoiceIdRef = useRef('');
   useEffect(() => {
     const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : '') || '';
     if (!voiceId) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
+    if (voiceId === lastVoiceIdRef.current) return; // skip if voice_id unchanged
+    lastVoiceIdRef.current = voiceId;
     let cancelled = false;
     ttsApi.getVoices({ voice_id: voiceId }).then(list => {
       if (cancelled) return;
@@ -307,9 +310,11 @@ function VoiceRoleEditor({
       setCloneVoiceDescription(profile.description ?? '');
       setClonePromptText((profile.description ?? '').slice(0, 100));
 
-      const vv = profile.voice;
-      if (!vv || voiceEngineAppliedRef.current) return;
+      if (voiceEngineAppliedRef.current) return;
       voiceEngineAppliedRef.current = true;
+
+      const vv = profile.voice;
+      if (!vv) return;
 
       const model = vv.model || '';
       const voiceType = vv.voice_type || '';
@@ -317,19 +322,10 @@ function VoiceRoleEditor({
         setVoiceCategory('design');
         if (model === 'mimo_tts') setDesignSubEngine('mimo');
         else if (model === 'voxcpm') setDesignSubEngine('voxcpm');
-        if (profile.voice_params) {
-          const mp = profile.voice_params[model];
-          if (mp?.params) {
-            const pp = mp.params as Record<string, unknown>;
-            if (pp.voice_description) setCloneVoiceDescription(pp.voice_description as string);
-            if (pp.instruction) setParams({ ...params, voiceDesignInstruction: pp.instruction as string });
-          }
-        }
         setDesignProfileId(profile.id);
       } else if (voiceType === 'preset') {
         setVoiceCategory('preset');
       } else {
-        // clone
         setVoiceCategory('clone');
         if (model === 'cosyvoice') setCloneSubEngine('cosyvoice');
         else if (model === 'mimo_tts') setCloneSubEngine('mimo');
