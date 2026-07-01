@@ -58,14 +58,14 @@ describe('VoiceClone Page', () => {
     });
   });
 
-  it('should display input method label on voice cards', async () => {
+  it('should display voice type label on voice cards', async () => {
     const mockVoices: VoiceProfile[] = [
       {
         id: 'voice-upload',
         name: '上传声音',
         audio_url: '/api/clone/audio/voice-upload',
         voice: { model: 'mimo_tts', voice_type: 'clone' },
-        voice_params: { mimo_tts: { params: { input_method: 'upload' } } },
+        voice_params: { mimo_tts: { params: {} } },
         created_at: new Date().toISOString(),
       },
     ];
@@ -77,7 +77,7 @@ describe('VoiceClone Page', () => {
     await waitFor(() => {
       expect(screen.getByText('上传声音')).toBeInTheDocument();
     });
-    expect(screen.getByText('上传')).toBeInTheDocument();
+    expect(screen.getByText('上传声音')).toBeInTheDocument();
   });
 
   it('should display edit and delete buttons on voice cards', async () => {

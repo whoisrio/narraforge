@@ -37,14 +37,12 @@ function engineLabel(profile: VoiceProfile): string {
   return 'Unknown';
 }
 
-/** 输入方式标签 */
-function inputMethodLabel(profile: VoiceProfile): string {
-  const model = profile.voice?.model || '';
-  const params = (profile.voice_params?.[model]?.params || {}) as Record<string, unknown>;
-  const method = params.input_method as string | undefined;
-  if (method === 'record') return t('voiceClone.record');
-  if (method === 'upload') return t('voiceClone.upload');
-  if (method === 'url') return t('voiceClone.url');
+/** 音色来源标签 */
+function voiceTypeLabel(profile: VoiceProfile): string {
+  const vt = profile.voice?.voice_type;
+  if (vt === 'preset') return t('voiceClone.preset');
+  if (vt === 'clone') return t('voiceClone.clone');
+  if (vt === 'design') return t('voiceClone.design');
   return '';
 }
 
@@ -575,8 +573,8 @@ export function VoiceClone() {
                   <strong className={styles.voiceCardName}>{v.name || v.description || t('common.unnamed')}</strong>
                   <div className={styles.voiceCardChips}>
                     <span className={styles.chipEngine}>{engineLabel(v)}</span>
-                    {inputMethodLabel(v) && (
-                      <span className={styles.chipDesc}>{inputMethodLabel(v)}</span>
+                    {voiceTypeLabel(v) && (
+                      <span className={styles.chipDesc}>{voiceTypeLabel(v)}</span>
                     )}
                     {v.description && v.description !== v.name && (
                       <span className={styles.chipDesc}>{v.description.slice(0, 30)}</span>
