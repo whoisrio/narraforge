@@ -244,7 +244,7 @@ export function VoiceClone() {
         description: designBrief,
         avatar: designAvatar || undefined,
         preview_text: designSampleText || 'This is a preview text.',
-        original_prompt_text: designBrief,
+        ...(designEngine === 'voxcpm' ? { original_prompt_text: designBrief } : {}),
       });
       setVoices(prev => [saved, ...prev.filter(v => v.id !== saved.id)]);
       setDesignStatus(t('voiceDesign.savedAsProfile'));

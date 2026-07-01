@@ -520,7 +520,7 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
         vp_params["instruction"] = request.instruction
     if request.preview_text:
         vp_params["audition_text"] = request.preview_text
-    if request.original_prompt_text:
+    if request.original_prompt_text and request.engine in ("voxcpm",):
         vp_params["original_prompt_text"] = request.original_prompt_text
 
     voice = VoiceProfile(

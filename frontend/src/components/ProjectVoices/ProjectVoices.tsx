@@ -283,7 +283,7 @@ function VoiceRoleEditor({
         voice_description: voiceDescription,
         instruction,
         preview_text: auditionText,
-        original_prompt_text: voiceDescription,
+        ...(engine === 'voxcpm' ? { original_prompt_text: voiceDescription } : {}),
       });
       setDesignProfileId(profile.id);
       setDesignPhase('confirmed');
