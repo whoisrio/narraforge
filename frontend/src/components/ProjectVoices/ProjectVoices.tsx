@@ -309,11 +309,12 @@ function VoiceRoleEditor({
   useEffect(() => {
     const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : '') || '';
     if (!voiceId) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
-    if (voiceId === lastVoiceIdRef.current) return; // skip if voice_id unchanged
-    lastVoiceIdRef.current = voiceId;
+    if (voiceId === lastVoiceIdRef.current) return;
     let cancelled = false;
+    const fetchId = voiceId;
     ttsApi.getVoices({ voice_id: voiceId }).then(list => {
       if (cancelled) return;
+      lastVoiceIdRef.current = fetchId;
       const profile = list[0];
       if (!profile) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
       const previewSrc = profile.has_preview ? voicePreviewAudioUrl(profile.id) : '';
