@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from app.schemas.segmented_project import SynthesizeParams
+
 from sqlalchemy.orm import Session
 
 from app.core import segmented_assets as assets
@@ -452,55 +454,58 @@ def _merge_params(*sources: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def synthesize_with_engine(
-    engine: str, text: str, params: dict[str, Any], db: Session | None = None
+    text: str, p: SynthesizeParams, db: Session | None = None
 ) -> tuple[bytes, str]:
     """Dispatch to the existing TTS service. Returns (audio_bytes, native_format)."""
-    logger.info(f"[synthesize_with_engine] engine={engine}, mimo_mode={params.get('mimo_mode')}, mimo_clone_voice_id={params.get('mimo_clone_voice_id')}, voxcpm_mode={params.get('voxcpm_mode')}, voice_id={params.get('voice_id')}")
+    engine = p.engine
+    logger.info(
+        "[synthesize_with_engine] engine=%s mimo_mode=%s mimo_clone=%s voxcpm_mode=%s voice_id=%s",
+        engine, p.mimo_mode, p.mimo_clone_voice_id, p.voxcpm_mode, p.voice_id)
     if engine == "edge_tts":
         from app.api.tts import synthesize_speech_internal
         return synthesize_speech_internal(
             text=text, voice_id="",
-            edge_voice=params.get("edge_voice"),
-            edge_rate=params.get("edge_rate"),
-            edge_volume=params.get("edge_volume"),
+            edge_voice=p.edge_voice,
+            edge_rate=p.edge_rate,
+            edge_volume=p.edge_volume,
         )
     if engine == "cosyvoice":
         from app.api.tts import synthesize_speech_internal
         return synthesize_speech_internal(
             text=text,
-            voice_id=params.get("voice_id", ""),
-            speed=params.get("speed", 1.0),
-            volume=params.get("volume", 80),
-            pitch=params.get("pitch", 1.0),
-            instruction=params.get("instruction", ""),
-            enable_ssml=params.get("enable_ssml", False),
-            enable_markdown_filter=params.get("enable_markdown_filter", False),
-            language=params.get("language", "Chinese"),
+            voice_id=p.voice_id,
+            speed=p.speed,
+            volume=p.volume,
+            pitch=p.pitch,
+            instruction=p.instruction,
+            enable_ssml=p.enable_ssml,
+            enable_markdown_filter=p.enable_markdown_filter,
+            language=p.language,
             db=db,
         )
     if engine == "mimo_tts":
         from app.api.mimo_tts import synthesize_mimo_internal
         return synthesize_mimo_internal(
             text=text,
-            mimo_mode=params.get("mimo_mode", "preset"),
-            preset_voice=params.get("mimo_preset_voice"),
-            clone_voice_id=params.get("mimo_clone_voice_id"),
-            voice_description=params.get("mimo_voice_description"),
-            instruction=params.get("mimo_instruction", ""),
-            context=params.get("context"),
+            mimo_mode=p.mimo_mode,
+            preset_voice=p.mimo_preset_voice,
+            clone_voice_id=p.mimo_clone_voice_id,
+            voice_description=p.mimo_voice_description,
+            instruction=p.mimo_instruction,
+            context=p.context,
             db=db,
         )
     if engine == "voxcpm":
         from app.api.voxcpm import synthesize_voxcpm_internal
         return synthesize_voxcpm_internal(
             text=text,
-            mode=params.get("voxcpm_mode", "tts"),
-            voice_id=params.get("voice_id", ""),
-            voice_description=params.get("voxcpm_voice_description", ""),
-            style_control=params.get("voxcpm_style_control", ""),
-            prompt_text=params.get("voxcpm_prompt_text"),
-            cfg_value=params.get("voxcpm_cfg_value", 2.0),
-            inference_timesteps=params.get("voxcpm_inference_timesteps", 10),
+            mode=p.voxcpm_mode,
+            voice_id=p.voice_id,
+            voice_description=p.voxcpm_voice_description,
+            style_control=p.voxcpm_style_control,
+            prompt_text=p.voxcpm_prompt_text,
+            cfg_value=p.voxcpm_cfg_value,
+            inference_timesteps=p.voxcpm_inference_timesteps,
             db=db,
         )
     raise ValueError(f"Unsupported engine: {engine}")
@@ -538,20 +543,21 @@ def synthesize_segment(
             role_params = role.voice.get("params", {}) if isinstance(role.voice, dict) else {}
 
     effective = _merge_params(_flatten_voice_for_synthesis(chapter.voice or {}), role_params, request_params)
-    logger.info(f"[synthesize_segment] role_params={role_params}, request_params={request_params}, merged engine={effective.get('engine')}, mimo_mode={effective.get('mimo_mode')}")
+    logger.info("[synthesize_segment] role_params=%s request_params=%s merged engine=%s mimo_mode=%s",
+                 role_params, request_params, effective.get('engine'), effective.get('mimo_mode'))
 
     # Preserve role_id and segment_kind for reproducibility
     if role_id is not None:
         effective["role_id"] = role_id
     effective["segment_kind"] = getattr(seg, "segment_kind", None) or "narration"
 
-    engine = effective.get("engine", "edge_tts")
+    sp = SynthesizeParams(**effective)
     text_to_speak = text_override or seg.text or ""
 
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
 
-    audio_bytes, _native_fmt = synthesize_with_engine(engine, text_to_speak, effective, db=db)
+    audio_bytes, _native_fmt = synthesize_with_engine(text_to_speak, sp, db=db)
     assets.ensure_project_layout(project_id, chapter_id)
 
     existing_audio = seg.audio or {}

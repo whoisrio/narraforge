@@ -2,7 +2,7 @@
 
 **Project:** NarraForge
 **ORM:** SQLAlchemy (declarative base)
-**Updated:** 2026-07-01 (schema v3.1 — Phase 1+2: remove dead snapshot, unify chapter voice)
+**Updated:** 2026-07-01 (schema v3.2 — Phase 1-4: structured TTS params, removed voices_engine)
 
 ---
 

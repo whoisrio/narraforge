@@ -186,3 +186,49 @@ class SourceDocumentOut(BaseModel):
     duration_sec: float | None
     created_at: str
     updated_at: str | None = None
+
+
+# ── TTS Synthesis Params ──
+
+class SynthesizeParams(BaseModel):
+    """Structured TTS parameters for synthesize_with_engine.
+    All fields are optional — the engine determines which subset is used."""
+
+    engine: str = "edge_tts"
+
+    # Edge-TTS
+    edge_voice: str | None = None
+    edge_rate: str | None = None
+    edge_volume: str | None = None
+
+    # CosyVoice
+    voice_id: str = ""
+    instruction: str = ""
+    speed: float = 1.0
+    volume: int = 80
+    pitch: float = 1.0
+    language: str = "Chinese"
+    enable_ssml: bool = False
+    enable_markdown_filter: bool = False
+
+    # MiMo
+    mimo_mode: str = "preset"
+    mimo_preset_voice: str | None = None
+    mimo_clone_voice_id: str | None = None
+    mimo_voice_description: str | None = None
+    mimo_instruction: str = ""
+
+    # VoxCPM
+    voxcpm_mode: str = "tts"
+    voxcpm_voice_description: str = ""
+    voxcpm_style_control: str = ""
+    voxcpm_prompt_text: str | None = None
+    voxcpm_cfg_value: float = 2.0
+    voxcpm_inference_timesteps: int = 10
+
+    # Context (MiMo voice design)
+    context: list[dict[str, str]] | None = None
+
+    # Metadata
+    role_id: str | None = None
+    segment_kind: str = "narration"

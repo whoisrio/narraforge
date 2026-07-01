@@ -171,9 +171,9 @@ def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkey
 
     captured: dict[str, object] = {}
 
-    def fake_synth(engine, text, params, db=None):
-        captured["engine"] = engine
-        captured["params"] = params
+    def fake_synth(text, p, db=None):
+        captured["engine"] = p.engine
+        captured["params"] = p
         return b"RIFF\x00\x00\x00\x00WAVEfmt ", "wav"
 
     with patch("app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
@@ -184,4 +184,4 @@ def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkey
 
     assert captured["engine"] == "edge_tts"
     # Role voice params (zh-CN-XiaoxiaoNeural) should override chapter defaults (zh-CN-YunjianNeural)
-    assert captured["params"]["edge_voice"] == "zh-CN-XiaoxiaoNeural"
+    assert captured["params"].edge_voice == "zh-CN-XiaoxiaoNeural"
