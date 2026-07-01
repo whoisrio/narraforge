@@ -590,7 +590,7 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
 
     return {
         "id": voice.id,
-        "cloned_preview_path": (voice.preview or {}).get("preview_audio_path"),
+        "preview_audio_path": (voice.preview or {}).get("preview_audio_path"),
     }
 
 

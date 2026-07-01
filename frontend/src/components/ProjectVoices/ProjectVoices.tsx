@@ -491,7 +491,7 @@ function VoiceRoleEditor({
 
       const { base64, format } = await resolveAudioBase64(ttsResult);
       const saveResult = await voiceApi.savePreviewAudio(voice.id, base64, format);
-      if (!saveResult.cloned_preview_path) throw new Error('后端未返回试听文件路径');
+      if (!saveResult.preview_audio_path) throw new Error('后端未返回试听文件路径');
       setClonePreviewAudioSrc(`data:audio/${format};base64,${base64}`);
     } catch (err) {
       console.warn('Failed to generate/save clone preview:', err);
@@ -552,7 +552,7 @@ function VoiceRoleEditor({
       const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : '') || '';
       if (voiceId) {
         const saveResult = await voiceApi.savePreviewAudio(voiceId, base64, format);
-        if (!saveResult.cloned_preview_path) throw new Error('后端未返回试听文件路径');
+        if (!saveResult.preview_audio_path) throw new Error('后端未返回试听文件路径');
       }
       setClonePreviewAudioSrc(src);
       setClonePreviewStatus('done');

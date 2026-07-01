@@ -433,7 +433,7 @@ class TestCloneAPI:
         assert response.status_code == 200
         data = response.json()
         assert data["id"] == voice_id
-        assert "Preview_Test" in data["cloned_preview_path"]
+        assert "Preview_Test" in data["preview_audio_path"]
 
         # 验证数据库已更新
         db_session.expire_all()
