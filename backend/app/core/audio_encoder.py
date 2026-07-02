@@ -149,41 +149,60 @@ def concat_to_mp3(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     list_path: Path | None = None
+    wav_path: Path | None = None
     out_tmp = output_path.with_suffix(output_path.suffix + ".tmp")
     try:
-        # Use filter_complex concat instead of the concat demuxer.
-        # The concat demuxer requires all inputs to have identical codec/format;
-        # filter_complex handles per-input normalization and avoids AVFrame
-        # padding errors (e.g. "inadequate AVFrame plane padding" from libmp3lame).
+        # Two-pass approach to avoid "inadequate AVFrame plane padding" in libmp3lame.
+        # libmp3lame requires properly padded audio frames; mixing different encoders
+        # (Edge-TTS MP3, CosyVoice WAV) can produce frames that libmp3lame rejects.
+        # Pass 1: concat + normalize to uniform PCM s16le WAV
+        # Pass 2: encode the WAV to MP3
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp_wav:
+            wav_path = Path(tmp_wav.name)
+
         inputs: list[str] = []
         filters: list[str] = []
         for i, p in enumerate(input_paths):
             inputs.extend(["-i", str(p)])
             filters.append(f"[{i}:a]")
-        # concat=n=1:v=0:a=1 copies one audio stream per input
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-loglevel", "error",
+
+        # Pass 1
+        cmd1 = [
+            "ffmpeg", "-y", "-loglevel", "error",
         ] + inputs + [
             "-filter_complex",
-            f"{''.join(filters)}concat=n={len(input_paths)}:v=0:a=1[out]",
+            f"{''.join(filters)}concat=n={len(input_paths)}:v=0:a=1,aformat=s16:44100[out]",
             "-map", "[out]",
+            "-f", "wav",
+            str(wav_path),
+        ]
+        proc1 = subprocess.run(cmd1, capture_output=True, timeout=180)
+        if proc1.returncode != 0:
+            raise AudioEncoderError(
+                f"ffmpeg concat to WAV failed (code {proc1.returncode}): {proc1.stderr.decode(errors='replace')}"
+            )
+
+        # Pass 2
+        cmd2 = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", str(wav_path),
             "-codec:a", "libmp3lame",
             "-b:a", bitrate,
             "-f", "mp3",
             str(out_tmp),
         ]
-        proc = subprocess.run(cmd, capture_output=True, timeout=180)
-        if proc.returncode != 0:
+        proc2 = subprocess.run(cmd2, capture_output=True, timeout=180)
+        if proc2.returncode != 0:
             raise AudioEncoderError(
-                f"ffmpeg concat failed (code {proc.returncode}): {proc.stderr.decode(errors='replace')}"
+                f"ffmpeg WAV to MP3 failed (code {proc2.returncode}): {proc2.stderr.decode(errors='replace')}"
             )
         out_tmp.replace(output_path)
     finally:
-        if out_tmp is not None:
+        for p in (wav_path, out_tmp):
+            if p is None:
+                continue
             try:
-                out_tmp.unlink()
+                p.unlink()
             except FileNotFoundError:
                 pass
 
