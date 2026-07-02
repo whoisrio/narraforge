@@ -9,6 +9,8 @@ function makeSegment(id: string, kind: 'narration' | 'dialogue', text: string): 
   return {
     id,
     text,
+    voice: kind === 'dialogue' ? { source: 'role' as const, role_id: 'role-a' } : { source: 'chapter' as const },
+    audio: { format: 'mp3' },
     params: baseParams,
     status: kind === 'dialogue' ? 'ready' : 'idle',
     segment_kind: kind,
@@ -110,7 +112,7 @@ describe('ChatSegmentView studio script flow', () => {
     expect(screen.getByText('嘉宾A')).toBeInTheDocument();
     expect(screen.getByText('台词内容')).toBeInTheDocument();
     expect(screen.getByText(/Edge-TTS/)).toBeInTheDocument();
-    expect(screen.getByText('excited')).toBeInTheDocument();
+    expect(screen.getAllByText('激昂').length).toBeGreaterThan(0);
   });
 
   it('keeps regenerate, play, append dialogue, and append narration actions wired', () => {
@@ -195,6 +197,6 @@ describe('ChatSegmentView studio script flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /改为旁白/ }));
 
     // Narration segments get null role — voice comes from global Engine panel
-    expect(onUpdateKind).toHaveBeenCalledWith('s1', 'narration', null);
+    expect(onUpdateKind).toHaveBeenCalledWith('s1', 'narration');
   });
 });

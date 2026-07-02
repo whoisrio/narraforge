@@ -40,8 +40,8 @@ export async function synthesizeVoiceDesignPreview(request: VoiceDesignPreviewRe
     return voxcpmApi.design({
       voice_description: description,
       text: sampleText,
-      cfg_value: voxcpmCfgFromIntensity(request.intensity),
-      inference_timesteps: voxcpmStepsFromStability(request.stability),
+      cfg_value: voxcpmCfgFromIntensity(request.intensity ?? 72),
+      inference_timesteps: voxcpmStepsFromStability(request.stability ?? 68),
       format: 'wav',
     });
   }

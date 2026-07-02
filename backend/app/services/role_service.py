@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.core.time_utils import utcnow
 from app.models.role import Role
@@ -24,17 +25,21 @@ def role_to_out(role: Role) -> RoleOut:
         avatar=role.avatar,
         description=role.description,
         role_kind=role.role_kind,
-        default_engine=role.default_engine,
-        default_voice=role.default_voice,
-        default_engine_params=role.default_engine_params or {},
+        project_id=role.project_id,
+        voice=role.voice or {"engine": "edge_tts", "params": {}},
         favorite_styles=role.favorite_styles or [],
         created_at=_to_iso(role.created_at),
         updated_at=_to_iso(role.updated_at),
     )
 
 
-def list_roles(db: Session) -> list[RoleOut]:
-    roles = db.query(Role).order_by(Role.updated_at.desc()).all()
+def list_roles(db: Session, project_id: str | None = None) -> list[RoleOut]:
+    query = db.query(Role)
+    if project_id:
+        query = query.filter(or_(Role.project_id == None, Role.project_id == project_id))
+    else:
+        query = query.filter(Role.project_id == None)
+    roles = query.order_by(Role.updated_at.desc()).all()
     return [role_to_out(role) for role in roles]
 
 
@@ -51,9 +56,8 @@ def create_role(db: Session, payload: RoleIn) -> Role:
         avatar=payload.avatar,
         description=payload.description,
         role_kind=payload.role_kind,
-        default_engine=payload.default_engine,
-        default_voice=payload.default_voice,
-        default_engine_params=payload.default_engine_params,
+        project_id=payload.project_id,
+        voice=payload.voice,
         favorite_styles=payload.favorite_styles,
     )
     db.add(role)

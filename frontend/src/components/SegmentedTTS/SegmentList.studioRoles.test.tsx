@@ -3,16 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Role, Segment } from '../../types';
 import { SegmentList } from './SegmentList';
 
-const baseParams = { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunxiNeural' };
-
 const roles: Role[] = [
   {
     id: 'narrator-1',
     name: '默认旁白',
     description: 'Narrator',
-    default_engine: 'edge_tts',
-    default_voice: 'zh-CN-YunxiNeural',
-    default_engine_params: baseParams,
+    voice: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural' },
     favorite_styles: [],
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
@@ -21,9 +17,7 @@ const roles: Role[] = [
     id: 'cast-1',
     name: '嘉宾A',
     description: 'Cast',
-    default_engine: 'edge_tts',
-    default_voice: 'zh-CN-YunyangNeural',
-    default_engine_params: { ...baseParams, edge_voice: 'zh-CN-YunyangNeural' },
+    voice: { engine: 'edge_tts', voice: 'zh-CN-YunyangNeural' },
     favorite_styles: [],
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
@@ -32,9 +26,7 @@ const roles: Role[] = [
     id: 'cast-long',
     name: '这是一个非常非常非常长的角色名字会把Segment信息挤歪',
     description: 'Cast',
-    default_engine: 'edge_tts',
-    default_voice: 'zh-CN-YunyangNeural',
-    default_engine_params: { ...baseParams, edge_voice: 'zh-CN-YunyangNeural' },
+    voice: { engine: 'edge_tts', voice: 'zh-CN-YunyangNeural' },
     favorite_styles: [],
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
@@ -45,12 +37,13 @@ function makeSegment(id: string, kind: 'narration' | 'dialogue'): Segment {
   return {
     id,
     text: kind === 'narration' ? '旁白内容' : '嘉宾：台词内容',
-    params: baseParams,
+    voice: { source: 'chapter' },
+    audio: { format: 'mp3' },
+    params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunxiNeural' },
     status: 'idle',
     segment_kind: kind,
     role_id: kind === 'dialogue' ? 'cast-1' : null,
     emotion: 'calm',
-    prosody_marks: [],
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
   };
@@ -117,7 +110,7 @@ describe('SegmentList studio role controls', () => {
     renderList({ voiceMode: 'dialogue', onUpdateRole });
 
     // All roles should be available as select options
-    const select = screen.getByRole('combobox', { name: '选择台词角色' });
+    const select = screen.getByRole('combobox', { name: '选择角色' });
     expect(select).toBeInTheDocument();
     const options = select.querySelectorAll('option');
     // 1 placeholder + 3 roles
@@ -131,7 +124,7 @@ describe('SegmentList studio role controls', () => {
 
     renderList({ voiceMode: 'dialogue', onUpdateRole });
 
-    const select = screen.getByRole('combobox', { name: '选择台词角色' });
+    const select = screen.getByRole('combobox', { name: '选择角色' });
     fireEvent.change(select, { target: { value: 'narrator-1' } });
 
     expect(onUpdateRole).toHaveBeenCalledWith('s2', 'narrator-1', expect.objectContaining({

@@ -870,3 +870,9 @@ Phase 6   导出增强
 Phase 7   视觉制作 Brief
 Phase 8   回导合成（可选后期）
 ```
+
+---
+
+## 已完成
+
+- **2026-06-30** — 数据模型重构 (schema v3)：去除 narration_documents 表、统一 EngineParams/JSON 列、移除派生/冗余字段、用 VoiceSource 替代分散覆盖字段。

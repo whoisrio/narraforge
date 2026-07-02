@@ -74,12 +74,12 @@
 }
 
 /* Full card emotion backgrounds */
-.emoHappy { background: #fef9ef; border-color: #f0d080; }
-.emoSad { background: #f2f6fb; border-color: #a8c0d8; }
-.emoAngry { background: #fdf2ef; border-color: #e09080; }
-.emoCalm { background: #f2f8f4; border-color: #a8ccb5; }
+.emoHappy { background: var(--emo-happy-bg); border-color: var(--emo-happy-border); }
+.emoSad { background: var(--emo-sad-bg); border-color: var(--emo-sad-border); }
+.emoAngry { background: var(--emo-angry-bg); border-color: var(--emo-angry-border); }
+.emoCalm { background: var(--emo-calm-bg); border-color: var(--emo-calm-border); }
 .emoNeutral { background: var(--color-surface); }
-.emoExcited { background: #fdf5ef; border-color: #e8a878; }
+.emoExcited { background: var(--emo-excited-bg); border-color: var(--emo-excited-border); }
 
 /* Selected overrides emotion background */
 .emoHappy.selected { background: #fef3dd !important; }
@@ -220,7 +220,7 @@
   white-space: nowrap; box-shadow: 0 2px 6px rgba(192,57,43,0.2);
   transition: all 0.15s; flex-shrink: 0;
 }
-.genBtnFail:hover:not(:disabled) { background: #a83225; }
+.genBtnFail:hover:not(:disabled) { background: var(--color-error); }
 
 .genBadge {
   font-size: 12px; color: var(--color-info); font-weight: 500;
@@ -296,12 +296,12 @@
   display: inline-flex;
 }
 
-.emoHappy .compactEmo { background: #e8a838; }
-.emoSad .compactEmo { background: #6b8db5; }
-.emoAngry .compactEmo { background: #c45a4a; }
-.emoCalm .compactEmo { background: #7ba68a; }
+.emoHappy .compactEmo { background: var(--emo-happy); }
+.emoSad .compactEmo { background: var(--emo-sad); }
+.emoAngry .compactEmo { background: var(--emo-angry); }
+.emoCalm .compactEmo { background: var(--emo-calm); }
 .emoNeutral .compactEmo { background: var(--color-border); }
-.emoExcited .compactEmo { background: #d46a2c; }
+.emoExcited .compactEmo { background: var(--emo-excited); }
 
 .compactIdx {
   font-size: 10px;
@@ -402,7 +402,7 @@
 }
 
 .compactPlayBtn:hover {
-  background: #238b7e;
+  background: var(--color-success);
   transform: scale(1.1);
 }
 
@@ -438,7 +438,7 @@
 /* Compact stale indicator */
 .compactStale {
   font-size: 12px;
-  color: #c47a3a;
+  color: var(--color-primary);
   flex-shrink: 0;
   cursor: help;
   animation: stalePulse 2s ease-in-out infinite;
@@ -482,9 +482,9 @@
   gap: 3px;
   font-size: 10px;
   font-weight: 600;
-  color: #c47a3a;
-  background: color-mix(in srgb, #c47a3a 10%, var(--color-surface));
-  border: 1px solid color-mix(in srgb, #c47a3a 30%, var(--color-border));
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
   border-radius: var(--radius-full);
   padding: 1px 7px;
   cursor: pointer;
@@ -492,7 +492,7 @@
 }
 
 .indVoiceToggle:hover {
-  background: color-mix(in srgb, #c47a3a 20%, var(--color-surface));
+  background: color-mix(in srgb, var(--color-primary) 20%, var(--color-surface));
 }
 
 .indVoiceToggleOff {

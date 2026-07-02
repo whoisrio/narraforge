@@ -41,7 +41,7 @@ export const backendStorage: SegmentedProjectStorage = {
         ...chapter,
         segments: chapter.segments.map((segment) => ({
           ...segment,
-          locked_params: segment.overrides ?? [],
+          locked_params: [],
         })),
       })),
     };

@@ -51,7 +51,7 @@
   flex: 0 0 38px;
   border-radius: 14px;
   background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
-  color: #fff;
+  color: var(--color-surface);
   font-weight: 900;
   box-shadow: 0 8px 18px rgba(139, 76, 13, 0.18);
 }
@@ -279,7 +279,7 @@
 
 .chapterItemActionDanger:hover {
   background: rgba(163, 58, 32, 0.1);
-  color: #a33a20;
+  color: var(--color-error);
 }
 
 .chapterRenameInline {

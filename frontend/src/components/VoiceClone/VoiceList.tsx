@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { voiceApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import type { VoiceProfile } from '../../types';
+import { voicePreviewAudioUrl } from '../../types';
 import { Button, Modal, Input, Select, Loading, EmptyState, Card, Alert } from '../ui';
 
 interface VoiceListProps {
@@ -28,7 +29,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
   const [selectedVoice, setSelectedVoice] = useState<VoiceProfile | null>(null);
   const [registerName, setRegisterName] = useState('');
   const [registerRole, setRegisterRole] = useState('custom');
-  const [registerResult, setRegisterResult] = useState<{ qwen_voice_id?: string; role?: string; cloned_at?: string } | null>(null);
+  const [registerResult, setRegisterResult] = useState<VoiceProfile | null>(null);
   const [syncMessage, setSyncMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // 删除确认弹窗状态
@@ -50,11 +51,10 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       const all = await voiceApi.list();
       // 根据引擎筛选已克隆的声音
       const cloned = all.filter(v => {
-        if (!v.is_cloned) return false;
-        if (engine === 'mimo') return v.clone_engine === 'mimo';
-        if (engine === 'voxcpm') return v.clone_engine === 'voxcpm';
-        // CosyVoice: 显示 qwen 引擎的，以及没有 clone_engine 标记的旧数据（兼容）
-        return v.clone_engine === 'qwen' || (!v.clone_engine && v.qwen_voice_id);
+        if (v.voice?.voice_type !== 'clone') return false;
+        if (engine === 'mimo') return v.voice?.model === 'mimo_tts';
+        if (engine === 'voxcpm') return v.voice?.model === 'voxcpm';
+        return v.voice?.model === 'cosyvoice' || (!v.voice?.model && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
       });
       setVoices(cloned);
     } catch (err) {
@@ -68,6 +68,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
   useEffect(() => {
     setLoading(true);
     fetchVoices();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [engine, refreshCounter]);
 
   const handleSyncFromQwen = async () => {
@@ -334,7 +335,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
             <Card key={voice.id} style={voiceCardStyle}>
               <div style={voiceContentStyle}>
                 <div style={voiceInfoStyle}>
-                  <audio src={voice.audio_url} controls style={{ height: '32px' }} />
+                  <audio src={voicePreviewAudioUrl(voice.id)} controls style={{ height: '32px' }} />
                   <div>
                     {editingId === voice.id ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -370,11 +371,11 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <div style={voiceNameStyle}>
-                          {voice.name || voice.qwen_voice_id || 'N/A'}
+                          {voice.name || ((voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string) || 'N/A'}
                         </div>
-                        {voice.clone_engine && (
-                          <span style={engineBadgeStyle(voice.clone_engine)}>
-                            {voice.clone_engine === 'mimo' ? 'MiMo' : voice.clone_engine === 'voxcpm' ? 'VoxCPM' : 'Qwen'}
+                        {voice.voice?.model && (
+                          <span style={engineBadgeStyle(voice.voice.model)}>
+                            {voice.voice?.model === 'mimo_tts' ? 'MiMo' : voice.voice?.model === 'voxcpm' ? 'VoxCPM' : 'Qwen'}
                           </span>
                         )}
                         <span
@@ -387,26 +388,20 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                       </div>
                     )}
                     <div style={voiceMetaStyle}>
-                      {voice.is_cloned ? (
+                      {voice.voice?.voice_type === 'clone' ? (
                         <>
                           <span style={{ color: 'var(--color-success)', marginRight: 'var(--spacing-xs)' }}>✓ Cloned</span>
-                          {voice.clone_engine === 'qwen' && voice.role && ` | Role: ${voice.role}`}
-                          {voice.clone_engine === 'mimo' && ' | MiMo 即时复刻'}
-                          {voice.cloned_at && ` | ${new Date(voice.cloned_at).toLocaleDateString()}`}
+                          {voice.voice?.model === 'mimo_tts' && ' | MiMo 即时复刻'}
+                          {voice.created_at && ` | ${new Date(voice.created_at).toLocaleDateString()}`}
                         </>
                       ) : (
                         'Not cloned yet'
                       )}
                     </div>
-                    {voice.prompt_text && (
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary, #6b7280)', marginTop: '2px', lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                        转录：{voice.prompt_text}
-                      </div>
-                    )}
                   </div>
                 </div>
                 <div style={actionButtonsStyle}>
-                  {!voice.is_cloned && voice.clone_engine !== 'mimo' && (
+                  {voice.voice?.voice_type !== 'clone' && voice.voice?.model !== 'mimo_tts' && (
                     <Button
                       variant="primary"
                       size="sm"
@@ -477,9 +472,9 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
         {registerResult && (
           <Alert variant="success" style={{ marginTop: 'var(--spacing-md)' }}>
             <div style={{ fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--spacing-xs)' }}>✓ Clone Successful!</div>
-            <div><strong>Voice ID:</strong> {registerResult.qwen_voice_id}</div>
-            <div><strong>Role:</strong> {registerResult.role}</div>
-            <div><strong>Cloned at:</strong> {registerResult.cloned_at ? new Date(registerResult.cloned_at).toLocaleString() : 'N/A'}</div>
+            <div><strong>Voice ID:</strong> {registerResult.id}</div>
+            <div><strong>Model:</strong> {registerResult.voice?.model || 'N/A'}</div>
+            <div><strong>Created at:</strong> {new Date(registerResult.created_at).toLocaleString()}</div>
           </Alert>
         )}
       </Modal>

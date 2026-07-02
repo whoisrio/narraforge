@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import Markdown from 'react-markdown';
 import type { Chapter } from '../../types';
+import { useTranslation } from '../../i18n';
 import { CompareView } from './CompareView';
 import { SourceDocumentView } from './SourceDocumentView';
 import styles from './ProjectLibrary.module.css';
@@ -45,7 +46,7 @@ function formatSeconds(seconds: number): string {
 }
 
 function chapterAudioDuration(chapter: Chapter): number {
-  return chapter.segments.reduce((total, segment) => total + (segment.duration_sec ?? 0), 0);
+  return chapter.segments.reduce((total, segment) => total + (segment.audio.duration_sec ?? 0), 0);
 }
 
 function chapterProgress(chapter: Chapter) {
@@ -79,9 +80,8 @@ export function ProjectLibrary({
   onDeleteChapter,
   onEnterStudio,
   onModeChange,
-  projectName,
-  onRenameProject,
 }: ProjectLibraryProps) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState<LibraryMode>('overview');
   const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
   const [comparing, setComparing] = useState(false);
@@ -133,10 +133,10 @@ export function ProjectLibrary({
   if (!activeChapter) {
     return (
       <section className={styles.emptyRoot}>
-        <span className={styles.kicker}>Library</span>
-        <h2>Chapter Library</h2>
-        <p>还没有章节。先创建一个章节，再进入工作室分段合成。</p>
-        <button type="button" onClick={() => onAddChapter()}>新建章节</button>
+        <span className={styles.kicker}>{t('projectLibrary.title')}</span>
+        <h2>{t('projectLibrary.title')}</h2>
+        <p>{t('projectLibrary.emptyDesc')}</p>
+        <button type="button" onClick={() => onAddChapter()}>{t('projectLibrary.newChapter')}</button>
       </section>
     );
   }
@@ -151,30 +151,30 @@ export function ProjectLibrary({
           <h2 className={styles.srOnly}>Immersive Chapter Editor</h2>
           <input
             className={styles.chapterTitleInput}
-            aria-label="章节标题"
+            aria-label={t('projectLibrary.chapterTitle')}
             value={activeChapter.name}
             onChange={(event) => onRenameChapter(activeChapter.id, event.target.value)}
-            placeholder="章节标题"
+            placeholder={t('projectLibrary.chapterTitle')}
           />
           <div className={styles.editorMetrics}>
-            <span>{chars} 字</span>
-            <span>预计 {formatSeconds(estimateDurationSec(text))}</span>
-            <span>{progress.ready}/{progress.total} 已生成</span>
+            <span>{chars} {t('projectLibrary.wordCount')}</span>
+            <span>{t('projectLibrary.estimated')} {formatSeconds(estimateDurationSec(text))}</span>
+            <span>{progress.ready}/{progress.total} {t('projectLibrary.segmentsGenerated')}</span>
           </div>
         </header>
 
         <label className={styles.designTitleField}>
-          <span>设计标题</span>
+          <span>{t('projectLibrary.designTitle')}</span>
           <input
             value={activeChapter.design_title ?? ''}
             onChange={(event) => onUpdateChapterDesignTitle(activeChapter.id, event.target.value)}
-            placeholder="用于视频画面的章节标题"
+            placeholder={t('projectLibrary.designTitlePlaceholder')}
           />
         </label>
 
         {showPreview ? (
           <div className={styles.markdownPreview}>
-            <Markdown>{text || '*尚未填写章节全文。*'}</Markdown>
+            <Markdown>{text || `*${t('projectLibrary.noContent')}*`}</Markdown>
           </div>
         ) : (
           <textarea
@@ -182,7 +182,7 @@ export function ProjectLibrary({
             aria-label="章节全文"
             value={text}
             onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
-            placeholder="在这里维护本章完整旁白稿。进入工作室后再切分为语音段落。"
+            placeholder={t('projectLibrary.descPlaceholder')}
           />
         )}
 
@@ -192,7 +192,7 @@ export function ProjectLibrary({
             className={styles.ghostButton}
             onClick={() => setLibraryMode('overview')}
           >
-            ← 返回文本库
+            ← {t('projectLibrary.backToLibrary')}
           </button>
           <div className={styles.bottomBarDivider} />
           <button
@@ -200,22 +200,22 @@ export function ProjectLibrary({
             className={styles.ghostButton}
             onClick={() => setLibraryMode('fulltext')}
           >
-            查看全文
+            {t('projectLibrary.viewFulltext')}
           </button>
           <button
             type="button"
             className={styles.ghostButton}
             onClick={() => setShowPreview(!showPreview)}
           >
-            {showPreview ? '编辑' : '预览'}
+            {showPreview ? t('projectLibrary.edit') : t('projectLibrary.preview')}
           </button>
           <button
             type="button"
             className={styles.bottomBarNav}
             onClick={() => onSelectChapter(navigateChapter(chapters, activeChapter.id, 'prev'))}
-            aria-label="上一章"
+            aria-label={t('projectLibrary.previousChapter')}
           >
-            ← 上一章
+            ← {t('projectLibrary.previousChapter')}
           </button>
           <span className={styles.bottomBarLabel}>{activeChapter.name}</span>
           <button
@@ -223,15 +223,15 @@ export function ProjectLibrary({
             className={styles.primaryButton}
             onClick={() => onEnterStudio(activeChapter.id)}
           >
-            进入工作室
+            {t('projectLibrary.enterStudio')}
           </button>
           <button
             type="button"
             className={styles.bottomBarNav}
             onClick={() => onSelectChapter(navigateChapter(chapters, activeChapter.id, 'next'))}
-            aria-label="下一章"
+            aria-label={t('projectLibrary.nextChapter')}
           >
-            下一章 →
+            {t('projectLibrary.nextChapter')} →
           </button>
         </div>
       </section>
@@ -245,16 +245,16 @@ export function ProjectLibrary({
     return (
       <section className={styles.chapterEditorRoot}>
         <header className={styles.editorHeader}>
-          <h2 className={styles.chapterTitleInput} style={{ border: 'none', background: 'none', cursor: 'default' }}>文本库全文</h2>
+          <h2 className={styles.chapterTitleInput} style={{ border: 'none', background: 'none', cursor: 'default' }}>{t('projectLibrary.fulltextView')}</h2>
           <div className={styles.editorMetrics}>
-            <span>{allChars} 字</span>
-            <span>预计 {formatSeconds(allDuration)}</span>
-            <span>{chapters.length} 章</span>
+            <span>{allChars} {t('projectLibrary.wordCount')}</span>
+            <span>{t('projectLibrary.estimated')} {formatSeconds(allDuration)}</span>
+            <span>{chapters.length} {t('projectLibrary.chapterCount')}</span>
           </div>
         </header>
 
         <div className={styles.markdownPreview}>
-          <Markdown>{allText || '*尚未填写任何章节全文。*'}</Markdown>
+          <Markdown>{allText || `*${t('projectLibrary.noContent')}*`}</Markdown>
         </div>
 
         <div className={styles.bottomBar}>
@@ -263,7 +263,7 @@ export function ProjectLibrary({
             className={styles.ghostButton}
             onClick={() => setLibraryMode('overview')}
           >
-            ← 返回文本库
+            ← {t('projectLibrary.backToLibrary')}
           </button>
           <div className={styles.bottomBarDivider} />
           <button
@@ -276,7 +276,7 @@ export function ProjectLibrary({
               }
             }}
           >
-            按章节查看
+            {t('projectLibrary.viewByChapter')}
           </button>
         </div>
       </section>
@@ -286,18 +286,18 @@ export function ProjectLibrary({
   const narrationContent = (
     <>
       <div className={styles.filterRow}>
-        <span className={styles.filterChipActive}>Active <strong>{chapters.length}</strong></span>
-        <span className={styles.filterChip}>Drafts</span>
-        <span className={styles.filterChip}>Completed <strong>{totals.ready}</strong></span>
+        <span className={styles.filterChipActive}>{t('projectLibrary.active')} <strong>{chapters.length}</strong></span>
+        <span className={styles.filterChip}>{t('projectLibrary.draft')}</span>
+        <span className={styles.filterChip}>{t('projectLibrary.completed')} <strong>{totals.ready}</strong></span>
       </div>
 
       {creatingChapter && (
         <div className={styles.createChapterPanel}>
-          <label htmlFor="library-new-chapter-name">新章节名称</label>
+          <label htmlFor="library-new-chapter-name">{t('projectLibrary.chapterName')}</label>
           <input
             id="library-new-chapter-name"
             value={newChapterName}
-            placeholder={`新章节 ${chapters.length + 1}`}
+            placeholder={`${t('projectLibrary.newChapterPlaceholder')} ${chapters.length + 1}`}
             onChange={(event) => setNewChapterName(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') createChapter();
@@ -309,8 +309,8 @@ export function ProjectLibrary({
             autoFocus
           />
           <div className={styles.createChapterActions}>
-            <button type="button" onClick={createChapter}>创建章节</button>
-            <button type="button" onClick={() => { setCreatingChapter(false); setNewChapterName(''); }}>取消</button>
+            <button type="button" onClick={createChapter}>{t('projectLibrary.createChapter')}</button>
+            <button type="button" onClick={() => { setCreatingChapter(false); setNewChapterName(''); }}>{t('projectLibrary.cancel')}</button>
           </div>
         </div>
       )}
@@ -337,7 +337,7 @@ export function ProjectLibrary({
                 <div className={styles.chapterTitleRow}>
                   {isEditing ? (
                     <div className={styles.chapterRenameForm}>
-                      <label htmlFor={`chapter-card-name-${chapter.id}`}>章节卡片名称</label>
+                      <label htmlFor={`chapter-card-name-${chapter.id}`}>{t('projectLibrary.chapterTitle')}</label>
                       <input
                         id={`chapter-card-name-${chapter.id}`}
                         value={chapterNameDraft}
@@ -352,8 +352,8 @@ export function ProjectLibrary({
                         autoFocus
                       />
                       <div className={styles.chapterRenameActions}>
-                        <button type="button" onClick={() => saveChapterName(chapter)}>保存章节名称</button>
-                        <button type="button" onClick={() => { setEditingChapterId(null); setChapterNameDraft(''); }}>取消</button>
+                        <button type="button" onClick={() => saveChapterName(chapter)}>{t('projectLibrary.save')}</button>
+                        <button type="button" onClick={() => { setEditingChapterId(null); setChapterNameDraft(''); }}>{t('projectLibrary.cancel')}</button>
                       </div>
                     </div>
                   ) : (
@@ -361,25 +361,25 @@ export function ProjectLibrary({
                   )}
                   {!isEditing && (
                     <div className={styles.chapterQuickActions}>
-                      <button type="button" aria-label={`重命名章节 ${chapter.name}`} onClick={() => startRenameChapter(chapter)}>✎</button>
-                      <button type="button" aria-label={`删除章节 ${chapter.name}`} disabled={!canDeleteChapter} onClick={() => onDeleteChapter(chapter.id)}>⌫</button>
+                      <button type="button" aria-label={`${t('projectLibrary.renameChapter')} ${chapter.name}`} onClick={() => startRenameChapter(chapter)}>✎</button>
+                      <button type="button" aria-label={`${t('projectLibrary.deleteChapter')} ${chapter.name}`} disabled={!canDeleteChapter} onClick={() => onDeleteChapter(chapter.id)}>⌫</button>
                     </div>
                   )}
                 </div>
-                <p>{text || '尚未填写章节全文。'}</p>
+                <p>{text || t('projectLibrary.noContent')}</p>
                 <div className={styles.chapterStats}>
-                  <span>{chars} 字</span>
-                  <span>{chapter.segments.length} 段</span>
+                  <span>{chars} {t('projectLibrary.chars')}</span>
+                  <span>{chapter.segments.length} {t('projectLibrary.segments')}</span>
                   <span>{formatSeconds(chapterAudioDuration(chapter))}</span>
                 </div>
                 <div className={styles.progressMeta}>
-                  <span>生成进度</span>
-                  <span>{progress.ready}/{progress.total} 已生成</span>
+                  <span>{t('projectLibrary.generationProgress')}</span>
+                  <span>{progress.ready}/{progress.total} {t('projectLibrary.segmentsGenerated')}</span>
                 </div>
                 <div className={styles.progressTrack}><span style={{ width: `${progress.percent}%` }} /></div>
                 <div className={styles.cardActions}>
-                  <button type="button" onClick={() => { onSelectChapter(chapter.id); setLibraryMode('chapter'); }}>打开文本</button>
-                  <button type="button" onClick={() => onEnterStudio(chapter.id)}>进入工作室</button>
+                  <button type="button" onClick={() => { onSelectChapter(chapter.id); setLibraryMode('chapter'); }}>{t('projectLibrary.openText')}</button>
+                  <button type="button" onClick={() => onEnterStudio(chapter.id)}>{t('projectLibrary.enterStudio')}</button>
                 </div>
               </div>
             </article>
@@ -409,14 +409,14 @@ export function ProjectLibrary({
               className={`${styles.tab} ${activeTab === 'source' ? styles.tabActive : ''}`}
               onClick={() => { setActiveTab('source'); setComparing(false); }}
             >
-              源文档
+              {t('projectLibrary.sourceDoc')}
             </button>
             <button
               type="button"
               className={`${styles.tab} ${activeTab === 'narration' ? styles.tabActive : ''}`}
               onClick={() => { setActiveTab('narration'); setComparing(false); }}
             >
-              旁白文档
+              {t('projectLibrary.narrationDoc')}
             </button>
           </div>
         </div>
@@ -428,19 +428,19 @@ export function ProjectLibrary({
                 className={styles.ghostButton}
                 onClick={() => setSourceViewMode(sourceViewMode === 'edit' ? 'view' : 'edit')}
               >
-                {sourceViewMode === 'edit' ? '查看' : '编辑'}
+                {sourceViewMode === 'edit' ? t('projectLibrary.view') : t('projectLibrary.edit')}
               </button>
-              <button type="button" className={styles.ghostButton} onClick={() => setComparing(true)}>对比查看</button>
-              <button type="button" className={styles.ghostButton} onClick={() => setActiveTab('narration')}>← 返回文档库</button>
+              <button type="button" className={styles.ghostButton} onClick={() => setComparing(true)}>{t('projectLibrary.compare') || '对比'}</button>
+              <button type="button" className={styles.ghostButton} onClick={() => setActiveTab('narration')}>← {t('projectLibrary.backToLibrary')}</button>
             </>
           )}
           {activeTab === 'narration' && !comparing && (
             <>
-              <div className={styles.headerStat}><span>章节</span><strong>{chapters.length}</strong></div>
-              <div className={styles.headerStat}><span>字数</span><strong>{totals.chars}</strong></div>
-              <div className={styles.headerStat}><span>分段</span><strong>{totals.segments}</strong></div>
-              <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>查看全文</button>
-              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>新建章节</button>
+              <div className={styles.headerStat}><span>{t('projectLibrary.chapterCount')}</span><strong>{chapters.length}</strong></div>
+              <div className={styles.headerStat}><span>{t('projectLibrary.wordCount')}</span><strong>{totals.chars}</strong></div>
+              <div className={styles.headerStat}><span>{t('projectLibrary.segments')}</span><strong>{totals.segments}</strong></div>
+              <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>{t('projectLibrary.viewFulltext')}</button>
+              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>{t('projectLibrary.newChapter')}</button>
             </>
           )}
         </div>

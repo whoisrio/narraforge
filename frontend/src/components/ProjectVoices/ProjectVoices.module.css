@@ -35,8 +35,8 @@
   margin: 0;
   color: var(--color-text-primary);
   font-size: var(--font-size-2xl);
-  font-weight: var(--font-weight-bold);
-  letter-spacing: -0.04em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .headerDesc {
@@ -168,7 +168,7 @@
   width: 44px;
   height: 44px;
   border-radius: var(--radius-md);
-  color: #fff;
+  color: var(--color-surface);
   font-size: 18px;
   font-weight: 900;
   flex-shrink: 0;
@@ -176,11 +176,11 @@
 }
 
 .avatarEdge {
-  background: linear-gradient(135deg, #c47a3a, #a05a20);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
 }
 
 .avatarCosy {
-  background: linear-gradient(135deg, #2a9d8f, #1a7a6e);
+  background: linear-gradient(135deg, var(--color-success), var(--color-success));
 }
 
 .avatarMimo {
@@ -188,11 +188,11 @@
 }
 
 .avatarVoxcpm {
-  background: linear-gradient(135deg, #3b82c4, #2a6090);
+  background: linear-gradient(135deg, var(--color-info), var(--color-info));
 }
 
 .avatarDefault {
-  background: linear-gradient(135deg, #8b7355, #6b5a45);
+  background: linear-gradient(135deg, var(--color-text-secondary), var(--color-text-secondary));
 }
 
 /* --- Card Body --- */
@@ -259,7 +259,7 @@
 
 .chipCast {
   background: rgba(0, 104, 93, 0.1);
-  color: #00685d;
+  color: var(--color-success);
 }
 
 /* Engine chips */
@@ -728,13 +728,13 @@
 
 .designError {
   margin: 0;
-  color: var(--color-danger, #ef4444);
+  color: var(--color-danger, var(--color-error));
   font-size: var(--font-size-sm);
 }
 
 .designHint {
   margin: 0;
-  color: var(--color-success, #22c55e);
+  color: var(--color-success, var(--color-success));
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
 }

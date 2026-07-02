@@ -38,15 +38,11 @@
   letter-spacing: -0.04em;
 }
 
-.header p,
-.exportRule p {
+.header p {
   margin: 4px 0 0;
   color: var(--color-text-secondary);
   font-size: 12px;
   line-height: 1.35;
-}
-
-.header p {
   display: none;
 }
 
@@ -68,10 +64,6 @@
 
 .card {
   padding: 18px;
-}
-
-.card:last-child {
-  grid-column: 1 / -1;
 }
 
 .field {
@@ -125,15 +117,13 @@
   margin-top: 16px;
 }
 
-.metaList > div,
-.exportRule {
+.metaList > div {
   border-radius: 16px;
   padding: 12px;
   background: rgba(249, 243, 235, 0.62);
 }
 
-.metaList strong,
-.exportRule strong {
+.metaList strong {
   display: block;
   margin-top: 3px;
   color: var(--color-text-primary);

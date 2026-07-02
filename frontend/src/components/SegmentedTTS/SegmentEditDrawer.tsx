@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Segment, SegmentEngineParams } from '../../types';
+import type { Segment, EngineParams } from '../../types';
+import { useTranslation } from '../../i18n';
+import { segEngine, segEffectiveParams } from '../../services/segmentShims';
 import styles from './SegmentEditDrawer.module.css';
 
 interface SegmentEditDrawerProps {
@@ -7,7 +9,7 @@ interface SegmentEditDrawerProps {
   onClose: () => void;
   onUpdateText: (id: string, text: string) => void;
   onUpdateSSML: (id: string, ssml: string) => void;
-  onUpdateParams: (id: string, params: Partial<SegmentEngineParams>) => void;
+  onUpdateParams: (id: string, params: Partial<EngineParams>) => void;
   onRegenerate: (id: string) => void;
   onAnnotateSSML: (id: string) => void;
 }
@@ -17,11 +19,13 @@ interface SegmentEditDrawerContentProps extends Omit<SegmentEditDrawerProps, 'se
 }
 
 function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML, onUpdateParams, onRegenerate, onAnnotateSSML }: SegmentEditDrawerContentProps) {
+  const { t } = useTranslation();
   const [localText, setLocalText] = useState(segment.text);
-  const [localSSML, setLocalSSML] = useState(segment.ssml ?? '');
+  const [localSSML, setLocalSSML] = useState('');
   const [dirty, setDirty] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isCosyVoice = segment.params.engine === 'cosyvoice';
+  const isCosyVoice = segEngine(segment) === 'cosyvoice';
+  const eff = segEffectiveParams(segment);
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -29,22 +33,22 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
 
   const handleClose = useCallback(() => {
     if (dirty) {
-      const ok = confirm('未保存修改将丢失，确认放弃？');
+      const ok = confirm(t('segment.editDrawer.confirmDiscard'));
       if (!ok) return;
     }
     onClose();
-  }, [dirty, onClose]);
+  }, [dirty, onClose, t]);
 
   return (
     <div className={styles.overlay} onClick={handleClose}>
       <div className={styles.drawer} onClick={(e) => e.stopPropagation()}>
         <div className={styles.drawerHeader}>
-          <span>编辑 #{segment.id.slice(-3)}</span>
+          <span>{t('segment.editDrawer.title', { id: segment.id.slice(-3) })}</span>
           <button onClick={handleClose} className={styles.closeBtn}>✕</button>
         </div>
 
         <div className={styles.drawerBody}>
-          <label className={styles.label}>文本</label>
+          <label className={styles.label}>{t('segment.editDrawer.text')}</label>
           <textarea
             ref={textareaRef}
             className={styles.textarea}
@@ -56,10 +60,10 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
           {isCosyVoice && (
             <>
               <div className={styles.ssmlHeader}>
-                <label className={styles.label}>SSML 标记</label>
+                <label className={styles.label}>{t('segment.editDrawer.ssml')}</label>
                 <button className={styles.annotateBtn}
                   onClick={() => onAnnotateSSML(segment.id)}>
-                  ✨ 智能标注
+                  {t('segment.editDrawer.smartAnnotate')}
                 </button>
               </div>
               <textarea
@@ -73,19 +77,19 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
           )}
 
           <div className={styles.paramGrid}>
-            <label className={styles.label}>语速</label>
+            <label className={styles.label}>{t('segment.editDrawer.speed')}</label>
             <input type="range" min={0.5} max={2} step={0.1}
-              value={segment.params.speed ?? 1.0}
+              value={eff.speed ?? 1.0}
               onChange={(e) => onUpdateParams(segment.id, { speed: parseFloat(e.target.value) })} />
 
-            <label className={styles.label}>音调</label>
+            <label className={styles.label}>{t('segment.editDrawer.pitch')}</label>
             <input type="range" min={0.5} max={2} step={0.1}
-              value={segment.params.pitch ?? 1.0}
+              value={eff.pitch ?? 1.0}
               onChange={(e) => onUpdateParams(segment.id, { pitch: parseFloat(e.target.value) })} />
 
-            <label className={styles.label}>音量</label>
+            <label className={styles.label}>{t('segment.editDrawer.volume')}</label>
             <input type="range" min={0} max={100} step={1}
-              value={segment.params.volume ?? 80}
+              value={eff.volume ?? 80}
               onChange={(e) => onUpdateParams(segment.id, { volume: parseInt(e.target.value) })} />
           </div>
         </div>
@@ -94,10 +98,10 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
           <div className={styles.footerRight}>
             <button className={styles.regenerateBtn}
               onClick={() => onRegenerate(segment.id)}>
-              ↻ 重新生成
+              {t('segment.editDrawer.regenerate')}
             </button>
             <button className={styles.saveBtn} onClick={() => { setDirty(false); onClose(); }}>
-              ✓ 保存关闭
+              {t('segment.editDrawer.saveClose')}
             </button>
           </div>
         </div>

@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import type { Segment, EmotionType, VoiceProfile } from '../../types';
+import type { EngineParams, Segment, EmotionType, VoiceProfile, Role, RoleSnapshot } from '../../types';
 import { isSegmentAudioStale, isSegmentVoiceStale } from '../../services/segmentGenerationInputs';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { MergeMenu } from './MergeMenu';
+import { useTranslation } from '../../i18n';
 import styles from './SegmentRow.module.css';
 
 interface SegmentRowProps {
@@ -29,6 +30,12 @@ interface SegmentRowProps {
   timeStart?: number;
   /** End time in seconds (start + this segment's duration) */
   timeEnd?: number;
+  /** Available roles for lookup */
+  roles: Role[];
+  /** Snapshot of the role at generation time */
+  roleSnapshot?: RoleSnapshot;
+  /** The chapter's saved/applied voice params — used for staleness instead of live panel state */
+  chapterVoice?: EngineParams;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter?: (afterId: string) => void;
@@ -45,18 +52,21 @@ interface SegmentRowProps {
 }
 
 function fmtTime(sec: number): string {
-  const m = Math.floor(sec / 60);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
-  return `${String(m).padStart(2, '0')}:${s < 10 ? '0' : ''}${s.toFixed(1)}`;
+  const mm = String(m).padStart(2, '0');
+  const ss = `${s < 10 ? '0' : ''}${s.toFixed(1)}`;
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 const ENGINE_LABELS: Record<string, string> = {
-  cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo',
+  cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM',
 };
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
-  happy: '欣喜', sad: '沉重', angry: '愤怒',
-  calm: '沉稳', neutral: '中性', excited: '激昂',
+  happy: 'segment.segmentRow.happy', sad: 'segment.segmentRow.sad', angry: 'segment.segmentRow.angry',
+  calm: 'segment.segmentRow.calm', neutral: 'segment.segmentRow.neutral', excited: 'segment.segmentRow.excited',
 };
 
 const WF_SHAPES: number[][] = [
@@ -76,16 +86,18 @@ function getWaveform(id: string): number[] {
 export function SegmentRow({
   segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine,
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
- layout, timeStart, timeEnd, onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
- onMerge, isLast,
+  layout, timeStart, timeEnd, roles, roleSnapshot, chapterVoice,
+  onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
+  onMerge, isLast,
 }: SegmentRowProps) {
+  const { t } = useTranslation();
   const [charIdx, setCharIdx] = useState(-1);
   const timerRef = useRef<number | null>(null);
   const textLen = segment.text.length;
 
   useEffect(() => {
-    if (isPlaying && segment.duration_sec && textLen > 0) {
-      const ms = (segment.duration_sec * 1000) / textLen;
+    if (isPlaying && segment.audio.duration_sec && textLen > 0) {
+      const ms = (segment.audio.duration_sec * 1000) / textLen;
       setCharIdx(0);
       let i = 0;
       timerRef.current = window.setInterval(() => {
@@ -101,90 +113,174 @@ export function SegmentRow({
       return () => { if (timerRef.current) clearInterval(timerRef.current); setCharIdx(-1); };
     }
     setCharIdx(-1);
-  }, [isPlaying, segment.duration_sec, textLen]);
+  }, [isPlaying, segment.audio.duration_sec, textLen]);
 
   const isGenerating = segment.status === 'pending' || segment.status === 'queued';
   const isReady = segment.status === 'ready';
   const isFailed = segment.status === 'failed';
   const isIdle = segment.status === 'idle';
+  // SSML is stored in generated_params (or custom voice.params for un-generated segments)
+  const hasSSML: boolean = !!(
+    (segment.generated_params as Record<string, unknown>)?.ssml
+    || (segment.voice.source === 'custom' && (segment.voice.params as Record<string, unknown>)?.ssml)
+  );
   const emotion = segment.emotion || 'neutral';
   const emoCamel = emotion.charAt(0).toUpperCase() + emotion.slice(1); // happy -> Happy
-  const hasOverride = segment.overrides?.includes('voice');
+  const hasOverride = segment.voice.source === 'custom';
   const useIndependentVoice = hasOverride;
   const idx = String(index).padStart(2, '0');
   const waveform = getWaveform(segment.id);
 
+  // Resolve the effective role (for role-based and custom-with-role sources)
+  const resolvedRole: Role | RoleSnapshot | undefined = (() => {
+    const vs = segment.voice;
+    if (vs.source === 'role') {
+      return roles.find(r => r.id === vs.role_id) || roleSnapshot;
+    }
+    if (vs.source === 'custom' && vs.role_id) {
+      return roles.find(r => r.id === vs.role_id);
+    }
+    return undefined;
+  })();
+
   // effectiveEngine: what engine this segment WOULD use right now
-  const effectiveEngine = hasOverride ? segment.params.engine : (engine || segment.params.engine);
+  const effectiveEngine = segment.voice.source === 'custom'
+    ? segment.voice.engine
+    : (resolvedRole?.voice?.engine || engine || 'cosyvoice');
 
-  // Resolve voice display:
-  // 优先使用 voice_ref 字段（显式存储的音色引用）
-  // 回退到旧的推断逻辑（兼容旧数据）
+  // Resolve voice display from the VoiceSource discriminated union
   const resolveVoiceDisplay = (): { engine: string; voice: string } => {
-    // 优先使用 voice_ref
-    if (segment.voice_ref) {
-      const eng = ENGINE_LABELS[segment.voice_ref.engine] || segment.voice_ref.engine;
-      return { engine: eng, voice: segment.voice_ref.name || '未选择' };
-    }
+    const vs = segment.voice;
 
-    // 回退到旧的推断逻辑
-    const p = segment.params;
-    const dispEngine = (isReady || isGenerating) ? p.engine : effectiveEngine;
+    // When audio is generated, prefer engine from generated_params
+    const dispEngine = (isReady && segment.generated_params?.engine)
+      ? segment.generated_params.engine
+      : effectiveEngine;
     const eng = ENGINE_LABELS[dispEngine] || dispEngine;
-    const useGlobal = !hasOverride && !isReady && !isGenerating;
 
-    if (dispEngine === 'edge_tts') {
-      const ev = useGlobal ? globalEdgeVoice : p.edge_voice;
-      if (ev) {
-        const parts = ev.split('-');
-        const name = (parts[parts.length - 1] || ev).replace(/Neural$|V\d+$/i, '');
-        return { engine: eng, voice: name };
-      }
-      return { engine: eng, voice: '未选择' };
-    }
-
-    if (dispEngine === 'mimo_tts') {
-      const mode = useGlobal ? globalMimoMode : p.mimo_mode;
-      if (mode === 'voiceclone') {
-        const cloneId = useGlobal ? globalMimoCloneVoiceId : p.mimo_clone_voice_id;
-        if (cloneId) {
-          const vObj = voices.find(v => v.id === cloneId);
-          return { engine: eng, voice: vObj?.name || '自定义音色' };
+    /** Extract a human-readable voice name from engine params */
+    const extractVoiceName = (srcEngine: string, params: Record<string, unknown>): string => {
+      if (srcEngine === 'edge_tts') {
+        const ev = (params.voice || '') as string;
+        if (ev) {
+          const parts = ev.split('-');
+          return (parts[parts.length - 1] || ev).replace(/Neural$|V\d+$/i, '');
         }
-        return { engine: eng, voice: '未选择' };
+        return t('segment.segmentRow.voiceNotSelected');
       }
-      if (mode === 'voicedesign') {
-        const cloneId = p.mimo_clone_voice_id;
-        if (cloneId) {
-          const vObj = voices.find(v => v.id === cloneId);
-          return { engine: eng, voice: vObj?.name || '音色设计' };
+      if (srcEngine === 'mimo_tts') {
+        const mode = (params.mode || 'preset') as string;
+        if (mode === 'voiceclone' || mode === 'voicedesign') {
+          const cloneId = params.voice_id as string | undefined;
+          if (cloneId) {
+            const vObj = voices.find(v => v.id === cloneId);
+            return vObj?.name || (mode === 'voicedesign' ? t('segment.segmentRow.voiceDesigned') : t('segment.segmentRow.customVoice'));
+          }
+          if (mode === 'voicedesign') {
+            const desc = (params.voice_description || '') as string;
+            return desc ? desc.slice(0, 20) : t('segment.segmentRow.voiceDesigned');
+          }
+          return t('segment.segmentRow.voiceNotSelected');
         }
-        const desc = p.mimo_voice_description || '';
-        return { engine: eng, voice: desc ? desc.slice(0, 20) : '音色设计' };
+        return (params.voice_id as string) || t('segment.segmentRow.voiceNotSelected');
       }
-      // preset mode (default)
-      const preset = useGlobal ? globalMimoPresetVoice : p.mimo_preset_voice;
-      return { engine: eng, voice: preset || '未选择' };
-    }
+      // CosyVoice / VoxCPM
+      const vid = params.voice_id as string | undefined;
+      if (vid) {
+        const vObj = voices.find(v => {
+          const voiceVid = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+          return (voiceVid || v.id) === vid;
+        });
+        if (vObj?.name) return vObj.name;
+        if (vid.startsWith('cosyvoice-')) return t('segment.segmentRow.cosyVoice');
+        if (vid.startsWith('voxcpm-')) return t('segment.segmentRow.voxcpmVoice');
+        return vid.length > 20 ? `${vid.slice(0, 8)}…` : vid;
+      }
+      return t('segment.segmentRow.voiceNotSelected');
+    };
 
-    // CosyVoice / VoxCPM
-    const vid = useGlobal ? globalVoiceId : p.voice_id;
-    if (vid) {
-      const vObj = voices.find(v => (v.qwen_voice_id || v.id) === vid);
-      if (vObj?.name) return { engine: eng, voice: vObj.name };
-      // Fallback: extract a readable label from the voice ID
-      if (vid.startsWith('cosyvoice-')) return { engine: eng, voice: 'CosyVoice 音色' };
-      if (vid.startsWith('voxcpm-')) return { engine: eng, voice: 'VoxCPM 音色' };
-      return { engine: eng, voice: vid.length > 20 ? `${vid.slice(0, 8)}…` : vid };
+    switch (vs.source) {
+      case 'role': {
+        if (resolvedRole) {
+          return { engine: eng, voice: resolvedRole.name };
+        }
+        return { engine: eng, voice: t('segment.segmentRow.voiceNotSelected') };
+      }
+      case 'chapter': {
+        // Display from chapterVoice (applied voice), not generated_params or panel state.
+        // generated_params is only for staleness comparison, not display.
+        const saved = (chapterVoice as Record<string, unknown>);
+        if (saved) {
+          const srcEngine = String(saved.engine || effectiveEngine);
+          return { engine: eng, voice: extractVoiceName(srcEngine, saved) };
+        }
+        // Fallback: live panel state (only when no chapterVoice at all)
+        const chapterParams: Record<string, unknown> = {};
+        if (effectiveEngine === 'edge_tts') {
+          chapterParams.voice = globalEdgeVoice || '';
+        } else if (effectiveEngine === 'mimo_tts') {
+          chapterParams.mode = globalMimoMode;
+          chapterParams.voice_id = globalMimoPresetVoice || globalMimoCloneVoiceId;
+        } else {
+          chapterParams.voice_id = globalVoiceId;
+        }
+        const voiceName = extractVoiceName(effectiveEngine, chapterParams);
+        if (!voiceName || voiceName === t('segment.segmentRow.voiceNotSelected')) {
+          if (globalVoiceName) return { engine: eng, voice: globalVoiceName };
+        }
+        return { engine: eng, voice: voiceName };
+      }
+      case 'custom': {
+        const params = (isReady && segment.generated_params)
+          ? (segment.generated_params as unknown as Record<string, unknown>)
+          : (vs.params as Record<string, unknown>);
+        const voiceName = extractVoiceName(dispEngine, params);
+        if (voiceName && voiceName !== t('segment.segmentRow.voiceNotSelected')) {
+          return { engine: eng, voice: voiceName };
+        }
+        // Locked with no custom params yet — inherit display from saved voice
+        const fallback = (chapterVoice as Record<string, unknown>) || {};
+        const fbVn = extractVoiceName(dispEngine, fallback);
+        return { engine: eng, voice: fbVn || voiceName || t('segment.segmentRow.customVoice') };
+      }
     }
-    if (!hasOverride && globalVoiceName) return { engine: eng, voice: globalVoiceName };
-    return { engine: eng, voice: '未选择' };
   };
 
   const { engine: displayEngine, voice: voiceDisplayName } = resolveVoiceDisplay();
 
-  // Resolve voice object for gender lookup (from stored params)
-  const voiceObj = voices.find(v => (v.qwen_voice_id || v.id) === segment.params.voice_id);
+  // Resolve voice ID for gender lookup from the correct source.
+  // For custom segments with empty params (just locked), fall back to chapterVoice.
+  const voiceVoiceId = (() => {
+    const vs = segment.voice;
+    if (vs.source === 'custom') {
+      const cv = (vs.params as Record<string, unknown>)?.voice_id as string | undefined;
+      return cv || (chapterVoice as Record<string, unknown>)?.voice_id as string | undefined;
+    }
+    if (vs.source === 'role' && resolvedRole?.voice) {
+      return (resolvedRole.voice as unknown as Record<string, unknown>).voice_id as string | undefined;
+    }
+    return (chapterVoice as Record<string, unknown>)?.voice_id as string | undefined
+      || globalVoiceId;
+  })();
+  const voiceObj = voices.find(v => {
+    const voiceVid = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+    return (voiceVid || v.id) === voiceVoiceId;
+  });
+
+  // Edge-TTS voice technical name for gender heuristic.
+  // For custom segments with empty params (just locked), fall back to chapterVoice.
+  const edgeVoiceForGender: string = (() => {
+    const vs = segment.voice;
+    if (vs.source === 'custom') {
+      const cv = (vs.params as Record<string, unknown>)?.voice as string;
+      if (cv) return cv;
+      return ((chapterVoice as Record<string, unknown>)?.voice as string) || '';
+    }
+    if (vs.source === 'role' && resolvedRole?.voice) {
+      return ((resolvedRole.voice as unknown as Record<string, unknown>).voice as string || '');
+    }
+    return ((chapterVoice as Record<string, unknown>)?.voice as string) || globalEdgeVoice || '';
+  })();
 
   const resolveGender = (): string => {
     const desc = (voiceObj?.description || voiceObj?.name || '').toLowerCase();
@@ -192,8 +288,7 @@ export function SegmentRow({
     if (desc.includes('男') || desc.includes('male')) return 'male';
     // For Edge-TTS, check the relevant edge voice name
     if (effectiveEngine === 'edge_tts') {
-      const ev = hasOverride ? (segment.params.edge_voice || '') : (globalEdgeVoice || '');
-      if (/xiaoxiao|xiaoyi|xiaomeng|xiaomo|xiaorui|xiaoyan|jenny|aria|jane|sara|lisa/i.test(ev)) return 'female';
+      if (/xiaoxiao|xiaoyi|xiaomeng|xiaomo|xiaorui|xiaoyan|jenny|aria|jane|sara|lisa/i.test(edgeVoiceForGender)) return 'female';
       return 'male';
     }
     return 'male'; // default
@@ -204,11 +299,8 @@ export function SegmentRow({
   // Use the shared helper so role snapshots and prosody marks participate in
   // staleness alongside engine/voice. The helper compares the segment's
   // effective generation inputs against generated_params.
-
-  const generatedEngine = segment.params.engine;
-
-  // Engine changed → stale (unless locked). Kept for the warning label below.
-  const engineChanged = !hasOverride && !!generatedEngine && generatedEngine !== effectiveEngine;
+  
+  const generatedEngine = segment.generated_params?.engine;
 
   // Resolve the current global voice identifier for comparison (per-engine).
   const currentGlobalVoice = effectiveEngine === 'edge_tts'
@@ -217,18 +309,48 @@ export function SegmentRow({
       ? (globalMimoMode === 'voiceclone' ? (globalMimoCloneVoiceId || '') : (globalMimoPresetVoice || ''))
       : (globalVoiceId || '');
 
-  // Effective params that this segment would generate with right now. When the
-  // segment has no independent-voice override, fold in the active global voice
-  // settings so global changes are detected as stale.
-  const defaultParamsForStale = {
-    ...segment.params,
-    engine: (effectiveEngine || segment.params.engine) as Segment['params']['engine'],
-    voice_id: !hasOverride ? globalVoiceId : segment.params.voice_id,
-    edge_voice: !hasOverride ? globalEdgeVoice : segment.params.edge_voice,
-    mimo_mode: !hasOverride ? (globalMimoMode as Segment['params']['mimo_mode']) : segment.params.mimo_mode,
-    mimo_preset_voice: !hasOverride ? globalMimoPresetVoice : segment.params.mimo_preset_voice,
-    mimo_clone_voice_id: !hasOverride ? globalMimoCloneVoiceId : segment.params.mimo_clone_voice_id,
+  // Build params for staleness comparison from the voice source.
+  // Use chapterVoice (applied/saved) for chapter-source segments so that
+  // unreviewed panel changes do NOT trigger staleness until Apply is clicked.
+  const staleEngine = (segment.voice.source === 'chapter' && chapterVoice)
+    ? (chapterVoice.engine || effectiveEngine)
+    : effectiveEngine;
+  const defaultParamsForStale: Record<string, unknown> = {
+    engine: staleEngine,
   };
+  if (segment.voice.source === 'custom') {
+    Object.assign(defaultParamsForStale, segment.voice.params as Record<string, unknown>);
+  } else if (segment.voice.source === 'role' && resolvedRole?.voice) {
+    Object.assign(defaultParamsForStale, resolvedRole.voice as unknown as Record<string, unknown>);
+  } else if (chapterVoice) {
+    // chapter source: use the saved/applied chapter voice, not live panel state
+    const cv = chapterVoice as Record<string, unknown>;
+    if (staleEngine === 'edge_tts') {
+      defaultParamsForStale.voice = cv.voice;
+    } else if (staleEngine === 'mimo_tts') {
+      defaultParamsForStale.mode = cv.mode;
+      defaultParamsForStale.voice_id = cv.voice_id;
+    } else {
+      defaultParamsForStale.voice_id = cv.voice_id;
+    }
+  } else {
+    // Fallback (no chapterVoice): use live panel state as before
+    if (effectiveEngine === 'edge_tts') {
+      defaultParamsForStale.voice = globalEdgeVoice;
+    } else if (effectiveEngine === 'mimo_tts') {
+      defaultParamsForStale.mode = globalMimoMode;
+      defaultParamsForStale.voice_id = globalMimoPresetVoice || globalMimoCloneVoiceId;
+    } else {
+      defaultParamsForStale.voice_id = globalVoiceId;
+    }
+  }
+  // Engine changed → stale (unless locked). Compare against staleEngine now that it's defined.
+  const engineChanged = !hasOverride && !!generatedEngine && generatedEngine !== staleEngine;
+  // Extract voice identifier from generated_params (replaces deprecated generated_voice_id)
+  const generatedVoiceId: string | undefined = segment.generated_params
+    ? ((segment.generated_params as Record<string, unknown>).voice_id as string
+      || (segment.generated_params as Record<string, unknown>).voice as string)
+    : undefined;
   const isStale = segment.generated_params
     ? isSegmentAudioStale(segment, defaultParamsForStale)
     // Legacy / frontend-mode audio without recorded generated_params: fall back
@@ -237,23 +359,29 @@ export function SegmentRow({
         status: segment.status,
         hasVoiceOverride: !!hasOverride,
         generatedEngine,
-        effectiveEngine: effectiveEngine as Segment['params']['engine'],
-        generatedVoiceId: segment.generated_voice_id,
+        effectiveEngine: staleEngine as string,
+        generatedVoiceId,
         currentGlobalVoice,
       });
 
-  // Build a human-readable label for the current global voice (for stale warning text)
-  const currentGlobalVoiceLabel = effectiveEngine === 'edge_tts'
-    ? (() => {
-        const parts = (globalEdgeVoice || '').split('-');
-        return (parts[parts.length - 1] || globalEdgeVoice || '').replace(/Neural$|V\d+$/i, '');
-      })()
-    : effectiveEngine === 'mimo_tts'
-      ? (globalMimoMode === 'voiceclone' ? '自定义音色' : (globalMimoPresetVoice || ''))
-      : (globalVoiceName || currentGlobalVoice || '');
+  const currentGlobalVoiceLabel = (() => {
+    const cv = chapterVoice as Record<string, unknown> | undefined;
+    const eng = (cv?.engine || effectiveEngine) as string;
+    if (eng === 'edge_tts') {
+      const v = (cv?.voice || globalEdgeVoice || '') as string;
+      const parts = v.split('-');
+      return (parts[parts.length - 1] || v).replace(/Neural$|V\d+$/i, '');
+    }
+    if (eng === 'mimo_tts') {
+      const mode = (cv?.mode || globalMimoMode) as string;
+      return mode === 'voiceclone' ? t('segment.segmentRow.customVoice')
+        : ((cv?.voice_id || globalMimoPresetVoice || '') as string);
+    }
+    return (globalVoiceName || currentGlobalVoice || '') as string;
+  })();
 
-  const dur = isReady && segment.duration_sec
-    ? segment.duration_sec.toFixed(1) + 's'
+  const dur = isReady && segment.audio.duration_sec
+    ? segment.audio.duration_sec.toFixed(1) + 's'
     : isGenerating ? '...' : '';
 
   if (layout === 'horizontal') {
@@ -289,7 +417,7 @@ export function SegmentRow({
       >
         <div className={styles.compactEmo} />
         <div className={styles.compactAvatarWrap}>
-          <VoiceAvatar name={voiceDisplayName} size={28} gender={voiceGender} />
+          <VoiceAvatar name={voiceDisplayName} avatar={resolvedRole?.avatar} size={28} gender={voiceGender} />
         </div>
         <div className={styles.compactVoice}>
           <span className={styles.compactVoiceName} title={voiceDisplayName}>{voiceDisplayName}</span>
@@ -310,27 +438,32 @@ export function SegmentRow({
           </button>
         )}
         {isReady && isStale && (
-          <span className={styles.compactStale} title="音色已变更，建议重新生成">⚠</span>
+          <span className={styles.compactStale} title={t('segment.segmentRow.voiceChanged')}>⚠</span>
         )}
-        {isReady && (
+        {/* Only show toggle for non-role segments (narration follows global, can be locked/unlocked) */}
+        {isReady && segment.voice.source !== 'role' && (
           <button
             className={`${styles.compactVoiceLock} ${useIndependentVoice ? styles.compactVoiceLockActive : ''}`}
-            title={useIndependentVoice ? '独立音色（点击跟随全局）' : '跟随全局（点击锁定独立音色）'}
+            title={t(useIndependentVoice ? 'segment.segmentRow.unlockTooltip' : 'segment.segmentRow.lockTooltip')}
             onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
           >
             {useIndependentVoice ? '🔒' : '🔗'}
           </button>
         )}
+        {/* Role segments: always locked (show lock icon, no click) */}
+        {isReady && segment.voice.source === 'role' && (
+          <span className={styles.compactVoiceLock + ' ' + styles.compactVoiceLockActive} title={t('segment.segmentRow.roleLocked')}>🔒</span>
+        )}
         {onMerge && (
           <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} compact />
         )}
         {isReady && (
-          <button className={styles.compactPlayBtn} title={isPlaying && !isPaused ? '暂停' : '播放'}
+          <button className={styles.compactPlayBtn} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
             onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
             {isPlaying && !isPaused ? '⏸' : '▶'}
           </button>
         )}
-        <button className={styles.compactDelBtn} title="删除" disabled={isGenerating}
+        <button className={styles.compactDelBtn} title={t('common.delete')} disabled={isGenerating}
           onClick={(e) => { e.stopPropagation(); onDelete(segment.id); }}>
           ✕
         </button>
@@ -345,10 +478,10 @@ export function SegmentRow({
       onClick={() => onSelect(segment.id)}
     >
       <div className={styles.avatarCol}>
-<VoiceAvatar name={voiceDisplayName} size={48} gender={voiceGender}
+        <VoiceAvatar name={voiceDisplayName} avatar={resolvedRole?.avatar} size={48} gender={voiceGender}
           label={voiceDisplayName}
           sublabel={displayEngine} />
-        {isSelected && <span className={styles.editingBadge}>编辑中</span>}
+        {isSelected && <span className={styles.editingBadge}>{t('segment.segmentRow.editing')}</span>}
       </div>
 
       <div className={styles.body}>
@@ -364,7 +497,7 @@ export function SegmentRow({
         {/* Stale warning */}
         {isStale && (
           <div className={styles.staleWarn}>
-            ⚠ {engineChanged ? '模型已切换' : '音色已变更'}（当前全局: {ENGINE_LABELS[effectiveEngine] || effectiveEngine}{currentGlobalVoiceLabel ? ` · ${currentGlobalVoiceLabel}` : ''}），建议重新生成
+            ⚠ {engineChanged ? t('segment.segmentRow.engineChanged') : t('segment.segmentRow.voiceChangedText')}（当前全局: {ENGINE_LABELS[effectiveEngine] || effectiveEngine}{currentGlobalVoiceLabel ? ` · ${currentGlobalVoiceLabel}` : ''}），{t('segment.segmentRow.suggestRegenerate')}
           </div>
         )}
 
@@ -376,7 +509,7 @@ export function SegmentRow({
         )}
 
         {/* Decorative waveform */}
-        {isReady && segment.current_audio_id && (
+        {isReady && segment.audio.current?.id && (
           <div className={styles.waveDecor}>
             {waveform.map((h, i) => <div key={i} className={styles.wfBar} style={{ height: `${h}%` }} />)}
           </div>
@@ -386,60 +519,60 @@ export function SegmentRow({
         <div className={styles.metaRow}>
           <div className={styles.badges}>
             {segment.emotion && (
-              <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{EMOTION_LABELS[emotion]}</span>
+              <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{t(EMOTION_LABELS[emotion])}</span>
             )}
             {hasOverride && (
               <button
                 className={styles.indVoiceToggle}
-                title="点击取消独立音色，跟随全局"
+                title={t('segment.segmentRow.clickToCancelIndependent')}
                 onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
               >
-                🔒 独立音色
+                {t('segment.segmentRow.locked')}
               </button>
             )}
             {!hasOverride && isReady && (
               <button
                 className={styles.indVoiceToggleOff}
-                title="点击锁定为独立音色，不再跟随全局"
+                title={t('segment.segmentRow.clickToLockIndependent')}
                 onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
               >
-                🔗 跟随全局
+                {t('segment.segmentRow.global')}
               </button>
             )}
             {isReady && !isStale && <span className={styles.readyMark}>✓</span>}
             {isFailed && <span className={styles.failMark}>✕ {segment.error || ''}</span>}
-            {isIdle && <span className={styles.idleText}>待生成</span>}
-            {segment.ssml && <span className={styles.ssmlMark}>SSML</span>}
+            {isIdle && <span className={styles.idleText}>{t('segment.segmentRow.idle')}</span>}
+            {hasSSML && <span className={styles.ssmlMark}>SSML</span>}
           </div>
           <div className={styles.actions}>
             {/* Generate button for idle/failed */}
             {(isIdle || isFailed) && (
               <button className={isFailed ? styles.genBtnFail : styles.genBtn} disabled={isGenerating}
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>
-                {isGenerating ? '⏳' : '▶ 生成'}
+                {isGenerating ? '⏳' : `▶ ${t('segment.segmentRow.generate')}`}
               </button>
             )}
             {isGenerating && <span className={styles.genBadge}>⏳</span>}
             {isReady && (
-              <button className={styles.actPlay} title={isPlaying && !isPaused ? '暂停' : '播放'}
+              <button className={styles.actPlay} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
                 onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
                 {isPlaying && !isPaused ? '⏸' : '▶'}
               </button>
             )}
-            <button className={styles.actBtn} title="编辑"
+            <button className={styles.actBtn} title={t('segment.segmentRow.edit')}
               onClick={(e) => { e.stopPropagation(); onEdit(segment.id); }}>✎</button>
             {isReady && (
-              <button className={styles.actBtn} title="重新生成"
+              <button className={styles.actBtn} title={t('segment.segmentRow.regenerate')}
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>↻</button>
             )}
             {isReady && onTrimSilence && (
-              <button className={styles.actBtn} title="裁剪静音"
+              <button className={styles.actBtn} title={t('segment.segmentRow.trim')}
                 onClick={(e) => { e.stopPropagation(); onTrimSilence(segment.id); }}>✂</button>
             )}
             {onMerge && (
               <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} />
             )}
-            <button className={styles.actBtnDanger} title="删除" disabled={isGenerating}
+            <button className={styles.actBtnDanger} title={t('common.delete')} disabled={isGenerating}
               onClick={(e) => { e.stopPropagation(); onDelete(segment.id); }}>✕</button>
           </div>
         </div>

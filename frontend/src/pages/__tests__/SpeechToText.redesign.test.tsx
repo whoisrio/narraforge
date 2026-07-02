@@ -1,7 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { SpeechToText } from '../SpeechToText';
-import { speechToTextApi } from '../../services/api';
 
 vi.mock('../../hooks/useStorageMode', () => ({
   useStorageMode: () => ({ mode: 'frontend' }),
@@ -49,8 +48,8 @@ describe('SpeechToText redesigned layout', () => {
   it('renders the two-column Transcription Hub layout with all sections', () => {
     render(<SpeechToText />);
 
-    expect(screen.getByText('Transcription Hub')).toBeInTheDocument();
-    expect(screen.getByText('Convert spoken narrative into polished prose.')).toBeInTheDocument();
+    expect(screen.getByText('字幕识别')).toBeInTheDocument();
+    expect(screen.getByText('把单文件、多文件、音视频素材统一放入 Ingest 流程，生成可编辑 Transcript，再统一校准、翻译和导出。')).toBeInTheDocument();
     expect(screen.getByTestId('audio-dropzone')).toBeInTheDocument();
     expect(screen.getByTestId('transcript-editor')).toBeInTheDocument();
     expect(screen.getByTestId('correction-panel')).toBeInTheDocument();

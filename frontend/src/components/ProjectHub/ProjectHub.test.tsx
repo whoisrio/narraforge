@@ -23,7 +23,7 @@ function makeProject(id: string, name: string, chapters: number, segmentsPerChap
         created_at: now,
         updated_at: now,
       })),
-      default_params: { engine: 'edge_tts', edge_voice: 'zh-CN-YunxiNeural', language: 'Chinese' },
+      voice: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural', rate: '+0%', volume: '+0%' },
       split_config: { delimiters: ['。'], mode: 'rule' },
       created_at: now,
       updated_at: now,
@@ -51,7 +51,7 @@ describe('ProjectHub', () => {
     expect(within(card).getByText('67%')).toBeInTheDocument();
     expect(within(card).getByText('制作中')).toBeInTheDocument();
     expect(within(card).queryByText(/Voice workshop|chapters ·|Production|Chapters|Segments/)).not.toBeInTheDocument();
-    expect(screen.getByText('Project Hub')).toBeInTheDocument();
+    expect(screen.getByText('项目工作台')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /新建项目/ })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: /打开 DeepSeek 解说/ })).toBeInTheDocument();
     expect(within(card).getByRole('button', { name: /项目操作 DeepSeek 解说/ })).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import styles from './SourceDocumentView.module.css';
 
@@ -11,20 +11,18 @@ interface SourceDocumentViewProps {
   onViewModeChange: (mode: 'edit' | 'view') => void;
 }
 
-function countChars(text: string): number {
-  return text.replace(/\s/g, '').length;
-}
-
-export function SourceDocumentView({ content, onChange, onCompare, onBack, viewMode, onViewModeChange }: SourceDocumentViewProps) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+export function SourceDocumentView({
+  content, onChange, viewMode,
+}: SourceDocumentViewProps) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    return () => clearTimeout(timerRef.current);
+    return () => clearTimeout(timerRef.current ?? undefined);
   }, []);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
-    clearTimeout(timerRef.current);
+    clearTimeout(timerRef.current ?? undefined);
     timerRef.current = setTimeout(() => onChange(text), 500);
   }, [onChange]);
 

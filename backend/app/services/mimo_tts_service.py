@@ -100,6 +100,7 @@ class MiMoTTSService:
         voice_description: str,
         optimize_text_preview: bool = False,
         format: str = "wav",
+        context: str | None = None,
     ) -> bytes:
         """
         使用文本描述设计音色进行语音合成（mimo-v2.5-tts-voicedesign）
@@ -109,11 +110,15 @@ class MiMoTTSService:
             voice_description: 音色描述文本（放在 user 消息中）
             optimize_text_preview: 是否智能润色目标播报文本（默认 False，严格使用传入文本）
             format: 输出格式
+            context: 可选的上文对话文本，拼接在 user 消息中
 
         Returns:
             音频原始字节
         """
-        messages = [{"role": "user", "content": voice_description}]
+        user_content = voice_description
+        if context:
+            user_content = f"{context}\n\n{voice_description}"
+        messages = [{"role": "user", "content": user_content}]
 
         if text:
             messages.append({"role": "assistant", "content": text})
@@ -138,6 +143,7 @@ class MiMoTTSService:
         mime_type: str = "audio/mpeg",
         instruction: str = "",
         format: str = "wav",
+        context: str | None = None,
     ) -> bytes:
         """
         使用音频样本复刻音色进行语音合成（mimo-v2.5-tts-voiceclone）
@@ -148,15 +154,15 @@ class MiMoTTSService:
             mime_type: 音频 MIME 类型 audio/mpeg 或 audio/wav
             instruction: 可选的风格指令
             format: 输出格式
+            context: 可选的上文对话文本，拼接在 user 消息中
 
         Returns:
             音频原始字节
         """
-        messages = []
-        if instruction:
-            messages.append({"role": "user", "content": instruction})
-        else:
-            messages.append({"role": "user", "content": ""})
+        user_content = instruction or ""
+        if context:
+            user_content = f"{context}\n\n{user_content}" if user_content else context
+        messages = [{"role": "user", "content": user_content}]
 
         messages.append({"role": "assistant", "content": text})
 
@@ -177,6 +183,7 @@ class MiMoTTSService:
         audio_path: str,
         instruction: str = "",
         format: str = "wav",
+        context: str | None = None,
     ) -> bytes:
         """
         便捷方法：从本地音频文件进行音色复刻
@@ -217,6 +224,7 @@ class MiMoTTSService:
             mime_type=mime_type,
             instruction=instruction,
             format=format,
+            context=context,
         )
 
     async def list_preset_voices(self) -> list:

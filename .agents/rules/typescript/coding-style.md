@@ -197,3 +197,10 @@ const validated: UserInput = userSchema.parse(input)
 - No `console.log` statements in production code
 - Use proper logging libraries instead
 - See hooks for automatic detection
+
+### Voice Resolution (added 2026-06-30)
+
+- Use `VoiceSource` discriminated union for segment voice config: `{source:'chapter'|'role'|'custom', ...}`
+- Use `resolveEffectiveVoice()` from `services/voiceResolution.ts` to compute effective params (chapter -> role -> segment merge)
+- Never access `seg.params` / `seg.overrides` directly. Use `resolveEffectiveVoice(seg.voice, role, chapter.default_params)` instead.
+- Use `isAudioStale()` from `services/voiceResolution.ts` for stale detection — compare `resolveEffectiveVoice()` output vs `seg.generated_params`.

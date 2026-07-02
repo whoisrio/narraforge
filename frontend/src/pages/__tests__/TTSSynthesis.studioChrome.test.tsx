@@ -22,7 +22,6 @@ const mockProject = vi.hoisted(() => {
     layout: 'vertical' as const,
     remotion_project_path: null,
     default_narrator_role_id: null,
-    default_narrator_snapshot: null,
     created_at: now,
     updated_at: now,
   };

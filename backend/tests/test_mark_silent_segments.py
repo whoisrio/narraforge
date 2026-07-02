@@ -30,7 +30,7 @@ def _seed_project(db_session, base_dir: Path) -> str:
     db_session.add(p)
     ch = SegmentedProjectChapter(
         id="c-silent", project_id="p-silent", name="C1", position=0,
-        default_params={"engine": "edge_tts", "voice_id": "v1"},
+        voice={"engine": "edge_tts", "voice_id": "v1"},
     )
     db_session.add(ch)
     db_session.flush()
@@ -46,16 +46,16 @@ def _seed_project(db_session, base_dir: Path) -> str:
     p3.write_bytes(b"REAL_MP3" * 1000)
 
     s1 = SegmentedProjectSegment(
-        id="s1", chapter_id="c-silent", project_id="p-silent", position=0,
-        text="a", current_audio_path="proj1.mp3",
+        id="s1", chapter_id="c-silent", position=0,
+        text="a", audio={"current": {"path": "proj1.mp3", "format": "mp3"}},
     )
     s2 = SegmentedProjectSegment(
-        id="s2", chapter_id="c-silent", project_id="p-silent", position=1,
-        text="b", current_audio_path="proj2.mp3",
+        id="s2", chapter_id="c-silent", position=1,
+        text="b", audio={"current": {"path": "proj2.mp3", "format": "mp3"}},
     )
     s3 = SegmentedProjectSegment(
-        id="s3", chapter_id="c-silent", project_id="p-silent", position=2,
-        text="c", current_audio_path="proj3.mp3", audio_missing=True,
+        id="s3", chapter_id="c-silent", position=2,
+        text="c", audio={"current": {"path": "proj3.mp3", "format": "mp3"}, "missing": True},
     )
     db_session.add_all([s1, s2, s3])
     db_session.commit()
@@ -77,9 +77,9 @@ def test_marks_silent_files_as_missing(db_session, tmp_path, monkeypatch):
         s.id: s for s in
         db_session.query(SegmentedProjectSegment).all()
     }
-    assert segs["s1"].audio_missing is True
-    assert segs["s2"].audio_missing is False  # real file, not touched
-    assert segs["s3"].audio_missing is True   # was already True
+    assert (segs["s1"].audio or {}).get("missing") is True
+    assert (segs["s2"].audio or {}).get("missing") is not True  # real file, not touched
+    assert (segs["s3"].audio or {}).get("missing") is True   # was already True
 
 
 def test_marks_when_file_missing_from_disk(db_session, tmp_path, monkeypatch):
@@ -93,7 +93,7 @@ def test_marks_when_file_missing_from_disk(db_session, tmp_path, monkeypatch):
     result = mark_silent_segments_as_missing(db_session)
 
     segs = {s.id: s for s in db_session.query(SegmentedProjectSegment).all()}
-    assert segs["s1"].audio_missing is True
+    assert (segs["s1"].audio or {}).get("missing") is True
     assert result["file_missing"] == 1
 
 

@@ -8,13 +8,14 @@ def _role_payload(role_id: str = "role-linxia") -> dict:
         "avatar": "avatar://linxia",
         "description": "温柔但紧张的女主角",
         "role_kind": "cast",
-        "default_engine": "edge_tts",
-        "default_voice": "zh-CN-XiaoxiaoNeural",
-        "default_engine_params": {
+        "voice": {
             "engine": "edge_tts",
-            "edge_voice": "zh-CN-XiaoxiaoNeural",
-            "edge_rate": "+0%",
-            "edge_volume": "+0%",
+            "params": {
+                "engine": "edge_tts",
+                "edge_voice": "zh-CN-XiaoxiaoNeural",
+                "edge_rate": "+0%",
+                "edge_volume": "+0%",
+            },
         },
         "favorite_styles": [
             {"id": "soft", "name": "低声", "style_tags": ["low_voice"]},
@@ -29,8 +30,8 @@ def test_roles_crud_round_trip(client):
     assert body["id"] == "role-linxia"
     assert body["name"] == "林夏"
     assert body["role_kind"] == "cast"
-    assert body["default_engine"] == "edge_tts"
-    assert body["default_engine_params"]["edge_voice"] == "zh-CN-XiaoxiaoNeural"
+    assert body["voice"]["engine"] == "edge_tts"
+    assert body["voice"]["params"]["edge_voice"] == "zh-CN-XiaoxiaoNeural"
     assert body["favorite_styles"][0]["name"] == "低声"
     assert body["created_at"]
     assert body["updated_at"]
@@ -44,17 +45,19 @@ def test_roles_crud_round_trip(client):
         json={
             "name": "林夏新版",
             "role_kind": "narrator",
-            "default_voice": "zh-CN-XiaoyiNeural",
-            "default_engine_params": {
+            "voice": {
                 "engine": "edge_tts",
-                "edge_voice": "zh-CN-XiaoyiNeural",
+                "params": {
+                    "engine": "edge_tts",
+                    "edge_voice": "zh-CN-XiaoyiNeural",
+                },
             },
         },
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["name"] == "林夏新版"
     assert updated.json()["role_kind"] == "narrator"
-    assert updated.json()["default_voice"] == "zh-CN-XiaoyiNeural"
+    assert updated.json()["voice"]["params"]["edge_voice"] == "zh-CN-XiaoyiNeural"
 
     deleted = client.delete("/api/roles/role-linxia")
     assert deleted.status_code == 204

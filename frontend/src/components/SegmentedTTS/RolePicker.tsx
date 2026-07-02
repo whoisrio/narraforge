@@ -1,4 +1,5 @@
 import type { Role, RoleSnapshot } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './RolePicker.module.css';
 
 interface RolePickerProps {
@@ -22,10 +23,12 @@ function toSnapshot(role: Role): RoleSnapshot {
   };
 }
 
-export function RolePicker({ roles, value, label = '角色', onChange, onManage }: RolePickerProps) {
+export function RolePicker({ roles, value, label, onChange, onManage }: RolePickerProps) {
+  const { t } = useTranslation();
+  const effectiveLabel = label ?? t('segment.rolePicker.label');
   return (
     <label className={styles.root}>
-      <span className={styles.label}>{label}</span>
+      <span className={styles.label}>{effectiveLabel}</span>
       <div className={styles.controls}>
         <select
           className={styles.select}
@@ -35,12 +38,12 @@ export function RolePicker({ roles, value, label = '角色', onChange, onManage 
             onChange(role?.id ?? null, role ? toSnapshot(role) : null);
           }}
         >
-          <option value="">未选择</option>
+          <option value="">{t('segment.rolePicker.unselected')}</option>
           {roles.map((role) => (
             <option key={role.id} value={role.id}>{role.name}</option>
           ))}
         </select>
-        <button type="button" className={styles.manageButton} onClick={onManage}>管理</button>
+        <button type="button" className={styles.manageButton} onClick={onManage}>{t('segment.rolePicker.manage')}</button>
       </div>
     </label>
   );

@@ -11,7 +11,7 @@ function makeProject(id: string): SegmentedProject {
   return {
     schema_version: 2, id, name: 'x', layout: 'vertical',
     chapters: [{ id: 'c1', name: '第一章', engine: 'edge_tts', segments: [],
-      default_params: { engine: 'edge_tts' },
+      voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' },
       split_config: { delimiters: ['。'], mode: 'rule' },
       created_at: now, updated_at: now }],
     created_at: now, updated_at: now,

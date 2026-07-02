@@ -37,21 +37,21 @@ export function computeCharDiff(original: string, suggested: string) {
 }
 
 const ENGINE_OPTIONS = [
-  { value: 'whisper', label: 'Whisper (多语言)' },
-  { value: 'funasr', label: 'FunASR (中文优化)' },
+  { value: 'whisper', labelKey: 'transcription.engineWhisper' },
+  { value: 'funasr', labelKey: 'transcription.engineFunASR' },
 ];
 
 const WHISPER_MODEL_OPTIONS = [
-  { value: 'tiny', label: 'Tiny (最快)' },
-  { value: 'base', label: 'Base' },
-  { value: 'small', label: 'Small' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'large-v3', label: 'Large-v3 (最准)' },
+  { value: 'tiny', labelKey: 'transcription.modelTiny' },
+  { value: 'base', labelKey: 'transcription.modelBase' },
+  { value: 'small', labelKey: 'transcription.modelSmall' },
+  { value: 'medium', labelKey: 'transcription.modelMedium' },
+  { value: 'large-v3', labelKey: 'transcription.modelLargeV3' },
 ];
 
 const FUNASR_MODEL_OPTIONS = [
-  { value: 'paraformer-zh', label: 'Paraformer-ZH (中文)' },
-  { value: 'paraformer-zh-streaming', label: 'Paraformer-ZH Streaming' },
+  { value: 'paraformer-zh', labelKey: 'transcription.modelParaformer' },
+  { value: 'paraformer-zh-streaming', labelKey: 'transcription.modelParaformerStreaming' },
 ];
 
 export { ENGINE_OPTIONS, WHISPER_MODEL_OPTIONS, FUNASR_MODEL_OPTIONS };
@@ -171,10 +171,11 @@ export function useTranscription() {
 
       loadHistory();
     } catch (err: unknown) {
-      setError(getErrorDetail(err, 'Transcription failed'));
+      setError(getErrorDetail(err, 'transcription.errorTranscriptionFailed'));
     } finally {
       setProcessing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files, modelSize, beamSize, engine, enableVad, storageMode]);
 
   // ---- Export ----
@@ -279,7 +280,7 @@ export function useTranscription() {
   const handleCorrect = useCallback(async () => {
     if (!result?.content) return;
     if (!originalDoc.trim()) {
-      setError('请先粘贴原始文稿，再进行校准');
+      setError('transcription.errorNoOriginal');
       return;
     }
     setCorrecting(true);
@@ -291,7 +292,7 @@ export function useTranscription() {
       setSuggestions(res.suggestions);
       setCorrectionModel(res.model);
     } catch (err: unknown) {
-      setError(getErrorDetail(err, 'LLM 校准失败，请检查 .env 中的 LLM 配置'));
+      setError(getErrorDetail(err, 'transcription.errorCorrectionFailed'));
     } finally {
       setCorrecting(false);
     }
@@ -335,7 +336,7 @@ export function useTranscription() {
       setBilingualSegments(res.segments);
       setBilingualSrt(res.bilingual_srt);
     } catch (err: unknown) {
-      setError(getErrorDetail(err, '翻译失败，请检查 API Key 配置'));
+      setError(getErrorDetail(err, 'transcription.errorTranslationFailed'));
     } finally {
       setTranslating(false);
     }

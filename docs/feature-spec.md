@@ -178,18 +178,44 @@ idle → queued → pending → ready
                      ↘ failed → (retry) → pending
 ```
 
-#### Per-Segment Features
+#### Narrator Voice Sidebar
 
+The Studio sidebar has a **Narrator Voice** panel with engine selector (Edge-TTS / CosyVoice / MiMo-TTS / VoxCPM) and engine-specific parameter controls. All controls update **panel state immediately** but do NOT affect existing segments. A segmented narración does not reference engine-voice from the panel at real-time.
+
+An **Apply** button at the bottom:
+1. Opens a confirmation dialog
+2. On confirm, writes `buildCurrentParams()` → `Chapter.voice` via `SET_DEFAULT_PARAMS`
+3. All chapter-source segments refresh their display from the saved `Chapter.voice`
+4. Segments whose `generated_params` differ from the new `Chapter.voice` are flagged as stale
+
+Until Apply is clicked, the panel voice selection has zero effect on segment display or staleness.
+
+#### Per-Segment Voice Source
+
+Each segment has a `voice` field of type `VoiceSource`:
+
+| Source | Display | Behavior |
+|--------|---------|----------|
+| `chapter` | Shows `Chapter.voice` (applied voice) | Follows global; stale when generated_params ≠ chapterVoice |
+| `role` | Shows role name | Follows assigned role's voice |
+| `custom` | Shows custom `params`, falls back to `chapterVoice` if empty | Locked independent voice |
+
+Lock toggle (🔗↔🔒): `TOGGLE_INDEPENDENT_VOICE` switches between `chapter` and `custom` source. When locking, `params` is initially empty — the display falls back to `chapterVoice` until the segment is regenerated with custom params.
+
+Additional per-segment features:
 - Text editing, SSML annotation (CosyVoice), engine/voice override
 - Override tracking via `overrides` array
 - Undo regenerate (swap current/previous audio)
 - Insert/delete/reorder segments
 - Role assignment (narrator or cast)
-- Voice source tracking via `voice_ref` (`role` / `global` / `custom`) — displays the active voice name and origin
 
 #### Stale Detection
 
-When the global voice changes, segments generated with the old voice are flagged as stale with a warning.
+Segments are compared against `Chapter.voice` (the applied/saved voice), NOT the live panel state. This means:
+
+- Changing the voice selector in the sidebar does **not** trigger stale warnings
+- Only after clicking **Apply** (and `Chapter.voice` is updated) do segments with mismatched `generated_params` show a stale ⚠ warning
+- Locked segments (`voice.source === 'custom'`) are never stale from global voice changes
 
 #### Batch Operations
 

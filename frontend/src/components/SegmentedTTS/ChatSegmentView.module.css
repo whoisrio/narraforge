@@ -30,7 +30,7 @@
   border-radius: 12px;
   padding: 10px 12px;
   background: rgba(196, 122, 58, 0.08);
-  color: #8a4f1f;
+  color: var(--color-primary-dark);
   font-size: 13px;
 }
 
@@ -91,6 +91,6 @@
   border-radius: 999px;
   padding: 8px 14px;
   background: rgba(196, 122, 58, 0.08);
-  color: #8a4f1f;
+  color: var(--color-primary-dark);
   cursor: pointer;
 }

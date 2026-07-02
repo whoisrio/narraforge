@@ -16,7 +16,7 @@ def _create_project_with_segments(client, project_id: str = "p-anim-1"):
             "chapters": [
                 {
                     "id": "ch1", "position": 0, "name": "第一章", "engine": None,
-                    "default_params": {}, "split_config": {}, "original_text": None,
+                    "voice": {}, "split_config": {}, "original_text": None,
                     "segments": [
                         {"id": "s1", "position": 0, "text": "第 1 段", "duration_sec": 4.0},
                         {"id": "s2", "position": 1, "text": "第 2 段", "duration_sec": 5.0},
@@ -24,7 +24,7 @@ def _create_project_with_segments(client, project_id: str = "p-anim-1"):
                 },
                 {
                     "id": "ch2", "position": 1, "name": "第二章", "engine": None,
-                    "default_params": {}, "split_config": {}, "original_text": None,
+                    "voice": {}, "split_config": {}, "original_text": None,
                     "segments": [
                         {"id": "s3", "position": 0, "text": "第 3 段", "duration_sec": 6.0},
                     ],
@@ -46,7 +46,7 @@ def test_animation_theme_round_trip(client):
             "animation_theme": "dark-botanical",
             "chapters": [
                 {"id": "ch1", "position": 0, "name": "第一章",
-                 "default_params": {}, "split_config": {},
+                 "voice": {}, "split_config": {},
                  "segments": []},
             ],
         },
@@ -77,7 +77,7 @@ def test_animation_spec_round_trip_via_save(client):
             "schema_version": 2, "layout": "vertical",
             "chapters": [
                 {"id": "ch1", "position": 0, "name": "第一章",
-                 "default_params": {}, "split_config": {},
+                 "voice": {}, "split_config": {},
                  "segments": [
                     {"id": "s1", "position": 0, "text": "x",
                      "animation_spec": spec},
@@ -219,7 +219,7 @@ def test_animation_spec_null_after_omitted(client):
             "schema_version": 2, "layout": "vertical",
             "chapters": [
                 {"id": "ch1", "position": 0, "name": "第一章",
-                 "default_params": {}, "split_config": {},
+                 "voice": {}, "split_config": {},
                  "segments": [{"id": "s1", "position": 0, "text": "x"}]},
             ],
         },

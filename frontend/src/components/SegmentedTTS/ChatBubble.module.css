@@ -17,7 +17,7 @@
 }
 
 .selected .body {
-  border-color: #c47a3a;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 4px rgba(196, 122, 58, 0.14), var(--shadow-md);
 }
 
@@ -123,11 +123,11 @@
   padding: 1px 3px;
   background: rgba(196, 122, 58, 0.22);
   color: inherit;
-  border-bottom: 2px solid #c47a3a;
+  border-bottom: 2px solid var(--color-primary);
 }
 
 .stale {
-  background: #fff0e8 !important;
-  color: #a33 !important;
+  background: var(--color-surface)0e8 !important;
+  color: var(--color-error) !important;
   font-weight: 900;
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ttsApi } from '../../services/api';
 import type { EdgeVoice } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './EdgeTTSPanel.module.css';
 
 interface EdgeTTSPanelProps {
@@ -12,18 +13,19 @@ interface EdgeTTSPanelProps {
   onVolumeChange?: (v: number) => void;
 }
 
-const GENDER_OPTIONS = [
-  { value: '', label: '全部' },
-  { value: 'Female', label: '女声' },
-  { value: 'Male', label: '男声' },
-] as const;
-
 export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRateChange, onVolumeChange }: EdgeTTSPanelProps) {
   const [languages, setLanguages] = useState<string[]>([]);
   const [selectedLanguage, setSelectedLanguage] = useState('Chinese');
   const [selectedGender, setSelectedGender] = useState('');
   const [voices, setVoices] = useState<EdgeVoice[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const { t } = useTranslation();
+  
+  const GENDER_OPTIONS = [
+    { value: '', label: t('tts.all') },
+    { value: 'Female', label: t('tts.female') },
+    { value: 'Male', label: t('tts.male') },
+  ];
 
   useEffect(() => {
     ttsApi.getEdgeLanguages().then(setLanguages).catch(() => {});
@@ -46,13 +48,13 @@ export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRat
   return (
     <div className={styles.panel}>
       {/* Language */}
-      <label className={styles.fieldLabel}>语言</label>
+      <label className={styles.fieldLabel}>{t('tts.language')}</label>
       <select className={styles.select} value={selectedLanguage} onChange={e => setSelectedLanguage(e.target.value)}>
         {languages.map(lang => <option key={lang} value={lang}>{lang}</option>)}
       </select>
 
       {/* Gender */}
-      <label className={styles.fieldLabel}>性别</label>
+      <label className={styles.fieldLabel}>{t('tts.gender')}</label>
       <div className={styles.pillGroup}>
         {GENDER_OPTIONS.map(opt => (
           <button key={opt.value} className={`${styles.pill} ${selectedGender === opt.value ? styles.pillActive : ''}`}
@@ -61,9 +63,9 @@ export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRat
       </div>
 
       {/* Voice */}
-      <label className={styles.fieldLabel}>音色</label>
+      <label className={styles.fieldLabel}>{t('tts.voice')}</label>
       {isLoading ? (
-        <span className={styles.loadingText}>加载中...</span>
+        <span className={styles.loadingText}>{t('common.loading')}</span>
       ) : (
         <select className={styles.select} value={selectedVoice || ''} onChange={e => onVoiceSelect(e.target.value)}>
           {voices.map(v => (
@@ -78,7 +80,7 @@ export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRat
       {onRateChange && (
         <div className={styles.sliderRow}>
           <div className={styles.sliderHeader}>
-            <span className={styles.fieldLabel}>语速</span>
+            <span className={styles.fieldLabel}>{t('tts.rate')}</span>
             <span className={styles.paramValue}>{rate ?? 0}%</span>
           </div>
           <input type="range" min={-50} max={50} step={5} value={rate ?? 0}
@@ -92,7 +94,7 @@ export function EdgeTTSPanel({ selectedVoice, onVoiceSelect, rate, volume, onRat
       {onVolumeChange && (
         <div className={styles.sliderRow}>
           <div className={styles.sliderHeader}>
-            <span className={styles.fieldLabel}>音量</span>
+            <span className={styles.fieldLabel}>{t('tts.volume')}</span>
             <span className={styles.paramValue}>{volume ?? 0}%</span>
           </div>
           <input type="range" min={-50} max={50} step={5} value={volume ?? 0}

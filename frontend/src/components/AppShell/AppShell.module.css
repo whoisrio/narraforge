@@ -2,7 +2,7 @@
   min-height: 100vh;
   background:
     radial-gradient(circle at top left, rgba(255, 220, 195, 0.58), transparent 360px),
-    linear-gradient(135deg, #fff8f1 0%, #f9f3eb 48%, #f3ede6 100%);
+    linear-gradient(135deg, var(--color-background) 0%, var(--color-surface-low) 48%, var(--color-surface-container) 100%);
   color: var(--color-text-primary);
   --shell-sidebar-width: var(--nav-width);
 }
@@ -41,7 +41,7 @@
   width: 38px;
   height: 38px;
   border-radius: 14px;
-  color: #fff;
+  color: var(--color-surface);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: -0.04em;
@@ -135,8 +135,8 @@
   padding: 0 12px;
   border-radius: 14px;
   color: var(--color-text-secondary);
-  font-size: 14px;
-  font-weight: 750;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   transition: background var(--transition-normal), color var(--transition-normal), transform var(--transition-fast), box-shadow var(--transition-normal);

@@ -1,54 +1,74 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { Segment, SegmentEngineParams, EmotionType, VoiceProfile } from '../../types';
-import { ttsApi } from '../../services/api';
-import { VoiceAvatar } from '../ui/VoiceAvatar';
+import { useTranslation } from '../../i18n';
+import type { Segment, EngineParams, EmotionType, VoiceProfile, MiMoPresetVoice, Role } from '../../types';
+import { ttsApi, mimoTtsApi } from '../../services/api';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
+import { segEngine, segEffectiveParams, segFieldOverridden, segOverrideFields } from '../../services/segmentShims';
 import styles from './SegmentEditPanel.module.css';
 
-type SegmentOverride = NonNullable<Segment['overrides']>[number];
-type SegmentParamField = keyof SegmentEngineParams;
-type SegmentParamValue = SegmentEngineParams[SegmentParamField];
+type SegmentParamField = keyof EngineParams;
+type SegmentParamValue = EngineParams[SegmentParamField];
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
-  happy: '欣喜', sad: '沉重', angry: '愤怒',
-  calm: '沉稳', neutral: '中性', excited: '激昂',
+  happy: 'segmentEdit.emotion.happy', sad: 'segmentEdit.emotion.sad', angry: 'segmentEdit.emotion.angry',
+  calm: 'segmentEdit.emotion.calm', neutral: 'segmentEdit.emotion.neutral', excited: 'segmentEdit.emotion.excited',
 };
 
 interface SegmentEditPanelProps {
   segment: Segment | null;
   voices: VoiceProfile[];
-  globalVoiceName?: string;
+  roles?: Role[];
   onClose: () => void;
   onUpdateText: (id: string, text: string) => void;
   onUpdateSSML: (id: string, ssml: string) => void;
-  onUpdateParams: (id: string, params: Partial<SegmentEngineParams>) => void;
-  onUpdateOverrides?: (id: string, overrides: Segment['overrides']) => void;
   onUpdateEmotion?: (id: string, emotion: string) => void;
+  onUndo?: (id: string) => void;
   onRegenerate: (id: string) => void;
+  onConfirmCustom?: (id: string, localParams: Record<string, unknown>) => void;
   onAnnotateSSML: (id: string) => void;
   onSplit?: (id: string, position: number) => void;
 }
 
 const ALL_EMOTIONS: { key: string; label: string; color: string; bg: string }[] = [
-  { key: 'happy', label: '欣喜', color: '#e8a838', bg: '#fef7e6' },
-  { key: 'excited', label: '激昂', color: '#d46a2c', bg: '#fdf0e8' },
-  { key: 'calm', label: '沉稳', color: '#7ba68a', bg: '#eef5f0' },
-  { key: 'neutral', label: '中性', color: '#9e978e', bg: '#f5f4f0' },
-  { key: 'sad', label: '沉重', color: '#6b8db5', bg: '#edf2f8' },
-  { key: 'angry', label: '愤怒', color: '#c45a4a', bg: '#fceae7' },
+  { key: 'happy', label: 'segmentEdit.emotion.happy', color: '#e8a838', bg: '#fef7e6' },
+  { key: 'excited', label: 'segmentEdit.emotion.excited', color: '#d46a2c', bg: '#fdf0e8' },
+  { key: 'calm', label: 'segmentEdit.emotion.calm', color: '#7ba68a', bg: '#eef5f0' },
+  { key: 'neutral', label: 'segmentEdit.emotion.neutral', color: '#9e978e', bg: '#f5f4f0' },
+  { key: 'sad', label: 'segmentEdit.emotion.sad', color: '#6b8db5', bg: '#edf2f8' },
+  { key: 'angry', label: 'segmentEdit.emotion.angry', color: '#c45a4a', bg: '#fceae7' },
 ];
 
-const MIMO_PRESET_VOICES = ['冰糖', '星辰', '雪梨', '琥珀', '青云', '紫霞'];
-
 export function SegmentEditPanel({
-  segment, voices, globalVoiceName, onClose, onUpdateText,
-  onUpdateParams, onUpdateOverrides, onUpdateEmotion, onRegenerate, onAnnotateSSML, onSplit,
+  segment, voices, roles, onClose, onUpdateText,
+  onUpdateEmotion, onUndo, onRegenerate, onConfirmCustom, onAnnotateSSML, onSplit,
 }: SegmentEditPanelProps) {
+  const { t } = useTranslation();
   const [localText, setLocalText] = useState(segment?.text ?? '');
   const [showParams, setShowParams] = useState(false);
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>([]);
+  const [mimoPresets, setMimoPresets] = useState<MiMoPresetVoice[]>([]);
   const [edgeLang] = useState('Chinese');
+  const [localParams, setLocalParams] = useState<Record<string, unknown>>({});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Reset local params when segment source changes
+  useEffect(() => {
+    if (!segment) { setLocalParams({}); return; }
+    const _eff = segEffectiveParams(segment);
+    // For role segments, include role voice params as base display
+    if (segment.voice.source === 'role' && segment.role_id && roles) {
+      const role = roles.find(r => r.id === segment.role_id);
+      if (role?.voice) {
+        const v = role.voice;
+        // Store EngineParams directly — no flat-key conversion
+        const roleParams: Record<string, unknown> = { engine: v.engine, ...v };
+        setLocalParams({ ..._eff, ...roleParams });
+        return;
+      }
+    }
+    setLocalParams(_eff);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segment?.id, segment?.voice?.source, roles]);
 
   useEffect(() => {
     if (segment) {
@@ -56,6 +76,7 @@ export function SegmentEditPanel({
       setShowParams(false);
       setTimeout(() => textareaRef.current?.focus(), 50);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segment?.id]);
 
   // Sync localText when the segment's text changes externally (e.g., after split)
@@ -68,10 +89,18 @@ export function SegmentEditPanel({
 
   // Load Edge-TTS voices when engine is edge_tts
   useEffect(() => {
-    if (segment?.params.engine === 'edge_tts' || showParams) {
+    if (segEngine(segment) === 'edge_tts' || showParams) {
       ttsApi.getEdgeVoices(edgeLang).then(setEdgeVoices).catch(() => {});
     }
-  }, [edgeLang, segment?.params.engine, showParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edgeLang, segment ? segEngine(segment) : undefined, showParams]);
+
+  // Load MiMo preset voices from backend
+  useEffect(() => {
+    if (showParams) {
+      mimoTtsApi.getPresetVoices().then(setMimoPresets).catch(() => {});
+    }
+  }, [showParams]);
 
   const handleTextChange = useCallback((text: string) => {
     setLocalText(text);
@@ -80,71 +109,62 @@ export function SegmentEditPanel({
 
   const handleParamChange = useCallback((field: SegmentParamField, value: SegmentParamValue) => {
     if (!segment) return;
-    const params: Partial<SegmentEngineParams> = {};
+    const params: Partial<EngineParams> = {};
     if (field === 'engine') {
-      params.engine = value as SegmentEngineParams['engine'];
-      // Reset voice when switching engine
-      if (value === 'edge_tts') { params.edge_voice = ''; }
-      else if (value === 'mimo_tts') { params.mimo_preset_voice = '冰糖'; }
-      else if (value === 'voxcpm') { params.voxcpm_mode = 'tts'; }
+      params.engine = value as EngineParams['engine'];
+      if (value === 'edge_tts') { params.voice = ''; }
+      else if (value === 'mimo_tts') { params.mode = 'preset'; params.voice_id = '冰糖'; }
+      else if (value === 'voxcpm') { params.mode = 'clone'; }
       else { params.voice_id = ''; }
     }
     else if (field === 'speed') params.speed = value as number;
     else if (field === 'volume') params.volume = value as number;
     else if (field === 'pitch') params.pitch = value as number;
     else if (field === 'voice_id') params.voice_id = value as string;
-    else if (field === 'edge_voice') params.edge_voice = value as string;
-    else if (field === 'mimo_preset_voice') params.mimo_preset_voice = value as string;
-    else if (field === 'mimo_clone_voice_id') params.mimo_clone_voice_id = value as string;
-    else if (field === 'mimo_instruction') params.mimo_instruction = value as string;
-    else if (field === 'voxcpm_style_control') params.voxcpm_style_control = value as string;
-    else if (field === 'language') params.language = value as string;
+    else if (field === 'voice') params.voice = value as string;
+    else if (field === 'mode') params.mode = value as string;
     else if (field === 'instruction') params.instruction = value as string;
-    onUpdateParams(segment.id, params);
+    else if (field === 'style_control') params.style_control = value as string;
+    else if (field === 'language') params.language = value as string;
 
-    // Track overrides (skip engine switch)
-    if (field !== 'engine') {
-      const overrideField: SegmentOverride = field === 'voice_id' || field === 'edge_voice' || field === 'mimo_preset_voice' || field === 'mimo_clone_voice_id'
-        ? 'voice'
-        : (field === 'mimo_instruction' || field === 'voxcpm_style_control' ? 'instruction' : field as SegmentOverride);
-      if (onUpdateOverrides && !segment.overrides?.includes(overrideField)) {
-        onUpdateOverrides(segment.id, [...(segment.overrides || []), overrideField]);
-      }
-    }
-  }, [segment, onUpdateParams, onUpdateOverrides]);
-
-  const handleResetOverride = useCallback((field: SegmentOverride) => {
-    if (!segment || !onUpdateOverrides) return;
-    onUpdateOverrides(segment.id, (segment.overrides || []).filter(f => f !== field));
-  }, [segment, onUpdateOverrides]);
+    // All edits accumulate locally; only confirm button commits
+    setLocalParams(prev => ({ ...prev, ...params as unknown as Record<string, unknown> }));
+  }, [segment]);
 
   if (!segment) return null;
 
+  const isCustom = segment.voice.source === 'custom';
   const emotion = segment.emotion || 'neutral';
   const emoCamel = emotion.charAt(0).toUpperCase() + emotion.slice(1);
-  const isCosyVoice = segment.params.engine === 'cosyvoice';
-  const isEdgeTTS = segment.params.engine === 'edge_tts';
-  const isMiMo = segment.params.engine === 'mimo_tts';
-  const isVoxCPM = segment.params.engine === 'voxcpm';
-  const hasOverrides = segment.overrides && segment.overrides.length > 0;
+  const _eff = segEffectiveParams(segment);
+  // Merge local edits on top of effective params (for preview when not custom)
+  const eff: Record<string, unknown> = isCustom ? _eff : { ..._eff, ...localParams };
+  const isCosyVoice = eff.engine === 'cosyvoice';
+  const isEdgeTTS = eff.engine === 'edge_tts';
+  const isMiMo = eff.engine === 'mimo_tts';
+  const isVoxCPM = eff.engine === 'voxcpm';
+  const hasOverrides = segOverrideFields(segment).length > 0;
 
   // Build override summary
   const overrideSummary: string[] = [];
-  if (segment.overrides?.includes('voice')) {
+  if (segFieldOverridden(segment, 'voice')) {
     if (isEdgeTTS) {
-      overrideSummary.push(`音色: ${segment.params.edge_voice || '自定义'}`);
+      overrideSummary.push(`${t('segmentEdit.voice')}: ${(eff.voice as string) || t('segmentEdit.custom')}`);
     } else if (isMiMo) {
-      overrideSummary.push(`音色: ${segment.params.mimo_preset_voice || '自定义'}`);
+      overrideSummary.push(`${t('segmentEdit.voice')}: ${(eff.voice_id as string) || t('segmentEdit.custom')}`);
     } else if (isVoxCPM) {
-      const v = voices.find(v => v.id === segment.params.voice_id);
-      overrideSummary.push(`音色: ${v?.name || '自定义'}`);
+      const v = voices.find(v => v.id === eff.voice_id);
+      overrideSummary.push(`${t('segmentEdit.voice')}: ${v?.name || t('segmentEdit.custom')}`);
     } else {
-      const v = voices.find(v => (v.qwen_voice_id || v.id) === segment.params.voice_id);
-      overrideSummary.push(`音色: ${v?.name || '自定义'}`);
+      const v = voices.find(v => {
+        const vid = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+        return (vid || v.id) === eff.voice_id;
+      });
+      overrideSummary.push(`${t('segmentEdit.voice')}: ${v?.name || t('segmentEdit.custom')}`);
     }
   }
-  if (segment.overrides?.includes('speed')) overrideSummary.push(`语速: ${(segment.params.speed ?? 1).toFixed(1)}×`);
-  if (segment.overrides?.includes('pitch')) overrideSummary.push(`语调: ${(segment.params.pitch ?? 1).toFixed(1)}`);
+  if (segFieldOverridden(segment, 'speed')) overrideSummary.push(`${t('segmentEdit.speed')}: ${Number(eff.speed ?? 1).toFixed(1)}×`);
+  if (segFieldOverridden(segment, 'pitch')) overrideSummary.push(`${t('segmentEdit.pitch')}: ${Number(eff.pitch ?? 1).toFixed(1)}`);
 
   return (
     <div className={styles.panel}>
@@ -155,26 +175,13 @@ export function SegmentEditPanel({
           <div className={styles.title}>
             {segment.emotion && (
               <span className={`${styles.emotionTag} ${styles[`emotion${emoCamel}`]}`}>
-                {EMOTION_LABELS[emotion]}
+                {t(EMOTION_LABELS[emotion])}
               </span>
             )}
-            编辑 #{segment.id.slice(-3)}
+            {t('segmentEdit.editSegment')} #{segment.id.slice(-3)}
           </div>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
-
-        {/* Role info (if assigned) */}
-        {segment.role_snapshot && (
-          <div className={styles.roleInfo}>
-            <VoiceAvatar
-              avatar={segment.role_snapshot.avatar}
-              name={segment.role_snapshot.name}
-              engine={segment.role_snapshot.default_engine}
-              size={28}
-            />
-            <span className={styles.roleInfoName}>{segment.role_snapshot.name}</span>
-          </div>
-        )}
 
         {/* Text */}
         <textarea ref={textareaRef} className={styles.textarea} value={localText}
@@ -189,7 +196,7 @@ export function SegmentEditPanel({
                 onSplit(segment.id, pos);
               }
             }}>
-              ✂ 在光标处拆分
+              {t('segmentEdit.splitAtCursor')}
             </button>
           </div>
         )}
@@ -197,19 +204,19 @@ export function SegmentEditPanel({
         {/* SSML (CosyVoice only) */}
         {isCosyVoice && (
           <div className={styles.ssmlBar}>
-            <button className={styles.ssmlBtn} onClick={() => onAnnotateSSML(segment.id)}>✨ 智能标注</button>
+            <button className={styles.ssmlBtn} onClick={() => onAnnotateSSML(segment.id)}>{t('segmentEdit.smartAnnotate')}</button>
           </div>
         )}
 
         {/* Emotion picker */}
         <div className={styles.emotionPicker}>
-          <span className={styles.emotionPickerLabel}>感情色彩</span>
+          <span className={styles.emotionPickerLabel}>{t('segmentEdit.emotionLabel')}</span>
           <div className={styles.emotionChips}>
             {ALL_EMOTIONS.map(e => (
               <button key={e.key} className={styles.emotionChip}
                 style={{ background: emotion === e.key ? e.color : e.bg, color: emotion === e.key ? '#fff' : e.color, borderColor: emotion === e.key ? e.color : 'transparent' }}
                 onClick={() => onUpdateEmotion?.(segment.id, e.key)}>
-                {e.label}
+                {t(e.label)}
               </button>
             ))}
           </div>
@@ -221,20 +228,20 @@ export function SegmentEditPanel({
             {hasOverrides ? (
               <><span className={styles.dot} /><span>{overrideSummary.join(' · ')}</span></>
             ) : (
-              <span style={{ color: 'var(--color-text-muted)' }}>使用全局参数</span>
+              <span style={{ color: 'var(--color-text-muted)' }}>{t('segmentEdit.useGlobalParams')}</span>
             )}
           </div>
           <button className={`${styles.expandBtn} ${showParams ? styles.expandBtnOpen : ''}`}
             onClick={() => setShowParams(!showParams)}>
             <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-            参数覆盖
+            {t('segmentEdit.paramsOverride')}
           </button>
-          {segment.status === 'ready' && (
-            <button className={styles.btnSecondary} onClick={() => onRegenerate(segment.id)}>撤销</button>
+          {segment.status === 'ready' && onUndo && (
+            <button className={styles.btnSecondary} onClick={() => onUndo(segment.id)}>{t('segmentEdit.undo')}</button>
           )}
           <button className={styles.btnPrimary} onClick={() => onRegenerate(segment.id)}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ verticalAlign: '-1px', marginRight: 3 }}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            重新生成
+            {t('segmentEdit.regenerate')}
           </button>
         </div>
 
@@ -242,16 +249,18 @@ export function SegmentEditPanel({
         {showParams && (
           <div className={styles.paramsPanel}>
             <div className={styles.paramsTitle}>
-              参数覆盖
-              <span className={styles.paramsHint}>— 修改后此段不再跟随全局</span>
+              {t('segmentEdit.paramsOverride')}
+              <span className={styles.paramsHint}>
+                {isCustom ? t('segmentEdit.customVoiceActive') : t('segmentEdit.willBecomeCustom')}
+              </span>
             </div>
 
-            {/* Engine selector — full width */}
+            {/* Engine selector */}
             <div className={styles.engineRow}>
-              <span className={styles.paramLabel}>模型</span>
+              <span className={styles.paramLabel}>{t('segmentEdit.model')}</span>
               <div className={styles.enginePills}>
                 {(['cosyvoice', 'edge_tts', 'mimo_tts', 'voxcpm'] as const).map(eng => (
-                  <button key={eng} className={`${styles.enginePill} ${segment.params.engine === eng ? styles.enginePillActive : ''}`}
+                  <button key={eng} className={`${styles.enginePill} ${eff.engine === eng ? styles.enginePillActive : ''}`}
                     onClick={() => handleParamChange('engine', eng)}>
                     {eng === 'cosyvoice' ? 'CosyVoice' : eng === 'edge_tts' ? 'Edge-TTS' : eng === 'mimo_tts' ? 'MiMo' : 'VoxCPM'}
                   </button>
@@ -260,133 +269,141 @@ export function SegmentEditPanel({
             </div>
 
             <div className={styles.paramsGrid}>
-              {/* Voice — per engine */}
-              <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                <div className={styles.paramLabel}>
-                  {segment.overrides?.includes('voice') && <span className={styles.overrideDot} />}
-                  音色
-                </div>
-
-                {isCosyVoice && (
-                  <select className={styles.paramSelect} value={segment.params.voice_id || ''}
-                    onChange={e => handleParamChange('voice_id', e.target.value)}>
-                    <option value="">🌐 跟随全局 — {globalVoiceName || '全局音色'}</option>
-                    {voices.map(v => {
-                      const key = v.qwen_voice_id || v.id;
-                      return <option key={v.id} value={key}>⭐ {v.name}</option>;
-                    })}
-                  </select>
-                )}
-
-                {isEdgeTTS && (
-                  <select className={styles.paramSelect} value={segment.params.edge_voice || ''}
-                    onChange={e => handleParamChange('edge_voice', e.target.value)}>
-                    <option value="">🌐 跟随全局</option>
-                    {edgeVoices.map(v => (
-                      <option key={v.short_name} value={v.short_name}>
-                        {v.display_name} ({v.gender === 'Female' ? '女' : '男'})
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                {isMiMo && (
-                  <select className={styles.paramSelect} value={segment.params.mimo_preset_voice || ''}
-                    onChange={e => handleParamChange('mimo_preset_voice', e.target.value)}>
-                    <option value="">🌐 跟随全局</option>
-                    {MIMO_PRESET_VOICES.map(name => (
-                      <option key={name} value={name}>⭐ {name}</option>
-                    ))}
-                  </select>
-                )}
-
-                {isVoxCPM && (
-                  <select className={styles.paramSelect} value={segment.params.voice_id || ''}
-                    onChange={e => handleParamChange('voice_id', e.target.value)}>
-                    <option value="">🌐 跟随全局</option>
-                    {voices.map(v => (
-                      <option key={v.id} value={v.id}>⭐ {v.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              {/* Speed */}
-              <div className={styles.paramField}>
-                <div className={styles.paramLabel}>
-                  {segment.overrides?.includes('speed') && <span className={styles.overrideDot} />}
-                  语速
-                  {segment.overrides?.includes('speed') && <button className={styles.resetBtn} onClick={() => handleResetOverride('speed')}>重置</button>}
-                </div>
-                <div className={styles.sliderRow}>
-                  <input type="range" min={0.5} max={2.0} step={0.1} className={styles.range}
-                    value={segment.params.speed ?? 1.0} onChange={e => handleParamChange('speed', parseFloat(e.target.value))} />
-                  <span className={styles.sliderVal}>{(segment.params.speed ?? 1.0).toFixed(1)}×</span>
-                </div>
-              </div>
-
-              {/* Volume */}
-              <div className={styles.paramField}>
-                <div className={styles.paramLabel}>
-                  {segment.overrides?.includes('volume') && <span className={styles.overrideDot} />}
-                  音量
-                  {segment.overrides?.includes('volume') && <button className={styles.resetBtn} onClick={() => handleResetOverride('volume')}>重置</button>}
-                </div>
-                <div className={styles.sliderRow}>
-                  <input type="range" min={0} max={100} step={1} className={styles.range}
-                    value={segment.params.volume ?? 80} onChange={e => handleParamChange('volume', parseInt(e.target.value))} />
-                  <span className={styles.sliderVal}>{segment.params.volume ?? 80}</span>
-                </div>
-              </div>
-
-              {/* Pitch (CosyVoice only) */}
+              {/* CosyVoice: cloned voice selector */}
               {isCosyVoice && (
-                <div className={styles.paramField}>
-                  <div className={styles.paramLabel}>
-                    {segment.overrides?.includes('pitch') && <span className={styles.overrideDot} />}
-                    语调
-                    {segment.overrides?.includes('pitch') && <button className={styles.resetBtn} onClick={() => handleResetOverride('pitch')}>重置</button>}
-                  </div>
-                  <div className={styles.sliderRow}>
-                    <input type="range" min={0.5} max={2.0} step={0.1} className={styles.range}
-                      value={segment.params.pitch ?? 1.0} onChange={e => handleParamChange('pitch', parseFloat(e.target.value))} />
-                    <span className={styles.sliderVal}>{(segment.params.pitch ?? 1.0).toFixed(1)}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Language (CosyVoice) */}
-              {isCosyVoice && (
-                <div className={styles.paramField}>
-                  <div className={styles.paramLabel}>语言</div>
-                  <select className={styles.paramSelect} value={segment.params.language || 'Chinese'}
-                    onChange={e => handleParamChange('language', e.target.value)}>
-                    <option value="Chinese">中文</option>
-                    <option value="English">English</option>
-                    <option value="Japanese">日本語</option>
-                    <option value="Korean">한국어</option>
+                <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                  <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
+                  <select className={styles.paramSelect} value={eff.voice_id || ''}
+                    onChange={e => handleParamChange('voice_id', e.target.value)}>
+                    {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
+                      {voices.filter(v => v.voice?.model === 'cosyvoice').map(v => {
+                        const key = (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || v.id;
+                        return <option key={key} value={key}>⭐ {v.name || key}</option>;
+                      })}
                   </select>
                 </div>
               )}
 
-              {/* Instruction (CosyVoice/MiMo/VoxCPM) */}
+              {/* Edge-TTS: voice + rate + volume */}
+              {isEdgeTTS && (
+                <>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
+                    <select className={styles.paramSelect} value={(eff.voice as string) || ''}
+                      onChange={e => handleParamChange('voice', e.target.value)}>
+                      {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
+                      {edgeVoices.map(v => (
+                        <option key={v.short_name} value={v.short_name}>
+                          {v.display_name} ({v.gender === 'Female' ? t('segmentEdit.female') : t('segmentEdit.male')})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className={styles.paramField}>
+                    <div className={styles.paramLabel}>{t('segmentEdit.speed')}</div>
+                    <div className={styles.sliderRow}>
+                      <input type="range" min={0.5} max={2.0} step={0.1} className={styles.range}
+                        value={eff.speed ?? 1.0} onChange={e => handleParamChange('speed', parseFloat(e.target.value))} />
+                      <span className={styles.sliderVal}>{(eff.speed ?? 1.0).toFixed(1)}×</span>
+                    </div>
+                  </div>
+                  <div className={styles.paramField}>
+                    <div className={styles.paramLabel}>{t('segmentEdit.volume')}</div>
+                    <div className={styles.sliderRow}>
+                      <input type="range" min={0} max={100} step={1} className={styles.range}
+                        value={eff.volume ?? 80} onChange={e => handleParamChange('volume', parseInt(e.target.value))} />
+                      <span className={styles.sliderVal}>{eff.volume ?? 80}</span>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* MiMo: mode + voice */}
+              {isMiMo && (
+                <>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <div className={styles.paramLabel}>{t('segmentEdit.voiceMode')}</div>
+                    <div className={styles.enginePills}>
+                      <button className={`${styles.enginePill} ${((eff.mode as string) || 'preset') === 'preset' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'preset')}>{t('segmentEdit.mimoPreset')}</button>
+                      <button className={`${styles.enginePill} ${(eff.mode as string) === 'voiceclone' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'voiceclone')}>{t('segmentEdit.mimoClone')}</button>
+                    </div>
+                  </div>
+                  {((eff.mode as string) || 'preset') === 'preset' ? (
+                    <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                      <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
+                      <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
+                        onChange={e => handleParamChange('voice_id', e.target.value)}>
+                        {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
+                        {mimoPresets.map(v => (
+                          <option key={v.voice_id} value={v.voice_id}>⭐ {v.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                      <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
+                      <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
+                        onChange={e => handleParamChange('voice_id', e.target.value)}>
+                        {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
+                        {voices.filter(v => v.voice?.model === 'mimo_tts' && v.id).map(v => (
+                          <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* VoxCPM: mode + voice */}
+              {isVoxCPM && (
+                <>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <div className={styles.paramLabel}>{t('segmentEdit.voiceMode')}</div>
+                    <div className={styles.enginePills}>
+                      <button className={`${styles.enginePill} ${((eff.mode as string) || 'clone') === 'clone' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'clone')}>{t('segmentEdit.voxcpmClone')}</button>
+                      <button className={`${styles.enginePill} ${(eff.mode as string) === 'ultimate' ? styles.enginePillActive : ''}`}
+                        onClick={() => handleParamChange('mode', 'ultimate')}>{t('segmentEdit.voxcpmUltimate')}</button>
+                    </div>
+                  </div>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
+                    <select className={styles.paramSelect} value={eff.voice_id || ''}
+                      onChange={e => handleParamChange('voice_id', e.target.value)}>
+                      {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
+                      {voices.filter(v => v.voice?.model === 'voxcpm').map(v => (
+                          <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
+                        ))}
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {/* Instruction */}
               {(isCosyVoice || isMiMo || isVoxCPM) && (
                 <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                  <div className={styles.paramLabel}>
-                    {segment.overrides?.includes('instruction') && <span className={styles.overrideDot} />}
-                    风格指令
-                    {segment.overrides?.includes('instruction') && <button className={styles.resetBtn} onClick={() => handleResetOverride('instruction')}>重置</button>}
-                  </div>
+                  <div className={styles.paramLabel}>{t('segmentEdit.styleInstruction')}</div>
                   <StyleInstructionPicker
-                    value={isMiMo ? (segment.params.mimo_instruction || '') : isVoxCPM ? (segment.params.voxcpm_style_control || '') : (segment.params.instruction || '')}
-                    onChange={value => handleParamChange(isMiMo ? 'mimo_instruction' : isVoxCPM ? 'voxcpm_style_control' : 'instruction', value)}
-                    label=""
-                    placeholder="跟随全局风格指令，或选择预设/直接输入..."
-                    dense
+                    value={isMiMo ? ((eff.instruction as string) || '') : isVoxCPM ? ((eff.style_control as string) || '') : ((eff.instruction as string) || '')}
+                    onChange={value => handleParamChange(isMiMo ? 'instruction' : isVoxCPM ? 'style_control' : 'instruction', value)}
+                    label="" placeholder={t('segmentEdit.styleHint')} dense
                   />
                 </div>
               )}
             </div>
+
+            {/* Confirm custom button — always visible */}
+            {onConfirmCustom && (
+              <button
+                className={styles.btnPrimary}
+                style={{ marginTop: '0.75rem', width: '100%' }}
+                onClick={() => onConfirmCustom(segment.id, localParams)}
+              >
+                {t('segmentEdit.confirmCustom')}
+              </button>
+            )}
           </div>
         )}
       </div>

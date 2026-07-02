@@ -6,9 +6,9 @@ import { segmentedReducer, createInitialProject, migrateV1 } from '../useSegment
 function makeChapter(overrides: Partial<Chapter> = {}): Chapter {
   const now = new Date().toISOString();
   return {
-    id: 'ch1', name: '第一章', engine: 'cosyvoice',
+    id: 'ch1', name: '第一章',
+    voice: { engine: 'cosyvoice', voice_id: '', speed: 1, volume: 80, pitch: 1, language: 'Chinese' },
     segments: [],
-    default_params: { engine: 'cosyvoice' },
     split_config: { delimiters: ['，', '。'], mode: 'rule' },
     created_at: now, updated_at: now,
     ...overrides,
@@ -36,7 +36,7 @@ describe('segmentedReducer', () => {
   it('APPLY_SPLIT replaces segments with idle status', () => {
     const p = makeProject({}, {
       segments: [
-        { id: 'old', text: 'old', params: { engine: 'cosyvoice' }, status: 'ready', created_at: '', updated_at: '' },
+        { id: 'old', text: 'old', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration', status: 'ready', created_at: '', updated_at: '' },
       ],
     });
     const next = segmentedReducer({ project: p }, { type: 'APPLY_SPLIT', items: [{ text: 'a' }, { text: 'b' }] });
@@ -46,22 +46,14 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).selected_segment_id).toBeUndefined();
   });
 
-  it('APPLY_SPLIT preserves inferred segment kind and role snapshot', () => {
-    const roleSnapshot = {
-      id: 'role-guest-a',
-      name: '嘉宾A',
-      default_engine: 'edge_tts' as const,
-      default_voice: 'Yunyang',
-      default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunyangNeural' },
-      favorite_styles: [],
-    };
+  it('APPLY_SPLIT preserves inferred segment kind and role', () => {
     const next = segmentedReducer({ project: makeProject() }, {
       type: 'APPLY_SPLIT',
       items: [{
         text: '嘉宾A：你好',
         segment_kind: 'dialogue',
         role_id: 'role-guest-a',
-        role_snapshot: roleSnapshot,
+        role_snapshot: { id: 'role-guest-a', name: '嘉宾A', default_engine: 'edge_tts', default_voice: 'Yunyang', default_engine_params: { engine: 'edge_tts', edge_voice: 'zh-CN-YunyangNeural' }, favorite_styles: [] },
       }],
     });
 
@@ -69,21 +61,22 @@ describe('segmentedReducer', () => {
     expect(seg.text).toBe('嘉宾A：你好');
     expect(seg.segment_kind).toBe('dialogue');
     expect(seg.role_id).toBe('role-guest-a');
-    expect(seg.role_snapshot?.name).toBe('嘉宾A');
+    // voice reflects role assignment
+    expect(seg.voice.source).toBe('role');
   });
 
   it('APPEND_SEGMENT appends with default_params', () => {
     const next = segmentedReducer({ project: makeProject() }, { type: 'APPEND_SEGMENT', text: 'hello' });
     expect(ac(next.project).segments).toHaveLength(1);
     expect(ac(next.project).segments[0].text).toBe('hello');
-    expect(ac(next.project).segments[0].params.engine).toBe('cosyvoice');
+    expect(ac(next.project).segments[0].voice.source).toBe('chapter');
   });
 
   it('INSERT_SEGMENT inserts after given id', () => {
     const p = makeProject({}, {
       segments: [
-        { id: 'a', text: 'a', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' },
-        { id: 'c', text: 'c', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' },
+        { id: 'a', text: 'a', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' },
+        { id: 'c', text: 'c', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' },
       ],
     });
     const next = segmentedReducer({ project: p }, { type: 'INSERT_SEGMENT', afterId: 'a', text: 'b' });
@@ -91,8 +84,8 @@ describe('segmentedReducer', () => {
   });
 
   it('DELETE_SEGMENT removes the segment and deselects if it was selected', () => {
-    const s1: Segment = { id: 'a', text: 'a', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' };
-    const s2: Segment = { id: 'b', text: 'b', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' };
+    const s1: Segment = { id: 'a', text: 'a', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
+    const s2: Segment = { id: 'b', text: 'b', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
     const p = makeProject({}, { segments: [s1, s2], selected_segment_id: 'a' });
     const next = segmentedReducer({ project: p }, { type: 'DELETE_SEGMENT', id: 'a' });
     expect(ac(next.project).segments).toHaveLength(1);
@@ -101,82 +94,70 @@ describe('segmentedReducer', () => {
 
   it('REORDER moves segment from fromIndex to toIndex', () => {
     const segments: Segment[] = [
-      { id: 'a', text: 'a', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' },
-      { id: 'b', text: 'b', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' },
-      { id: 'c', text: 'c', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' },
+      { id: 'a', text: 'a', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' },
+      { id: 'b', text: 'b', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' },
+      { id: 'c', text: 'c', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' },
     ];
     const p = makeProject({}, { segments });
     const next = segmentedReducer({ project: p }, { type: 'REORDER', fromIndex: 2, toIndex: 0 });
     expect(ac(next.project).segments.map(s => s.id)).toEqual(['c', 'a', 'b']);
   });
 
-  it('GENERATE_SUCCESS swaps audio references and sets ready', () => {
-    const s: Segment = { id: 's1', text: 'x', params: { engine: 'cosyvoice' }, status: 'pending',
-      current_audio_id: 'old_current', previous_audio_id: 'old_prev', created_at: '', updated_at: '' };
+  it('GENERATE_SUCCESS sets audio on segment', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3', current: { id: 'old_current' }, previous: { id: 'old_prev' } }, segment_kind: 'narration', status: 'pending',
+      created_at: '', updated_at: '' };
     const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
       type: 'GENERATE_SUCCESS', id: 's1', audio_id: 'new_audio', duration_sec: 3.2,
     });
     const seg = ac(next.project).segments[0];
     expect(seg.status).toBe('ready');
-    expect(seg.current_audio_id).toBe('new_audio');
-    expect(seg.previous_audio_id).toBe('old_current');
-    expect(seg.duration_sec).toBe(3.2);
+    expect(seg.audio.current?.id).toBe('new_audio');
+    expect(seg.audio.previous?.id).toBe('old_current');
+    expect(seg.audio.duration_sec).toBe(3.2);
   });
 
-  it('UNDO_REGENERATE swaps current and previous', () => {
-    const s: Segment = { id: 's1', text: 'x', params: { engine: 'cosyvoice' }, status: 'ready',
-      current_audio_id: 'c', previous_audio_id: 'p', created_at: '', updated_at: '' };
+  it('UNDO_REGENERATE swaps current and previous audio', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3', current: { id: 'c' }, previous: { id: 'p' } }, segment_kind: 'narration', status: 'ready',
+      created_at: '', updated_at: '' };
     const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, { type: 'UNDO_REGENERATE', id: 's1' });
-    expect(ac(next.project).segments[0].current_audio_id).toBe('p');
-    expect(ac(next.project).segments[0].previous_audio_id).toBe('c');
+    expect(ac(next.project).segments[0].audio.current?.id).toBe('p');
+    expect(ac(next.project).segments[0].audio.previous?.id).toBe('c');
   });
 
   it('UPDATE_TEXT changes text', () => {
-    const s: Segment = { id: 's1', text: 'old', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' };
+    const s: Segment = { id: 's1', text: 'old', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
     const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, { type: 'UPDATE_TEXT', id: 's1', text: 'new' });
     expect(ac(next.project).segments[0].text).toBe('new');
   });
 
-  it('UPDATE_PARAMS locks voice when setting a segment-specific voice', () => {
+  it('UPDATE_PARAMS sets voice to custom', () => {
     const s: Segment = {
-      id: 's1', text: 'x', params: { engine: 'cosyvoice', voice_id: 'global-voice' },
+      id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration',
       status: 'idle', created_at: '', updated_at: '',
     };
     const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
       type: 'UPDATE_PARAMS', id: 's1', params: { voice_id: 'segment-voice' },
     });
     const seg = ac(next.project).segments[0];
-    expect(seg.params.voice_id).toBe('segment-voice');
-    expect(seg.overrides).toContain('voice');
+    expect(seg.voice.source).toBe('custom');
   });
 
-  it('UPDATE_PARAMS unlocks voice when resetting a segment voice to follow global', () => {
-    const s: Segment = {
-      id: 's1', text: 'x', params: { engine: 'cosyvoice', voice_id: 'segment-voice' },
-      status: 'idle', overrides: ['voice'], created_at: '', updated_at: '',
-    };
-    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
-      type: 'UPDATE_PARAMS', id: 's1', params: { voice_id: '' },
-    });
-    expect(ac(next.project).segments[0].overrides).not.toContain('voice');
-  });
-
-  it('BATCH_SET_SSML sets ssml for multiple segments', () => {
-    const s1: Segment = { id: 'a', text: 'a', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' };
-    const s2: Segment = { id: 'b', text: 'b', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' };
+  it('BATCH_SET_SSML is a no-op in V3 (SSML not stored on segment)', () => {
+    const s1: Segment = { id: 'a', text: 'a', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration', status: 'idle', created_at: '', updated_at: '' };
+    const s2: Segment = { id: 'b', text: 'b', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration', status: 'idle', created_at: '', updated_at: '' };
     const next = segmentedReducer({ project: makeProject({}, { segments: [s1, s2] }) }, {
       type: 'BATCH_SET_SSML', updates: [
         { id: 'a', ssml: '<speak>a</speak>' },
         { id: 'b', ssml: '<speak>b</speak>' },
       ], by_llm: true,
     });
-    expect(ac(next.project).segments[0].ssml).toBe('<speak>a</speak>');
-    expect(ac(next.project).segments[0].ssml_annotated_by_llm).toBe(true);
-    expect(ac(next.project).segments[1].ssml).toBe('<speak>b</speak>');
+    // BATCH_SET_SSML is a no-op in V3 - segments should remain unchanged
+    expect(ac(next.project).segments[0].text).toBe('a');
+    expect(ac(next.project).segments[1].text).toBe('b');
   });
 
   it('GENERATE_FAIL sets failed status and error', () => {
-    const s: Segment = { id: 's1', text: 'x', params: { engine: 'cosyvoice' }, status: 'pending', created_at: '', updated_at: '' };
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'pending', created_at: '', updated_at: '' };
     const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, { type: 'GENERATE_FAIL', id: 's1', error: 'timeout' });
     expect(ac(next.project).segments[0].status).toBe('failed');
     expect(ac(next.project).segments[0].error).toBe('timeout');
@@ -258,12 +239,12 @@ describe('segmentedReducer', () => {
   });
 
   it('migrateV1 converts old project to v2 with chapters', () => {
-    const v1 = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const v1: any = {
+      voice: { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' },
       schema_version: 1, id: 'old', name: 'Old Project',
       segments: [{ id: 's1', text: 'hello', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' }],
-      default_params: { engine: 'cosyvoice' },
       split_config: { delimiters: ['，'], mode: 'rule' },
-      layout: 'vertical', engine: 'edge_tts', edge_voice: 'zh-CN-XiaoxiaoNeural',
       created_at: '', updated_at: '',
     };
     const migrated = migrateV1(v1);
@@ -271,15 +252,14 @@ describe('segmentedReducer', () => {
     expect(migrated.chapters).toHaveLength(1);
     expect(migrated.chapters[0].segments).toHaveLength(1);
     expect(migrated.chapters[0].segments[0].text).toBe('hello');
-    expect(migrated.chapters[0].engine).toBe('edge_tts');
-    expect(migrated.chapters[0].edge_voice).toBe('zh-CN-XiaoxiaoNeural');
+    expect(migrated.chapters[0].voice.engine).toBe('edge_tts');
+    expect(migrated.chapters[0].voice.voice).toBe('zh-CN-XiaoxiaoNeural');
     expect(migrated.active_chapter_id).toBe(migrated.chapters[0].id);
   });
 
   it('LOAD_PROJECT migrates v1 data automatically', () => {
     const v1: RawSegmentedProject = {
       schema_version: 1, id: 'old', name: 'Old',
-      segments: [], default_params: { engine: 'cosyvoice' },
       split_config: { delimiters: ['，'], mode: 'rule' },
       layout: 'vertical', created_at: '', updated_at: '',
     };
@@ -310,13 +290,13 @@ describe('segmentedReducer', () => {
     });
 
     expect(ac(next.project).segments[0].role_id).toBe('role-linxia');
-    expect(ac(next.project).segments[0].role_snapshot?.name).toBe('林夏');
+    expect(ac(next.project).segments[0].voice.source).toBe('role');
     expect(project.chapters[0].segments[0].role_id).toBeUndefined();
   });
 
-  it('UPDATE_PROSODY_MARKS replaces marks on one segment only', () => {
-    const s1: Segment = { id: 's1', text: '你好世界', params: { engine: 'edge_tts' }, status: 'idle', created_at: '', updated_at: '' };
-    const s2: Segment = { id: 's2', text: '第二句', params: { engine: 'edge_tts' }, status: 'idle', created_at: '', updated_at: '' };
+  it('UPDATE_PROSODY_MARKS is a no-op in V3 and does not error', () => {
+    const s1: Segment = { id: 's1', text: '你好世界', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration', status: 'idle', created_at: '', updated_at: '' };
+    const s2: Segment = { id: 's2', text: '第二句', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration', status: 'idle', created_at: '', updated_at: '' };
     const project = makeProject({}, { segments: [s1, s2] });
 
     const next = segmentedReducer({ project }, {
@@ -325,10 +305,9 @@ describe('segmentedReducer', () => {
       prosodyMarks: [{ id: 'm1', start: 0, end: 2, style_tags: ['low_voice'] }],
     });
 
-    expect(ac(next.project).segments[0].prosody_marks).toEqual([
-      { id: 'm1', start: 0, end: 2, style_tags: ['low_voice'] },
-    ]);
-    expect(ac(next.project).segments[1].prosody_marks).toEqual([]);
+    // UPDATE_PROSODY_MARKS is a no-op in V3 — segments should remain unchanged
+    expect(ac(next.project).segments[0].text).toBe('你好世界');
+    expect(ac(next.project).segments[1].text).toBe('第二句');
   });
 
   it('SET_SEGMENT_KIND sets dialogue or narration without changing text', () => {
@@ -340,21 +319,62 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments[0].text).toBe('旁白');
   });
 
-  it('SET_PROJECT_NARRATOR stores narrator role and snapshot', () => {
-    const roleSnapshot = {
-      id: 'role-narrator',
-      name: '旁白',
-      default_engine: 'edge_tts' as const,
-      default_voice: 'zh-CN-YunjianNeural',
-      default_engine_params: { engine: 'edge_tts' as const, edge_voice: 'zh-CN-YunjianNeural' },
-      favorite_styles: [],
-    };
+  it('SET_PROJECT_NARRATOR stores narrator role', () => {
     const next = segmentedReducer({ project: makeProject() }, {
       type: 'SET_PROJECT_NARRATOR',
       roleId: 'role-narrator',
-      roleSnapshot,
     });
     expect(next.project.default_narrator_role_id).toBe('role-narrator');
-    expect(next.project.default_narrator_snapshot?.name).toBe('旁白');
+  });
+});
+
+describe('voice source transitions (V3)', () => {
+  it('TOGGLE_INDEPENDENT_VOICE: custom → restores role if role_id exists', () => {
+    const s: Segment = {
+      id: 's1', text: 'x',
+      voice: { source: 'custom', engine: 'edge_tts', params: {} },
+      role_id: 'role-1',
+      audio: { format: 'mp3' },
+      segment_kind: 'narration' as const, status: 'ready' as const,
+      created_at: '', updated_at: '',
+    };
+    const next = segmentedReducer(
+      { project: makeProject({}, { segments: [s] }) },
+      { type: 'TOGGLE_INDEPENDENT_VOICE', id: 's1' },
+    );
+    expect(ac(next.project).segments[0].voice.source).toBe('role');
+    const vs = ac(next.project).segments[0].voice as { role_id?: string };
+    expect(vs.role_id).toBe('role-1');
+  });
+
+  it('TOGGLE_INDEPENDENT_VOICE: custom without role_id → chapter', () => {
+    const s: Segment = {
+      id: 's1', text: 'x',
+      voice: { source: 'custom', engine: 'edge_tts', params: {} },
+      audio: { format: 'mp3' },
+      segment_kind: 'narration' as const, status: 'ready' as const,
+      role_id: null, created_at: '', updated_at: '',
+    };
+    const next = segmentedReducer(
+      { project: makeProject({}, { segments: [s] }) },
+      { type: 'TOGGLE_INDEPENDENT_VOICE', id: 's1' },
+    );
+    expect(ac(next.project).segments[0].voice.source).toBe('chapter');
+  });
+
+  it('GENERATE_SUCCESS: does not change role source to custom', () => {
+    const s: Segment = {
+      id: 's1', text: 'x',
+      voice: { source: 'role', role_id: 'role-1' },
+      audio: { format: 'mp3' },
+      segment_kind: 'narration' as const, status: 'pending' as const,
+      role_id: null, created_at: '', updated_at: '',
+    };
+    const next = segmentedReducer(
+      { project: makeProject({}, { segments: [s] }) },
+      { type: 'GENERATE_SUCCESS', id: 's1', audio_id: 'a1', updated_params: { engine: 'mimo_tts' } },
+    );
+    expect(ac(next.project).segments[0].voice.source).toBe('role');
+    expect(ac(next.project).segments[0].status).toBe('ready');
   });
 });

@@ -152,6 +152,42 @@
   transition: right var(--transition-normal);
 }
 
+/* Collapsed transport bar — just the toggle handle on the left */
+.transportBarCollapsed {
+  min-height: auto;
+  padding: 4px 12px;
+  justify-content: flex-start;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.transportToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 10px;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.transportToggle:hover {
+  color: var(--color-primary-dark);
+  background: rgba(255, 220, 195, 0.5);
+}
+
+.transportToggleLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
 .transportControls {
   display: flex;
   align-items: center;

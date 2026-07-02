@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useTranslation } from '../../i18n';
 import styles from './VoiceStudioLayout.module.css';
 
 export type StudioViewMode = 'list' | 'dialogue';
@@ -17,9 +18,12 @@ interface VoiceStudioLayoutProps {
 
 function formatDuration(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
-  const minutes = Math.floor(safe / 60);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
   const rest = safe % 60;
-  return `${minutes}:${String(rest).padStart(2, '0')}`;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(rest).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${minutes}:${ss}`;
 }
 
 export function VoiceStudioLayout({
@@ -34,6 +38,8 @@ export function VoiceStudioLayout({
   onPlayAll,
 }: VoiceStudioLayoutProps) {
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
+  const [transportCollapsed, setTransportCollapsed] = useState(true);
+  const { t } = useTranslation();
 
   const toggleCollapsed = (next: boolean) => {
     setSidePanelCollapsed(next);
@@ -77,21 +83,36 @@ export function VoiceStudioLayout({
         </button>
       </aside>
 
-      <footer className={styles.transportBar} data-testid="voice-studio-transport-bar" style={transportBarStyle}>
+      <footer className={`${styles.transportBar} ${transportCollapsed ? styles.transportBarCollapsed : ''}`} data-testid="voice-studio-transport-bar" style={transportBarStyle}>
+        <button
+          type="button"
+          className={styles.transportToggle}
+          onClick={() => setTransportCollapsed(!transportCollapsed)}
+          aria-label={transportCollapsed ? '展开播放栏' : '收起播放栏'}
+        >
+          {transportCollapsed ? '▲' : '▼'}
+          {transportCollapsed && <span className={styles.transportToggleLabel}>播放栏</span>}
+        </button>
+        {!transportCollapsed && (
         <div className={styles.transportControls}>
           <button type="button" className={styles.roundButton}>‹</button>
           <button type="button" className={styles.playButton} onClick={onPlayAll}>播放</button>
           <button type="button" className={styles.roundButton}>›</button>
         </div>
+        )}
+        {!transportCollapsed && (
         <div className={styles.masterTimeline}>
           <span>Master Transport</span>
           <div className={styles.masterTrack}><span style={{ width: `${progress}%` }} /></div>
           <strong>{formatDuration(durationSec)}</strong>
         </div>
+        )}
+        {!transportCollapsed && (
         <div className={styles.exportGroup}>
           <span className={styles.remotionPath}>{remotionPath || '未设置 Remotion 路径'}</span>
-          <button type="button" className={styles.primaryButton} onClick={onExport}>导出</button>
+          <button type="button" className={styles.primaryButton} onClick={onExport}>{t('studio.exportLabel')}</button>
         </div>
+        )}
       </footer>
     </section>
   );

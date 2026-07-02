@@ -23,13 +23,15 @@ function makeChapter(id: string, name: string, originalText: string, segments = 
     segments: Array.from({ length: segments }, (_, index) => ({
       id: `${id}-s-${index}`,
       text: `segment ${index}`,
+      voice: { source: 'chapter' as const },
+      audio: { format: 'mp3', duration_sec: index % 2 === 0 ? 6 : undefined },
+      segment_kind: 'narration' as const,
       params: baseParams,
       status: index % 2 === 0 ? 'ready' : 'idle',
-      duration_sec: index % 2 === 0 ? 6 : undefined,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
     })),
-    default_params: baseParams,
+    voice: baseParams,
     split_config: { delimiters: ['。'], mode: 'rule' },
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
@@ -142,8 +144,8 @@ describe('ProjectLibrary', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /重命名章节 第一章/ }));
-    fireEvent.change(screen.getByLabelText('章节卡片名称'), { target: { value: '第一章新版' } });
-    fireEvent.click(screen.getByRole('button', { name: /保存章节名称/ }));
+    fireEvent.change(screen.getByLabelText('章节标题'), { target: { value: '第一章新版' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存/ }));
 
     expect(onRenameChapter).toHaveBeenCalledWith('ch-1', '第一章新版');
     expect(onSelectChapter).not.toHaveBeenCalled();
@@ -228,3 +230,4 @@ describe('ProjectLibrary', () => {
     expect(onAddChapter).toHaveBeenCalledWith('第三章：正式开场');
   });
 });
+

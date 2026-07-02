@@ -1,0 +1,298 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(29, 27, 23, 0.35);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: var(--z-modal, 500);
+  animation: fadeIn 0.2s ease;
+}
+
+.modal {
+  background: var(--color-surface, #ffffff);
+  border-radius: var(--radius-xl, 20px);
+  border: 1px solid var(--color-border, #e8e1db);
+  box-shadow: 0 18px 36px rgba(26, 24, 20, 0.12), 0 6px 12px rgba(26, 24, 20, 0.05);
+  max-width: 680px;
+  width: calc(100% - 48px);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUp 0.25s ease;
+}
+
+/* ---- Header ---- */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg, 24px) var(--spacing-xl, 32px);
+  border-bottom: 1px solid var(--color-border-light, #f3ede6);
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+}
+
+.titleIcon {
+  font-size: 22px;
+}
+
+.titleText {
+  font-family: var(--font-family-heading, 'Plus Jakarta Sans', sans-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary, #1d1b17);
+}
+
+.methodBadge {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 9999px);
+  background: color-mix(in srgb, var(--color-info, #3b82c4) 10%, transparent);
+  color: var(--color-info, #3b82c4);
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: var(--color-text-muted, #867467);
+  font-size: 20px;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm, 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 150ms ease;
+}
+
+.closeBtn:hover {
+  background: var(--color-surface-hover, #f3f2ee);
+  color: var(--color-text-primary, #1d1b17);
+}
+
+/* ---- Body (scrollable) ---- */
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg, 24px) var(--spacing-xl, 32px);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg, 24px);
+}
+
+/* ---- Section ---- */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 8px);
+}
+
+.sectionLabel {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, #867467);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+}
+
+.chapterList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 8px);
+}
+
+.chapterItem {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  padding: 10px 14px;
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-surface-low, #f9f3eb);
+  border: 1px solid var(--color-border, #e8e1db);
+}
+
+.chapterIdx {
+  font-family: var(--font-family-mono, 'JetBrains Mono', monospace);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-primary, #c47a3a);
+}
+
+.chapterTitle {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary, #1d1b17);
+  flex: 1;
+}
+
+.chapterSegCount {
+  font-family: var(--font-family-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--color-text-muted, #867467);
+}
+
+/* ---- Role Cards ---- */
+.roleList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 8px);
+}
+
+.roleCard {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 16px);
+  padding: 12px 16px;
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-surface, #ffffff);
+  border: 1px solid var(--color-border, #e8e1db);
+}
+
+.roleAvatar {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-sm, 8px);
+  background: var(--color-primary-container, #ffdcc3);
+  color: var(--color-primary, #c47a3a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.roleInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.roleName {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1d1b17);
+}
+
+.roleOccur {
+  font-family: var(--font-family-mono, 'JetBrains Mono', monospace);
+  font-size: 11px;
+  color: var(--color-text-muted, #867467);
+}
+
+.roleConfBadge {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 9999px);
+}
+
+.roleConfBadge.high {
+  background: color-mix(in srgb, var(--color-success, #2a9d8f) 12%, transparent);
+  color: var(--color-success, #2a9d8f);
+}
+
+.roleConfBadge.mid {
+  background: color-mix(in srgb, var(--color-warning, #d4944e) 12%, transparent);
+  color: var(--color-warning, #d4944e);
+}
+
+/* ---- Footer ---- */
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm, 8px);
+  padding: var(--spacing-md, 16px) var(--spacing-xl, 32px);
+  border-top: 1px solid var(--color-border-light, #f3ede6);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs, 4px);
+  padding: 9px 22px;
+  border: none;
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.btnPrimary {
+  background: linear-gradient(135deg, #c47a3a, #d4944e);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(196, 122, 58, 0.25);
+}
+
+.btnPrimary:hover {
+  box-shadow: 0 4px 16px rgba(196, 122, 58, 0.4);
+  transform: scale(1.03);
+}
+
+.btnPrimary:active {
+  transform: scale(0.97);
+}
+
+.btnGhost {
+  background: var(--color-surface-hover, #f3f2ee);
+  color: var(--color-text-secondary, #534439);
+  border: 1px solid var(--color-border, #e8e1db);
+}
+
+.btnGhost:hover {
+  background: var(--color-surface-active, #e8e1db);
+}
+
+/* ---- Loading ---- */
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-3xl, 64px) 0;
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 14px;
+  color: var(--color-text-muted, #867467);
+}
+
+/* ---- Empty ---- */
+.empty {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 13px;
+  color: var(--color-text-muted, #867467);
+  padding: var(--spacing-sm, 8px) 0;
+}
+
+/* ---- Animations ---- */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

@@ -11,9 +11,8 @@ class RoleIn(BaseModel):
     avatar: str | None = None
     description: str | None = None
     role_kind: str = "cast"
-    default_engine: str = "edge_tts"
-    default_voice: str | None = None
-    default_engine_params: dict[str, Any] = Field(default_factory=dict)
+    project_id: str | None = None
+    voice: dict[str, Any] = Field(default_factory=lambda: {"engine": "edge_tts", "params": {}})
     favorite_styles: list[dict[str, Any]] = Field(default_factory=list)
 
 
@@ -22,9 +21,7 @@ class RoleUpdate(BaseModel):
     avatar: str | None = None
     description: str | None = None
     role_kind: str | None = None
-    default_engine: str | None = None
-    default_voice: str | None = None
-    default_engine_params: dict[str, Any] | None = None
+    voice: dict[str, Any] | None = None
     favorite_styles: list[dict[str, Any]] | None = None
 
 

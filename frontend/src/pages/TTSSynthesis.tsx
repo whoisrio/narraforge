@@ -21,7 +21,8 @@ import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, SegmentEngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
+import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
@@ -36,6 +37,7 @@ import styles from './TTSSynthesis.module.css';
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
 
+/** 将角色 voice (EngineParams) 转换为 old flat 字段名，供 handleRegenerate 内部使用 */
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
 
 function toEdgeFormat(value: number) {
@@ -46,7 +48,7 @@ function endsWithSentencePeriod(text: string): boolean {
   return /[。．.](?:[”"』」》）)]*)\s*$/.test(text.trim());
 }
 
-function getErrorMessage(error: unknown, fallback = '生成失败'): string {
+function getErrorMessage(error: unknown, fallback = t('common.generationFailed')): string {
   return error instanceof Error ? error.message : String(error || fallback);
 }
 
@@ -56,7 +58,7 @@ function createScratchpadProject(): SegmentedProject {
   return {
     ...project,
     id: SCRATCHPAD_PROJECT_ID,
-    name: '草稿项目',
+    name: t('common.draftProject'),
     created_at: project.created_at || now,
     updated_at: project.updated_at || now,
   };
@@ -122,7 +124,6 @@ export function TTSSynthesis({
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
   const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>(() => project.configs?.split_voice_mode ?? 'narration');
-  // Sync splitVoiceMode when project changes (e.g., loading a different project)
   useEffect(() => {
     setSplitVoiceMode(project.configs?.split_voice_mode ?? 'narration');
   }, [project.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -164,7 +165,7 @@ export function TTSSynthesis({
     let total = 0;
     for (let i = 0; i < activeIdx; i++) {
       for (const seg of project.chapters[i].segments) {
-        if (seg.status === 'ready' && seg.duration_sec) total += seg.duration_sec;
+        if (seg.status === 'ready' && seg.audio.duration_sec) total += seg.audio.duration_sec;
       }
     }
     return total;
@@ -251,7 +252,7 @@ export function TTSSynthesis({
           full = scratchpad!;
         } else {
           full = createInitialProject();
-          full.name = '临时项目';
+          full.name = t('project.draftProject');
         }
       }
       const localDraft = await getDraft(full.id);
@@ -348,13 +349,13 @@ export function TTSSynthesis({
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  useEffect(() => { ttsApi.getVoices().then(setVoices).catch(() => {}); }, [refreshCounter]);
+  useEffect(() => { ttsApi.getVoices({ project_id: project.id }).then(setVoices).catch(() => {}); }, [refreshCounter, project.id]);
 
   useEffect(() => {
-    roleApi.listRoles()
+    roleApi.listRoles(project.id)
       .then(setRoles)
       .catch((error) => console.warn('Role list failed:', error));
-  }, []);
+  }, [project.id]);
 
   const projectStorage: SegmentedProjectStorage = storageMode === 'backend' ? backendStorage : indexedDBStorage;
   const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
@@ -364,24 +365,31 @@ export function TTSSynthesis({
 
   // ---- Chapter management ----
 
-  /** Restore global state from a chapter's saved settings */
+  /** Restore global state from a chapter's saved voice */
   const restoreChapterSettings = useCallback((ch: Chapter) => {
-    if (ch.engine) setEngine(ch.engine as Engine); else setEngine('edge_tts');
-    setSelectedVoiceId(ch.voice_id || '');
-    setEdgeVoice(ch.edge_voice || '');
-    setEdgeRate(ch.edge_rate ?? 0);
-    setEdgeVolume(ch.edge_volume ?? 0);
-    setMimoMode((ch.mimo_mode as MiMoMode) || 'preset');
-    setMimoPresetVoice(ch.mimo_preset_voice || '冰糖');
-    setMimoInstruction(ch.mimo_instruction || '');
-    setMimoCloneVoiceId(ch.mimo_clone_voice_id || '');
-    setVoxcpmMode((ch.voxcpm_mode as VoxCPMMode) || 'clone');
-    setVoxcpmStyleControl(ch.voxcpm_style_control || '');
-    setVoxcpmPromptText(ch.voxcpm_prompt_text || '');
-    setVoxcpmCfgValue(ch.voxcpm_cfg_value ?? 2.0);
-    setVoxcpmInferenceTimesteps(ch.voxcpm_inference_timesteps ?? 10);
-    setParams({ language: (ch.language as TTSRequest['language']) || 'Chinese', speed: ch.speed ?? 1.0, volume: ch.volume ?? 80, pitch: ch.pitch ?? 1.0 });
-    setPanelOpen(ch.panel_open ?? true);
+    const v = ch.voice;
+    const engine = (v?.engine || 'edge_tts') as Engine;
+    setEngine(engine);
+    if (engine === 'edge_tts') {
+      setEdgeVoice((v as EdgeTTSParams).voice || '');
+      setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
+      setEdgeVolume(parseFloat((v as EdgeTTSParams).volume) || 0);
+    } else if (engine === 'cosyvoice') {
+      setSelectedVoiceId((v as CosyVoiceParams).voice_id || '');
+      setParams({ language: ((v as CosyVoiceParams).language || 'Chinese') as TTSRequest['language'], speed: (v as CosyVoiceParams).speed ?? 1.0, volume: (v as CosyVoiceParams).volume ?? 80, pitch: (v as CosyVoiceParams).pitch ?? 1.0 });
+    } else if (engine === 'mimo_tts') {
+      setMimoMode(((v as MiMoParams).mode || 'preset') as MiMoMode);
+      setMimoPresetVoice((v as MiMoParams).voice_id || '冰糖');
+      setMimoInstruction((v as MiMoParams).instruction || '');
+      setMimoCloneVoiceId((v as MiMoParams).voice_id || '');
+    } else if (engine === 'voxcpm') {
+      setVoxcpmMode(((v as VoxCPMParams).mode || 'clone') as VoxCPMMode);
+      setSelectedVoiceId((v as VoxCPMParams).voice_id || '');
+      setVoxcpmStyleControl((v as VoxCPMParams).style_control || '');
+      setVoxcpmPromptText((v as VoxCPMParams).prompt_text || '');
+      setVoxcpmCfgValue((v as VoxCPMParams).cfg_value ?? 2.0);
+      setVoxcpmInferenceTimesteps((v as VoxCPMParams).inference_timesteps ?? 10);
+    }
   }, []);
 
   const handleSelectChapter = useCallback((chapterId: string) => {
@@ -403,8 +411,8 @@ export function TTSSynthesis({
     const ch = project.chapters.find(c => c.id === chapterId);
     if (ch) {
       for (const seg of ch.segments) {
-        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
-        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
+        if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
+        if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
       }
     }
     dispatch({ type: 'DELETE_CHAPTER', id: chapterId });
@@ -420,7 +428,7 @@ export function TTSSynthesis({
     if (project.chapters.length <= 1) return;
     const ch = project.chapters.find(c => c.id === chapterId);
     const segCount = ch?.segments.length || 0;
-    const audioCount = ch?.segments.filter(s => s.current_audio_id).length || 0;
+    const audioCount = ch?.segments.filter(s => s.audio.current?.id).length || 0;
     setConfirmDialog({
       open: true, title: '删除章节',
       message: `确定删除「${ch?.name || '此章节'}」？\n包含 ${segCount} 个片段${audioCount > 0 ? `、${audioCount} 段音频` : ''}，将一并删除。`,
@@ -431,23 +439,16 @@ export function TTSSynthesis({
 
   // ---- Segmented mode handlers ----
 
-  /** Build SegmentEngineParams from current global state */
-  const buildCurrentParams = useCallback((): SegmentEngineParams => {
+  /** Build EngineParams from current global state */
+  const buildCurrentParams = useCallback((): EngineParams => {
     if (engine === 'edge_tts') {
-      return { engine: 'edge_tts', edge_voice: edgeVoice, edge_rate: toEdgeFormat(edgeRate), edge_volume: toEdgeFormat(edgeVolume) };
+      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume) } as EdgeTTSParams;
     }
     if (engine === 'mimo_tts') {
-      return { engine: 'mimo_tts', mimo_mode: mimoMode, mimo_preset_voice: mimoPresetVoice, mimo_clone_voice_id: mimoCloneVoiceId, mimo_instruction: mimoInstruction };
+      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction } as MiMoParams;
     }
     if (engine === 'voxcpm') {
-      const params: SegmentEngineParams = {
-        engine: 'voxcpm', voice_id: selectedVoiceId, voxcpm_mode: voxcpmMode,
-        voxcpm_style_control: voxcpmStyleControl,
-        voxcpm_prompt_text: voxcpmPromptText, voxcpm_cfg_value: voxcpmCfgValue,
-        voxcpm_inference_timesteps: voxcpmInferenceTimesteps,
-      };
-      console.log('[buildCurrentParams] voxcpm:', params);
-      return params;
+      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps } as VoxCPMParams;
     }
     return {
       engine: 'cosyvoice', voice_id: selectedVoiceId,
@@ -479,7 +480,10 @@ export function TTSSynthesis({
       return { name: vObj?.name || 'VoxCPM 音色', source: 'global', voice_id: selectedVoiceId, engine: 'voxcpm' };
     }
     // CosyVoice (default)
-    const vObj = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
+    const vObj = voices.find(v => {
+      const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+      return (voiceId || v.id) === selectedVoiceId;
+    });
     return { name: vObj?.name || 'CosyVoice 音色', source: 'global', voice_id: selectedVoiceId, engine: 'cosyvoice' };
   }, [engine, selectedVoiceId, voices, edgeVoice, mimoMode, mimoPresetVoice, mimoCloneVoiceId]);
 
@@ -583,11 +587,24 @@ export function TTSSynthesis({
       variant: 'danger', confirmLabel: '删除',
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); void doDeleteProject(projectId); },
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.id, project, projectList, doDeleteProject, showToast]);
 
   const handleToggleIndependentVoice = useCallback((id: string) => {
     dispatch({ type: 'TOGGLE_INDEPENDENT_VOICE', id });
   }, [dispatch]);
+
+  const handleConfirmCustom = useCallback((id: string, localParams: Record<string, unknown>) => {
+    const seg = activeChapter.segments.find(s => s.id === id);
+    if (!seg) return;
+    if (!window.confirm('此段将使用自定义音色，不再跟随全局/角色设置。确认？')) return;
+    // Take all params from the panel display (effective + local edits)
+    const eff = segEffectiveParams(seg) as Record<string, unknown>;
+    const fullParams = { ...eff, ...localParams };
+    dispatch({ type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true });
+    // Clear existing audio — was generated with old params
+    if (seg.status === 'ready') dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id });
+  }, [activeChapter.segments, dispatch]);
 
   const handleMerge = useCallback((id: string, direction: 'up' | 'down') => {
     const segs = activeChapter.segments;
@@ -657,7 +674,7 @@ export function TTSSynthesis({
   /** Re-split: clean up existing segment audio before applying new split */
   const doApplySplit = useCallback((items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[], originalText: string) => {
     const oldAudioIds = activeChapter.segments
-      .flatMap(s => [s.current_audio_id, s.previous_audio_id])
+      .flatMap(s => [s.audio.current?.id, s.audio.previous?.id])
       .filter((id): id is string => !!id);
 
     // 构建带 voice_ref 的 items
@@ -665,11 +682,12 @@ export function TTSSynthesis({
     const itemsWithVoiceRef = items.map(item => {
       // 如果有角色，使用角色的音色信息
       if (item.role_id && item.role_snapshot) {
+        const rsv = item.role_snapshot.voice as Record<string, unknown> | undefined;
         const roleVoiceRef: import('../types').VoiceRef = {
           name: item.role_snapshot.name,
           source: 'role',
-          voice_id: item.role_snapshot.default_voice || '',
-          engine: item.role_snapshot.default_engine,
+          voice_id: (rsv?.voice_id || rsv?.voice || '') as string,
+          engine: (rsv?.engine || 'edge_tts') as EngineParams['engine'],
           role_id: item.role_id,
         };
         return { ...item, voice_ref: roleVoiceRef };
@@ -680,7 +698,7 @@ export function TTSSynthesis({
     const apply = async () => {
       for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch { /* ignore */ } }
       dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
-      dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText, engine, voice_id: selectedVoiceId, edge_voice: edgeVoice } });
+      dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText } });
       dispatch({ type: 'APPLY_SPLIT', items: itemsWithVoiceRef });
     };
 
@@ -694,6 +712,7 @@ export function TTSSynthesis({
     } else {
       apply();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, dispatch, buildCurrentParams, buildGlobalVoiceRef, selectedVoiceId, edgeVoice, engine]);
 
   const buildSplitItemsWithRoles = useCallback((
@@ -755,78 +774,86 @@ export function TTSSynthesis({
     const segIdx = activeChapter.segments.findIndex(s => s.id === id);
     dispatch({ type: 'GENERATE_START', id });
     try {
-      const overrides = seg.overrides || [];
-      const hasVoiceLock = overrides.includes('voice');
-      // Find role whenever segment has one (not only when voice-locked)
+      const hasVoiceLock = segHasOverride(seg);
       const currentRole = seg.role_id ? roles.find(r => r.id === seg.role_id) : undefined;
-      // Merge role params on top of segment params
-      const sp: SegmentEngineParams = currentRole?.default_engine_params
-        ? { ...seg.params, ...currentRole.default_engine_params }
-        : seg.params;
-      const gp = buildCurrentParams();
 
-      // When a role exists, use role's engine and all role engine params (sp).
-      // When no role, fall back to global (gp).
-      // Voice lock only matters when there's no role — it controls stored vs global.
-      const effectiveEngine = currentRole ? (sp.engine || gp.engine) : (hasVoiceLock ? (sp.engine || gp.engine) : gp.engine);
-
-      const voiceId = currentRole ? (sp.voice_id || '') : (hasVoiceLock ? sp.voice_id : (gp.voice_id || sp.voice_id));
-      const speed = overrides.includes('speed') ? sp.speed : (currentRole ? sp.speed : gp.speed) ?? 1.0;
-      const volume = overrides.includes('volume') ? sp.volume : (currentRole ? sp.volume : gp.volume) ?? 80;
-      const pitch = overrides.includes('pitch') ? sp.pitch : (currentRole ? sp.pitch : gp.pitch) ?? 1.0;
-      const instruction = overrides.includes('instruction') ? sp.instruction : (currentRole ? sp.instruction : gp.instruction) || '';
-      const language = overrides.includes('language') ? sp.language : (currentRole ? sp.language : gp.language) || 'Chinese';
-
-      // Edge-TTS: role params when role exists, otherwise voice lock → global
-      const effectiveEdgeVoice = currentRole ? (sp.edge_voice || '') : (hasVoiceLock ? sp.edge_voice : (gp.edge_voice || ''));
-      const effectiveEdgeRate = currentRole ? (sp.edge_rate ?? '+0%') : (hasVoiceLock ? sp.edge_rate : (gp.edge_rate ?? '+0%'));
-      const effectiveEdgeVolume = currentRole ? (sp.edge_volume ?? '+0%') : (hasVoiceLock ? sp.edge_volume : (gp.edge_volume ?? '+0%'));
-
-      // MiMo: role params when role exists, otherwise voice lock → global
-      const effectiveMimoMode = currentRole ? (sp.mimo_mode || 'preset') : (hasVoiceLock ? sp.mimo_mode : (gp.mimo_mode || 'preset'));
-      const effectiveMimoPreset = currentRole ? (sp.mimo_preset_voice || '') : (hasVoiceLock ? sp.mimo_preset_voice : (gp.mimo_preset_voice || ''));
-      const effectiveMimoCloneId = currentRole ? (sp.mimo_clone_voice_id || '') : (hasVoiceLock ? sp.mimo_clone_voice_id : (gp.mimo_clone_voice_id || ''));
-      const effectiveMimoVoiceDesc = currentRole ? (sp.mimo_voice_description || '') : (hasVoiceLock ? (sp.mimo_voice_description || '') : (gp.mimo_voice_description || ''));
-      const effectiveMimoInstruction = overrides.includes('instruction') ? (sp.mimo_instruction || '') : (currentRole ? (sp.mimo_instruction || '') : (gp.mimo_instruction || ''));
-
-      // VoxCPM: role params when role exists, otherwise voice lock → global
-      const effectiveVoxcpmMode = currentRole ? (sp.voxcpm_mode || 'tts') : (hasVoiceLock ? (sp.voxcpm_mode || 'tts') : (gp.voxcpm_mode || 'tts'));
-      const effectiveVoxcpmCfg = currentRole ? (sp.voxcpm_cfg_value ?? 2.0) : (hasVoiceLock ? (sp.voxcpm_cfg_value ?? 2.0) : (gp.voxcpm_cfg_value ?? 2.0));
-      const effectiveVoxcpmTimesteps = currentRole ? (sp.voxcpm_inference_timesteps ?? 10) : (hasVoiceLock ? (sp.voxcpm_inference_timesteps ?? 10) : (gp.voxcpm_inference_timesteps ?? 10));
-      const effectiveVoxcpmDesc = currentRole ? (sp.voxcpm_voice_description || '') : (hasVoiceLock ? (sp.voxcpm_voice_description || '') : (gp.voxcpm_voice_description || ''));
-      const effectiveVoxcpmStyle = overrides.includes('instruction') ? (sp.voxcpm_style_control || '') : (currentRole ? (sp.voxcpm_style_control || '') : (gp.voxcpm_style_control || ''));
-      const effectiveVoxcpmPrompt = currentRole ? (sp.voxcpm_prompt_text || '') : (hasVoiceLock ? (sp.voxcpm_prompt_text || '') : (gp.voxcpm_prompt_text || ''));
-
-      const textToSend = (sp.enable_ssml && seg.ssml) ? seg.ssml : seg.text;
-
-      // Voice identifier & params snapshot — shared by both backend and frontend paths
-      let usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoMode === 'voicedesign' ? effectiveMimoVoiceDesc : effectiveMimoCloneId) : (effectiveEngine === 'voxcpm' ? voiceId : voiceId));
-      const updatedParams: Partial<SegmentEngineParams> = { engine: effectiveEngine };
-      if (effectiveEngine === 'edge_tts') {
-        updatedParams.edge_voice = effectiveEdgeVoice;
-        updatedParams.edge_rate = effectiveEdgeRate;
-        updatedParams.edge_volume = effectiveEdgeVolume;
-      } else if (effectiveEngine === 'mimo_tts') {
-        updatedParams.mimo_mode = effectiveMimoMode;
-        updatedParams.mimo_preset_voice = effectiveMimoPreset;
-        updatedParams.mimo_clone_voice_id = effectiveMimoCloneId;
-        updatedParams.mimo_voice_description = effectiveMimoVoiceDesc;
-        updatedParams.mimo_instruction = effectiveMimoInstruction;
-      } else if (effectiveEngine === 'voxcpm') {
-        updatedParams.voxcpm_mode = effectiveVoxcpmMode;
-        updatedParams.voxcpm_cfg_value = effectiveVoxcpmCfg;
-        updatedParams.voxcpm_inference_timesteps = effectiveVoxcpmTimesteps;
-        updatedParams.voxcpm_voice_description = effectiveVoxcpmDesc;
-        updatedParams.voxcpm_style_control = effectiveVoxcpmStyle;
-        updatedParams.voxcpm_prompt_text = effectiveVoxcpmPrompt;
+      // Resolve effective EngineParams with priority: custom > role > global
+      let effectiveParams: EngineParams;
+      let effectiveEngine: Engine;
+      if (hasVoiceLock && seg.voice.source === 'custom') {
+        effectiveParams = seg.voice.params as unknown as EngineParams;
+        effectiveEngine = (effectiveParams.engine || seg.voice.engine) as Engine;
+      } else if (currentRole?.voice) {
+        effectiveParams = currentRole.voice;
+        effectiveEngine = effectiveParams.engine as Engine;
       } else {
-        updatedParams.voice_id = voiceId;
-        updatedParams.speed = speed;
-        updatedParams.volume = volume;
-        updatedParams.pitch = pitch;
-        updatedParams.language = language;
-        updatedParams.instruction = instruction;
+        effectiveParams = buildCurrentParams();
+        effectiveEngine = effectiveParams.engine as Engine;
       }
+
+      // Extract engine-specific params from discriminated union
+      let effectiveEdgeVoice = '';
+      let effectiveEdgeRate = '+0%';
+      let effectiveEdgeVolume = '+0%';
+      let voiceId = '';
+      let speed = 1.0;
+      let volume: number = 80;
+      let pitch = 1.0;
+      let instruction = '';
+      let language = 'Chinese';
+      let effectiveMimoMode = 'preset';
+      let effectiveMimoPreset = '';
+      let effectiveMimoCloneId = '';
+      let effectiveMimoVoiceDesc = '';
+      let effectiveMimoInstruction = '';
+      let effectiveVoxcpmMode = 'tts';
+      let effectiveVoxcpmCfg = 2.0;
+      let effectiveVoxcpmTimesteps = 10;
+      let effectiveVoxcpmDesc = '';
+      let effectiveVoxcpmStyle = '';
+      let effectiveVoxcpmPrompt = '';
+
+      if (effectiveEngine === 'edge_tts') {
+        const e = effectiveParams as EdgeTTSParams;
+        effectiveEdgeVoice = e.voice || '';
+        effectiveEdgeRate = e.rate || '+0%';
+        effectiveEdgeVolume = e.volume || '+0%';
+      } else if (effectiveEngine === 'mimo_tts') {
+        const m = effectiveParams as MiMoParams;
+        effectiveMimoMode = m.mode || 'preset';
+        effectiveMimoInstruction = m.instruction || '';
+        effectiveMimoVoiceDesc = m.voice_description || '';
+        if (m.mode === 'preset') effectiveMimoPreset = m.voice_id || '冰糖';
+        else effectiveMimoCloneId = m.voice_id || '';
+      } else if (effectiveEngine === 'voxcpm') {
+        const v = effectiveParams as VoxCPMParams;
+        effectiveVoxcpmMode = v.mode || 'clone';
+        voiceId = v.voice_id || '';
+        effectiveVoxcpmCfg = v.cfg_value ?? 2.0;
+        effectiveVoxcpmTimesteps = v.inference_timesteps ?? 10;
+        effectiveVoxcpmDesc = v.voice_description || '';
+        effectiveVoxcpmStyle = v.style_control || '';
+        effectiveVoxcpmPrompt = v.prompt_text || '';
+      } else {
+        const c = effectiveParams as CosyVoiceParams;
+        voiceId = c.voice_id || '';
+        speed = c.speed ?? 1.0;
+        volume = c.volume ?? 80;
+        pitch = c.pitch ?? 1.0;
+        language = c.language || 'Chinese';
+        instruction = c.instruction || '';
+      }
+
+      const textToSend = seg.text;
+
+      // Voice identifier for display (may be updated below for design detection)
+      let usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice
+        : effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId)
+        : effectiveEngine === 'voxcpm' ? voiceId
+        : voiceId;
+
+      // Use effectiveParams directly as the snapshot (already EngineParams)
+      const updatedParams = effectiveParams;
 
       // Design voice detection: design modes need to use clone APIs at synthesis time.
       // Roles store mimo_mode='voicedesign' or voxcpm_mode='design' to indicate design voices.
@@ -897,7 +924,7 @@ export function TTSSynthesis({
           project.id, activeChapter.id, seg.id, {
             params: requestParams,
             text: textToSend,
-            ssml: (sp.enable_ssml && seg.ssml) ? seg.ssml : undefined,
+            ssml: undefined,
             keep_previous: true,
           },
         );
@@ -906,8 +933,8 @@ export function TTSSynthesis({
           ?.flatMap((c: Chapter) => c.segments ?? [])
           ?.find((s: Segment) => s.id === seg.id);
         // Clear legacy IndexedDB audio_id if it existed (segment now uses backend path)
-        if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
-        if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
+        if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
+        if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
         // Surgically update only the regenerated segment — preserve all other segments' frontend state
         const usedVoiceId = effectiveEngine === 'edge_tts' ? effectiveEdgeVoice : (effectiveEngine === 'mimo_tts' ? (effectiveMimoMode === 'preset' ? effectiveMimoPreset : effectiveMimoCloneId) : voiceId);
         dispatch({
@@ -915,10 +942,10 @@ export function TTSSynthesis({
           id,
           generated_voice_id: usedVoiceId,
           updated_params: updatedParams,
-          current_audio_path: updatedSeg?.current_audio_path,
-          previous_audio_path: updatedSeg?.previous_audio_path,
-          audio_format: updatedSeg?.audio_format ?? 'mp3',
-          duration_sec: updatedSeg?.duration_sec,
+          current_audio_path: updatedSeg?.audio.current?.path,
+            previous_audio_path: updatedSeg?.audio.previous?.path,
+            audio_format: updatedSeg?.audio.format ?? 'mp3',
+            duration_sec: updatedSeg?.audio.current?.duration_sec ?? updatedSeg?.audio.duration_sec,
           generated_params: updatedSeg?.generated_params,
         });
         return;
@@ -978,6 +1005,7 @@ export function TTSSynthesis({
     } catch (error: unknown) {
       dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error) });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, dispatch, buildCurrentParams, showToast, roles]);
 
   // Keep ref in sync
@@ -990,7 +1018,7 @@ export function TTSSynthesis({
     const toRegenerate = activeChapter.segments.filter(s => {
       if (s.status === 'idle' || s.status === 'failed') return true;
       if (s.status === 'ready') {
-        const hasVoiceLock = s.overrides?.includes('voice');
+        const hasVoiceLock = s.voice.source === 'custom';
         return !hasVoiceLock; // regenerate ready segments that follow global voice
       }
       return false; // skip 'pending'/'queued'
@@ -1001,10 +1029,10 @@ export function TTSSynthesis({
       return;
     }
 
-    const existingAudio = toRegenerate.filter(s => s.current_audio_id);
+    const existingAudio = toRegenerate.filter(s => s.audio.current?.id);
 
     // Show confirmation
-    const lockedCount = activeChapter.segments.filter(s => s.status === 'ready' && s.overrides?.includes('voice')).length;
+    const lockedCount = activeChapter.segments.filter(s => s.status === 'ready' && s.voice.source === 'custom').length;
     const lines = [
       `将重新生成 ${toRegenerate.length} 个片段。`,
     ];
@@ -1026,6 +1054,7 @@ export function TTSSynthesis({
         await doRegenerateAll(toRegenerate);
       },
     });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating, activeChapter.segments, showToast]);
 
   const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments) => {
@@ -1059,10 +1088,11 @@ export function TTSSynthesis({
     } finally {
       setGenerating(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, showToast]);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
-    const ids = idsArg ?? activeChapter.segments.filter(s => s.params.engine === 'cosyvoice').map(s => s.id);
+    const ids = idsArg ?? activeChapter.segments.filter(s => (segEffectiveParams(s).engine as string) === 'cosyvoice').map(s => s.id);
     const targetSegs = activeChapter.segments.filter(s => ids.includes(s.id));
     if (!targetSegs.length) return;
     try {
@@ -1109,7 +1139,7 @@ export function TTSSynthesis({
     stopCurrentAudio();
 
     const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg?.current_audio_id && !seg?.current_audio_path) {
+    if (!seg?.audio.current?.id && !seg?.audio.current?.path) {
       showToast('该段尚未生成音频', 'error');
       return;
     }
@@ -1121,8 +1151,8 @@ export function TTSSynthesis({
         chapterId: activeChapter?.id,
         projectId: project?.id,
         storageMode,
-        current_audio_id: seg?.current_audio_id,
-        current_audio_path: seg?.current_audio_path,
+        current_audio_id: seg?.audio.current?.id,
+        current_audio_path: seg?.audio.current?.path,
       });
       const msg = getErrorMessage(e, String(e));
       showToast(`播放失败 (${ctx}): ${msg}`, 'error');
@@ -1130,7 +1160,7 @@ export function TTSSynthesis({
 
     try {
       // Backend mode: fetch audio as blob, then play via blob URL
-      if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
+      if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
         const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
         const resp = await fetch(url, { cache: 'no-store' });
         if (!resp.ok) {
@@ -1165,7 +1195,7 @@ export function TTSSynthesis({
       }
       // Path mismatch: segment has backend audio_path but storage mode is frontend.
       // This happens when the user generated audio in backend mode then switched modes.
-      if (seg.current_audio_path && !seg.current_audio_id) {
+      if (seg.audio.current?.path && !seg.current_audio_id) {
         showToast('该段音频在后端，请切换到后端存储模式播放', 'error');
         return;
       }
@@ -1195,11 +1225,12 @@ export function TTSSynthesis({
       setIsPaused(false);
       setPlayAllActive(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, playingId, stopCurrentAudio, storageMode, project, activeChapter, showToast]);
 
   const handlePlayAll = useCallback(async () => {
     const readySegs = activeChapter.segments.filter(s =>
-      s.status === 'ready' && (s.current_audio_id || s.current_audio_path),
+      s.status === 'ready' && (s.audio.current?.id || s.audio.current?.path),
     );
     if (readySegs.length === 0) return;
 
@@ -1227,7 +1258,7 @@ export function TTSSynthesis({
 
       try {
         // Backend mode: fetch audio as blob, then play
-        if (storageMode === 'backend' && project?.id && seg.current_audio_path) {
+        if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
           const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
           const resp = await fetch(url, { cache: 'no-store' });
           if (!resp.ok) {
@@ -1268,6 +1299,7 @@ export function TTSSynthesis({
     setPlayingId(undefined);
     setIsPaused(false);
     setPlayAllActive(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, storageMode, project, activeChapter]);
 
   const handleStopAll = useCallback(() => {
@@ -1276,7 +1308,7 @@ export function TTSSynthesis({
 
   const handleTrimSilence = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg?.current_audio_id) return;
+    if (!seg?.audio.current?.id) return;
     try {
       const blob = await getTTSAudioBlob(seg.current_audio_id);
       if (!blob) return;
@@ -1300,16 +1332,20 @@ export function TTSSynthesis({
 
       // Save trimmed audio, delete old
       const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-      await saveTTSResult({ id: newId, text: seg.text, voice_id: seg.params.voice_id || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: seg.params.speed ?? 1, volume: seg.params.volume ?? 80, pitch: seg.params.pitch ?? 1, instruction: seg.params.instruction || '', language: seg.params.language || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
+      const eff = segEffectiveParams(seg);
+      await saveTTSResult({ id: newId, text: seg.text, voice_id: (eff.voice_id as string) || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: (eff.speed as number) ?? 1, volume: (eff.volume as number) ?? 80, pitch: (eff.pitch as number) ?? 1, instruction: (eff.instruction as string) || '', language: (eff.language as string) || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
-      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, generated_voice_id: seg.generated_voice_id });
+      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration });
       showToast(`裁剪了 ${trimmedMs}ms 静音`);
     } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
 
-  const selectedVoice = voices.find(v => (v.qwen_voice_id || v.id) === selectedVoiceId);
+  const selectedVoice = voices.find(v => {
+    const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
+    return (voiceId || v.id) === selectedVoiceId;
+  });
   // isScratchpadProject 已提前到 component 顶部 (P2 v2 useMemo 引用)
-  const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.duration_sec ?? 0), 0);
+  const activeChapterDuration = activeChapter.segments.reduce((total, segment) => total + (segment.audio.duration_sec ?? 0), 0);
   const generatedSegmentCount = activeChapter.segments.filter(segment => segment.status === 'ready').length;
   return (
     <div className={styles.container}>
@@ -1437,6 +1473,27 @@ export function TTSSynthesis({
                         projectId={project.id}
                       />
                     )}
+                    <button
+                      type="button"
+                      className={styles.sidebarApplyBtn}
+                      onClick={() => {
+                        const params = buildCurrentParams();
+                        setConfirmDialog({
+                          open: true,
+                          title: t('studio.applyVoice'),
+                          message: t('studio.applyVoiceHelp'),
+                          confirmLabel: t('studio.applyVoice'),
+                          onConfirm: () => {
+                            setConfirmDialog(prev => ({ ...prev, open: false }));
+                            dispatch({ type: 'SET_DEFAULT_PARAMS', params });
+                            showToast(t('studio.voiceApplied'));
+                          },
+                        });
+                      }}
+                      title={t('studio.applyVoiceHelp')}
+                    >
+                      {t('studio.applyVoice')}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1467,14 +1524,14 @@ export function TTSSynthesis({
 
             <div className={styles.sourceProductionBar} aria-label="Source Text production controls">
               <div className={styles.productionActions}>
-                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ 批量合成</button>
+                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ {t('studio.batchSynthesize')}</button>
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
-                  {playAllActive ? '⏹ 停止' : '▶ 全部播放'}
+                  {playAllActive ? '⏹ 停止' : `▶ ${t('studio.playAll')}`}
                 </button>
-                {isScratchpadProject && <span className={styles.scratchpadBadge}>默认草稿</span>}
+                {isScratchpadProject && <span className={styles.scratchpadBadge}>{t('projectHub.tempProject')}</span>}
                 <span className={styles.segmentedStats}>
-                  {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.duration_sec ?? 0), 0).toFixed(1)}s
-                  {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
+                  {activeChapter.segments.length} {t('projectOverview.segments')} · {activeChapter.segments.reduce((a, s) => a + (s.audio.duration_sec ?? 0), 0).toFixed(1)}s
+                  {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} ${t('projectOverview.generated')}`}
                 </span>
                 {engine === 'cosyvoice' && (
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
@@ -1482,14 +1539,14 @@ export function TTSSynthesis({
               </div>
               <div className={styles.productionRight}>
                 <div className={styles.toolbarGroup} aria-label="segment 时间呈现">
-                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>章节时间</button>
-                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>全局时间</button>
+                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>{t('studio.chapterTime')}</button>
+                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>{t('studio.globalTime')}</button>
                 </div>
                 <div className={styles.viewToggle} aria-label="segment 卡片呈现">
                   <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
-                    onClick={() => setCompactMode(true)}>紧凑</button>
+                    onClick={() => setCompactMode(true)}>{t('studio.compactView')}</button>
                   <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
-                    onClick={() => setCompactMode(false)}>展开</button>
+                    onClick={() => setCompactMode(false)}>{t('studio.expandedView')}</button>
                 </div>
               </div>
             </div>
@@ -1513,6 +1570,7 @@ export function TTSSynthesis({
                 globalMimoPresetVoice={mimoPresetVoice}
                 globalMimoCloneVoiceId={mimoCloneVoiceId}
                 chapterStartOffset={effectiveTimeOffset}
+                chapterVoice={activeChapter.voice}
                 onSelect={(id) => {
                   const currentSelected = activeChapter.selected_segment_id;
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
@@ -1529,6 +1587,7 @@ export function TTSSynthesis({
                 onPlay={handlePlaySegment}
                 onTrimSilence={handleTrimSilence}
                 onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
+                onConfirmCustom={handleConfirmCustom}
                 onDuplicate={(id) => {
                   const seg = activeChapter.segments.find(s => s.id === id);
                   if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text, voice_ref: seg.voice_ref || buildGlobalVoiceRef() });
@@ -1536,7 +1595,14 @@ export function TTSSynthesis({
                 onAnnotateSSML={(id) => handleAnnotateSSML([id])}
                 onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
                 onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
-                onUpdateParams={(id, params) => dispatch({ type: 'UPDATE_PARAMS', id, params })}
+                onUpdateParams={(id, params) => {
+                  // Only apply params update for already-custom segments
+                  const seg = activeChapter.segments.find(s => s.id === id);
+                  if (seg?.voice.source === 'custom') {
+                    dispatch({ type: 'UPDATE_PARAMS', id, params });
+                  }
+                  // Non-custom: ignored here; params accumulated locally in edit panel → confirm button handles conversion
+                }}
                 onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
                 onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
                 onUpdateKind={(id, kind, roleSnapshot) => {
@@ -1555,6 +1621,7 @@ export function TTSSynthesis({
                 segments={activeChapter.segments}
                 chapterDesignTitle={activeChapter.design_title || activeChapter.name}
                 remotionProjectPath={project.remotion_project_path}
+                exportDirectory={project.export_directory}
                 defaultName={activeChapter.design_title || activeChapter.name}
                 globalStartOffset={chapterStartOffset}
                 onClose={() => setExportOpen(false)}
@@ -1604,7 +1671,10 @@ export function TTSSynthesis({
             remotionPath={project.remotion_project_path}
             roles={roles}
             onEnterLibrary={() => setProjectSection('library')}
-            onEnterStudio={() => setProjectSection('studio')}
+            onEnterStudio={(chapterId) => {
+              if (chapterId) handleSelectChapter(chapterId);
+              setProjectSection('studio');
+            }}
             onOpenVoices={() => setProjectSection('voices')}
           />
         ) : projectSection === 'settings' ? (
@@ -1614,10 +1684,7 @@ export function TTSSynthesis({
             storageMode={storageMode}
             chapterCount={project.chapters.length}
             projectDescription={project.description}
-            projectType={project.project_type}
-            defaultLanguage={project.default_language}
             exportDirectory={project.export_directory}
-            exportNamingTemplate={project.export_naming_template}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}
@@ -1673,6 +1740,7 @@ export function TTSSynthesis({
         open={roleLibraryOpen}
         onClose={() => setRoleLibraryOpen(false)}
         onRolesChanged={setRoles}
+        projectId={project.id}
       />
     </div>
   );

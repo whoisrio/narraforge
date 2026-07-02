@@ -92,7 +92,7 @@ def health():
 
 
 # Import and include routers
-from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm, model_config, text_split, segmented_projects, voxcpm, sources, narrations, roles
+from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm, model_config, text_split, text_analysis, segmented_projects, voxcpm, sources, roles
 
 app.include_router(clone.router, prefix="/api/clone", tags=["voice-clone"])
 app.include_router(tts.router, prefix="/api/tts", tags=["tts"])
@@ -102,8 +102,8 @@ app.include_router(mimo_tts.router, prefix="/api/mimo-tts", tags=["mimo-tts"])
 app.include_router(subtitle_llm.router, prefix="/api/subtitle-llm", tags=["subtitle-llm"])
 app.include_router(model_config.router, prefix="/api/model-config", tags=["model-config"])
 app.include_router(text_split.router, prefix="/api/text-split", tags=["text-split"])
+app.include_router(text_analysis.router, prefix="/api/text-analysis", tags=["text-analysis"])
 app.include_router(segmented_projects.router, prefix="/api", tags=["segmented-projects"])
 app.include_router(voxcpm.router, prefix="/api/voxcpm", tags=["voxcpm"])
 app.include_router(sources.router, prefix="/api", tags=["sources"])
-app.include_router(narrations.router, prefix="/api", tags=["narrations"])
 app.include_router(roles.router, prefix="/api", tags=["roles"])

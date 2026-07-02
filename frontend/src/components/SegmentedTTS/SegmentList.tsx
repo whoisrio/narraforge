@@ -1,4 +1,4 @@
-import type { Segment, SegmentEngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
+import type { Segment, EngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import { inferSpeakerName } from '../../services/segmentKindInference';
 import { t } from '../../i18n';
@@ -25,6 +25,8 @@ interface SegmentListProps {
   globalMimoCloneVoiceId?: string;
   /** Cumulative time offset from previous chapters (seconds) */
   chapterStartOffset?: number;
+  /** The chapter's saved/applied voice — used for staleness instead of live panel state */
+  chapterVoice?: EngineParams;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -35,11 +37,12 @@ interface SegmentListProps {
   onPlay: (id: string) => void;
   onTrimSilence?: (id: string) => void;
   onUndo: (id: string) => void;
+  onConfirmCustom?: (id: string, localParams: Record<string, unknown>) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
   onUpdateText?: (id: string, text: string) => void;
   onUpdateSSML?: (id: string, ssml: string) => void;
-  onUpdateParams?: (id: string, params: Partial<SegmentEngineParams>) => void;
+  onUpdateParams?: (id: string, params: Partial<EngineParams>) => void;
   onUpdateEmotion?: (id: string, emotion: string) => void;
   onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
   onUpdateKind?: (id: string, kind: SegmentKind, roleSnapshot: RoleSnapshot | null) => void;
@@ -75,8 +78,8 @@ export function SegmentList(props: SegmentListProps) {
   let cumulative = props.chapterStartOffset ?? 0;
   for (const seg of segments) {
     const start = cumulative;
-    if (seg.duration_sec && seg.status === 'ready') {
-      cumulative += seg.duration_sec;
+    if (seg.audio.duration_sec && seg.status === 'ready') {
+      cumulative += seg.audio.duration_sec;
       timeRanges.push({ start, end: cumulative });
     } else {
       timeRanges.push({ start });
@@ -89,6 +92,8 @@ export function SegmentList(props: SegmentListProps) {
     compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine: props.engine,
     globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,
+    roles: allRoles, roleSnapshot: seg.role_snapshot ?? undefined,
+    chapterVoice: props.chapterVoice,
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
@@ -142,9 +147,9 @@ export function SegmentList(props: SegmentListProps) {
                     const role = allRoles.find(r => r.id === e.target.value);
                     if (role) props.onUpdateRole?.(seg.id, role.id, toSnapshot(role));
                   }}
-                  aria-label="选择台词角色"
+                  aria-label={t('segmentList.selectRole')}
                 >
-                  <option value="" disabled>选择角色</option>
+                  <option value="" disabled>{t('segmentList.selectRolePlaceholder')}</option>
                   {allRoles.map(role => (
                     <option key={role.id} value={role.id}>{role.name}</option>
                   ))}
@@ -157,12 +162,13 @@ export function SegmentList(props: SegmentListProps) {
                 <SegmentEditPanel
                   segment={editingSegment}
                   voices={props.voices}
-                  globalVoiceName={props.globalVoiceName}
+                  roles={props.roles}
                   onClose={() => onEdit('')}
                   onUpdateText={props.onUpdateText || (() => {})}
                   onUpdateSSML={props.onUpdateSSML || (() => {})}
-                  onUpdateParams={props.onUpdateParams || (() => {})}
                   onUpdateEmotion={props.onUpdateEmotion}
+                  onUndo={props.onUndo}
+                  onConfirmCustom={props.onConfirmCustom}
                   onRegenerate={props.onRegenerate}
                   onAnnotateSSML={(id) => props.onAnnotateSSML?.(id)}
                   onSplit={props.onSplit}
@@ -178,7 +184,7 @@ export function SegmentList(props: SegmentListProps) {
           </div>
         );
       })}
-      <button className={styles.appendBtn} onClick={onAppend}>+ 追加新段</button>
+      <button className={styles.appendBtn} onClick={onAppend}>{t('segment.segmentList.append')}</button>
     </div>
   );
 }

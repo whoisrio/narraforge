@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
-import type { EmotionType, Role, RoleSnapshot, Segment } from '../../types';
+import type { EmotionType, Role, Segment } from '../../types';
+import { useTranslation } from '../../i18n';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
+import { segEngine, segEffectiveParams } from '../../services/segmentShims';
 import styles from './ChatBubble.module.css';
 
 interface ChatBubbleProps {
@@ -14,13 +16,14 @@ interface ChatBubbleProps {
   onSelect: (id: string) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
-  onUpdateRole?: (id: string, roleId: string | null, roleSnapshot: RoleSnapshot | null) => void;
+  onUpdateRole?: (id: string, roleId: string | null) => void;
   onUpdateKind?: (id: string) => void;
   onTextSelection: (segmentId: string, start: number, end: number, text: string) => void;
 }
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
-  happy: '欣喜', sad: '沉重', angry: '愤怒', calm: '沉稳', neutral: '中性', excited: '激昂',
+  happy: 'segmentEdit.emotion.happy', sad: 'segmentEdit.emotion.sad', angry: 'segmentEdit.emotion.angry',
+  calm: 'segmentEdit.emotion.calm', neutral: 'segmentEdit.emotion.neutral', excited: 'segmentEdit.emotion.excited',
 };
 
 function emotionClass(emotion?: EmotionType): string {
@@ -28,45 +31,22 @@ function emotionClass(emotion?: EmotionType): string {
   return styles[`emo${value.charAt(0).toUpperCase()}${value.slice(1)}`] || styles.emoNeutral;
 }
 
-function voiceLabel(segment: Segment): string {
-  const snapshot = segment.role_snapshot;
-  if (snapshot?.default_voice) return snapshot.default_voice;
-  if (segment.params.edge_voice) return segment.params.edge_voice;
-  if (segment.params.voice_id) return segment.params.voice_id;
-  if (segment.params.mimo_preset_voice) return segment.params.mimo_preset_voice;
-  return '未选择音色';
+function voiceLabel(segment: Segment, t: (key: string) => string): string {
+  const eff = segEffectiveParams(segment);
+  if (eff.voice) return eff.voice as string;
+  if (eff.voice_id) return eff.voice_id as string;
+  if (eff.voice_description) return (eff.voice_description as string).slice(0, 20);
+  return t('segment.chatBubble.noVoiceSelected');
 }
 
-function toSnapshot(role: Role): RoleSnapshot {
-  return {
-    id: role.id,
-    name: role.name,
-    avatar: role.avatar,
-    description: role.description,
-    default_engine: role.default_engine,
-    default_voice: role.default_voice,
-    default_engine_params: { ...role.default_engine_params },
-    favorite_styles: [...role.favorite_styles],
-  };
-}
-
-function renderMarkedText(segment: Segment): ReactNode {
-  const text = segment.text || '空台词';
-  const marks = [...(segment.prosody_marks ?? [])].sort((a, b) => a.start - b.start);
-  if (marks.length === 0) return text;
-  const parts: ReactNode[] = [];
-  let cursor = 0;
-  for (const mark of marks) {
-    if (mark.start > cursor) parts.push(<span key={`plain-${cursor}`}>{text.slice(cursor, mark.start)}</span>);
-    parts.push(<mark key={mark.id} className={styles.prosodyMark}>{text.slice(mark.start, mark.end)}</mark>);
-    cursor = Math.max(cursor, mark.end);
-  }
-  if (cursor < text.length) parts.push(<span key={`plain-${cursor}`}>{text.slice(cursor)}</span>);
-  return parts;
+function renderMarkedText(segment: Segment, t: (key: string) => string): ReactNode {
+  // prosody_marks removed in V3 — render plain text
+  return segment.text || t('segment.chatBubble.emptyLine');
 }
 
 export function ChatBubble({ segment, index, role, roles = [], isSelected, isPlaying, isStale, onSelect, onRegenerate, onPlay, onUpdateRole, onUpdateKind, onTextSelection }: ChatBubbleProps) {
-  const roleName = role?.name ?? segment.role_snapshot?.name ?? '未命名角色';
+  const { t } = useTranslation();
+  const roleName = role?.name ?? t('segment.chatBubble.unnamedRole');
   const emotion = (segment.emotion ?? 'neutral') as EmotionType;
   return (
     <article
@@ -76,36 +56,36 @@ export function ChatBubble({ segment, index, role, roles = [], isSelected, isPla
       <VoiceAvatar name={roleName} size={36} gender="female" />
       <div className={styles.body}>
         <header className={styles.meta}>
-          <span>台词 #{String(index).padStart(2, '0')}</span>
+          <span>{t('segment.chatBubble.lineNumber', { index: String(index).padStart(2, '0') })}</span>
           {onUpdateKind && (
             <button
               type="button"
               className={styles.kindSwitch}
               onClick={(event) => { event.stopPropagation(); onUpdateKind(segment.id); }}
             >
-              改为旁白
+              {t('segment.chatBubble.switchToNarration')}
             </button>
           )}
           {onUpdateRole ? (
             <label className={styles.rolePicker} onClick={(event) => event.stopPropagation()}>
-              <span>选择角色</span>
+              <span>{t('segment.chatBubble.selectRole')}</span>
               <select
-                aria-label="选择角色"
+                aria-label={t('segment.chatBubble.selectRole')}
                 value={segment.role_id ?? ''}
                 onChange={(event) => {
                   const nextRole = roles.find(item => item.id === event.target.value);
-                  onUpdateRole(segment.id, nextRole?.id ?? null, nextRole ? toSnapshot(nextRole) : null);
+                  onUpdateRole(segment.id, nextRole?.id ?? null);
                 }}
               >
-                <option value="">未选择</option>
+                <option value="">{t('segment.chatBubble.noVoiceSelected')}</option>
                 {roles.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </label>
           ) : (
             <span>{roleName}</span>
           )}
-          <span>{segment.params.engine === 'edge_tts' ? 'Edge-TTS' : segment.params.engine} · {voiceLabel(segment)}</span>
-          <span>{emotion}</span>
+          <span>{segEngine(segment) === 'edge_tts' ? 'Edge-TTS' : segEngine(segment)} · {voiceLabel(segment, t)}</span>
+          <span>{t(EMOTION_LABELS[emotion])}</span>
         </header>
         <p
           className={styles.text}
@@ -119,14 +99,14 @@ export function ChatBubble({ segment, index, role, roles = [], isSelected, isPla
             onTextSelection(segment.id, start, start + selected.length, selected);
           }}
         >
-          {renderMarkedText(segment)}
+          {renderMarkedText(segment, t)}
         </p>
         <footer className={styles.footer}>
-          <span>{EMOTION_LABELS[emotion]}</span>
-          <span>{segment.prosody_marks?.length ?? 0} 个局部语气</span>
-          {isStale && <span className={styles.stale}>需重新生成</span>}
-          <button type="button" onClick={(event) => { event.stopPropagation(); onPlay(segment.id); }}>{isPlaying ? '播放中' : '播放'}</button>
-          <button type="button" onClick={(event) => { event.stopPropagation(); onRegenerate(segment.id); }}>生成</button>
+          <span>{t(EMOTION_LABELS[emotion])}</span>
+          <span>{t('segment.chatBubble.prosodyMarks', { count: 0 })}</span>
+          {isStale && <span className={styles.stale}>{t('segment.chatBubble.needRegenerate')}</span>}
+          <button type="button" onClick={(event) => { event.stopPropagation(); onPlay(segment.id); }}>{isPlaying ? t('segment.chatBubble.playing') : t('segment.chatBubble.play')}</button>
+          <button type="button" onClick={(event) => { event.stopPropagation(); onRegenerate(segment.id); }}>{t('segment.chatBubble.generate')}</button>
         </footer>
       </div>
     </article>

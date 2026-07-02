@@ -23,13 +23,12 @@ def _seed_project(pid: str = "p1", name: str = "Test") -> ProjectIn:
         chapters=[
             {
                 "id": f"c-{pid}", "position": 0, "name": "第一章", "engine": "edge_tts",
-                "default_params": {"engine": "edge_tts"},
+                "voice": {"engine": "edge_tts"},
                 "split_config": {"delimiters": ["。"], "mode": "rule"},
                 "segments": [
                     {
                         "id": f"s-{pid}", "position": 0, "text": "hello",
-                        "params": {"engine": "edge_tts"},
-                        "locked_params": [],
+                        "voice": {"source": "chapter"},
                     }
                 ],
             }
@@ -73,10 +72,10 @@ def test_save_project_preserves_existing_backend_audio_when_payload_omits_path(d
     db_session.commit()
 
     seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
-    seg.current_audio_path = "p1/chapters/c-p1/audio/s-p1.mp3"
-    seg.previous_audio_path = "p1/chapters/c-p1/audio/s-p1-old.mp3"
-    seg.audio_format = "mp3"
-    seg.duration_sec = 1.23
+    seg.audio = {
+        "current": {"path": "p1/chapters/c-p1/audio/s-p1.mp3", "format": "mp3", "duration_sec": 1.23},
+        "previous": {"path": "p1/chapters/c-p1/audio/s-p1-old.mp3"},
+    }
     seg.generated_params = {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"}
     db_session.commit()
 
@@ -85,10 +84,11 @@ def test_save_project_preserves_existing_backend_audio_when_payload_omits_path(d
     db_session.commit()
 
     seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
-    assert seg.current_audio_path == "p1/chapters/c-p1/audio/s-p1.mp3"
-    assert seg.previous_audio_path == "p1/chapters/c-p1/audio/s-p1-old.mp3"
-    assert seg.audio_format == "mp3"
-    assert seg.duration_sec == 1.23
+    audio = seg.audio or {}
+    assert audio["current"]["path"] == "p1/chapters/c-p1/audio/s-p1.mp3"
+    assert audio.get("previous", {}).get("path") == "p1/chapters/c-p1/audio/s-p1-old.mp3"
+    assert audio["current"]["format"] == "mp3"
+    assert audio["current"]["duration_sec"] == 1.23
     assert seg.generated_params == {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"}
 
 
@@ -143,27 +143,20 @@ def test_to_iso_handles_naive_and_aware():
     assert _to_iso(datetime(2026, 6, 9, 12, 0, 0, tzinfo=timezone.utc)) == "2026-06-09T12:00:00+00:00"
 
 
-def test_save_project_persists_role_snapshot_and_prosody_marks(db_session, tmp_path, monkeypatch):
+def test_save_project_persists_role_and_segment_kind(db_session, tmp_path, monkeypatch):
     from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
 
     project = _seed_project("p-role")
     project.default_narrator_role_id = "role-narrator"
-    project.default_narrator_snapshot = {
-        "id": "role-narrator",
-        "name": "旁白",
-        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-YunjianNeural"},
-    }
     project.chapters[0].segments[0].role_id = "role-linxia"
-    project.chapters[0].segments[0].role_snapshot = {
-        "id": "role-linxia",
-        "name": "林夏",
-        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
-    }
     project.chapters[0].segments[0].segment_kind = "dialogue"
-    project.chapters[0].segments[0].prosody_marks = [
-        {"id": "mark-1", "start": 0, "end": 2, "style_tags": ["low_voice"]}
-    ]
+    project.chapters[0].segments[0].voice = {
+        "source": "role",
+        "role_id": "role-linxia",
+        "engine": "edge_tts",
+        "name": "林夏",
+    }
 
     save_project(db_session, project)
     db_session.commit()
@@ -171,20 +164,19 @@ def test_save_project_persists_role_snapshot_and_prosody_marks(db_session, tmp_p
     detail = get_project_detail(db_session, "p-role")
     assert detail is not None
     assert detail.default_narrator_role_id == "role-narrator"
-    assert detail.default_narrator_snapshot["name"] == "旁白"
     segment = detail.chapters[0].segments[0]
     assert segment.role_id == "role-linxia"
-    assert segment.role_snapshot["name"] == "林夏"
     assert segment.segment_kind == "dialogue"
-    assert segment.prosody_marks[0]["id"] == "mark-1"
+    assert segment.voice["source"] == "role"
+    assert segment.voice["name"] == "林夏"
 
 
-def test_save_project_persists_voice_ref(db_session, tmp_path, monkeypatch):
+def test_save_project_persists_voice(db_session, tmp_path, monkeypatch):
     from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
 
-    project = _seed_project("p-vref")
-    project.chapters[0].segments[0].voice_ref = {
+    project = _seed_project("p-voice")
+    project.chapters[0].segments[0].voice = {
         "name": "旁白",
         "source": "role",
         "voice_id": "zh-CN-YunxiNeural",
@@ -195,43 +187,12 @@ def test_save_project_persists_voice_ref(db_session, tmp_path, monkeypatch):
     save_project(db_session, project)
     db_session.commit()
 
-    detail = get_project_detail(db_session, "p-vref")
+    detail = get_project_detail(db_session, "p-voice")
     assert detail is not None
     seg = detail.chapters[0].segments[0]
-    assert seg.voice_ref is not None
-    assert seg.voice_ref["name"] == "旁白"
-    assert seg.voice_ref["source"] == "role"
-    assert seg.voice_ref["voice_id"] == "zh-CN-YunxiNeural"
-    assert seg.voice_ref["engine"] == "edge_tts"
-    assert seg.voice_ref["role_id"] == "role-narrator"
-
-
-def test_get_project_detail_migrates_voice_ref_for_old_segments(db_session, tmp_path, monkeypatch):
-    from app.core import config
-    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
-
-    # Save a project without voice_ref (simulating old data)
-    project = _seed_project("p-migrate")
-    project.chapters[0].segments[0].role_id = "role-x"
-    project.chapters[0].segments[0].role_snapshot = {
-        "id": "role-x",
-        "name": "角色X",
-        "default_engine_params": {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
-    }
-    project.chapters[0].segments[0].segment_kind = "dialogue"
-    save_project(db_session, project)
-    db_session.commit()
-
-    # Clear voice_ref in DB to simulate old segment
-    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p-migrate").one()
-    seg.voice_ref = None
-    db_session.commit()
-
-    # get_project_detail should auto-migrate
-    detail = get_project_detail(db_session, "p-migrate")
-    assert detail is not None
-    migrated_seg = detail.chapters[0].segments[0]
-    assert migrated_seg.voice_ref is not None
-    assert migrated_seg.voice_ref["source"] == "role"
-    assert migrated_seg.voice_ref["name"] == "角色X"
-    assert migrated_seg.voice_ref["role_id"] == "role-x"
+    assert seg.voice is not None
+    assert seg.voice["name"] == "旁白"
+    assert seg.voice["source"] == "role"
+    assert seg.voice["voice_id"] == "zh-CN-YunxiNeural"
+    assert seg.voice["engine"] == "edge_tts"
+    assert seg.voice["role_id"] == "role-narrator"

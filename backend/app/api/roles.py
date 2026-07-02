@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,8 +13,11 @@ router = APIRouter()
 
 
 @router.get("/roles", response_model=list[RoleOut])
-def list_roles(db: Session = Depends(get_db)) -> list[RoleOut]:
-    return svc.list_roles(db)
+def list_roles(
+    project_id: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+) -> list[RoleOut]:
+    return svc.list_roles(db, project_id=project_id)
 
 
 @router.post("/roles", response_model=RoleOut, status_code=201)

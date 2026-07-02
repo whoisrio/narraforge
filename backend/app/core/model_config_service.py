@@ -28,9 +28,6 @@ PROVIDER_KEYS = {
     "qwen_tts": "model_config.qwen_tts",
     "mimo_tts": "model_config.mimo_tts",
     "llm": "model_config.llm",
-    "funasr": "model_config.funasr",
-    "oss": "model_config.oss",
-    "app": "model_config.app",
 }
 
 # 每个提供商的配置字段定义：
@@ -93,98 +90,6 @@ PROVIDER_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
             "description": "如 mimo-v2.5-pro、deepseek-chat 等",
         },
     },
-    "funasr": {
-        "model": {
-            "label": "模型名称",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "funasr_model",
-            "description": "如 paraformer-zh、paraformer-zh-streaming",
-        },
-        "device": {
-            "label": "计算设备",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "funasr_device",
-            "description": "留空自动检测 (cuda > mps > cpu)",
-        },
-    },
-    "oss": {
-        "access_key": {
-            "label": "Access Key",
-            "type": "password",
-            "sensitive": True,
-            "default_from_settings": "oss_ak",
-            "description": "七牛云 Access Key",
-        },
-        "secret_key": {
-            "label": "Secret Key",
-            "type": "password",
-            "sensitive": True,
-            "default_from_settings": "oss_sk",
-            "description": "七牛云 Secret Key",
-        },
-        "bucket_name": {
-            "label": "Bucket 名称",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "bucket_name",
-            "description": "七牛云存储空间名称",
-        },
-        "bucket_domain": {
-            "label": "Bucket 域名",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "bucket_domain",
-            "description": "七牛云 CDN/绑定域名",
-        },
-    },
-    "app": {
-        "public_base_url": {
-            "label": "公网访问 URL",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "public_base_url",
-            "description": "CosyVoice 声音注册需要的公网可访问 URL",
-        },
-    },
-    "voxcpm": {
-        "model_path": {
-            "label": "模型路径",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "voxcpm_model_path",
-            "description": "HuggingFace 模型 ID 或本地权重目录（如 openbmb/VoxCPM2）",
-        },
-        "device": {
-            "label": "推理设备",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "voxcpm_device",
-            "description": "auto / cuda / cuda:0 / cpu",
-        },
-        "dtype": {
-            "label": "推理精度",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "voxcpm_dtype",
-            "description": "auto / float16 / bfloat16",
-        },
-        "inference_timesteps": {
-            "label": "去噪步数",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "voxcpm_inference_timesteps",
-            "description": "越高质量越好，越慢。推荐 10",
-        },
-        "cfg_value": {
-            "label": "CFG 强度",
-            "type": "text",
-            "sensitive": False,
-            "default_from_settings": "voxcpm_cfg_value",
-            "description": "Classifier-Free Guidance 强度，推荐 2.0",
-        },
-    },
 }
 
 # 提供商的显示信息
@@ -192,10 +97,6 @@ PROVIDER_INFO: dict[str, dict[str, str]] = {
     "qwen_tts": {"label": "千问 TTS / CosyVoice", "icon": "🎙️"},
     "mimo_tts": {"label": "小米 MiMo TTS", "icon": "🔊"},
     "llm": {"label": "LLM 字幕服务", "icon": "🤖"},
-    "funasr": {"label": "FunASR 语音识别", "icon": "🎤"},
-    "oss": {"label": "七牛云对象存储", "icon": "☁️"},
-    "app": {"label": "应用设置", "icon": "⚙️"},
-    "voxcpm": {"label": "VoxCPM 本地 TTS", "icon": "🎯"},
 }
 
 

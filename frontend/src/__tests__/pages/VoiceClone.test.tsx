@@ -24,7 +24,7 @@ describe('VoiceClone Page', () => {
     render(<VoiceClone />);
 
     expect(screen.getByRole('heading', { name: '音色设计' })).toBeInTheDocument();
-    expect(screen.getByText('Voice Profiles')).toBeInTheDocument();
+    expect(screen.getByText('音色档案')).toBeInTheDocument();
   });
 
   it('should show empty state when no cloned voices exist', async () => {
@@ -42,12 +42,9 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-1',
         name: '我的声音',
-        audio_url: '/api/clone/audio/voice-1',
-        qwen_voice_id: 'qwen-1',
-        role: 'custom',
-        clone_engine: 'qwen',
-        is_cloned: true,
-        cloned_at: new Date().toISOString(),
+        has_preview: true,
+        voice: { model: 'cosyvoice', voice_type: 'clone' },
+        voice_params: { cosyvoice: { params: { voice_id: 'qwen-1' } } },
         created_at: new Date().toISOString(),
       },
     ];
@@ -61,20 +58,15 @@ describe('VoiceClone Page', () => {
     });
   });
 
-  it('should display input method label on voice cards', async () => {
+  it('should display voice type label on voice cards', async () => {
     const mockVoices: VoiceProfile[] = [
       {
         id: 'voice-upload',
         name: '上传声音',
-        audio_url: '/api/clone/audio/voice-upload',
-        clone_engine: 'mimo',
-        is_cloned: true,
+        has_preview: true,
+        voice: { model: 'mimo_tts', voice_type: 'clone' },
+        voice_params: { mimo_tts: { params: {} } },
         created_at: new Date().toISOString(),
-        voices_engine: {
-          type: 'clone',
-          engine: { type: 'Mimo', sub_type: 'mimo-clone' },
-          parameters: { input_method: 'upload' },
-        },
       },
     ];
 
@@ -85,7 +77,7 @@ describe('VoiceClone Page', () => {
     await waitFor(() => {
       expect(screen.getByText('上传声音')).toBeInTheDocument();
     });
-    expect(screen.getByText('上传')).toBeInTheDocument();
+    expect(screen.getByText('上传声音')).toBeInTheDocument();
   });
 
   it('should display edit and delete buttons on voice cards', async () => {
@@ -93,9 +85,9 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-1',
         name: '测试声音',
-        audio_url: '/api/clone/audio/voice-1',
-        clone_engine: 'qwen',
-        is_cloned: true,
+        has_preview: true,
+        voice: { model: 'cosyvoice', voice_type: 'clone' },
+        voice_params: { cosyvoice: { params: {} } },
         created_at: new Date().toISOString(),
       },
     ];
@@ -116,12 +108,12 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-1',
         name: '编辑测试',
-        audio_url: '/api/clone/audio/voice-1',
-        clone_engine: 'mimo',
-        is_cloned: true,
+        has_preview: true,
+        voice: { model: 'mimo_tts', voice_type: 'clone' },
+        voice_params: { mimo_tts: { params: {} } },
         created_at: new Date().toISOString(),
-        source_audio_url: '/api/clone/audio/voice-1?field=original',
-        cloned_preview_url: '/api/clone/audio/voice-1?field=preview',
+        has_source: true,
+        has_preview: true,
       },
     ];
 
@@ -147,9 +139,9 @@ describe('VoiceClone Page', () => {
       {
         id: 'voice-del',
         name: '删除测试',
-        audio_url: '/api/clone/audio/voice-del',
-        clone_engine: 'qwen',
-        is_cloned: true,
+        has_preview: true,
+        voice: { model: 'cosyvoice', voice_type: 'clone' },
+        voice_params: { cosyvoice: { params: {} } },
         created_at: new Date().toISOString(),
       },
     ];

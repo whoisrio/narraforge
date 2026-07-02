@@ -1,3 +1,4 @@
+import { useTranslation } from '../i18n';
 import { useTranscription } from '../hooks/useTranscription';
 import {
   AudioDropzone,
@@ -13,6 +14,7 @@ import {
 import styles from './SpeechToText.module.css';
 
 export function SpeechToText() {
+  const { t } = useTranslation();
   const tx = useTranscription();
 
   return (
@@ -20,8 +22,8 @@ export function SpeechToText() {
       {/* Section header */}
       <div className={styles.pageHeader}>
         <div>
-          <h2 className={styles.pageTitle}>Transcription Hub</h2>
-          <p className={styles.pageDesc}>Convert spoken narrative into polished prose.</p>
+          <h1 className={styles.pageTitle}>{t('subtitles.title')}</h1>
+          <p className={styles.pageDesc}>{t('subtitles.heroDescription')}</p>
         </div>
       </div>
 

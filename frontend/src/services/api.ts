@@ -37,7 +37,7 @@ export const voiceApi = {
   // 只获取已克隆的声音（从 Qwen 同步的）
   listCloned: async (): Promise<VoiceProfile[]> => {
     const all = await voiceApi.list();
-    return all.filter(v => v.is_cloned && v.qwen_voice_id);
+    return all.filter(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
   },
 
   createClone: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
@@ -93,7 +93,7 @@ export const voiceApi = {
   },
 
   /** 保存克隆音色的试听音频 */
-  savePreviewAudio: async (voiceId: string, audioBase64: string, audioFormat: string = 'wav'): Promise<{ id: string; cloned_preview_path: string }> => {
+  savePreviewAudio: async (voiceId: string, audioBase64: string, audioFormat: string = 'wav'): Promise<{ id: string; preview_audio_path: string }> => {
     const { data } = await api.patch(`/clone/${voiceId}/preview-audio`, {
       audio_base64: audioBase64,
       audio_format: audioFormat,
@@ -195,8 +195,14 @@ export const mimoTtsApi = {
     text?: string;
     optimize_text_preview?: boolean;
     format?: string;
+    context?: string;
   }): Promise<TTSResult> => {
-    const { data } = await api.post<TTSResult>('/mimo-tts/voicedesign', params);
+    const { context, ...rest } = params;
+    const body: Record<string, unknown> = { ...rest };
+    if (context) {
+      body.context = [{ role: 'user', content: context }];
+    }
+    const { data } = await api.post<TTSResult>('/mimo-tts/voicedesign', body);
     return data;
   },
 
@@ -206,8 +212,14 @@ export const mimoTtsApi = {
     voice_id: string;
     instruction?: string;
     format?: string;
+    context?: string;
   }): Promise<TTSResult> => {
-    const { data } = await api.post<TTSResult>('/mimo-tts/voiceclone', params);
+    const { context, ...rest } = params;
+    const body: Record<string, unknown> = { ...rest };
+    if (context) {
+      body.context = [{ role: 'user', content: context }];
+    }
+    const { data } = await api.post<TTSResult>('/mimo-tts/voiceclone', body);
     return data;
   },
 
@@ -456,6 +468,34 @@ export const textSplitApi = {
     return data;
   },
 };
+// ---------------------------------------------------------------------------
+// Text Analysis API (script parsing: chapter/role/dialogue detection)
+// ---------------------------------------------------------------------------
+
+export interface TextAnalysisChapterItem {
+  title: string;
+  segments: { text: string; role: string | null; role_confidence: number }[];
+}
+
+export interface TextAnalysisDetectedRole {
+  name: string;
+  occurrences: number;
+  confidence: number;
+}
+
+export interface TextAnalysisSplitResult {
+  method: string;
+  chapters: TextAnalysisChapterItem[];
+  detected_roles: TextAnalysisDetectedRole[];
+}
+
+export const textAnalysisApi = {
+  splitScript: async (text: string, mode: string = 'auto'): Promise<TextAnalysisSplitResult> => {
+    const { data } = await api.post<TextAnalysisSplitResult>('/text-analysis/split', { text, mode });
+    return data;
+  },
+};
+
 export const segmentedProjectApi = {
   synthesizeSegment: async (
     projectId: string,
@@ -478,21 +518,26 @@ export const segmentedProjectApi = {
     const { data } = await api.get<import('../types').SegmentedProject>(`/segmented-projects/${id}`);
     return data;
   },
-  getChapterAudioExportUrl: (projectId: string, chapterId: string): string => (
-    `/api/segmented-projects/${projectId}/chapters/${chapterId}/export-audio`
-  ),
-  exportTextFileToRemotion: async (projectId: string, filename: string, content: string): Promise<{ path: string }> => {
+  getChapterAudioExportUrl: (projectId: string, chapterId: string, exportDirectory?: string | null): string => {
+    const params = new URLSearchParams();
+    if (exportDirectory) params.set('export_directory', exportDirectory);
+    const qs = params.toString();
+    return `/api/segmented-projects/${projectId}/chapters/${chapterId}/export-audio${qs ? `?${qs}` : ''}`;
+  },
+  exportTextFileToRemotion: async (projectId: string, filename: string, content: string, exportDirectory?: string | null): Promise<{ path: string }> => {
     const { data } = await api.post<{ path: string }>(
       `/segmented-projects/${projectId}/export-text-file-to-remotion`,
-      { filename, content },
+      { filename, content, export_directory: exportDirectory ?? undefined },
     );
     return data;
   },
 };
 
 export const roleApi = {
-  listRoles: async (): Promise<import('../types').Role[]> => {
-    const { data } = await api.get<import('../types').Role[]>('/roles');
+  listRoles: async (projectId?: string): Promise<import('../types').Role[]> => {
+    const { data } = await api.get<import('../types').Role[]>('/roles', {
+      params: projectId ? { project_id: projectId } : undefined,
+    });
     return data;
   },
   createRole: async (role: import('../types').RoleSnapshot): Promise<import('../types').Role> => {

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { MigrationResult } from '../../services/segmentedMigration';
+import { useTranslation } from '../../i18n';
 import { migrateIndexedDBProjectsToBackend, clearLocalProjects } from '../../services/segmentedMigration';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function MigrationPrompt({ localCount, onComplete, onDismiss }: Props) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<MigrationResult[] | null>(null);
 
@@ -26,18 +28,18 @@ export function MigrationPrompt({ localCount, onComplete, onDismiss }: Props) {
 
   return (
     <div className="migration-prompt">
-      <h3>迁移本地项目到后端</h3>
+      <h3>{t('segment.migration.title')}</h3>
       {results == null && (
         <>
-          <p>检测到本地有 {localCount} 个分段项目，是否迁移到后端存储？</p>
-          <button onClick={run} disabled={busy}>迁移</button>
-          <button onClick={onDismiss} disabled={busy}>稍后再说</button>
+          <p>{t('segment.migration.prompt', { count: localCount })}</p>
+          <button onClick={run} disabled={busy}>{t('segment.migration.run')}</button>
+          <button onClick={onDismiss} disabled={busy}>{t('segment.migration.dismiss')}</button>
         </>
       )}
       {results != null && (
         <>
-          <p>迁移完成：{results.filter((r) => r.status === 'ok').length} 成功 / {results.filter((r) => r.status === 'error').length} 失败</p>
-          <button onClick={onComplete}>完成</button>
+          <p>{t('segment.migration.result', { ok: results.filter((r) => r.status === 'ok').length, error: results.filter((r) => r.status === 'error').length })}</p>
+          <button onClick={onComplete}>{t('segment.migration.done')}</button>
         </>
       )}
     </div>

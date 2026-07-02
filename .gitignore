@@ -79,7 +79,15 @@ playwright-report/
 .claude/skills/
 .claude/worktrees/
 .agents/skills/
+.claude
+.workbuddy
+.hermes
+.agents
 .trae
+.superpowers
 .superpowersbackend/db.sqlite3
 backend/*.db
+backend/voice_clone.db*
 backend/uploads_bak
+.playwright-cli
+home.yaml

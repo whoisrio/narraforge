@@ -1,0 +1,111 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(29, 27, 23, 0.35);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.2s ease;
+}
+
+.dialog {
+  background: var(--color-surface, #ffffff);
+  border-radius: var(--radius-xl, 20px);
+  border: 1px solid var(--color-border, #e8e1db);
+  box-shadow: 0 18px 36px rgba(26, 24, 20, 0.12), 0 6px 12px rgba(26, 24, 20, 0.05);
+  max-width: 440px;
+  width: calc(100% - 48px);
+  padding: var(--spacing-xl, 32px);
+  animation: slideUp 0.25s ease;
+}
+
+.icon {
+  font-size: 32px;
+  margin-bottom: var(--spacing-md, 16px);
+}
+
+.title {
+  font-family: var(--font-family-heading, 'Plus Jakarta Sans', sans-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text-primary, #1d1b17);
+  margin: 0 0 var(--spacing-sm, 8px) 0;
+}
+
+.message {
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 14px;
+  color: var(--color-text-secondary, #534439);
+  line-height: 1.6;
+  margin: 0 0 var(--spacing-lg, 24px) 0;
+}
+
+.roles {
+  list-style: none;
+  padding: 0;
+  margin: var(--spacing-sm, 8px) 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roleTag {
+  padding: 3px 10px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-surface-low, #f9f3eb);
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 12px;
+  color: var(--color-text-secondary, #534439);
+  border: 1px solid var(--color-border, #e8e1db);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm, 8px);
+}
+
+.btn {
+  padding: 9px 22px;
+  border: none;
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btnCancel {
+  background: var(--color-surface-hover, #f3f2ee);
+  color: var(--color-text-secondary, #534439);
+  border: 1px solid var(--color-border, #e8e1db);
+}
+
+.btnCancel:hover {
+  background: var(--color-surface-active, #e8e1db);
+}
+
+.btnConfirm {
+  background: linear-gradient(135deg, #c47a3a, #d4944e);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(196, 122, 58, 0.25);
+}
+
+.btnConfirm:hover {
+  box-shadow: 0 4px 16px rgba(196, 122, 58, 0.4);
+  transform: scale(1.03);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}

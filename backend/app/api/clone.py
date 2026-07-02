@@ -186,9 +186,8 @@ async def upload_voice(
     voice = VoiceProfile(
         id=file_id,
         name=file.filename or "Unnamed Voice",
-        source_audio_path=settings.to_relative(file_path),
-        role="custom",
-        prompt_text=prompt_text or None,
+        voice={"model": "", "voice_type": "upload"},
+        voice_params={"": {"source_audio_path": settings.to_relative(file_path), "params": {"prompt_text": prompt_text or None}}},
         project_id=project_id or None,
     )
     db.add(voice)
@@ -199,8 +198,8 @@ async def upload_voice(
         "id": voice.id,
         "name": voice.name,
         "audio_url": f"/api/clone/audio/{voice.id}",
-        "is_cloned": voice.is_cloned,
-        "prompt_text": voice.prompt_text,
+        "is_cloned": (voice.voice or {}).get("voice_type") == "clone",
+        "prompt_text": (voice.voice_params or {}).get("", {}).get("params", {}).get("prompt_text"),
     }
 
 
@@ -282,10 +281,8 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
     voice = VoiceProfile(
         id=file_id,
         name=request.name or f"Voice_{file_id[:8]}",
-        source_audio_path=settings.to_relative(final_audio_path),
-        role="custom",
-        external_audio_url=audio_url,  # 保存原始 URL
-        prompt_text=request.prompt_text or None,
+        voice={"model": "", "voice_type": "upload"},
+        voice_params={"": {"source_audio_path": settings.to_relative(final_audio_path), "params": {"external_audio_url": audio_url, "prompt_text": request.prompt_text or None}}},
         project_id=request.project_id or None,
     )
     db.add(voice)
@@ -297,7 +294,7 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
         "name": voice.name,
         "audio_url": f"/api/clone/audio/{voice.id}",
         "external_audio_url": audio_url,
-        "is_cloned": voice.is_cloned,
+        "is_cloned": (voice.voice or {}).get("voice_type") == "clone",
     }
 
 
@@ -309,8 +306,12 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Voice not found")
 
     # 优先使用外部音频 URL（如果有），否则上传本地文件到七牛云
-    if not voice.external_audio_url:
-        resolved_src = _resolve(voice.source_audio_path)
+    vp = dict(voice.voice_params or {})
+    model = (voice.voice or {}).get("model", "")
+    model_vp = dict(vp.get(model, {}) or {})
+    ext_audio_url = model_vp.get("params", {}).get("external_audio_url")
+    if not ext_audio_url:
+        resolved_src = _resolve(model_vp.get("source_audio_path", ""))
         if not resolved_src:
             raise HTTPException(status_code=404, detail="Audio file not found")
         if not is_qiniu_configured(db):
@@ -321,35 +322,36 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         try:
             key = os.path.basename(resolved_src)
             qiniu_url = upload_to_qiniu(resolved_src, key, db=db)
-            voice.external_audio_url = qiniu_url
-            db.commit()
-            db.refresh(voice)
+            model_vp.setdefault("params", {})["external_audio_url"] = qiniu_url
+            audio_path_for_clone = qiniu_url
         except RuntimeError as e:
             raise HTTPException(status_code=500, detail=f"Qiniu upload failed: {e}")
+    else:
+        audio_path_for_clone = ext_audio_url
 
-    audio_path_for_clone = voice.external_audio_url
     logger.info(f"Using external audio URL for cloning: {audio_path_for_clone}")
 
     try:
         tts_service = await get_tts_service(db)
 
         # 调用千问声音克隆 API 进行注册
-        # register_cloned_voice 会自动检测 audio_path 是否为 URL
         result = await tts_service.register_cloned_voice(
             reference_audio_path=audio_path_for_clone,
             voice_name=request.name or voice.name,
         )
 
         # 更新数据库
-        voice.qwen_voice_id = result["voice_id"]
-        voice.role = result.get("role", request.role)
-        voice.is_cloned = True
-        voice.cloned_at = utcnow()
-        voice.clone_engine = "qwen"
-        voice.voice_engine_type = "clone"
-        voice.engine_type = "CosyVoice"
-        voice.engine_sub_type = None
-        voice.engine_params = request.engine_params or {}
+        new_vp = {}
+        new_model_vp = dict(model_vp)
+        new_model_vp.setdefault("params", {})
+        new_model_vp["params"]["voice_id"] = result["voice_id"]
+        if audio_path_for_clone and audio_path_for_clone != ext_audio_url:
+            new_model_vp["params"]["external_audio_url"] = audio_path_for_clone
+        if request.engine_params:
+            new_model_vp["params"].update(request.engine_params)
+        new_vp["cosyvoice"] = new_model_vp
+        voice.voice = {"model": "cosyvoice", "voice_type": "clone"}
+        voice.voice_params = new_vp
 
         if request.name:
             voice.name = request.name
@@ -381,19 +383,23 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    resolved_src = _resolve(voice.source_audio_path)
+    model = (voice.voice or {}).get("model", "")
+    source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+    resolved_src = _resolve(source_path)
     if not resolved_src:
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
-        voice.is_cloned = True
-        voice.cloned_at = utcnow()
-        voice.clone_engine = "mimo"
-        voice.mimo_voice_id = "mimo_voiceclone"  # 标记使用 MiMo voiceclone
-        voice.voice_engine_type = "clone"
-        voice.engine_type = "Mimo"
-        voice.engine_sub_type = "mimo-clone"
-        voice.engine_params = request.engine_params or {}
+        voice.voice = {"model": "mimo_tts", "voice_type": "clone"}
+        vp = dict(voice.voice_params or {})
+        if "" in vp and "mimo_tts" not in vp:
+            vp["mimo_tts"] = vp.pop("")
+        model_vp = dict(vp.get("mimo_tts", {}) or {})
+        model_vp.setdefault("params", {})["voice_id"] = "mimo_voiceclone"
+        if request.engine_params:
+            model_vp["params"].update(request.engine_params)
+        vp["mimo_tts"] = model_vp
+        voice.voice_params = vp
 
         if request.name:
             voice.name = request.name
@@ -425,20 +431,26 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    resolved_src = _resolve(voice.source_audio_path)
+    model = (voice.voice or {}).get("model", "")
+    source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+    resolved_src = _resolve(source_path)
     if not resolved_src:
         raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
-        voice.is_cloned = True
-        voice.cloned_at = utcnow()
-        voice.clone_engine = "voxcpm"
-        voice.voice_engine_type = "clone"
-        voice.engine_type = "VoxCpm"
         engine_params = request.engine_params or {}
         voxcpm_mode = engine_params.get("voxcpm_mode", "clone")
-        voice.engine_sub_type = "voxcpm-ultimate" if voxcpm_mode == "ultimate" else "voxcpm-clone"
-        voice.engine_params = engine_params
+        voice.voice = {"model": "voxcpm", "voice_type": "clone"}
+        vp = dict(voice.voice_params or {})
+        if "" in vp and "voxcpm" not in vp:
+            vp["voxcpm"] = vp.pop("")
+        model_vp = dict(vp.get("voxcpm", {}) or {})
+        model_vp["mode"] = voxcpm_mode
+        if engine_params:
+            model_vp.setdefault("params", {})
+            model_vp["params"].update(engine_params)
+        vp["voxcpm"] = model_vp
+        voice.voice_params = vp
 
         if request.name:
             voice.name = request.name
@@ -492,39 +504,37 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
 
     # 创建 VoiceProfile 记录
     if request.engine == "preset":
-        engine_sub_type = "preset-clone"
-        engine_type = "Mimo"  # 默认 MiMo，后续可扩展
+        model = "mimo_tts"
+        voice_type = "preset"
     elif request.engine == "mimo":
-        engine_sub_type = "mimo-design"
-        engine_type = "Mimo"
+        model = "mimo_tts"
+        voice_type = "design"
     else:
-        engine_sub_type = "voxcpm-design"
-        engine_type = "VoxCpm"
-    engine_params: dict = {}
+        model = "voxcpm"
+        voice_type = "design"
+
+    vp_params: dict = {}
     if request.voice_description:
-        engine_params["voice_description"] = request.voice_description
+        vp_params["voice_description"] = request.voice_description
     if request.instruction:
-        engine_params["instruction"] = request.instruction
+        vp_params["instruction"] = request.instruction
     if request.preview_text:
-        engine_params["audition_text"] = request.preview_text
-    if request.original_prompt_text:
-        engine_params["original_prompt_text"] = request.original_prompt_text
+        vp_params["audition_text"] = request.preview_text
+    if request.original_prompt_text and request.engine in ("voxcpm",):
+        vp_params["original_prompt_text"] = request.original_prompt_text
 
     voice = VoiceProfile(
         id=voice_id,
         name=request.name,
-        source_audio_path=settings.to_relative(audio_path),
         description=request.description,
-        clone_engine=request.engine,
-        is_cloned=True,
-        cloned_at=utcnow(),
         avatar=request.avatar,
         project_id=request.project_id,
-        voice_engine_type="design" if request.engine != "preset" else "clone",
-        engine_type=engine_type,
-        engine_sub_type=engine_sub_type,
-        engine_params=engine_params,
-        prompt_text=request.original_prompt_text or request.preview_text or request.voice_description,
+        voice={"model": model, "voice_type": voice_type},
+        voice_params={model: {"source_audio_path": settings.to_relative(audio_path), "params": vp_params}},
+        preview={
+            "audition_text": request.preview_text,
+            "preview_audio_path": settings.to_relative(audio_path),
+        },
     )
     db.add(voice)
     db.commit()
@@ -570,7 +580,9 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
     with open(preview_path, "wb") as f:
         f.write(audio_bytes)
 
-    voice.cloned_preview_path = settings.to_relative(preview_path)
+    preview_data = dict(voice.preview or {})
+    preview_data["preview_audio_path"] = settings.to_relative(preview_path)
+    voice.preview = preview_data
     db.commit()
     db.refresh(voice)
 
@@ -578,7 +590,7 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
 
     return {
         "id": voice.id,
-        "cloned_preview_path": voice.cloned_preview_path,
+        "preview_audio_path": (voice.preview or {}).get("preview_audio_path"),
     }
 
 
@@ -626,22 +638,29 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
             if status != "OK":
                 continue
 
-            # 检查是否已存在
-            existing = db.query(VoiceProfile).filter(
-                VoiceProfile.qwen_voice_id == voice_id
-            ).first()
+            # 检查是否已存在 (use Python filter since JSON column)
+            all_voices = db.query(VoiceProfile).all()
+            existing = None
+            for v in all_voices:
+                vp = v.voice_params or {}
+                cosy_vp = (vp.get("cosyvoice") or {})
+                if cosy_vp.get("params", {}).get("voice_id") == voice_id:
+                    existing = v
+                    break
 
             if existing:
                 existing_count += 1
                 # 更新已有记录
                 existing.name = name
-                existing.role = qwen_voice.get("role", "custom")
+                voice_data = existing.voice or {}
+                voice_data["role"] = qwen_voice.get("role", "custom")
+                existing.voice = voice_data
                 db.commit()
                 db.refresh(existing)
                 results.append({
                     "id": existing.id,
                     "name": existing.name,
-                    "qwen_voice_id": existing.qwen_voice_id,
+                    "qwen_voice_id": ((existing.voice_params or {}).get("cosyvoice", {}) or {}).get("params", {}).get("voice_id"),
                     "action": "updated"
                 })
             else:
@@ -649,12 +668,8 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 new_voice = VoiceProfile(
                     id=str(uuid.uuid4()),
                     name=name,
-                    qwen_voice_id=voice_id,
-                    role=qwen_voice.get("role", "custom"),
-                    is_cloned=True,
-                    cloned_at=utcnow(),
-                    clone_engine="qwen",
-                    source_audio_path=None,  # 从 Qwen 同步的没有本地音频文件
+                    voice={"model": "cosyvoice", "voice_type": "clone"},
+                    voice_params={"cosyvoice": {"params": {"voice_id": voice_id}}},
                 )
                 db.add(new_voice)
                 db.commit()
@@ -663,7 +678,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 results.append({
                     "id": new_voice.id,
                     "name": new_voice.name,
-                    "qwen_voice_id": new_voice.qwen_voice_id,
+                    "qwen_voice_id": voice_id,
                     "action": "created"
                 })
 
@@ -709,7 +724,13 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
 
     # 更新 prompt_text（如果提供了的话）
     if request.prompt_text is not None:
-        voice.prompt_text = request.prompt_text.strip() or None
+        voice_data = dict(voice.voice or {})
+        model = voice_data.get("model", "")
+        vp = dict(voice.voice_params or {})
+        model_vp = dict(vp.get(model, {}) or {})
+        model_vp.setdefault("params", {})["prompt_text"] = request.prompt_text.strip() or None
+        vp[model] = model_vp
+        voice.voice_params = vp
 
     db.commit()
     db.refresh(voice)
@@ -717,7 +738,7 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
     return {
         "id": voice.id,
         "description": voice.description,
-        "prompt_text": voice.prompt_text,
+        "prompt_text": ((voice.voice_params or {}).get((voice.voice or {}).get("model", ""), {}) or {}).get("params", {}).get("prompt_text"),
     }
 
 
@@ -730,8 +751,11 @@ async def get_voice_audio(voice_id: str, field: str = None, db: Session = Depend
 
     from fastapi.responses import FileResponse
 
-    resolved_src = _resolve(voice.source_audio_path)
-    resolved_preview = _resolve(voice.cloned_preview_path)
+    model = (voice.voice or {}).get("model", "")
+    source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+    preview_path = (voice.preview or {}).get("preview_audio_path", "")
+    resolved_src = _resolve(source_path)
+    resolved_preview = _resolve(preview_path)
 
     if field == "source" and resolved_src:
         return FileResponse(resolved_src, media_type="audio/wav")
@@ -764,11 +788,13 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    # Qwen 声音需要删除云端音色；MiMo 声音无云端数据，跳过
-    if voice.clone_engine != "mimo" and voice.qwen_voice_id:
+    # Qwen 声音需要删除云端音色；MiMo/VoxCPM 声音无云端数据，跳过
+    voice_data = voice.voice or {}
+    cosy_vp = (voice.voice_params or {}).get("cosyvoice", {}) or {}
+    if voice_data.get("model") == "cosyvoice" and cosy_vp.get("params", {}).get("voice_id"):
         try:
             tts_service = await get_tts_service(db)
-            await tts_service.delete_cloned_voice(voice.qwen_voice_id)
+            await tts_service.delete_cloned_voice(cosy_vp["params"]["voice_id"])
         except Exception as e:
             logger.error(f"Failed to delete voice from Qwen: {e}")
             raise HTTPException(
@@ -776,8 +802,11 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
                 detail=f"Failed to delete cloned voice on Qwen: {str(e)}",
             )
 
-    resolved_src = _resolve(voice.source_audio_path)
-    resolved_preview = _resolve(voice.cloned_preview_path)
+    model = voice_data.get("model", "")
+    source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+    preview_path = (voice.preview or {}).get("preview_audio_path", "")
+    resolved_src = _resolve(source_path)
+    resolved_preview = _resolve(preview_path)
     if resolved_src:
         os.remove(resolved_src)
     if resolved_preview:

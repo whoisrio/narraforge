@@ -258,7 +258,7 @@
 
 .del {
   background: rgba(239, 68, 68, 0.12);
-  color: #dc2626;
+  color: var(--color-error);
   text-decoration: line-through;
   text-decoration-color: rgba(220, 38, 38, 0.5);
   padding: 0 2px;
@@ -267,7 +267,7 @@
 
 .ins {
   background: rgba(16, 185, 129, 0.12);
-  color: #059669;
+  color: var(--color-success);
   font-weight: var(--font-weight-semibold);
   padding: 0 2px;
   border-radius: 2px;
@@ -292,9 +292,9 @@
   flex-shrink: 0;
 }
 
-.confHigh { background: rgba(239, 68, 68, 0.1); color: #dc2626; }
-.confMed  { background: rgba(245, 158, 11, 0.1); color: #d97706; }
-.confLow  { background: rgba(16, 185, 129, 0.1); color: #059669; }
+.confHigh { background: rgba(239, 68, 68, 0.1); color: var(--color-error); }
+.confMed  { background: rgba(245, 158, 11, 0.1); color: var(--color-warning); }
+.confLow  { background: rgba(16, 185, 129, 0.1); color: var(--color-success); }
 
 .check {
   width: 18px;

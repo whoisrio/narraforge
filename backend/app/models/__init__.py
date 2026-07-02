@@ -8,7 +8,7 @@ from app.models.segmented_project import (
     SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
-from app.models.narration import SourceDocument, NarrationDocument
+from app.models.source_document import SourceDocument
 from app.models.role import Role
 
 __all__ = [
@@ -23,6 +23,5 @@ __all__ = [
     "SegmentedProjectChapter",
     "SegmentedProjectSegment",
     "SourceDocument",
-    "NarrationDocument",
     "Role",
 ]

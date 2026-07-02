@@ -1,21 +1,36 @@
 import { useState, useEffect, useCallback } from 'react';
 import { modelConfigApi } from '../services/api';
 import type { ModelConfigs, ModelConfigFieldValue } from '../types';
+import { useTranslation } from '../i18n';
 import styles from './ModelConfig.module.css';
+
+/** 每个 provider 对应的图标文件名（放在 frontend/public/ 下） */
+const PROVIDER_ICONS: Record<string, string> = {
+  qwen_tts: 'qwen-ai-logo.png',
+  mimo_tts: 'mi-co-id-logo.png',
+  llm: 'model.png',
+};
 
 /** 单个提供商的编辑状态 */
 interface ProviderEditState {
   expanded: boolean;
-  fields: Record<string, string>;   // 字段名 → 当前输入值
-  modified: Set<string>;            // 被修改过的字段
+  fields: Record<string, string>;
+  modified: Set<string>;
   saving: boolean;
 }
+
+const PROVIDER_DESCRIPTIONS: Record<string, string> = {
+  qwen_tts: '阿里云 DashScope 语音合成，支持 CosyVoice 高质量克隆与 Qwen TTS',
+  mimo_tts: '小米 MiMo 语音合成服务，支持多语言高质量 TTS',
+  llm: 'LLM 字幕模型，用于智能文本分段与情感分析',
+};
 
 export function ModelConfig() {
   const [configs, setConfigs] = useState<ModelConfigs | null>(null);
   const [editStates, setEditStates] = useState<Record<string, ProviderEditState>>({});
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { t } = useTranslation();
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ message, type });
@@ -26,7 +41,6 @@ export function ModelConfig() {
   useEffect(() => {
     modelConfigApi.getAll().then(data => {
       setConfigs(data);
-      // 初始化编辑状态
       const states: Record<string, ProviderEditState> = {};
       for (const [provider, providerData] of Object.entries(data)) {
         const fields: Record<string, string> = {};
@@ -44,9 +58,9 @@ export function ModelConfig() {
       setLoading(false);
     }).catch(() => {
       setLoading(false);
-      showToast('加载配置失败', 'error');
+      showToast(t('modelConfig.loadFailed'), 'error');
     });
-  }, []);
+  }, [t, showToast]);
 
   const toggleExpand = useCallback((provider: string) => {
     setEditStates(prev => ({
@@ -79,13 +93,11 @@ export function ModelConfig() {
     }));
 
     try {
-      // 只提交被修改的字段
       const updates: Record<string, string> = {};
       for (const field of state.modified) {
         updates[field] = state.fields[field];
       }
 
-      // 收集该提供商的敏感字段名集合，供 API 层加密传输
       const sensitiveFieldKeys = new Set<string>();
       const providerFields = configs[provider]?.fields;
       if (providerFields) {
@@ -96,20 +108,13 @@ export function ModelConfig() {
 
       await modelConfigApi.update(provider, updates, sensitiveFieldKeys);
 
-      // 更新本地状态：清空 modified，更新 configs 中的值
       setEditStates(prev => ({
         ...prev,
-        [provider]: {
-          ...prev[provider],
-          saving: false,
-          modified: new Set(),
-        },
+        [provider]: { ...prev[provider], saving: false, modified: new Set() },
       }));
 
-      // 重新加载配置以获取最新状态
       const freshConfigs = await modelConfigApi.getAll();
       setConfigs(freshConfigs);
-      // 更新 fields 中的值（清除已输入的密码等）
       const fields: Record<string, string> = {};
       for (const [fieldKey, fieldVal] of Object.entries(freshConfigs[provider].fields)) {
         fields[fieldKey] = fieldVal.value === '********' ? '' : fieldVal.value;
@@ -119,15 +124,15 @@ export function ModelConfig() {
         [provider]: { ...prev[provider], fields },
       }));
 
-      showToast('配置已保存', 'success');
+      showToast(t('modelConfig.configLoaded'), 'success');
     } catch {
       setEditStates(prev => ({
         ...prev,
         [provider]: { ...prev[provider], saving: false },
       }));
-      showToast('保存失败', 'error');
+      showToast(t('modelConfig.saveFailed'), 'error');
     }
-  }, [editStates, configs, showToast]);
+  }, [editStates, configs, showToast, t]);
 
   const handleReset = useCallback((provider: string) => {
     if (!configs) return;
@@ -138,29 +143,29 @@ export function ModelConfig() {
     }
     setEditStates(prev => ({
       ...prev,
-      [provider]: {
-        ...prev[provider],
-        fields,
-        modified: new Set(),
-      },
+      [provider]: { ...prev[provider], fields, modified: new Set() },
     }));
   }, [configs]);
 
   if (loading) {
-    return <div className={styles.loading}>加载中...</div>;
+    return <div className={styles.loading}>{t('modelConfig.loading')}</div>;
   }
 
   if (!configs) {
-    return <div className={styles.loading}>配置加载失败</div>;
+    return <div className={styles.loading}>{t('modelConfig.loadFailed')}</div>;
   }
 
   return (
     <div className={styles.container}>
+      {/* Page Header */}
       <div className={styles.header}>
-        <h1>模型配置</h1>
-        <p>管理各模型提供商的连接配置，界面设置优先，未配置时自动使用环境变量默认值</p>
+        <h1 className={styles.pageTitle}>{t('modelConfig.title')}</h1>
+        <p className={styles.pageDesc}>
+          {t('modelConfig.description')}
+        </p>
       </div>
 
+      {/* Provider Cards */}
       <div className={styles.providerList}>
         {Object.entries(configs).map(([providerKey, provider]) => {
           const state = editStates[providerKey];
@@ -170,28 +175,50 @@ export function ModelConfig() {
           const anyEnvDefault = Object.values(provider.fields).some(f => f.has_env_default && !f.value);
           const hasModified = state.modified.size > 0;
 
+          let statusLabel = t('modelConfig.status.notConfigured');
+          let statusClass = styles.configured;
+          if (allConfigured) {
+            statusLabel = t('modelConfig.status.configured');
+            statusClass = styles.configured;
+          } else if (anyEnvDefault) {
+            statusLabel = t('modelConfig.status.usingDefault');
+            statusClass = styles.envDefault;
+          } else {
+            statusLabel = t('modelConfig.status.notConfigured');
+            statusClass = styles.notConfigured;
+          }
+
           return (
             <div key={providerKey} className={styles.providerCard}>
               <div
                 className={styles.providerHeader}
                 onClick={() => toggleExpand(providerKey)}
               >
-                <span className={styles.providerIcon}>{provider.icon}</span>
-                <div className={styles.providerInfo}>
+                <div className={styles.providerIconWrap}>
+                  {PROVIDER_ICONS[providerKey] ? (
+                    <img
+                      src={`/${PROVIDER_ICONS[providerKey]}`}
+                      alt={provider.label}
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <span className={styles.providerIconFallback}>{provider.icon}</span>
+                  )}
+                </div>
+                <div className={styles.providerMeta}>
                   <div className={styles.providerName}>{provider.label}</div>
-                  <div className={styles.providerStatus}>
-                    {allConfigured ? (
-                      <span className={`${styles.statusBadge} ${styles.configured}`}>已配置</span>
-                    ) : anyEnvDefault ? (
-                      <span className={`${styles.statusBadge} ${styles.envDefault}`}>使用默认值</span>
-                    ) : (
-                      <span className={`${styles.statusBadge} ${styles.notConfigured}`}>未配置</span>
-                    )}
+                  <div className={styles.providerDesc}>
+                    {PROVIDER_DESCRIPTIONS[providerKey] ?? ''}
                   </div>
                 </div>
+                <span className={`${styles.statusBadge} ${statusClass}`}>
+                  {statusLabel}
+                </span>
                 <svg
-                  className={`${styles.expandIcon} ${state.expanded ? styles.expanded : ''}`}
-                  width="16" height="16" viewBox="0 0 16 16" fill="none"
+                  className={`${styles.expandChevron} ${state.expanded ? styles.expanded : ''}`}
+                  width="18" height="18" viewBox="0 0 16 16" fill="none"
                 >
                   <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
@@ -209,20 +236,20 @@ export function ModelConfig() {
                     />
                   ))}
 
-                  <div className={styles.saveRow}>
+                  <div className={styles.actionBar}>
                     <button
-                      className={`${styles.saveButton} ${styles.ghost}`}
+                      className={`${styles.btn} ${styles.btnGhost}`}
                       onClick={() => handleReset(providerKey)}
                       disabled={!hasModified}
                     >
-                      重置
+                      {t('modelConfig.reset')}
                     </button>
                     <button
-                      className={`${styles.saveButton} ${styles.primary}`}
+                      className={`${styles.btn} ${styles.btnPrimary}`}
                       onClick={() => handleSave(providerKey)}
                       disabled={state.saving || !hasModified}
                     >
-                      {state.saving ? '保存中...' : '保存'}
+                      {state.saving ? t('modelConfig.saving') : t('modelConfig.save')}
                     </button>
                   </div>
                 </div>
@@ -253,17 +280,34 @@ function ConfigField({
   modified: boolean;
   onChange: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   const [showPassword, setShowPassword] = useState(false);
   const isPassword = meta.sensitive;
+  const hasValue = value.length > 0;
 
   const placeholder = meta.has_env_default
-    ? '留空使用环境变量默认值'
+    ? t('modelConfig.placeholder')
     : '';
 
   return (
     <div className={styles.fieldGroup}>
-      <div className={styles.fieldLabel}>
-        <span>{meta.label}{modified ? ' *' : ''}</span>
+      <div className={styles.fieldHeader}>
+        <span className={styles.fieldLabel}>{meta.label}</span>
+        {modified && <span className={styles.fieldModified}>{t('modelConfig.modified')}</span>}
+      </div>
+      {meta.description && (
+        <div className={styles.fieldDesc}>{meta.description}</div>
+      )}
+      <div className={`${styles.fieldInputWrapper} ${hasValue ? styles.hasValue : ''}`}>
+        <input
+          className={styles.fieldInput}
+          type={isPassword && !showPassword ? 'password' : 'text'}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          autoComplete="off"
+          data-1p-ignore
+        />
         {isPassword && (
           <button
             className={styles.passwordToggle}
@@ -274,18 +318,6 @@ function ConfigField({
           </button>
         )}
       </div>
-      {meta.description && (
-        <div className={styles.fieldDesc}>{meta.description}</div>
-      )}
-      <input
-        className={styles.fieldInput}
-        type={isPassword && !showPassword ? 'password' : 'text'}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete="off"
-        data-1p-ignore
-      />
     </div>
   );
 }

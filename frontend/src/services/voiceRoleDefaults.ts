@@ -1,57 +1,57 @@
-import type { RoleSnapshot, SegmentEngineParams } from '../types';
+import type { RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, VoxCPMParams } from '../types';
 
 export type VoiceRoleKind = 'Narrator' | 'Cast';
 
 export const DEFAULT_EDGE_NARRATOR_VOICE = 'zh-CN-YunxiNeural';
 export const DEFAULT_EDGE_CAST_VOICE = 'zh-CN-YunyangNeural';
 
-function hasUsableVoice(params: SegmentEngineParams): boolean {
-  if (params.engine === 'edge_tts') return Boolean(params.edge_voice?.trim());
+function hasUsableVoice(params: EngineParams): boolean {
+  if (params.engine === 'edge_tts') return Boolean((params as EdgeTTSParams).voice?.trim());
   if (params.engine === 'cosyvoice') return Boolean(params.voice_id?.trim());
   if (params.engine === 'mimo_tts') {
-    if (params.mimo_mode === 'voiceclone') return Boolean(params.mimo_clone_voice_id?.trim());
-    if (params.mimo_mode === 'voicedesign') return Boolean(params.mimo_voice_description?.trim());
-    return Boolean(params.mimo_preset_voice?.trim());
+    const mode = (params as MiMoParams).mode ?? 'preset';
+    if (mode === 'voiceclone') return Boolean(params.voice_id?.trim());
+    if (mode === 'voicedesign') return Boolean((params as MiMoParams).voice_description?.trim());
+    return Boolean(params.voice_id?.trim());
   }
   if (params.engine === 'voxcpm') {
-    return params.voxcpm_mode === 'clone' || params.voxcpm_mode === 'ultimate'
-      ? Boolean(params.voice_id?.trim())
-      : Boolean(params.voxcpm_voice_description?.trim());
+    const mode = (params as VoxCPMParams).mode ?? 'clone';
+    if (mode === 'clone' || mode === 'ultimate') return Boolean(params.voice_id?.trim());
+    return Boolean((params as VoxCPMParams).voice_description?.trim());
   }
   return false;
 }
 
-function fallbackEdgeParams(roleKind: VoiceRoleKind): SegmentEngineParams {
+function fallbackEdgeParams(roleKind: VoiceRoleKind): EdgeTTSParams {
   return {
     engine: 'edge_tts',
-    edge_voice: roleKind === 'Narrator' ? DEFAULT_EDGE_NARRATOR_VOICE : DEFAULT_EDGE_CAST_VOICE,
-    edge_rate: '+0%',
-    edge_volume: '+0%',
+    voice: roleKind === 'Narrator' ? DEFAULT_EDGE_NARRATOR_VOICE : DEFAULT_EDGE_CAST_VOICE,
+    rate: '+0%',
+    volume: '+0%',
   };
 }
 
-function normalizeParams(params: SegmentEngineParams, roleKind: VoiceRoleKind): SegmentEngineParams {
+function normalizeParams(params: EngineParams, roleKind: VoiceRoleKind): EngineParams {
   if (!hasUsableVoice(params)) return fallbackEdgeParams(roleKind);
 
   if (params.engine === 'edge_tts') {
+    const ep = params as EdgeTTSParams;
     return {
-      ...params,
-      edge_voice: params.edge_voice || (roleKind === 'Narrator' ? DEFAULT_EDGE_NARRATOR_VOICE : DEFAULT_EDGE_CAST_VOICE),
-      edge_rate: params.edge_rate || '+0%',
-      edge_volume: params.edge_volume || '+0%',
-    };
+      ...ep,
+      voice: ep.voice || (roleKind === 'Narrator' ? DEFAULT_EDGE_NARRATOR_VOICE : DEFAULT_EDGE_CAST_VOICE),
+      rate: ep.rate || '+0%',
+      volume: ep.volume || '+0%',
+    } as EdgeTTSParams;
   }
 
   return params;
 }
 
-function defaultVoiceFromParams(params: SegmentEngineParams): string {
-  return params.edge_voice
-    || params.voice_id
-    || params.mimo_clone_voice_id
-    || params.mimo_preset_voice
-    || params.voxcpm_voice_description
-    || '';
+function defaultVoiceFromParams(params: EngineParams): string {
+  if (params.engine === 'edge_tts') return (params as EdgeTTSParams).voice || '';
+  if (params.engine === 'mimo_tts') return (params as MiMoParams).voice_description || params.voice_id || '';
+  if (params.engine === 'voxcpm') return (params as VoxCPMParams).voice_description || params.voice_id || '';
+  return params.voice_id || '';
 }
 
 export function createVoiceRoleDraft({
@@ -61,7 +61,7 @@ export function createVoiceRoleDraft({
 }: {
   name: string;
   roleKind: VoiceRoleKind;
-  currentParams: SegmentEngineParams;
+  currentParams: EngineParams;
 }): RoleSnapshot {
   const roleParams = normalizeParams(currentParams, roleKind);
 
@@ -77,6 +77,6 @@ export function createVoiceRoleDraft({
   };
 }
 
-export function roleVoiceLabelFromParams(params: SegmentEngineParams, fallback?: string | null): string {
+export function roleVoiceLabelFromParams(params: EngineParams, fallback?: string | null): string {
   return defaultVoiceFromParams(params) || fallback || '未设置音色';
 }
