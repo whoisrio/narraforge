@@ -6,7 +6,6 @@ import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import { segEngine, segEffectiveParams, segFieldOverridden, segOverrideFields } from '../../services/segmentShims';
 import styles from './SegmentEditPanel.module.css';
 
-type SegmentOverride = 'voice' | 'speed' | 'volume' | 'pitch' | 'language' | 'instruction';
 type SegmentParamField = keyof EngineParams;
 type SegmentParamValue = EngineParams[SegmentParamField];
 
@@ -19,12 +18,9 @@ interface SegmentEditPanelProps {
   segment: Segment | null;
   voices: VoiceProfile[];
   roles?: Role[];
-  globalVoiceName?: string;
   onClose: () => void;
   onUpdateText: (id: string, text: string) => void;
   onUpdateSSML: (id: string, ssml: string) => void;
-  onUpdateParams: (id: string, params: Partial<EngineParams>) => void;
-  onUpdateOverrides?: (id: string, overrides: string[]) => void;
   onUpdateEmotion?: (id: string, emotion: string) => void;
   onUndo?: (id: string) => void;
   onRegenerate: (id: string) => void;
@@ -43,8 +39,8 @@ const ALL_EMOTIONS: { key: string; label: string; color: string; bg: string }[] 
 ];
 
 export function SegmentEditPanel({
-  segment, voices, roles, globalVoiceName, onClose, onUpdateText,
-  onUpdateParams, onUpdateOverrides, onUpdateEmotion, onUndo, onRegenerate, onConfirmCustom, onAnnotateSSML, onSplit,
+  segment, voices, roles, onClose, onUpdateText,
+  onUpdateEmotion, onUndo, onRegenerate, onConfirmCustom, onAnnotateSSML, onSplit,
 }: SegmentEditPanelProps) {
   const { t } = useTranslation();
   const [localText, setLocalText] = useState(segment?.text ?? '');
@@ -71,6 +67,7 @@ export function SegmentEditPanel({
       }
     }
     setLocalParams(_eff);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segment?.id, segment?.voice?.source, roles]);
 
   useEffect(() => {
@@ -95,6 +92,7 @@ export function SegmentEditPanel({
     if (segEngine(segment) === 'edge_tts' || showParams) {
       ttsApi.getEdgeVoices(edgeLang).then(setEdgeVoices).catch(() => {});
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [edgeLang, segment ? segEngine(segment) : undefined, showParams]);
 
   // Load MiMo preset voices from backend
@@ -132,11 +130,6 @@ export function SegmentEditPanel({
     // All edits accumulate locally; only confirm button commits
     setLocalParams(prev => ({ ...prev, ...params as unknown as Record<string, unknown> }));
   }, [segment]);
-
-  const handleResetOverride = useCallback((field: SegmentOverride) => {
-    if (!segment || !onUpdateOverrides) return;
-    onUpdateOverrides(segment.id, segOverrideFields(segment).filter(f => f !== field));
-  }, [segment, onUpdateOverrides]);
 
   if (!segment) return null;
 

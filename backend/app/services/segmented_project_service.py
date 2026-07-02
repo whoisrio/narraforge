@@ -85,6 +85,17 @@ def _dump_animation_spec(spec: dict[str, Any] | None) -> str | None:
     return json.dumps(spec, ensure_ascii=False)
 
 
+def _duration_from_bytes(audio_bytes: bytes, fmt: str) -> float | None:
+    """Compute audio duration from raw bytes using pydub. Returns None on failure."""
+    import io
+    try:
+        from pydub import AudioSegment
+        seg_audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=fmt)
+        return round(seg_audio.duration_seconds, 2)
+    except Exception:
+        return None
+
+
 # ----- serialization -----
 
 def project_to_summary(p: SegmentedProject) -> ProjectSummary:
@@ -418,6 +429,7 @@ def update_segment_after_synth(
     *,
     current_audio_path: str,
     previous_audio_path: str | None,
+    previous_duration_sec: float | None = None,
     audio_format: str,
     duration_sec: float | None,
     generated_params: dict[str, Any],
@@ -428,7 +440,10 @@ def update_segment_after_synth(
     if duration_sec is not None:
         audio_data["current"]["duration_sec"] = duration_sec
     if previous_audio_path:
-        audio_data["previous"] = {"path": previous_audio_path}
+        prev_entry: dict[str, Any] = {"path": previous_audio_path}
+        if previous_duration_sec is not None:
+            prev_entry["duration_sec"] = previous_duration_sec
+        audio_data["previous"] = prev_entry
     seg.audio = audio_data
     seg.generated_params = generated_params
     seg.generated_at = utcnow()
@@ -561,7 +576,9 @@ def synthesize_segment(
     assets.ensure_project_layout(project_id, chapter_id)
 
     existing_audio = seg.audio or {}
-    prev_rel: str | None = existing_audio.get("current", {}).get("path") if isinstance(existing_audio, dict) else None
+    prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
+    prev_rel: str | None = prev_current.get("path")
+    prev_duration: float | None = prev_current.get("duration_sec")
 
     if is_ffmpeg_available():
         target_mp3 = assets.segment_audio_path(project_id, chapter_id, seg.id, "mp3")
@@ -583,12 +600,15 @@ def synthesize_segment(
         except Exception as e:  # noqa: BLE001
             logger.warning("probe_audio_duration failed for %s: %s", new_rel, e)
             duration_sec = None
+        # Fallback: compute duration from raw bytes when ffprobe is unavailable
+        if duration_sec is None and audio_bytes:
+            duration_sec = _duration_from_bytes(audio_bytes, "mp3")
     else:
         wav_path = assets.segment_audio_path(project_id, chapter_id, seg.id, "wav")
         wav_path.write_bytes(audio_bytes)
         new_rel = wav_path.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "wav"
-        duration_sec = None
+        duration_sec = _duration_from_bytes(audio_bytes, "wav") if audio_bytes else None
 
     if not keep_previous and prev_rel:
         try:
@@ -601,6 +621,7 @@ def synthesize_segment(
         db, seg,
         current_audio_path=new_rel,
         previous_audio_path=prev_rel,
+        previous_duration_sec=prev_duration,
         audio_format=audio_format,
         duration_sec=duration_sec,
         generated_params=effective,
@@ -611,6 +632,7 @@ def export_chapter_audio_mp3(
     db: Session,
     project_id: str,
     chapter_id: str,
+    export_directory: str | None = None,
 ) -> Path:
     """Export all ready backend-stored segment audio in a chapter as one MP3."""
     chapter = get_chapter_row(db, project_id, chapter_id)
@@ -641,7 +663,7 @@ def export_chapter_audio_mp3(
         raise ValueError("no_ready_audio")
 
     db.commit()
-    export_path = _chapter_audio_export_path(chapter, project_id, chapter_id)
+    export_path = _chapter_audio_export_path(chapter, project_id, chapter_id, export_directory)
     return concat_to_mp3(input_paths, export_path)
 
 
@@ -655,6 +677,7 @@ def _chapter_audio_export_path(
     chapter: SegmentedProjectChapter,
     project_id: str,
     chapter_id: str,
+    export_directory: str | None = None,
 ) -> Path:
     project = chapter.project
     title = str(getattr(chapter, "design_title", None) or chapter.name or chapter_id)
@@ -662,11 +685,13 @@ def _chapter_audio_export_path(
     remotion_path = getattr(project, "remotion_project_path", None)
     if remotion_path:
         root = Path(remotion_path).expanduser()
-        public_audio = root / "public" / "audio"
-        if public_audio.exists() and public_audio.is_dir():
-            return public_audio / filename
-        if root.exists() and root.is_dir():
-            return root / filename
+        if not root.exists() or not root.is_dir():
+            root.mkdir(parents=True, exist_ok=True)
+        # Resolve export directory relative to remotion project root
+        rel_dir = (export_directory or "public/audio").strip("/")
+        target_dir = root / rel_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return target_dir / filename
     return assets.chapter_dir(project_id, chapter_id) / "exports" / filename
 
 
@@ -675,6 +700,7 @@ def copy_file_to_remotion_export_target(
     project_id: str,
     source_path: Path,
     filename: str,
+    export_directory: str | None = None,
 ) -> Path:
     project = get_project_row(db, project_id)
     if project is None:
@@ -684,13 +710,13 @@ def copy_file_to_remotion_export_target(
         raise ValueError("remotion_project_path_not_set")
     root = Path(remotion_path).expanduser()
     if not root.exists() or not root.is_dir():
-        raise ValueError("remotion_project_path_invalid")
-    public_audio = root / "public" / "audio"
-    target_dir = public_audio if public_audio.exists() and public_audio.is_dir() else root
+        root.mkdir(parents=True, exist_ok=True)
+    rel_dir = (export_directory or "public/audio").strip("/")
+    target_dir = root / rel_dir
+    target_dir.mkdir(parents=True, exist_ok=True)
     safe_name = _safe_filename_part(filename.rsplit(".", 1)[0])
     suffix = Path(filename).suffix or source_path.suffix
     target = target_dir / f"{safe_name}{suffix}"
-    target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source_path, target)
     return target
 

@@ -38,12 +38,6 @@ function engineLabel(profile: VoiceProfile): string {
   return 'Unknown';
 }
 
-/** 音色描述标签 */
-function voiceDescriptionLabel(profile: VoiceProfile): string {
-  const model = profile.voice?.model || '';
-  const params = (profile.voice_params?.[model]?.params || {}) as Record<string, unknown>;
-  return (params.voice_description as string) || '';
-}
 
 export function VoiceClone() {
   // ---- 声音列表 ----

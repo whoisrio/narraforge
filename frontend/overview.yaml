@@ -1,0 +1,13 @@
+- generic [ref=e3]:
+  - generic [ref=e4]: "[plugin:vite:oxc] Transform failed with 1 error: [PARSE_ERROR] Error: Unexpected token ╭─[ src/components/SegmentedTTS/SegmentRow.tsx:342:5 ] │ 342 │ ? ((segment.generated_params as Record<string, unknown>).voice_id as string │ ┬ │ ╰── ─────╯"
+  - generic [ref=e5]: /Users/rio/repos/myprjs/narraforge/frontend/src/components/SegmentedTTS/SegmentRow.tsx
+  - generic [ref=e6]: at transformWithOxc (file:///Users/rio/repos/myprjs/narraforge/frontend/node_modules/vite/dist/node/chunks/node.js:3719:19) at TransformPluginContext.transform (file:///Users/rio/repos/myprjs/narraforge/frontend/node_modules/vite/dist/node/chunks/node.js:3795:26) at EnvironmentPluginContainer.transform (file:///Users/rio/repos/myprjs/narraforge/frontend/node_modules/vite/dist/node/chunks/node.js:29998:51) at async loadAndTransform (file:///Users/rio/repos/myprjs/narraforge/frontend/node_modules/vite/dist/node/chunks/node.js:24133:26) at async viteTransformMiddleware (file:///Users/rio/repos/myprjs/narraforge/frontend/node_modules/vite/dist/node/chunks/node.js:24941:20)
+  - generic [ref=e7]:
+    - text: Click outside, press Esc key, or fix the code to dismiss.
+    - text: You can also disable this overlay by setting
+    - code [ref=e8]: server.hmr.overlay
+    - text: to
+    - code [ref=e9]: "false"
+    - text: in
+    - code [ref=e10]: vite.config.ts
+    - text: .

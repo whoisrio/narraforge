@@ -5,6 +5,7 @@ import { useStorageMode } from '../../hooks/useStorageMode';
 import { segParams } from '../../services/segmentShims';
 import { segmentedProjectApi, subtitleLlmApi } from '../../services/api';
 import { buildSRTContent, concatAudioBuffers, encodeWAV } from '../../services/audioConcat';
+import { getTTSAudioBlob } from '../../services/indexedDB';
 import styles from './ExportDialog.module.css';
 
 interface ExportDialogProps {
@@ -14,6 +15,8 @@ interface ExportDialogProps {
   segments: Segment[];
   chapterDesignTitle?: string;
   remotionProjectPath?: string | null;
+  /** Relative export directory under remotion project path (e.g. "public/audio") */
+  exportDirectory?: string | null;
   defaultName: string;
   /** Start time offset for global SRT timestamps (seconds) */
   globalStartOffset?: number;
@@ -32,7 +35,7 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ExportDialog({ open, projectId, chapterId, segments, chapterDesignTitle, remotionProjectPath, defaultName, globalStartOffset = 0, onClose }: ExportDialogProps) {
+export function ExportDialog({ open, projectId, chapterId, segments, chapterDesignTitle, remotionProjectPath, exportDirectory, defaultName, globalStartOffset = 0, onClose }: ExportDialogProps) {
   const { mode: storageMode } = useStorageMode();
   const [name, setName] = useState(defaultName);
   const [options, setOptions] = useState<ExportOption[]>(['audio', 'json']);
@@ -53,7 +56,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
       const sanitized = name.replace(/[/\\\\:*?"<>|]/g, '_') || 'export';
       const exportTextFile = async (filename: string, content: string, mimeType: string) => {
         if (storageMode === 'backend' && remotionProjectPath) {
-          await segmentedProjectApi.exportTextFileToRemotion(projectId, filename, content);
+          await segmentedProjectApi.exportTextFileToRemotion(projectId, filename, content, exportDirectory);
           return;
         }
         downloadBlob(new Blob([content], { type: mimeType }), filename);
@@ -82,7 +85,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
           }
         }
         if (storageMode === 'backend') {
-          const resp = await fetch(segmentedProjectApi.getChapterAudioExportUrl(projectId, chapterId));
+          const resp = await fetch(segmentedProjectApi.getChapterAudioExportUrl(projectId, chapterId, exportDirectory));
           if (!resp.ok) {
             let detail = `HTTP ${resp.status}`;
             try {
@@ -159,7 +162,7 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
     } finally {
       setExporting(false);
     }
-  }, [segments, name, options, targetLang, storageMode, projectId, chapterId, chapterDesignTitle, remotionProjectPath, srtUseGlobalTime, globalStartOffset, t]);
+  }, [segments, name, options, targetLang, storageMode, projectId, chapterId, chapterDesignTitle, remotionProjectPath, exportDirectory, srtUseGlobalTime, globalStartOffset, t]);
 
   if (!open) return null;
 

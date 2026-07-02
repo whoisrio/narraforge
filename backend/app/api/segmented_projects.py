@@ -189,10 +189,11 @@ def get_segment_audio(
 def export_chapter_audio(
     project_id: str,
     chapter_id: str,
+    export_directory: str | None = None,
     db: Session = Depends(get_db),
 ):
     try:
-        audio_path = svc.export_chapter_audio_mp3(db, project_id, chapter_id)
+        audio_path = svc.export_chapter_audio_mp3(db, project_id, chapter_id, export_directory)
     except LookupError:
         raise HTTPException(status_code=404, detail="chapter_not_found")
     except AudioEncoderError as e:
@@ -224,6 +225,7 @@ def export_text_file_to_remotion(
             project_id=project_id,
             source_path=tmp_path,
             filename=body.filename,
+            export_directory=body.export_directory,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="project_not_found")

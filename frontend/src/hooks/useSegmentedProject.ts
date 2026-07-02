@@ -49,12 +49,16 @@ function isEmotionType(value: unknown): value is EmotionType {
   return typeof value === 'string' && ['happy', 'sad', 'angry', 'calm', 'neutral', 'excited'].includes(value);
 }
 
-function enrichSegment(raw: RawSegment, _defaultVoice?: Record<string, unknown>): Segment {
+function enrichSegment(raw: RawSegment): Segment {
   const now = new Date().toISOString();
   const rawAudio = (raw as Record<string, unknown>).audio as Record<string, unknown> | undefined;
   const hasAudio = !!(rawAudio?.current || rawAudio?.previous);
   const voice: VoiceSource = ((raw as Record<string, unknown>).voice as VoiceSource) ?? { source: 'chapter' } as VoiceSource;
   const audio: Segment['audio'] = (rawAudio as Segment['audio']) ?? { format: 'mp3' };
+  // Backend returns duration_sec under audio.current — lift to audio.duration_sec for frontend consistency
+  if (!audio.duration_sec && audio.current?.duration_sec) {
+    audio.duration_sec = audio.current.duration_sec;
+  }
   const base: Segment = {
     id: raw.id ?? uid(),
     text: raw.text ?? '',
@@ -82,7 +86,7 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
         voice: voice,
         split_config: ch.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
         design_title: ch.design_title ?? ch.name,
-        segments: (ch.segments || []).map((s) => enrichSegment(s, voice)),
+        segments: (ch.segments || []).map((s) => enrichSegment(s)),
       };
     });
     return {
@@ -150,7 +154,7 @@ function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): S
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
-  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path' | 'description' | 'project_type' | 'default_language' | 'export_directory' | 'export_naming_template'>> }
+  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path' | 'description' | 'export_directory'>> }
   | { type: 'SET_SOURCE_DOCUMENT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management

@@ -144,8 +144,8 @@ describe('ProjectLibrary', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /重命名章节 第一章/ }));
-    fireEvent.change(screen.getByLabelText('章节卡片名称'), { target: { value: '第一章新版' } });
-    fireEvent.click(screen.getByRole('button', { name: /保存章节名称/ }));
+    fireEvent.change(screen.getByLabelText('章节标题'), { target: { value: '第一章新版' } });
+    fireEvent.click(screen.getByRole('button', { name: /保存/ }));
 
     expect(onRenameChapter).toHaveBeenCalledWith('ch-1', '第一章新版');
     expect(onSelectChapter).not.toHaveBeenCalled();

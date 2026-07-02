@@ -117,6 +117,7 @@ const VOICE_SOURCE_TABS: { value: VoiceSourceCategory; label: string; desc: stri
 ];
 
 /** 判断当前 draft 属于哪个音色来源分类 */
+// eslint-disable-next-line react-refresh/only-export-components
 export function normalizeDraftForSave(draft: RoleSnapshot): RoleSnapshot {
   const voice = draft.voice;
   if (!voice) return draft;
@@ -211,6 +212,7 @@ function VoiceRoleEditor({
       ? ((vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_description : undefined) ?? '')
       : ((vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_description : undefined) ?? '');
     setLocalDesignDesc(desc);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vox?.engine, vox?.voice_description, designSubEngine]);
 
   const setVoiceDescription = (desc: string) => {
@@ -608,6 +610,7 @@ function VoiceRoleEditor({
     } finally {
       setClonePreviewing(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, draft.voice]);
 
   return (

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useTranslation } from '../../i18n';
 import styles from './VoiceStudioLayout.module.css';
 
 export type StudioViewMode = 'list' | 'dialogue';
@@ -17,9 +18,12 @@ interface VoiceStudioLayoutProps {
 
 function formatDuration(seconds: number): string {
   const safe = Math.max(0, Math.round(seconds));
-  const minutes = Math.floor(safe / 60);
+  const hours = Math.floor(safe / 3600);
+  const minutes = Math.floor((safe % 3600) / 60);
   const rest = safe % 60;
-  return `${minutes}:${String(rest).padStart(2, '0')}`;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(rest).padStart(2, '0');
+  return hours > 0 ? `${hours}:${mm}:${ss}` : `${minutes}:${ss}`;
 }
 
 export function VoiceStudioLayout({
@@ -35,6 +39,7 @@ export function VoiceStudioLayout({
 }: VoiceStudioLayoutProps) {
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
   const [transportCollapsed, setTransportCollapsed] = useState(true);
+  const { t } = useTranslation();
 
   const toggleCollapsed = (next: boolean) => {
     setSidePanelCollapsed(next);
@@ -105,7 +110,7 @@ export function VoiceStudioLayout({
         {!transportCollapsed && (
         <div className={styles.exportGroup}>
           <span className={styles.remotionPath}>{remotionPath || '未设置 Remotion 路径'}</span>
-          <button type="button" className={styles.primaryButton} onClick={onExport}>导出</button>
+          <button type="button" className={styles.primaryButton} onClick={onExport}>{t('studio.exportLabel')}</button>
         </div>
         )}
       </footer>

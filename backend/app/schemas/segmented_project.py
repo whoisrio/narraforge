@@ -84,6 +84,7 @@ class SynthesizeSegmentRequest(BaseModel):
 class ExportTextFileRequest(BaseModel):
     filename: str
     content: str
+    export_directory: str | None = None
 
 
 class SplitRequest(BaseModel):

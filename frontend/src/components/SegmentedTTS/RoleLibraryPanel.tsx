@@ -53,6 +53,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
         onRolesChanged(items);
       })
       .catch(() => setError(t('segment.roleLibrary.loadFailed')));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, onRolesChanged, t]);
 
   if (!open) return null;

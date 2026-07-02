@@ -712,6 +712,7 @@ export function TTSSynthesis({
     } else {
       apply();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, dispatch, buildCurrentParams, buildGlobalVoiceRef, selectedVoiceId, edgeVoice, engine]);
 
   const buildSplitItemsWithRoles = useCallback((
@@ -944,7 +945,7 @@ export function TTSSynthesis({
           current_audio_path: updatedSeg?.audio.current?.path,
             previous_audio_path: updatedSeg?.audio.previous?.path,
             audio_format: updatedSeg?.audio.format ?? 'mp3',
-            duration_sec: updatedSeg?.audio.duration_sec,
+            duration_sec: updatedSeg?.audio.current?.duration_sec ?? updatedSeg?.audio.duration_sec,
           generated_params: updatedSeg?.generated_params,
         });
         return;
@@ -1472,6 +1473,27 @@ export function TTSSynthesis({
                         projectId={project.id}
                       />
                     )}
+                    <button
+                      type="button"
+                      className={styles.sidebarApplyBtn}
+                      onClick={() => {
+                        const params = buildCurrentParams();
+                        setConfirmDialog({
+                          open: true,
+                          title: t('studio.applyVoice'),
+                          message: t('studio.applyVoiceHelp'),
+                          confirmLabel: t('studio.applyVoice'),
+                          onConfirm: () => {
+                            setConfirmDialog(prev => ({ ...prev, open: false }));
+                            dispatch({ type: 'SET_DEFAULT_PARAMS', params });
+                            showToast(t('studio.voiceApplied'));
+                          },
+                        });
+                      }}
+                      title={t('studio.applyVoiceHelp')}
+                    >
+                      {t('studio.applyVoice')}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1502,14 +1524,14 @@ export function TTSSynthesis({
 
             <div className={styles.sourceProductionBar} aria-label="Source Text production controls">
               <div className={styles.productionActions}>
-                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ 批量合成</button>
+                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ {t('studio.batchSynthesize')}</button>
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
-                  {playAllActive ? '⏹ 停止' : '▶ 全部播放'}
+                  {playAllActive ? '⏹ 停止' : `▶ ${t('studio.playAll')}`}
                 </button>
-                {isScratchpadProject && <span className={styles.scratchpadBadge}>默认草稿</span>}
+                {isScratchpadProject && <span className={styles.scratchpadBadge}>{t('projectHub.tempProject')}</span>}
                 <span className={styles.segmentedStats}>
-                  {activeChapter.segments.length} 段 · {activeChapter.segments.reduce((a, s) => a + (s.audio.duration_sec ?? 0), 0).toFixed(1)}s
-                  {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} 已生成`}
+                  {activeChapter.segments.length} {t('projectOverview.segments')} · {activeChapter.segments.reduce((a, s) => a + (s.audio.duration_sec ?? 0), 0).toFixed(1)}s
+                  {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} ${t('projectOverview.generated')}`}
                 </span>
                 {engine === 'cosyvoice' && (
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
@@ -1517,14 +1539,14 @@ export function TTSSynthesis({
               </div>
               <div className={styles.productionRight}>
                 <div className={styles.toolbarGroup} aria-label="segment 时间呈现">
-                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>章节时间</button>
-                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>全局时间</button>
+                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>{t('studio.chapterTime')}</button>
+                  <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>{t('studio.globalTime')}</button>
                 </div>
                 <div className={styles.viewToggle} aria-label="segment 卡片呈现">
                   <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
-                    onClick={() => setCompactMode(true)}>紧凑</button>
+                    onClick={() => setCompactMode(true)}>{t('studio.compactView')}</button>
                   <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
-                    onClick={() => setCompactMode(false)}>展开</button>
+                    onClick={() => setCompactMode(false)}>{t('studio.expandedView')}</button>
                 </div>
               </div>
             </div>
@@ -1548,6 +1570,7 @@ export function TTSSynthesis({
                 globalMimoPresetVoice={mimoPresetVoice}
                 globalMimoCloneVoiceId={mimoCloneVoiceId}
                 chapterStartOffset={effectiveTimeOffset}
+                chapterVoice={activeChapter.voice}
                 onSelect={(id) => {
                   const currentSelected = activeChapter.selected_segment_id;
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
@@ -1598,6 +1621,7 @@ export function TTSSynthesis({
                 segments={activeChapter.segments}
                 chapterDesignTitle={activeChapter.design_title || activeChapter.name}
                 remotionProjectPath={project.remotion_project_path}
+                exportDirectory={project.export_directory}
                 defaultName={activeChapter.design_title || activeChapter.name}
                 globalStartOffset={chapterStartOffset}
                 onClose={() => setExportOpen(false)}
@@ -1647,7 +1671,10 @@ export function TTSSynthesis({
             remotionPath={project.remotion_project_path}
             roles={roles}
             onEnterLibrary={() => setProjectSection('library')}
-            onEnterStudio={() => setProjectSection('studio')}
+            onEnterStudio={(chapterId) => {
+              if (chapterId) handleSelectChapter(chapterId);
+              setProjectSection('studio');
+            }}
             onOpenVoices={() => setProjectSection('voices')}
           />
         ) : projectSection === 'settings' ? (
@@ -1657,10 +1684,7 @@ export function TTSSynthesis({
             storageMode={storageMode}
             chapterCount={project.chapters.length}
             projectDescription={project.description}
-            projectType={project.project_type}
-            defaultLanguage={project.default_language}
             exportDirectory={project.export_directory}
-            exportNamingTemplate={project.export_naming_template}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

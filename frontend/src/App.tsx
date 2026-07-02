@@ -44,7 +44,7 @@ function storageForMode(mode: StorageMode): SegmentedProjectStorage {
 }
 
 function AppContent() {
-  const [activeView, setActiveView] = useState<View>('tts-synthesis');
+  const [activeView, setActiveView] = useState<View>('home');
   const [activeTab, setActiveTab] = useState<Tab>('tts-synthesis');
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<SegmentedProject[]>([]);

@@ -25,6 +25,8 @@ interface SegmentListProps {
   globalMimoCloneVoiceId?: string;
   /** Cumulative time offset from previous chapters (seconds) */
   chapterStartOffset?: number;
+  /** The chapter's saved/applied voice — used for staleness instead of live panel state */
+  chapterVoice?: EngineParams;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -76,8 +78,8 @@ export function SegmentList(props: SegmentListProps) {
   let cumulative = props.chapterStartOffset ?? 0;
   for (const seg of segments) {
     const start = cumulative;
-    if (seg.duration_sec && seg.status === 'ready') {
-      cumulative += seg.duration_sec;
+    if (seg.audio.duration_sec && seg.status === 'ready') {
+      cumulative += seg.audio.duration_sec;
       timeRanges.push({ start, end: cumulative });
     } else {
       timeRanges.push({ start });
@@ -91,6 +93,7 @@ export function SegmentList(props: SegmentListProps) {
     globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,
     roles: allRoles, roleSnapshot: seg.role_snapshot ?? undefined,
+    chapterVoice: props.chapterVoice,
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
@@ -160,11 +163,9 @@ export function SegmentList(props: SegmentListProps) {
                   segment={editingSegment}
                   voices={props.voices}
                   roles={props.roles}
-                  globalVoiceName={props.globalVoiceName}
                   onClose={() => onEdit('')}
                   onUpdateText={props.onUpdateText || (() => {})}
                   onUpdateSSML={props.onUpdateSSML || (() => {})}
-                  onUpdateParams={props.onUpdateParams || (() => {})}
                   onUpdateEmotion={props.onUpdateEmotion}
                   onUndo={props.onUndo}
                   onConfirmCustom={props.onConfirmCustom}

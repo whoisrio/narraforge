@@ -34,6 +34,8 @@ interface SegmentRowProps {
   roles: Role[];
   /** Snapshot of the role at generation time */
   roleSnapshot?: RoleSnapshot;
+  /** The chapter's saved/applied voice params — used for staleness instead of live panel state */
+  chapterVoice?: EngineParams;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter?: (afterId: string) => void;
@@ -50,9 +52,12 @@ interface SegmentRowProps {
 }
 
 function fmtTime(sec: number): string {
-  const m = Math.floor(sec / 60);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
-  return `${String(m).padStart(2, '0')}:${s < 10 ? '0' : ''}${s.toFixed(1)}`;
+  const mm = String(m).padStart(2, '0');
+  const ss = `${s < 10 ? '0' : ''}${s.toFixed(1)}`;
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 const ENGINE_LABELS: Record<string, string> = {
@@ -81,7 +86,7 @@ function getWaveform(id: string): number[] {
 export function SegmentRow({
   segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine,
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
-  layout, timeStart, timeEnd, roles, roleSnapshot,
+  layout, timeStart, timeEnd, roles, roleSnapshot, chapterVoice,
   onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
   onMerge, isLast,
 }: SegmentRowProps) {
@@ -196,14 +201,20 @@ export function SegmentRow({
 
     switch (vs.source) {
       case 'role': {
-        // Show the role name as the voice display for role-based sourcing
         if (resolvedRole) {
           return { engine: eng, voice: resolvedRole.name };
         }
         return { engine: eng, voice: t('segment.segmentRow.voiceNotSelected') };
       }
       case 'chapter': {
-        // Build chapter-default params from global props
+        // Display from chapterVoice (applied voice), not generated_params or panel state.
+        // generated_params is only for staleness comparison, not display.
+        const saved = (chapterVoice as Record<string, unknown>);
+        if (saved) {
+          const srcEngine = String(saved.engine || effectiveEngine);
+          return { engine: eng, voice: extractVoiceName(srcEngine, saved) };
+        }
+        // Fallback: live panel state (only when no chapterVoice at all)
         const chapterParams: Record<string, unknown> = {};
         if (effectiveEngine === 'edge_tts') {
           chapterParams.voice = globalEdgeVoice || '';
@@ -220,46 +231,55 @@ export function SegmentRow({
         return { engine: eng, voice: voiceName };
       }
       case 'custom': {
-        // Use params from the custom voice source (or generated_params when audio is ready)
         const params = (isReady && segment.generated_params)
           ? (segment.generated_params as unknown as Record<string, unknown>)
           : (vs.params as Record<string, unknown>);
         const voiceName = extractVoiceName(dispEngine, params);
-        return { engine: eng, voice: voiceName || t('segment.segmentRow.customVoice') };
+        if (voiceName && voiceName !== t('segment.segmentRow.voiceNotSelected')) {
+          return { engine: eng, voice: voiceName };
+        }
+        // Locked with no custom params yet — inherit display from saved voice
+        const fallback = (chapterVoice as Record<string, unknown>) || {};
+        const fbVn = extractVoiceName(dispEngine, fallback);
+        return { engine: eng, voice: fbVn || voiceName || t('segment.segmentRow.customVoice') };
       }
     }
   };
 
   const { engine: displayEngine, voice: voiceDisplayName } = resolveVoiceDisplay();
 
-  // Resolve voice ID for gender lookup from the correct source
+  // Resolve voice ID for gender lookup from the correct source.
+  // For custom segments with empty params (just locked), fall back to chapterVoice.
   const voiceVoiceId = (() => {
     const vs = segment.voice;
     if (vs.source === 'custom') {
-      return (vs.params as Record<string, unknown>)?.voice_id as string | undefined;
+      const cv = (vs.params as Record<string, unknown>)?.voice_id as string | undefined;
+      return cv || (chapterVoice as Record<string, unknown>)?.voice_id as string | undefined;
     }
     if (vs.source === 'role' && resolvedRole?.voice) {
       return (resolvedRole.voice as unknown as Record<string, unknown>).voice_id as string | undefined;
     }
-    return globalVoiceId;
+    return (chapterVoice as Record<string, unknown>)?.voice_id as string | undefined
+      || globalVoiceId;
   })();
   const voiceObj = voices.find(v => {
     const voiceVid = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
     return (voiceVid || v.id) === voiceVoiceId;
   });
 
-  // Edge-TTS voice technical name for gender heuristic
+  // Edge-TTS voice technical name for gender heuristic.
+  // For custom segments with empty params (just locked), fall back to chapterVoice.
   const edgeVoiceForGender: string = (() => {
     const vs = segment.voice;
     if (vs.source === 'custom') {
-      return ((vs.params as Record<string, unknown>)?.voice as string
-        || (vs.params as Record<string, unknown>)?.voice as string
-        || '');
+      const cv = (vs.params as Record<string, unknown>)?.voice as string;
+      if (cv) return cv;
+      return ((chapterVoice as Record<string, unknown>)?.voice as string) || '';
     }
     if (vs.source === 'role' && resolvedRole?.voice) {
       return ((resolvedRole.voice as unknown as Record<string, unknown>).voice as string || '');
     }
-    return globalEdgeVoice || '';
+    return ((chapterVoice as Record<string, unknown>)?.voice as string) || globalEdgeVoice || '';
   })();
 
   const resolveGender = (): string => {
@@ -282,9 +302,6 @@ export function SegmentRow({
   
   const generatedEngine = segment.generated_params?.engine;
 
-  // Engine changed → stale (unless locked). Kept for the warning label below.
-  const engineChanged = !hasOverride && !!generatedEngine && generatedEngine !== effectiveEngine;
-
   // Resolve the current global voice identifier for comparison (per-engine).
   const currentGlobalVoice = effectiveEngine === 'edge_tts'
     ? (globalEdgeVoice || '')
@@ -293,17 +310,31 @@ export function SegmentRow({
       : (globalVoiceId || '');
 
   // Build params for staleness comparison from the voice source.
-  // (Legacy 2-arg call to isSegmentAudioStale returns false; staleness is
-  // handled by isSegmentVoiceStale below. Kept minimal and deprecated-field-free.)
+  // Use chapterVoice (applied/saved) for chapter-source segments so that
+  // unreviewed panel changes do NOT trigger staleness until Apply is clicked.
+  const staleEngine = (segment.voice.source === 'chapter' && chapterVoice)
+    ? (chapterVoice.engine || effectiveEngine)
+    : effectiveEngine;
   const defaultParamsForStale: Record<string, unknown> = {
-    engine: effectiveEngine,
+    engine: staleEngine,
   };
   if (segment.voice.source === 'custom') {
     Object.assign(defaultParamsForStale, segment.voice.params as Record<string, unknown>);
   } else if (segment.voice.source === 'role' && resolvedRole?.voice) {
     Object.assign(defaultParamsForStale, resolvedRole.voice as unknown as Record<string, unknown>);
+  } else if (chapterVoice) {
+    // chapter source: use the saved/applied chapter voice, not live panel state
+    const cv = chapterVoice as Record<string, unknown>;
+    if (staleEngine === 'edge_tts') {
+      defaultParamsForStale.voice = cv.voice;
+    } else if (staleEngine === 'mimo_tts') {
+      defaultParamsForStale.mode = cv.mode;
+      defaultParamsForStale.voice_id = cv.voice_id;
+    } else {
+      defaultParamsForStale.voice_id = cv.voice_id;
+    }
   } else {
-    // chapter source: inject global params per engine
+    // Fallback (no chapterVoice): use live panel state as before
     if (effectiveEngine === 'edge_tts') {
       defaultParamsForStale.voice = globalEdgeVoice;
     } else if (effectiveEngine === 'mimo_tts') {
@@ -313,6 +344,8 @@ export function SegmentRow({
       defaultParamsForStale.voice_id = globalVoiceId;
     }
   }
+  // Engine changed → stale (unless locked). Compare against staleEngine now that it's defined.
+  const engineChanged = !hasOverride && !!generatedEngine && generatedEngine !== staleEngine;
   // Extract voice identifier from generated_params (replaces deprecated generated_voice_id)
   const generatedVoiceId: string | undefined = segment.generated_params
     ? ((segment.generated_params as Record<string, unknown>).voice_id as string
@@ -326,20 +359,26 @@ export function SegmentRow({
         status: segment.status,
         hasVoiceOverride: !!hasOverride,
         generatedEngine,
-        effectiveEngine: effectiveEngine as string,
+        effectiveEngine: staleEngine as string,
         generatedVoiceId,
         currentGlobalVoice,
       });
 
-  // Build a human-readable label for the current global voice (for stale warning text)
-  const currentGlobalVoiceLabel = effectiveEngine === 'edge_tts'
-    ? (() => {
-        const parts = (globalEdgeVoice || '').split('-');
-        return (parts[parts.length - 1] || globalEdgeVoice || '').replace(/Neural$|V\d+$/i, '');
-      })()
-    : effectiveEngine === 'mimo_tts'
-      ? (globalMimoMode === 'voiceclone' ? t('segment.segmentRow.customVoice') : (globalMimoPresetVoice || ''))
-      : (globalVoiceName || currentGlobalVoice || '');
+  const currentGlobalVoiceLabel = (() => {
+    const cv = chapterVoice as Record<string, unknown> | undefined;
+    const eng = (cv?.engine || effectiveEngine) as string;
+    if (eng === 'edge_tts') {
+      const v = (cv?.voice || globalEdgeVoice || '') as string;
+      const parts = v.split('-');
+      return (parts[parts.length - 1] || v).replace(/Neural$|V\d+$/i, '');
+    }
+    if (eng === 'mimo_tts') {
+      const mode = (cv?.mode || globalMimoMode) as string;
+      return mode === 'voiceclone' ? t('segment.segmentRow.customVoice')
+        : ((cv?.voice_id || globalMimoPresetVoice || '') as string);
+    }
+    return (globalVoiceName || currentGlobalVoice || '') as string;
+  })();
 
   const dur = isReady && segment.audio.duration_sec
     ? segment.audio.duration_sec.toFixed(1) + 's'

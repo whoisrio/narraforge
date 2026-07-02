@@ -3,7 +3,7 @@ import { useTranslation } from '../i18n';
 import styles from './Landing.module.css';
 
 interface LandingProps {
-  onNavigate: (tab: 'voice-clone' | 'tts-synthesis' | 'speech-to-text' | 'model-config') => void;
+  onNavigate: (tab: 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config') => void;
 }
 
 /* ── Segmented Circle Logo ── */
@@ -110,7 +110,7 @@ export default function Landing({ onNavigate }: LandingProps) {
           <p className={styles.heroSub}>{t('landing.heroSubtitle')}</p>
           <p className={styles.heroDesc}>{t('landing.heroDesc')}</p>
           <div className={styles.heroActions}>
-            <button className={styles.btnPrimary} onClick={() => onNavigate('voice-clone')}>
+            <button className={styles.btnPrimary} onClick={() => onNavigate('tts-synthesis')}>
               {t('landing.heroCTA')}
             </button>
             <button className={styles.btnSecondary} onClick={scrollToFlow}>
@@ -171,7 +171,7 @@ export default function Landing({ onNavigate }: LandingProps) {
       <section className={styles.ctaSection}>
         <h2 className={styles.ctaTitle}>{t('landing.cta.title')}</h2>
         <p className={styles.ctaSub}>{t('landing.cta.subtitle')}</p>
-        <button className={styles.btnPrimary} onClick={() => onNavigate('voice-clone')}>
+        <button className={styles.btnPrimary} onClick={() => onNavigate('tts-synthesis')}>
           {t('landing.cta.button')}
         </button>
       </section>

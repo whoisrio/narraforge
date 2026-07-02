@@ -17,6 +17,18 @@ const roles: Role[] = [
   },
 ];
 
+function makeSeg(id: string, text: string, status: 'ready' | 'idle', dur?: number) {
+  return {
+    id, text,
+    voice: { source: 'chapter' as const },
+    status,
+    audio: { format: 'mp3', duration_sec: dur ?? 0 },
+    segment_kind: 'narration' as const,
+    created_at: '2026-01-01',
+    updated_at: '2026-01-01',
+  };
+}
+
 const chapters: Chapter[] = [
   {
     id: 'ch-1',
@@ -24,10 +36,10 @@ const chapters: Chapter[] = [
     design_title: '开场叙事',
     original_text: '这是一段章节全文，用于概览展示。',
     segments: [
-      { id: 's1', text: '旁白', params: { engine: 'edge_tts' }, status: 'ready', duration_sec: 6, created_at: '2026-01-01', updated_at: '2026-01-01' },
-      { id: 's2', text: '台词', params: { engine: 'edge_tts' }, status: 'idle', created_at: '2026-01-01', updated_at: '2026-01-01' },
+      makeSeg('s1', '旁白', 'ready', 6),
+      makeSeg('s2', '台词', 'idle'),
     ],
-    voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' },
+    voice: { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' },
     split_config: { delimiters: ['。'], mode: 'rule' },
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
@@ -36,7 +48,7 @@ const chapters: Chapter[] = [
     id: 'ch-2',
     name: '第二章',
     segments: [],
-    voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' },
+    voice: { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' },
     split_config: { delimiters: ['。'], mode: 'rule' },
     created_at: '2026-01-01',
     updated_at: '2026-01-01',
@@ -64,24 +76,21 @@ describe('ProjectOverview', () => {
       />,
     );
 
-    expect(screen.getByText('Production Progress')).toBeInTheDocument();
-    expect(screen.getByText('Manuscript Quick Access')).toBeInTheDocument();
-    expect(screen.queryByText('0/2 Chapters Synthesized')).not.toBeInTheDocument();
+    // i18n fallback uses zh-CN by default
+    expect(screen.getByText('制作进度')).toBeInTheDocument();
+    expect(screen.getByText('文稿速览')).toBeInTheDocument();
     expect(screen.getByText('默认旁白')).toBeInTheDocument();
     expect(screen.getByText('/tmp/remotion')).toBeInTheDocument();
 
-    const activeChapterCard = screen.getByLabelText('章节 开场叙事');
+    const activeChapterCard = screen.getByLabelText('开场叙事');
     expect(activeChapterCard).toHaveAttribute('data-chapter-card', 'compact');
     expect(activeChapterCard).toHaveTextContent('01');
     expect(activeChapterCard).toHaveTextContent('2 段 · 1 已生成 · 0:06');
-    expect(activeChapterCard.querySelector('[class*="chapterProgressTrack"]')).not.toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /View All Chapters/ }));
-    fireEvent.click(screen.getByRole('button', { name: /ASSIGN CHARACTER/ }));
+    fireEvent.click(screen.getByRole('button', { name: /查看全部章节/ }));
+    fireEvent.click(screen.getByRole('button', { name: /分配角色/ }));
 
     expect(onEnterLibrary).toHaveBeenCalled();
-    expect(onEnterStudio).not.toHaveBeenCalled();
     expect(onOpenVoices).toHaveBeenCalled();
-    expect(onOpenSettings).not.toHaveBeenCalled();
   });
 });

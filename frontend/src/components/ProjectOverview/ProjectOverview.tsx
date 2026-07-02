@@ -1,4 +1,6 @@
+import { useState, useRef } from 'react';
 import type { Chapter, Role } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './ProjectOverview.module.css';
 
 interface ProjectOverviewProps {
@@ -8,7 +10,7 @@ interface ProjectOverviewProps {
   remotionPath?: string | null;
   roles?: Role[];
   onEnterLibrary: () => void;
-  onEnterStudio: () => void;
+  onEnterStudio: (chapterId?: string) => void;
   onOpenVoices: () => void;
   onOpenSettings?: () => void;
 }
@@ -29,26 +31,20 @@ function getChapterStatus(chapter: Chapter): ChapterStatus {
   return 'draft';
 }
 
-function chapterStatusLabel(status: ChapterStatus): string {
-  if (status === 'ready') return '完成';
-  if (status === 'synthesizing') return '合成中';
-  return '草稿';
-}
-
-function formatRelativeTime(isoDate?: string | null): string {
+function formatRelativeTime(isoDate: string | null | undefined, t: (k: string, p?: Record<string, unknown>) => string): string {
   if (!isoDate) return '';
   const now = Date.now();
   const then = new Date(isoDate).getTime();
   if (Number.isNaN(then)) return '';
   const diffSec = Math.floor((now - then) / 1000);
-  if (diffSec < 60) return 'Just now';
+  if (diffSec < 60) return t('projectOverview.justNow');
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 60) return t('projectOverview.minutesAgo', { n: diffMin });
   const diffHour = Math.floor(diffMin / 60);
-  if (diffHour < 24) return `${diffHour}h ago`;
+  if (diffHour < 24) return t('projectOverview.hoursAgo', { n: diffHour });
   const diffDay = Math.floor(diffHour / 24);
-  if (diffDay === 1) return 'Yesterday';
-  return `${diffDay}d ago`;
+  if (diffDay === 1) return t('projectOverview.yesterday');
+  return t('projectOverview.daysAgo', { n: diffDay });
 }
 
 function formatDuration(totalSec: number): string {
@@ -62,7 +58,7 @@ function chapterProgress(chapter: Chapter): { generated: number; total: number; 
   const total = chapter.segments.length;
   const generated = chapter.segments.filter(segment => segment.status === 'ready').length;
   const percent = total === 0 ? 0 : Math.round((generated / total) * 100);
-  const duration = chapter.segments.reduce((sum, segment) => sum + (segment.duration_sec ?? 0), 0);
+  const duration = chapter.segments.reduce((sum, segment) => sum + (segment.audio.duration_sec ?? 0), 0);
   return { generated, total, percent, duration };
 }
 
@@ -78,13 +74,105 @@ function voiceLabel(role: Role): string {
   return (params.voice_id as string) || '';
 }
 
+function RolePreviewButton({ role }: { role: Role }) {
+  const { t } = useTranslation();
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [error, setError] = useState(false);
+
+  const handlePreview = async () => {
+    if (playing) {
+      audioRef.current?.pause();
+      setPlaying(false);
+      return;
+    }
+    setError(false);
+    try {
+      const v = role.voice as Record<string, unknown>;
+      const engine = (v?.engine as string) ?? 'edge_tts';
+      let voiceId = '';
+      if (engine === 'cosyvoice' || engine === 'mimo_tts' || engine === 'voxcpm') {
+        voiceId = (v as { voice_id?: string }).voice_id ?? '';
+      }
+
+      let audioSrc: string | null = null;
+
+      // 1) Try to play existing voice profile preview audio
+      if (voiceId) {
+        try {
+          const { ttsApi } = await import('../../services/api');
+          const profiles = await ttsApi.getVoices({ voice_id: voiceId });
+          const profile = profiles[0];
+          if (profile?.has_preview) {
+            audioSrc = `/api/clone/audio/${profile.id}?field=preview`;
+          }
+        } catch { /* fall through to synthesis */ }
+      }
+
+      // 2) Fall back to real-time TTS synthesis
+      if (!audioSrc) {
+        const { ttsApi } = await import('../../services/api');
+        const text = t('voiceDesign.defaultSampleText') || '这是一段试听文本。';
+        let resp: { audio_base64: string; audio_format: string };
+        if (engine === 'edge_tts') {
+          const params = (v as { voice?: string; rate?: string; volume?: string }) || {};
+          resp = await ttsApi.synthesize({
+            text, engine: 'edge_tts', voice_id: '',
+            edge_voice: params.voice || '',
+            edge_rate: params.rate || '+0%',
+            edge_volume: params.volume || '+0%',
+            format: 'mp3',
+          });
+        } else {
+          const params = (v as { voice_id?: string; speed?: number; volume?: number; pitch?: number }) || {};
+          resp = await ttsApi.synthesize({
+            text, engine: engine as 'cosyvoice', voice_id: params.voice_id || '',
+            speed: params.speed ?? 1, volume: params.volume ?? 80,
+            pitch: params.pitch ?? 1, format: 'mp3',
+          });
+        }
+        const bytes = atob(resp.audio_base64);
+        const arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        const blob = new Blob([arr], { type: resp.audio_format === 'wav' ? 'audio/wav' : 'audio/mpeg' });
+        audioSrc = URL.createObjectURL(blob);
+      }
+
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.addEventListener('ended', () => setPlaying(false));
+        audioRef.current.addEventListener('error', () => { setPlaying(false); setError(true); });
+      }
+      audioRef.current.src = audioSrc;
+      await audioRef.current.play();
+      setPlaying(true);
+    } catch {
+      setError(true);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      className={styles.rolePreviewBtn}
+      onClick={(e) => { e.stopPropagation(); handlePreview(); }}
+      title={playing ? t('segment.segmentRow.pause') : t('segment.segmentRow.play')}
+      disabled={error}
+    >
+      {error ? '⚠' : playing ? '⏸' : '▶'}
+    </button>
+  );
+}
+
 export function ProjectOverview(props: ProjectOverviewProps) {
+  const { t } = useTranslation();
   const {
     chapters,
     activeChapterId,
     remotionPath,
     roles = [],
     onEnterLibrary,
+    onEnterStudio,
     onOpenVoices,
   } = props;
   const segmentCount = chapters.reduce((sum, ch) => sum + ch.segments.length, 0);
@@ -94,6 +182,12 @@ export function ProjectOverview(props: ProjectOverviewProps) {
   );
   const progress = segmentCount === 0 ? 0 : Math.round((generatedCount / segmentCount) * 100);
 
+  const statusLabel = (status: ChapterStatus): string => {
+    if (status === 'ready') return t('projectOverview.statusComplete');
+    if (status === 'synthesizing') return t('projectOverview.statusSynthesizing');
+    return t('projectOverview.statusDraft');
+  };
+
   return (
     <section className={styles.root}>
       {/* Production Progress */}
@@ -101,7 +195,7 @@ export function ProjectOverview(props: ProjectOverviewProps) {
         <div className={styles.progressHeader}>
           <div className={styles.sectionTitle}>
             <span className={styles.sectionIcon}>◈</span>
-            <span>Production Progress</span>
+            <span>{t('projectOverview.productionProgress')}</span>
           </div>
           <span className={styles.progressPercent}>{progress}%</span>
         </div>
@@ -117,14 +211,14 @@ export function ProjectOverview(props: ProjectOverviewProps) {
           <div className={styles.sectionHeader}>
             <div className={styles.sectionTitle}>
               <span className={styles.sectionIcon}>▤</span>
-              <span>Manuscript Quick Access</span>
+              <span>{t('projectOverview.manuscriptQuickAccess')}</span>
             </div>
             <button type="button" className={styles.linkButton} onClick={onEnterLibrary}>
-              View All Chapters
+              {t('projectOverview.viewAllChapters')}
             </button>
           </div>
           {chapters.length === 0 ? (
-            <p className={styles.emptyHint}>No chapters yet. Open the text library to get started.</p>
+            <p className={styles.emptyHint}>{t('projectOverview.noChaptersYet')}</p>
           ) : (
             <ul className={styles.chapterList} data-visual="compact-chapter-list">
               {chapters.map((chapter, index) => {
@@ -133,14 +227,17 @@ export function ProjectOverview(props: ProjectOverviewProps) {
                 return (
                   <li
                     key={chapter.id}
-                    className={`${styles.chapterListItem} ${chapter.id === activeChapterId ? styles.chapterListItemActive : ''}`}
+                    className={`${styles.chapterListItem} ${styles.chapterClickable} ${chapter.id === activeChapterId ? styles.chapterListItemActive : ''}`}
                     data-chapter-card="compact"
-                    aria-label={`章节 ${chapter.design_title || chapter.name}`}
+                    aria-label={chapter.design_title || chapter.name}
+                    onClick={() => onEnterStudio(chapter.id)}
                   >
                     <span className={styles.chapterIndex}>{String(index + 1).padStart(2, '0')}</span>
                     <div className={styles.chapterInfo}>
                       <strong>{chapter.design_title || chapter.name}</strong>
-                      <small>{chapterStats.total} 段 · {chapterStats.generated} 已生成 · {formatDuration(chapterStats.duration)} · {formatRelativeTime(chapter.updated_at || chapter.created_at)}</small>
+                      <small>
+                        {chapterStats.total} {t('projectOverview.segments')} · {chapterStats.generated} {t('projectOverview.generated')} · {formatDuration(chapterStats.duration)} · {formatRelativeTime(chapter.updated_at || chapter.created_at, t)}
+                      </small>
                       <div className={styles.chapterProgressTrack} aria-hidden="true">
                         <i style={{ width: `${chapterStats.percent}%` }} />
                       </div>
@@ -154,7 +251,7 @@ export function ProjectOverview(props: ProjectOverviewProps) {
                             : styles.statusDraft
                       }
                     >
-                      {chapterStatusLabel(status)}
+                      {statusLabel(status)}
                     </span>
                   </li>
                 );
@@ -168,14 +265,14 @@ export function ProjectOverview(props: ProjectOverviewProps) {
           <div className={styles.sectionHeader}>
             <div className={styles.sectionTitle}>
               <span className={styles.sectionIcon}>◌</span>
-              <span>Active Cast</span>
+              <span>{t('projectOverview.activeCast')}</span>
             </div>
           </div>
 
           {/* Roles */}
           <div className={styles.castSection}>
             {roles.length === 0 ? (
-              <p className={styles.emptyHint}>No roles assigned.</p>
+              <p className={styles.emptyHint}>{t('projectOverview.noRoles')}</p>
             ) : (
               <div className={styles.castList}>
                 {roles.map(role => (
@@ -185,6 +282,7 @@ export function ProjectOverview(props: ProjectOverviewProps) {
                       <strong>{role.name}</strong>
                       <small>{engineLabel((role.voice as Record<string, unknown>)?.engine as string ?? 'edge_tts')} · {voiceLabel(role)}</small>
                     </div>
+                    <RolePreviewButton role={role} />
                   </div>
                 ))}
               </div>
@@ -192,7 +290,7 @@ export function ProjectOverview(props: ProjectOverviewProps) {
           </div>
 
           <button type="button" className={styles.assignButton} onClick={onOpenVoices}>
-            + ASSIGN CHARACTER
+            {t('projectOverview.assignCharacter')}
           </button>
         </section>
       </div>
@@ -202,20 +300,20 @@ export function ProjectOverview(props: ProjectOverviewProps) {
         <div className={styles.sectionHeader}>
           <div className={styles.sectionTitle}>
             <span className={styles.sectionIcon}>⚙</span>
-            <span>Technical Overview</span>
+            <span>{t('projectOverview.technicalOverview')}</span>
           </div>
         </div>
         <div className={styles.techGrid}>
           <div className={styles.techField}>
-            <span className={styles.techLabel}>Remotion Repository</span>
+            <span className={styles.techLabel}>{t('projectOverview.remotionRepo')}</span>
             <div className={styles.techValue}>
-              <code>{remotionPath || 'Not configured'}</code>
+              <code>{remotionPath || t('projectOverview.notConfigured')}</code>
             </div>
           </div>
           <div className={styles.techField}>
-            <span className={styles.techLabel}>Auto-SRT Generation</span>
+            <span className={styles.techLabel}>{t('projectOverview.autoSrt')}</span>
             <div className={styles.techToggleRow}>
-              <span className={styles.techToggleLabel}>Coming soon</span>
+              <span className={styles.techToggleLabel}>{t('projectOverview.comingSoon')}</span>
               <label className={styles.toggleDisabled}>
                 <input type="checkbox" disabled />
                 <span className={styles.toggleTrack}>

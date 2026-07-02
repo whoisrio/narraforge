@@ -518,13 +518,16 @@ export const segmentedProjectApi = {
     const { data } = await api.get<import('../types').SegmentedProject>(`/segmented-projects/${id}`);
     return data;
   },
-  getChapterAudioExportUrl: (projectId: string, chapterId: string): string => (
-    `/api/segmented-projects/${projectId}/chapters/${chapterId}/export-audio`
-  ),
-  exportTextFileToRemotion: async (projectId: string, filename: string, content: string): Promise<{ path: string }> => {
+  getChapterAudioExportUrl: (projectId: string, chapterId: string, exportDirectory?: string | null): string => {
+    const params = new URLSearchParams();
+    if (exportDirectory) params.set('export_directory', exportDirectory);
+    const qs = params.toString();
+    return `/api/segmented-projects/${projectId}/chapters/${chapterId}/export-audio${qs ? `?${qs}` : ''}`;
+  },
+  exportTextFileToRemotion: async (projectId: string, filename: string, content: string, exportDirectory?: string | null): Promise<{ path: string }> => {
     const { data } = await api.post<{ path: string }>(
       `/segmented-projects/${projectId}/export-text-file-to-remotion`,
-      { filename, content },
+      { filename, content, export_directory: exportDirectory ?? undefined },
     );
     return data;
   },

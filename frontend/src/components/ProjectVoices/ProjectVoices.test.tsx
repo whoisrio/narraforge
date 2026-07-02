@@ -310,6 +310,7 @@ describe('design voice loading in editor', () => {
         has_preview: true,
         has_source: false,
         created_at: '2026-01-01T00:00:00.000Z',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any,
     ]);
 
@@ -319,10 +320,12 @@ describe('design voice loading in editor', () => {
       description: null,
       avatar: null,
       role_kind: 'cast',
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       voice: { engine: 'mimo_tts', mode: 'voicedesign', voice_id: 'vp-design-1' } as any,
       favorite_styles: [],
       default_engine: 'mimo_tts',
       default_voice: null,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       default_engine_params: { engine: 'mimo_tts', mode: 'voicedesign', voice_id: 'vp-design-1' } as any,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',

@@ -105,8 +105,8 @@ export type VoiceSource =
 // ── Audio container ──
 
 export interface SegmentAudio {
-  current?: { id?: string; path?: string };
-  previous?: { id?: string; path?: string };
+  current?: { id?: string; path?: string; duration_sec?: number };
+  previous?: { id?: string; path?: string; duration_sec?: number };
   format: string;
   duration_sec?: number;
 }
