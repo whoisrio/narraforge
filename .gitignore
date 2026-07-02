@@ -84,6 +84,7 @@ playwright-report/
 .hermes
 .agents
 .trae
+.codebuddy
 .superpowers
 .superpowersbackend/db.sqlite3
 backend/*.db
