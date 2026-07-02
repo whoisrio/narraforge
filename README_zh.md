@@ -4,7 +4,7 @@
 
 一站式 AI 叙事工坊，集成声音克隆、文字转语音、语音转字幕。专为旁白与对话制作设计，支持多角色音色项目管理。
 
-![NarraForge 首页](frontend/src/assets/frontpage-2.png)
+![NarraForge 首页](docs/uiscreenshots/narraforge-landing-page-screenshots.png)
 
 ## 亮点
 
@@ -16,14 +16,21 @@
 
 ## 截图
 
-### 单段合成
-![单段合成](docs/screenshots/tts-single.png)
+### 首页
+![首页](docs/uiscreenshots/narraforge-landing-page-screenshots.png)
 
-### 分段编辑器
-![分段编辑器](docs/screenshots/tts-segmented.png)
+### 项目工作台
+![项目工作台](docs/uiscreenshots/narraforge-project-hub-screenshots.png)
 
-### 编辑面板
-![编辑面板](docs/screenshots/tts-edit-panel.png)
+### 项目工作区
+
+| 总览 | 文库 | 工作室 |
+|------|------|--------|
+| ![项目总览](docs/uiscreenshots/narraforge-project-overview-screenshots.png) | ![项目文库](docs/uiscreenshots/narraforge-project-library-screenshots.png) | ![项目工作室](docs/uiscreenshots/narraforge-project-studio-screenshots.png) |
+
+| 角色 | 规划 |
+|------|------|
+| ![项目角色](docs/uiscreenshots/narraforge-project-roles-screenshots.png) | ![后续规划](docs/uiscreenshots/upcommint-plan-screenshots.png) |
 
 ## 支持的引擎
 
