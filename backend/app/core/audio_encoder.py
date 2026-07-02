@@ -151,19 +151,24 @@ def concat_to_mp3(
     list_path: Path | None = None
     out_tmp = output_path.with_suffix(output_path.suffix + ".tmp")
     try:
-        with tempfile.NamedTemporaryFile("w", suffix=".txt", encoding="utf-8", delete=False) as f:
-            list_path = Path(f.name)
-            for p in input_paths:
-                safe_path = str(Path(p).resolve()).replace("'", "'\\''")
-                f.write(f"file '{safe_path}'\n")
-
+        # Use filter_complex concat instead of the concat demuxer.
+        # The concat demuxer requires all inputs to have identical codec/format;
+        # filter_complex handles per-input normalization and avoids AVFrame
+        # padding errors (e.g. "inadequate AVFrame plane padding" from libmp3lame).
+        inputs: list[str] = []
+        filters: list[str] = []
+        for i, p in enumerate(input_paths):
+            inputs.extend(["-i", str(p)])
+            filters.append(f"[{i}:a]")
+        # concat=n=1:v=0:a=1 copies one audio stream per input
         cmd = [
             "ffmpeg",
             "-y",
             "-loglevel", "error",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", str(list_path),
+        ] + inputs + [
+            "-filter_complex",
+            f"{''.join(filters)}concat=n={len(input_paths)}:v=0:a=1[out]",
+            "-map", "[out]",
             "-codec:a", "libmp3lame",
             "-b:a", bitrate,
             "-f", "mp3",
@@ -176,11 +181,9 @@ def concat_to_mp3(
             )
         out_tmp.replace(output_path)
     finally:
-        for p in (list_path, out_tmp):
-            if p is None:
-                continue
+        if out_tmp is not None:
             try:
-                p.unlink()
+                out_tmp.unlink()
             except FileNotFoundError:
                 pass
 
