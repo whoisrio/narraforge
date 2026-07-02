@@ -4,7 +4,7 @@
 
 One-stop AI narration workshop for voice cloning, text-to-speech, and speech-to-subtitle. Designed for narrators and dialogue production with multi-voice project management.
 
-![NarraForge Homepage](frontend/src/assets/frontpage-2.png)
+![NarraForge Homepage](docs/uiscreenshots/narraforge-landing-page-screenshots.png)
 
 ## Highlights
 
@@ -16,14 +16,21 @@ One-stop AI narration workshop for voice cloning, text-to-speech, and speech-to-
 
 ## Screenshots
 
-### Single Segment Synthesis
-![Single Segment](docs/screenshots/tts-single.png)
+### Landing Page
+![Landing Page](docs/uiscreenshots/narraforge-landing-page-screenshots.png)
 
-### Segmented Editor
-![Segmented Editor](docs/screenshots/tts-segmented.png)
+### Project Hub
+![Project Hub](docs/uiscreenshots/narraforge-project-hub-screenshots.png)
 
-### Edit Panel
-![Edit Panel](docs/screenshots/tts-edit-panel.png)
+### Project Workspace
+
+| Overview | Library | Studio |
+|----------|---------|--------|
+| ![Project Overview](docs/uiscreenshots/narraforge-project-overview-screenshots.png) | ![Project Library](docs/uiscreenshots/narraforge-project-library-screenshots.png) | ![Project Studio](docs/uiscreenshots/narraforge-project-studio-screenshots.png) |
+
+| Roles | Upcoming |
+|-------|----------|
+| ![Project Roles](docs/uiscreenshots/narraforge-project-roles-screenshots.png) | ![Upcoming](docs/uiscreenshots/upcommint-plan-screenshots.png) |
 
 ## Supported Engines
 
