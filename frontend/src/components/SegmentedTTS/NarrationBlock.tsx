@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { EmotionType, Segment, SegmentKind } from '../../types';
+import { useTranslation, t } from '../../i18n';
 import styles from './NarrationBlock.module.css';
 
 interface NarrationBlockProps {
@@ -19,26 +20,27 @@ function emotionClass(emotion?: EmotionType): string {
 
 function renderMarkedText(segment: Segment): ReactNode {
   // prosody_marks removed in V3 — render plain text
-  return segment.text || '空旁白';
+  return segment.text || t('narrationBlock.emptyNarration');
 }
 
 export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, onSelect, onUpdateKind, onTextSelection }: NarrationBlockProps) {
+  const { t } = useTranslation();
   return (
     <article
       className={`${styles.root} ${emotionClass(segment.emotion)} ${isSelected ? styles.selected : ''}`}
       onClick={() => onSelect(segment.id)}
     >
-      <div className={styles.label}>旁白 #{String(index).padStart(2, '0')}</div>
+      <div className={styles.label}>{t('narrationBlock.narrationLabel')}{String(index).padStart(2, '0')}</div>
       {onUpdateKind && (
         <button
           type="button"
           className={styles.kindSwitch}
           onClick={(event) => { event.stopPropagation(); onUpdateKind(segment.id, 'dialogue'); }}
         >
-          改为台词
+          {t('narrationBlock.switchToDialogue')}
         </button>
       )}
-      {!hasNarratorVoice && <div className={styles.warning}>需要设置旁白音色</div>}
+      {!hasNarratorVoice && <div className={styles.warning}>{t('narrationBlock.narratorVoiceRequired')}</div>}
       <p
         onMouseUp={(event) => {
           const selection = window.getSelection();

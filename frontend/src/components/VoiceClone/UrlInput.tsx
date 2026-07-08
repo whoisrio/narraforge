@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { voiceApi } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import type { VoiceProfile } from '../../types';
 import styles from './UrlInput.module.css';
 
@@ -28,6 +29,7 @@ function getErrorDetail(error: unknown, fallback: string) {
  * 后端负责：HEAD 校验 URL 可达性 → 下载音频到 uploads 目录 → 保存 external_audio_url。
  */
 export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
+  const { t } = useTranslation();
   const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -35,7 +37,7 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
   const handleConfirm = async () => {
     const trimmed = url.trim();
     if (!trimmed) {
-      setError('请输入音频文件地址');
+      setError(t('urlInput.emptyUrl'));
       return;
     }
 
@@ -43,7 +45,7 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
     try {
       new URL(trimmed);
     } catch {
-      setError('请输入有效的 URL 地址');
+      setError(t('urlInput.invalidUrl'));
       return;
     }
 
@@ -54,8 +56,8 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
       const result = await voiceApi.uploadFromUrl(trimmed, undefined, undefined, projectId);
       onUrlConfirmed(result);
     } catch (err: unknown) {
-      const msg = getErrorDetail(err, '下载失败');
-      setError(`确认失败：${msg}`);
+      const msg = getErrorDetail(err, t('urlInput.downloadFailed'));
+      setError(t('urlInput.confirmFailed', { message: msg }));
     } finally {
       setIsLoading(false);
     }
@@ -66,7 +68,7 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
       <input
         className={styles.urlInput}
         type="url"
-        placeholder="请输入音频文件的公网地址，如 https://example.com/audio.wav"
+        placeholder={t('urlInput.placeholder')}
         value={url}
         onChange={(e) => { setUrl(e.target.value); setError(''); }}
         onKeyDown={(e) => e.key === 'Enter' && handleConfirm()}
@@ -76,7 +78,7 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
       {error && <span className={styles.error}>{error}</span>}
 
       <div className={styles.hint}>
-        支持 MP3、WAV、OGG 等音频格式。请确保链接可直接访问（无需登录）。
+        {t('urlInput.hint')}
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -85,7 +87,7 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
           onClick={handleConfirm}
           disabled={isLoading || !url.trim()}
         >
-          {isLoading ? '校验并下载中...' : '确认'}
+          {isLoading ? t('urlInput.validating') : t('urlInput.confirm')}
         </button>
         <button
           className={styles.confirmButton}
@@ -93,7 +95,7 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
           onClick={onBack}
           disabled={isLoading}
         >
-          返回
+          {t('urlInput.back')}
         </button>
       </div>
     </div>

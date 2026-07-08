@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import type { NarrationDocument } from '../../types';
 import styles from './NarrationFullView.module.css';
 
@@ -7,6 +8,7 @@ interface NarrationFullViewProps {
 }
 
 export function NarrationFullView({ narration, onClose }: NarrationFullViewProps) {
+  const { t } = useTranslation();
   // Parse markdown H2 to render chapters
   const body = narration.body_markdown;
   const h2Pattern = /^## (.+)$/gm;
@@ -33,7 +35,7 @@ export function NarrationFullView({ narration, onClose }: NarrationFullViewProps
   if (chapters.length > 0) {
     chapters[chapters.length - 1].content = workingBody.slice(lastIdx).trim();
   } else {
-    chapters.push({ title: '全文', content: workingBody.trim() });
+    chapters.push({ title: t('narrationFullView.fullText'), content: workingBody.trim() });
   }
 
   return (
@@ -41,9 +43,9 @@ export function NarrationFullView({ narration, onClose }: NarrationFullViewProps
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
           <div className={styles.headerLeft}>
-            <h2>📜 旁白文档 {narration.version}</h2>
+            <h2>{t('narrationFullView.title', { version: narration.version })}</h2>
             <span className={styles.meta}>
-              {chapters.length} 章节 · {narration.word_count.toLocaleString()} 字 ·{' '}
+              {t('narrationFullView.meta', { chapters: chapters.length, words: narration.word_count.toLocaleString() })} ·{' '}
               {new Date(narration.generated_at).toLocaleString('zh-CN', { hour12: false })}
             </span>
           </div>
@@ -54,7 +56,7 @@ export function NarrationFullView({ narration, onClose }: NarrationFullViewProps
                 navigator.clipboard.writeText(narration.body_markdown);
               }}
             >
-              📋 复制
+              {t('narrationFullView.copy')}
             </button>
             <button className={styles.closeBtn} onClick={onClose}>×</button>
           </div>

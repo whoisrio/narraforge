@@ -465,3 +465,61 @@ When `storageMode = backend`:
 - Backend is authoritative; IndexedDB is draft cache with `base_updated_at` conflict detection (2000ms tolerance)
 - Migration from IndexedDB prompted when switching to backend mode
 - Audio transcoded via ffmpeg to mp3
+
+---
+
+## 12. E2E Test Coverage
+
+Each feature section is covered by automated E2E tests under `tests/e2e/specs/`.
+Tests verify UI state before/after operations and validate backend data (including JSON field-level checks).
+
+### 12.1 Project CRUD (§4.1, §4.2)
+
+| Test | Feature Section | What It Verifies |
+|------|----------------|------------------|
+| `project-crud.spec.ts` — creates a new project from the hub | §4.1 Project Structure, §4.2 ProjectHub | New project card appears, backend has valid chapters |
+| `project-crud.spec.ts` — renames a project | §4.1 Project Structure, §4.2 ProjectHub | Name updates in UI and backend, chapters preserved |
+| `project-crud.spec.ts` — deletes a project with confirmation | §4.1 Project Structure, §4.2 ProjectHub | Project removed from UI and backend after confirm |
+
+### 12.2 Project Pages (§3, §4.2, §4.4, §4.6)
+
+| Test | Feature Section | What It Verifies |
+|------|----------------|------------------|
+| `project-pages.spec.ts` — Voice Design page | §3.1 Page Structure, §3.5 Voice Profile Cards | Page title, voice profile grid renders |
+| `project-pages.spec.ts` — Role Management | §4.6 Voices — Role Management | Role list with 小明/小红 roles visible |
+| `project-pages.spec.ts` — Global Role Library | §4.6 Voices — Role Library | Role library panel opens from project |
+| `project-pages.spec.ts` — Overview | §4.2 ProjectShell (Overview) | Chapter list, narrator info, segment counts |
+| `project-pages.spec.ts` — Studio | §4.4 Studio — Segmented Editor | Segment rows render, batch controls visible |
+| `project-pages.spec.ts` — Voice Lock Icons | §4.4 Per-Segment Voice Source | Lock/unlock icons on segment rows |
+
+### 12.3 Studio Operations (§4.4)
+
+| Test | Feature Section | What It Verifies |
+|------|----------------|------------------|
+| `studio-segment-operations.spec.ts` — generate audio | §4.4 Segment Lifecycle | idle → queued → pending → ready transition |
+| `studio-segment-operations.spec.ts` — toggle voice lock | §4.4 Per-Segment Voice Source | chapter ↔ custom source switch |
+| `studio-segment-operations.spec.ts` — delete segment | §4.4 Per-Segment features | Segment removed, count decreased |
+| `studio-segment-operations.spec.ts` — merge segments | §4.4 Per-Segment features | Two segments merged into one |
+| `studio-text-split.spec.ts` — rule mode split | §4.4 Text Input & Split (Rule) | Text split by punctuation delimiters |
+| `studio-text-split.spec.ts` — LLM smart split | §4.4 Text Input & Split (LLM) | Semantic splitting with emotion analysis |
+| `studio-text-split.spec.ts` — re-split | §4.4 Text Input & Split | Existing segments cleaned up before re-split |
+| `studio-narrator-voice.spec.ts` — engine selector | §4.4 Narrator Voice Sidebar | Engine options (Edge/CosyVoice/MiMo/VoxCPM) |
+| `studio-narrator-voice.spec.ts` — apply voice | §4.4 Narrator Voice Sidebar (Apply) | Chapter.voice updated, stale segments flagged |
+| `studio-batch-export.spec.ts` — batch synthesize | §4.4 Batch Operations (Generate All) | All idle/failed segments queued |
+| `studio-batch-export.spec.ts` — export dialog | §4.4 Batch Operations (Export) | WAV/JSON/SRT export options shown |
+
+### 12.4 Voice Role Flows (§3.3, §3.4, §4.6, §4.7)
+
+| Test | Feature Section | What It Verifies |
+|------|----------------|------------------|
+| `voice-role-flows.spec.ts` — MiMo preset role | §4.6 Role Management, §4.7 Voice Selection | MiMo preset voice → role created → preview plays |
+| `voice-role-flows.spec.ts` — design new voice role | §4.6 Role Management, §3.4 Voice Design Flow | Text description → preview → save → role created |
+| `voice-role-flows.spec.ts` — edit existing role | §4.6 Role Management, §3.3 Clone Flow | Edit role → preview audio renders correctly |
+| `dialogue-prosody.spec.ts` — dialogue view | §4.6 Role Management, §4.4 Segment Kind | Role created, dialogue segment with role assignment |
+
+### 12.5 Transcription Hub (§5)
+
+| Test | Feature Section | What It Verifies |
+|------|----------------|------------------|
+| `transcription.spec.ts` — upload area | §5.1 Layout, §5.4 Input Methods | Two-column layout, AudioDropzone visible |
+| `transcription.spec.ts` — engine config | §5.2 Engine Support, §5.3 Parameters | Whisper/FunASR options, model size selector |

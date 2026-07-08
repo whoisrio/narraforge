@@ -1,6 +1,7 @@
 import type { BilingualSegment } from '../../services/api';
 import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
+import { useTranslation } from '../../i18n';
 import styles from './BilingualCard.module.css';
 
 interface BilingualCardProps {
@@ -27,11 +28,12 @@ export function BilingualCard({
   bilingualSegments, translating, targetLang, hasResult,
   onTargetLangChange, onTranslate, onDownload,
 }: BilingualCardProps) {
+  const { t } = useTranslation();
   return (
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>
         <span className="material-symbols-outlined">translate</span>
-        Bilingual
+        {t('bilingualCard.title')}
       </h3>
       <div className={styles.controls}>
         <Select
@@ -47,7 +49,7 @@ export function BilingualCard({
           disabled={translating || !hasResult}
           onClick={onTranslate}
         >
-          {translating ? '翻译中...' : '生成双语'}
+          {translating ? t('bilingualCard.translating') : t('bilingualCard.generateBilingual')}
         </Button>
       </div>
       {bilingualSegments.length > 0 && (
@@ -65,7 +67,7 @@ export function BilingualCard({
             ))}
           </div>
           <Button variant="primary" size="sm" fullWidth onClick={onDownload}>
-            下载双语 SRT
+            {t('bilingualCard.downloadBilingualSrt')}
           </Button>
         </>
       )}

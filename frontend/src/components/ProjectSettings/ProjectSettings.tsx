@@ -37,55 +37,55 @@ export function ProjectSettings({
       <header className={styles.header}>
         <div>
           <span className={styles.kicker}>Project Settings</span>
-          <h2>项目设置</h2>
-          <p>管理项目基本信息与视频导出配置。</p>
+          <h2>{t('projectSettings.title')}</h2>
+          <p>{t('projectSettings.description')}</p>
         </div>
-        <button type="button" onClick={onBackToOverview}>返回总览</button>
+        <button type="button" onClick={onBackToOverview}>{t('projectSettings.backToOverview')}</button>
       </header>
 
       <div className={styles.grid}>
         <section className={styles.card}>
-          <span className={styles.kicker}>基本信息</span>
+          <span className={styles.kicker}>{t('projectSettings.basicInfo')}</span>
           <label className={styles.field}>
-            <span>项目名称</span>
-            <input aria-label="项目名称" value={projectName} onChange={(event) => onRenameProject(event.target.value)} />
+            <span>{t('projectSettings.projectName')}</span>
+            <input aria-label={t('projectSettings.projectName')} value={projectName} onChange={(event) => onRenameProject(event.target.value)} />
           </label>
           <label className={styles.field}>
-            <span>项目描述</span>
+            <span>{t('projectSettings.projectDescription')}</span>
             <textarea
-              aria-label="项目描述"
+              aria-label={t('projectSettings.projectDescription')}
               value={projectDescription ?? ''}
-              placeholder="这个项目的内容方向、发布平台或制作备注"
+              placeholder={t('projectSettings.description')}
               onChange={(event) => onUpdateProjectMeta({ description: event.target.value || null })}
             />
           </label>
           <div className={styles.metaList}>
-            <div><span>章节数量</span><strong>{chapterCount} 章</strong></div>
+            <div><span>{t('projectSettings.chapterCount', { count: chapterCount })}</span></div>
             <div><span>{t('settings.storageMode')}</span><strong>{storageLabel}</strong></div>
           </div>
         </section>
 
         <section className={styles.card}>
-          <span className={styles.kicker}>视频项目</span>
+          <span className={styles.kicker}>{t('projectSettings.videoProject')}</span>
           <label className={styles.field}>
-            <span>Remotion 项目路径</span>
+            <span>{t('projectSettings.remotionPath')}</span>
             <input
-              aria-label="Remotion 项目路径"
+              aria-label={t('projectSettings.remotionPath')}
               value={remotionPath ?? ''}
-              placeholder="/path/to/remotion-project"
+              placeholder={t('projectSettings.remotionPathPlaceholder')}
               onChange={(event) => onUpdateRemotionPath(event.target.value || null)}
             />
           </label>
           <label className={styles.field}>
-            <span>默认导出目录</span>
+            <span>{t('projectSettings.exportDir')}</span>
             <input
-              aria-label="默认导出目录"
+              aria-label={t('projectSettings.exportDir')}
               value={exportDirectory ?? 'public/audio'}
-              placeholder="public/audio"
+              placeholder={t('projectSettings.exportDirPlaceholder')}
               onChange={(event) => onUpdateProjectMeta({ export_directory: event.target.value || null })}
             />
             <small style={{ color: 'var(--color-text-secondary)', fontSize: '0.8rem', marginTop: '4px', display: 'block' }}>
-              相对于 Remotion 项目路径的目录，导出时会自动创建
+              {t('projectSettings.exportDirHint')}
             </small>
           </label>
         </section>

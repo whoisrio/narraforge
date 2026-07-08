@@ -1,4 +1,5 @@
 import type { SegmentedProject, Chapter, Segment, EngineParams, SegmentKind, EmotionType, VoiceSource, RoleSnapshot, ProsodyMark } from '../types';
+import { t } from '../i18n';
 
 let _idCounter = 0;
 function uid(): string {
@@ -22,11 +23,11 @@ function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
 
 export function createInitialProject(): SegmentedProject {
   const now = new Date().toISOString();
-  const ch = makeChapter('第一章');
+  const ch = makeChapter(t('segmentedProject.defaultChapterName'));
   return {
     schema_version: 2,
     id: uid(),
-    name: '新项目',
+    name: t('segmentedProject.newProject'),
     chapters: [ch],
     active_chapter_id: ch.id,
     layout: 'vertical',
@@ -101,7 +102,7 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
   const now = new Date().toISOString();
   const ch: Chapter = {
     id: uid(),
-    name: '第一章',
+    name: t('segmentedProject.defaultChapterName'),
     voice: r.voice || { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' },
     original_text: r.original_text,
     segments: r.segments || [],
@@ -113,7 +114,7 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
   return {
     schema_version: 2,
     id: r.id ?? uid(),
-    name: r.name || '未命名项目',
+    name: r.name || t('segmentedProject.unnamedProject'),
     chapters: [ch],
     active_chapter_id: ch.id,
     layout: r.layout || 'vertical',
@@ -232,7 +233,7 @@ export function segmentedReducer(state: State, action: Action): State {
       const migrated = migrateV1(action.project);
       if (migrated.chapters.length === 0) {
         // Project has no chapters — add a default one
-        const ch = makeChapter('第一章');
+        const ch = makeChapter(t('segmentedProject.defaultChapterName'));
         migrated.chapters = [ch];
         migrated.active_chapter_id = ch.id;
       }

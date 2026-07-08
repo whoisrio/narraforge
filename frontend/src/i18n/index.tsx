@@ -65,7 +65,7 @@ export function createTranslator(locale: Locale = 'zh-CN') {
 }
 
 // Default translator for direct imports (prefer useTranslation() in React components)
-export const t = createTranslator('zh-CN');
+export const t = createTranslator('en-US');
 
 // Translation Context — shared locale state across all components
 interface TranslationContextValue {
@@ -78,10 +78,10 @@ const TranslationContext = createContext<TranslationContextValue | null>(null);
 
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === 'undefined') return 'zh-CN';
+    if (typeof window === 'undefined') return 'en-US';
     const saved = localStorage.getItem('narraforge-locale');
     if (saved && isSupportedLocale(saved)) return saved;
-    return 'zh-CN';
+    return 'en-US';
   });
 
   const t = useMemo(() => createTranslator(locale), [locale]);
@@ -107,7 +107,7 @@ export function useTranslation() {
   const ctx = useContext(TranslationContext);
   if (!ctx) {
     // Fallback: if not wrapped in provider, use module-level translator
-    return { t: createTranslator('zh-CN'), locale: 'zh-CN' as Locale, setLocale: () => {} };
+    return { t: createTranslator('en-US'), locale: 'en-US' as Locale, setLocale: () => {} };
   }
   return ctx;
 }

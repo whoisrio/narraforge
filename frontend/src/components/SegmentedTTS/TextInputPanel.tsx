@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { t } from '../../i18n';
+import { useTranslation } from '../../i18n';
 import { textSplitApi } from '../../services/api';
 import { stripMarkdownForTTS } from '../../utils/stripMarkdownForTTS';
 import type { Chapter } from '../../types';
@@ -37,6 +37,7 @@ export function TextInputPanel({
   onSplitVoiceModeChange,
   showVoiceModeSwitch = true,
 }: TextInputPanelProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState(sourceText ?? '');
   const mode = splitConfig.mode;
   const [isSplitting, setIsSplitting] = useState(false);
@@ -103,11 +104,11 @@ export function TextInputPanel({
           onSplit(segments, text, splitVoiceMode);
           setDetailsOpen(false);
         } catch (fallbackError: unknown) {
-          alert(`${t('textInput.modeLLM')}失败，{t('textInput.modeRule')}也失败: ${getErrorMessage(error) || getErrorMessage(fallbackError)}`);
+          alert(t('textInput.llmFailedRuleFailed', { llm: t('textInput.modeLLM'), rule: t('textInput.modeRule') }) + ': ' + (getErrorMessage(error) || getErrorMessage(fallbackError)));
         }
       } else {
         console.error('Rule split failed:', error);
-        alert(`${t('textInput.split')}失败: ${getErrorMessage(error)}`);
+        alert(t('textInput.splitFailedMsg', { split: t('textInput.split') }) + ': ' + getErrorMessage(error));
       }
     } finally {
       setIsSplitting(false);

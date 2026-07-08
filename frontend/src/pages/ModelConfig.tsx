@@ -11,6 +11,13 @@ const PROVIDER_ICONS: Record<string, string> = {
   llm: 'model.png',
 };
 
+/** provider key → i18n description key mapping */
+const PROVIDER_DESC_KEYS: Record<string, string> = {
+  qwen_tts: 'modelConfig.providerDescQwenTts',
+  mimo_tts: 'modelConfig.providerDescMimoTts',
+  llm: 'modelConfig.providerDescLlm',
+};
+
 /** 单个提供商的编辑状态 */
 interface ProviderEditState {
   expanded: boolean;
@@ -18,12 +25,6 @@ interface ProviderEditState {
   modified: Set<string>;
   saving: boolean;
 }
-
-const PROVIDER_DESCRIPTIONS: Record<string, string> = {
-  qwen_tts: '阿里云 DashScope 语音合成，支持 CosyVoice 高质量克隆与 Qwen TTS',
-  mimo_tts: '小米 MiMo 语音合成服务，支持多语言高质量 TTS',
-  llm: 'LLM 字幕模型，用于智能文本分段与情感分析',
-};
 
 export function ModelConfig() {
   const [configs, setConfigs] = useState<ModelConfigs | null>(null);
@@ -210,7 +211,7 @@ export function ModelConfig() {
                 <div className={styles.providerMeta}>
                   <div className={styles.providerName}>{provider.label}</div>
                   <div className={styles.providerDesc}>
-                    {PROVIDER_DESCRIPTIONS[providerKey] ?? ''}
+                    {PROVIDER_DESC_KEYS[providerKey] ? t(PROVIDER_DESC_KEYS[providerKey]) : ''}
                   </div>
                 </div>
                 <span className={`${styles.statusBadge} ${statusClass}`}>
@@ -314,7 +315,7 @@ function ConfigField({
             onClick={() => setShowPassword(!showPassword)}
             type="button"
           >
-            {showPassword ? '隐藏' : '显示'}
+            {showPassword ? t('common.hide') : t('common.show')}
           </button>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { TTSRequest } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './ParameterControls.module.css';
 
 interface ParameterControlsProps {
@@ -62,6 +63,7 @@ function persistParams(
 }
 
 export function ParameterControls({ params, onParamChange }: ParameterControlsProps) {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(true);
 
   // 初始化时从 localStorage 恢复用户上次的选择
@@ -113,15 +115,15 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
         onClick={() => setCollapsed(!collapsed)}
         aria-expanded={!collapsed}
       >
-        <span>参数设置</span>
-        <span className={styles.arrow}>{collapsed ? '展开' : '收起'}</span>
+        <span>{t('parameterControls.parameterSettings')}</span>
+        <span className={styles.arrow}>{collapsed ? t('common.expand') : t('common.collapse')}</span>
       </button>
 
       {!collapsed && (
         <div className={styles.controls}>
           {/* Language */}
           <div className={styles.control}>
-            <label htmlFor="language">语言</label>
+            <label htmlFor="language">{t('tts.language')}</label>
             <select
               id="language"
               value={params.language || 'Chinese'}
@@ -135,7 +137,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
 
           {/* Speed */}
           <div className={styles.control}>
-            <label htmlFor="speed">语速: {(params.speed ?? 1.0).toFixed(1)}x</label>
+            <label htmlFor="speed">{t('tts.speed')}: {(params.speed ?? 1.0).toFixed(1)}x</label>
             <input
               id="speed"
               type="range"
@@ -143,7 +145,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
               max="2.0"
               step="0.1"
               role="slider"
-              aria-label="语速"
+              aria-label={t('tts.speed')}
               value={params.speed ?? 1.0}
               onChange={(e) => onParamChange({ ...params, speed: parseFloat(e.target.value) })}
             />
@@ -151,7 +153,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
 
           {/* Volume */}
           <div className={styles.control}>
-            <label htmlFor="volume">音量: {params.volume ?? 80}</label>
+            <label htmlFor="volume">{t('tts.volume')}: {params.volume ?? 80}</label>
             <input
               id="volume"
               type="range"
@@ -159,7 +161,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
               max="100"
               step="1"
               role="slider"
-              aria-label="音量"
+              aria-label={t('tts.volume')}
               value={params.volume ?? 80}
               onChange={(e) => onParamChange({ ...params, volume: parseInt(e.target.value) })}
             />
@@ -167,7 +169,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
 
           {/* Pitch */}
           <div className={styles.control}>
-            <label htmlFor="pitch">语调: {(params.pitch ?? 1.0).toFixed(1)}</label>
+            <label htmlFor="pitch">{t('tts.pitch')}: {(params.pitch ?? 1.0).toFixed(1)}</label>
             <input
               id="pitch"
               type="range"
@@ -175,7 +177,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
               max="2.0"
               step="0.1"
               role="slider"
-              aria-label="语调"
+              aria-label={t('tts.pitch')}
               value={params.pitch ?? 1.0}
               onChange={(e) => onParamChange({ ...params, pitch: parseFloat(e.target.value) })}
             />
@@ -183,7 +185,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
 
           {/* 复刻指令 */}
           <div className={styles.instructionSection}>
-            <label htmlFor="instruction">复刻指令</label>
+            <label htmlFor="instruction">{t('parameterControls.voiceCloneInstruction')}</label>
             <input
               id="instruction"
               type="text"
@@ -213,7 +215,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
           {/* 开关选项 */}
           <div className={styles.toggles}>
             <div className={styles.toggle}>
-              <span>启用 SSML</span>
+              <span>{t('parameterControls.enableSsml')}</span>
               <button
                 type="button"
                 className={`${styles.toggleButton} ${currentSsml ? styles.toggleOn : ''}`}
@@ -221,11 +223,11 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
                 role="switch"
                 aria-checked={currentSsml}
               >
-                {currentSsml ? '开' : '关'}
+                {currentSsml ? t('common.on') : t('common.off')}
               </button>
             </div>
             <div className={styles.toggle}>
-              <span>过滤 Markdown 标记</span>
+              <span>{t('parameterControls.filterMarkdown')}</span>
               <button
                 type="button"
                 className={`${styles.toggleButton} ${currentMarkdownFilter ? styles.toggleOn : ''}`}
@@ -233,7 +235,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
                 role="switch"
                 aria-checked={currentMarkdownFilter}
               >
-                {currentMarkdownFilter ? '开' : '关'}
+                {currentMarkdownFilter ? t('common.on') : t('common.off')}
               </button>
             </div>
           </div>

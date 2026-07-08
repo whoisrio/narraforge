@@ -3,6 +3,7 @@ import type { TTSLocalRecord } from '../../types';
 import { ttsApi } from '../../services/api';
 import { getTTSHistory } from '../../services/indexedDB';
 import { useStorageMode } from '../../hooks/useStorageMode';
+import { useTranslation } from '../../i18n';
 import styles from './MultiAudioSelector.module.css';
 
 interface AudioItem {
@@ -43,6 +44,7 @@ async function loadFrontendHistory(): Promise<AudioItem[]> {
 }
 
 export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelectorProps) {
+  const { t } = useTranslation();
   const { mode } = useStorageMode();
   const [items, setItems] = useState<AudioItem[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
@@ -88,7 +90,7 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
       .filter(Boolean) as AudioItem[];
 
     if (orderedItems.length === 0) {
-      alert('请至少选择一个音频');
+      alert(t('multiAudioSelector.selectAtLeastOne'));
       return;
     }
 
@@ -108,7 +110,7 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
     }
 
     onTranscribe(files);
-  }, [selectedOrder, items, onTranscribe]);
+  }, [selectedOrder, items, onTranscribe, t]);
 
   const selectedList = selectedOrder
     .map((id) => items.find((it) => it.id === id))
@@ -123,16 +125,16 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
               <path d="M4 6h4v8H4V6zM10 4h6v12h-6V4z" fill="currentColor" opacity="0.3"/>
               <path d="M4 14l4-4 3 3 3-5 4 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
             </svg>
-            多音频合并转写
+            {t('multiAudioSelector.title')}
             <span className={styles.badge}>
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
                 <path d="M5 1L6.5 3.5L9.5 4L7.25 6L7.75 9L5 7.5L2.25 9L2.75 6L0.5 4L3.5 3.5L5 1Z" fill="currentColor"/>
               </svg>
-              高级功能
+              {t('multiAudioSelector.advancedFeature')}
             </span>
           </div>
           <div className={styles.subtitle}>
-            从文字转语音的历史记录中选择多个音频，按顺序合并后进行语音识别
+            {t('multiAudioSelector.description')}
           </div>
         </div>
       </div>
@@ -140,7 +142,7 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
       <div className={styles.panel}>
         <div className={styles.selectSection}>
           <h3>
-            可选音频
+            {t('multiAudioSelector.availableAudio')}
             <span className={styles.count}>{items.length}</span>
           </h3>
           <div className={styles.list}>
@@ -155,14 +157,14 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
               </label>
             ))}
             {items.length === 0 && (
-              <div className={styles.emptyHint}>暂无合成音频，请先在"文字转语音"页合成语音</div>
+              <div className={styles.emptyHint}>{t('multiAudioSelector.noAudioHint')}</div>
             )}
           </div>
         </div>
 
         <div className={styles.orderSection}>
           <h3>
-            合并顺序
+            {t('multiAudioSelector.mergeOrder')}
             <span className={styles.count}>{selectedList.length}</span>
           </h3>
           {selectedList.length > 0 ? (
@@ -173,9 +175,9 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
                     <span className={styles.orderIndex}>{idx + 1}.</span>
                     <span className={styles.orderLabel}>{it.label}</span>
                     <div className={styles.orderActions}>
-                      <button onClick={() => moveUp(it.id)} disabled={idx === 0} title="上移">▲</button>
-                      <button onClick={() => moveDown(it.id)} disabled={idx === selectedList.length - 1} title="下移">▼</button>
-                      <button onClick={() => toggleSelect(it.id)} title="移除">✕</button>
+                      <button onClick={() => moveUp(it.id)} disabled={idx === 0} title={t('multiAudioSelector.moveUp')}>▲</button>
+                      <button onClick={() => moveDown(it.id)} disabled={idx === selectedList.length - 1} title={t('multiAudioSelector.moveDown')}>▼</button>
+                      <button onClick={() => toggleSelect(it.id)} title={t('multiAudioSelector.remove')}>✕</button>
                     </div>
                   </div>
                 ))}
@@ -185,11 +187,11 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
                 onClick={handleMergeTranscribe}
                 disabled={processing || selectedList.length === 0}
               >
-                {processing ? '合并转写中...' : `合并并转写 (${selectedList.length} 个文件)`}
+                {processing ? t('multiAudioSelector.mergingTranscribe') : `${t('multiAudioSelector.mergeAndTranscribe')} (${selectedList.length})`}
               </button>
             </>
           ) : (
-            <div className={styles.emptyHint}>勾选左侧音频后，按添加顺序排列</div>
+            <div className={styles.emptyHint}>{t('multiAudioSelector.selectAudioHint')}</div>
           )}
         </div>
       </div>

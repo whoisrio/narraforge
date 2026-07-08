@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useTranslation } from '../../i18n';
 import type { SourceDocument } from '../../types';
 import styles from './SourceUploadZone.module.css';
 
@@ -10,6 +11,7 @@ interface SourceUploadZoneProps {
 type Tab = 'paste' | 'audio';
 
 export function SourceUploadZone({ onAdd, projectId }: SourceUploadZoneProps) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('paste');
   const [pastedText, setPastedText] = useState('');
   const [audioFile, setAudioFile] = useState<File | null>(null);
@@ -56,13 +58,13 @@ export function SourceUploadZone({ onAdd, projectId }: SourceUploadZoneProps) {
           className={`${styles.tab} ${tab === 'paste' ? styles.tabActive : ''}`}
           onClick={() => setTab('paste')}
         >
-          📝 粘贴文本
+          {t('sourceUploadZone.pasteText')}
         </button>
         <button
           className={`${styles.tab} ${tab === 'audio' ? styles.tabActive : ''}`}
           onClick={() => setTab('audio')}
         >
-          🎵 上传音频
+          {t('sourceUploadZone.uploadAudio')}
         </button>
       </div>
 
@@ -70,19 +72,19 @@ export function SourceUploadZone({ onAdd, projectId }: SourceUploadZoneProps) {
         <div className={styles.body}>
           <textarea
             className={styles.textarea}
-            placeholder="把要变成语音的文本粘贴在这里…&#10;支持纯文本 / Markdown"
+            placeholder={`${t('sourceUploadZone.pastePlaceholder')}\n${t('sourceUploadZone.pastePlaceholderHint')}`}
             value={pastedText}
             onChange={e => setPastedText(e.target.value)}
             rows={3}
           />
           <div className={styles.row}>
-            <span className={styles.hint}>{pastedText.length} 字</span>
+            <span className={styles.hint}>{t('sourceUploadZone.charCount', { count: pastedText.length })}</span>
             <button
               className={styles.submitBtn}
               onClick={handleSubmitPaste}
               disabled={!pastedText.trim()}
             >
-              + 添加为源
+              {t('sourceUploadZone.addAsSource')}
             </button>
           </div>
         </div>
@@ -102,13 +104,13 @@ export function SourceUploadZone({ onAdd, projectId }: SourceUploadZoneProps) {
             </div>
           )}
           <div className={styles.row}>
-            <span className={styles.hint}>支持 .mp3 / .wav · 视频抽音待 P2.x</span>
+            <span className={styles.hint}>{t('sourceUploadZone.audioHint')}</span>
             <button
               className={styles.submitBtn}
               onClick={handleSubmitAudio}
               disabled={!audioFile}
             >
-              + 添加为源
+              {t('sourceUploadZone.addAsSource')}
             </button>
           </div>
         </div>

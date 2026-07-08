@@ -18,6 +18,8 @@ NarraForge is an AI narration workshop that integrates voice cloning, text-to-sp
 | Contributing guide | `docs/CONTRIBUTING.md` | Development conventions and contribution guidelines. |
 | design guide | `docs/design/stitch_narraforge_story_global_prj/DESIGN.md` | UI design guidelines. |
 | Test MAP | `backend/tests/TEST_MAP.md` | Test case and function map doc |
+| E2E Test Guide | `docs/e2e-test-guide.md` | Running instructions, conventions, and test requirements |
+| E2E Test Progress | `docs/e2e-test-progress.md` | E2E test status, known issues, and fixes applied |
 
 **KEEP these documents updated by every PR**!
 
@@ -145,6 +147,8 @@ Cross-stack browser E2E tests live under `tests/e2e/`.
 - Generated screenshots, videos, traces, and reports must go to ignored artifact directories such as `test-results/`, `playwright-report/`, or `.artifacts/e2e/`; do not commit generated E2E run artifacts.
 
 See `tests/e2e/README.md` for the E2E directory layout and artifact policy.
+See `docs/e2e-test-guide.md` for running instructions, conventions, and test requirements.
+See `docs/e2e-test-progress.md` for current test status and known issues.
 
 ## Notes
 

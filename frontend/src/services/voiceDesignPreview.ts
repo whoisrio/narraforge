@@ -1,5 +1,6 @@
 import type { TTSResult } from '../types';
 import { mimoTtsApi, ttsApi, voxcpmApi } from './api';
+import { t } from '../i18n';
 
 export type VoiceDesignEngine = 'qwen' | 'mimo' | 'voxcpm';
 
@@ -25,7 +26,7 @@ function voxcpmStepsFromStability(stability: number): number {
 
 export async function synthesizeVoiceDesignPreview(request: VoiceDesignPreviewRequest): Promise<TTSResult> {
   const description = request.voiceDescription.trim();
-  const sampleText = request.sampleText.trim() || '这是一段用于确认音色风格的试听文本。';
+  const sampleText = request.sampleText.trim() || t('voiceDesignPreview.defaultSampleText');
 
   if (request.engine === 'mimo') {
     return mimoTtsApi.synthesizeVoiceDesign({

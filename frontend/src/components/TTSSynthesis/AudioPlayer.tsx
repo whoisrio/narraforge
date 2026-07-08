@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { TTSResult } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './AudioPlayer.module.css';
 
 interface AudioPlayerProps {
@@ -20,6 +21,7 @@ function base64ToBlobUrl(base64: string, format: string): string {
 }
 
 export function AudioPlayer({ result, isLoading }: AudioPlayerProps) {
+  const { t } = useTranslation();
   const [format, setFormat] = useState<'mp3' | 'wav'>('mp3');
 
   const audioSrc = useMemo(() => {
@@ -67,7 +69,7 @@ export function AudioPlayer({ result, isLoading }: AudioPlayerProps) {
       <div className={styles.container}>
         <div className={styles.loading}>
           <div className={styles.spinner} />
-          <span>正在生成语音...</span>
+          <span>{t('audioPlayer.generatingSpeech')}</span>
         </div>
       </div>
     );
@@ -77,7 +79,7 @@ export function AudioPlayer({ result, isLoading }: AudioPlayerProps) {
     return (
       <div className={styles.container}>
         <div className={styles.empty}>
-          <p>输入文字并点击"生成语音"开始</p>
+          <p>{t('audioPlayer.inputTextToStart')}</p>
         </div>
       </div>
     );
@@ -85,14 +87,14 @@ export function AudioPlayer({ result, isLoading }: AudioPlayerProps) {
 
   return (
     <div className={styles.container}>
-      <h3>生成结果</h3>
+      <h3>{t('audioPlayer.generationResult')}</h3>
 
       <div className={styles.player}>
         <audio controls src={audioSrc} className={styles.audio} />
       </div>
 
       <div className={styles.downloadSection}>
-        <span>下载格式：</span>
+        <span>{t('audioPlayer.downloadFormat')}</span>
         <select
           value={format}
           onChange={(e) => setFormat(e.target.value as 'mp3' | 'wav')}
@@ -101,7 +103,7 @@ export function AudioPlayer({ result, isLoading }: AudioPlayerProps) {
           <option value="wav">WAV</option>
         </select>
         <button onClick={handleDownload} className={styles.downloadButton}>
-          下载音频
+          {t('audioPlayer.downloadAudio')}
         </button>
       </div>
 

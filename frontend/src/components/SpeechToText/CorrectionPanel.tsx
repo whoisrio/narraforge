@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { CorrectionSuggestion } from '../../services/api';
 import { computeCharDiff } from '../../hooks/useTranscription';
 import { Button } from '../ui/Button';
+import { useTranslation } from '../../i18n';
 import styles from './CorrectionPanel.module.css';
 
 interface CorrectionPanelProps {
@@ -31,6 +32,7 @@ export function CorrectionPanel({
   onToggleAccept,
   onApply,
 }: CorrectionPanelProps) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -38,7 +40,7 @@ export function CorrectionPanel({
       <button className={styles.toggle} onClick={() => setExpanded(!expanded)}>
         <div className={styles.toggleLeft}>
           <span className="material-symbols-outlined">spellcheck</span>
-          <span className={styles.toggleTitle}>字幕校准</span>
+          <span className={styles.toggleTitle}>{t('correctionPanel.title')}</span>
           {suggestions.length > 0 && (
             <span className={styles.countBadge}>{suggestions.length}</span>
           )}
@@ -51,7 +53,7 @@ export function CorrectionPanel({
 
       {expanded && (
         <div className={styles.content}>
-          <p className={styles.description}>提供原始文稿，LLM 对比识别结果，只修正错别字，不改变内容意思。</p>
+          <p className={styles.description}>{t('correctionPanel.description')}</p>
 
           <div className={styles.modeRow}>
             <button
@@ -59,22 +61,22 @@ export function CorrectionPanel({
               onClick={() => onModeChange('smart')}
             >
               <span className="material-symbols-outlined">bolt</span>
-              智能模式
-              <span className={styles.modeHint}>本地预筛 + LLM 复验</span>
+              {t('correctionPanel.smartMode')}
+              <span className={styles.modeHint}>{t('correctionPanel.smartModeHint')}</span>
             </button>
             <button
               className={`${styles.modeBtn} ${correctionMode === 'full' ? styles.modeBtnActive : ''}`}
               onClick={() => onModeChange('full')}
             >
               <span className="material-symbols-outlined">search</span>
-              全量模式
-              <span className={styles.modeHint}>所有字幕送 LLM 分析</span>
+              {t('correctionPanel.fullMode')}
+              <span className={styles.modeHint}>{t('correctionPanel.fullModeHint')}</span>
             </button>
           </div>
 
           <textarea
             className={styles.docInput}
-            placeholder="在此粘贴原始文稿/脚本..."
+            placeholder={t('correctionPanel.placeholder')}
             value={originalDoc}
             onChange={(e) => onOriginalDocChange(e.target.value)}
             rows={4}
@@ -87,13 +89,13 @@ export function CorrectionPanel({
               disabled={correcting || !originalDoc.trim()}
               onClick={onCorrect}
             >
-              {correcting ? '校准中...' : '开始校准'}
+              {correcting ? t('correctionPanel.correcting') : t('correctionPanel.startCorrection')}
             </Button>
             {suggestions.length > 0 && (
-              <span className={styles.resultHint}>发现 {suggestions.length} 处可能的识别错误</span>
+              <span className={styles.resultHint}>{t('correctionPanel.foundErrors', { count: suggestions.length })}</span>
             )}
             {suggestions.length === 0 && correctionModel && !correcting && (
-              <span className={styles.okHint}>✓ 未发现识别错误</span>
+              <span className={styles.okHint}>{t('correctionPanel.noErrors')}</span>
             )}
           </div>
 
@@ -102,7 +104,7 @@ export function CorrectionPanel({
               <div className={styles.tableToolbar}>
                 <div className={styles.tableToolbarLeft}>
                   <span className={styles.countBadge}>{suggestions.length}</span>
-                  <span>处识别错误</span>
+                  <span>{t('correctionPanel.errorCount')}</span>
                 </div>
                 <div className={styles.tableToolbarRight}>
                   <button className={styles.linkBtn} onClick={() => {
@@ -110,7 +112,7 @@ export function CorrectionPanel({
                       // deselect all — handled by parent resetting
                     }
                   }}>
-                    {acceptedSuggestions.size === suggestions.length ? '取消全选' : '全选'}
+                    {acceptedSuggestions.size === suggestions.length ? t('correctionPanel.deselectAll') : t('correctionPanel.selectAll')}
                   </button>
                   <Button
                     variant="primary"
@@ -118,7 +120,7 @@ export function CorrectionPanel({
                     disabled={acceptedSuggestions.size === 0}
                     onClick={onApply}
                   >
-                    应用修改 {acceptedSuggestions.size > 0 && `(${acceptedSuggestions.size})`}
+                    {t('correctionPanel.applyChanges')} {acceptedSuggestions.size > 0 && `(${acceptedSuggestions.size})`}
                   </Button>
                 </div>
               </div>
@@ -127,9 +129,9 @@ export function CorrectionPanel({
                 <div className={styles.tableHeader}>
                   <div className={styles.colCheck}></div>
                   <div className={styles.colIdx}>#</div>
-                  <div className={styles.colLeft}>识别文本</div>
-                  <div className={styles.colRight}>校准文本</div>
-                  <div className={styles.colReason}>说明</div>
+                  <div className={styles.colLeft}>{t('correctionPanel.recognizedText')}</div>
+                  <div className={styles.colRight}>{t('correctionPanel.correctedText')}</div>
+                  <div className={styles.colReason}>{t('correctionPanel.explanation')}</div>
                 </div>
                 {suggestions.map((s, i) => {
                   const accepted = acceptedSuggestions.has(s.index);
@@ -164,7 +166,7 @@ export function CorrectionPanel({
                         <span className={`${styles.conf} ${
                           s.confidence === 'high' ? styles.confHigh :
                           s.confidence === 'medium' ? styles.confMed : styles.confLow
-                        }`}>{s.confidence === 'high' ? '高' : s.confidence === 'medium' ? '中' : '低'}</span>
+                        }`}>{s.confidence === 'high' ? t('correctionPanel.confidenceHigh') : s.confidence === 'medium' ? t('correctionPanel.confidenceMedium') : t('correctionPanel.confidenceLow')}</span>
                         {s.reason}
                       </div>
                     </div>

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from '../../i18n';
 import { Button, Card } from '../ui';
 
 interface AudioRecorderProps {
@@ -6,6 +7,7 @@ interface AudioRecorderProps {
 }
 
 export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
+  const { t } = useTranslation();
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -119,7 +121,7 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
 
     } catch (err) {
       console.error('Failed to start recording:', err);
-      alert('无法访问麦克风，请检查浏览器权限');
+      alert(t('audioRecorder.micAccessDenied'));
     }
   };
 
@@ -146,13 +148,13 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
   return (
     <Card>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <h3 style={{ margin: 0 }}>🎙️ 录制声音样本</h3>
+        <h3 style={{ margin: 0 }}>{t('audioRecorder.title')}</h3>
         <p style={{ color: 'var(--color-text-muted)', margin: 0 }}>
-          录制 10-30 秒清晰语音，可用于克隆音色。
+          {t('audioRecorder.description')}
         </p>
         <canvas ref={canvasRef} style={{ width: '100%', height: 50, background: 'var(--color-surface-secondary)', borderRadius: 8 }} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>音量 {volumeLevel}%</span>
+          <span>{t('audioRecorder.volume', { level: volumeLevel })}</span>
           <span>{fmt(recordTime)}</span>
         </div>
         {playbackUrl && !recording && (
@@ -160,11 +162,11 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
         )}
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           {!recording ? (
-            <Button onClick={startRecording}>开始录制</Button>
+            <Button onClick={startRecording}>{t('audioRecorder.startRecording')}</Button>
           ) : (
-            <Button variant="secondary" onClick={stopRecording}>停止录制</Button>
+            <Button variant="secondary" onClick={stopRecording}>{t('audioRecorder.stopRecording')}</Button>
           )}
-          <Button variant="secondary" disabled={!audioBlob || recording} onClick={confirmRecording}>使用录音</Button>
+          <Button variant="secondary" disabled={!audioBlob || recording} onClick={confirmRecording}>{t('audioRecorder.useRecording')}</Button>
         </div>
       </div>
     </Card>

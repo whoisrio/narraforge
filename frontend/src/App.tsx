@@ -126,7 +126,8 @@ function AppContent() {
   const handleRenameProjectFromHub = async (projectId: string, name: string) => {
     const nextName = name.trim();
     if (!nextName) return;
-    const existingProject = projects.find(project => project.id === projectId) ?? await projectStorage.getProject(projectId);
+    // Always fetch full project data (with chapters) to avoid overwriting with summary data
+    const existingProject = await projectStorage.getProject(projectId);
     if (!existingProject) return;
     await projectStorage.saveProject({
       ...existingProject,

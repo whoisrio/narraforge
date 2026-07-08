@@ -10,6 +10,7 @@
  * - SSML 结构校验
  */
 import { useState, useCallback, useRef, useMemo } from 'react';
+import { useTranslation, t as translate } from '../../i18n';
 import styles from './SSMLToolbar.module.css';
 
 /* ─── SSML 标签定义 ─── */
@@ -30,85 +31,85 @@ interface TagCategory {
 
 const TAG_CATEGORIES: TagCategory[] = [
   {
-    name: '语音控制',
+    name: translate('ssml.voiceControl'),
     icon: '🎛️',
     tags: [
       {
-        label: '音效模式',
+        label: translate('ssml.effectMode'),
         tag: 'speak',
-        description: '给整段文本添加音效（机器人、萝莉等）',
+        description: translate('ssml.effectModeDesc'),
         defaultAttrs: { effect: 'robot' },
         optionalAttrs: [
-          { name: 'effect', label: '音效类型', options: ['robot', 'lolita', 'lowpass', 'echo'], description: '选择一种音效应用于朗读' },
+          { name: 'effect', label: translate('ssml.effectType'), options: ['robot', 'lolita', 'lowpass', 'echo'], description: translate('ssml.effectTypeDesc') },
         ],
       },
     ],
   },
   {
-    name: '停顿强调',
+    name: translate('ssml.pauseEmphasis'),
     icon: '⏸️',
     tags: [
       {
-        label: '插入停顿',
+        label: translate('ssml.insertPause'),
         tag: 'break',
-        description: '在指定位置插入静默停顿',
+        description: translate('ssml.insertPauseDesc'),
         selfClosing: true,
         defaultAttrs: { time: '500ms' },
         optionalAttrs: [
-          { name: 'time', label: '停顿时长', placeholder: '如 300ms / 1s / 2s', options: ['200ms', '300ms', '500ms', '1s', '2s', '3s', '5s'], description: '控制停顿的时间长度' },
+          { name: 'time', label: translate('ssml.pauseDuration'), placeholder: translate('ssml.pauseDurationPlaceholder'), options: ['200ms', '300ms', '500ms', '1s', '2s', '3s', '5s'], description: translate('ssml.pauseDurationDesc') },
         ],
       },
     ],
   },
   {
-    name: '发音校正',
+    name: translate('ssml.pronunciationCorrection'),
     icon: '🔤',
     tags: [
       {
-        label: '拼音注音',
+        label: translate('ssml.pinyinAnnotation'),
         tag: 'phoneme',
-        description: '用拼音精确指定中文发音（多音字校正必备）',
+        description: translate('ssml.pinyinAnnotationDesc'),
         defaultAttrs: { alphabet: 'py', ph: '' },
         optionalAttrs: [
-          { name: 'alphabet', label: '标注类型', options: ['py', 'cmu'], description: 'py=拼音, cmu=CMU音标' },
-          { name: 'ph', label: '拼音/音标', placeholder: '如：xing2 hang2 (空格分隔)', description: '用空格分隔每个字的拼音，声调用数字1-4标注' },
+          { name: 'alphabet', label: translate('ssml.annotationType'), options: ['py', 'cmu'], description: translate('ssml.annotationTypeDesc') },
+          { name: 'ph', label: translate('ssml.pinyinOrPhoneme'), placeholder: translate('ssml.pinyinPlaceholder'), description: translate('ssml.pinyinDesc') },
         ],
       },
       {
-        label: '替换朗读',
+        label: translate('ssml.substituteReading'),
         tag: 'sub',
-        description: '将文本替换为指定的朗读内容（如：HTTP → 超文本传输协议）',
+        description: translate('ssml.substituteReadingDesc'),
         defaultAttrs: { alias: '' },
         optionalAttrs: [
-          { name: 'alias', label: '朗读内容', placeholder: '如：超文本传输协议', description: '实际朗读的文字，会替代原始文本' },
+          { name: 'alias', label: translate('ssml.readingContent'), placeholder: translate('ssml.readingContentPlaceholder'), description: translate('ssml.readingContentDesc') },
         ],
       },
     ],
   },
   {
-    name: '特殊读法',
+    name: translate('ssml.specialReading'),
     icon: '🔢',
     tags: [
-      { label: '数字读法', tag: 'say-as', description: '按数字的标准读法朗读（如：一二三）', defaultAttrs: { 'interpret-as': 'digits' } },
-      { label: '电话号码', tag: 'say-as', description: '按电话号码格式逐位读出', defaultAttrs: { 'interpret-as': 'telephone' } },
-      { label: '日期', tag: 'say-as', description: '按日期格式朗读', defaultAttrs: { 'interpret-as': 'date' } },
-      { label: '时间', tag: 'say-as', description: '按时间格式朗读', defaultAttrs: { 'interpret-as': 'time' } },
-      { label: '货币金额', tag: 'say-as', description: '按货币金额朗读', defaultAttrs: { 'interpret-as': 'currency' } },
-      { label: '逐字符', tag: 'say-as', description: '逐个字符朗读', defaultAttrs: { 'interpret-as': 'characters' } },
+      { label: translate('ssml.digitReading'), tag: 'say-as', description: translate('ssml.digitReadingDesc'), defaultAttrs: { 'interpret-as': 'digits' } },
+      { label: translate('ssml.telephoneNumber'), tag: 'say-as', description: translate('ssml.telephoneNumberDesc'), defaultAttrs: { 'interpret-as': 'telephone' } },
+      { label: translate('ssml.date'), tag: 'say-as', description: translate('ssml.dateDesc'), defaultAttrs: { 'interpret-as': 'date' } },
+      { label: translate('ssml.time'), tag: 'say-as', description: translate('ssml.timeDesc'), defaultAttrs: { 'interpret-as': 'time' } },
+      { label: translate('ssml.currency'), tag: 'say-as', description: translate('ssml.currencyDesc'), defaultAttrs: { 'interpret-as': 'currency' } },
+      { label: translate('ssml.characters'), tag: 'say-as', description: translate('ssml.charactersDesc'), defaultAttrs: { 'interpret-as': 'characters' } },
     ],
   },
   {
-    name: '音效插入',
+    name: translate('ssml.soundEffectInsert'),
     icon: '🔊',
     tags: [
       {
-        label: '插入音效',
+        label: translate('ssml.insertSoundEffect'),
         tag: 'soundEvent',
-        description: '在文本中插入外部音效文件（铃声、猫叫等）',
+        description: translate('ssml.insertSoundEffectDesc'),
         selfClosing: true,
         defaultAttrs: { src: '' },
         optionalAttrs: [
-          { name: 'src', label: '音频URL', placeholder: '阿里云OSS上的WAV文件URL', description: '支持 WAV 格式的公网可访问音频地址' },
+          { name: 'src', label: translate('ssml.audioUrl'), placeholder: translate('ssml.audioUrlPlaceholder'), description: translate('ssml.audioUrlDesc') },
         ],
       },
     ],
@@ -124,33 +125,33 @@ interface SSMLTemplate {
 
 const SSML_TEMPLATES: SSMLTemplate[] = [
   {
-    name: '多音字纠正',
-    description: '用拼音标注多音字的正确读法',
+    name: translate('ssml.polyphoneCorrection'),
+    description: translate('ssml.polyphoneCorrectionDesc'),
     content: '<phoneme alphabet="py" ph="hang2">行</phoneme>业标准',
   },
   {
-    name: '数字+单位',
-    description: '数字按位读出后接单位',
+    name: translate('ssml.digitsAndUnit'),
+    description: translate('ssml.digitsAndUnitDesc'),
     content: '<say-as interpret-as="digits">138</say-as>号文件',
   },
   {
-    name: '电话号码',
-    description: '电话号码逐位读出',
+    name: translate('ssml.telephoneNumber'),
+    description: translate('ssml.telephoneNumberTplDesc'),
     content: '联系电话<say-as interpret-as="telephone">13800138000</say-as>',
   },
   {
-    name: '停顿分段',
-    description: '在句间加入自然停顿',
+    name: translate('ssml.pauseSegment'),
+    description: translate('ssml.pauseSegmentDesc'),
     content: '第一句话说完了。<break time="800ms"/>接下来是第二句。',
   },
   {
-    name: '缩写替换',
-    description: '将缩写替换为完整读法',
+    name: translate('ssml.abbreviationReplace'),
+    description: translate('ssml.abbreviationReplaceDesc'),
     content: '<sub alias="超文本传输协议">HTTP</sub>是网络的基础协议',
   },
   {
-    name: '音效机器人',
-    description: '机器人音效朗读',
+    name: translate('ssml.robotEffect'),
+    description: translate('ssml.robotEffectDesc'),
     content: '<speak effect="robot">你好，我是机器人。</speak>',
   },
 ];
@@ -243,13 +244,13 @@ function validateSSML(text: string): ValidationIssue[] {
       stack.push({ tag: t.tag, pos: t.pos });
     } else {
       if (stack.length === 0) {
-        issues.push({ type: 'error', message: `多余的关闭标签 </${t.tag}>`, position: t.pos });
+        issues.push({ type: 'error', message: translate('ssml.unexpectedCloseTag', { tag: t.tag }), position: t.pos });
       } else {
         const top = stack[stack.length - 1];
         if (top.tag !== t.tag) {
           issues.push({
             type: 'error',
-            message: `标签不匹配：期望 </${top.tag}>，实际 </${t.tag}>`,
+            message: translate('ssml.tagMismatch', { expected: top.tag, actual: t.tag }),
             position: t.pos,
           });
         } else {
@@ -260,7 +261,7 @@ function validateSSML(text: string): ValidationIssue[] {
   }
 
   for (const unclosed of stack) {
-    issues.push({ type: 'error', message: `未关闭的标签 <${unclosed.tag}>`, position: unclosed.pos });
+    issues.push({ type: 'error', message: translate('ssml.unclosedTag', { tag: unclosed.tag }), position: unclosed.pos });
   }
 
   return issues;
@@ -302,11 +303,12 @@ function findEnclosingTag(text: string, selStart: number, selEnd: number) {
 
 /* ─── 结构树面板 ─── */
 function StructureTree({ text, onJump }: { text: string; onJump: (pos: number) => void }) {
+  const { t } = useTranslation();
   const nodes = useMemo(() => parseSSMLStructure(text), [text]);
   const issues = useMemo(() => validateSSML(text), [text]);
 
   if (nodes.length === 0 && issues.length === 0) {
-    return <div className={styles.treeEmpty}>无 SSML 标签</div>;
+    return <div className={styles.treeEmpty}>{t('ssml.noSsmlTags')}</div>;
   }
 
   return (
@@ -341,6 +343,7 @@ interface SSMLToolbarProps {
 }
 
 export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLToolbarProps) {
+  const { t } = useTranslation();
   const [activeCategory, setActiveCategory] = useState(0);
   const [showAttrDialog, setShowAttrDialog] = useState<SSMLTag | null>(null);
   const [attrValues, setAttrValues] = useState<Record<string, string>>({});
@@ -385,7 +388,7 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
       setShowAttrDialog(tag);
     } else {
       const attrStr = buildAttrString(tag.defaultAttrs || {});
-      const insert = `<${tag.tag}${attrStr}>${selected || '文本内容'}</${tag.tag}>`;
+      const insert = `<${tag.tag}${attrStr}>${selected || t('ssml.textContent')}</${tag.tag}>`;
       const cursorPos = start + `<${tag.tag}${attrStr}>`.length + (selected ? selected.length : 4);
       insertText(text.substring(0, start) + insert + text.substring(end), cursorPos);
     }
@@ -410,7 +413,7 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
       insert = `<${tag.tag}${attrStr}/>`;
       cursorPos = selStart + insert.length;
     } else {
-      insert = `<${tag.tag}${attrStr}>${selected || '文本内容'}</${tag.tag}>`;
+      insert = `<${tag.tag}${attrStr}>${selected || t('ssml.textContent')}</${tag.tag}>`;
       cursorPos = selStart + `<${tag.tag}${attrStr}>`.length + (selected ? selected.length : 4);
     }
 
@@ -466,13 +469,13 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
           className={`${styles.categoryTab} ${showTemplates ? styles.categoryTabActive : ''}`}
           onClick={() => { setShowTemplates(!showTemplates); setShowStructure(false); }}
         >
-          📋 模板
+          📋 {t('ssml.templates')}
         </button>
         <button
           className={`${styles.categoryTab} ${showStructure ? styles.categoryTabActive : ''}`}
           onClick={() => { setShowStructure(!showStructure); setShowTemplates(false); }}
         >
-          🌳 结构
+          🌳 {t('ssml.structure')}
         </button>
       </div>
 
@@ -494,7 +497,7 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
             onClick={unwrapTag}
             title="删除光标处/选区外层的 SSML 标签"
           >
-            删除标签
+            {t('ssml.deleteTag')}
           </button>
         </div>
       )}
@@ -519,7 +522,7 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
 
       {/* 提示条 */}
       <div className={styles.hint}>
-        💡 选中文本后点击标签即可包裹 · 在模板中选择常用片段 · 在结构中查看标签层级和校验结果
+        💡 {t('ssml.hintBar')}
       </div>
 
       {/* 属性编辑弹窗 */}
@@ -541,7 +544,7 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
                     value={attrValues[attr.name] || ''}
                     onChange={e => setAttrValues(prev => ({ ...prev, [attr.name]: e.target.value }))}
                   >
-                    <option value="">选择...</option>
+                    <option value="">{t('common.selectPlaceholder')}</option>
                     {attr.options.map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
@@ -560,7 +563,7 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
 
             {/* 实时预览 */}
             <div className={styles.previewBox}>
-              <div className={styles.previewLabel}>预览：</div>
+              <div className={styles.previewLabel}>{t('ssml.preview')}</div>
               <code>
                 {(() => {
                   const attrStr = buildAttrString(attrValues);
@@ -571,8 +574,8 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
             </div>
 
             <div className={styles.dialogActions}>
-              <button className={styles.cancelBtn} onClick={() => setShowAttrDialog(null)}>取消</button>
-              <button className={styles.confirmBtn} onClick={confirmAttrDialog}>插入</button>
+              <button className={styles.cancelBtn} onClick={() => setShowAttrDialog(null)}>{t('common.cancel')}</button>
+              <button className={styles.confirmBtn} onClick={confirmAttrDialog}>{t('ssml.insert')}</button>
             </div>
           </div>
         </div>

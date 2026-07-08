@@ -4,6 +4,7 @@ import path from 'node:path'
 const runDir = process.env.PW_RUN || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 
 export default defineConfig({
+  globalSetup: './tests/e2e/global-setup.ts',
   testDir: './tests/e2e/specs',
   timeout: 60_000,
   expect: {

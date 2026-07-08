@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from '../../i18n';
 import type { SourceDocument } from '../../types';
 import styles from './GenerateNarrationModal.module.css';
 
@@ -9,13 +10,14 @@ interface GenerateNarrationModalProps {
 }
 
 export function GenerateNarrationModal({ sources, onClose, onGenerate }: GenerateNarrationModalProps) {
+  const { t } = useTranslation();
   // 默认全选
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(sources.map(s => s.id))
   );
   const [promptHint, setPromptHint] = useState('');
   const [targetChapters, setTargetChapters] = useState(3);
-  const [targetWords, setTargetWords] = useState('1000-1500 字');
+  const [targetWords, setTargetWords] = useState(t('generateNarration.defaultWordCount'));
   const [engine, setEngine] = useState('mimo');
 
   const toggleId = (id: string) => {
@@ -36,15 +38,15 @@ export function GenerateNarrationModal({ sources, onClose, onGenerate }: Generat
     <div className={styles.backdrop} onClick={onClose}>
       <div className={styles.modal} onClick={e => e.stopPropagation()}>
         <div className={styles.header}>
-          <h2>🧠 生成旁白文档</h2>
+          <h2>{t('generateNarration.title')}</h2>
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
         <p className={styles.desc}>
-          从选中源合成一份适合朗读的口播稿，并按 # 二级标题切到各章节。
+          {t('generateNarration.description')}
         </p>
 
         <div className={styles.section}>
-          <label className={styles.label}>📚 选中的源 ({selectedIds.size}/{sources.length})</label>
+          <label className={styles.label}>{t('generateNarration.selectedSources', { selected: selectedIds.size, total: sources.length })}</label>
           <div className={styles.sourceList}>
             {sources.map(src => {
               const selected = selectedIds.has(src.id);
@@ -67,10 +69,10 @@ export function GenerateNarrationModal({ sources, onClose, onGenerate }: Generat
         </div>
 
         <div className={styles.section}>
-          <label className={styles.label}>📝 补充提示（可选）</label>
+          <label className={styles.label}>{t('generateNarration.promptHint')}</label>
           <textarea
             className={styles.textarea}
-            placeholder="例如: 保持轻松风格, 多用反问, 避免专业术语堆砌…"
+            placeholder={t('generateNarration.promptPlaceholder')}
             value={promptHint}
             onChange={e => setPromptHint(e.target.value)}
             rows={3}
@@ -79,7 +81,7 @@ export function GenerateNarrationModal({ sources, onClose, onGenerate }: Generat
 
         <div className={styles.row}>
           <div className={styles.field}>
-            <label className={styles.label}>🎯 目标章节</label>
+            <label className={styles.label}>{t('generateNarration.targetChapters')}</label>
             <input
               type="number"
               min={1}
@@ -90,7 +92,7 @@ export function GenerateNarrationModal({ sources, onClose, onGenerate }: Generat
             />
           </div>
           <div className={styles.field}>
-            <label className={styles.label}>📏 字数</label>
+            <label className={styles.label}>{t('generateNarration.wordCount')}</label>
             <input
               type="text"
               value={targetWords}
@@ -99,31 +101,31 @@ export function GenerateNarrationModal({ sources, onClose, onGenerate }: Generat
             />
           </div>
           <div className={styles.field}>
-            <label className={styles.label}>🤖 引擎</label>
+            <label className={styles.label}>{t('generateNarration.engine')}</label>
             <select
               value={engine}
               onChange={e => setEngine(e.target.value)}
               className={styles.input}
             >
-              <option value="mimo">MiMo (推荐)</option>
+              <option value="mimo">{t('generateNarration.engineMiMo')}</option>
               <option value="qwen">Qwen</option>
-              <option value="rule">纯规则</option>
+              <option value="rule">{t('generateNarration.engineRule')}</option>
             </select>
           </div>
         </div>
 
         <div className={styles.note}>
-          ⏱ 生成可能需要 10-30 秒 · 新版本会成为项目活跃版本 · 旧版本保留可对比
+          {t('generateNarration.generationNote')}
         </div>
 
         <div className={styles.actions}>
-          <button className={styles.cancelBtn} onClick={onClose}>取消</button>
+          <button className={styles.cancelBtn} onClick={onClose}>{t('generateNarration.cancel')}</button>
           <button
             className={styles.primaryBtn}
             onClick={handleSubmit}
             disabled={selectedIds.size === 0}
           >
-            🧠 生成新版本
+            {t('generateNarration.generateNewVersion')}
           </button>
         </div>
       </div>

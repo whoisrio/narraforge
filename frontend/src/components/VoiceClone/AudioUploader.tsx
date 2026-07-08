@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from '../../i18n';
 
 interface AudioUploaderProps {
   /** 文件选择后回调，传递选中的 File 对象（不自动上传） */
@@ -6,11 +7,12 @@ interface AudioUploaderProps {
 }
 
 export function AudioUploader({ onFileSelected }: AudioUploaderProps) {
+  const { t } = useTranslation();
   const [dragOver, setDragOver] = useState(false);
 
   const handleFile = (file: File) => {
     if (!file.name.match(/\.(mp3|wav|webm)$/i)) {
-      alert('请上传 MP3、WAV 或 WebM 格式的文件');
+      alert(t('audioUploader.invalidFormat'));
       return;
     }
     onFileSelected?.(file);
@@ -52,10 +54,10 @@ export function AudioUploader({ onFileSelected }: AudioUploaderProps) {
         <div>
           <div style={{ fontSize: '48px', marginBottom: 'var(--spacing-sm)' }}>📁</div>
           <div style={{ fontSize: 'var(--font-size-base)', fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--spacing-xs)' }}>
-            拖拽音频文件到此处
+            {t('audioUploader.dragHere')}
           </div>
           <div style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-secondary)' }}>
-            或点击浏览（支持 MP3、WAV、WebM）
+            {t('audioUploader.clickToBrowse')}
           </div>
         </div>
       </label>

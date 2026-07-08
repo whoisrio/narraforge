@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { mimoTtsApi, voiceApi } from '../../services/api';
 import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { MiMoPresetVoice, VoiceProfile as CloneVoice } from '../../types';
+import { useTranslation, t } from '../../i18n';
 import styles from './MiMoTTSPanel.module.css';
 
 /** MiMo TTS 子模式 */
@@ -38,8 +39,8 @@ interface MiMoTTSPanelProps {
 }
 
 const MODE_TABS: { value: MiMoMode; label: string }[] = [
-  { value: 'preset', label: '预置音色' },
-  { value: 'voiceclone', label: '音色复刻' },
+  { value: 'preset', label: t('mimoTts.presetVoice') },
+  { value: 'voiceclone', label: t('mimoTts.voiceClone') },
 ];
 
 export function MiMoTTSPanel({
@@ -54,6 +55,7 @@ export function MiMoTTSPanel({
   excludeCloneEngines = ['qwen'],
   projectId,
 }: MiMoTTSPanelProps) {
+  const { t } = useTranslation();
   const [presetVoices, setPresetVoices] = useState<MiMoPresetVoice[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
   const [voicesError, setVoicesError] = useState('');
@@ -75,7 +77,7 @@ export function MiMoTTSPanel({
           onPresetVoiceSelect(preferred?.voice_id || voices[0].voice_id);
         }
       } catch (err) {
-        setVoicesError('加载预置音色失败');
+        setVoicesError(t('mimoTts.loadPresetVoicesFailed'));
         console.error('Failed to load MiMo preset voices:', err);
       } finally {
         setVoicesLoading(false);
@@ -127,9 +129,9 @@ export function MiMoTTSPanel({
       {/* 预置音色面板 */}
       {mode === 'preset' && (
         <div>
-          <div className={styles.sectionTitle}>选择预置音色</div>
+          <div className={styles.sectionTitle}>{t('mimoTts.selectPresetVoice')}</div>
           {voicesLoading ? (
-            <div className={styles.loading}>加载音色中...</div>
+            <div className={styles.loading}>{t('mimoTts.loadingVoices')}</div>
           ) : voicesError ? (
             <div className={styles.error}>{voicesError}</div>
           ) : (
@@ -154,7 +156,7 @@ export function MiMoTTSPanel({
             <StyleInstructionPicker
               value={instruction}
               onChange={onInstructionChange}
-              label="风格指令"
+              label={t('tts.styleInstruction')}
               placeholder="选择预设，或直接输入新的风格指令..."
             />
           </div>
@@ -164,9 +166,9 @@ export function MiMoTTSPanel({
       {/* 音色复刻面板 */}
       {mode === 'voiceclone' && (
         <div>
-          <div className={styles.sectionTitle}>选择已有声音</div>
+          <div className={styles.sectionTitle}>{t('mimoTts.selectExistingVoice')}</div>
           {cloneVoicesLoading ? (
-            <div className={styles.loading}>加载声音列表...</div>
+            <div className={styles.loading}>{t('mimoTts.loadingVoiceList')}</div>
           ) : cloneVoices.length === 0 ? (
             <div className={styles.empty}>
               没有可用的声音，请先在「音色设计」页面上传或设计音色
@@ -194,7 +196,7 @@ export function MiMoTTSPanel({
             <StyleInstructionPicker
               value={instruction}
               onChange={onInstructionChange}
-              label="风格指令"
+              label={t('tts.styleInstruction')}
               placeholder="选择预设，或直接输入新的风格指令..."
             />
           </div>

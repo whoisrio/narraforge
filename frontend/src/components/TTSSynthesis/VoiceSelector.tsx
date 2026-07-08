@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ttsApi } from '../../services/api';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import type { VoiceProfile } from '../../types';
+import { useTranslation } from '../../i18n';
 import styles from './VoiceSelector.module.css';
 
 interface VoiceSelectorProps {
@@ -10,6 +11,7 @@ interface VoiceSelectorProps {
 }
 
 export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorProps) {
+  const { t } = useTranslation();
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -27,7 +29,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
           onVoiceSelect(voiceKey);
         }
       } catch (err) {
-        setError('加载声音列表失败');
+        setError(t('voiceSelector.loadVoicesFailed'));
         console.error('Failed to load voices:', err);
       } finally {
         setIsLoading(false);
@@ -38,7 +40,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
   }, [refreshCounter]);
 
   if (isLoading) {
-    return <div className={styles.loading}>加载声音列表...</div>;
+    return <div className={styles.loading}>{t('voiceSelector.loadingVoices')}</div>;
   }
 
   if (error) {
@@ -46,12 +48,12 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
   }
 
   if (voices.length === 0) {
-    return <div className={styles.empty}>暂无克隆声音，请先在"声音复刻"页面上传音频</div>;
+    return <div className={styles.empty}>{t('voiceSelector.noCloneVoices')}</div>;
   }
 
   return (
     <div className={styles.container}>
-      <label htmlFor="voice-select" className={styles.label}>选择声音</label>
+      <label htmlFor="voice-select" className={styles.label}>{t('voiceSelector.selectVoice')}</label>
       <select
         id="voice-select"
         className={styles.select}
@@ -60,7 +62,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
         data-testid="voice-select"
       >
         {!selectedVoiceId && (
-          <option value="" disabled>请选择声音...</option>
+          <option value="" disabled>{t('voiceSelector.pleaseSelectVoice')}</option>
         )}
         {voices.map(voice => {
           const voiceKey = (voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || voice.id;

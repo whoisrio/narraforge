@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { t } from '../i18n';
+import { t as staticT, useTranslation } from '../i18n';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
 import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSPanel';
@@ -58,7 +58,7 @@ function createScratchpadProject(): SegmentedProject {
   return {
     ...project,
     id: SCRATCHPAD_PROJECT_ID,
-    name: t('common.draftProject'),
+    name: staticT('common.draftProject'),
     created_at: project.created_at || now,
     updated_at: project.updated_at || now,
   };
@@ -83,6 +83,7 @@ export function TTSSynthesis({
   hideProjectSidebar?: boolean;
   onBackToProjects?: () => void;
 }) {
+  const { t } = useTranslation();
   const { mode: storageMode } = useStorageMode();
   const { refreshCounter } = useVoiceRefresh();
   const initialLoadDoneRef = useRef(false);
@@ -98,7 +99,7 @@ export function TTSSynthesis({
 
   // MiMo TTS state
   const [mimoMode, setMimoMode] = useState<MiMoMode>('preset');
-  const [mimoPresetVoice, setMimoPresetVoice] = useState('冰糖');
+  const [mimoPresetVoice, setMimoPresetVoice] = useState(t('tts.defaultMimoPresetVoice'));
   const [mimoInstruction, setMimoInstruction] = useState('');
   const [mimoCloneVoiceId, setMimoCloneVoiceId] = useState('');
 
@@ -241,7 +242,7 @@ export function TTSSynthesis({
       // 真实项目加载失败，不静默降级到草稿
       if (!full && initialProjectId) {
         console.error(`[TTSSynthesis] Project ${initialProjectId} not found in ${storageMode} storage`);
-        showToast(`项目加载失败（存储模式: ${storageMode}）`, 'error');
+        showToast(t('tts.projectLoadFailedStorageMode', { mode: storageMode }), 'error');
         onBackToProjects?.();
         return;
       }
@@ -252,7 +253,7 @@ export function TTSSynthesis({
           full = scratchpad!;
         } else {
           full = createInitialProject();
-          full.name = t('project.draftProject');
+          full.name = t('common.draftProject');
         }
       }
       const localDraft = await getDraft(full.id);
@@ -295,7 +296,7 @@ export function TTSSynthesis({
     })().catch((e) => {
       console.error('Project load failed:', e);
       if (initialProjectId) {
-        showToast('项目加载失败，请重试', 'error');
+        showToast(t('tts.projectLoadFailedRetry'), 'error');
         onBackToProjects?.();
       }
     });
@@ -379,7 +380,7 @@ export function TTSSynthesis({
       setParams({ language: ((v as CosyVoiceParams).language || 'Chinese') as TTSRequest['language'], speed: (v as CosyVoiceParams).speed ?? 1.0, volume: (v as CosyVoiceParams).volume ?? 80, pitch: (v as CosyVoiceParams).pitch ?? 1.0 });
     } else if (engine === 'mimo_tts') {
       setMimoMode(((v as MiMoParams).mode || 'preset') as MiMoMode);
-      setMimoPresetVoice((v as MiMoParams).voice_id || '冰糖');
+      setMimoPresetVoice((v as MiMoParams).voice_id || t('tts.defaultMimoPresetVoice'));
       setMimoInstruction((v as MiMoParams).instruction || '');
       setMimoCloneVoiceId((v as MiMoParams).voice_id || '');
     } else if (engine === 'voxcpm') {
@@ -401,7 +402,7 @@ export function TTSSynthesis({
   }, [project.chapters, dispatch, restoreChapterSettings]);
 
   const handleAddChapter = useCallback((requestedName?: string) => {
-    const fallbackName = `新章节 ${project.chapters.length + 1}`;
+    const fallbackName = t('tts.newChapter', { num: project.chapters.length + 1 });
     const name = requestedName?.trim() || fallbackName;
     dispatch({ type: 'ADD_CHAPTER', name });
     // New chapter inherits settings from previous active chapter, so no need to reset global state
@@ -421,7 +422,7 @@ export function TTSSynthesis({
       const newActive = project.active_chapter_id === chapterId ? remaining[0] : remaining.find(c => c.id === project.active_chapter_id) || remaining[0];
       restoreChapterSettings(newActive);
     }
-    showToast(`已删除 ${ch?.name || '章节'}`);
+    showToast(t('tts.chapterDeleted', { name: ch?.name || t('tts.chapter') }));
   }, [project.chapters, project.active_chapter_id, dispatch, restoreChapterSettings, showToast]);
 
   const handleDeleteChapter = useCallback((chapterId: string) => {
@@ -430,9 +431,9 @@ export function TTSSynthesis({
     const segCount = ch?.segments.length || 0;
     const audioCount = ch?.segments.filter(s => s.audio.current?.id).length || 0;
     setConfirmDialog({
-      open: true, title: '删除章节',
-      message: `确定删除「${ch?.name || '此章节'}」？\n包含 ${segCount} 个片段${audioCount > 0 ? `、${audioCount} 段音频` : ''}，将一并删除。`,
-      variant: 'warning', confirmLabel: '删除',
+      open: true, title: t('tts.deleteChapter'),
+      message: t('tts.deleteChapterConfirm', { name: ch?.name || t('tts.thisChapter'), segCount, audioInfo: audioCount > 0 ? t('tts.audioCount', { count: audioCount }) : '' }),
+      variant: 'warning', confirmLabel: t('common.delete'),
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDeleteChapter(chapterId); },
     });
   }, [project.chapters, doDeleteChapter]);
@@ -464,27 +465,27 @@ export function TTSSynthesis({
     if (engine === 'edge_tts') {
       const parts = (edgeVoice || '').split('-');
       const name = (parts[parts.length - 1] || edgeVoice || '').replace(/Neural$|V\d+$/i, '');
-      return { name: name || '未选择', source: 'global', voice_id: edgeVoice, engine: 'edge_tts' };
+      return { name: name || t('tts.noVoiceSelected'), source: 'global', voice_id: edgeVoice, engine: 'edge_tts' };
     }
     // MiMo
     if (engine === 'mimo_tts') {
       if (mimoMode === 'voiceclone') {
         const vObj = voices.find(v => v.id === mimoCloneVoiceId);
-        return { name: vObj?.name || '自定义音色', source: 'global', voice_id: mimoCloneVoiceId, engine: 'mimo_tts' };
+        return { name: vObj?.name || t('tts.customVoice'), source: 'global', voice_id: mimoCloneVoiceId, engine: 'mimo_tts' };
       }
-      return { name: mimoPresetVoice || '未选择', source: 'global', voice_id: mimoPresetVoice, engine: 'mimo_tts' };
+      return { name: mimoPresetVoice || t('tts.noVoiceSelected'), source: 'global', voice_id: mimoPresetVoice, engine: 'mimo_tts' };
     }
     // VoxCPM
     if (engine === 'voxcpm') {
       const vObj = voices.find(v => v.id === selectedVoiceId);
-      return { name: vObj?.name || 'VoxCPM 音色', source: 'global', voice_id: selectedVoiceId, engine: 'voxcpm' };
+      return { name: vObj?.name || t('tts.voxcpmVoice'), source: 'global', voice_id: selectedVoiceId, engine: 'voxcpm' };
     }
     // CosyVoice (default)
     const vObj = voices.find(v => {
       const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
       return (voiceId || v.id) === selectedVoiceId;
     });
-    return { name: vObj?.name || 'CosyVoice 音色', source: 'global', voice_id: selectedVoiceId, engine: 'cosyvoice' };
+    return { name: vObj?.name || t('tts.cosyVoiceVoice'), source: 'global', voice_id: selectedVoiceId, engine: 'cosyvoice' };
   }, [engine, selectedVoiceId, voices, edgeVoice, mimoMode, mimoPresetVoice, mimoCloneVoiceId]);
 
   const resetGlobalSettings = useCallback(() => {
@@ -494,7 +495,7 @@ export function TTSSynthesis({
     setEdgeRate(0);
     setEdgeVolume(0);
     setMimoMode('preset');
-    setMimoPresetVoice('冰糖');
+    setMimoPresetVoice(t('tts.defaultMimoPresetVoice'));
     setMimoInstruction('');
     setMimoCloneVoiceId('');
     setVoxcpmMode('clone');
@@ -525,7 +526,7 @@ export function TTSSynthesis({
 
   const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
     const np = createInitialProject();
-    np.name = name || `新项目 ${projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1}`;
+    np.name = name || t('tts.newProject', { num: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
     if (logo) np.logo = logo;
     await projectStorage.saveProject(np, { mode: 'immediate' });
     const list = sortProjectsWithScratchpad(await projectStorage.listProjects());
@@ -537,7 +538,7 @@ export function TTSSynthesis({
 
   const doDeleteProject = useCallback(async (projectId: string) => {
     if (projectId === SCRATCHPAD_PROJECT_ID) {
-      showToast('草稿项目不可删除', 'error');
+      showToast(t('tts.cannotDeleteDraftProject'), 'error');
       return;
     }
 
@@ -559,10 +560,10 @@ export function TTSSynthesis({
           const fallback = createInitialProject();
           if (storageMode === 'frontend') {
             fallback.id = SCRATCHPAD_PROJECT_ID;
-            fallback.name = '草稿项目';
+            fallback.name = t('common.draftProject');
             await indexedDBStorage.saveProject(fallback, { mode: 'immediate' });
           } else {
-            fallback.name = '临时项目';
+            fallback.name = t('tts.temporaryProject');
           }
           setProjectList([fallback]);
           setProject(fallback);
@@ -570,21 +571,20 @@ export function TTSSynthesis({
           resetGlobalSettings();
         }
       }
-      showToast('项目已删除');
-    } catch (e) { console.error('Delete project failed:', e); showToast('删除失败', 'error'); }
+      showToast(t('tts.projectDeleted'));
+    } catch (e) { console.error('Delete project failed:', e); showToast(t('tts.deleteFailed'), 'error'); }
   }, [project.id, projectStorage, storageMode, loadProjectById, dispatch, resetGlobalSettings, showToast]);
 
   const handleDeleteProject = useCallback((projectId = project.id) => {
     if (projectId === SCRATCHPAD_PROJECT_ID) {
-      showToast('草稿项目不可删除', 'error');
+      showToast(t('tts.cannotDeleteDraftProject'), 'error');
       return;
     }
     const target = projectList.find(p => p.id === projectId) || project;
     setConfirmDialog({
-      open: true, title: '删除项目',
-      message: `确定删除项目「${target.name}」？
-此操作不可撤销，所有章节和音频将一并删除。`,
-      variant: 'danger', confirmLabel: '删除',
+      open: true, title: t('tts.deleteProject'),
+      message: t('tts.deleteProjectConfirm', { name: target.name }),
+      variant: 'danger', confirmLabel: t('common.delete'),
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); void doDeleteProject(projectId); },
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -597,13 +597,20 @@ export function TTSSynthesis({
   const handleConfirmCustom = useCallback((id: string, localParams: Record<string, unknown>) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
-    if (!window.confirm('此段将使用自定义音色，不再跟随全局/角色设置。确认？')) return;
-    // Take all params from the panel display (effective + local edits)
-    const eff = segEffectiveParams(seg) as Record<string, unknown>;
-    const fullParams = { ...eff, ...localParams };
-    dispatch({ type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true });
-    // Clear existing audio — was generated with old params
-    if (seg.status === 'ready') dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id });
+    setConfirmDialog({
+      open: true,
+      title: t('tts.useCustomVoice'),
+      message: t('tts.useCustomVoiceConfirm'),
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        // Take all params from the panel display (effective + local edits)
+        const eff = segEffectiveParams(seg) as Record<string, unknown>;
+        const fullParams = { ...eff, ...localParams };
+        dispatch({ type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true });
+        // Clear existing audio — was generated with old params
+        if (seg.status === 'ready') dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id });
+      },
+    });
   }, [activeChapter.segments, dispatch]);
 
   const handleMerge = useCallback((id: string, direction: 'up' | 'down') => {
@@ -623,9 +630,9 @@ export function TTSSynthesis({
     };
     if (hasAudio) {
       setConfirmDialog({
-        open: true, title: '合并分段',
-        message: `${direction === 'down' ? '向下' : '向上'}合并将删除两段的已生成音频，是否继续？`,
-        variant: 'warning', confirmLabel: '继续',
+        open: true, title: t('tts.mergeSegments'),
+        message: t('tts.mergeSegmentsConfirm', { direction: direction === 'down' ? t('tts.down') : t('tts.up') }),
+        variant: 'warning', confirmLabel: t('common.continue'),
         onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doMerge(); },
       });
     } else {
@@ -643,9 +650,9 @@ export function TTSSynthesis({
     };
     if (hasAudio) {
       setConfirmDialog({
-        open: true, title: '拆分分段',
-        message: '拆分将删除该段的已生成音频，是否继续？',
-        variant: 'warning', confirmLabel: '继续',
+        open: true, title: t('tts.splitSegment'),
+        message: t('tts.splitSegmentConfirm'),
+        variant: 'warning', confirmLabel: t('common.continue'),
         onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doSplit(); },
       });
     } else {
@@ -662,11 +669,11 @@ export function TTSSynthesis({
       dispatch({ type: 'DELETE_SEGMENT', id });
     };
     const preview = seg.text.length > 20 ? seg.text.slice(0, 20) + '…' : seg.text;
-    const audioWarn = seg.current_audio_id ? '\n已生成的音频也将一并删除。' : '';
+    const audioWarn = seg.current_audio_id ? t('tts.audioWillBeDeleted') : '';
     setConfirmDialog({
-      open: true, title: '删除分段',
-      message: `确定删除该分段？\n「${preview}」${audioWarn}`,
-      variant: 'danger', confirmLabel: '删除',
+      open: true, title: t('tts.deleteSegment'),
+      message: `${t('tts.deleteSegmentConfirm')}\n「${preview}」${audioWarn}`,
+      variant: 'danger', confirmLabel: t('common.delete'),
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDelete(); },
     });
   }, [activeChapter.segments, dispatch]);
@@ -704,9 +711,9 @@ export function TTSSynthesis({
 
     if (oldAudioIds.length > 0) {
       setConfirmDialog({
-        open: true, title: '重新拆分',
-        message: `重新拆分将删除当前 ${activeChapter.segments.length} 段中已生成的 ${oldAudioIds.length} 段音频，是否继续？`,
-        variant: 'warning', confirmLabel: '继续',
+        open: true, title: t('tts.reSplit'),
+        message: t('tts.reSplitConfirm', { segCount: activeChapter.segments.length, audioCount: oldAudioIds.length }),
+        variant: 'warning', confirmLabel: t('common.continue'),
         onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); apply(); },
       });
     } else {
@@ -732,10 +739,10 @@ export function TTSSynthesis({
       setRoles(prev => exists
         ? prev.map(role => role.id === saved.id ? saved : role)
         : [saved, ...prev.filter(role => role.id !== saved.id)]);
-      showToast(exists ? '角色已更新' : '角色已创建');
+      showToast(exists ? t('tts.roleUpdated') : t('tts.roleCreated'));
     } catch (error) {
       console.error('Save role failed:', error);
-      showToast('角色保存失败', 'error');
+      showToast(t('tts.roleSaveFailed'), 'error');
       throw error;
     }
   }, [roles, showToast]);
@@ -749,10 +756,10 @@ export function TTSSynthesis({
       dispatch({ type: 'CLEAR_ROLE_FROM_SEGMENTS', roleId });
       // 2. 从本地角色列表移除（不调用 roleApi.deleteRole）
       setRoles(prev => prev.filter(role => role.id !== roleId));
-      showToast('角色已从项目移除');
+      showToast(t('tts.roleRemovedFromProject'));
     } catch (error) {
       console.error('Remove role from project failed:', error);
-      showToast('移除角色失败', 'error');
+      showToast(t('tts.removeRoleFailed'), 'error');
     }
   }, [roles, dispatch, showToast]);
 
@@ -762,7 +769,7 @@ export function TTSSynthesis({
       await playVoiceRolePreview(role, sampleText);
     } catch (error) {
       console.error('Preview role failed:', error);
-      showToast('试听失败：请检查后端 TTS 服务、模型配置和音色参数', 'error');
+      showToast(t('tts.previewFailed'), 'error');
     } finally {
       setPreviewingRoleId(null);
     }
@@ -823,7 +830,7 @@ export function TTSSynthesis({
         effectiveMimoMode = m.mode || 'preset';
         effectiveMimoInstruction = m.instruction || '';
         effectiveMimoVoiceDesc = m.voice_description || '';
-        if (m.mode === 'preset') effectiveMimoPreset = m.voice_id || '冰糖';
+        if (m.mode === 'preset') effectiveMimoPreset = m.voice_id || t('tts.defaultMimoPresetVoice');
         else effectiveMimoCloneId = m.voice_id || '';
       } else if (effectiveEngine === 'voxcpm') {
         const v = effectiveParams as VoxCPMParams;
@@ -1025,7 +1032,7 @@ export function TTSSynthesis({
     });
 
     if (toRegenerate.length === 0) {
-      showToast('没有需要重新生成的片段');
+      showToast(t('tts.noSegmentsToRegenerate'));
       return;
     }
 
@@ -1034,21 +1041,21 @@ export function TTSSynthesis({
     // Show confirmation
     const lockedCount = activeChapter.segments.filter(s => s.status === 'ready' && s.voice.source === 'custom').length;
     const lines = [
-      `将重新生成 ${toRegenerate.length} 个片段。`,
+      t('tts.regenerateCount', { count: toRegenerate.length }),
     ];
     if (existingAudio.length > 0) {
-      lines.push(`其中 ${existingAudio.length} 个已有音频将被删除后重新生成。`);
+      lines.push(t('tts.existingAudioWillBeDeleted', { count: existingAudio.length }));
     }
     if (lockedCount > 0) {
-      lines.push(`已锁定独立音色的 ${lockedCount} 个片段将保持不变。`);
+      lines.push(t('tts.lockedSegmentsUnchanged', { count: lockedCount }));
     }
 
     setConfirmDialog({
       open: true,
-      title: '全部重新生成',
+      title: t('tts.regenerateAll'),
       message: lines.join('\n'),
       variant: 'warning',
-      confirmLabel: '重新生成',
+      confirmLabel: t('tts.regenerate'),
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, open: false }));
         await doRegenerateAll(toRegenerate);
@@ -1081,10 +1088,10 @@ export function TTSSynthesis({
         }
       };
       await Promise.all(Array.from({ length: 3 }, () => next()));
-      showToast('全部生成完成');
+      showToast(t('tts.allGenerationComplete'));
     } catch (e) {
       console.error('Regenerate all failed:', e);
-      showToast('部分生成失败', 'error');
+      showToast(t('tts.partialGenerationFailed'), 'error');
     } finally {
       setGenerating(false);
     }
@@ -1100,8 +1107,8 @@ export function TTSSynthesis({
       const updates = targetSegs.map((s, i) => ({ id: s.id, ssml: result.annotations[i]?.ssml ?? `<speak>${s.text}</speak>` }));
       dispatch({ type: 'BATCH_SET_SSML', updates, by_llm: true });
       for (const s of targetSegs) { dispatch({ type: 'UPDATE_PARAMS', id: s.id, params: { enable_ssml: true } }); }
-      showToast(`已为 ${targetSegs.length} 段标注 SSML`);
-    } catch { showToast('SSML 标注失败，请检查 LLM 配置', 'error'); }
+      showToast(t('tts.ssmlAnnotated', { count: targetSegs.length }));
+    } catch { showToast(t('tts.ssmlAnnotateFailed'), 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
 
   /** Stop whatever is currently playing (single or play-all) and reset state */
@@ -1140,7 +1147,7 @@ export function TTSSynthesis({
 
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg?.audio.current?.id && !seg?.audio.current?.path) {
-      showToast('该段尚未生成音频', 'error');
+      showToast(t('tts.segmentNoAudio'), 'error');
       return;
     }
 
@@ -1155,7 +1162,7 @@ export function TTSSynthesis({
         current_audio_path: seg?.audio.current?.path,
       });
       const msg = getErrorMessage(e, String(e));
-      showToast(`播放失败 (${ctx}): ${msg}`, 'error');
+      showToast(t('tts.playFailed', { ctx, msg }), 'error');
     };
 
     try {
@@ -1175,7 +1182,7 @@ export function TTSSynthesis({
           throw new Error(detail);
         }
         const blob = await resp.blob();
-        if (blob.size < 100) throw new Error(`音频为空 (${blob.size}B)，可能后端文件损坏`);
+        if (blob.size < 100) throw new Error(t('tts.audioEmpty', { size: blob.size }));
         const blobUrl = URL.createObjectURL(blob);
         blobUrlRef.current = blobUrl;
         const audio = new Audio(blobUrl);
@@ -1196,12 +1203,12 @@ export function TTSSynthesis({
       // Path mismatch: segment has backend audio_path but storage mode is frontend.
       // This happens when the user generated audio in backend mode then switched modes.
       if (seg.audio.current?.path && !seg.current_audio_id) {
-        showToast('该段音频在后端，请切换到后端存储模式播放', 'error');
+        showToast(t('tts.audioInBackend'), 'error');
         return;
       }
       const blob = await getTTSAudioBlob(seg.current_audio_id!);
       if (!blob) {
-        showToast('本地音频文件不存在或已被清理，请重新生成', 'error');
+        showToast(t('tts.localAudioMissing'), 'error');
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -1318,7 +1325,7 @@ export function TTSSynthesis({
         reader.readAsDataURL(blob);
       });
       const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(base64);
-      if (trimmedMs <= 0) { showToast('无多余静音'); return; }
+      if (trimmedMs <= 0) { showToast(t('tts.noExcessSilence')); return; }
 
       // Decode trimmed to get new duration
       const byteStr = atob(trimmedBase64);
@@ -1336,8 +1343,8 @@ export function TTSSynthesis({
       await saveTTSResult({ id: newId, text: seg.text, voice_id: (eff.voice_id as string) || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: (eff.speed as number) ?? 1, volume: (eff.volume as number) ?? 80, pitch: (eff.pitch as number) ?? 1, instruction: (eff.instruction as string) || '', language: (eff.language as string) || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration });
-      showToast(`裁剪了 ${trimmedMs}ms 静音`);
-    } catch (e) { console.error('Trim failed:', e); showToast('裁剪失败', 'error'); }
+      showToast(t('tts.trimmedSilence', { ms: trimmedMs }));
+    } catch (e) { console.error('Trim failed:', e); showToast(t('tts.trimFailed'), 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
 
   const selectedVoice = voices.find(v => {
@@ -1365,7 +1372,7 @@ export function TTSSynthesis({
 
         <ProjectShell
           projectName={project.name}
-          projectSubtitle={isScratchpadProject ? '快速试稿' : '项目制 · 章节分段'}
+          projectSubtitle={isScratchpadProject ? t('tts.quickDraft') : t('tts.projectChaptered')}
           activeSection={projectSection}
           chapterName={activeChapter.name}
           segmentCount={activeChapter.segments.length}
@@ -1526,7 +1533,7 @@ export function TTSSynthesis({
               <div className={styles.productionActions}>
                 <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ {t('studio.batchSynthesize')}</button>
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
-                  {playAllActive ? '⏹ 停止' : `▶ ${t('studio.playAll')}`}
+                  {playAllActive ? t('tts.stop') : `▶ ${t('studio.playAll')}`}
                 </button>
                 {isScratchpadProject && <span className={styles.scratchpadBadge}>{t('projectHub.tempProject')}</span>}
                 <span className={styles.segmentedStats}>
@@ -1534,15 +1541,15 @@ export function TTSSynthesis({
                   {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} ${t('projectOverview.generated')}`}
                 </span>
                 {engine === 'cosyvoice' && (
-                  <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>✨ 标注</button>
+                  <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>{t('tts.annotate')}</button>
                 )}
               </div>
               <div className={styles.productionRight}>
-                <div className={styles.toolbarGroup} aria-label="segment 时间呈现">
+                <div className={styles.toolbarGroup} aria-label={t('tts.segmentTimeDisplay')}>
                   <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>{t('studio.chapterTime')}</button>
                   <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>{t('studio.globalTime')}</button>
                 </div>
-                <div className={styles.viewToggle} aria-label="segment 卡片呈现">
+                <div className={styles.viewToggle} aria-label={t('tts.segmentCardDisplay')}>
                   <button className={`${styles.viewToggleBtn} ${compactMode ? styles.viewToggleActive : ''}`}
                     onClick={() => setCompactMode(true)}>{t('studio.compactView')}</button>
                   <button className={`${styles.viewToggleBtn} ${!compactMode ? styles.viewToggleActive : ''}`}
