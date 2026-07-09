@@ -1,12 +1,12 @@
 /**
  * Cross-platform E2E runner.
  *
- * Sets PW_RUN timestamp and DATABASE_URL, then spawns Playwright.
+ * Detects managed Node.js 22 (WorkBuddy-bundled) for ESM compatibility,
+ * sets PW_RUN timestamp and DATABASE_URL, then spawns Playwright.
  * Used by the npm "e2e" script — works on macOS, Linux, and Windows.
  */
 const { spawnSync } = require('node:child_process');
 const { join } = require('node:path');
-
 const { existsSync } = require('node:fs');
 const os = require('node:os');
 
