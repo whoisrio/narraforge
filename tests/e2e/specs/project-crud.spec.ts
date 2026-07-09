@@ -8,12 +8,14 @@
  * @feature docs/feature-spec.md §4.2 ProjectHub (Default View)
  */
 import { expect, test } from '@playwright/test';
-import { collectErrors, setLocaleToZhCN, readIndexedDBProjects, validateChapter, enterWorkspace } from '../helpers';
+import { collectErrors, setLocaleToZhCN, readBackendProjects, validateChapter, enterWorkspace } from '../helpers';
+import { readDbProject, readDbProjects, validateDbProjectRow } from '../helpers/dbReader';
+import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
-test.describe('Project CRUD', () => {
+test.describe('项目增删改查', () => {
   // @feature §4.1 Project Structure — create new project
   // @feature §4.2 ProjectHub — new project card appears in grid
-  test('creates a new project from the hub', async ({ page }) => {
+  test('从工作台创建新项目', async ({ page }) => {
     const errors = collectErrors(page);
     await setLocaleToZhCN(page);
 
@@ -23,7 +25,7 @@ test.describe('Project CRUD', () => {
 
     // ── Step 1: BEFORE action — snapshot backend state ──
 
-    const projectsBefore = await readIndexedDBProjects(page);
+    const projectsBefore = await readBackendProjects(page);
     const countBefore = projectsBefore.length;
     const idsBefore = new Set(projectsBefore.map((p) => p.id));
 
@@ -46,7 +48,12 @@ test.describe('Project CRUD', () => {
 
     // IndexedDB verification
     await page.waitForTimeout(1_500); // wait for save
-    const projectsAfter = await readIndexedDBProjects(page);
+    const projectsAfter = await readBackendProjects(page);
+
+    // Dual-read: DB layer
+    const dbProjects = await readDbProjects();
+    expect(dbProjects.length).toBe(projectsAfter.length);
+    expect(dbProjects.some((p) => !idsBefore.has(p.id))).toBe(true);
 
     // Verify a new project was added
     expect(projectsAfter.length).toBe(countBefore + 1);
@@ -65,12 +72,17 @@ test.describe('Project CRUD', () => {
       validateChapter(ch);
     }
 
+    // Dual-read: DB contract validation (full bundle)
+    if (newProject!.id) {
+      await verifyDbWithScreenshot(page, newProject!.id, 'project-crud-create');
+    }
+
     expect(errors).toEqual([]);
   });
 
   // @feature §4.1 Project Structure — rename project
   // @feature §4.2 ProjectHub — rename via card menu
-  test('renames a project', async ({ page }) => {
+  test('重命名项目', async ({ page }) => {
     const errors = collectErrors(page);
     await setLocaleToZhCN(page);
 
@@ -100,9 +112,13 @@ test.describe('Project CRUD', () => {
     // ── Data-layer verification: IndexedDB state ──
 
     await page.waitForTimeout(1_500);
-    const projects = await readIndexedDBProjects(page);
+    const projects = await readBackendProjects(page);
     const renamedProject = projects.find((p) => p.name === 'test-renamed');
     expect(renamedProject).toBeTruthy();
+
+    // Dual-read: DB layer
+    const dbProjects = await readDbProjects();
+    expect(dbProjects.some((p) => p.name === 'test-renamed')).toBe(true);
 
     // Restore original name
     const renamedCard = page.locator('[aria-label*="项目 test-renamed"]').first();
@@ -114,16 +130,20 @@ test.describe('Project CRUD', () => {
 
     // Verify restoration in IndexedDB
     await page.waitForTimeout(1_500);
-    const projectsRestored = await readIndexedDBProjects(page);
+    const projectsRestored = await readBackendProjects(page);
     const restoredProject = projectsRestored.find((p) => p.name === 'test');
     expect(restoredProject).toBeTruthy();
+
+    // Dual-read: DB layer
+    const dbRestored = await readDbProjects();
+    expect(dbRestored.some((p) => p.name === 'test')).toBe(true);
 
     expect(errors).toEqual([]);
   });
 
   // @feature §4.1 Project Structure — delete project
   // @feature §4.2 ProjectHub — delete via card menu with confirmation
-  test('deletes a project with confirmation', async ({ page }) => {
+  test('删除项目（含确认对话框）', async ({ page }) => {
     const errors = collectErrors(page);
     await setLocaleToZhCN(page);
 
@@ -146,49 +166,43 @@ test.describe('Project CRUD', () => {
     // ── Step 1: BEFORE action — snapshot backend state ──
 
     await page.waitForTimeout(1_500);
-    const projectsBefore = await readIndexedDBProjects(page);
+    const projectsBefore = await readBackendProjects(page);
     const countBefore = projectsBefore.length;
     const targetProject = projectsBefore.find((p) => p.name === 'E2E-待删除项目');
     expect(targetProject).toBeTruthy();
     const targetId = targetProject!.id;
 
     // Set up dialog handler BEFORE triggering the delete action
-    const dialogPromise = page.waitForEvent('dialog', { timeout: 10_000 });
+    page.on('dialog', async (dialog) => {
+      expect(dialog.message()).toContain('确定删除项目');
+      await dialog.accept();
+    });
 
     // Open the menu for the new project and click delete
-    const projectCard = page.locator('[aria-label*="E2E-待删除项目"]').first();
+    const projectCard = page.locator('article[aria-label*="项目 E2E-待删除项目"]').first();
     await expect(projectCard).toBeVisible({ timeout: 5_000 });
     await projectCard.locator('[aria-haspopup="menu"]').click();
     await page.waitForTimeout(500); // wait for menu animation
 
-    // Use evaluate to click the delete menu item directly
-    await page.evaluate(() => {
-      const menuItems = document.querySelectorAll('[role="menuitem"]');
-      for (const item of menuItems) {
-        if (item.textContent?.includes('删除')) {
-          (item as HTMLElement).click();
-          break;
-        }
-      }
-    });
-
-    // Handle the native window.confirm() dialog
-    const dialog = await dialogPromise;
-    expect(dialog.message()).toContain('确定删除项目');
-    await dialog.accept();
+    // Click the delete menu item
+    await page.getByRole('menuitem', { name: /删除/ }).click();
 
     // ── Step 2: POST-COMMIT — project no longer exists, count -1 ──
 
-    // Verify the project card is gone (UI)
-    await expect(page.getByText('E2E-待删除项目')).not.toBeVisible({ timeout: 10_000 });
+    // Wait for the hub list to refresh
+    await page.waitForTimeout(2_000);
 
     // Backend verification
     await page.waitForTimeout(1_500);
-    const projectsAfter = await readIndexedDBProjects(page);
+    const projectsAfter = await readBackendProjects(page);
 
     // Verify the project no longer exists in backend
     const deletedProject = projectsAfter.find((p) => p.id === targetId);
     expect(deletedProject).toBeUndefined();
+
+    // Dual-read: DB layer — project row must be gone
+    const dbProjects = await readDbProjects();
+    expect(dbProjects.find((p) => p.id === targetId)).toBeUndefined();
 
     // Verify project count decreased
     expect(projectsAfter.length).toBe(countBefore - 1);

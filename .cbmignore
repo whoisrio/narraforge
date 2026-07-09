@@ -1,0 +1,45 @@
+# codebase-memory-mcp ignore file
+# Similar to .gitignore syntax
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual env
+backend/.venv/
+
+# Test directories
+backend/tests/
+tests/
+test-results/
+
+# Build / output artifacts
+frontend/dist/
+frontend/build/
+frontend/coverage/
+backend/migrations/
+backend/output/
+backend/uploads/
+backend/logs/
+backend/pretrained_models/
+
+# Frontend tests
+frontend/src/test/
+frontend/src/__tests__/
+frontend/src/**/__tests__/
+*.test.ts
+*.test.tsx
+*.test.js
+*.test.jsx
+*.spec.ts
+*.spec.tsx
+*.spec.js
+*.spec.jsx
+
+# Node
+node_modules/
+
+# Cache
+.pytest_cache/
+.backend-cache/

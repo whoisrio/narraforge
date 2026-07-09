@@ -12,11 +12,10 @@ import { createInitialProject } from './hooks/useSegmentedProject';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/VoiceRefreshProvider';
 import { ThemeProvider } from './hooks/useTheme';
-import { TranslationProvider } from './i18n';
+import { TranslationProvider, useTranslation } from './i18n';
 import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import type { SegmentedProject } from './types';
-import { t } from './i18n';
 import styles from './App.module.css';
 
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
@@ -27,6 +26,7 @@ type View = Page | Tab;
 
 function SettingsSelect() {
   const { mode, setMode } = useStorageModeContext();
+  const { t } = useTranslation();
   return (
     <select value={mode} onChange={(e) => setMode(e.target.value as StorageMode)}>
       <option value="backend">{t('settings.backend')}</option>
@@ -52,6 +52,7 @@ function AppContent() {
   const [storageModeLoaded, setStorageModeLoaded] = useState(false);
 
   const projectStorage = storageForMode(storageMode);
+  const { t } = useTranslation();
 
   useEffect(() => {
     configApi.getStorageMode().then(
@@ -114,7 +115,7 @@ function AppContent() {
   const handleDeleteProjectFromHub = async (projectId: string) => {
     const target = projects.find(project => project.id === projectId);
     const targetName = target?.name ?? t('project.unknownProject');
-    const confirmMessage = `${t('project.deleteConfirm', { name: targetName })}\n${t('project.deleteMessage')}`;
+    const confirmMessage = t('tts.deleteProjectConfirm', { name: targetName });
     if (!window.confirm(confirmMessage)) return;
     await projectStorage.deleteProject(projectId);
     await refreshProjects();

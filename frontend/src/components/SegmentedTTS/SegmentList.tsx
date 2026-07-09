@@ -1,7 +1,7 @@
 import type { Segment, EngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import { inferSpeakerName } from '../../services/segmentKindInference';
-import { t } from '../../i18n';
+import { useTranslation } from '../../i18n';
 import { SegmentRow } from './SegmentRow';
 import { SegmentEditPanel } from './SegmentEditPanel';
 import styles from './SegmentList.module.css';
@@ -70,6 +70,7 @@ function toSnapshot(role: Role): RoleSnapshot {
 }
 
 export function SegmentList(props: SegmentListProps) {
+  const { t } = useTranslation();
   const { segments, layout, selectedId, playingId, isPaused, compact, voiceMode = 'narration', voices, globalVoiceId, globalVoiceName, globalEdgeVoice, globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId, onAppend, onEdit, onPlay } = props;
   const allRoles = props.roles ?? [];
   const showKindControls = voiceMode !== 'narration';

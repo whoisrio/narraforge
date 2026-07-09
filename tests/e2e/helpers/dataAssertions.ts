@@ -76,20 +76,6 @@ export async function readBackendProject(page: Page, projectId: string): Promise
 }
 
 /**
- * Read all segmented projects — uses backend API (works with backend storage mode).
- */
-export async function readIndexedDBProjects(page: Page): Promise<SegmentedProject[]> {
-  return readBackendProjects(page);
-}
-
-/**
- * Read a single segmented project by ID — uses backend API.
- */
-export async function readIndexedDBProject(page: Page, projectId: string): Promise<SegmentedProject | undefined> {
-  return readBackendProject(page, projectId);
-}
-
-/**
  * Find the active project by picking the most recently updated project from the backend.
  */
 export async function readActiveProject(page: Page): Promise<SegmentedProject | undefined> {
@@ -178,9 +164,9 @@ export function interceptPutResponse(
 
 // ── JSON Schema Validators ──
 
-const VALID_ENGINES = ['edge_tts', 'cosyvoice', 'mimo_tts', 'voxcpm'];
-const VALID_EMOTIONS = ['happy', 'sad', 'angry', 'calm', 'neutral', 'excited'];
-const VALID_SOURCES = ['chapter', 'role', 'custom'];
+export const VALID_ENGINES = ['edge_tts', 'cosyvoice', 'mimo_tts', 'voxcpm'];
+export const VALID_EMOTIONS = ['happy', 'sad', 'angry', 'calm', 'neutral', 'excited'];
+export const VALID_SOURCES = ['chapter', 'role', 'custom'];
 
 /**
  * Validate EngineParams JSON (discriminated union by engine field).
@@ -422,11 +408,10 @@ export function assertSegmentVoiceSource(
 
 /**
  * Assert that a segment has generated audio with valid fields.
+ * Does not require `status === 'ready'` because the backend API does not return
+ * a `status` field; the presence of `audio.current` is the authoritative signal.
  */
 export function assertSegmentHasAudio(segment: Segment): void {
-  if (segment.status !== 'ready') {
-    throw new Error(`Segment "${segment.id}" status expected "ready" but got "${segment.status}"`);
-  }
   if (!segment.audio?.current?.path && !segment.audio?.current?.id) {
     throw new Error(`Segment "${segment.id}" has no audio path or id in audio.current`);
   }
@@ -507,12 +492,29 @@ export function assertSegmentHasText(segment: Segment, minLength = 1): void {
 
 /**
  * Count segments with status 'ready' (generated audio).
+ * Note: this relies on the frontend's `status` field. Backend API responses do
+ * not include `status`; use `countSegmentsWithAudio` for backend data.
  */
 export function countReadySegments(project: SegmentedProject): number {
   let count = 0;
   for (const ch of project.chapters) {
     for (const seg of ch.segments) {
       if (seg.status === 'ready') count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Count segments that have audio.current (the backend signal for generated audio).
+ * Use this instead of `countReadySegments` when reading from the API/DB.
+ */
+export function countSegmentsWithAudio(project: SegmentedProject): number {
+  let count = 0;
+  for (const ch of project.chapters) {
+    for (const seg of ch.segments) {
+      const current = seg.audio?.current;
+      if (current && (current.id || current.path)) count++;
     }
   }
   return count;

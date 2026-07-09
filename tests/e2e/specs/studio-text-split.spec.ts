@@ -9,6 +9,7 @@
 import { expect, test } from '@playwright/test';
 import {
   collectErrors,
+  setLocaleToZhCN,
   goToStudio,
   readBackendProject,
   assertSegmentHasText,
@@ -18,14 +19,16 @@ import {
   validateSegment,
   validateSplitConfig,
 } from '../helpers';
+import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
 const MULTI_SENTENCE_TEXT =
   '夜色渐深，远处的山峦只剩下模糊的轮廓。小明加快了脚步，心里想着早点赶到破庙。' +
   '忽然，一阵冷风吹过，树叶沙沙作响。小红在身后喊道："等等我！"';
 
-test.describe('Studio Text Split', () => {
+test.describe('文本拆分', () => {
   // @feature §4.4 Text Input & Split — Rule mode: split by punctuation delimiters
-  test('splits text using rule mode', async ({ page }) => {
+  test('使用规则模式拆分文本', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -121,6 +124,8 @@ test.describe('Studio Text Split', () => {
       validateSegment(seg);
     }
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-text-split-dbProject1');
+
     // Verify total segment count matches the UI count
     expect(activeChapter!.segments.length).toBe(count);
 
@@ -140,7 +145,8 @@ test.describe('Studio Text Split', () => {
   });
 
   // @feature §4.4 Text Input & Split — LLM mode: semantic splitting with emotion analysis
-  test('switches to LLM smart split mode', async ({ page }) => {
+  test('切换到LLM智能拆分模式', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -264,11 +270,14 @@ test.describe('Studio Text Split', () => {
     // Verify segments exist (count may be same if prior test already populated segments)
     expect(activeChapter!.segments.length).toBeGreaterThanOrEqual(2);
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-text-split-dbProject2');
+
     expect(errors).toEqual([]);
   });
 
   // @feature §4.4 Text Input & Split — re-split: clean up existing segment audio before applying new split
-  test('re-splits existing text', async ({ page }) => {
+  test('重新拆分已有文本', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -365,6 +374,8 @@ test.describe('Studio Text Split', () => {
 
     // Validate full chapter schema
     validateChapter(activeChapter!);
+
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-text-split-dbProject3');
 
     expect(errors).toEqual([]);
   });

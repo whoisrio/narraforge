@@ -1,7 +1,12 @@
 import { defineConfig, devices } from '@playwright/test'
 import path from 'node:path'
 
-const runDir = process.env.PW_RUN || new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+const pad = (n: number) => String(n).padStart(2, '0')
+const runDir = (() => {
+  if (process.env.PW_RUN) return process.env.PW_RUN
+  const n = new Date()
+  return `${n.getFullYear()}-${pad(n.getMonth() + 1)}-${pad(n.getDate())}T${pad(n.getHours())}-${pad(n.getMinutes())}-${pad(n.getSeconds())}`
+})()
 
 export default defineConfig({
   globalSetup: './tests/e2e/global-setup.ts',
@@ -11,10 +16,14 @@ export default defineConfig({
     timeout: 10_000,
   },
   outputDir: path.join('test-results', runDir),
+  reporter: [
+    ['list'],
+    ['html', { outputFolder: path.join('playwright-report', runDir) }],
+  ],
   use: {
     baseURL: 'http://127.0.0.1:5173',
     trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
+    screenshot: 'on',
     video: 'retain-on-failure',
   },
   webServer: [

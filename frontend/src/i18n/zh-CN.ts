@@ -621,6 +621,7 @@ export const zhCN = {
       defaultVoice: '默认音色',
       noVoiceSet: '未设置音色',
       createNew: '新角色',
+      save: '保存角色',
       loadFailed: '角色库加载失败',
       nameEmpty: '角色名不能为空',
       saveFailed: '角色保存失败',

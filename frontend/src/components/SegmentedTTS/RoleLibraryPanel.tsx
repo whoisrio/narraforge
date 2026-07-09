@@ -35,6 +35,7 @@ function roleToDraft(role: Role): RoleSnapshot {
     default_voice: role.default_voice,
     default_engine_params: { ...role.default_engine_params },
     favorite_styles: [...role.favorite_styles],
+    voice: role.voice ? { ...role.voice } : undefined,
   };
 }
 
@@ -67,9 +68,17 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
     setError(null);
     try {
       const existing = roles.find((role) => role.id === draft.id);
+      const payload: RoleSnapshot = {
+        ...draft,
+        voice: {
+          engine: draft.default_engine,
+          voice: draft.default_voice,
+          ...draft.default_engine_params,
+        },
+      };
       const saved = existing
-        ? await roleApi.updateRole(draft.id, draft)
-        : await roleApi.createRole(draft);
+        ? await roleApi.updateRole(draft.id, payload)
+        : await roleApi.createRole(payload);
       const next = existing
         ? roles.map((role) => (role.id === saved.id ? saved : role))
         : [saved, ...roles];

@@ -3,13 +3,13 @@
  */
 export { enterWorkspace, openTestProject, goToRolePage, goToStudio, goToVoiceDesign, goToLibrary } from './navigation';
 export { collectErrors } from './errors';
+export { expectNoRawI18nKey, findRawI18nKeys } from './i18nGuard';
 export { setLocaleToZhCN } from './locale';
 export { seedTestProject } from './seed';
 export {
-  readIndexedDBProjects,
-  readIndexedDBProject,
   readActiveProject,
   readBackendProject,
+  readBackendProjects,
   interceptApiResponse,
   interceptPostResponse,
   interceptPutResponse,
@@ -22,6 +22,7 @@ export {
   assertValidEmotion,
   countReadySegments,
   totalSegmentCount,
+  countSegmentsWithAudio,
   validateEngineParams,
   validateVoiceSource,
   validateAudioMeta,
@@ -29,3 +30,8 @@ export {
   validateSegment,
   validateChapter,
 } from './dataAssertions';
+// NOTE: dbReader (node:sqlite) is intentionally NOT re-exported from this barrel.
+// Specs that read the DB should import it directly:
+//   import { readDbProject, validateDbProjectRow } from '../helpers/dbReader';
+// This keeps `node:sqlite` (Node >= 22.5) isolated to DB-reading specs so it
+// cannot break unrelated specs on older Node runtimes.

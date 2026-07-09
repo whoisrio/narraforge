@@ -623,6 +623,7 @@ export const enUS: Messages = {
       defaultVoice: 'Default Voice',
       noVoiceSet: 'No voice set',
       createNew: 'New Role',
+      save: 'Save Role',
       loadFailed: 'Failed to load role library',
       nameEmpty: 'Role name cannot be empty',
       saveFailed: 'Failed to save role',

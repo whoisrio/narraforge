@@ -1041,13 +1041,13 @@ export function TTSSynthesis({
     // Show confirmation
     const lockedCount = activeChapter.segments.filter(s => s.status === 'ready' && s.voice.source === 'custom').length;
     const lines = [
-      t('tts.regenerateCount', { count: toRegenerate.length }),
+      t('tts.willRegenerateN', { count: toRegenerate.length }),
     ];
     if (existingAudio.length > 0) {
-      lines.push(t('tts.existingAudioWillBeDeleted', { count: existingAudio.length }));
+      lines.push(t('tts.nExistingAudioWillBeDeleted', { count: existingAudio.length }));
     }
     if (lockedCount > 0) {
-      lines.push(t('tts.lockedSegmentsUnchanged', { count: lockedCount }));
+      lines.push(t('tts.nLockedSegmentsUnchanged', { count: lockedCount }));
     }
 
     setConfirmDialog({

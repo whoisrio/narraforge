@@ -17,6 +17,7 @@ import {
   collectErrors,
   interceptPostResponse,
   validateEngineParams,
+  setLocaleToZhCN,
 } from '../helpers';
 
 /* ------------------------------------------------------------------ */
@@ -27,6 +28,7 @@ test.describe('MiMo 预置音色角色创建', () => {
   // @feature §4.6 Voices — Role Management — create cast role with MiMo preset voice
   // @feature §4.7 Narrator Mode Voice Selection — MiMo preset voices
   test('选择 MiMo 预置音色创建角色，试听并保存', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
     await goToRolePage(page);
 
@@ -107,6 +109,7 @@ test.describe('设计新音色角色创建', () => {
   // @feature §4.6 Voices — Role Management — create cast role with designed voice
   // @feature §3.4 Voice Design Flow — describe → preview → save
   test('设计新音色创建角色，试听并保存', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
     await goToRolePage(page);
 
@@ -179,6 +182,7 @@ test.describe('编辑已有角色试听', () => {
   // @feature §4.6 Voices — Role Management — edit existing role
   // @feature §3.3 Clone Flow — edit & delete: re-record/re-upload
   test('编辑小明角色，设计试听音频正常渲染', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
     await goToRolePage(page);
 

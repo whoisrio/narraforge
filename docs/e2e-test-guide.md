@@ -67,11 +67,19 @@ PW_RUN=my-run npx playwright test
 
 Backend data readers:
 
-| Reader | What it reads |
-|---|---|
-| `readBackendProject(page, id)` | Single project with full chapters/segments |
-| `readBackendProjects(page)` | All projects (summary) |
-| `readActiveProject(page)` | Most recently updated project |
+| Reader | What it reads | Import from |
+|---|---|---|
+| `readBackendProject(page, id)` | Single project with full chapters/segments | `../helpers` (barrel) |
+| `readBackendProjects(page)` | All projects (summary) | `../helpers` (barrel) |
+| `readActiveProject(page)` | Most recently updated project | `../helpers` (barrel) |
+| `readDbProject(id)` | Raw project bundle (project + chapters + segments + referenced roles) directly from the database | `../helpers/dbReader` |
+| `readDbProjects()` | All project summary rows (for count/existence assertions) | `../helpers/dbReader` |
+| `validateDbProjectRow(bundle)` | Validates a raw DB bundle against `docs/database-schema.md` | `../helpers/dbReader` |
+
+> `readDbProject` / `readDbProjects` / `validateDbProjectRow` live in
+> `tests/e2e/helpers/dbReader.ts` and are imported **directly** (not via the barrel),
+> because they depend on `node:sqlite` (Node >= 22.5). This keeps the dependency
+> isolated to DB-reading specs. See "Dual-Layer Verification" below.
 
 ## Test Requirements
 
@@ -87,6 +95,50 @@ Every test must verify both UI state AND backend data before and after the opera
 
 Backend data with JSON fields must be validated to every sub-field, not just top-level.
 Use the validators from `dataAssertions.ts` for EngineParams, VoiceSource, AudioMeta, SplitConfig.
+
+### Dual-Layer Verification (API + DB)
+
+Every write must be verified at **both** layers, because the API response and the DB
+row are two independent representations that can each diverge:
+
+- **API layer** — what the frontend and integrations see. Read with
+  `readBackendProject(page, id)` and validate with `validateChapter` /
+  `validateSegment` (these check the API shape, including the derived `status` field).
+- **DB layer** — what was actually persisted. Read with `readDbProject(id)` (raw rows
+  via `node:sqlite`) and validate with `validateDbProjectRow(bundle)` against
+  `docs/database-schema.md`.
+
+The two layers are validated against **their own contracts** — do **NOT** assert
+`api === db`. They legitimately differ, e.g.:
+
+- service-layer `datetime` → string serialization (`created_at` is a `datetime` in DB, a `str` in API);
+- column mapping (`role_id`, `default_narrator_role_id`, `animation_spec_json`);
+- the **flat `SegmentEngineParams`** shape in `segment.generated_params`
+  (`edge_voice` / `edge_rate` / …) vs the **`EngineParams` discriminated union** in
+  `chapter.voice` / `roles.voice` (`voice` / `rate` / …).
+
+Reading both and validating each is the whole point — it catches "API looks right but
+DB never persisted" and "DB stored but service maps it wrong on the way out".
+
+**DB reader usage** (`tests/e2e/helpers/dbReader.ts`):
+
+```ts
+import { readDbProject, validateDbProjectRow } from '../helpers/dbReader';
+
+// in the post-commit step, alongside the API read:
+const db = await readDbProject('test-e2e-project');
+if (!db) throw new Error('project was not persisted to the database');
+validateDbProjectRow(db); // throws on any docs/database-schema.md contract violation
+```
+
+- The connector is **connection-string driven** via `DATABASE_URL` (reads `backend/.env`
+  or `process.env.DATABASE_URL`). `sqlite://` is fully supported (local dev DB).
+  `postgresql://` / `mysql://` are guarded with a clear error until a `pg` / `mysql2`
+  connector shim is added — so the mechanism works whether the DB is local or remote.
+- `node:sqlite` requires **Node >= 22.5**.
+- JSON columns come back as strings from SQLite and are parsed inside
+  `validateDbProjectRow`; `generated_params` is validated loosely (engine only) because
+  its flat shape differs from the `EngineParams` union.
 
 ### Console Error Collection
 

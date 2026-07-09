@@ -10,10 +10,10 @@
 import { expect, test } from '@playwright/test';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 
-test.describe('Transcription Hub', () => {
+test.describe('语音转写', () => {
   // @feature §5.1 Layout — two-column layout with AudioDropzone
   // @feature §5.4 Input Methods — single file drag-and-drop
-  test('navigates to transcription page and shows upload area', async ({ page }) => {
+  test('导航到转写页面并显示上传区域', async ({ page }) => {
     const errors = collectErrors(page);
     await setLocaleToZhCN(page);
 
@@ -38,7 +38,7 @@ test.describe('Transcription Hub', () => {
 
   // @feature §5.2 Engine Support — Whisper and FunASR engine options
   // @feature §5.3 Transcription Parameters — model size, beam size, VAD
-  test('shows engine configuration options', async ({ page }) => {
+  test('显示引擎配置选项', async ({ page }) => {
     const errors = collectErrors(page);
     await setLocaleToZhCN(page);
 

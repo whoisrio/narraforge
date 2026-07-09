@@ -435,6 +435,7 @@ def update_segment_after_synth(
     generated_params: dict[str, Any],
 ) -> None:
     audio_data = {
+        "format": audio_format,
         "current": {"path": current_audio_path, "format": audio_format},
     }
     if duration_sec is not None:

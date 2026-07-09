@@ -35,10 +35,13 @@ export function ConfirmDialog({
           <p className={styles.message}>{message}</p>
         </div>
         <div className={styles.actions}>
-          <button className={styles.cancelBtn} onClick={onCancel}>{resolvedCancelLabel}</button>
+          <button
+            className={styles.cancelBtn}
+            onClick={(e) => { e.stopPropagation(); onCancel(); }}
+          >{resolvedCancelLabel}</button>
           <button
             className={variant === 'danger' ? styles.confirmDanger : styles.confirmWarning}
-            onClick={onConfirm}
+            onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           >
             {resolvedConfirmLabel}
           </button>

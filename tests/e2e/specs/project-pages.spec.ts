@@ -12,25 +12,29 @@
 
 import { expect, test } from '@playwright/test';
 import {
+  setLocaleToZhCN,
   openTestProject,
   goToStudio,
   goToVoiceDesign,
   collectErrors,
   readBackendProject,
-  readIndexedDBProjects,
+  readBackendProjects,
   validateChapter,
   validateSegment,
   validateVoiceSource,
 } from '../helpers';
+import { readDbProjects } from '../helpers/dbReader';
+import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
 /* ------------------------------------------------------------------ */
 /*  Voice Design Studio (音色设计 / 工作室)                              */
 /* ------------------------------------------------------------------ */
 
-test.describe('Voice Design Studio (音色设计)', () => {
+test.describe('音色设计', () => {
   // @feature §3.1 Page Structure — voice design page title and panels
   // @feature §3.5 Voice Profile Cards — card grid with preview buttons
-  test('navigates to voice design page and shows profiles', async ({ page }) => {
+  test('导航到音色设计页面并显示音色列表', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToVoiceDesign(page);
@@ -46,9 +50,13 @@ test.describe('Voice Design Studio (音色设计)', () => {
 
     // Voice design page is not project-scoped, so just verify no IndexedDB corruption.
     // Read projects to ensure IndexedDB is accessible (no crash on page load).
-    const projects = await readIndexedDBProjects(page);
+    const projects = await readBackendProjects(page);
     // Projects may or may not exist — the key assertion is that reading did not throw.
     expect(Array.isArray(projects)).toBe(true);
+
+    // Dual-read: DB layer
+    const dbProjects = await readDbProjects();
+    expect(Array.isArray(dbProjects)).toBe(true);
 
     // 不应有 console error
     expect(errors).toEqual([]);
@@ -59,9 +67,10 @@ test.describe('Voice Design Studio (音色设计)', () => {
 /*  Project Role Page (角色)                                           */
 /* ------------------------------------------------------------------ */
 
-test.describe('Project Role Page (项目角色)', () => {
+test.describe('项目角色', () => {
   // @feature §4.6 Voices — Role Management — narrator + cast roles
-  test('opens project and navigates to role management', async ({ page }) => {
+  test('打开项目并导航到角色管理', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await openTestProject(page);
@@ -91,6 +100,8 @@ test.describe('Project Role Page (项目角色)', () => {
       validateChapter(ch);
     }
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'project-pages-dbProject');
+
     // 不应有 console error
     expect(errors).toEqual([]);
   });
@@ -100,9 +111,10 @@ test.describe('Project Role Page (项目角色)', () => {
 /*  Global Role Library (全局角色库)                                     */
 /* ------------------------------------------------------------------ */
 
-test.describe('Global Role Library (全局角色库)', () => {
+test.describe('全局角色库', () => {
   // @feature §4.6 Voices — Role Management — global role library
-  test('opens role library panel from project role page', async ({ page }) => {
+  test('从项目角色页打开角色库面板', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await openTestProject(page);
@@ -140,6 +152,8 @@ test.describe('Global Role Library (全局角色库)', () => {
       validateChapter(ch);
     }
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'project-pages-dbProjectRl');
+
     // 不应有 console error
     expect(errors).toEqual([]);
   });
@@ -149,9 +163,10 @@ test.describe('Global Role Library (全局角色库)', () => {
 /*  Project Overview (总览)                                            */
 /* ------------------------------------------------------------------ */
 
-test.describe('Project Overview (总览)', () => {
+test.describe('项目总览', () => {
   // @feature §4.2 ProjectShell Sections — Overview: chapter list, narrator info
-  test('opens project and shows overview with chapters', async ({ page }) => {
+  test('打开项目并显示章节总览', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await openTestProject(page);
@@ -179,6 +194,8 @@ test.describe('Project Overview (总览)', () => {
       validateChapter(ch);
     }
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'project-pages-dbProjectOv');
+
     // 不应有 console error
     expect(errors).toEqual([]);
   });
@@ -188,9 +205,10 @@ test.describe('Project Overview (总览)', () => {
 /*  Project Studio (项目工作室 - VoiceStudioLayout)                      */
 /* ------------------------------------------------------------------ */
 
-test.describe('Project Studio (项目工作室)', () => {
+test.describe('项目工作室', () => {
   // @feature §4.4 Studio — Segmented Editor — segment rows, batch controls
-  test('opens project and navigates to studio with segments', async ({ page }) => {
+  test('打开项目并导航到带段落的配音工作室', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -213,6 +231,8 @@ test.describe('Project Studio (项目工作室)', () => {
     // Validate active chapter with full schema (voice EngineParams + all segments)
     validateChapter(activeChapter!);
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'project-pages-dbProjectSt');
+
     // 不应有 console error
     expect(errors).toEqual([]);
   });
@@ -222,9 +242,10 @@ test.describe('Project Studio (项目工作室)', () => {
 /*  Voice toggle behavior (旁白/角色 toggle)                            */
 /* ------------------------------------------------------------------ */
 
-test.describe('Segment voice toggle', () => {
+test.describe('段落语音切换', () => {
   // @feature §4.4 Per-Segment Voice Source — lock toggle (🔗↔🔒)
-  test('studio page renders voice lock icons on segment rows', async ({ page }) => {
+  test('工作室页面在段落行上渲染语音锁图标', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -251,6 +272,8 @@ test.describe('Segment voice toggle', () => {
       validateSegment(seg);
       validateVoiceSource(seg.voice as Record<string, unknown>, `segment "${seg.id}".voice`);
     }
+
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'project-pages-dbProjectVt');
 
     expect(errors).toEqual([]);
   });

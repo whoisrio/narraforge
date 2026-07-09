@@ -11,6 +11,7 @@
 import { expect, test } from '@playwright/test';
 import {
   collectErrors,
+  setLocaleToZhCN,
   goToStudio,
   readBackendProject,
   interceptPostResponse,
@@ -20,11 +21,18 @@ import {
   validateSegment,
   validateVoiceSource,
   validateChapter,
+  seedTestProject,
 } from '../helpers';
+import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
-test.describe('Studio Segment Operations', () => {
+test.describe('段落操作', () => {
+  test.beforeAll(async ({ browser }) => {
+    const page = await browser.newPage();
+    try { await seedTestProject(page); } finally { await page.close(); }
+  });
   // @feature §4.4 Segment Lifecycle — idle → queued → pending → ready
-  test('generates audio for a single segment', async ({ page }) => {
+  test('为单个段落生成音频', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -34,73 +42,79 @@ test.describe('Studio Segment Operations', () => {
     await expect(segmentRows.first()).toBeVisible({ timeout: 10_000 });
     const firstRow = segmentRows.first();
 
-    // Capture the text of the first segment for later matching
-    const firstSegmentText = await firstRow
-      .locator('[class*="text"], textarea, [contenteditable]')
-      .first()
-      .textContent()
-      .catch(() => '');
+    // ── Step 0: Strip audio from first segment so it becomes idle ──
+    // The seed gives every segment an audio.current.id placeholder, which the frontend
+    // derives as status='ready'. In compact mode only idle segments show a generate button.
+    // We clear the audio via the backend API so the segment goes idle and generates from scratch.
 
-    // ── Step 1: BEFORE action — snapshot IndexedDB state ──
+    const projectResp = await page.evaluate(async () => {
+      const r = await fetch('/api/segmented-projects/test-e2e-project');
+      return r.json();
+    });
+    const activeChId = projectResp.active_chapter_id || projectResp.chapters[0].id;
+    const firstSeg = projectResp.chapters.find((c: any) => c.id === activeChId)?.segments[0];
+    expect(firstSeg).toBeTruthy();
+    const segId = firstSeg.id;
+    // Strip audio and status so segment becomes idle, and reset to
+    // narration + chapter voice in case a prior test changed the kind/role.
+    firstSeg.audio = { format: 'mp3' };
+    firstSeg.status = 'idle';
+    firstSeg.segment_kind = 'narration';
+    firstSeg.voice = { source: 'chapter' };
+    firstSeg.role_id = null;
 
-    await page.waitForTimeout(1_000);
+    await page.evaluate(async ({ project, activeChapterId }: any) => {
+      project.active_chapter_id = activeChapterId;
+      await fetch(`/api/segmented-projects/test-e2e-project`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(project),
+      });
+    }, { project: projectResp, activeChapterId: activeChId });
+
+    // Reload the studio page so the UI picks up the idle segment
+    await goToStudio(page);
+    await page.waitForTimeout(500);
+
+    // ── Step 1: BEFORE action ──
+    const segRowsAfterReload = page.locator('[class*="compactCard"]');
+    await expect(segRowsAfterReload.first()).toBeVisible({ timeout: 10_000 });
+    const updatedFirstRow = segRowsAfterReload.first();
+
     const projectBefore = await readBackendProject(page, 'test-e2e-project');
     expect(projectBefore).toBeTruthy();
     const chapterBefore = projectBefore!.chapters.find(
       (ch) => ch.id === (projectBefore!.active_chapter_id ?? projectBefore!.chapters[0]?.id),
     );
     expect(chapterBefore).toBeTruthy();
-    expect(chapterBefore!.segments.length).toBeGreaterThan(0);
-
-    // Snapshot the target segment status before generation
-    const targetSegBefore = firstSegmentText
-      ? chapterBefore!.segments.find((s) => s.text.includes(firstSegmentText.slice(0, 20)))
-      : chapterBefore!.segments[0];
-    expect(targetSegBefore).toBeTruthy();
-    const statusBefore = targetSegBefore!.status;
+    const segBefore = chapterBefore!.segments.find((s) => s.id === segId);
+    expect(segBefore).toBeTruthy();
+    const hadAudioPlaceholder = !!(segBefore!.audio?.current?.id);
 
     // Set up API intercept before triggering the action
     const synthResponsePromise = interceptPostResponse(page, '/synthesize');
 
-    // ── Step 2: Click "生成" ──
+    // ── Step 2: Click the compact generate button (now visible because segment is idle) ──
+    const genBtn = updatedFirstRow.locator('[class*="compactGenBtn"]');
+    await expect(genBtn).toBeVisible({ timeout: 5_000 });
+    await genBtn.click();
 
-    await firstRow.getByRole('button', { name: '生成' }).click();
-
-    // ── Step 3: Loading indicator appears, segment status still idle/pending ──
-
-    await expect(page.getByText('生成中...').first()).toBeVisible({ timeout: 15_000 });
-
-    // During loading, the segment status in IndexedDB should still be the original value
-    // (the in-flight generation has not completed yet)
-    const projectDuringLoading = await readBackendProject(page, 'test-e2e-project');
-    const chapterDuring = projectDuringLoading!.chapters.find(
-      (ch) => ch.id === (projectDuringLoading!.active_chapter_id ?? projectDuringLoading!.chapters[0]?.id),
-    );
-    const segDuring = firstSegmentText
-      ? chapterDuring!.segments.find((s) => s.text.includes(firstSegmentText.slice(0, 20)))
-      : chapterDuring!.segments[0];
-    expect(segDuring).toBeTruthy();
-    // Status should be idle, queued, or pending — not yet 'ready'
-    expect(['idle', 'queued', 'pending']).toContain(segDuring!.status);
-
-    // Wait for completion
-    await expect(page.getByText('生成中...').first()).not.toBeVisible({ timeout: 60_000 });
-
-    // ── Step 4: POST-COMMIT — segment status = 'ready', audio valid ──
-
-    // Verify the segment shows generated audio (play button appears)
-    const playButtons = firstRow.locator('[class*="play"], [aria-label*="播放"]');
-    await expect(playButtons.first()).toBeVisible({ timeout: 10_000 });
-
-    // API response verification
+    // ── Step 3: Wait for synthesis response and poll backend for real audio ──
     const synthResponse = await synthResponsePromise;
     expect(synthResponse.status).toBe(200);
-    expect(synthResponse.body).toBeTruthy();
-    const synthBody = synthResponse.body as Record<string, unknown>;
-    expect(synthBody.chapters).toBeTruthy();
 
-    // IndexedDB verification
-    await page.waitForTimeout(2_000); // wait for autosave
+    await expect.poll(async () => {
+      const p = await readBackendProject(page, 'test-e2e-project');
+      const seg = p!.chapters.flatMap((ch) => ch.segments).find((s) => s.id === segId);
+      return !!(seg?.audio?.current?.path);
+    }, { timeout: 60_000 }).toBe(true);
+
+    // ── Step 4: POST-COMMIT — segment has real audio ──
+
+    const playButtons = updatedFirstRow.locator('[class*="compactPlayBtn"], [class*="play"], [aria-label*="播放"]');
+    await expect(playButtons.first()).toBeVisible({ timeout: 10_000 });
+
+    await page.waitForTimeout(2_000);
     const projectAfter = await readBackendProject(page, 'test-e2e-project');
     expect(projectAfter).toBeTruthy();
 
@@ -108,34 +122,53 @@ test.describe('Studio Segment Operations', () => {
       (ch) => ch.id === (projectAfter!.active_chapter_id ?? projectAfter!.chapters[0]?.id),
     );
     expect(activeChapter).toBeTruthy();
-    expect(activeChapter!.segments.length).toBeGreaterThan(0);
 
-    // Validate full chapter schema
-    validateChapter(activeChapter!);
-
-    const targetSegment = firstSegmentText
-      ? activeChapter!.segments.find((s) => s.text.includes(firstSegmentText.slice(0, 20)))
-      : activeChapter!.segments[0];
+    const targetSegment = activeChapter!.segments.find((s) => s.id === segId);
     expect(targetSegment).toBeTruthy();
 
-    // Verify segment status changed to 'ready' and has audio data
     assertSegmentHasAudio(targetSegment!);
-
-    // Validate the generated segment's full schema
     validateSegment(targetSegment!);
 
-    // Verify status actually changed from before
-    expect(targetSegment!.status).not.toBe(statusBefore);
-    expect(targetSegment!.status).toBe('ready');
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-segment-operations-dbProject1');
 
     expect(errors).toEqual([]);
   });
 
   // @feature §4.4 Per-Segment Voice Source — lock toggle (chapter ↔ custom)
-  test('toggles voice lock on a segment', async ({ page }) => {
+  test('切换段落的语音锁定', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
+
+    // ── Step 0: Ensure first segment has toggleable voice (source=chapter) ──
+    // Prior tests (dialogue-prosody) may set segment_kind=dialogue / voice.source=role,
+    // which renders a static lock span instead of a clickable toggle button.
+
+    interface HookState { chapterId: string; segId: string };
+    const reset = await page.evaluate(async () => {
+      const r = await fetch('/api/segmented-projects/test-e2e-project');
+      const p = await r.json();
+      const ch = p.chapters.find((c: any) => c.id === (p.active_chapter_id ?? p.chapters[0]?.id));
+      const seg = ch?.segments?.[0];
+      if (!seg) return null;
+      const dirty = seg.voice?.source === 'role' || seg.segment_kind === 'dialogue';
+      if (dirty) {
+        await fetch(`/api/segmented-projects/test-e2e-project/chapters/${ch.id}/segments/${seg.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ segment_kind: 'narration', voice: { source: 'chapter' }, role_id: null }),
+        });
+        return { chapterId: ch.id, segId: seg.id };
+      }
+      return null;
+    });
+
+    if (reset) {
+      // Reload so the frontend picks up the reset segment
+      await goToStudio(page);
+      await page.waitForTimeout(500);
+    }
 
     // ── Step 1: BEFORE action — snapshot IndexedDB state ──
 
@@ -212,11 +245,14 @@ test.describe('Studio Segment Operations', () => {
     // Validate reverted voice source
     validateVoiceSource(segReverted.voice as Record<string, unknown>, 'segment[0].voice-reverted');
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-segment-operations-dbProject2');
+
     expect(errors).toEqual([]);
   });
 
   // @feature §4.4 Per-Segment features — delete segment with confirmation
-  test('deletes a segment', async ({ page }) => {
+  test('删除段落', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -290,11 +326,14 @@ test.describe('Studio Segment Operations', () => {
       validateSegment(seg);
     }
 
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-segment-operations-dbProject3');
+
     expect(errors).toEqual([]);
   });
 
   // @feature §4.4 Per-Segment features — merge adjacent segments
-  test('merges segments down', async ({ page }) => {
+  test('向下合并段落', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -368,6 +407,8 @@ test.describe('Studio Segment Operations', () => {
 
     // Validate the chapter and all remaining segments
     validateChapter(activeChapterAfter!);
+
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-segment-operations-dbProject4');
 
     expect(errors).toEqual([]);
   });

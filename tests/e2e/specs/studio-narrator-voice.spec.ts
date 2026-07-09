@@ -8,11 +8,17 @@
  * @feature docs/feature-spec.md §4.4 Stale Detection
  */
 import { expect, test } from '@playwright/test';
-import { collectErrors, goToStudio, readBackendProject, validateChapter } from '../helpers';
+import { collectErrors, setLocaleToZhCN, goToStudio, readBackendProject, validateChapter, seedTestProject } from '../helpers';
+import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
-test.describe('Studio Narrator Voice', () => {
+test.describe('旁白音色设置', () => {
+  test.beforeAll(async ({ browser }) => {
+    const page = await browser.newPage();
+    try { await seedTestProject(page); } finally { await page.close(); }
+  });
   // @feature §4.4 Narrator Voice Sidebar — engine selector (Edge-TTS/CosyVoice/MiMo/VoxCPM)
-  test('opens narrator voice sidebar and shows engine selector', async ({ page }) => {
+  test('打开旁白音色侧栏并显示引擎选择器', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -31,7 +37,8 @@ test.describe('Studio Narrator Voice', () => {
   });
 
   // @feature §4.4 Narrator Voice Sidebar — Apply button: writes Chapter.voice, flags stale segments
-  test('applies narrator voice to all segments', async ({ page }) => {
+  test('将旁白音色应用到所有段落', async ({ page }) => {
+    await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     await goToStudio(page);
@@ -114,6 +121,8 @@ test.describe('Studio Narrator Voice', () => {
     for (const ch of projectAfter!.chapters) {
       validateChapter(ch);
     }
+
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-narrator-voice-dbProject');
 
     const activeChapterAfter = projectAfter!.chapters.find(
       (ch) => ch.id === (projectAfter!.active_chapter_id ?? projectAfter!.chapters[0]?.id),
