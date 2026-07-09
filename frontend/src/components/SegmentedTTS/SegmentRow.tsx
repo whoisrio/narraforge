@@ -441,7 +441,7 @@ export function SegmentRow({
           <span className={styles.compactStale} title={t('segment.segmentRow.voiceChanged')}>⚠</span>
         )}
         {/* Only show toggle for non-role segments (narration follows global, can be locked/unlocked) */}
-        {isReady && segment.voice.source !== 'role' && (
+        {segment.voice.source !== 'role' && (
           <button
             className={`${styles.compactVoiceLock} ${useIndependentVoice ? styles.compactVoiceLockActive : ''}`}
             title={t(useIndependentVoice ? 'segment.segmentRow.unlockTooltip' : 'segment.segmentRow.lockTooltip')}
@@ -451,7 +451,7 @@ export function SegmentRow({
           </button>
         )}
         {/* Role segments: always locked (show lock icon, no click) */}
-        {isReady && segment.voice.source === 'role' && (
+        {segment.voice.source === 'role' && (
           <span className={styles.compactVoiceLock + ' ' + styles.compactVoiceLockActive} title={t('segment.segmentRow.roleLocked')}>🔒</span>
         )}
         {onMerge && (

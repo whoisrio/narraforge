@@ -3,8 +3,11 @@
  * Creates the "test" project with chapters and roles that E2E tests depend on.
  */
 import type { Page } from '@playwright/test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 const BASE_URL = 'http://127.0.0.1:8002';
+const ROOT = path.resolve(__dirname, '..', '..', '..');
 
 /** Delete all roles with the given name to avoid duplicates from prior runs. */
 async function deleteRolesByName(page: Page, name: string): Promise<void> {
@@ -88,6 +91,11 @@ export async function seedTestProject(page: Page): Promise<{
   const chapter1Id = 'test-chapter-1';
   const chapter2Id = 'test-chapter-2';
 
+  // Clean up stale audio files from prior test runs (avoids false positives
+  // when tests assert that deleted segments have their files removed).
+  const segDir = path.join(ROOT, 'backend', 'uploads', 'segmented', projectId);
+  try { fs.rmSync(segDir, { recursive: true, force: true }); } catch { /* ignore */ }
+
   // Create project with chapters (each chapter has sample segments for studio tests)
   await upsertProject(page, projectId, 'test', [
     {
@@ -95,9 +103,9 @@ export async function seedTestProject(page: Page): Promise<{
       name: '第1章 夜路',
       voice: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural', rate: '+0%', volume: '+0%' },
       segments: [
-        { id: 'seg-1-1', text: '夜色渐浓，小路两旁的树影摇曳。', position: 0, segment_kind: 'narration', emotion: 'neutral', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3', current: { id: 'audio-1-1' } } },
-        { id: 'seg-1-2', text: '远处传来几声犬吠，打破了夜晚的寂静。', position: 1, segment_kind: 'narration', emotion: 'calm', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3', current: { id: 'audio-1-2' } } },
-        { id: 'seg-1-3', text: '他加快了脚步，心中隐隐有些不安。', position: 2, segment_kind: 'narration', emotion: 'neutral', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3', current: { id: 'audio-1-3' } } },
+        { id: 'seg-1-1', text: '夜色渐浓，小路两旁的树影摇曳。', position: 0, segment_kind: 'narration', emotion: 'neutral', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3' } },
+        { id: 'seg-1-2', text: '远处传来几声犬吠，打破了夜晚的寂静。', position: 1, segment_kind: 'narration', emotion: 'calm', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3' } },
+        { id: 'seg-1-3', text: '他加快了脚步，心中隐隐有些不安。', position: 2, segment_kind: 'narration', emotion: 'neutral', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3' } },
       ],
     },
     {
@@ -105,8 +113,8 @@ export async function seedTestProject(page: Page): Promise<{
       name: '第2章 破庙',
       voice: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural', rate: '+0%', volume: '+0%' },
       segments: [
-        { id: 'seg-2-1', text: '破庙的门半掩着，里面透出微弱的灯光。', position: 0, segment_kind: 'narration', emotion: 'neutral', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3', current: { id: 'audio-2-1' } } },
-        { id: 'seg-2-2', text: '他推开门，看到一个老人坐在火堆旁。', position: 1, segment_kind: 'narration', emotion: 'calm', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3', current: { id: 'audio-2-2' } } },
+        { id: 'seg-2-1', text: '破庙的门半掩着，里面透出微弱的灯光。', position: 0, segment_kind: 'narration', emotion: 'neutral', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3' } },
+        { id: 'seg-2-2', text: '他推开门，看到一个老人坐在火堆旁。', position: 1, segment_kind: 'narration', emotion: 'calm', voice: { source: 'chapter' }, status: 'idle', audio: { format: 'mp3' } },
       ],
     },
   ]);

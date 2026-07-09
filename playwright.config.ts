@@ -1,6 +1,13 @@
 import { defineConfig, devices } from '@playwright/test'
 import path from 'node:path'
 
+// Ensure e2e tests connect to the isolated test database.
+// e2e-run.cjs sets DATABASE_URL but shell:true on Windows may strip it
+// before it reaches Playwright workers — set it here as a safety net.
+if (!process.env.DATABASE_URL) {
+  process.env.DATABASE_URL = 'sqlite:///backend/voice_clone_e2e.db'
+}
+
 const pad = (n: number) => String(n).padStart(2, '0')
 const runDir = (() => {
   if (process.env.PW_RUN) return process.env.PW_RUN
@@ -29,7 +36,9 @@ export default defineConfig({
   webServer: [
     {
       name: 'backend',
-      command: 'cd backend && ENV_FILE=.env.e2e uv run uvicorn main:app --host 127.0.0.1 --port 8002',
+      command: 'uv run python -m uvicorn main:app --host 127.0.0.1 --port 8002',
+      cwd: 'backend',
+      env: { ENV_FILE: '.env.e2e' },
       url: 'http://127.0.0.1:8002/health',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
@@ -38,7 +47,8 @@ export default defineConfig({
     },
     {
       name: 'frontend',
-      command: 'cd frontend && npm run dev -- --host 127.0.0.1 --port 5173',
+      command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+      cwd: 'frontend',
       url: 'http://127.0.0.1:5173',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
