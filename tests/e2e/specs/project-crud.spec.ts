@@ -11,6 +11,7 @@ import { expect, test } from '@playwright/test';
 import { collectErrors, setLocaleToZhCN, readBackendProjects, validateChapter, enterWorkspace } from '../helpers';
 import { readDbProject, readDbProjects, validateDbProjectRow } from '../helpers/dbReader';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
+import { expectProjectDirGone } from '../helpers/fsAssertions';
 
 test.describe('项目增删改查', () => {
   // @feature §4.1 Project Structure — create new project
@@ -203,6 +204,9 @@ test.describe('项目增删改查', () => {
     // Dual-read: DB layer — project row must be gone
     const dbProjects = await readDbProjects();
     expect(dbProjects.find((p) => p.id === targetId)).toBeUndefined();
+
+    // Filesystem: segmented/{project_id}/ directory must be removed
+    expectProjectDirGone(targetId);
 
     // Verify project count decreased
     expect(projectsAfter.length).toBe(countBefore - 1);

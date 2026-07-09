@@ -29,7 +29,7 @@ export default defineConfig({
   webServer: [
     {
       name: 'backend',
-      command: 'cd backend && uv run uvicorn main:app --host 127.0.0.1 --port 8002',
+      command: 'cd backend && ENV_FILE=.env.e2e uv run uvicorn main:app --host 127.0.0.1 --port 8002',
       url: 'http://127.0.0.1:8002/health',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,

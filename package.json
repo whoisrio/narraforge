@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "e2e": "PW_RUN=$(date +%Y-%m-%dT%H-%M-%S) playwright test --workers=1",
+    "e2e": "PW_RUN=$(date +%Y-%m-%dT%H-%M-%S) DATABASE_URL=sqlite:///backend/voice_clone_e2e.db playwright test --workers=1",
     "e2e:ui": "playwright test --ui",
     "e2e:clean": "rm -rf test-results/*/ playwright-report/*/",
     "e2e:report": "npx playwright show-report playwright-report/$(ls -t playwright-report | head -1)"

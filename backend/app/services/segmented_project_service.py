@@ -325,6 +325,28 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         # Remove orphan segments
         for seg in list(ch.segments):
             if seg.id not in keep_segment_ids:
+                # Clean up audio files from disk before removing the DB row
+                if seg.audio:
+                    try:
+                        audio_data = seg.audio if isinstance(seg.audio, dict) else json.loads(seg.audio)
+                        current = audio_data.get('current')
+                        if current and isinstance(current, dict):
+                            fmt = current.get('format', 'mp3')
+                            assets.remove_segment_audio(project.id, ch.id, seg.id, fmt)
+                        # Also handle 'previous' audio for re-generation scenarios
+                        previous = audio_data.get('previous')
+                        if previous and isinstance(previous, dict) and isinstance(previous.get('path'), str):
+                            prev_path_str = previous['path']
+                            try:
+                                prev_path = Path(prev_path_str)
+                                if not prev_path.is_absolute():
+                                    prev_path = assets.settings.segmented_dir / prev_path
+                                if prev_path.exists():
+                                    prev_path.unlink()
+                            except (OSError, Exception):
+                                pass
+                    except Exception:
+                        pass
                 db.delete(seg)
 
     # Remove orphan chapters

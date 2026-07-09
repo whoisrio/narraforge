@@ -13,15 +13,28 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     // Wait for backend to be ready
     const maxWait = 30_000;
     const start = Date.now();
+    let healthJson: any = null;
     while (Date.now() - start < maxWait) {
       try {
         const resp = await page.request.get('http://127.0.0.1:8002/health');
-        if (resp.ok()) break;
+        if (resp.ok()) {
+          healthJson = await resp.json();
+          break;
+        }
       } catch {
         // Backend not ready yet
       }
       await new Promise((r) => setTimeout(r, 1_000));
     }
+
+    // Probe: verify backend is running in E2E mode with isolated database
+    if (healthJson?.app_env !== 'e2e') {
+      throw new Error(
+        `Health check failed: app_env=${healthJson?.app_env}. ` +
+        `Backend MUST run with ENV_FILE=.env.e2e to use the isolated test database.`
+      );
+    }
+    console.log(`[global-setup] Backend app_env=${healthJson.app_env} ✓`);
 
     // Set storage mode to backend so the frontend reads projects from SQLite (not IndexedDB)
     const modeResp = await page.request.put('http://127.0.0.1:8002/api/config/storage-mode', {
