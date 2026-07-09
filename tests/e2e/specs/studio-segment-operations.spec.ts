@@ -24,6 +24,7 @@ import {
   seedTestProject,
 } from '../helpers';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
+import { expectSegmentFileGone } from '../helpers/fsAssertions';
 
 test.describe('段落操作', () => {
   test.beforeAll(async ({ browser }) => {
@@ -327,6 +328,10 @@ test.describe('段落操作', () => {
     }
 
     await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-segment-operations-dbProject3');
+
+    // Filesystem: deleted segment's audio file must be removed
+    const deletedSegId = activeChapterBefore!.segments[activeChapterBefore!.segments.length - 1].id;
+    expectSegmentFileGone('test-e2e-project', activeChapterBefore!.id, deletedSegId);
 
     expect(errors).toEqual([]);
   });
