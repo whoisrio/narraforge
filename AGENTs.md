@@ -18,8 +18,7 @@ NarraForge is an AI narration workshop that integrates voice cloning, text-to-sp
 | Contributing guide | `docs/CONTRIBUTING.md` | Development conventions and contribution guidelines. |
 | design guide | `docs/design/stitch_narraforge_story_global_prj/DESIGN.md` | UI design guidelines. |
 | Test MAP | `backend/tests/TEST_MAP.md` | Test case and function map doc |
-| E2E Test Guide | `docs/e2e-test-guide.md` | Running instructions, conventions, and test requirements |
-| E2E Test Progress | `docs/e2e-test-progress.md` | E2E test status, known issues, and fixes applied |
+| E2E Test Guide | `docs/e2e-test-guide.md` | Running instructions, conventions, dual-read verification, and gap analysis |
 
 **KEEP these documents updated by every PR**!
 

@@ -142,4 +142,25 @@ CSS Modules hash class names. Use partial match selectors:
 - `reuseExistingServer: !process.env.CI` — reuse local servers; CI always starts fresh
 - `DATABASE_URL` — connection string for dbReader, falls back to `backend/.env`
 
-See `docs/e2e-test-progress.md` for current status and gap analysis.
+## Pending E2E Coverage (Gap Analysis)
+
+All 26 current tests pass. The following scenarios are not yet covered.
+
+**Verification standard for new tests**: Every test must verify both API and DB layers
+against their own contracts (API → `docs/api-reference.md` + Pydantic schema; DB →
+`docs/database-schema.md` + `validateDbProjectRow`).
+
+| # | Missing Scenario | Details | Suggested Location | Priority |
+|---|---|---|---|---|
+| G1 | **Regenerate All flow** | `TTSSynthesis.handleRegenerateAll` has an i18n raw-key bug; needs regression coverage | New `studio-resynthesis.spec.ts` or extend `studio-segment-operations` | High |
+| G2 | **CosyVoice / VoxCPM role creation** | voice-role-flows only tests MiMo preset; other engines not verified | Extend `voice-role-flows.spec.ts` | Medium |
+| G3 | **Voice Clone flow** | Clone voice creation, sample upload, result persistence — entirely uncovered | New `voice-clone.spec.ts` | Medium |
+| G4 | **Actual audio playback** | Only checks player UI visibility; does not verify audio src is valid and duration > 0 | Extend existing studio specs | Medium |
+| G5 | **English locale UI** | All 26 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
+| G6 | **Error recovery** | Synthesis-failure retry, state rollback, user feedback — untested | Extend `studio-segment-operations` / `studio-batch-export` | Low |
+| G7 | **Mobile / responsive** | No viewport-dimension tests | New `responsive.spec.ts` | Low |
+
+**Additional rules**:
+- G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;
+  complement with a global E2E guard `expectNoRawI18nKey(page)` scanning the entire app for leaked raw keys.
+- G5 can reuse the same raw-key detection helper as G1.
