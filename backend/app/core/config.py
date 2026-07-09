@@ -24,6 +24,7 @@ class Settings(BaseSettings):
 
     # App
     app_name: str = "NarraForge"
+    app_env: str = "production"   # production | e2e (set by .env.e2e overlay)
     debug: bool = True
 
     # Paths
@@ -116,17 +117,38 @@ class Settings(BaseSettings):
 
     @classmethod
     def _load_env_with_refs(cls) -> dict:
-        """读取 .env 文件并解析 ${ENV_VAR} 引用"""
+        """读取 .env 文件并解析 ${ENV_VAR} 引用。
+        
+        加载顺序：
+        1. 先加载 .env（生产配置）
+        2. 如果设置了 ENV_FILE 环境变量（如 ENV_FILE=.env.e2e），叠加加载该文件，
+           覆盖同名 key。用于 E2E 测试环境隔离（如使用独立的测试数据库）。"""
         configured_env_file = cls.model_config.get("env_file") or ".env"
         if isinstance(configured_env_file, (list, tuple)):
             configured_env_file = configured_env_file[0] if configured_env_file else ".env"
         if not isinstance(configured_env_file, (str, Path)):
             configured_env_file = ".env"
-        env_file = Path(configured_env_file)
-        if not env_file.exists():
-            return {}
 
-        result = {}
+        # Load base .env first
+        result: dict[str, str] = {}
+        base_env = Path(configured_env_file)
+        if base_env.exists():
+            result = cls._parse_env_file(base_env)
+
+        # If ENV_FILE is set, load it as an overlay (overrides base .env values)
+        overlay_name = os.environ.get("ENV_FILE")
+        if overlay_name:
+            overlay_path = Path(overlay_name)
+            if overlay_path.exists():
+                overlay = cls._parse_env_file(overlay_path)
+                result.update(overlay)  # overlay keys win
+
+        return result
+
+    @staticmethod
+    def _parse_env_file(env_file: Path) -> dict[str, str]:
+        """Parse a single .env file and resolve ${ENV_VAR} references."""
+        result: dict[str, str] = {}
         for line in env_file.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("#"):
@@ -138,7 +160,7 @@ class Settings(BaseSettings):
             value = value.strip().strip('"').strip("'")
             # 去除行内注释（# 及其后的内容），避免注释文本被误当作值的一部分
             if "#" in value:
-                value = value.split("#", 1)[0].strip()
+                value = value.split("#")[0].strip()
             if _ENV_VAR_PATTERN.search(value):
                 value = _resolve_env_refs(value)
             result[key.lower()] = value

@@ -92,3 +92,4 @@ backend/voice_clone.db*
 backend/uploads_bak
 .playwright-cli
 home.yaml
+backend/voice_clone_e2e.db

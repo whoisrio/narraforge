@@ -88,7 +88,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "app_env": settings.app_env}
 
 
 # Import and include routers
