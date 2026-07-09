@@ -152,9 +152,9 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 
 | # | Missing Scenario | Details | Suggested Location | Priority |
 |---|---|---|---|---|
-| G1 | **Regenerate All flow** | `TTSSynthesis.handleRegenerateAll` has an i18n raw-key bug; needs regression coverage | New `studio-resynthesis.spec.ts` or extend `studio-segment-operations` | High |
+| G1 | **Regenerate All flow** | i18n raw-key regression covered by `studio-resynthesis.spec.ts` + `i18n.test.ts` + E2E guard | `studio-resynthesis.spec.ts` | High | ✅ Done |
 | G2 | **CosyVoice / VoxCPM role creation** | voice-role-flows only tests MiMo preset; other engines not verified | Extend `voice-role-flows.spec.ts` | Medium |
-| G3 | **Voice Clone flow** | Clone voice creation, sample upload, result persistence — entirely uncovered | New `voice-clone.spec.ts` | Medium |
+| G3 | **Voice Clone flow** | MiMo clone: upload → preview → create → verify — covered by `voice-clone.spec.ts` | `voice-clone.spec.ts` | Medium | ✅ Done |
 | G4 | **Actual audio playback** | Only checks player UI visibility; does not verify audio src is valid and duration > 0 | Extend existing studio specs | Medium |
 | G5 | **English locale UI** | All 26 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
 | G6 | **Error recovery** | Synthesis-failure retry, state rollback, user feedback — untested | Extend `studio-segment-operations` / `studio-batch-export` | Low |
