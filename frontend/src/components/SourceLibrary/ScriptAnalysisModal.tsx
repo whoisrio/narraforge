@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from '../../i18n';
 import type { TextAnalysisSplitResult } from '../../services/api';
 import styles from './ScriptAnalysisModal.module.css';
 
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function ScriptAnalysisModal({ result, loading, onClose, onConfirm }: Props) {
+  const { t } = useTranslation();
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -25,7 +27,7 @@ export function ScriptAnalysisModal({ result, loading, onClose, onConfirm }: Pro
         <div className={styles.header}>
           <div className={styles.titleGroup}>
             <span className={styles.titleIcon}>🤖</span>
-            <span className={styles.titleText}>智能分析结果</span>
+            <span className={styles.titleText}>{t('scriptAnalysis.title')}</span>
             {result?.method && (
               <span className={styles.methodBadge}>{result.method}</span>
             )}
@@ -36,35 +38,35 @@ export function ScriptAnalysisModal({ result, loading, onClose, onConfirm }: Pro
         {/* Body */}
         <div className={styles.body}>
           {loading ? (
-            <div className={styles.loading}>分析中...</div>
+            <div className={styles.loading}>{t('scriptAnalysis.analyzing')}</div>
           ) : !result ? (
-            <div className={styles.loading}>分析失败，请重试</div>
+            <div className={styles.loading}>{t('scriptAnalysis.failed')}</div>
           ) : (
             <>
               {/* Chapters */}
               <div className={styles.section}>
                 <div className={styles.sectionLabel}>
-                  📑 {result.chapters.length} 个章节
+                  {t('scriptAnalysis.chaptersCount', { count: result.chapters.length })}
                 </div>
                 {result.chapters.length > 0 ? (
                   <div className={styles.chapterList}>
                     {result.chapters.map((ch, i) => (
                       <div key={i} className={styles.chapterItem}>
                         <span className={styles.chapterIdx}>#{i + 1}</span>
-                        <span className={styles.chapterTitle}>{ch.title || '(未命名)'}</span>
-                        <span className={styles.chapterSegCount}>{ch.segments.length} 句</span>
+                        <span className={styles.chapterTitle}>{ch.title || t('scriptAnalysis.unnamed')}</span>
+                        <span className={styles.chapterSegCount}>{t('scriptAnalysis.sentenceCount', { count: ch.segments.length })}</span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className={styles.empty}>未检测到章节</div>
+                  <div className={styles.empty}>{t('scriptAnalysis.noChaptersDetected')}</div>
                 )}
               </div>
 
               {/* Roles */}
               <div className={styles.section}>
                 <div className={styles.sectionLabel}>
-                  🎭 {result.detected_roles.length} 个角色
+                  {t('scriptAnalysis.rolesCount', { count: result.detected_roles.length })}
                 </div>
                 {result.detected_roles.length > 0 ? (
                   <div className={styles.roleList}>
@@ -76,7 +78,7 @@ export function ScriptAnalysisModal({ result, loading, onClose, onConfirm }: Pro
                         <div className={styles.roleInfo}>
                           <div className={styles.roleName}>{role.name}</div>
                           <div className={styles.roleOccur}>
-                            出现 {role.occurrences} 次
+                            {t('scriptAnalysis.occurrences', { count: role.occurrences })}
                           </div>
                         </div>
                         <span className={`${styles.roleConfBadge} ${role.confidence >= 0.9 ? styles.high : styles.mid}`}>
@@ -86,7 +88,7 @@ export function ScriptAnalysisModal({ result, loading, onClose, onConfirm }: Pro
                     ))}
                   </div>
                 ) : (
-                  <div className={styles.empty}>未检测到角色 · 可能文本量太小或格式不标准</div>
+                  <div className={styles.empty}>{t('scriptAnalysis.noRolesDetected')}</div>
                 )}
               </div>
             </>
@@ -97,10 +99,10 @@ export function ScriptAnalysisModal({ result, loading, onClose, onConfirm }: Pro
         {result && !loading && (
           <div className={styles.footer}>
             <button className={`${styles.btn} ${styles.btnGhost}`} onClick={onClose}>
-              取消
+              {t('scriptAnalysis.cancel')}
             </button>
             <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={onConfirm}>
-              确认并应用
+              {t('scriptAnalysis.confirmAndApply')}
             </button>
           </div>
         )}

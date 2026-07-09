@@ -113,7 +113,7 @@ export function SegmentEditPanel({
     if (field === 'engine') {
       params.engine = value as EngineParams['engine'];
       if (value === 'edge_tts') { params.voice = ''; }
-      else if (value === 'mimo_tts') { params.mode = 'preset'; params.voice_id = '冰糖'; }
+      else if (value === 'mimo_tts') { params.mode = 'preset'; params.voice_id = t('tts.defaultMimoPresetVoice'); }
       else if (value === 'voxcpm') { params.mode = 'clone'; }
       else { params.voice_id = ''; }
     }
@@ -129,7 +129,7 @@ export function SegmentEditPanel({
 
     // All edits accumulate locally; only confirm button commits
     setLocalParams(prev => ({ ...prev, ...params as unknown as Record<string, unknown> }));
-  }, [segment]);
+  }, [segment, t]);
 
   if (!segment) return null;
 

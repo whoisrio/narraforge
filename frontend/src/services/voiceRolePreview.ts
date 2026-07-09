@@ -1,5 +1,6 @@
 import type { RoleSnapshot, TTSResult } from '../types';
 import { mimoTtsApi, ttsApi, voxcpmApi } from './api';
+import { t } from '../i18n';
 
 function previewFormat(role: RoleSnapshot): 'mp3' | 'wav' {
   return role.default_engine === 'voxcpm' ? 'wav' : 'mp3';
@@ -57,7 +58,7 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
     }
     return mimoTtsApi.synthesizePreset({
       text: sampleText,
-      voice: (params.voice_id as string) || role.default_voice || '冰糖',
+      voice: (params.voice_id as string) || role.default_voice || t('voiceRolePreview.defaultMiMoVoice'),
       instruction: (params.instruction as string),
       format,
     });

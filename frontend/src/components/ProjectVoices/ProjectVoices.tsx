@@ -9,6 +9,7 @@ import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import { AudioRecorder, AudioUploader, AudioPreview, UrlInput } from '../VoiceClone';
+import { useTranslation, t } from '../../i18n';
 import styles from './ProjectVoices.module.css';
 
 /* ------------------------------------------------------------------ */
@@ -29,7 +30,6 @@ interface ProjectVoicesProps {
 /*  Constants                                                          */
 /* ------------------------------------------------------------------ */
 
-const ROLE_SAMPLE = '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。';
 const COMMON_EDGE_VOICES: { short_name: string; display_name: string; gender: string }[] = [
   { short_name: DEFAULT_EDGE_NARRATOR_VOICE, display_name: 'Yunxi', gender: 'Male' },
   { short_name: DEFAULT_EDGE_CAST_VOICE, display_name: 'Yunyang', gender: 'Male' },
@@ -93,7 +93,7 @@ function createRoleDraft(): RoleSnapshot {
   const voice = { engine: 'edge_tts' as const, voice: DEFAULT_EDGE_CAST_VOICE, rate: '+0%', volume: '+0%' } as EdgeTTSParams;
   return {
     id: `role-cast-${Date.now()}`,
-    name: '新角色',
+    name: t('projectVoices.newRole'),
     avatar: '',
     description: 'Cast',
     voice,
@@ -109,12 +109,6 @@ function createRoleDraft(): RoleSnapshot {
 /* ------------------------------------------------------------------ */
 
 type VoiceSourceCategory = 'preset' | 'clone' | 'design';
-
-const VOICE_SOURCE_TABS: { value: VoiceSourceCategory; label: string; desc: string }[] = [
-  { value: 'preset', label: '模型预制音色', desc: 'Edge-TTS / MiMo 系统音色' },
-  { value: 'clone', label: '克隆音色', desc: 'CosyVoice / MiMo / VoxCPM 克隆' },
-  { value: 'design', label: '设计新音色', desc: 'MiMo / VoxCPM 文本描述设计' },
-];
 
 /** 判断当前 draft 属于哪个音色来源分类 */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -162,6 +156,14 @@ function VoiceRoleEditor({
   saving?: boolean;
   projectId?: string;
 }) {
+  const { t } = useTranslation();
+
+  const voiceSourceTabs: { value: VoiceSourceCategory; label: string; desc: string }[] = [
+    { value: 'preset', label: t('projectVoices.presetVoice'), desc: t('projectVoices.presetVoiceDesc') },
+    { value: 'clone', label: t('projectVoices.cloneVoice'), desc: t('projectVoices.cloneVoiceDesc') },
+    { value: 'design', label: t('projectVoices.designVoice'), desc: t('projectVoices.designVoiceDesc') },
+  ];
+
   const vox = draft.voice;
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>(COMMON_EDGE_VOICES);
   const [mimoPresetVoices, setMimoPresetVoices] = useState<MiMoPresetVoice[]>([]);
@@ -230,7 +232,7 @@ function VoiceRoleEditor({
     try {
       const result = await fetchVoiceRolePreview(
         normalizeDraftForSave(draft),
-        '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。',
+        t('projectVoices.auditionSampleText'),
       );
       if (result.audio_base64) {
         setDesignAudioBase64(result.audio_base64);
@@ -241,19 +243,19 @@ function VoiceRoleEditor({
         setDesignAudioSrc(result.audio_url);
         setDesignPhase('previewed');
       } else {
-        setDesignError('未返回音频数据');
+        setDesignError(t('projectVoices.noAudioReturned'));
         setDesignPhase('idle');
       }
     } catch (err) {
-      setDesignError(err instanceof Error ? err.message : '试听失败');
+      setDesignError(err instanceof Error ? err.message : t('projectVoices.previewFailed'));
       setDesignPhase('idle');
     }
-  }, [draft]);
+  }, [draft, t]);
 
   /** 确认保存音色：将试听音频持久化为 VoiceProfile，但保持设计界面不变。返回 profile ID 或 null。 */
   const handleDesignConfirmSave = useCallback(async (): Promise<string | null> => {
     if (!designAudioBase64 && !designAudioSrc) {
-      setDesignError('没有可保存的音频，请先试听');
+      setDesignError(t('projectVoices.noAudioToSave'));
       return null;
     }
     setDesignPhase('saving');
@@ -274,7 +276,7 @@ function VoiceRoleEditor({
         });
       }
       if (!audioBase64) {
-        setDesignError('无法获取音频数据');
+        setDesignError(t('projectVoices.cannotGetAudioData'));
         setDesignPhase('previewed');
         return null;
       }
@@ -282,7 +284,7 @@ function VoiceRoleEditor({
       const instruction = designSubEngine === 'mimo'
         ? ((vox?.engine === 'mimo_tts' ? (vox as MiMoParams).instruction : undefined) ?? '')
         : ((vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).style_control : undefined) ?? '');
-      const auditionText = '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。';
+      const auditionText = t('projectVoices.auditionSampleText');
       const profile = await voiceApi.createFromDesign({
         audio_base64: audioBase64,
         engine,
@@ -299,7 +301,7 @@ function VoiceRoleEditor({
       triggerRefresh();
       return profile.id;
     } catch (err) {
-      setDesignError(err instanceof Error ? err.message : '保存失败');
+      setDesignError(err instanceof Error ? err.message : t('projectVoices.saveFailed'));
       setDesignPhase('previewed');
       return null;
     }
@@ -508,7 +510,7 @@ function VoiceRoleEditor({
           setClonePreviewStatus('done');
         } catch (err) {
           setClonePreviewStatus('error');
-          setClonePreviewError(err instanceof Error ? err.message : '试听音频生成失败');
+          setClonePreviewError(err instanceof Error ? err.message : t('projectVoices.previewFailed'));
         }
       }
     } catch { /* ignore refresh errors */ }
@@ -536,7 +538,7 @@ function VoiceRoleEditor({
 
       const { base64, format } = await resolveAudioBase64(ttsResult);
       const saveResult = await voiceApi.savePreviewAudio(voice.id, base64, format);
-      if (!saveResult.preview_audio_path) throw new Error('后端未返回试听文件路径');
+      if (!saveResult.preview_audio_path) throw new Error(t('projectVoices.backendNoPreviewPath'));
       setClonePreviewAudioSrc(`data:audio/${format};base64,${base64}`);
     } catch (err) {
       console.warn('Failed to generate/save clone preview:', err);
@@ -544,7 +546,7 @@ function VoiceRoleEditor({
     }
   };
 
-  const SAMPLE_TEXT = '这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。';
+  const SAMPLE_TEXT = t('projectVoices.auditionSampleText');
 
   /** 从当前 draft 提取引擎参数，用于克隆时写入 VoiceProfile.engine_params */
   const cloneEngineParams = (engine: 'cosyvoice' | 'mimo' | 'voxcpm'): Record<string, unknown> => {
@@ -567,7 +569,7 @@ function VoiceRoleEditor({
     if (result.audio_base64) return { base64: result.audio_base64, format };
     if (result.audio_url) {
       const resp = await fetch(result.audio_url);
-      if (!resp.ok) throw new Error(`获取音频失败: ${resp.status}`);
+      if (!resp.ok) throw new Error(`${t('projectVoices.cannotGetAudioData')}: ${resp.status}`);
       const blob = await resp.blob();
       const buf = await blob.arrayBuffer();
       const bytes = new Uint8Array(buf);
@@ -575,7 +577,7 @@ function VoiceRoleEditor({
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       return { base64: btoa(binary), format };
     }
-    throw new Error('合成未返回音频');
+    throw new Error(t('projectVoices.synthesisNoAudio'));
   };
 
   /** Clone mode: synthesize preview, play it, and save to cloned_preview_path */
@@ -599,12 +601,12 @@ function VoiceRoleEditor({
       const isPresetVoice = vox?.engine === 'mimo_tts' && ((vox as MiMoParams).mode ?? 'preset') === 'preset';
       if (voiceId && !isPresetVoice) {
         const saveResult = await voiceApi.savePreviewAudio(voiceId, base64, format);
-        if (!saveResult.preview_audio_path) throw new Error('后端未返回试听文件路径');
+        if (!saveResult.preview_audio_path) throw new Error(t('projectVoices.backendNoPreviewPath'));
       }
       setClonePreviewAudioSrc(src);
       setClonePreviewStatus('done');
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '试听失败';
+      const msg = err instanceof Error ? err.message : t('projectVoices.previewFailed');
       setClonePreviewError(msg);
       setClonePreviewStatus('error');
     } finally {
@@ -614,22 +616,22 @@ function VoiceRoleEditor({
   }, [draft, draft.voice]);
 
   return (
-    <section className={styles.editorPanel} aria-label="声音角色编辑器">
+    <section className={styles.editorPanel} aria-label={t('projectVoices.voiceRoleEditor')}>
       <div className={styles.editorBar}>
         <div>
           <span className={styles.kicker}>Voice Role</span>
-          <h3>{draft.name || '声音角色配置'}</h3>
-          <p>选择音色来源和参数。</p>
+          <h3>{draft.name || t('projectVoices.voiceRoleConfig')}</h3>
+          <p>{t('projectVoices.selectVoiceSourceAndParams')}</p>
         </div>
         <div className={styles.editorActions}>
-          <button type="button" className={styles.ghostButton} onClick={onCancel}>取消</button>
+          <button type="button" className={styles.ghostButton} onClick={onCancel}>{t('common.cancel')}</button>
           <button type="button" className={styles.primaryButton} disabled={saving || designPhase === 'saving'} onClick={async () => {
             if (isDesignMode) {
               // 如果还没确认过音色，先自动确认
               let profileId: string | null = designProfileId;
               if (!profileId) {
                 if (!designAudioBase64 && !designAudioSrc) {
-                  setDesignError('请先试听音色，再保存角色');
+                  setDesignError(t('projectVoices.previewBeforeSave'));
                   return;
                 }
                 profileId = await handleDesignConfirmSave();
@@ -669,23 +671,23 @@ function VoiceRoleEditor({
                 }
                 onSave({ ...draft, voice: savedVoice });
               } catch (err) {
-                setDesignError(err instanceof Error ? err.message : '预置音色保存失败');
+                setDesignError(err instanceof Error ? err.message : t('projectVoices.presetVoiceSaveFailed'));
               }
               return;
             }
             // Clone mode: verify preview audio was saved
             if (voiceCategory === 'clone') {
               if (clonePreviewStatus === 'generating') {
-                setClonePreviewError('请等待试听音频生成完成');
+                setClonePreviewError(t('projectVoices.waitForPreviewGeneration'));
                 return;
               }
               if (clonePreviewStatus === 'error' || !clonePreviewAudioSrc) {
-                setClonePreviewError('试听音频尚未生成，请先点击「生成试听」');
+                setClonePreviewError(t('projectVoices.generatePreviewFirst'));
                 return;
               }
             }
             onSave(normalizeDraftForSave(draft));
-          }}>{saving ? '保存中...' : '保存角色'}</button>
+          }}>{saving ? t('common.saving') : t('projectVoices.saveRole')}</button>
         </div>
       </div>
 
@@ -701,7 +703,7 @@ function VoiceRoleEditor({
                 size="md"
               />
               <div className={styles.identityFields}>
-                <label>角色名
+                <label>{t('projectVoices.roleName')}
                   <input value={draft.name} onChange={(event) => onChange({ ...draft, name: event.target.value })} />
                 </label>
               </div>
@@ -710,10 +712,10 @@ function VoiceRoleEditor({
 
           {/* 音色来源分类 */}
           <section className={styles.configCard}>
-            <h4>音色来源</h4>
+            <h4>{t('projectVoices.voiceSource')}</h4>
             <div className={styles.engineRow}>
               <div className={styles.enginePills}>
-                {VOICE_SOURCE_TABS.map(tab => (
+                {voiceSourceTabs.map(tab => (
                   <button
                     type="button"
                     key={tab.value}
@@ -743,22 +745,22 @@ function VoiceRoleEditor({
                   {/* Edge-TTS 预制 */}
                   {vox?.engine === 'edge_tts' && (
                     <>
-                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>音色
+                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>{t('projectVoices.voice')}
                         <select className={styles.paramSelect} value={(vox as EdgeTTSParams).voice ?? ''} onChange={(event) => setParams({ edge_voice: event.target.value })}>
                           {(vox as EdgeTTSParams).voice && <option value={(vox as EdgeTTSParams).voice}>{(vox as EdgeTTSParams).voice}</option>}
                           {edgeVoices.map(v => (
                             <option key={v.short_name} value={v.short_name}>
-                              {v.display_name} ({v.gender === 'Female' ? '女' : '男'})
+                              {v.display_name} ({v.gender === 'Female' ? t('common.female') : t('common.male')})
                             </option>
                           ))}
                         </select>
                       </label>
-                      <label className={styles.paramField}>语速
+                      <label className={styles.paramField}>{t('tts.speed')}
                         <select className={styles.paramSelect} value={(vox as EdgeTTSParams).rate ?? '+0%'} onChange={(event) => setParams({ edge_rate: event.target.value })}>
                           {['-50%', '-30%', '-20%', '-10%', '+0%', '+10%', '+20%', '+30%', '+50%', '+80%', '+100%'].map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                       </label>
-                      <label className={styles.paramField}>音量
+                      <label className={styles.paramField}>{t('tts.volume')}
                         <select className={styles.paramSelect} value={(vox as EdgeTTSParams).volume ?? '+0%'} onChange={(event) => setParams({ edge_volume: event.target.value })}>
                           {['-50%', '-30%', '-20%', '-10%', '+0%', '+10%', '+20%', '+30%', '+50%', '+80%', '+100%'].map(v => <option key={v} value={v}>{v}</option>)}
                         </select>
@@ -769,13 +771,13 @@ function VoiceRoleEditor({
                   {/* MiMo 预制 */}
                   {vox?.engine === 'mimo_tts' && (
                     <>
-                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>预置音色
+                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>{t('projectVoices.presetVoice')}
                         <select className={styles.paramSelect} value={(vox as MiMoParams).voice_id ?? ''} onChange={(event) => setParams({ mimo_preset_voice: event.target.value })}>
-                          {mimoPresetVoices.map(v => <option key={v.voice_id} value={v.voice_id}>{v.name} ({v.gender === 'Female' ? '女' : '男'})</option>)}
+                          {mimoPresetVoices.map(v => <option key={v.voice_id} value={v.voice_id}>{v.name} ({v.gender === 'Female' ? t('common.female') : t('common.male')})</option>)}
                         </select>
                       </label>
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                        <StyleInstructionPicker value={(vox as MiMoParams).instruction ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label="风格指令" placeholder="选择预设或直接输入..." dense />
+                        <StyleInstructionPicker value={(vox as MiMoParams).instruction ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
                       </div>
                     </>
                   )}
@@ -818,10 +820,10 @@ function VoiceRoleEditor({
                       <div style={{ gridColumn: '1 / -1' }}>
                         {cloneOriginalAudioSrc && !clonePendingFile ? (
                           <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                            <span className={styles.paramLabel}>原始音频</span>
+                            <span className={styles.paramLabel}>{t('projectVoices.originalAudio')}</span>
                             <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
                             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                              <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新输入 URL</button>
+                              <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>{t('projectVoices.reInputUrl')}</button>
                             </div>
                           </div>
                         ) : (
@@ -840,27 +842,27 @@ function VoiceRoleEditor({
                         )}
                       </div>
 
-                      <label className={styles.paramField}>语速
-                        <input className={styles.range} aria-label="语速" type="range" min={0.5} max={2} step={0.01} value={(vox as CosyVoiceParams).speed ?? 1} onChange={(event) => setParams({ speed: Number(event.target.value) })} />
+                      <label className={styles.paramField}>{t('tts.speed')}
+                        <input className={styles.range} aria-label={t('tts.speed')} type="range" min={0.5} max={2} step={0.01} value={(vox as CosyVoiceParams).speed ?? 1} onChange={(event) => setParams({ speed: Number(event.target.value) })} />
                         <span className={styles.sliderVal}>{((vox as CosyVoiceParams).speed ?? 1).toFixed(2)}×</span>
                       </label>
-                      <label className={styles.paramField}>音量
-                        <input className={styles.range} aria-label="音量" type="range" min={0} max={100} value={(vox as CosyVoiceParams).volume ?? 80} onChange={(event) => setParams({ volume: Number(event.target.value) })} />
+                      <label className={styles.paramField}>{t('tts.volume')}
+                        <input className={styles.range} aria-label={t('tts.volume')} type="range" min={0} max={100} value={(vox as CosyVoiceParams).volume ?? 80} onChange={(event) => setParams({ volume: Number(event.target.value) })} />
                         <span className={styles.sliderVal}>{(vox as CosyVoiceParams).volume ?? 80}</span>
                       </label>
-                      <label className={styles.paramField}>音高
-                        <input className={styles.range} aria-label="音高" type="range" min={0.5} max={2} step={0.01} value={(vox as CosyVoiceParams).pitch ?? 1} onChange={(event) => setParams({ pitch: Number(event.target.value) })} />
+                      <label className={styles.paramField}>{t('projectVoices.pitch')}
+                        <input className={styles.range} aria-label={t('projectVoices.pitch')} type="range" min={0.5} max={2} step={0.01} value={(vox as CosyVoiceParams).pitch ?? 1} onChange={(event) => setParams({ pitch: Number(event.target.value) })} />
                         <span className={styles.sliderVal}>{((vox as CosyVoiceParams).pitch ?? 1).toFixed(2)}</span>
                       </label>
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                        <StyleInstructionPicker value={(vox as CosyVoiceParams).instruction ?? ''} onChange={(value) => setParams({ instruction: value })} label="风格指令" placeholder="选择预设或直接输入..." dense />
+                        <StyleInstructionPicker value={(vox as CosyVoiceParams).instruction ?? ''} onChange={(value) => setParams({ instruction: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
                       </div>
-                      <label className={styles.paramField}>语言
+                      <label className={styles.paramField}>{t('tts.language')}
                         <select className={styles.paramSelect} value={(vox as CosyVoiceParams).language || 'Chinese'} onChange={(event) => setParams({ language: event.target.value })}>
-                          <option value="Chinese">中文</option>
-                          <option value="English">English</option>
-                          <option value="Japanese">日本語</option>
-                          <option value="Korean">한국어</option>
+                          <option value="Chinese">{t('segment.language.chinese')}</option>
+                          <option value="English">{t('segment.language.english')}</option>
+                          <option value="Japanese">{t('segment.language.japanese')}</option>
+                          <option value="Korean">{t('segment.language.korean')}</option>
                         </select>
                       </label>
                     </>
@@ -875,7 +877,7 @@ function VoiceRoleEditor({
                             <button key={m} type="button"
                               className={`${styles.enginePill} ${cloneInputMethod === m ? styles.enginePillActive : ''}`}
                               onClick={() => { setCloneInputMethod(m); setClonePendingFile(null); }}>
-                              {m === 'record' ? '录制' : '上传'}
+                              {m === 'record' ? t('common.record') : t('common.upload')}
                             </button>
                           ))}
                         </div>
@@ -885,11 +887,11 @@ function VoiceRoleEditor({
                         <div style={{ gridColumn: '1 / -1' }}>
                           {cloneOriginalAudioSrc && !clonePendingFile ? (
                             <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                              <span className={styles.paramLabel}>原始录音</span>
+                              <span className={styles.paramLabel}>{t('projectVoices.originalRecording')}</span>
                               <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
                               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新录制</button>
-                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('upload'); setCloneOriginalAudioSrc(''); }}>重新上传</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>{t('projectVoices.reRecord')}</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('upload'); setCloneOriginalAudioSrc(''); }}>{t('projectVoices.reUpload')}</button>
                               </div>
                             </div>
                           ) : (
@@ -914,11 +916,11 @@ function VoiceRoleEditor({
                         <div style={{ gridColumn: '1 / -1' }}>
                           {cloneOriginalAudioSrc && !clonePendingFile ? (
                             <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                              <span className={styles.paramLabel}>原始录音</span>
+                              <span className={styles.paramLabel}>{t('projectVoices.originalRecording')}</span>
                               <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
                               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('record'); setCloneOriginalAudioSrc(''); }}>重新录制</button>
-                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新上传</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('record'); setCloneOriginalAudioSrc(''); }}>{t('projectVoices.reRecord')}</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>{t('projectVoices.reUpload')}</button>
                               </div>
                             </div>
                           ) : (
@@ -941,12 +943,12 @@ function VoiceRoleEditor({
 
                       {((vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_description : undefined) || cloneVoiceDescription) && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                          <span className={styles.paramLabel}>音色描述（设计来源）</span>
+                          <span className={styles.paramLabel}>{t('projectVoices.voiceDescriptionSource')}</span>
                           <p className={styles.configHint} style={{ marginTop: '0.25rem' }}>{(vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_description : undefined) || cloneVoiceDescription}</p>
                         </div>
                       )}
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                        <StyleInstructionPicker value={(vox?.engine === 'mimo_tts' ? (vox as MiMoParams).instruction : undefined) ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label="风格指令" placeholder="选择预设或直接输入..." dense />
+                        <StyleInstructionPicker value={(vox?.engine === 'mimo_tts' ? (vox as MiMoParams).instruction : undefined) ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
                       </div>
                     </>
                   )}
@@ -956,8 +958,8 @@ function VoiceRoleEditor({
                     <>
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                         <div className={styles.enginePills} style={{ marginBottom: '0.5rem' }}>
-                          <button type="button" className={`${styles.enginePill} ${voxcpmCloneMode === 'clone' ? styles.enginePillActive : ''}`} onClick={() => { setVoxcpmCloneMode('clone'); setParams({ voxcpm_mode: 'clone' }); }}>声音克隆</button>
-                          <button type="button" className={`${styles.enginePill} ${voxcpmCloneMode === 'ultimate' ? styles.enginePillActive : ''}`} onClick={() => { setVoxcpmCloneMode('ultimate'); setParams({ voxcpm_mode: 'ultimate' }); }}>极致克隆</button>
+                          <button type="button" className={`${styles.enginePill} ${voxcpmCloneMode === 'clone' ? styles.enginePillActive : ''}`} onClick={() => { setVoxcpmCloneMode('clone'); setParams({ voxcpm_mode: 'clone' }); }}>{t('projectVoices.voiceClone')}</button>
+                          <button type="button" className={`${styles.enginePill} ${voxcpmCloneMode === 'ultimate' ? styles.enginePillActive : ''}`} onClick={() => { setVoxcpmCloneMode('ultimate'); setParams({ voxcpm_mode: 'ultimate' }); }}>{t('projectVoices.ultimateClone')}</button>
                         </div>
                       </div>
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
@@ -966,7 +968,7 @@ function VoiceRoleEditor({
                             <button key={m} type="button"
                               className={`${styles.enginePill} ${cloneInputMethod === m ? styles.enginePillActive : ''}`}
                               onClick={() => { setCloneInputMethod(m); setClonePendingFile(null); }}>
-                              {m === 'record' ? '录制' : '上传'}
+                              {m === 'record' ? t('common.record') : t('common.upload')}
                             </button>
                           ))}
                         </div>
@@ -976,11 +978,11 @@ function VoiceRoleEditor({
                         <div style={{ gridColumn: '1 / -1' }}>
                           {cloneOriginalAudioSrc && !clonePendingFile ? (
                             <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                              <span className={styles.paramLabel}>原始录音</span>
+                              <span className={styles.paramLabel}>{t('projectVoices.originalRecording')}</span>
                               <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
                               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新录制</button>
-                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('upload'); setCloneOriginalAudioSrc(''); }}>重新上传</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>{t('projectVoices.reRecord')}</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('upload'); setCloneOriginalAudioSrc(''); }}>{t('projectVoices.reUpload')}</button>
                               </div>
                             </div>
                           ) : (
@@ -1005,11 +1007,11 @@ function VoiceRoleEditor({
                         <div style={{ gridColumn: '1 / -1' }}>
                           {cloneOriginalAudioSrc && !clonePendingFile ? (
                             <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
-                              <span className={styles.paramLabel}>原始录音</span>
+                              <span className={styles.paramLabel}>{t('projectVoices.originalRecording')}</span>
                               <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={cloneOriginalAudioSrc} />
                               <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('record'); setCloneOriginalAudioSrc(''); }}>重新录制</button>
-                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>重新上传</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => { setCloneInputMethod('record'); setCloneOriginalAudioSrc(''); }}>{t('projectVoices.reRecord')}</button>
+                                <button type="button" className={styles.ghostButton} onClick={() => setCloneOriginalAudioSrc('')}>{t('projectVoices.reUpload')}</button>
                               </div>
                             </div>
                           ) : (
@@ -1031,31 +1033,31 @@ function VoiceRoleEditor({
                       )}
                       {((vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_description : undefined) || cloneVoiceDescription) && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                          <span className={styles.paramLabel}>音色描述（设计来源）</span>
+                          <span className={styles.paramLabel}>{t('projectVoices.voiceDescriptionSource')}</span>
                           <p className={styles.configHint} style={{ marginTop: '0.25rem' }}>{(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_description : undefined) || cloneVoiceDescription}</p>
                         </div>
                       )}
                       {voxcpmCloneMode === 'clone' && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                          <StyleInstructionPicker value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).style_control : undefined) ?? ''} onChange={(value) => setParams({ voxcpm_style_control: value })} label="风格指令" placeholder="选择预设或直接输入..." dense />
+                          <StyleInstructionPicker value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).style_control : undefined) ?? ''} onChange={(value) => setParams({ voxcpm_style_control: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
                         </div>
                       )}
                       {voxcpmCloneMode === 'ultimate' && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                          <span className={styles.paramLabel}>参考音频文本</span>
+                          <span className={styles.paramLabel}>{t('projectVoices.referenceAudioText')}</span>
                           {clonePromptText ? (
                             <span className={styles.configHint} style={{ display: 'block', marginTop: '0.25rem' }}>{clonePromptText}</span>
                           ) : (
-                            <span style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>⚠ 该声音未填写参考音频文本，极致克隆无法使用</span>
+                            <span style={{ color: 'var(--color-danger, #ef4444)', fontSize: '0.8rem', display: 'block', marginTop: '0.25rem' }}>{t('projectVoices.missingRefAudioText')}</span>
                           )}
                         </div>
                       )}
-                      <label className={styles.paramField}>CFG 强度
-                        <input className={styles.range} aria-label="CFG 强度" type="range" min={1} max={5} step={0.1} value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).cfg_value : undefined) ?? 2} onChange={(event) => setParams({ voxcpm_cfg_value: Number(event.target.value) })} />
+                      <label className={styles.paramField}>{t('projectVoices.cfgStrength')}
+                        <input className={styles.range} aria-label={t('projectVoices.cfgStrength')} type="range" min={1} max={5} step={0.1} value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).cfg_value : undefined) ?? 2} onChange={(event) => setParams({ voxcpm_cfg_value: Number(event.target.value) })} />
                         <span className={styles.sliderVal}>{((vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).cfg_value : undefined) ?? 2).toFixed(1)}</span>
                       </label>
-                      <label className={styles.paramField}>去噪步数
-                        <input className={styles.range} aria-label="去噪步数" type="range" min={1} max={50} step={1} value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).inference_timesteps : undefined) ?? 10} onChange={(event) => setParams({ voxcpm_inference_timesteps: Number(event.target.value) })} />
+                      <label className={styles.paramField}>{t('projectVoices.denoiseSteps')}
+                        <input className={styles.range} aria-label={t('projectVoices.denoiseSteps')} type="range" min={1} max={50} step={1} value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).inference_timesteps : undefined) ?? 10} onChange={(event) => setParams({ voxcpm_inference_timesteps: Number(event.target.value) })} />
                         <span className={styles.sliderVal}>{(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).inference_timesteps : undefined) ?? 10}</span>
                       </label>
                     </>
@@ -1084,21 +1086,21 @@ function VoiceRoleEditor({
                       }}>VoxCPM</button>
                     </div>
                   </div>
-                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>音色描述
+                  <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>{t('projectVoices.voiceDescription')}
                     <textarea
                       className={styles.paramTextarea}
                       value={localDesignDesc}
                       onChange={(event) => setVoiceDescription(event.target.value)}
-                      placeholder="描述你想要的音色，如：年轻女性，温柔甜美，语速适中..."
+                      placeholder={t('projectVoices.voiceDescriptionPlaceholder')}
                       rows={3}
                     />
                   </label>
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                    <span className={styles.paramLabel}>试听文本</span>
+                    <span className={styles.paramLabel}>{t('projectVoices.sampleText')}</span>
                     <p style={{ margin: '0.25rem 0 0', padding: '0.5rem 0.75rem', background: 'var(--color-bg-secondary, #f7f7f8)', borderRadius: '6px', fontSize: '0.85rem', lineHeight: 1.5, color: 'var(--color-text-secondary, #6b7280)' }}>
-                      这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。
+                      {t('projectVoices.auditionSampleText')}
                     </p>
-                    <span className={styles.configHint}>试听文本由系统提供，确保音色描述准确即可。</span>
+                    <span className={styles.configHint}>{t('projectVoices.sampleTextHint')}</span>
                   </div>
                 </>
               )}
@@ -1109,7 +1111,7 @@ function VoiceRoleEditor({
         <aside className={styles.previewCard}>
           <span className={styles.kicker}>Real-time Preview</span>
           <h4>Studio Playback</h4>
-          <p>"这是一段角色试听文本，用来确认音色、节奏和情绪是否适合当前项目。"</p>
+          <p>"{t('projectVoices.auditionSampleText')}"</p>
           <div className={styles.waveform} aria-hidden="true"><i /><i /><i /><i /><i /></div>
 
           {isDesignMode ? (
@@ -1122,29 +1124,29 @@ function VoiceRoleEditor({
                   onClick={handleDesignPreview}
                   disabled={!localDesignDesc.trim()}
                 >
-                  试听音色
+                  {t('projectVoices.previewVoice')}
                 </button>
               )}
               {designPhase === 'previewing' && (
-                <button type="button" className={styles.ghostButton} disabled>生成中...</button>
+                <button type="button" className={styles.ghostButton} disabled>{t('common.generating')}</button>
               )}
               {designPhase === 'previewed' && (
                 <>
-                  <p className={styles.designHint}>已试听 · 满意后点击「确认保存」</p>
+                  <p className={styles.designHint}>{t('projectVoices.previewedConfirmHint')}</p>
                   <div className={styles.designActions}>
-                    <button type="button" className={styles.ghostButton} onClick={handleDesignPreview}>重新生成</button>
-                    <button type="button" className={styles.primaryButton} onClick={handleDesignConfirmSave}>确认保存音色</button>
+                    <button type="button" className={styles.ghostButton} onClick={handleDesignPreview}>{t('common.regenerate')}</button>
+                    <button type="button" className={styles.primaryButton} onClick={handleDesignConfirmSave}>{t('projectVoices.confirmSaveVoice')}</button>
                   </div>
                 </>
               )}
               {designPhase === 'saving' && (
-                <button type="button" className={styles.ghostButton} disabled>保存中...</button>
+                <button type="button" className={styles.ghostButton} disabled>{t('common.saving')}</button>
               )}
               {designPhase === 'confirmed' && (
                 <>
-                  <p className={styles.designHint}>{designProfileId ? '音色已保存' : '音色已暂存 · 点击顶部「保存角色」完成持久化'}</p>
+                  <p className={styles.designHint}>{designProfileId ? t('projectVoices.voiceSaved') : t('projectVoices.voiceStagedSaveRole')}</p>
                   <div className={styles.designActions}>
-                    <button type="button" className={styles.ghostButton} onClick={() => { setDesignProfileId(''); setDesignPhase('idle'); setDesignAudioBase64(''); setDesignAudioSrc(''); }}>重新设计</button>
+                    <button type="button" className={styles.ghostButton} onClick={() => { setDesignProfileId(''); setDesignPhase('idle'); setDesignAudioBase64(''); setDesignAudioSrc(''); }}>{t('projectVoices.redesign')}</button>
                   </div>
                 </>
               )}
@@ -1156,19 +1158,19 @@ function VoiceRoleEditor({
             <>
               {clonePreviewing ? (
                 <div style={{ marginBottom: '0.75rem' }}>
-                  <span className={styles.paramLabel}>克隆试听音色</span>
-                  <p className={styles.designHint}>正在生成试听音频...</p>
+                  <span className={styles.paramLabel}>{t('projectVoices.clonePreviewVoice')}</span>
+                  <p className={styles.designHint}>{t('projectVoices.generatingPreviewAudio')}</p>
                 </div>
               ) : clonePreviewAudioSrc ? (
                 <div style={{ marginBottom: '0.75rem' }}>
-                  <span className={styles.paramLabel}>克隆试听音色</span>
+                  <span className={styles.paramLabel}>{t('projectVoices.clonePreviewVoice')}</span>
                   <audio controls style={{ width: '100%', marginTop: '0.25rem' }} src={clonePreviewAudioSrc} />
                 </div>
               ) : null}
               {clonePreviewError && (
                 <p className={styles.designHint} style={{ color: '#d32f2f' }}>{clonePreviewError}</p>
               )}
-              <button type="button" className={styles.ghostButton} disabled={clonePreviewing} onClick={handleClonePreview}>{clonePreviewing ? '生成中...' : '生成试听'}</button>
+              <button type="button" className={styles.ghostButton} disabled={clonePreviewing} onClick={handleClonePreview}>{clonePreviewing ? t('common.generating') : t('projectVoices.generatePreview')}</button>
             </>
           )}
         </aside>
@@ -1194,6 +1196,7 @@ function CharacterCard({
   onPreview: () => void;
   onDelete?: () => void;
 }) {
+  const { t } = useTranslation();
   const configured = isConfigured(role);
   const cardClass = [
     styles.charCard,
@@ -1205,7 +1208,7 @@ function CharacterCard({
       className={cardClass}
       tabIndex={0}
       role="button"
-      aria-label={`编辑 ${role.name}`}
+      aria-label={t('projectVoices.editRole', { name: role.name })}
       onClick={onEdit}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onEdit(); } }}
     >
@@ -1219,13 +1222,13 @@ function CharacterCard({
       <div className={styles.cardBody}>
         <strong className={styles.charName}>
           {role.name}
-          {isDefault && <span className={styles.defaultBadge}>默认</span>}
+          {isDefault && <span className={styles.defaultBadge}>{t('common.default')}</span>}
         </strong>
         <div className={styles.chipRow}>
-          <span className={`${styles.chip} ${styles.chipCast}`}>角色</span>
+          <span className={`${styles.chip} ${styles.chipCast}`}>{t('projectVoices.role')}</span>
           <span className={`${styles.chip} ${styles.chipEngine}`}>{engineLabel(role)}</span>
-          <span className={`${styles.chip} ${styles.chipEngine}`}>{roleVoiceDisplayName(role) || '未设置'}</span>
-          <span className={styles.chip} title={configured ? '已配置音色' : '待配置'}>
+          <span className={`${styles.chip} ${styles.chipEngine}`}>{roleVoiceDisplayName(role) || t('projectVoices.notSet')}</span>
+          <span className={styles.chip} title={configured ? t('projectVoices.voiceConfigured') : t('projectVoices.voiceNotConfigured')}>
             <span className={`${styles.statusDot} ${configured ? styles.statusReady : styles.statusDraft}`} />
           </span>
         </div>
@@ -1236,13 +1239,13 @@ function CharacterCard({
           type="button"
           className={styles.ghostButton}
           onClick={(e) => { e.stopPropagation(); onPreview(); }}
-        >试听</button>
+        >{t('common.preview')}</button>
         {onDelete && (
           <button
             type="button"
             className={styles.iconButton}
-            aria-label={`删除 ${role.name}`}
-            title="删除角色"
+            aria-label={t('projectVoices.deleteRole', { name: role.name })}
+            title={t('projectVoices.deleteRoleTitle')}
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
           >✕</button>
         )}
@@ -1266,12 +1269,14 @@ export function ProjectVoices({
   onPreviewRole,
   onManageRoles,
 }: ProjectVoicesProps) {
+  const { t } = useTranslation();
   const [editingRole, setEditingRole] = useState<RoleSnapshot | null>(null);
   const [engineFilter, setEngineFilter] = useState<EngineFilter>('all');
 
   const filterByEngine = (list: Role[]) =>
     engineFilter === 'all' ? list : list.filter(r => r.voice?.engine === engineFilter);
 
+  const roleSample = t('projectVoices.roleSampleText');
   const filteredRoles = filterByEngine(roles);
 
   const [saving, setSaving] = useState(false);
@@ -1295,7 +1300,7 @@ export function ProjectVoices({
         }
       } catch { /* fall through to live synthesis */ }
     }
-    onPreviewRole(roleToSnapshot(role), ROLE_SAMPLE);
+    onPreviewRole(roleToSnapshot(role), roleSample);
   }, [onPreviewRole]);
 
   const saveEditingRole = async (draft: RoleSnapshot) => {
@@ -1317,8 +1322,8 @@ export function ProjectVoices({
       <header className={styles.header}>
         <div className={styles.headerText}>
           <span className={styles.kicker}>Characters</span>
-          <h2>角色管理</h2>
-          <p className={styles.headerDesc}>管理项目中的角色，配置音色、引擎和参数。</p>
+          <h2>{t('projectVoices.roleManagement')}</h2>
+          <p className={styles.headerDesc}>{t('projectVoices.roleManagementDesc')}</p>
         </div>
         <div className={styles.filterBar}>
           <select
@@ -1326,13 +1331,13 @@ export function ProjectVoices({
             value={engineFilter}
             onChange={(e) => setEngineFilter(e.target.value as EngineFilter)}
           >
-            <option value="all">全部引擎</option>
+            <option value="all">{t('projectVoices.allEngines')}</option>
             <option value="edge_tts">Edge-TTS</option>
             <option value="cosyvoice">CosyVoice</option>
             <option value="mimo_tts">MiMo</option>
             <option value="voxcpm">VoxCPM</option>
           </select>
-          <button type="button" className={styles.ghostButton} onClick={onManageRoles}>角色库</button>
+          <button type="button" className={styles.ghostButton} onClick={onManageRoles}>{t('projectVoices.roleLibrary')}</button>
         </div>
       </header>
 
@@ -1354,8 +1359,8 @@ export function ProjectVoices({
         <div className={styles.cardGrid} data-testid="role-list">
           {filteredRoles.length === 0 && (
             <div className={styles.emptyState}>
-              <strong>还没有角色</strong>
-              <p>创建角色，配置音色用于旁白和对话段落。</p>
+              <strong>{t('projectVoices.noRolesYet')}</strong>
+              <p>{t('projectVoices.noRolesDesc')}</p>
             </div>
           )}
           {filteredRoles.map(role => (
@@ -1380,7 +1385,7 @@ export function ProjectVoices({
             }}
           >
             <span className={styles.placeholderIcon}>+</span>
-            <span className={styles.placeholderLabel}>创建角色</span>
+            <span className={styles.placeholderLabel}>{t('projectVoices.createRole')}</span>
           </button>
         </div>
       </section>

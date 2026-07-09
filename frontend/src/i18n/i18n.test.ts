@@ -63,4 +63,31 @@ describe('i18n', () => {
     expect(isSupportedLocale('en-US')).toBe(true);
     expect(isSupportedLocale('fr-FR')).toBe(false);
   });
+
+  it('regenerates audio dialog copy with interpolation (regression: raw i18n keys must not leak)', () => {
+    const zh = createTranslator('zh-CN');
+    const en = createTranslator('en-US');
+
+    // Correct keys used by TTSSynthesis handleRegenerateAll — must interpolate {count}.
+    expect(zh('tts.willRegenerateN', { count: 3 })).toBe('将重新生成 3 个片段。');
+    expect(zh('tts.nExistingAudioWillBeDeleted', { count: 2 })).toBe('其中 2 个已有音频将被删除后重新生成。');
+    expect(zh('tts.nLockedSegmentsUnchanged', { count: 1 })).toBe('已锁定独立音色的 1 个片段将保持不变。');
+
+    expect(en('tts.willRegenerateN', { count: 3 })).toBe('Will regenerate 3 segments.');
+    expect(en('tts.nExistingAudioWillBeDeleted', { count: 2 })).toBe('2 existing audio files will be deleted and regenerated.');
+    expect(en('tts.nLockedSegmentsUnchanged', { count: 1 })).toBe('1 segments with locked independent voices will remain unchanged.');
+  });
+
+  it('never treats the deprecated regenerate keys as real translations', () => {
+    // These keys were previously used by mistake (raw key leaked into the UI).
+    // Assert they fall back to the key itself so the bug cannot silently return.
+    const zh = createTranslator('zh-CN');
+    const en = createTranslator('en-US');
+    expect(zh('tts.regenerateCount')).toBe('tts.regenerateCount');
+    expect(zh('tts.existingAudioWillBeDeleted')).toBe('tts.existingAudioWillBeDeleted');
+    expect(zh('tts.lockedSegmentsUnchanged')).toBe('tts.lockedSegmentsUnchanged');
+    expect(en('tts.regenerateCount')).toBe('tts.regenerateCount');
+    expect(en('tts.existingAudioWillBeDeleted')).toBe('tts.existingAudioWillBeDeleted');
+    expect(en('tts.lockedSegmentsUnchanged')).toBe('tts.lockedSegmentsUnchanged');
+  });
 });

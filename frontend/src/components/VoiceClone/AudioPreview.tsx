@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { voiceApi } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import styles from './AudioPreview.module.css';
 
@@ -22,6 +23,7 @@ interface AudioPreviewProps {
 
 /** 录音/上传完成后展示音频预览，依次执行 upload → clone（失败则回滚删除）。URL 模式下跳过 upload 直接 clone */
 export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', projectId, engineParams, onCloneSuccess, onCancel }: AudioPreviewProps) {
+  const { t } = useTranslation();
   const [isCloning, setIsCloning] = useState(false);
   const [step, setStep] = useState<'idle' | 'uploading' | 'cloning'>('idle');
   const [error, setError] = useState('');
@@ -58,7 +60,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
         setUploadedVoiceId(targetVoiceId);
         setStep('cloning');
       } else {
-        setError('缺少音频数据');
+        setError(t('audioPreview.missingAudioData'));
         return;
       }
 
@@ -89,7 +91,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
           console.error('Rollback failed:', rollbackErr);
         }
       }
-      setError(engine === 'mimo' ? 'MiMo 复刻失败，请重试' : engine === 'voxcpm' ? 'VoxCPM 标记失败，请重试' : '克隆失败，请重试');
+      setError(engine === 'mimo' ? t('audioPreview.cloneFailedMiMo') : engine === 'voxcpm' ? t('audioPreview.cloneFailedVoxCPM') : t('audioPreview.cloneFailed'));
       setStep('idle');
     } finally {
       setIsCloning(false);
@@ -114,17 +116,17 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
   return (
     <div className={styles.container}>
       <div className={styles.header}>
-        <span className={styles.label}>待处理音频</span>
+        <span className={styles.label}>{t('audioPreview.pendingAudio')}</span>
         {step !== 'idle' && (
           <span className={styles.stepIndicator}>
-            {step === 'uploading' ? '上传中...' : `${engineLabel} 复刻中...`}
+            {step === 'uploading' ? t('audioPreview.uploading') : t('audioPreview.cloning', { engine: engineLabel })}
           </span>
         )}
       </div>
 
       <div className={styles.fileInfo}>
         <span className={styles.fileName}>
-          {voiceId ? '外部音频' : file?.name}
+          {voiceId ? t('audioPreview.externalAudio') : file?.name}
         </span>
         {file && (
           <span className={styles.fileSize}>{(file.size / 1024).toFixed(1)} KB</span>
@@ -144,12 +146,12 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
         />
         <div className={styles.identityFields}>
           <label className={styles.fieldLabel}>
-            音色名称
+            {t('audioPreview.voiceNameLabel')}
             <input
               className={styles.fieldInput}
               value={voiceName}
               onChange={e => setVoiceName(e.target.value)}
-              placeholder={file?.name?.replace(/\.[^.]+$/, '') || '输入音色名称...'}
+              placeholder={file?.name?.replace(/\.[^.]+$/, '') || t('audioPreview.voiceNamePlaceholder')}
             />
           </label>
         </div>
@@ -158,16 +160,16 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
       {/* VoxCPM 模式：填写参考音频文本 */}
       {engine === 'voxcpm' && (
         <div className={styles.promptSection}>
-          <label className={styles.promptLabel}>参考音频文本</label>
+          <label className={styles.promptLabel}>{t('audioPreview.promptTextLabel')}</label>
           <textarea
             className={styles.promptTextarea}
             value={promptText}
             onChange={e => setPromptText(e.target.value)}
-            placeholder="输入参考音频中说话人说的完整文字（用于 VoxCPM Ultimate Clone 高保真克隆）"
+            placeholder={t('audioPreview.promptTextPlaceholder')}
             rows={3}
           />
           <span className={styles.promptHint}>
-            填写后声音保存时会一并存储，后续合成自动使用
+            {t('audioPreview.promptTextHint')}
           </span>
         </div>
       )}
@@ -181,15 +183,15 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
           disabled={isCloning || !canClone}
         >
           {isCloning
-            ? (step === 'uploading' ? '上传中...' : `${engineLabel} 复刻中...`)
-            : `使用 ${engineLabel} 复刻`}
+            ? (step === 'uploading' ? t('audioPreview.uploading') : t('audioPreview.cloning', { engine: engineLabel }))
+            : t('audioPreview.cloneWith', { engine: engineLabel })}
         </button>
         <button
           className={styles.cancelButton}
           onClick={handleCancel}
           disabled={isCloning}
         >
-          取消
+          {t('audioPreview.cancel')}
         </button>
       </div>
     </div>

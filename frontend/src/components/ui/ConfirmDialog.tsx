@@ -1,4 +1,4 @@
-import { t } from '../../i18n';
+import { useTranslation } from '../../i18n';
 import styles from './ConfirmDialog.module.css';
 
 interface ConfirmDialogProps {
@@ -14,11 +14,14 @@ interface ConfirmDialogProps {
 
 export function ConfirmDialog({
   open, title, message,
-  confirmLabel = t('common.confirm'),
-  cancelLabel = t('common.cancel'),
+  confirmLabel,
+  cancelLabel,
   variant = 'warning',
   onConfirm, onCancel,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+  const resolvedConfirmLabel = confirmLabel ?? t('common.confirm');
+  const resolvedCancelLabel = cancelLabel ?? t('common.cancel');
   if (!open) return null;
 
   return (
@@ -32,12 +35,15 @@ export function ConfirmDialog({
           <p className={styles.message}>{message}</p>
         </div>
         <div className={styles.actions}>
-          <button className={styles.cancelBtn} onClick={onCancel}>{cancelLabel}</button>
+          <button
+            className={styles.cancelBtn}
+            onClick={(e) => { e.stopPropagation(); onCancel(); }}
+          >{resolvedCancelLabel}</button>
           <button
             className={variant === 'danger' ? styles.confirmDanger : styles.confirmWarning}
-            onClick={onConfirm}
+            onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           >
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </button>
         </div>
       </div>

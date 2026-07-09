@@ -18,6 +18,7 @@ NarraForge is an AI narration workshop that integrates voice cloning, text-to-sp
 | Contributing guide | `docs/CONTRIBUTING.md` | Development conventions and contribution guidelines. |
 | design guide | `docs/design/stitch_narraforge_story_global_prj/DESIGN.md` | UI design guidelines. |
 | Test MAP | `backend/tests/TEST_MAP.md` | Test case and function map doc |
+| E2E Test Guide | `docs/e2e-test-guide.md` | Running instructions, conventions, dual-read verification, and gap analysis |
 
 **KEEP these documents updated by every PR**!
 
@@ -135,16 +136,59 @@ All frontend test files with `.test.ts`, `.test.tsx`, `.spec.ts`, or `.spec.tsx`
 
 ### E2E Tests
 
-Cross-stack browser E2E tests live under `tests/e2e/`.
+Cross-stack browser E2E tests live under `tests/e2e/`. All 26 specs pass with `npm run e2e`.
 
-- Automated browser specs belong in `tests/e2e/specs/`.
-- Stable E2E input fixtures belong in `tests/e2e/fixtures/`.
-- Shared E2E helper code belongs in `tests/e2e/helpers/`.
-- Manual browser verification scripts and checklists belong in `tests/e2e/manual/` and should use the `manual_*.py` prefix when they are Python scripts.
-- Intentional visual-regression baselines or useful legacy reference screenshots belong in `tests/e2e/snapshots/`.
-- Generated screenshots, videos, traces, and reports must go to ignored artifact directories such as `test-results/`, `playwright-report/`, or `.artifacts/e2e/`; do not commit generated E2E run artifacts.
+**Directory layout:**
 
-See `tests/e2e/README.md` for the E2E directory layout and artifact policy.
+```text
+tests/e2e/
+├── specs/                  ← Automated Playwright browser specs (26 tests)
+├── fixtures/               ← Stable E2E input fixtures (audio, images)
+├── helpers/                ← Shared utilities
+│   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
+│   ├── dbReader.ts         ← DB-layer reader — direct SQLite access via node:sqlite
+│   ├── dualReadSnapshot.ts ← Dual-read + screenshot helper
+│   └── index.ts            ← Barrel exports
+├── global-setup.ts         ← Seed data before all tests
+└── README.md               ← Layout and artifact policy
+```
+
+**How to run:**
+
+```bash
+npm run e2e          # 26 tests, serial (--workers=1), HTML report
+npm run e2e:ui       # Playwright visual test explorer
+npm run e2e:report   # Open latest HTML report
+npm run e2e:clean    # Remove all test-results and playwright-report dirs
+```
+
+Tests run serially (`--workers=1`) because they share a single SQLite DB.
+Playwright's `webServer` config auto-starts backend on `:8002` and frontend on `:5173`.
+Do NOT manually start servers — the webServer handles it and bypasses WorkBuddy's sandbox (which would block `shutil.rmtree` during project deletion).
+
+**Dual-read verification:**
+
+Every test that writes to the backend also verifies from TWO independent layers:
+
+| Layer | Reader | Validator |
+|-------|--------|-----------|
+| API | `readBackendProject(page, id)` | `validateChapter()`, `validateSegment()` |
+| DB | `readDbProject(id)` | `validateDbProjectRow()` |
+
+The `verifyDbWithScreenshot()` helper wraps DB-read + validation + a labeled screenshot that appears in the HTML report.
+
+**Artifacts:**
+
+Generated screenshots, videos, traces, and reports go to ignored directories:
+- `test-results/` — per-run failure artifacts and `testInfo.attach()` screenshots
+- `playwright-report/` — HTML report (one directory per run with local-timezone timestamp)
+- Do NOT commit anything under these directories.
+
+**Config highlights:**
+
+- `screenshot: 'on'` — every test captures a viewport screenshot at completion
+- `PW_RUN` env var — set by `npm run e2e` to `$(date +%Y-%m-%dT%H-%M-%S)` for consistent per-run directory naming
+- `reuseExistingServer: !process.env.CI` — local runs reuse existing servers; CI always starts fresh
 
 ## Notes
 

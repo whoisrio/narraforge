@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { voiceApi } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import type { VoiceProfile } from '../../types';
 import { voicePreviewAudioUrl } from '../../types';
@@ -21,6 +22,7 @@ function getErrorDetail(error: unknown, fallback: string) {
 }
 
 export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
+  const { t } = useTranslation();
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -80,7 +82,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       onRefresh?.();
     } catch (err) {
       console.error('Sync failed:', err);
-      setSyncMessage({ type: 'error', text: 'Sync failed, please try again' });
+      setSyncMessage({ type: 'error', text: t('voiceList.syncFailed') });
     } finally {
       setSyncing(false);
     }
@@ -158,7 +160,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       triggerRefresh();
     } catch (err) {
       console.error('Register failed:', err);
-      alert('Voice registration failed, please try again');
+      alert(t('voiceList.registrationFailed'));
     } finally {
       setRegisteringId(null);
     }
@@ -210,7 +212,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
         ? (err as { response?: { status?: number; data?: { detail?: unknown } } }).response
         : undefined;
       if (response?.status === 409) {
-        setEditingError(getErrorDetail(err, '该描述已用于其他声音'));
+        setEditingError(getErrorDetail(err, t('voiceList.duplicateDescription')));
       } else {
         console.error('Failed to save description:', err);
         setEditingId(null);
@@ -280,14 +282,14 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
   });
 
   if (loading) {
-    return <Loading message="Loading voices..." />;
+    return <Loading message={t('voiceList.loading')} />;
   }
 
   return (
     <div>
       <div style={headerStyle}>
         <h3 style={h3Style}>
-          🎤 {engine === 'mimo' ? 'MiMo 复刻声音' : engine === 'voxcpm' ? 'VoxCPM 克隆声音' : 'CosyVoice 克隆声音'}
+          🎤 {engine === 'mimo' ? t('voiceList.titleMiMo') : engine === 'voxcpm' ? t('voiceList.titleVoxCPM') : t('voiceList.titleCosyVoice')}
         </h3>
         <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
           {/* Sync from Qwen 仅在 CosyVoice 模式下显示 */}
@@ -299,7 +301,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
               disabled={syncing}
               loading={syncing}
             >
-              🔄 Sync from Qwen
+              {t('voiceList.syncFromQwen')}
             </Button>
           )}
           <Button
@@ -308,7 +310,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
             onClick={handleClearAllClick}
             disabled={voices.length === 0}
           >
-            🗑️ Clear All
+            {t('voiceList.clearAll')}
           </Button>
         </div>
       </div>
@@ -322,11 +324,11 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       {voices.length === 0 ? (
         <EmptyState
           icon="🎙️"
-          title="No Voices Yet"
+          title={t('voiceList.noVoicesYet')}
           description={
             engine === 'mimo'
-              ? "录制或上传音频，使用 MiMo 即时复刻音色。"
-              : "Upload or record audio to clone a voice."
+              ? t('voiceList.emptyDescMiMo')
+              : t('voiceList.emptyDescDefault')
           }
         />
       ) : (
@@ -381,7 +383,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                         <span
                           onClick={() => handleStartEdit(voice)}
                           style={{ cursor: 'pointer', fontSize: '12px', opacity: 0.6 }}
-                          title="编辑描述"
+                          title={t('voiceList.editDescription')}
                         >
                           ✏️
                         </span>
@@ -390,12 +392,12 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                     <div style={voiceMetaStyle}>
                       {voice.voice?.voice_type === 'clone' ? (
                         <>
-                          <span style={{ color: 'var(--color-success)', marginRight: 'var(--spacing-xs)' }}>✓ Cloned</span>
-                          {voice.voice?.model === 'mimo_tts' && ' | MiMo 即时复刻'}
+                          <span style={{ color: 'var(--color-success)', marginRight: 'var(--spacing-xs)' }}>✓ {t('voiceList.clonedBadge')}</span>
+                          {voice.voice?.model === 'mimo_tts' && ` | ${t('voiceList.miMoInstantClone')}`}
                           {voice.created_at && ` | ${new Date(voice.created_at).toLocaleDateString()}`}
                         </>
                       ) : (
-                        'Not cloned yet'
+                        t('voiceList.notClonedYet')
                       )}
                     </div>
                   </div>
@@ -407,7 +409,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                       size="sm"
                       onClick={() => handleRegisterClick(voice)}
                     >
-                      Clone
+                      {t('voiceList.clone')}
                     </Button>
                   )}
                   <Button
@@ -415,7 +417,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                     size="sm"
                     onClick={() => handleDeleteClick(voice.id)}
                   >
-                    Delete
+                    {t('voiceList.delete')}
                   </Button>
                 </div>
               </div>
@@ -427,11 +429,11 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       <Modal
         isOpen={showRegisterDialog && selectedVoice !== null}
         onClose={handleCloseModal}
-        title="Clone Voice"
+        title={t('voiceList.cloneVoice')}
         footer={
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
             <Button variant="ghost" onClick={handleCloseModal}>
-              {registerResult ? 'Close' : 'Cancel'}
+              {registerResult ? t('voiceList.close') : t('common.cancel')}
             </Button>
             {!registerResult && (
               <Button
@@ -440,18 +442,18 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                 loading={!!registeringId}
                 disabled={!registerName.trim()}
               >
-                {registeringId ? 'Cloning...' : 'Clone'}
+                {registeringId ? t('voiceList.cloning') : t('voiceList.clone')}
               </Button>
             )}
           </div>
         }
       >
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)', marginBottom: 'var(--spacing-lg)' }}>
-          Submit (1) audio to Qwen for voice cloning. This will create a persistent voice ID.
+          {t('voiceList.cloneDescription')}
         </p>
 
         <Input
-          label="Voice Name"
+          label={t('voiceList.voiceName')}
           type="text"
           value={registerName}
           onChange={(e) => setRegisterName(e.target.value)}
@@ -459,11 +461,11 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
         />
 
         <Select
-          label="Role"
+          label={t('voiceList.role')}
           options={[
-            { value: 'custom', label: 'Custom' },
-            { value: 'male', label: 'Male' },
-            { value: 'female', label: 'Female' },
+            { value: 'custom', label: t('voiceList.roleCustom') },
+            { value: 'male', label: t('voiceList.roleMale') },
+            { value: 'female', label: t('voiceList.roleFemale') },
           ]}
           value={registerRole}
           onChange={(e) => setRegisterRole(e.target.value as string)}
@@ -471,10 +473,10 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
 
         {registerResult && (
           <Alert variant="success" style={{ marginTop: 'var(--spacing-md)' }}>
-            <div style={{ fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--spacing-xs)' }}>✓ Clone Successful!</div>
-            <div><strong>Voice ID:</strong> {registerResult.id}</div>
-            <div><strong>Model:</strong> {registerResult.voice?.model || 'N/A'}</div>
-            <div><strong>Created at:</strong> {new Date(registerResult.created_at).toLocaleString()}</div>
+            <div style={{ fontWeight: 'var(--font-weight-medium)', marginBottom: 'var(--spacing-xs)' }}>{t('voiceList.cloneSuccess')}</div>
+            <div><strong>{t('voiceList.voiceId')}</strong> {registerResult.id}</div>
+            <div><strong>{t('voiceList.model')}</strong> {registerResult.voice?.model || 'N/A'}</div>
+            <div><strong>{t('voiceList.createdAt')}</strong> {new Date(registerResult.created_at).toLocaleString()}</div>
           </Alert>
         )}
       </Modal>
@@ -483,25 +485,25 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       <Modal
         isOpen={showDeleteConfirm}
         onClose={handleCancelDelete}
-        title="确认删除"
+        title={t('voiceList.confirmDelete')}
         footer={
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
             <Button variant="ghost" onClick={handleCancelDelete} disabled={deleting}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button variant="danger" onClick={handleConfirmDelete} loading={deleting}>
-              {deleting ? '删除中...' : '确认删除'}
+              {deleting ? t('voiceList.deleting') : t('voiceList.confirmDelete')}
             </Button>
           </div>
         }
       >
         <p style={{ marginBottom: 'var(--spacing-sm)' }}>
           {deleteTarget === null
-            ? `确定要删除所有${engine === 'mimo' ? 'MiMo' : 'CosyVoice'}复刻声音吗？`
-            : `确定要删除声音 "${voices.find(v => v.id === deleteTarget)?.name || deleteTarget}" 吗？`}
+            ? t('voiceList.confirmDeleteAll', { engine: engine === 'mimo' ? 'MiMo' : 'CosyVoice' })
+            : t('voiceList.confirmDeleteSingle', { name: voices.find(v => v.id === deleteTarget)?.name || deleteTarget })}
         </p>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>
-          此操作会同步删除云端的音色数据（如有），不可撤销。
+          {t('voiceList.deleteWarning')}
         </p>
       </Modal>
     </div>

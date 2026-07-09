@@ -8,7 +8,7 @@ import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
 import { voiceApi } from '../services/api';
 import { VoiceAvatar } from '../components/ui/VoiceAvatar';
-import { t } from '../i18n';
+import { useTranslation } from '../i18n';
 import type { TTSResult, VoiceProfile } from '../types';
 import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../types';
 import styles from './VoiceClone.module.css';
@@ -40,6 +40,7 @@ function engineLabel(profile: VoiceProfile): string {
 
 
 export function VoiceClone() {
+  const { t } = useTranslation();
   // ---- 声音列表 ----
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(true);
@@ -235,10 +236,10 @@ export function VoiceClone() {
       const saved = await voiceApi.createFromDesign({
         audio_base64: audioBase64,
         engine: designEngine,
-        name: designName.trim() || designBrief.trim().slice(0, 50) || 'Untitled Voice Profile',
+        name: designName.trim() || designBrief.trim().slice(0, 50) || t('voiceDesign.untitledVoiceProfile'),
         description: designBrief,
         avatar: designAvatar || undefined,
-        preview_text: designSampleText || 'This is a preview text.',
+        preview_text: designSampleText || t('voiceDesign.defaultPreviewText'),
         ...(designEngine === 'voxcpm' ? { original_prompt_text: designBrief } : {}),
       });
       setVoices(prev => [saved, ...prev.filter(v => v.id !== saved.id)]);
@@ -341,7 +342,7 @@ export function VoiceClone() {
               className={`${styles.engineOption} ${designEngine === 'voxcpm' ? styles.active : ''}`}
               onClick={() => setDesignEngine('voxcpm')}
             >
-              VoxCPM (本地)
+              {t('voiceDesign.voxcpmLocal')}
             </button>
           </div>
 

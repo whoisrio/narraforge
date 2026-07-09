@@ -1,5 +1,6 @@
 import { useRef, useState, useCallback } from 'react';
 import { Button } from '../ui/Button';
+import { useTranslation } from '../../i18n';
 import styles from './AudioDropzone.module.css';
 
 interface AudioDropzoneProps {
@@ -21,6 +22,7 @@ function formatSize(bytes: number): string {
 const ACCEPT = '.wav,.mp3,.m4a,.mp4,.mov,.webm';
 
 export function AudioDropzone({ files, onReplace, onAdd, onRemove, onMove, onTranscribe, processing }: AudioDropzoneProps) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -76,9 +78,9 @@ export function AudioDropzone({ files, onReplace, onAdd, onRemove, onMove, onTra
         <div className={styles.icon}>
           <span className="material-symbols-outlined">upload_file</span>
         </div>
-        <h3 className={styles.title}>Drop your audio here</h3>
-        <p className={styles.hint}>MP3, WAV, or AAC (Max 500MB)</p>
-        <p className={styles.browse}>or click to browse files</p>
+        <h3 className={styles.title}>{t('audioDropzone.dropTitle')}</h3>
+        <p className={styles.hint}>{t('audioDropzone.acceptedFormats')}</p>
+        <p className={styles.browse}>{t('audioDropzone.browseFiles')}</p>
         <input
           ref={inputRef}
           type="file"
@@ -108,7 +110,7 @@ export function AudioDropzone({ files, onReplace, onAdd, onRemove, onMove, onTra
                 className={styles.moveBtn}
                 onClick={() => onMove(index, -1)}
                 disabled={index === 0}
-                aria-label={`上移 ${file.name}`}
+                aria-label={t('audioDropzone.moveUp', { name: file.name })}
               >
                 <span className="material-symbols-outlined">arrow_upward</span>
               </button>
@@ -117,7 +119,7 @@ export function AudioDropzone({ files, onReplace, onAdd, onRemove, onMove, onTra
                 className={styles.moveBtn}
                 onClick={() => onMove(index, 1)}
                 disabled={index === files.length - 1}
-                aria-label={`下移 ${file.name}`}
+                aria-label={t('audioDropzone.moveDown', { name: file.name })}
               >
                 <span className="material-symbols-outlined">arrow_downward</span>
               </button>
@@ -125,7 +127,7 @@ export function AudioDropzone({ files, onReplace, onAdd, onRemove, onMove, onTra
                 type="button"
                 className={styles.removeBtn}
                 onClick={() => onRemove(index)}
-                aria-label={`移除 ${file.name}`}
+                aria-label={t('audioDropzone.remove', { name: file.name })}
               >
                 <span className="material-symbols-outlined">close</span>
               </button>
@@ -136,16 +138,16 @@ export function AudioDropzone({ files, onReplace, onAdd, onRemove, onMove, onTra
 
       <div className={styles.footer}>
         <div className={styles.total}>
-          Total: {formatSize(totalSize)} · {files.length} file{files.length !== 1 ? 's' : ''}
+          {t('audioDropzone.totalInfo', { size: formatSize(totalSize), count: files.length })}
         </div>
         <div className={styles.footerActions}>
           <button type="button" className={styles.replaceBtn} onClick={handleReplace}>
             <span className="material-symbols-outlined">refresh</span>
-            Replace Files
+            {t('audioDropzone.replaceFiles')}
           </button>
           <button type="button" className={styles.addBtn} onClick={() => addInputRef.current?.click()}>
             <span className="material-symbols-outlined">add</span>
-            Add More
+            {t('audioDropzone.addMore')}
           </button>
         </div>
       </div>
@@ -158,7 +160,7 @@ export function AudioDropzone({ files, onReplace, onAdd, onRemove, onMove, onTra
           disabled={files.length === 0 || processing}
           onClick={onTranscribe}
         >
-          {processing ? '识别中...' : files.length > 1 ? '统一 ASR' : '开始识别'}
+          {processing ? t('audioDropzone.recognizing') : files.length > 1 ? t('audioDropzone.unifiedAsr') : t('audioDropzone.startRecognition')}
         </Button>
       </div>
 

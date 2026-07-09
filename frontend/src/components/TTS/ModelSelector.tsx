@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { configApi } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import type { TTSConfig } from '../../types';
 import { Button, Input, Card, EmptyState } from '../ui';
 
@@ -8,6 +9,7 @@ interface ModelSelectorProps {
 }
 
 export function ModelSelector({ onSelect }: ModelSelectorProps) {
+  const { t } = useTranslation();
   const [configs, setConfigs] = useState<TTSConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -56,7 +58,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this model config?')) return;
+    if (!confirm(t('modelSelector.confirmDelete'))) return;
     try {
       await configApi.deleteModel(id);
       fetchConfigs();
@@ -112,42 +114,42 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
   };
 
   if (loading) {
-    return <Card><h3 style={h3Style}>🤖 Model Configuration</h3><div style={{ padding: 'var(--spacing-xl)' }}>Loading models...</div></Card>;
+    return <Card><h3 style={h3Style}>{t('modelSelector.title')}</h3><div style={{ padding: 'var(--spacing-xl)' }}>{t('modelSelector.loading')}</div></Card>;
   }
 
   return (
     <Card>
       <div style={headerStyle}>
-        <h3 style={h3Style}>🤖 Model Configuration</h3>
+        <h3 style={h3Style}>{t('modelSelector.title')}</h3>
         <Button
           variant={showForm ? 'ghost' : 'primary'}
           size="sm"
           onClick={() => setShowForm(!showForm)}
         >
-          {showForm ? 'Cancel' : '+ Add Model'}
+          {showForm ? t('modelSelector.cancel') : t('modelSelector.addModel')}
         </Button>
       </div>
 
       {showForm && (
         <div style={{ ...formContainerStyle, padding: 'var(--spacing-md)', background: 'var(--glow-primary)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--spacing-md)' }}>
           <Input
-            label="Model name"
+            label={t('modelSelector.modelName')}
             type="text"
-            placeholder="Enter model name"
+            placeholder={t('modelSelector.modelNamePlaceholder')}
             value={newConfig.name}
             onChange={(e) => setNewConfig({ ...newConfig, name: e.target.value })}
           />
           <Input
-            label="Provider"
+            label={t('modelSelector.provider')}
             type="text"
-            placeholder="qwen/azure/openai"
+            placeholder={t('modelSelector.providerPlaceholder')}
             value={newConfig.provider}
             onChange={(e) => setNewConfig({ ...newConfig, provider: e.target.value as TTSConfig['provider'] })}
           />
           <Input
-            label="Model name"
+            label={t('modelSelector.modelNameField')}
             type="text"
-            placeholder="qwen-tts"
+            placeholder={t('modelSelector.modelNameDefault')}
             value={newConfig.model_name}
             onChange={(e) => setNewConfig({ ...newConfig, model_name: e.target.value })}
           />
@@ -157,7 +159,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
             onClick={handleCreate}
             disabled={!newConfig.name.trim()}
           >
-            Create
+            {t('modelSelector.create')}
           </Button>
         </div>
       )}
@@ -165,8 +167,8 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
       {configs.length === 0 ? (
         <EmptyState
           icon="🤖"
-          title="No Models Configured"
-          description="Add a model configuration to get started."
+          title={t('modelSelector.noModels')}
+          description={t('modelSelector.noModelsDesc')}
         />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-sm)' }}>
@@ -191,7 +193,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
                   size="sm"
                   onClick={(e) => { e.stopPropagation(); handleDelete(config.id); }}
                 >
-                  Delete
+                  {t('modelSelector.delete')}
                 </Button>
               )}
             </div>

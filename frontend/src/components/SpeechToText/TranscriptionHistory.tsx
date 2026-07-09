@@ -1,4 +1,5 @@
 import type { TranscriptionRecord } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import styles from './TranscriptionHistory.module.css';
 
 interface TranscriptionHistoryProps {
@@ -7,13 +8,15 @@ interface TranscriptionHistoryProps {
 }
 
 export function TranscriptionHistory({ records, onDelete }: TranscriptionHistoryProps) {
+  const { t } = useTranslation();
+
   if (records.length === 0) {
-    return <div className={styles.empty}>暂无识别历史</div>;
+    return <div className={styles.empty}>{t('transcriptionHistory.empty')}</div>;
   }
 
   return (
     <div className={styles.container}>
-      <h3>识别历史 <span className={styles.count}>{records.length}</span></h3>
+      <h3>{t('transcriptionHistory.title')} <span className={styles.count}>{records.length}</span></h3>
       <div className={styles.list}>
         {records.map(record => (
           <div key={record.id} className={styles.card}>
@@ -45,10 +48,10 @@ export function TranscriptionHistory({ records, onDelete }: TranscriptionHistory
               <button
                 className={styles.deleteButton}
                 onClick={() => {
-                  if (confirm('确定删除这条识别记录？')) onDelete(record.id);
+                  if (confirm(t('transcriptionHistory.confirmDelete'))) onDelete(record.id);
                 }}
               >
-                删除
+                {t('transcriptionHistory.delete')}
               </button>
             </div>
           </div>

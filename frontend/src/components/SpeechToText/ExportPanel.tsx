@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import styles from './ExportPanel.module.css';
 
 interface ExportPanelProps {
@@ -7,11 +8,12 @@ interface ExportPanelProps {
 }
 
 export function ExportPanel({ hasResult, onDownloadSrt, onExport }: ExportPanelProps) {
+  const { t } = useTranslation();
   return (
     <div className={styles.card}>
       <h3 className={styles.cardTitle}>
         <span className="material-symbols-outlined">download</span>
-        Export
+        {t('exportPanel.title')}
       </h3>
       <div className={styles.buttonRow}>
         <button

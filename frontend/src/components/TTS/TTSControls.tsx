@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ttsApi, voiceApi } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import type { TTSRequest, TTSResult, VoiceProfile } from '../../types';
 import { Button, Input, Select, Slider, Card, Alert, Tabs } from '../ui';
 
@@ -14,6 +15,7 @@ interface Tab {
 }
 
 export function TTSControls({ onSynthesize }: TTSControlsProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [speed, setSpeed] = useState(1.0);
   const [volume, setVolume] = useState(80);
@@ -61,15 +63,15 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
       onSynthesize?.(res);
     } catch (err) {
       console.error('Synthesis failed:', err);
-      setError('Synthesis failed');
+      setError(t('ttsControls.synthesisFailed'));
     } finally {
       setSynthesizing(false);
     }
   };
 
   const tabs: Tab[] = [
-    { id: 'standard', label: 'Standard Voices', icon: '📢' },
-    { id: 'cloned', label: 'Cloned Voices', icon: '🎤' },
+    { id: 'standard', label: t('ttsControls.standardVoices'), icon: '📢' },
+    { id: 'cloned', label: t('ttsControls.clonedVoices'), icon: '🎤' },
   ];
 
   const handleTabChange = (tabId: string) => {
@@ -138,7 +140,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
   return (
     <Card>
       <div style={headerStyle}>
-        <h3 style={h3Style}>🔊 Text to Speech</h3>
+        <h3 style={h3Style}>{t('ttsControls.title')}</h3>
       </div>
 
       <div style={tabsContainerStyle}>
@@ -150,7 +152,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
       </div>
 
       <Select
-        label="Voice Selection"
+        label={t('ttsControls.voiceSelection')}
         options={currentVoiceOptions}
         value={selectedVoiceId}
         onChange={(e) => setSelectedVoiceId(e.target.value as string)}
@@ -159,23 +161,23 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
 
       {useClonedVoice && clonedVoiceOptions.length === 0 && (
         <Alert variant="warning">
-          ⚠️ No cloned voices available. Please clone a voice first in the Voice Clone tab.
+          {t('ttsControls.noClonedVoices')}
         </Alert>
       )}
 
       <div style={textareaContainerStyle}>
         <Input
-          label="Text"
+          label={t('ttsControls.textLabel')}
           type="textarea"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Enter text to convert to speech..."
+          placeholder={t('ttsControls.textPlaceholder')}
         />
       </div>
 
       <div style={controlsContainerStyle}>
         <Slider
-          label="Speed"
+          label={t('ttsControls.speed')}
           value={speed}
           onChange={setSpeed}
           min={0.5}
@@ -184,7 +186,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
         />
 
         <Slider
-          label="Volume"
+          label={t('ttsControls.volume')}
           value={volume}
           onChange={setVolume}
           min={0}
@@ -193,7 +195,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
         />
 
         <Slider
-          label="Pitch"
+          label={t('ttsControls.pitch')}
           value={pitch}
           onChange={(val) => setPitch(val as number)}
           min={0.5}
@@ -209,7 +211,7 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
         loading={synthesizing}
         disabled={!text.trim()}
       >
-        {synthesizing ? 'Synthesizing...' : 'Generate Speech'}
+        {synthesizing ? t('ttsControls.synthesizing') : t('ttsControls.generateSpeech')}
       </Button>
 
       {error && (

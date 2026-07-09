@@ -1,4 +1,5 @@
 import type { RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, VoxCPMParams } from '../types';
+import { t } from '../i18n';
 
 export type VoiceRoleKind = 'Narrator' | 'Cast';
 
@@ -78,5 +79,5 @@ export function createVoiceRoleDraft({
 }
 
 export function roleVoiceLabelFromParams(params: EngineParams, fallback?: string | null): string {
-  return defaultVoiceFromParams(params) || fallback || '未设置音色';
+  return defaultVoiceFromParams(params) || fallback || t('voiceRoleDefaults.noVoiceSet');
 }
