@@ -106,13 +106,30 @@ export interface DbProjectBundle {
 let cachedDb: DatabaseSync | null = null;
 
 function resolveDatabaseUrl(): string {
+  // 1) Explicit DATABASE_URL in the environment (set by e2e-run.cjs)
   if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+
+  // 2) If ENV_FILE is set (e.g. ENV_FILE=.env.e2e), read the overlay .env
+  //    which typically contains the test-isolated DATABASE_URL.
+  const overlayName = process.env.ENV_FILE;
+  if (overlayName) {
+    const overlayPath = path.resolve(process.cwd(), 'backend', overlayName);
+    if (fs.existsSync(overlayPath)) {
+      const overlayTxt = fs.readFileSync(overlayPath, 'utf-8');
+      const overlayMatch = overlayTxt.match(/^\s*DATABASE_URL\s*=\s*(.+?)\s*$/m);
+      if (overlayMatch) return overlayMatch[1];
+    }
+  }
+
+  // 3) Fallback: read backend/.env
   const envPath = path.resolve(process.cwd(), 'backend', '.env');
   if (fs.existsSync(envPath)) {
     const txt = fs.readFileSync(envPath, 'utf-8');
     const m = txt.match(/^\s*DATABASE_URL\s*=\s*(.+?)\s*$/m);
     if (m) return m[1];
   }
+
+  // 4) Hard-coded default
   return 'sqlite:///./voice_clone.db';
 }
 
@@ -120,14 +137,19 @@ function resolveSqliteFilePath(url: string): string {
   let fp = url.replace(/^sqlite:\/\//, '');
   if (fp.startsWith('///')) fp = fp.slice(3);
   else if (fp.startsWith('//')) fp = fp.slice(2);
-  // Normalize away any /. or /.. segments
+  // Normalize — on Windows this may turn "/./foo" into "\foo" which
+  // path.isAbsolute wrongly treats as drive-root absolute.
   fp = path.normalize(fp);
 
-  // Absolute path — use directly if it exists
+  // Absolute path that actually exists → use directly
+  // (only for truly absolute paths like C:\foo on Windows or /foo on Unix)
   if (path.isAbsolute(fp) && fs.existsSync(fp)) return fp;
 
+  // Strip any leading slash/backslash so path.resolve treats it as relative.
+  // E.g. on Windows "\voice_clone.db" → "voice_clone.db"
+  const stripped = fp.replace(/^[/\\]+/, '');
+
   // Try candidates relative to CWD
-  const stripped = fp.replace(/^\//, '');
   const candidates = [
     path.resolve(process.cwd(), 'backend', stripped),
     path.resolve(process.cwd(), stripped),

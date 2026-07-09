@@ -1078,16 +1078,11 @@ export function TTSSynthesis({
       // Step 2: Mark all as queued
       dispatch({ type: 'MARK_QUEUED', ids: toRegenerate.map(s => s.id) });
 
-      // Step 3: Generate in parallel (3 workers)
-      // Use ref to always get the LATEST handleRegenerate (not stale closure)
+      // Step 3: Generate sequentially to avoid rate-limiting external TTS services
       let i = 0;
-      const next = async () => {
-        while (i < toRegenerate.length) {
-          const seg = toRegenerate[i++];
-          await handleRegenerateRef.current(seg.id);
-        }
-      };
-      await Promise.all(Array.from({ length: 3 }, () => next()));
+      while (i < toRegenerate.length) {
+        await handleRegenerateRef.current(toRegenerate[i++].id);
+      }
       showToast(t('tts.allGenerationComplete'));
     } catch (e) {
       console.error('Regenerate all failed:', e);

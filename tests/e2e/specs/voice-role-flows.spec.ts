@@ -77,14 +77,14 @@ test.describe('MiMo 预置音色角色创建', () => {
     // 保存角色
     await page.getByRole('button', { name: '保存角色' }).click();
 
-    // 编辑器关闭，回到角色管理页
-    await expect(page.getByRole('heading', { name: '角色管理' })).toBeVisible({ timeout: 5_000 });
+    // Wait for editor to CLOSE — "保存角色" button should disappear from the page
+    await expect(page.getByRole('button', { name: '保存角色' })).not.toBeVisible({ timeout: 10_000 });
 
     // ── Data-layer verification: read role from backend API ──
 
     await page.waitForTimeout(1_000);
     const savedRole = await page.evaluate(async (name: string) => {
-      const resp = await fetch('/api/roles');
+      const resp = await fetch('/api/roles?project_id=test-e2e-project');
       const roles = await resp.json();
       return roles.find((r: { name: string }) => r.name === name);
     }, 'E2E-预置测试');

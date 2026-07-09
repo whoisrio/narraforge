@@ -447,7 +447,10 @@ export function segmentedReducer(state: State, action: Action): State {
           // Backend mode: audio stored on filesystem via audio_path
           if (action.current_audio_path !== undefined) {
             seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
-            seg.audio.current = { path: action.current_audio_path };
+            seg.audio.current = {
+              path: action.current_audio_path,
+              ...(action.duration_sec != null ? { duration_sec: action.duration_sec } : {}),
+            };
           }
           if (action.previous_audio_path !== undefined) {
             seg.audio.previous = { path: action.previous_audio_path };

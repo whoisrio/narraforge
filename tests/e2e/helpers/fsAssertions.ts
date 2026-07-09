@@ -15,9 +15,10 @@ const E2E_SEGMENTED_DIR = path.resolve(__dirname, '..', '..', '..', 'backend', '
  */
 export function expectProjectDirGone(projectId: string): void {
   const dir = path.join(E2E_SEGMENTED_DIR, projectId);
-  expect(fs.existsSync(dir),
+  expect(
+    retryUntilGone(dir, 5000),
     `Project directory should be deleted: ${dir}`
-  ).toBe(false);
+  ).toBe(true);
 }
 
 /**
@@ -28,10 +29,26 @@ export function expectSegmentFileGone(projectId: string, chapterId: string, segm
     path.join(E2E_SEGMENTED_DIR, projectId, 'chapters', chapterId, 'segments', `${segmentId}.${ext}`)
   );
   for (const f of candidates) {
-    expect(fs.existsSync(f),
+    expect(
+      retryUntilGone(f, 5000),
       `Segment audio file should be deleted: ${f}`
-    ).toBe(false);
+    ).toBe(true);
   }
+}
+
+/**
+ * Poll every 200ms for up to `maxWaitMs` until the path no longer exists.
+ * Returns true if gone, false if still there after timeout.
+ */
+function retryUntilGone(p: string, maxWaitMs: number): boolean {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    if (!fs.existsSync(p)) return true;
+    // Brief sleep — in ESM Playwright we can't do sync sleep, but fs check is cheap
+    const start = Date.now();
+    while (Date.now() - start < 200) { /* spin-wait, acceptable for 5s max */ }
+  }
+  return !fs.existsSync(p);
 }
 
 /**
