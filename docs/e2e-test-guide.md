@@ -6,32 +6,31 @@ Playwright auto-starts both backend (port 8002) and frontend (port 5173) via `we
 No need to manually start services.
 
 ```bash
-# Full suite
-npx playwright test
+npm run e2e          # Full suite (26 tests, --workers=1, HTML report)
+npm run e2e:ui       # Playwright visual test explorer
+npm run e2e:report   # Open latest HTML report
+npm run e2e:clean    # Remove all test-results/ and playwright-report/ dirs
 
 # Single spec file
-npx playwright test tests/e2e/specs/project-pages.spec.ts
+npx playwright test tests/e2e/specs/project-pages.spec.ts --workers=1
 
 # Single test by name
-npx playwright test --grep "opens project and shows overview"
-
-# With list reporter (shows pass/fail per test)
-npx playwright test --reporter=list
-
-# With custom run directory for artifacts
-PW_RUN=my-run npx playwright test
+npx playwright test --grep "打开项目" --workers=1
 ```
+
+Tests run **serially** (`--workers=1`) because they share a single SQLite database.
+Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block `shutil.rmtree` during project deletion).
 
 ## Directory Layout
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs |
-| `tests/e2e/fixtures/` | Stable input fixtures (sample audio, etc.) |
-| `tests/e2e/helpers/` | Shared helper code (navigation, assertions, seed) |
-| `tests/e2e/manual/` | Manual verification scripts and checklists |
-| `tests/e2e/snapshots/` | Visual-regression baselines |
-| `test-results/` | Generated artifacts (do not commit) |
+| `tests/e2e/specs/` | Automated browser E2E specs (26 tests, all Chinese locale) |
+| `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
+| `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
+| `tests/e2e/global-setup.ts` | Seed data before all tests |
+| `test-results/` | Per-run failure artifacts + screenshots (ignored, do not commit) |
+| `playwright-report/` | HTML reports (ignored, do not commit) |
 
 ## Test Data Setup
 
@@ -72,14 +71,14 @@ Backend data readers:
 | `readBackendProject(page, id)` | Single project with full chapters/segments | `../helpers` (barrel) |
 | `readBackendProjects(page)` | All projects (summary) | `../helpers` (barrel) |
 | `readActiveProject(page)` | Most recently updated project | `../helpers` (barrel) |
-| `readDbProject(id)` | Raw project bundle (project + chapters + segments + referenced roles) directly from the database | `../helpers/dbReader` |
-| `readDbProjects()` | All project summary rows (for count/existence assertions) | `../helpers/dbReader` |
+| `readDbProject(id)` | Raw project bundle (project + chapters + segments + roles) directly from SQLite | `../helpers/dbReader` |
+| `readDbProjects()` | All project summary rows | `../helpers/dbReader` |
 | `validateDbProjectRow(bundle)` | Validates a raw DB bundle against `docs/database-schema.md` | `../helpers/dbReader` |
+| `verifyDbWithScreenshot(page, id, label)` | DB read + schema validation + labeled screenshot | `../helpers/dualReadSnapshot` |
 
 > `readDbProject` / `readDbProjects` / `validateDbProjectRow` live in
 > `tests/e2e/helpers/dbReader.ts` and are imported **directly** (not via the barrel),
-> because they depend on `node:sqlite` (Node >= 22.5). This keeps the dependency
-> isolated to DB-reading specs. See "Dual-Layer Verification" below.
+> because they depend on `node:sqlite` (Node >= 22.5).
 
 ## Test Requirements
 
@@ -98,47 +97,18 @@ Use the validators from `dataAssertions.ts` for EngineParams, VoiceSource, Audio
 
 ### Dual-Layer Verification (API + DB)
 
-Every write must be verified at **both** layers, because the API response and the DB
-row are two independent representations that can each diverge:
+Every write must be verified at **both** layers:
 
-- **API layer** — what the frontend and integrations see. Read with
-  `readBackendProject(page, id)` and validate with `validateChapter` /
-  `validateSegment` (these check the API shape, including the derived `status` field).
-- **DB layer** — what was actually persisted. Read with `readDbProject(id)` (raw rows
-  via `node:sqlite`) and validate with `validateDbProjectRow(bundle)` against
-  `docs/database-schema.md`.
+- **API layer** — what the frontend sees. Read with `readBackendProject(page, id)` and
+  validate with `validateChapter` / `validateSegment`.
+- **DB layer** — what was actually persisted. Read with `readDbProject(id)` and validate
+  with `validateDbProjectRow(bundle)` against `docs/database-schema.md`.
 
-The two layers are validated against **their own contracts** — do **NOT** assert
-`api === db`. They legitimately differ, e.g.:
+The two layers are validated against **their own contracts** — do **NOT** assert `api === db`.
+They legitimately differ (datetime serialization, column mapping, flat vs discriminated union shapes).
 
-- service-layer `datetime` → string serialization (`created_at` is a `datetime` in DB, a `str` in API);
-- column mapping (`role_id`, `default_narrator_role_id`, `animation_spec_json`);
-- the **flat `SegmentEngineParams`** shape in `segment.generated_params`
-  (`edge_voice` / `edge_rate` / …) vs the **`EngineParams` discriminated union** in
-  `chapter.voice` / `roles.voice` (`voice` / `rate` / …).
-
-Reading both and validating each is the whole point — it catches "API looks right but
-DB never persisted" and "DB stored but service maps it wrong on the way out".
-
-**DB reader usage** (`tests/e2e/helpers/dbReader.ts`):
-
-```ts
-import { readDbProject, validateDbProjectRow } from '../helpers/dbReader';
-
-// in the post-commit step, alongside the API read:
-const db = await readDbProject('test-e2e-project');
-if (!db) throw new Error('project was not persisted to the database');
-validateDbProjectRow(db); // throws on any docs/database-schema.md contract violation
-```
-
-- The connector is **connection-string driven** via `DATABASE_URL` (reads `backend/.env`
-  or `process.env.DATABASE_URL`). `sqlite://` is fully supported (local dev DB).
-  `postgresql://` / `mysql://` are guarded with a clear error until a `pg` / `mysql2`
-  connector shim is added — so the mechanism works whether the DB is local or remote.
-- `node:sqlite` requires **Node >= 22.5**.
-- JSON columns come back as strings from SQLite and are parsed inside
-  `validateDbProjectRow`; `generated_params` is validated loosely (engine only) because
-  its flat shape differs from the `EngineParams` union.
+The `verifyDbWithScreenshot()` helper wraps both DB read + validation + a labeled
+viewport screenshot that appears in the HTML report automatically.
 
 ### Console Error Collection
 
@@ -147,9 +117,10 @@ Filter out known React warnings (empty `src` attribute, etc.) in `helpers/errors
 
 ### Screenshots
 
-- Save screenshots to `test-results/` for manual review.
-- Do NOT send screenshots to the AI model — models don't support multimodal input.
-- Use `screenshot: 'only-on-failure'` in Playwright config (default).
+- `screenshot: 'on'` in Playwright config — every test captures a viewport screenshot at completion.
+- `verifyDbWithScreenshot()` captures additional screenshots at each dual-read verification point.
+- All screenshots appear in the HTML report (`npm run e2e:report`).
+- Generated artifacts go to `test-results/` and `playwright-report/` — **do not commit**.
 
 ### CSS Module Selectors
 
@@ -159,10 +130,16 @@ CSS Modules hash class names. Use partial match selectors:
 
 ### i18n Considerations
 
-- Components using `useTranslation()` render in the current locale (Chinese when set).
-- Components using static `t` from `i18n` always render in English.
-- Use bilingual regex patterns when selectors might match either language: `/批量合成|Batch Synthesize/`
+- All 26 tests set `setLocaleToZhCN(page)` and use Chinese test names.
+- Components using `useTranslation()` render correctly in Chinese.
+- Components using static `t` from `i18n` always render in English — watch for these.
 
-## Current Status
+## Config Highlights
 
-See `docs/e2e-test-progress.md` for pass rate, known failures, and fixes applied.
+- `screenshot: 'on'` — viewport screenshot per test
+- `--workers=1` — serial execution (shared SQLite)
+- `PW_RUN=$(date +%Y-%m-%dT%H-%M-%S)` — per-run directory naming, set by `npm run e2e`
+- `reuseExistingServer: !process.env.CI` — reuse local servers; CI always starts fresh
+- `DATABASE_URL` — connection string for dbReader, falls back to `backend/.env`
+
+See `docs/e2e-test-progress.md` for current status and gap analysis.
