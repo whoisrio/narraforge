@@ -1,10 +1,10 @@
 {
   "private": true,
   "scripts": {
-    "e2e": "PW_RUN=$(date +%Y-%m-%dT%H-%M-%S) DATABASE_URL=sqlite:///backend/voice_clone_e2e.db playwright test --workers=1",
+    "e2e": "node scripts/e2e-run.cjs",
     "e2e:ui": "playwright test --ui",
-    "e2e:clean": "rm -rf test-results/*/ playwright-report/*/",
-    "e2e:report": "npx playwright show-report playwright-report/$(ls -t playwright-report | head -1)"
+    "e2e:clean": "node -e \"require('fs').rmSync('test-results',{recursive:true,force:true});require('fs').rmSync('playwright-report',{recursive:true,force:true})\"",
+    "e2e:report": "node -e \"const{readdirSync,statSync}=require('fs');const d=readdirSync('playwright-report').filter(x=>statSync('playwright-report/'+x).isDirectory()).sort().pop();require('child_process').spawnSync('npx',['playwright','show-report','playwright-report/'+d],{stdio:'inherit',shell:true})\""
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
