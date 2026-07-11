@@ -3,6 +3,7 @@
   "scripts": {
     "dev": "node scripts/dev-run.cjs",
     "e2e": "node scripts/e2e-run.cjs",
+    "e2e:workflow": "node scripts/e2e-run.cjs --workflow",
     "e2e:ui": "playwright test --ui",
     "e2e:clean": "node -e \"require('fs').rmSync('test-results',{recursive:true,force:true});require('fs').rmSync('playwright-report',{recursive:true,force:true})\"",
     "e2e:report": "node scripts/e2e-report.cjs"

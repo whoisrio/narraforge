@@ -51,7 +51,7 @@ test.describe('工作流启动与中断', () => {
 
   // @feature §7.1 POST /workflow — start a new run
   // @feature §5.1 Status — running → interrupted
-  test('启动工作流并等待脚本审查中断', async ({ page }) => {
+  test('启动工作流并等待脚本审查中断 @workflow', async ({ page }) => {
     test.setTimeout(600_000); // LLM calls can take 5+ minutes total
 
     await setLocaleToZhCN(page);
@@ -120,7 +120,7 @@ test.describe('审批通过', () => {
 
   // @feature §7.1 POST /resume — approve
   // @feature §8.3 ReviewEditor — approve flow
-  test('审批通过后完成全流程', async ({ page }) => {
+  test('审批通过后完成全流程 @workflow', async ({ page }) => {
     test.setTimeout(600_000); // Full pipeline: gen_script + review + split + synthesis
 
     await setLocaleToZhCN(page);
@@ -205,7 +205,7 @@ test.describe('审批拒绝', () => {
 
   // @feature §7.1 POST /resume — reject
   // @feature §8.3 ReviewEditor — reject flow
-  test('审批拒绝后回到脚本生成并再次中断', async ({ page }) => {
+  test('审批拒绝后回到脚本生成并再次中断 @workflow', async ({ page }) => {
     test.setTimeout(600_000); // Two rounds of gen_script + review
 
     await setLocaleToZhCN(page);
@@ -271,7 +271,7 @@ test.describe('并发限制', () => {
   });
 
   // @feature §12.1 — one active workflow per project
-  test('已有活跃工作流时新建运行按钮被禁用', async ({ page }) => {
+  test('已有活跃工作流时新建运行按钮被禁用 @workflow', async ({ page }) => {
     test.setTimeout(300_000);
 
     await setLocaleToZhCN(page);
@@ -318,7 +318,7 @@ test.describe('取消工作流', () => {
 
   // @feature §7.1 DELETE /workflow — cancel
   // @feature §5.2 Status × 操作矩阵
-  test('取消中断中的工作流', async ({ page }) => {
+  test('取消中断中的工作流 @workflow', async ({ page }) => {
     test.setTimeout(300_000);
 
     await setLocaleToZhCN(page);
@@ -372,7 +372,7 @@ test.describe('取消工作流', () => {
 
 test.describe('工作流列表', () => {
   // @feature §8.2 WorkflowHub — run list
-  test('显示工作流运行列表和状态', async ({ page }) => {
+  test('显示工作流运行列表和状态 @workflow', async ({ page }) => {
     test.setTimeout(300_000);
 
     await setLocaleToZhCN(page);
@@ -413,7 +413,7 @@ test.describe('工作流列表', () => {
 
 test.describe('工作流详情', () => {
   // @feature §8.4 WorkflowRunDetail — stage cards
-  test('查看已完成工作流的详情页', async ({ page }) => {
+  test('查看已完成工作流的详情页 @workflow', async ({ page }) => {
     test.setTimeout(600_000);
 
     await setLocaleToZhCN(page);

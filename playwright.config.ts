@@ -38,7 +38,7 @@ export default defineConfig({
       name: 'backend',
       command: 'uv run python -m uvicorn main:app --host 127.0.0.1 --port 8002',
       cwd: 'backend',
-      env: { ENV_FILE: '.env.e2e' },
+      env: { ENV_FILE: process.env.E2E_ENV_FILE || '.env.e2e' },
       url: 'http://127.0.0.1:8002/health',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
