@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus, WorkflowRun, WorkflowStartRequest, WorkflowResumeRequest, WorkflowReplayRequest, WorkflowForkRequest } from '../types';
 
 const api = axios.create({
   baseURL: '/api',
@@ -623,4 +623,36 @@ export const voxcpmApi = {
     const { data } = await api.post<TTSResult>('/voxcpm/ultimate-clone', params);
     return data;
   },
+};
+
+// ============ Workflow API ============
+
+export const workflowApi = {
+  /** 启动新工作流 */
+  start: (projectId: string, data?: WorkflowStartRequest) =>
+    api.post<WorkflowRun>(`/projects/${projectId}/workflow`, data).then(r => r.data),
+
+  /** 获取项目工作流列表 */
+  list: (projectId: string) =>
+    api.get<WorkflowRun[]>(`/projects/${projectId}/workflow`).then(r => r.data),
+
+  /** 获取单个工作流详情 */
+  get: (projectId: string, runId: string) =>
+    api.get<WorkflowRun>(`/projects/${projectId}/workflow/${runId}`).then(r => r.data),
+
+  /** 审批恢复 */
+  resume: (projectId: string, runId: string, data: WorkflowResumeRequest) =>
+    api.post<WorkflowRun>(`/projects/${projectId}/workflow/${runId}/resume`, data).then(r => r.data),
+
+  /** 从指定阶段重放 */
+  replay: (projectId: string, runId: string, data: WorkflowReplayRequest) =>
+    api.post<WorkflowRun>(`/projects/${projectId}/workflow/${runId}/replay`, data).then(r => r.data),
+
+  /** 从指定阶段分支 */
+  fork: (projectId: string, runId: string, data: WorkflowForkRequest) =>
+    api.post<WorkflowRun>(`/projects/${projectId}/workflow/${runId}/fork`, data).then(r => r.data),
+
+  /** 取消工作流 */
+  cancel: (projectId: string, runId: string) =>
+    api.delete<WorkflowRun>(`/projects/${projectId}/workflow/${runId}`).then(r => r.data),
 };

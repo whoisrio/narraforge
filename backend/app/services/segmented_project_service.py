@@ -581,8 +581,8 @@ def synthesize_segment(
             role_params = role.voice.get("params", {}) if isinstance(role.voice, dict) else {}
 
     effective = _merge_params(_flatten_voice_for_synthesis(chapter.voice or {}), role_params, request_params)
-    logger.info("[synthesize_segment] role_params=%s request_params=%s merged engine=%s mimo_mode=%s",
-                 role_params, request_params, effective.get('engine'), effective.get('mimo_mode'))
+    logger.info("[synthesize_segment] chapter.voice=%s role_params=%s request_params=%s merged=%s",
+                 chapter.voice, role_params, request_params, effective)
 
     # Preserve role_id and segment_kind for reproducibility
     if role_id is not None:
@@ -822,3 +822,63 @@ def mark_silent_segments_as_missing(
         "already_missing": already_missing,
         "file_missing": file_missing,
     }
+
+
+def create_chapter_for_project(
+    db: Session,
+    project_id: str,
+    chapter_name: str,
+    position: int,
+    voice: dict[str, Any] | None = None,
+) -> SegmentedProjectChapter:
+    """Create a new chapter under an existing project.
+
+    Returns the persisted ``SegmentedProjectChapter`` ORM instance.
+    The caller is responsible for committing the session.
+    """
+    from uuid import uuid4
+
+    project = db.query(SegmentedProject).filter_by(id=project_id).first()
+    if project is None:
+        raise LookupError(f"project_not_found: {project_id}")
+
+    chapter = SegmentedProjectChapter(
+        id=str(uuid4()),
+        project_id=project_id,
+        position=position,
+        name=chapter_name,
+        voice=voice or {},
+    )
+    db.add(chapter)
+    db.flush()
+    return chapter
+
+
+def create_segment_for_chapter(
+    db: Session,
+    chapter_id: str,
+    text: str,
+    position: int,
+    *,
+    emotion: str | None = None,
+    role: str | None = None,
+    segment_kind: str = "narration",
+) -> SegmentedProjectSegment:
+    """Create a new segment under an existing chapter.
+
+    Returns the persisted ``SegmentedProjectSegment`` ORM instance.
+    The caller is responsible for committing the session.
+    """
+    from uuid import uuid4
+
+    segment = SegmentedProjectSegment(
+        id=str(uuid4()),
+        chapter_id=chapter_id,
+        position=position,
+        text=text,
+        emotion=emotion,
+        segment_kind=segment_kind,
+    )
+    db.add(segment)
+    db.flush()
+    return segment

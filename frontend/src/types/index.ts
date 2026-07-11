@@ -553,3 +553,74 @@ export interface SSMLAnnotationItem {
   ssml: string;
   rationale: string;
 }
+
+// ── Workflow Types ──
+
+export type WorkflowStatus = 'running' | 'interrupted' | 'completed' | 'failed' | 'cancelled';
+export type WorkflowStageName = 'gen_script' | 'script_review' | 'split_segment' | 'synthesis';
+
+export interface WorkflowStage {
+  name: WorkflowStageName;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  duration_sec: number | null;
+}
+
+export interface WorkflowRun {
+  id: string;
+  project_id: string;
+  thread_id: string;
+  status: WorkflowStatus;
+  current_stage: WorkflowStageName;
+  stages: WorkflowStage[];
+  interrupt_payload?: WorkflowInterruptPayload;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowInterruptPayload {
+  script: string;
+  review: WorkflowReviewResult;
+  available_actions: ('approve' | 'reject')[];
+}
+
+export interface WorkflowReviewDimension {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  comment: string;
+  suggestion: string | null;
+}
+
+export interface WorkflowReviewResult {
+  dimensions: WorkflowReviewDimension[];
+  overall_score: number;
+  overall_comment: string;
+  has_critical_issue: boolean;
+}
+
+export interface WorkflowStartRequest {
+  source_document?: string;
+}
+
+export interface WorkflowResumeRequest {
+  stage: WorkflowStageName;
+  action: 'approve' | 'reject';
+  edited_script?: string;
+  comment?: string;
+  feedback?: string;
+}
+
+export interface WorkflowReplayRequest {
+  from_stage: WorkflowStageName;
+}
+
+export interface WorkflowForkRequest {
+  from_stage: WorkflowStageName;
+  state_override: Record<string, unknown>;
+}
+
+// SSE 事件类型
+export interface WorkflowSSEEvent {
+  type: 'stage_start' | 'stage_progress' | 'stage_complete' | 'interrupt' | 'error' | 'workflow_complete';
+  data: Record<string, unknown>;
+}

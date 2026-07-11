@@ -101,6 +101,21 @@ export interface DbProjectBundle {
   roles: DbRoleRow[];
 }
 
+export interface DbWorkflowRunRow {
+  id: string;
+  project_id: string;
+  thread_id: string;
+  status: string;
+  current_stage: string;
+  error: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  [key: string]: unknown;
+}
+
+const VALID_WORKFLOW_STATUSES = ['running', 'interrupted', 'completed', 'failed', 'cancelled'];
+const VALID_WORKFLOW_STAGES = ['gen_script', 'script_review', 'split_segment', 'synthesis', 'completed'];
+
 // ── Connection-string-driven connector ──
 
 let cachedDb: DatabaseSync | null = null;
@@ -329,5 +344,50 @@ export function validateDbProjectRow(bundle: DbProjectBundle): void {
     if (typeof r.id !== 'string') throw new Error('[db] role.id missing or invalid');
     const voice = parseJson(r.voice, `db role ${r.id} voice`);
     validateEngineParams(voice, `db role ${r.id}.voice`);
+  }
+}
+
+// ── WorkflowRun readers ──
+
+/**
+ * Read a single WorkflowRun row directly from the database.
+ * Returns undefined if the run id does not exist.
+ */
+export async function readDbWorkflowRun(runId: string): Promise<DbWorkflowRunRow | undefined> {
+  const db = getDb();
+  return db.prepare('SELECT * FROM workflow_runs WHERE id = ?').get(runId) as DbWorkflowRunRow | undefined;
+}
+
+/**
+ * Read all WorkflowRun rows for a given project, newest first.
+ */
+export async function readDbWorkflowRuns(projectId: string): Promise<DbWorkflowRunRow[]> {
+  const db = getDb();
+  return db
+    .prepare('SELECT * FROM workflow_runs WHERE project_id = ? ORDER BY created_at DESC')
+    .all(projectId) as DbWorkflowRunRow[];
+}
+
+/**
+ * Validate a raw DB WorkflowRun row against the schema.
+ * Throws on any contract violation.
+ */
+export function validateWorkflowRun(run: DbWorkflowRunRow): void {
+  if (typeof run.id !== 'string' || !run.id) throw new Error('[db] workflow_run.id missing or invalid');
+  if (typeof run.project_id !== 'string' || !run.project_id) throw new Error(`[db] workflow_run "${run.id}" project_id missing`);
+  if (typeof run.thread_id !== 'string' || !run.thread_id) throw new Error(`[db] workflow_run "${run.id}" thread_id missing`);
+  if (typeof run.status !== 'string' || !VALID_WORKFLOW_STATUSES.includes(run.status)) {
+    throw new Error(`[db] workflow_run "${run.id}" status invalid: "${run.status}"`);
+  }
+  if (typeof run.current_stage !== 'string' || !VALID_WORKFLOW_STAGES.includes(run.current_stage)) {
+    throw new Error(`[db] workflow_run "${run.id}" current_stage invalid: "${run.current_stage}"`);
+  }
+  if (run.error !== null && typeof run.error !== 'string') {
+    throw new Error(`[db] workflow_run "${run.id}" error must be null or string`);
+  }
+  for (const key of ['created_at', 'updated_at'] as const) {
+    if (run[key] !== null && typeof run[key] !== 'string') {
+      throw new Error(`[db] workflow_run "${run.id}" ${key} must be null or string`);
+    }
   }
 }

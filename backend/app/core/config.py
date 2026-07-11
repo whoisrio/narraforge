@@ -20,7 +20,7 @@ def _resolve_env_refs(value: str) -> str:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # App
     app_name: str = "NarraForge"
@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     llm_api_key: str = ""           # 留空则自动回退到 mimo_api_key
     llm_base_url: str = ""          # 留空则自动回退到 mimo_base_url
     llm_model: str = "mimo-v2.5-pro"
+
+    # Agent LLM（工作流脚本生成/审查/拆分等非 TTS 功能，留空则回退到 llm_* 配置）
+    agent_llm_api_key: str = ""
+    agent_llm_base_url: str = ""
+    agent_llm_model: str = ""
 
     # 公网访问 URL（CosyVoice 声音注册需要公网可访问的音频 URL）
     # 本地开发可以使用 ngrok 暴露的 URL，如：https://xxxx.ngrok.io

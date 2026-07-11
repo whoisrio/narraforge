@@ -539,12 +539,16 @@ def _run_async(coro):
     asyncio.run would raise RuntimeError)."""
     import asyncio
     try:
-        asyncio.get_running_loop()
+        loop = asyncio.get_running_loop()
     except RuntimeError:
+        loop = None
+
+    if loop is None:
+        # No running loop — use asyncio.run
         return asyncio.run(coro)
-    # Already in a loop — create an isolated one so we don't block the caller.
-    loop = asyncio.new_event_loop()
-    try:
-        return loop.run_until_complete(coro)
-    finally:
-        loop.close()
+    else:
+        # Already in a loop — create an isolated one in a new thread
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(asyncio.run, coro)
+            return future.result()

@@ -121,6 +121,7 @@ class EdgeTTSService:
         voice: str,
         rate: str = "+0%",
         volume: str = "+0%",
+        max_retries: int = 3,
     ) -> tuple[bytes, str]:
         """使用 edge-tts 合成语音
 
@@ -129,28 +130,39 @@ class EdgeTTSService:
             voice: 音色名 (如 "zh-CN-XiaoxiaoNeural")
             rate: 语速 (如 "+0%", "+50%", "-20%")
             volume: 音量 (如 "+0%", "+10%", "-10%")
+            max_retries: 最大重试次数
 
         Returns:
             (audio_data, audio_format) 音频数据和格式
         """
-        communicate = edge_tts.Communicate(
-            text=text,
-            voice=voice,
-            rate=rate,
-            volume=volume,
-            connect_timeout=10,
-            receive_timeout=30,
-        )
+        import asyncio
 
-        audio_data = b""
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                audio_data += chunk["data"]
+        for attempt in range(max_retries):
+            try:
+                communicate = edge_tts.Communicate(
+                    text=text,
+                    voice=voice,
+                    rate=rate,
+                    volume=volume,
+                    connect_timeout=10,
+                    receive_timeout=30,
+                )
 
-        if not audio_data:
-            raise RuntimeError("No audio received from edge-tts")
+                audio_data = b""
+                async for chunk in communicate.stream():
+                    if chunk["type"] == "audio":
+                        audio_data += chunk["data"]
 
-        return audio_data, "mp3"
+                if not audio_data:
+                    raise RuntimeError("No audio received from edge-tts")
+
+                return audio_data, "mp3"
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Edge TTS attempt {attempt + 1} failed: {e}, retrying...")
+                    await asyncio.sleep(1)
+                else:
+                    raise
 
 
 # 全局服务实例

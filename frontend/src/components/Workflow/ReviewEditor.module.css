@@ -1,0 +1,195 @@
+.reviewEditor {
+  padding: 24px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.backButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.backButton:hover {
+  color: #c47a3a;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 24px;
+  color: #1a1a1a;
+}
+
+.section {
+  background: white;
+  border: 1px solid #e8e0d8;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 12px;
+}
+
+.overallScore {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.scoreStars {
+  font-size: 20px;
+}
+
+.scoreValue {
+  font-size: 24px;
+  font-weight: 700;
+  color: #c47a3a;
+}
+
+.overallComment {
+  font-size: 14px;
+  color: #666;
+}
+
+.dimensionList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dimension {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dimensionIcon {
+  font-size: 16px;
+  min-width: 20px;
+  text-align: center;
+}
+
+.dimensionContent {
+  flex: 1;
+}
+
+.dimensionName {
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.dimensionComment {
+  font-size: 13px;
+  color: #666;
+}
+
+.dimensionSuggestion {
+  font-size: 13px;
+  color: #c47a3a;
+  margin-top: 4px;
+}
+
+.criticalWarning {
+  background: #ffebee;
+  border: 1px solid #ef9a9a;
+  border-radius: 8px;
+  padding: 12px;
+  color: #c62828;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.scriptEditor {
+  width: 100%;
+  min-height: 300px;
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.stats {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid #f0f0f0;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #999;
+}
+
+.directorNoteInput {
+  width: 100%;
+  min-height: 60px;
+  padding: 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.actionButton {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.rejectButton {
+  background: white;
+  border: 1px solid #d32f2f;
+  color: #d32f2f;
+}
+
+.rejectButton:hover {
+  background: #ffebee;
+}
+
+.approveButton {
+  background: #c47a3a;
+  border: none;
+  color: white;
+}
+
+.approveButton:hover {
+  background: #a86530;
+}
+
+.approveEditButton {
+  background: white;
+  border: 1px solid #c47a3a;
+  color: #c47a3a;
+}
+
+.approveEditButton:hover {
+  background: #fff3e0;
+}

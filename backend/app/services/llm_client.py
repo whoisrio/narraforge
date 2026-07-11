@@ -149,6 +149,176 @@ def _supports_response_format(base_url: str) -> bool:
     return False
 
 
+def get_agent_llm_config(db=None) -> tuple[str, str, str]:
+    """返回 Agent LLM 配置 (api_key, base_url, model)。
+    优先级：DB config > agent_llm_* env > llm_* env > mimo_* env
+    """
+    api_key = settings.agent_llm_api_key or settings.llm_api_key or settings.mimo_api_key
+    base_url = (settings.agent_llm_base_url or settings.llm_base_url or settings.mimo_base_url).rstrip("/")
+    model = settings.agent_llm_model or settings.llm_model
+
+    if db is not None:
+        try:
+            from app.core.model_config_service import get_effective_config
+            config = get_effective_config(db, "agent_llm")
+            api_key = config.get("api_key") or api_key
+            base_url = (config.get("base_url") or base_url).rstrip("/")
+            model = config.get("model") or model
+        except Exception:
+            pass  # 降级到 settings
+
+    if not api_key:
+        raise ValueError(
+            "Agent LLM API Key 未配置。请在界面或 .env 中设置 AGENT_LLM_API_KEY 或 LLM_API_KEY"
+        )
+    return api_key, base_url, model
+
+
+def call_agent_llm(
+    messages: list[dict],
+    model: str | None = None,
+    temperature: float = 0.3,
+    max_tokens: int = 8192,
+    db=None,
+    timeout: int = 300,
+    response_format: dict | None = None,
+) -> str:
+    """调用 Agent LLM（工作流等非 TTS 功能专用）。"""
+    api_key, base_url, default_model = get_agent_llm_config(db=db)
+    model = model or default_model
+
+    chat_url = f"{base_url}/chat/completions"
+    body: dict = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if response_format is not None:
+        body["response_format"] = response_format
+    payload = json.dumps(body).encode("utf-8")
+
+    if "xiaomimimo" in base_url:
+        headers = {"api-key": api_key, "Content-Type": "application/json"}
+    else:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    req = urllib.request.Request(chat_url, data=payload, headers=headers)
+    ctx = ssl.create_default_context()
+
+    logger.info(f"Agent LLM 调用: {model} @ {base_url}")
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        msg = result["choices"][0]["message"]
+        content = msg.get("content") or ""
+        reasoning = msg.get("reasoning_content") or ""
+        usage = result.get("usage", {})
+
+        logger.info(f'agent llm messages : {msg}')
+        if not content.strip():
+            logger.warning(
+                f"Agent LLM 返回空 content。usage={usage}, "
+                f"reasoning_len={len(reasoning)}, finish={result['choices'][0].get('finish_reason')}"
+            )
+            if reasoning:
+                rt = usage.get("completion_tokens_details", {}).get("reasoning_tokens", "?")
+                raise RuntimeError(
+                    f"模型推理耗尽 token（reasoning={rt}），未产生输出。请减少输入长度或更换模型。"
+                )
+        return content
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode("utf-8", errors="replace")
+        logger.error(f"Agent LLM API error {e.code}: {body_err}")
+        raise RuntimeError(f"Agent LLM API 调用失败 ({e.code}): {body_err[:200]}")
+    except urllib.error.URLError as e:
+        logger.error(f"Agent LLM API URL error: {e}")
+        raise RuntimeError(f"Agent LLM 服务不可达: {e}")
+
+
+async def call_agent_llm_streaming(
+    messages: list[dict],
+    on_chunk: callable,
+    model: str | None = None,
+    temperature: float = 0.3,
+    max_tokens: int = 8192,
+    db=None,
+    timeout: int = 300,
+) -> str:
+    """调用 Agent LLM 并流式返回结果。
+
+    Args:
+        messages: 聊天消息列表
+        on_chunk: 回调函数，每收到一个 chunk 时调用，参数为 (chunk_text: str)
+        model: 模型名称
+        temperature: 温度
+        max_tokens: 最大 token 数
+        db: 数据库连接
+        timeout: 超时时间
+
+    Returns:
+        完整的 LLM 响应文本
+    """
+    api_key, base_url, default_model = get_agent_llm_config(db=db)
+    model = model or default_model
+
+    chat_url = f"{base_url}/chat/completions"
+    body: dict = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+        "stream": True,
+    }
+    payload = json.dumps(body).encode("utf-8")
+
+    if "xiaomimimo" in base_url:
+        headers = {"api-key": api_key, "Content-Type": "application/json"}
+    else:
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
+    req = urllib.request.Request(chat_url, data=payload, headers=headers)
+    ctx = ssl.create_default_context()
+
+    logger.info(f"Agent LLM 流式调用: {model} @ {base_url}")
+    full_content = ""
+
+    try:
+        with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
+            buffer = ""
+            while True:
+                chunk = resp.read(1024)
+                if not chunk:
+                    break
+                buffer += chunk.decode("utf-8")
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line or line == "data: [DONE]":
+                        continue
+                    if line.startswith("data: "):
+                        try:
+                            data = json.loads(line[6:])
+                            delta = data.get("choices", [{}])[0].get("delta", {})
+                            content = delta.get("content", "")
+                            if content:
+                                full_content += content
+                                await on_chunk(content)
+                        except json.JSONDecodeError:
+                            continue
+
+        logger.info(f"Agent LLM 流式调用完成，总长度: {len(full_content)}")
+        return full_content
+
+    except urllib.error.HTTPError as e:
+        body_err = e.read().decode("utf-8", errors="replace")
+        logger.error(f"Agent LLM 流式调用失败 {e.code}: {body_err}")
+        raise RuntimeError(f"Agent LLM 流式调用失败 ({e.code}): {body_err[:200]}")
+    except urllib.error.URLError as e:
+        logger.error(f"Agent LLM 流式调用 URL error: {e}")
+        raise RuntimeError(f"Agent LLM 服务不可达: {e}")
+
+
 def call_llm(
     messages: list[dict],
     model: str | None = None,

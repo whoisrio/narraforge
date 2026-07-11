@@ -79,6 +79,15 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_db()
+    # Initialize workflow engine
+    import os
+    from app.services.workflow_service import init_workflow_engine
+    db_dir = os.path.dirname(settings.database_url.replace("sqlite:///", ""))
+    if not db_dir:
+        db_dir = "."
+    checkpoint_path = os.path.join(db_dir, "workflow_checkpoints.db")
+    store_path = os.path.join(db_dir, "workflow_store.db")
+    init_workflow_engine(checkpoint_path, store_path)
 
 
 @app.get("/")
@@ -92,7 +101,7 @@ def health():
 
 
 # Import and include routers
-from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm, model_config, text_split, text_analysis, segmented_projects, voxcpm, sources, roles
+from app.api import clone, tts, config, speech_to_text, mimo_tts, subtitle_llm, model_config, text_split, text_analysis, segmented_projects, voxcpm, sources, roles, workflow
 
 app.include_router(clone.router, prefix="/api/clone", tags=["voice-clone"])
 app.include_router(tts.router, prefix="/api/tts", tags=["tts"])
@@ -107,3 +116,4 @@ app.include_router(segmented_projects.router, prefix="/api", tags=["segmented-pr
 app.include_router(voxcpm.router, prefix="/api/voxcpm", tags=["voxcpm"])
 app.include_router(sources.router, prefix="/api", tags=["sources"])
 app.include_router(roles.router, prefix="/api", tags=["roles"])
+app.include_router(workflow.router, prefix="/api", tags=["workflow"])
