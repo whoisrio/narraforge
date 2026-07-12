@@ -3,6 +3,8 @@ import { useTranslation } from '../../i18n';
 import { workflowApi } from '../../services/api';
 import { useWorkflowStream } from '../../hooks/useWorkflowStream';
 import { LiveProgress } from './LiveProgress';
+import { Loading } from '../ui/Loading';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import type { WorkflowRun, WorkflowStatus, WorkflowStageName } from '../../types';
 import styles from './WorkflowHub.module.css';
 
@@ -19,11 +21,17 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
   const [runs, setRuns] = useState<WorkflowRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<string | null>(null);
 
   const fetchRuns = useCallback(async () => {
     try {
       const data = await workflowApi.list(projectId);
       setRuns(data);
+      // Auto-subscribe to running workflow SSE (covers resume from interrupted)
+      const running = data.find(r => r.status === 'running');
+      if (running) {
+        setActiveRunId(prev => prev ?? running.id);
+      }
     } finally {
       setLoading(false);
     }
@@ -56,9 +64,10 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
     }
   };
 
-  const handleCancel = async (runId: string) => {
-    if (!confirm(t('workflow.hub.confirmCancel'))) return;
-    await workflowApi.cancel(projectId, runId);
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget) return;
+    await workflowApi.cancel(projectId, cancelTarget);
+    setCancelTarget(null);
     await fetchRuns();
   };
 
@@ -85,7 +94,7 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
     }
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <Loading message={t('workflow.common.loading')} />;
 
   return (
     <div className={styles.workflowHub}>
@@ -96,6 +105,7 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
           onClick={handleStart}
           disabled={hasActive}
         >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
           {t('workflow.common.newRun')}
         </button>
       </div>
@@ -120,7 +130,7 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
                 {t(`workflow.status.${run.status}`)}
                 {run.status === 'interrupted' && ` @ ${t(`workflow.stage.${run.current_stage}`)}`}
               </span>
-              <span style={{ fontSize: 12, color: '#999' }}>
+              <span className={styles.timestamp}>
                 {t('workflow.hub.startedAt', { time: new Date(run.created_at).toLocaleString() })}
               </span>
             </div>
@@ -142,6 +152,7 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
                   className={`${styles.actionButton} ${styles.primary}`}
                   onClick={() => onViewReview?.(run.id)}
                 >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>rate_review</span>
                   {t('workflow.hub.viewReview')}
                 </button>
               )}
@@ -150,14 +161,16 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
                   className={styles.actionButton}
                   onClick={() => onViewRun?.(run.id)}
                 >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>visibility</span>
                   {t('workflow.hub.viewDetail')}
                 </button>
               )}
               {(run.status === 'running' || run.status === 'interrupted') && (
                 <button
                   className={`${styles.actionButton} ${styles.danger}`}
-                  onClick={() => handleCancel(run.id)}
+                  onClick={() => setCancelTarget(run.id)}
                 >
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>cancel</span>
                   {t('workflow.common.cancel')}
                 </button>
               )}
@@ -165,6 +178,15 @@ export function WorkflowHub({ projectId, onViewRun, onViewReview }: WorkflowHubP
           </div>
         ))
       )}
+
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        title={t('workflow.common.cancel')}
+        message={t('workflow.hub.confirmCancel')}
+        variant="danger"
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setCancelTarget(null)}
+      />
     </div>
   );
 }

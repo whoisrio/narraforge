@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from '../../i18n';
 import { workflowApi } from '../../services/api';
+import { Loading } from '../ui/Loading';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import type { WorkflowRun, WorkflowStageName } from '../../types';
 import styles from './WorkflowRunDetail.module.css';
 
@@ -11,11 +13,19 @@ interface WorkflowRunDetailProps {
 }
 
 const STATUS_ICONS: Record<string, string> = {
-  completed: '✅',
-  running: '🔄',
-  failed: '❌',
-  interrupted: '⏸️',
-  pending: '⏳',
+  completed: 'check_circle',
+  running: 'sync',
+  failed: 'error',
+  interrupted: 'pause_circle',
+  pending: 'schedule',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  completed: 'var(--color-success)',
+  running: 'var(--color-primary)',
+  failed: 'var(--color-error)',
+  interrupted: 'var(--color-warning)',
+  pending: 'var(--color-text-muted)',
 };
 
 export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetailProps) {
@@ -23,6 +33,7 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
   const [run, setRun] = useState<WorkflowRun | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: 'replay' | 'fork'; stage: WorkflowStageName } | null>(null);
 
   const fetchRun = useCallback(async () => {
     try {
@@ -41,35 +52,33 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
     fetchRun();
   }, [fetchRun]);
 
-  const handleReplay = async (stage: WorkflowStageName) => {
-    if (!confirm(t('workflow.detail.confirmReplay', { stage: t(`workflow.stage.${stage}`) }))) return;
+  const handleConfirmAction = async () => {
+    if (!confirmAction || !run) return;
     try {
-      await workflowApi.replay(projectId, runId, { from_stage: stage });
-      await fetchRun();
+      if (confirmAction.type === 'replay') {
+        await workflowApi.replay(projectId, runId, { from_stage: confirmAction.stage });
+        await fetchRun();
+      } else {
+        await workflowApi.fork(projectId, runId, { from_stage: confirmAction.stage, state_override: {} });
+        onBack();
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to replay workflow');
-    }
-  };
-
-  const handleFork = async (stage: WorkflowStageName) => {
-    if (!confirm(t('workflow.detail.confirmFork', { stage: t(`workflow.stage.${stage}`) }))) return;
-    try {
-      await workflowApi.fork(projectId, runId, { from_stage: stage, state_override: {} });
-      onBack();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fork workflow');
+      setError(err instanceof Error ? err.message : `Failed to ${confirmAction.type} workflow`);
+    } finally {
+      setConfirmAction(null);
     }
   };
 
   if (loading) {
-    return <div className={styles.loading}>{t('workflow.common.loading')}</div>;
+    return <Loading message={t('workflow.common.loading')} />;
   }
 
   if (error) {
     return (
       <div className={styles.runDetail}>
         <button className={styles.backButton} onClick={onBack}>
-          ← {t('workflow.common.back')}
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span>
+          {t('workflow.common.back')}
         </button>
         <div className={styles.errorBanner}>{error}</div>
       </div>
@@ -80,7 +89,8 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
     return (
       <div className={styles.runDetail}>
         <button className={styles.backButton} onClick={onBack}>
-          ← {t('workflow.common.back')}
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span>
+          {t('workflow.common.back')}
         </button>
         <div className={styles.loading}>{t('workflow.common.notFound')}</div>
       </div>
@@ -100,7 +110,8 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
   return (
     <div className={styles.runDetail}>
       <button className={styles.backButton} onClick={onBack}>
-        ← {t('workflow.common.back')}
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span>
+        {t('workflow.common.back')}
       </button>
 
       <div className={styles.header}>
@@ -123,7 +134,9 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
         <div className={styles.interruptInfo}>
           <div className={styles.interruptLabel}>{t('workflow.detail.reviewResult')}</div>
           <div className={styles.interruptValue}>
-            {t('workflow.detail.reviewScore')}: ⭐{run.interrupt_payload.review.overall_score}/5
+            {t('workflow.detail.reviewScore')}:
+            <span className="material-symbols-outlined" style={{ fontSize: 16, color: 'var(--color-primary)', verticalAlign: 'text-bottom', marginLeft: 4 }}>star</span>
+            {run.interrupt_payload.review.overall_score}/5
           </div>
         </div>
       )}
@@ -132,7 +145,12 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
         <div key={stage.name} className={styles.stageCard}>
           <div className={styles.stageHeader}>
             <span className={styles.stageName}>
-              <span className={styles.statusIcon}>{STATUS_ICONS[stage.status]}</span>
+              <span
+                className={`material-symbols-outlined ${styles.statusIcon}`}
+                style={{ color: STATUS_COLORS[stage.status] }}
+              >
+                {STATUS_ICONS[stage.status]}
+              </span>
               {t(`workflow.stage.${stage.name}`)}
             </span>
             <span className={styles.stageDuration}>
@@ -146,7 +164,9 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
             )}
             {stage.status === 'completed' && stage.name === 'script_review' && run.interrupt_payload && (
               <span>
-                {t('workflow.detail.reviewScore')}: ⭐{run.interrupt_payload.review.overall_score}/5
+                {t('workflow.detail.reviewScore')}:
+                <span className="material-symbols-outlined" style={{ fontSize: 14, color: 'var(--color-primary)', verticalAlign: 'text-bottom', marginLeft: 4 }}>star</span>
+                {run.interrupt_payload.review.overall_score}/5
               </span>
             )}
             {stage.status === 'completed' && stage.name === 'split_segment' && (
@@ -156,7 +176,7 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
               <span>{t('workflow.detail.audioFiles')}: ...</span>
             )}
             {stage.status === 'failed' && run.error && (
-              <span style={{ color: 'var(--color-error)' }}>{run.error}</span>
+              <span className={styles.errorMessage}>{run.error}</span>
             )}
           </div>
 
@@ -165,21 +185,36 @@ export function WorkflowRunDetail({ projectId, runId, onBack }: WorkflowRunDetai
               <>
                 <button
                   className={styles.actionButton}
-                  onClick={() => handleReplay(stage.name)}
+                  onClick={() => setConfirmAction({ type: 'replay', stage: stage.name })}
                 >
-                  🔄 {t('workflow.detail.replayFromHere')}
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>replay</span>
+                  {t('workflow.detail.replayFromHere')}
                 </button>
                 <button
                   className={styles.actionButton}
-                  onClick={() => handleFork(stage.name)}
+                  onClick={() => setConfirmAction({ type: 'fork', stage: stage.name })}
                 >
-                  🍴 {t('workflow.detail.forkFromHere')}
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>call_split</span>
+                  {t('workflow.detail.forkFromHere')}
                 </button>
               </>
             )}
           </div>
         </div>
       ))}
+
+      <ConfirmDialog
+        open={confirmAction !== null}
+        title={confirmAction?.type === 'replay' ? t('workflow.detail.replayFromHere') : t('workflow.detail.forkFromHere')}
+        message={confirmAction ? (
+          confirmAction.type === 'replay'
+            ? t('workflow.detail.confirmReplay', { stage: t(`workflow.stage.${confirmAction.stage}`) })
+            : t('workflow.detail.confirmFork', { stage: t(`workflow.stage.${confirmAction.stage}`) })
+        ) : ''}
+        variant="warning"
+        onConfirm={handleConfirmAction}
+        onCancel={() => setConfirmAction(null)}
+      />
     </div>
   );
 }

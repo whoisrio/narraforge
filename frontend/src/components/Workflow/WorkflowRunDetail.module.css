@@ -129,6 +129,10 @@
   font-size: var(--font-size-sm);
 }
 
+.errorMessage {
+  color: var(--color-error);
+}
+
 .interruptInfo {
   background: var(--color-surface-low);
   border: 1px solid var(--color-border);

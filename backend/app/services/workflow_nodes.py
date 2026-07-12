@@ -18,7 +18,7 @@ from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
 from app.services.workflow_graph import NarrationWorkflowState
-from app.services.prompts.workflow_prompts import GEN_SCRIPT_SYSTEM_PROMPT,SCRIPT_REVIEW_SYSTEM_PROMPT,SPLIT_SEGMENT_SYSTEM_PROMPT
+from app.services.prompts.workflow_prompts import GEN_SCRIPT_SYSTEM_PROMPT,SCRIPT_REVIEW_SYSTEM_PROMPT,SPLIT_SEGMENT_SYSTEM_PROMPT,PREFERENCE_EXTRACT_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -338,7 +338,42 @@ async def script_review_node(
                 exc_info=True,
             )
 
-    # 3. Interrupt and wait for human decision
+    # 3. Auto-reject if LLM review fails (skip human review)
+    # But force human review after MAX_AUTO_REJECT retries to prevent infinite loops
+    MAX_AUTO_REJECT = 3
+    retry_count = state.get("review_retry_count", 0)
+
+    should_auto_reject = (
+        retry_count < MAX_AUTO_REJECT
+        and (
+            review.get("has_critical_issue", False)
+            or review.get("overall_score", 5) < 3
+            or any(d.get("status") == "fail" for d in review.get("dimensions", []))
+        )
+    )
+
+    if should_auto_reject:
+        logger.info(
+            "script_review_node: LLM review failed (score=%s, critical=%s), auto-rejecting",
+            review.get("overall_score"), review.get("has_critical_issue"),
+        )
+        await emit_progress(
+            run_id, "script_review", "auto_reject",
+            f"LLM 审查未通过（评分 {review.get('overall_score', '?')}/5），自动重新生成...",
+            {"review": review, "dimensions_summary": [
+                {"name": d.get("name", ""), "status": d.get("status", "unknown"), "comment": d.get("comment", "")[:100]}
+                for d in review.get("dimensions", [])
+            ]},
+        )
+        return {
+            "review_feedback": review,
+            "review_status": "rejected",
+            "current_stage": "gen_script",
+            "review_retry_count": retry_count + 1,
+            "error": None,
+        }
+
+    # 4. LLM review passed — interrupt for human decision
     # Extract dimension summaries for display
     dimensions_summary = []
     for dim in review.get("dimensions", []):
@@ -589,6 +624,61 @@ async def split_segment_node(
             "chapters_detail": chapters_detail,
         },
     )
+    # 4. Persist chapters and segments to DB (without TTS synthesis)
+    from app.core.database import SessionLocal
+    from app.services.segmented_project_service import (
+        create_chapter_for_project,
+        create_segment_for_chapter,
+    )
+    from app.models.segmented_project import SegmentedProject
+
+    db = SessionLocal()
+    try:
+        project = db.query(SegmentedProject).filter_by(id=project_id).first()
+        default_voice = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
+        if project and project.chapters:
+            ch_voice = project.chapters[0].voice
+            # Only use chapter voice if it has a non-empty voice identifier
+            if ch_voice and ch_voice.get("voice") and ch_voice.get("engine") == "edge_tts":
+                default_voice = ch_voice
+            elif ch_voice and ch_voice.get("voice_id") and ch_voice.get("engine") in ("cosyvoice", "mimo_tts", "voxcpm"):
+                default_voice = ch_voice
+
+        for chapter_index, chapter_data in enumerate(structured):
+            chapter_title = chapter_data.get("chapter_title", f"Chapter {chapter_index + 1}")
+            chapter = create_chapter_for_project(
+                db, project_id, chapter_title, chapter_index,
+                voice=default_voice,
+            )
+            # Attach chapter_id for synthesis_node to reuse
+            chapter_data["_chapter_id"] = chapter.id
+
+            segments_data = chapter_data.get("segments", [])
+            for seg_index, seg_data in enumerate(segments_data):
+                segment = create_segment_for_chapter(
+                    db,
+                    chapter.id,
+                    seg_data["text"],
+                    seg_index,
+                    emotion=seg_data.get("emotion"),
+                    role=seg_data.get("role"),
+                    segment_kind=seg_data.get("segment_kind", "narration"),
+                )
+                # Attach segment_id for synthesis_node to reuse
+                seg_data["_segment_id"] = segment.id
+
+        db.commit()
+        logger.info(
+            "split_segment_node: persisted %d chapters, %d segments for project %s",
+            len(structured), total_segments, project_id,
+        )
+    except Exception:
+        db.rollback()
+        logger.error("split_segment_node: failed to persist segments for project %s", project_id, exc_info=True)
+        raise
+    finally:
+        db.close()
+
     await emit_progress(run_id, "split_segment", "stage_complete", "段落拆分阶段完成")
 
     return {
@@ -615,11 +705,7 @@ async def synthesis_node(
     3. Collect and return synthesis results.
     """
     from app.core.database import SessionLocal
-    from app.services.segmented_project_service import (
-        create_chapter_for_project,
-        create_segment_for_chapter,
-        synthesize_segment,
-    )
+    from app.services.segmented_project_service import synthesize_segment
     from app.services.workflow_progress import emit_progress
 
     project_id = state["project_id"]
@@ -644,40 +730,37 @@ async def synthesis_node(
     results: list[dict[str, object]] = []
     db = SessionLocal()
     try:
-        # Get default voice from project's first chapter
+        # Log the voice/engine being used for TTS
         from app.models.segmented_project import SegmentedProject
         project = db.query(SegmentedProject).filter_by(id=project_id).first()
-        default_voice = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
         if project and project.chapters:
-            default_voice = project.chapters[0].voice or default_voice
+            ch_voice = project.chapters[0].voice or {}
+            logger.info("synthesis_node: using project's first chapter voice: %s", ch_voice)
+        else:
+            logger.info("synthesis_node: using default edge_tts voice (zh-CN-YunxiNeural)")
 
+        # Segments already created by split_segment_node — use IDs from structured data
         synthesized_count = 0
         for chapter_index, chapter_data in enumerate(structured):
-            chapter_title = chapter_data.get("chapter_title", f"Chapter {chapter_index + 1}")
-            chapter = create_chapter_for_project(
-                db, project_id, chapter_title, chapter_index,
-                voice=default_voice,
-            )
+            chapter_id = chapter_data.get("_chapter_id")
+            if not chapter_id:
+                logger.warning("synthesis_node: chapter %d missing _chapter_id, skipping", chapter_index)
+                continue
 
             segments_data = chapter_data.get("segments", [])
             for seg_index, seg_data in enumerate(segments_data):
-                segment = create_segment_for_chapter(
-                    db,
-                    chapter.id,
-                    seg_data["text"],
-                    seg_index,
-                    emotion=seg_data.get("emotion"),
-                    role=seg_data.get("role"),
-                    segment_kind=seg_data.get("segment_kind", "narration"),
-                )
+                segment_id = seg_data.get("_segment_id")
+                if not segment_id:
+                    logger.warning("synthesis_node: segment %d/%d missing _segment_id, skipping", chapter_index, seg_index)
+                    continue
 
                 # Run TTS synthesis via the existing service (in thread to avoid event loop conflict)
                 synth_seg = await asyncio.to_thread(
                     synthesize_segment,
                     db,
                     project_id,
-                    chapter.id,
-                    segment.id,
+                    chapter_id,
+                    segment_id,
                 )
 
                 audio = synth_seg.audio or {}
@@ -685,8 +768,8 @@ async def synthesis_node(
                 results.append({
                     "chapter_index": chapter_index,
                     "segment_index": seg_index,
-                    "chapter_id": chapter.id,
-                    "segment_id": segment.id,
+                    "chapter_id": chapter_id,
+                    "segment_id": segment_id,
                     "audio_path": current.get("path"),
                     "duration_sec": current.get("duration_sec"),
                 })

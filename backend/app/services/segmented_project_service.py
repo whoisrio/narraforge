@@ -138,7 +138,7 @@ def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
     engine = voice.get("engine", "edge_tts")
     flat: dict[str, Any] = {"engine": engine}
     if engine == "edge_tts":
-        flat["edge_voice"] = voice.get("voice", "")
+        flat["edge_voice"] = voice.get("voice", "") or "zh-CN-YunxiNeural"
         flat["edge_rate"] = voice.get("rate", "+0%")
         flat["edge_volume"] = voice.get("volume", "+0%")
     elif engine == "cosyvoice":

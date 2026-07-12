@@ -210,7 +210,10 @@ def call_agent_llm(
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-        msg = result["choices"][0]["message"]
+        choices = result.get("choices", [])
+        if not choices:
+            raise RuntimeError(f"Agent LLM 返回空 choices: {result}")
+        msg = choices[0]["message"]
         content = msg.get("content") or ""
         reasoning = msg.get("reasoning_content") or ""
         usage = result.get("usage", {})
@@ -285,27 +288,23 @@ async def call_agent_llm_streaming(
 
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
-            buffer = ""
-            while True:
-                chunk = resp.read(1024)
-                if not chunk:
-                    break
-                buffer += chunk.decode("utf-8")
-                while "\n" in buffer:
-                    line, buffer = buffer.split("\n", 1)
-                    line = line.strip()
-                    if not line or line == "data: [DONE]":
-                        continue
-                    if line.startswith("data: "):
-                        try:
-                            data = json.loads(line[6:])
-                            delta = data.get("choices", [{}])[0].get("delta", {})
-                            content = delta.get("content", "")
-                            if content:
-                                full_content += content
-                                await on_chunk(content)
-                        except json.JSONDecodeError:
+            for raw_line in resp:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line or line == "data: [DONE]":
+                    continue
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                        choices = data.get("choices", [])
+                        if not choices:
                             continue
+                        delta = choices[0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            full_content += content
+                            await on_chunk(content)
+                    except (json.JSONDecodeError, IndexError, KeyError):
+                        continue
 
         logger.info(f"Agent LLM 流式调用完成，总长度: {len(full_content)}")
         return full_content
@@ -362,7 +361,10 @@ def call_llm(
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
             result = json.loads(resp.read().decode("utf-8"))
-        msg = result["choices"][0]["message"]
+        choices = result.get("choices", [])
+        if not choices:
+            raise RuntimeError(f"LLM 返回空 choices: {result}")
+        msg = choices[0]["message"]
         content = msg.get("content") or ""
         reasoning = msg.get("reasoning_content") or ""
         usage = result.get("usage", {})
@@ -371,7 +373,7 @@ def call_llm(
         if not content.strip():
             logger.warning(
                 f"LLM 返回空 content。usage={usage}, "
-                f"reasoning_len={len(reasoning)}, finish={result['choices'][0].get('finish_reason')}"
+                f"reasoning_len={len(reasoning)}, finish={choices[0].get('finish_reason')}"
             )
             if reasoning:
                 rt = usage.get("completion_tokens_details", {}).get("reasoning_tokens", "?")

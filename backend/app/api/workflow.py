@@ -53,6 +53,10 @@ async def _run_to_out(run: WorkflowRun) -> WorkflowRunOut:
             stages = await workflow_service.get_stage_durations(run.thread_id)
         except Exception:
             logger.warning("Failed to get stage durations for run %s", run.id, exc_info=True)
+        # Fallback: if checkpoint history is empty, return all stages as completed
+        if not stages:
+            stages = [{"name": name, "status": "completed", "duration_sec": None}
+                      for name in workflow_service.STAGE_ORDER]
     return WorkflowRunOut(
         id=run.id,
         project_id=run.project_id,

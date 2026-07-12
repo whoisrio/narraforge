@@ -461,7 +461,7 @@ requires-dist = [
     { name = "funasr", specifier = ">=1.0.0" },
     { name = "httpx", specifier = ">=0.26.0" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.13.2" },
-    { name = "langgraph", specifier = ">=0.2.0" },
+    { name = "langgraph", specifier = ">=1.2.0" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=1.0.0" },
     { name = "modelscope" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.8.0" },

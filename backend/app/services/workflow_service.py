@@ -424,6 +424,8 @@ async def get_stage_durations(thread_id: str) -> list[dict[str, Any]]:
     # Collect first-seen start and end timestamps per stage.
     stages: dict[str, dict[str, Any]] = {}
     for snapshot in history:
+        if not snapshot.values:
+            continue
         stage = snapshot.values.get("current_stage")
         ts = snapshot.created_at
         if stage and stage not in stages:

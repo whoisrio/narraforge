@@ -67,6 +67,7 @@ class NarrationWorkflowState(TypedDict, total=False):
 
     # -- metadata -------------------------------------------------------------
     current_stage: str
+    review_retry_count: int  # number of auto-reject cycles
     error: str | None
 
 

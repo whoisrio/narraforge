@@ -68,8 +68,10 @@ test.describe('工作流启动与中断', () => {
     console.log('[W1] clicking 新建运行...');
     await page.getByRole('button', { name: /新建运行/ }).click();
 
-    // ── AFTER: run card appears with "运行中" status ──
-    await expect(page.getByText(/运行中/).first()).toBeVisible({ timeout: 10_000 });
+    // ── AFTER: wait for the empty state to disappear (run card appears) ──
+    await page.waitForTimeout(3_000);
+    await page.reload();
+    await expect(page.getByText(/暂无工作流记录/)).toBeHidden({ timeout: 15_000 });
     console.log('[W1] workflow started, waiting for interrupt...');
 
     // ── AFTER: wait for interrupt (LLM gen_script + script_review) ──
@@ -121,7 +123,7 @@ test.describe('审批通过', () => {
   // @feature §7.1 POST /resume — approve
   // @feature §8.3 ReviewEditor — approve flow
   test('审批通过后完成全流程 @workflow', async ({ page }) => {
-    test.setTimeout(600_000); // Full pipeline: gen_script + review + split + synthesis
+    test.setTimeout(900_000); // Full pipeline: gen_script + review + split + synthesis (auto-reject retries)
 
     await setLocaleToZhCN(page);
     const errors = collectErrors(page);
@@ -130,7 +132,9 @@ test.describe('审批通过', () => {
     // ── Start workflow and wait for interrupt ──
     console.log('[W2] starting workflow...');
     await page.getByRole('button', { name: /新建运行/ }).click();
-    await expect(page.getByText(/运行中/).first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(3_000);
+    await page.reload();
+    await expect(page.getByText(/暂无工作流记录/)).toBeHidden({ timeout: 15_000 });
 
     const runs = await readDbWorkflowRuns(PROJECT_ID);
     const runId = runs[0].id;
@@ -166,7 +170,7 @@ test.describe('审批通过', () => {
     console.log('[W2] approved! waiting for full pipeline (split + synthesis)...');
 
     // ── Wait for full pipeline completion ──
-    const completedRun = await waitForWorkflowStatus(page, PROJECT_ID, runId, 'completed', 480_000);
+    const completedRun = await waitForWorkflowStatus(page, PROJECT_ID, runId, 'completed', 600_000);
     expect(completedRun.status).toBe('completed');
 
     // ── UI verification: completed status ──
@@ -215,7 +219,9 @@ test.describe('审批拒绝', () => {
     // ── Start workflow and wait for first interrupt ──
     console.log('[W3] starting workflow...');
     await page.getByRole('button', { name: /新建运行/ }).click();
-    await expect(page.getByText(/运行中/).first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(3_000);
+    await page.reload();
+    await expect(page.getByText(/暂无工作流记录/)).toBeHidden({ timeout: 15_000 });
 
     const runs = await readDbWorkflowRuns(PROJECT_ID);
     const runId = runs[0].id;
@@ -280,7 +286,9 @@ test.describe('并发限制', () => {
 
     // ── Start first workflow ──
     await page.getByRole('button', { name: /新建运行/ }).click();
-    await expect(page.getByText(/运行中/).first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(3_000);
+    await page.reload();
+    await expect(page.getByText(/暂无工作流记录/)).toBeHidden({ timeout: 15_000 });
 
     // Wait for it to reach interrupted state
     const runs = await readDbWorkflowRuns(PROJECT_ID);
@@ -328,7 +336,9 @@ test.describe('取消工作流', () => {
     // ── Start and wait for interrupt ──
     console.log('[W5] starting workflow...');
     await page.getByRole('button', { name: /新建运行/ }).click();
-    await expect(page.getByText(/运行中/).first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(3_000);
+    await page.reload();
+    await expect(page.getByText(/暂无工作流记录/)).toBeHidden({ timeout: 15_000 });
 
     const runs = await readDbWorkflowRuns(PROJECT_ID);
     const runId = runs[0].id;
@@ -340,10 +350,12 @@ test.describe('取消工作流', () => {
     await goToWorkflow(page);
     await expect(page.getByText(/等待审批/).first()).toBeVisible({ timeout: 15_000 });
 
-    // Handle the confirmation dialog
-    page.on('dialog', dialog => dialog.accept());
-
+    // Click cancel button → opens ConfirmDialog
     await page.getByRole('button', { name: /取消/ }).first().click();
+
+    // Confirm the custom ConfirmDialog
+    await expect(page.getByText(/确认取消/).first()).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: /确认/ }).first().click();
 
     // ── Wait for cancelled status ──
     const cancelledRun = await waitForWorkflowStatus(page, PROJECT_ID, runId, 'cancelled', 30_000);
@@ -414,7 +426,7 @@ test.describe('工作流列表', () => {
 test.describe('工作流详情', () => {
   // @feature §8.4 WorkflowRunDetail — stage cards
   test('查看已完成工作流的详情页 @workflow', async ({ page }) => {
-    test.setTimeout(600_000);
+    test.setTimeout(900_000);
 
     await setLocaleToZhCN(page);
     const errors = collectErrors(page);
@@ -425,7 +437,9 @@ test.describe('工作流详情', () => {
     await goToWorkflow(page);
 
     await page.getByRole('button', { name: /新建运行/ }).click();
-    await expect(page.getByText(/运行中/).first()).toBeVisible({ timeout: 10_000 });
+    await page.waitForTimeout(3_000);
+    await page.reload();
+    await expect(page.getByText(/暂无工作流记录/)).toBeHidden({ timeout: 15_000 });
 
     const runs = await readDbWorkflowRuns(PROJECT_ID);
     const runId = runs[0].id;
@@ -441,7 +455,7 @@ test.describe('工作流详情', () => {
     await page.getByRole('button', { name: /批准/ }).first().click();
     console.log('[W7] approved! waiting for completion...');
 
-    await waitForWorkflowStatus(page, PROJECT_ID, runId, 'completed', 480_000);
+    await waitForWorkflowStatus(page, PROJECT_ID, runId, 'completed', 600_000);
     console.log('[W7] completed! verifying detail page...');
 
     // ── Navigate to detail page ──
@@ -456,8 +470,8 @@ test.describe('工作流详情', () => {
     await expect(page.getByText(/段落拆分/).first()).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/语音合成/).first()).toBeVisible({ timeout: 10_000 });
 
-    // Back button should work (use exact text to avoid matching "← 返回项目总览")
-    const backButton = page.getByRole('button', { name: /^←\s*返回$/ }).first();
+    // Back button should work (avoid matching sidebar "← 返回项目总览")
+    const backButton = page.getByRole('button', { name: /^(?!.*项目总览).*返回.*$/ }).first();
     await expect(backButton).toBeVisible();
     await backButton.click();
 

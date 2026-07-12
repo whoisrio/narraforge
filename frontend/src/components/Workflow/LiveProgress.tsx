@@ -21,10 +21,10 @@ interface LiveProgressProps {
 const STAGE_ORDER: WorkflowStageName[] = ['gen_script', 'script_review', 'split_segment', 'synthesis'];
 
 const STAGE_ICONS: Record<string, string> = {
-  gen_script: '📝',
-  script_review: '🔍',
-  split_segment: '✂️',
-  synthesis: '🎙️',
+  gen_script: 'edit_note',
+  script_review: 'rate_review',
+  split_segment: 'content_cut',
+  synthesis: 'mic',
 };
 
 export function LiveProgress({ projectId, runId, currentStage, status }: LiveProgressProps) {
@@ -68,7 +68,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
         setEvents(prev => [...prev, {
           stage: data.stage,
           event_type: 'stage_start',
-          message: `开始 ${t(`workflow.stage.${data.stage}`)}`,
+          message: t('workflow.progress.stageStarted', { stage: t(`workflow.stage.${data.stage}`) }),
           data,
           timestamp: new Date().toISOString(),
         }]);
@@ -81,7 +81,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
         setEvents(prev => [...prev, {
           stage: data.stage,
           event_type: 'stage_complete',
-          message: `${t(`workflow.stage.${data.stage}`)} 完成`,
+          message: t('workflow.progress.stageCompleted', { stage: t(`workflow.stage.${data.stage}`) }),
           data,
           timestamp: new Date().toISOString(),
         }]);
@@ -94,7 +94,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
         setEvents(prev => [...prev, {
           stage: 'script_review',
           event_type: 'interrupt',
-          message: '等待导演审批',
+          message: t('workflow.progress.awaitingReview'),
           data,
           timestamp: new Date().toISOString(),
         }]);
@@ -105,7 +105,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
       setEvents(prev => [...prev, {
         stage: 'completed',
         event_type: 'workflow_complete',
-        message: '工作流已完成',
+        message: t('workflow.progress.workflowCompleted'),
         data: {},
         timestamp: new Date().toISOString(),
       }]);
@@ -117,7 +117,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
         setEvents(prev => [...prev, {
           stage: data.stage || 'unknown',
           event_type: 'error',
-          message: data.error || '发生错误',
+          message: data.error || t('workflow.progress.errorOccurred'),
           data,
           timestamp: new Date().toISOString(),
         }]);
@@ -167,7 +167,10 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
           className={styles.expandButton}
           onClick={() => toggleExpand(index)}
         >
-          {isExpanded ? '▼ 收起详情' : '▶ 查看详情'}
+          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+            {isExpanded ? 'expand_less' : 'expand_more'}
+          </span>
+          {isExpanded ? t('workflow.progress.collapseDetails') : t('workflow.progress.expandDetails')}
         </button>
 
         {isExpanded && (
@@ -175,7 +178,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
             {/* Script preview for gen_script */}
             {event.stage === 'gen_script' && event.data.script_preview ? (
               <div className={styles.detailSection}>
-                <div className={styles.detailLabel}>脚本预览:</div>
+                <div className={styles.detailLabel}>{t('workflow.progress.scriptPreview')}:</div>
                 <div className={styles.scriptPreview}>{event.data.script_preview as string}</div>
               </div>
             ) : null}
@@ -183,12 +186,12 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
             {/* Chapters info */}
             {event.data.chapters && Array.isArray(event.data.chapters) ? (
               <div className={styles.detailSection}>
-                <div className={styles.detailLabel}>章节:</div>
+                <div className={styles.detailLabel}>{t('workflow.progress.chapters')}:</div>
                 <div className={styles.chaptersList}>
                   {(event.data.chapters as Array<{title: string; length: number}>).map((ch, i) => (
                     <div key={i} className={styles.chapterItem}>
                       <span className={styles.chapterTitle}>{String(ch.title)}</span>
-                      <span className={styles.chapterLength}>{String(ch.length)}字</span>
+                      <span className={styles.chapterLength}>{String(ch.length)}{t('workflow.progress.characters')}</span>
                     </div>
                   ))}
                 </div>
@@ -198,12 +201,14 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
             {/* Review dimensions for script_review */}
             {event.stage === 'script_review' && event.data.dimensions_summary ? (
               <div className={styles.detailSection}>
-                <div className={styles.detailLabel}>审查维度:</div>
+                <div className={styles.detailLabel}>{t('workflow.progress.reviewDimensions')}:</div>
                 <div className={styles.dimensionsList}>
                   {(event.data.dimensions_summary as Array<{name: string; status: string; comment: string}>).map((dim, i) => (
                     <div key={i} className={styles.dimensionItem}>
                       <span className={`${styles.dimensionStatus} ${styles[`status_${dim.status}`]}`}>
-                        {dim.status === 'pass' ? '✓' : dim.status === 'warn' ? '⚠' : '✗'}
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
+                          {dim.status === 'pass' ? 'check_circle' : dim.status === 'warn' ? 'warning' : 'cancel'}
+                        </span>
                       </span>
                       <span className={styles.dimensionName}>{String(dim.name)}</span>
                       <span className={styles.dimensionComment}>{String(dim.comment)}</span>
@@ -216,7 +221,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
             {/* Overall comment */}
             {event.data.overall_comment ? (
               <div className={styles.detailSection}>
-                <div className={styles.detailLabel}>总体评价:</div>
+                <div className={styles.detailLabel}>{t('workflow.progress.overallComment')}:</div>
                 <div className={styles.overallComment}>{String(event.data.overall_comment)}</div>
               </div>
             ) : null}
@@ -224,13 +229,13 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
             {/* Chapters detail for split_segment */}
             {event.stage === 'split_segment' && event.data.chapters_detail ? (
               <div className={styles.detailSection}>
-                <div className={styles.detailLabel}>拆分结果:</div>
+                <div className={styles.detailLabel}>{t('workflow.progress.splitResult')}:</div>
                 <div className={styles.chaptersDetail}>
                   {(event.data.chapters_detail as Array<{title: string; segment_count: number; segments_preview: Array<{text: string; emotion: string}>}>).map((ch, i) => (
                     <div key={i} className={styles.chapterDetail}>
                       <div className={styles.chapterHeader}>
                         <span className={styles.chapterTitle}>{String(ch.title)}</span>
-                        <span className={styles.segmentCount}>{String(ch.segment_count)} 段</span>
+                        <span className={styles.segmentCount}>{String(ch.segment_count)} {t('workflow.progress.segments')}</span>
                       </div>
                       {ch.segments_preview.map((seg, j) => (
                         <div key={j} className={styles.segmentPreview}>
@@ -253,9 +258,12 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
     <div className={styles.liveProgress}>
       <div className={styles.header}>
         <div className={styles.headerLeft}>
-          <span className={styles.title}>实时进度</span>
+          <span className={styles.title}>{t('workflow.progress.realTimeProgress')}</span>
           <span className={`${styles.connectionStatus} ${connected ? styles.connected : styles.disconnected}`}>
-            {connected ? '● 已连接' : '○ 未连接'}
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+              {connected ? 'link' : 'link_off'}
+            </span>
+            {connected ? t('workflow.progress.connected') : t('workflow.progress.disconnected')}
           </span>
         </div>
         <button
@@ -264,9 +272,10 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
             setEvents([]);
             connect();
           }}
-          title="刷新进度"
+          title={t('workflow.progress.refresh')}
         >
-          ↻ 刷新
+          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>refresh</span>
+          {t('workflow.progress.refresh')}
         </button>
       </div>
 
@@ -277,10 +286,20 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
             className={`${styles.stageBlock} ${isActive ? styles.stageActive : ''} ${isCompleted ? styles.stageCompleted : ''}`}
           >
             <div className={styles.stageHeader}>
-              <span className={styles.stageIcon}>{STAGE_ICONS[stage]}</span>
+              <span className={`material-symbols-outlined ${styles.stageIcon}`}>
+                {STAGE_ICONS[stage]}
+              </span>
               <span className={styles.stageName}>{t(`workflow.stage.${stage}`)}</span>
-              {isActive && <span className={styles.spinner}>●</span>}
-              {isCompleted && <span className={styles.checkmark}>✓</span>}
+              {isActive && (
+                <span className={`material-symbols-outlined ${styles.spinner}`}>
+                  progress_activity
+                </span>
+              )}
+              {isCompleted && (
+                <span className={`material-symbols-outlined ${styles.checkmark}`}>
+                  check_circle
+                </span>
+              )}
             </div>
 
             {stageEvents.length > 0 && (
@@ -303,7 +322,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
                 {/* Streaming text display */}
                 {isActive && streamingTexts[stage] && (
                   <div className={styles.streamingText}>
-                    <div className={styles.streamingLabel}>LLM 输出:</div>
+                    <div className={styles.streamingLabel}>{t('workflow.progress.llmOutput')}:</div>
                     <div className={styles.streamingContent}>{streamingTexts[stage]}</div>
                   </div>
                 )}
@@ -315,7 +334,7 @@ export function LiveProgress({ projectId, runId, currentStage, status }: LivePro
 
       {events.length > 0 && (
         <div className={styles.latestEvent}>
-          <span className={styles.latestLabel}>最新:</span>
+          <span className={styles.latestLabel}>{t('workflow.progress.latest')}:</span>
           <span className={styles.latestMessage}>{events[events.length - 1].message}</span>
         </div>
       )}

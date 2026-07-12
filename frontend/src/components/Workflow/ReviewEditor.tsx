@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from '../../i18n';
 import { workflowApi } from '../../services/api';
+import { Loading } from '../ui/Loading';
 import type { WorkflowRun, WorkflowReviewResult, WorkflowReviewDimension } from '../../types';
 import styles from './ReviewEditor.module.css';
 
@@ -12,9 +13,9 @@ interface ReviewEditorProps {
 }
 
 const DIMENSION_ICONS: Record<string, string> = {
-  pass: '✅',
-  warn: '⚠️',
-  fail: '❌',
+  pass: 'check_circle',
+  warn: 'warning',
+  fail: 'cancel',
 };
 
 export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEditorProps) {
@@ -35,7 +36,7 @@ export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEdi
     });
   }, [projectId, runId]);
 
-  if (!run || !run.interrupt_payload) return <div>Loading...</div>;
+  if (!run || !run.interrupt_payload) return <Loading message={t('workflow.common.loading')} />;
 
   const review = run.interrupt_payload.review as WorkflowReviewResult;
 
@@ -75,7 +76,8 @@ export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEdi
   return (
     <div className={styles.reviewEditor}>
       <button className={styles.backButton} onClick={onBack}>
-        ← {t('workflow.common.back')}
+        <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_back</span>
+        {t('workflow.common.back')}
       </button>
 
       <h2 className={styles.title}>
@@ -88,7 +90,15 @@ export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEdi
 
         <div className={styles.overallScore}>
           <span className={styles.scoreStars}>
-            {'⭐'.repeat(review.overall_score)}{'☆'.repeat(5 - review.overall_score)}
+            {Array.from({ length: 5 }, (_, i) => (
+              <span
+                key={i}
+                className="material-symbols-outlined"
+                style={{ color: i < review.overall_score ? 'var(--color-primary)' : 'var(--color-text-disabled)', fontSize: 20 }}
+              >
+                {i < review.overall_score ? 'star' : 'star_border'}
+              </span>
+            ))}
           </span>
           <span className={styles.scoreValue}>{review.overall_score}/5</span>
           <span className={styles.overallComment}>{review.overall_comment}</span>
@@ -96,6 +106,7 @@ export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEdi
 
         {review.has_critical_issue && (
           <div className={styles.criticalWarning}>
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>error</span>
             {t('workflow.review.criticalIssueWarning')}
           </div>
         )}
@@ -103,13 +114,24 @@ export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEdi
         <div className={styles.dimensionList}>
           {review.dimensions.map((dim: WorkflowReviewDimension) => (
             <div key={dim.name} className={styles.dimension}>
-              <span className={styles.dimensionIcon}>{DIMENSION_ICONS[dim.status]}</span>
+              <span className={styles.dimensionIcon}>
+                <span
+                  className="material-symbols-outlined"
+                  style={{
+                    color: dim.status === 'pass' ? 'var(--color-success)' : dim.status === 'warn' ? 'var(--color-warning)' : 'var(--color-error)',
+                    fontSize: 20,
+                  }}
+                >
+                  {DIMENSION_ICONS[dim.status]}
+                </span>
+              </span>
               <div className={styles.dimensionContent}>
                 <div className={styles.dimensionName}>{dim.name}</div>
                 <div className={styles.dimensionComment}>{dim.comment}</div>
                 {dim.suggestion && (
                   <div className={styles.dimensionSuggestion}>
-                    → {dim.suggestion}
+                    <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_forward</span>
+                    {dim.suggestion}
                   </div>
                 )}
               </div>
@@ -165,6 +187,7 @@ export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEdi
               onClick={handleReject}
               disabled={submitting || !rejectFeedback.trim()}
             >
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
               {t('workflow.review.reject')}
             </button>
             <button
@@ -180,21 +203,24 @@ export function ReviewEditor({ projectId, runId, onBack, onComplete }: ReviewEdi
               className={`${styles.actionButton} ${styles.rejectButton}`}
               onClick={() => setShowRejectInput(true)}
             >
-              ❌ {t('workflow.review.reject')}
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+              {t('workflow.review.reject')}
             </button>
             <button
               className={`${styles.actionButton} ${styles.approveButton}`}
               onClick={handleApprove}
               disabled={submitting}
             >
-              ✅ {t('workflow.review.approve')}
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check</span>
+              {t('workflow.review.approve')}
             </button>
             <button
               className={`${styles.actionButton} ${styles.approveEditButton}`}
               onClick={handleApprove}
               disabled={submitting}
             >
-              ✅ {t('workflow.review.approveAndEdit')}
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
+              {t('workflow.review.approveAndEdit')}
             </button>
           </>
         )}
