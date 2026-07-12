@@ -57,6 +57,7 @@ export interface EdgeTTSParams {
   voice: string;
   rate: string;
   volume: string;
+  voice_id?: string;
 }
 
 export interface MiMoParams {

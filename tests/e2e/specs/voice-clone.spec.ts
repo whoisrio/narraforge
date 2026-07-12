@@ -14,8 +14,21 @@ import {
   setLocaleToZhCN,
 } from '../helpers';
 
+const BASE_URL = 'http://127.0.0.1:8002';
 const SAMPLE_AUDIO = path.resolve(__dirname, '..', 'fixtures', 'sample-audio', 'temp_audio.mp3');
 const CLONE_NAME = `e2e-mimo-${Date.now()}`;
+
+/** Delete voice profiles by name prefix via backend API. */
+async function deleteVoiceProfilesByPrefix(prefix: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/api/clone`);
+  if (!resp.ok) return;
+  const voices: Array<{ id: string; name: string }> = await resp.json();
+  for (const voice of voices) {
+    if (voice.name.startsWith(prefix)) {
+      await fetch(`${BASE_URL}/api/clone/${voice.id}`, { method: 'DELETE' }).catch(() => {});
+    }
+  }
+}
 
 test.describe('语音克隆', () => {
   test('使用 MiMo-TTS 克隆声音：上传音频 → 复刻 → 验证音色出现在列表中', async ({ page }) => {
@@ -74,5 +87,10 @@ test.describe('语音克隆', () => {
     await expect(voiceCard).toBeVisible({ timeout: 10_000 });
 
     expect(errors).toEqual([]);
+  });
+
+  // Cleanup: delete the voice profile created by this test
+  test.afterAll(async () => {
+    await deleteVoiceProfilesByPrefix('e2e-mimo-');
   });
 });

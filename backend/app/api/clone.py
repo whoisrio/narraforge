@@ -27,6 +27,18 @@ def _resolve(db_path: str | None) -> str | None:
     p = settings.resolve_path(db_path)
     return str(p) if p.exists() else None
 
+
+def _guess_media_type(file_path: str) -> str:
+    """根据文件扩展名猜测 MIME 类型，默认 audio/wav"""
+    ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else ""
+    return {
+        "mp3": "audio/mpeg",
+        "wav": "audio/wav",
+        "ogg": "audio/ogg",
+        "webm": "audio/webm",
+        "flac": "audio/flac",
+    }.get(ext, "audio/wav")
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -107,7 +119,7 @@ class UpdateDescriptionRequest(BaseModel):
 class DesignVoiceRequest(BaseModel):
     """从音色设计的预览音频创建 VoiceProfile"""
     audio_base64: str
-    engine: str  # 'mimo' | 'voxcpm'
+    engine: str  # 'mimo' | 'voxcpm' | 'preset'
     name: str
     description: str = ""
     avatar: str | None = None  # data URL 或外部 URL
@@ -116,6 +128,7 @@ class DesignVoiceRequest(BaseModel):
     instruction: str | None = None  # 合成指令
     preview_text: str | None = None  # 试听文本（存为 audition_text）
     original_prompt_text: str | None = None  # 原始语音转录（ultimate clone 的 prompt_text）
+    default_voice: str | None = None  # 预置音色的默认 voice 名称（用于区分 edge_tts 和 mimo_tts 预置）
 
 
 # ============ Routes ============
@@ -504,7 +517,11 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
 
     # 创建 VoiceProfile 记录
     if request.engine == "preset":
-        model = "mimo_tts"
+        # 区分 edge_tts 和 mimo_tts 预置音色
+        if request.default_voice:
+            model = "edge_tts"
+        else:
+            model = "mimo_tts"
         voice_type = "preset"
     elif request.engine == "mimo":
         model = "mimo_tts"
@@ -758,15 +775,15 @@ async def get_voice_audio(voice_id: str, field: str = None, db: Session = Depend
     resolved_preview = _resolve(preview_path)
 
     if field == "source" and resolved_src:
-        return FileResponse(resolved_src, media_type="audio/wav")
+        return FileResponse(resolved_src, media_type=_guess_media_type(resolved_src))
     if field == "preview" and resolved_preview:
-        return FileResponse(resolved_preview, media_type="audio/wav")
+        return FileResponse(resolved_preview, media_type=_guess_media_type(resolved_preview))
 
     # Fallback: preview 优先，否则 source
     if resolved_preview:
-        return FileResponse(resolved_preview, media_type="audio/wav")
+        return FileResponse(resolved_preview, media_type=_guess_media_type(resolved_preview))
     if resolved_src:
-        return FileResponse(resolved_src, media_type="audio/wav")
+        return FileResponse(resolved_src, media_type=_guess_media_type(resolved_src))
     raise HTTPException(status_code=404, detail="Audio not found")
 
 
@@ -789,6 +806,7 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Voice not found")
 
     # Qwen 声音需要删除云端音色；MiMo/VoxCPM 声音无云端数据，跳过
+    # 云端删除失败不应阻止本地清理，记录警告即可
     voice_data = voice.voice or {}
     cosy_vp = (voice.voice_params or {}).get("cosyvoice", {}) or {}
     if voice_data.get("model") == "cosyvoice" and cosy_vp.get("params", {}).get("voice_id"):
@@ -796,21 +814,20 @@ async def delete_voice(voice_id: str, db: Session = Depends(get_db)):
             tts_service = await get_tts_service(db)
             await tts_service.delete_cloned_voice(cosy_vp["params"]["voice_id"])
         except Exception as e:
-            logger.error(f"Failed to delete voice from Qwen: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to delete cloned voice on Qwen: {str(e)}",
-            )
+            logger.warning(f"Failed to delete voice from Qwen (continuing with local cleanup): {e}")
 
+    # 删除本地音频文件，单个文件失败不应阻止整体删除
     model = voice_data.get("model", "")
     source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
     preview_path = (voice.preview or {}).get("preview_audio_path", "")
     resolved_src = _resolve(source_path)
     resolved_preview = _resolve(preview_path)
-    if resolved_src:
-        os.remove(resolved_src)
-    if resolved_preview:
-        os.remove(resolved_preview)
+    for label, resolved in [("source", resolved_src), ("preview", resolved_preview)]:
+        if resolved:
+            try:
+                os.remove(resolved)
+            except OSError as e:
+                logger.warning(f"Failed to delete {label} audio file {resolved}: {e}")
 
     db.delete(voice)
     db.commit()

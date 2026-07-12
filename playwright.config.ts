@@ -17,6 +17,7 @@ const runDir = (() => {
 
 export default defineConfig({
   globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
   testDir: './tests/e2e/specs',
   timeout: 60_000,
   expect: {
