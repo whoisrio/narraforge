@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from langgraph.config import get_stream_writer
 
-from app.backend_client import BackendClient
+from app import backend_client
 from app.llm import stream_llm
-from app.prompts.narration import get_prompt
+from app.prompts import narration
 
 
 def parse_markdown_chapters(script: str) -> list[dict[str, str]]:
@@ -49,7 +49,7 @@ async def gen_script_node(state, runtime) -> dict:
     await emit({"type": "stage_start", "stage": "gen_script", "message": "开始生成旁白脚本..."})
 
     # 1. Fetch the source document from the backend.
-    backend = getattr(runtime, "backend", None) or BackendClient()
+    backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
     try:
         project = await backend.get_project(project_id)
         source_document = project.get("source_document") or ""
@@ -105,7 +105,7 @@ async def gen_script_node(state, runtime) -> dict:
 
     script = await stream_llm(
         [
-            {"role": "system", "content": get_prompt("gen_script")},
+            {"role": "system", "content": narration.get_prompt("gen_script")},
             {
                 "role": "user",
                 "content": f"请将以下源文档转化为视频旁白脚本：\n\n{source_document}{feedback_context}",

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from langgraph.config import get_stream_writer
 
-from app.backend_client import BackendClient
+from app import backend_client
 
 
 async def synthesis_node(state, runtime) -> dict:
@@ -34,7 +34,7 @@ async def synthesis_node(state, runtime) -> dict:
         }
     )
 
-    backend = getattr(runtime, "backend", None) or BackendClient()
+    backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
     results = []
     done = 0
     for ch in structured:

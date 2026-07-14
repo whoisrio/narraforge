@@ -15,7 +15,7 @@ from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 
 from app.llm import get_instructor_client
-from app.prompts.narration import get_prompt
+from app.prompts import narration
 from app.schemas import Preference, ReviewResult
 
 MAX_AUTO_REJECT = 3
@@ -37,7 +37,7 @@ async def _extract_preference(runtime, project_id: str, feedback: str) -> None:
             max_retries=1,
             messages=[
                 {"role": "system", "content": "你是一个偏好提取器，从用户的反馈中提取具体的创作偏好。"},
-                {"role": "user", "content": get_prompt("preference_extract", feedback=feedback)},
+                {"role": "user", "content": narration.get_prompt("preference_extract", feedback=feedback)},
             ],
         )
         await runtime.store.aput(
@@ -74,7 +74,7 @@ async def script_review_node(state, runtime) -> dict:
         model=model,
         max_retries=2,
         messages=[
-            {"role": "system", "content": get_prompt("script_review")},
+            {"role": "system", "content": narration.get_prompt("script_review")},
             {"role": "user", "content": f"请审查以下旁白脚本：\n\n{state['narration_script']}"},
         ],
     )

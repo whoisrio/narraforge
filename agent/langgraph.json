@@ -1,0 +1,5 @@
+{
+  "dependencies": ["."],
+  "graphs": { "narration": "./app/graph.py:graph" },
+  "env": ".env"
+}

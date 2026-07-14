@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from langgraph.config import get_stream_writer
 
-from app.backend_client import BackendClient
+from app import backend_client
 from app.llm import get_instructor_client
-from app.prompts.narration import get_prompt
+from app.prompts import narration
 from app.schemas import SegmentChapters
 
 
@@ -56,7 +56,7 @@ async def split_segment_node(state, runtime) -> dict:
         model=model,
         max_retries=2,
         messages=[
-            {"role": "system", "content": get_prompt("split_segment")},
+            {"role": "system", "content": narration.get_prompt("split_segment")},
             {
                 "role": "user",
                 "content": f"请将以下旁白脚本拆分为结构化段落：\n\n{script}{pref_context}",
@@ -65,7 +65,7 @@ async def split_segment_node(state, runtime) -> dict:
     )
 
     # Persist to backend.
-    backend = getattr(runtime, "backend", None) or BackendClient()
+    backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
     try:
         ids = await backend.batch_create_structure(project_id, structure)
     except Exception as exc:
