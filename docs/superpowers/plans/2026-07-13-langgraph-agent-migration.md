@@ -78,7 +78,7 @@
 
 `agent/tests/test_config.py`:
 ```python
-import os
+import pytest
 from app.config import get_agent_llm_config, get_backend_url
 
 
@@ -92,28 +92,20 @@ def test_get_backend_url_from_env(monkeypatch):
     assert get_backend_url() == "http://example:9999"
 
 
-def test_get_agent_llm_config_priority(monkeypatch):
+def test_get_agent_llm_config_reads_env(monkeypatch):
     monkeypatch.setenv("AGENT_LLM_API_KEY", "k1")
     monkeypatch.setenv("AGENT_LLM_BASE_URL", "http://dashscope")
     monkeypatch.setenv("AGENT_LLM_MODEL", "qwen-plus")
-    monkeypatch.delenv("LLM_API_KEY", raising=False)
-    monkeypatch.delenv("MIMO_API_KEY", raising=False)
     key, base, model = get_agent_llm_config()
-    assert key == "k1"
-    assert base == "http://dashscope"
-    assert model == "qwen-plus"
+    assert key == "k1" and base == "http://dashscope" and model == "qwen-plus"
 
 
-def test_get_agent_llm_config_fallback(monkeypatch):
+def test_get_agent_llm_config_missing_raises(monkeypatch):
     monkeypatch.delenv("AGENT_LLM_API_KEY", raising=False)
     monkeypatch.delenv("AGENT_LLM_BASE_URL", raising=False)
     monkeypatch.delenv("AGENT_LLM_MODEL", raising=False)
-    monkeypatch.setenv("LLM_API_KEY", "k2")
-    monkeypatch.setenv("LLM_BASE_URL", "http://llm")
-    monkeypatch.setenv("LLM_MODEL", "llm-m")
-    monkeypatch.delenv("MIMO_API_KEY", raising=False)
-    key, base, model = get_agent_llm_config()
-    assert key == "k2" and base == "http://llm" and model == "llm-m"
+    with pytest.raises(ValueError):
+        get_agent_llm_config()
 ```
 
 `agent/tests/conftest.py`:
@@ -142,12 +134,14 @@ def get_backend_url() -> str:
 
 
 def get_agent_llm_config() -> tuple[str, str, str]:
-    """Return (api_key, base_url, model). Priority: AGENT_LLM_* > LLM_* > MIMO_*."""
-    api_key = os.getenv("AGENT_LLM_API_KEY") or os.getenv("LLM_API_KEY") or os.getenv("MIMO_API_KEY")
-    base_url = (os.getenv("AGENT_LLM_BASE_URL") or os.getenv("LLM_BASE_URL") or os.getenv("MIMO_BASE_URL", "")).rstrip("/")
-    model = os.getenv("AGENT_LLM_MODEL") or os.getenv("LLM_MODEL") or os.getenv("MIMO_MODEL", "")
-    if not api_key:
-        raise ValueError("Agent LLM API Key not set. Set AGENT_LLM_API_KEY / LLM_API_KEY / MIMO_API_KEY.")
+    """Return (api_key, base_url, model). AGENT_LLM_* only; raises if any missing."""
+    api_key = os.getenv("AGENT_LLM_API_KEY")
+    base_url = (os.getenv("AGENT_LLM_BASE_URL") or "").rstrip("/")
+    model = os.getenv("AGENT_LLM_MODEL")
+    if not api_key or not base_url or not model:
+        raise ValueError(
+            "AGENT_LLM_API_KEY / AGENT_LLM_BASE_URL / AGENT_LLM_MODEL must all be set in agent/.env"
+        )
     return api_key, base_url, model
 ```
 
@@ -172,6 +166,7 @@ dependencies = [
     "instructor>=1.4",
     "langchain-core>=0.3",
     "openai>=1.50",
+    "langsmith>=0.3",
 ]
 
 [project.optional-dependencies]
@@ -194,10 +189,12 @@ Expected: PASS (4 tests).
 `agent/.env.example`:
 ```
 BACKEND_API_URL=http://127.0.0.1:8002
-# LLM provider (OpenAI-compatible). Priority: AGENT_LLM_* > LLM_* > MIMO_*
+# LLM provider (OpenAI-compatible). AGENT_LLM_* only - all three required.
 AGENT_LLM_API_KEY=
 AGENT_LLM_BASE_URL=
 AGENT_LLM_MODEL=
+# Optional: LangSmith prompt hub. If absent, code-default prompts are used.
+LANGSMITH_API_KEY=
 ```
 
 - [ ] **Step 7: Commit**
@@ -345,33 +342,101 @@ git commit -m "feat(agent): pydantic schemas for workflow state"
 
 ---
 
-### Task A3: Prompts migration
+### Task A3: Prompts module (defaults + LangSmith loader)
 
 **Files:**
 - Create: `agent/app/prompts/__init__.py`, `agent/app/prompts/narration.py`
+- Test: `agent/tests/test_prompts.py`
 
-- [ ] **Step 1: Create prompts module**
+**Interfaces:**
+- Produces: `get_prompt(name: str, **vars) -> str` (LangSmith-first, code-default fallback); constants `GEN_SCRIPT_SYSTEM_PROMPT`, `SCRIPT_REVIEW_SYSTEM_PROMPT`, `SPLIT_SEGMENT_SYSTEM_PROMPT`, `PREFERENCE_EXTRACT_PROMPT`.
+
+- [ ] **Step 1: Write failing test**
+
+`agent/tests/test_prompts.py`:
+```python
+import pytest
+from app.prompts.narration import get_prompt, GEN_SCRIPT_SYSTEM_PROMPT
+
+
+def test_get_prompt_falls_back_to_default_when_langsmith_unconfigured(monkeypatch):
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    assert get_prompt("gen_script") == GEN_SCRIPT_SYSTEM_PROMPT
+
+
+def test_get_prompt_unknown_name_raises():
+    with pytest.raises(KeyError):
+        get_prompt("nope")
+
+
+def test_get_prompt_formats_vars_on_default(monkeypatch):
+    monkeypatch.delenv("LANGSMITH_API_KEY", raising=False)
+    out = get_prompt("preference_extract", feedback="fix intro")
+    assert "fix intro" in out
+```
+
+- [ ] **Step 2: Run test - fails**
+
+Run: `cd agent && uv run --extra test pytest tests/test_prompts.py -v`
+
+- [ ] **Step 3: Create prompts module**
 
 `agent/app/prompts/__init__.py`: (empty)
 
-`agent/app/prompts/narration.py` — copy verbatim the four prompt constants from `backend/app/services/prompts/workflow_prompts.py`:
-- `GEN_SCRIPT_SYSTEM_PROMPT`
-- `SCRIPT_REVIEW_SYSTEM_PROMPT`
-- `SPLIT_SEGMENT_SYSTEM_PROMPT`
-- `PREFERENCE_EXTRACT_PROMPT`
+`agent/app/prompts/narration.py` - first copy verbatim the four prompt constants from `backend/app/services/prompts/workflow_prompts.py` (`GEN_SCRIPT_SYSTEM_PROMPT`, `SCRIPT_REVIEW_SYSTEM_PROMPT`, `SPLIT_SEGMENT_SYSTEM_PROMPT`, `PREFERENCE_EXTRACT_PROMPT`). Keep `{{` / `}}` escaping in `PREFERENCE_EXTRACT_PROMPT` (it uses `.format(feedback=...)`). Then append the loader:
 
-Run: `cd backend && sed -n '1,$p' app/services/prompts/workflow_prompts.py > /tmp/wf_prompts.py` then inspect and copy the 4 constants into `agent/app/prompts/narration.py`. Keep `{{` / `}}` escaping in `PREFERENCE_EXTRACT_PROMPT` (it uses `.format(feedback=...)`).
+```python
+from langsmith import Client
+from langsmith.client import convert_prompt_to_openai_format
 
-- [ ] **Step 2: Verify import**
+_DEFAULTS = {
+    "gen_script": GEN_SCRIPT_SYSTEM_PROMPT,
+    "script_review": SCRIPT_REVIEW_SYSTEM_PROMPT,
+    "split_segment": SPLIT_SEGMENT_SYSTEM_PROMPT,
+    "preference_extract": PREFERENCE_EXTRACT_PROMPT,
+}
+_LANGSMITH_NAMES = {
+    "gen_script": "narraforge-gen-script",
+    "script_review": "narraforge-script-review",
+    "split_segment": "narraforge-split-segment",
+    "preference_extract": "narraforge-preference-extract",
+}
+_client: Client | None = None
 
-Run: `cd agent && uv run python -c "from app.prompts.narration import GEN_SCRIPT_SYSTEM_PROMPT, SCRIPT_REVIEW_SYSTEM_PROMPT, SPLIT_SEGMENT_SYSTEM_PROMPT, PREFERENCE_EXTRACT_PROMPT; print(len(GEN_SCRIPT_SYSTEM_PROMPT))"`
-Expected: a positive number (the prompt length).
 
-- [ ] **Step 3: Commit**
+def get_prompt(name: str, **vars) -> str:
+    """Return prompt text: LangSmith first, code default on any failure."""
+    if name not in _DEFAULTS:
+        raise KeyError(name)
+    default = _DEFAULTS[name]
+    ls_name = _LANGSMITH_NAMES.get(name)
+    if ls_name:
+        try:
+            global _client
+            if _client is None:
+                _client = Client()  # reads LANGSMITH_API_KEY; raises if absent
+            pt = _client.pull_prompt(ls_name)
+            msgs = convert_prompt_to_openai_format(pt.invoke(vars))
+            for m in msgs:
+                if m.get("role") == "system" and m.get("content"):
+                    return m["content"]
+            if msgs and msgs[0].get("content"):
+                return msgs[0]["content"]
+        except Exception:
+            pass  # fall through to default
+    return default.format(**vars) if vars else default
+```
+
+- [ ] **Step 4: Run test - pass**
+
+Run: `cd agent && uv run --extra test pytest tests/test_prompts.py -v`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add agent/app/prompts/
-git commit -m "feat(agent): migrate narration prompts"
+git add agent/app/prompts/ agent/tests/test_prompts.py
+git commit -m "feat(agent): prompts with LangSmith-first loader + code fallback"
 ```
 
 ---
@@ -783,7 +848,7 @@ Run: `cd agent && uv run --extra test pytest tests/test_gen_script.py -v`
 from __future__ import annotations
 from langgraph.config import get_stream_writer
 from app.llm import stream_llm
-from app.prompts.narration import GEN_SCRIPT_SYSTEM_PROMPT
+from app.prompts.narration import get_prompt
 
 
 def parse_markdown_chapters(script: str) -> list[dict[str, str]]:
@@ -838,7 +903,7 @@ async def gen_script_node(state, runtime) -> dict:
 
     script = await stream_llm(
         [
-            {"role": "system", "content": GEN_SCRIPT_SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt("gen_script")},
             {"role": "user", "content": f"请将以下源文档转化为视频旁白脚本：\n\n{state['source_document']}{feedback_context}"},
         ],
         on_chunk=on_chunk,
@@ -968,7 +1033,7 @@ from uuid import uuid4
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 from app.llm import get_instructor_client
-from app.prompts.narration import SCRIPT_REVIEW_SYSTEM_PROMPT, PREFERENCE_EXTRACT_PROMPT
+from app.prompts.narration import get_prompt
 from app.schemas import ReviewResult, Preference
 
 MAX_AUTO_REJECT = 3
@@ -984,7 +1049,7 @@ async def _extract_preference(runtime, project_id: str, feedback: str) -> None:
             response_model=Preference, model=model, max_retries=1,
             messages=[
                 {"role": "system", "content": "你是一个偏好提取器，从用户的反馈中提取具体的创作偏好。"},
-                {"role": "user", "content": PREFERENCE_EXTRACT_PROMPT.format(feedback=feedback)},
+                {"role": "user", "content": get_prompt("preference_extract", feedback=feedback)},
             ],
         )
         await runtime.store.aput(("director_preference", "global"), key=str(uuid4()), value={
@@ -1008,7 +1073,7 @@ async def script_review_node(state, runtime) -> dict:
     review: ReviewResult = await client.create(
         response_model=ReviewResult, model=model, max_retries=2,
         messages=[
-            {"role": "system", "content": SCRIPT_REVIEW_SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt("script_review")},
             {"role": "user", "content": f"请审查以下旁白脚本：\n\n{state['narration_script']}"},
         ],
     )
@@ -1347,7 +1412,7 @@ from __future__ import annotations
 from langgraph.config import get_stream_writer
 from app.llm import get_instructor_client
 from app.backend_client import BackendClient
-from app.prompts.narration import SPLIT_SEGMENT_SYSTEM_PROMPT
+from app.prompts.narration import get_prompt
 from app.schemas import SegmentChapters
 
 
@@ -1375,7 +1440,7 @@ async def split_segment_node(state, runtime) -> dict:
     structure: SegmentChapters = await client.create(
         response_model=SegmentChapters, model=model, max_retries=2,
         messages=[
-            {"role": "system", "content": SPLIT_SEGMENT_SYSTEM_PROMPT},
+            {"role": "system", "content": get_prompt("split_segment")},
             {"role": "user", "content": f"请将以下旁白脚本拆分为结构化段落：\n\n{script}{pref_context}"},
         ],
     )

@@ -109,9 +109,10 @@
 
 ### 2.4 配置
 
-- agent 读 `BACKEND_API_URL=http://127.0.0.1:8002` + LLM keys（`AGENT_LLM_*` / `LLM_*` / `MIMO_*`）。
+- agent `.env`：`BACKEND_API_URL=http://127.0.0.1:8002` + `AGENT_LLM_API_KEY` / `AGENT_LLM_BASE_URL` / `AGENT_LLM_MODEL`（**仅此一组**，缺失即抛异常，无 `LLM_*`/`MIMO_*` 多层兜底）+ `LANGSMITH_API_KEY`（可选；缺失则 prompt 用代码默认值）。
 - 后端无需 agent URL（不调用 agent）。
 - 开发态 agent 无认证；生产认证后续按 LangGraph Platform custom auth 处理（out of scope）。
+- prompts 读取策略：运行时先 `langsmith.Client().pull_prompt(name)` 从 LangSmith 拉；失败（无 key / 未发布 / 网络错）则用 `agent/app/prompts/narration.py` 里的代码默认值。LangSmith 仅为可选的 prompt 热更新通道。
 
 ### 2.5 agent/ 代码布局
 
@@ -187,15 +188,16 @@ class NarrationWorkflowState(TypedDict, total=False):
 
 ### 3.3 LLM 层（agent/app/llm.py）- instructor
 
-provider 感知客户端，镜像后端 `_supports_response_format()` 逻辑但用 instructor 的 `Mode`：
+provider 感知客户端，**仅读 `AGENT_LLM_*`**（缺失抛异常，无多层兜底），用 instructor 的 `Mode`：
 
 ```python
 import instructor
 from openai import AsyncOpenAI
 from instructor import Mode
+from app.config import get_agent_llm_config
 
 def get_instructor_client() -> tuple[instructor.AsyncInstructor, str]:
-    api_key, base_url, model = get_agent_llm_config()
+    api_key, base_url, model = get_agent_llm_config()  # AGENT_LLM_* only, raises if missing
     if "xiaomimimo" in base_url:
         # MiMo: api-key header, 不支持 response_format -> MD_JSON
         raw = AsyncOpenAI(base_url=base_url, api_key=api_key,
@@ -210,6 +212,51 @@ def get_instructor_client() -> tuple[instructor.AsyncInstructor, str]:
 
 instructor 自动处理 schema 注入、`response_format`（或 MD_JSON 下解析 markdown 中 JSON）、`ValidationError` 重试。
 **消除** `extract_json_object`、`extract_json_array`、`_inject_schema_instruction`、`call_llm_structured` 手写重试循环。
+
+### 3.3b Prompt 加载（agent/app/prompts/narration.py）
+
+代码默认 prompt 常量保留（与现有 `workflow_prompts.py` 一致），作为兜底。`get_prompt(name, **vars) -> str` 运行时先从 LangSmith 拉，失败回退默认值：
+
+```python
+from langsmith import Client
+from langsmith.client import convert_prompt_to_openai_format
+
+_DEFAULTS = {
+    "gen_script": GEN_SCRIPT_SYSTEM_PROMPT,
+    "script_review": SCRIPT_REVIEW_SYSTEM_PROMPT,
+    "split_segment": SPLIT_SEGMENT_SYSTEM_PROMPT,
+    "preference_extract": PREFERENCE_EXTRACT_PROMPT,
+}
+_LANGSMITH_NAMES = {
+    "gen_script": "narraforge-gen-script",
+    "script_review": "narraforge-script-review",
+    "split_segment": "narraforge-split-segment",
+    "preference_extract": "narraforge-preference-extract",
+}
+_client: Client | None = None
+
+def get_prompt(name: str, **vars) -> str:
+    default = _DEFAULTS[name]
+    ls_name = _LANGSMITH_NAMES.get(name)
+    if ls_name:
+        try:
+            global _client
+            if _client is None:
+                _client = Client()  # reads LANGSMITH_API_KEY; raises if absent -> caught below
+            pt = _client.pull_prompt(ls_name)
+            msgs = convert_prompt_to_openai_format(pt.invoke(vars))
+            for m in msgs:
+                if m.get("role") == "system" and m.get("content"):
+                    return m["content"]
+            if msgs and msgs[0].get("content"):
+                return msgs[0]["content"]
+        except Exception:
+            pass  # fall through to default
+    return default.format(**vars) if vars else default
+```
+
+节点用 `get_prompt("gen_script")` / `get_prompt("script_review")` / `get_prompt("split_segment")` / `get_prompt("preference_extract", feedback=...)` 取 prompt。
+未配置 `LANGSMITH_API_KEY` 或 prompt 未发布时，自动用代码默认值，agent 正常工作。
 
 ### 3.4 节点 LLM 使用策略
 
@@ -749,6 +796,7 @@ httpx>=0.27
 instructor>=1.4
 langchain-core>=0.3       # instructor 依赖
 openai>=1.50              # instructor 底层客户端
+langsmith>=0.3            # prompt 拉取（可选，缺失回退代码默认）
 ```
 
 ### 12.2 后端
