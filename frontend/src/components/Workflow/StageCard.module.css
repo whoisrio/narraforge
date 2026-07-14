@@ -1,0 +1,91 @@
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.card[data-status='running'] {
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 8px var(--glow-primary);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 11px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--color-text-primary);
+}
+
+.header:hover {
+  background: var(--color-surface-hover);
+}
+
+.statusIcon {
+  font-size: 16px;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+}
+
+.card[data-status='completed'] .statusIcon {
+  color: var(--color-success);
+  font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+}
+
+.card[data-status='running'] .statusIcon {
+  color: var(--color-primary);
+  animation: spin 1.4s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.title {
+  font-weight: 600;
+}
+
+.summary {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.caret {
+  font-size: 16px;
+  color: var(--color-text-muted);
+}
+
+.body {
+  padding: 0 11px 10px;
+  border-top: 1px solid var(--color-border-light);
+  padding-top: 10px;
+  margin-top: 2px;
+}
+
+.fullscreenBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 6px;
+  margin-top: 8px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  border-radius: 6px;
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  justify-content: center;
+}
+
+.fullscreenBtn:hover {
+  background: var(--color-surface-hover);
+}
