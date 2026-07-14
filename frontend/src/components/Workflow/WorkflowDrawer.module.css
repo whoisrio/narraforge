@@ -1,0 +1,136 @@
+.drawer {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 56%;
+  background: var(--color-background);
+  border-left: 1px solid var(--color-border-strong);
+  box-shadow: -8px 0 24px rgba(26, 24, 20, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  flex-shrink: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--color-primary-dark);
+}
+
+.icon {
+  font-size: 20px;
+  color: var(--color-primary);
+}
+
+.badge {
+  font-size: 10px;
+  padding: 2px 7px;
+  background: var(--color-primary-container);
+  color: var(--color-primary-dark);
+  border-radius: 9px;
+}
+
+.badgeIdle {
+  font-size: 10px;
+  padding: 2px 7px;
+  background: var(--color-surface-container);
+  color: var(--color-text-muted);
+  border-radius: 9px;
+}
+
+.headerActions {
+  display: flex;
+  gap: 4px;
+}
+
+.iconBtn {
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.body {
+  flex: 1;
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+.stageDetail {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.scriptPreview {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background: var(--color-surface-low);
+  padding: 8px;
+  border-radius: 6px;
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.chapterSummary {
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.fullscreenContent {
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.fullScript {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.fsChapter {
+  margin-bottom: 12px;
+}
+
+.fsSegment {
+  display: flex;
+  gap: 6px;
+  padding: 5px 8px;
+  background: var(--color-surface-low);
+  border-radius: 5px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.fsEmotion {
+  font-size: 9px;
+  padding: 1px 6px;
+  background: var(--color-surface-container);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
