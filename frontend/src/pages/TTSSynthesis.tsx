@@ -31,7 +31,6 @@ import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
 import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
 import { ProjectOverview } from '../components/ProjectOverview/ProjectOverview';
 import { ProjectSettings } from '../components/ProjectSettings/ProjectSettings';
-import { WorkflowPage } from '../components/Workflow/WorkflowPage';
 import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
 import styles from './TTSSynthesis.module.css';
@@ -1635,9 +1634,10 @@ export function TTSSynthesis({
         </VoiceStudioLayout>
         ) : projectSection === 'library' ? (
           <ProjectLibrary
+            projectId={project.id}
+            projectName={project.name}
             chapters={project.chapters}
             activeChapterId={project.active_chapter_id}
-            projectName={project.name}
             sourceDocument={project.source_document}
             onSelectChapter={handleSelectChapter}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
@@ -1679,10 +1679,6 @@ export function TTSSynthesis({
               setProjectSection('studio');
             }}
             onOpenVoices={() => setProjectSection('voices')}
-          />
-        ) : projectSection === 'workflow' ? (
-          <WorkflowPage
-            projectId={project.id}
           />
         ) : projectSection === 'settings' ? (
           <ProjectSettings

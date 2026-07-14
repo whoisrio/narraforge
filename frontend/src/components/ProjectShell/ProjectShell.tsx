@@ -4,7 +4,7 @@ import type { Chapter } from '../../types';
 import styles from './ProjectShell.module.css';
 
 
-export type ProjectSectionId = 'overview' | 'library' | 'studio' | 'voices' | 'workflow' | 'settings';
+export type ProjectSectionId = 'overview' | 'library' | 'studio' | 'voices' | 'settings';
 
 interface ProjectShellProps {
   projectName: string;
@@ -31,7 +31,6 @@ const SECTION_ICONS: Record<ProjectSectionId, string> = {
   library: '▤',
   studio: '◉',
   voices: '◌',
-  workflow: '🎬',
   settings: '⚙',
 };
 

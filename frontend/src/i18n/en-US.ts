@@ -12,7 +12,6 @@ export const enUS: Messages = {
     library: 'Library',
     studio: 'Studio',
     voices: 'Characters',
-    workflow: 'Workflow',
     settings: 'Project Settings',
   },
   subtitles: {

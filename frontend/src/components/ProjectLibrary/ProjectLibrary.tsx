@@ -4,11 +4,15 @@ import type { Chapter } from '../../types';
 import { useTranslation } from '../../i18n';
 import { CompareView } from './CompareView';
 import { SourceDocumentView } from './SourceDocumentView';
+import { WorkflowDrawer } from '../Workflow/WorkflowDrawer';
+import { DrawerIndicator } from '../Workflow/DrawerIndicator';
+import { agentClient } from '../../services/langgraph/client';
 import styles from './ProjectLibrary.module.css';
 
 interface ProjectLibraryProps {
   chapters: Chapter[];
   activeChapterId?: string;
+  projectId?: string;
   projectName?: string;
   sourceDocument?: string | null;
   onSelectChapter: (id: string) => void;
@@ -87,6 +91,31 @@ export function ProjectLibrary({
   const [comparing, setComparing] = useState(false);
   const [sourceViewMode, setSourceViewMode] = useState<'edit' | 'view'>('edit');
   const [showPreview, setShowPreview] = useState(false);
+  const [drawerThreadId, setDrawerThreadId] = useState<string | null>(null);
+  const [drawerCollapsed, setDrawerCollapsed] = useState(false);
+
+  const startWorkflow = async () => {
+    const existing = await agentClient.threads.search({
+      metadata: { project_id: projectId, kind: 'narration_workflow' },
+      limit: 50,
+    });
+    const active = existing.filter(
+      (t: any) => t.status === 'busy' || t.status === 'interrupted',
+    );
+    if (active.length) {
+      alert('项目已有运行中的工作流');
+      return;
+    }
+    const thread = await agentClient.threads.create({
+      metadata: {
+        project_id: projectId,
+        project_name: projectName,
+        kind: 'narration_workflow',
+      },
+    });
+    setDrawerThreadId(thread.thread_id);
+    setDrawerCollapsed(false);
+  };
 
   const setLibraryMode = (next: LibraryMode) => {
     setMode(next);
@@ -454,18 +483,46 @@ export function ProjectLibrary({
             onBack={() => setComparing(false)}
           />
         ) : activeTab === 'source' ? (
-          <SourceDocumentView
-            content={sourceDocument ?? ''}
-            onChange={(text) => onUpdateSourceDocument?.(text)}
-            onCompare={() => setComparing(true)}
-            onBack={() => setActiveTab('narration')}
-            viewMode={sourceViewMode}
-            onViewModeChange={setSourceViewMode}
-          />
+          <>
+            <SourceDocumentView
+              content={sourceDocument ?? ''}
+              onChange={(text) => onUpdateSourceDocument?.(text)}
+              onCompare={() => setComparing(true)}
+              onBack={() => setActiveTab('narration')}
+              viewMode={sourceViewMode}
+              onViewModeChange={setSourceViewMode}
+            />
+            {projectId && (
+              <div className={styles.workflowTrigger}>
+                <div>
+                  <strong>从此源文档生成旁白</strong>
+                  <span>运行 4 阶段工作流：生成脚本 → 脚本审查 → 段落拆分 → 语音合成</span>
+                </div>
+                <button className={styles.workflowBtn} onClick={startWorkflow}>
+                  <span className="material-symbols-outlined">auto_awesome</span>
+                  生成旁白
+                </button>
+              </div>
+            )}
+          </>
         ) : (
           narrationContent
         )}
       </div>
+      {drawerThreadId && !drawerCollapsed && projectId && (
+        <WorkflowDrawer
+          threadId={drawerThreadId}
+          projectId={projectId}
+          onClose={() => setDrawerThreadId(null)}
+          onCollapse={() => setDrawerCollapsed(true)}
+        />
+      )}
+      {drawerThreadId && drawerCollapsed && (
+        <DrawerIndicator
+          status="running"
+          onExpand={() => setDrawerCollapsed(false)}
+        />
+      )}
     </section>
   );
 }

@@ -10,7 +10,6 @@ export const zhCN = {
     library: '文本库',
     studio: '工作室',
     voices: '角色',
-    workflow: '工作流',
     settings: '项目设置',
   },
   subtitles: {
