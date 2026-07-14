@@ -22,6 +22,11 @@ export default defineConfig({
         target: process.env.VITE_BACKEND_URL || 'http://127.0.0.1:8002',
         changeOrigin: true,
       },
+      '/agent': {
+        target: 'http://127.0.0.1:2024',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/agent/, ''),
+      },
     },
   },
 })
