@@ -48,12 +48,7 @@ class SegmentedProject(Base):
         order_by="SegmentedProjectChapter.position",
     )
 
-    workflow_runs = relationship(
-        "WorkflowRun",
-        back_populates="project",
-        cascade="all, delete-orphan",
-    )
-
+    
     def __repr__(self) -> str:  # pragma: no cover
         return f"<SegmentedProject(id={self.id}, name={self.name!r})>"
 
