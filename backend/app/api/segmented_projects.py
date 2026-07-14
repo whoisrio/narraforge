@@ -122,6 +122,57 @@ def synthesize_segment(
     return detail
 
 
+# ----- chapters:batch (agent split_segment node) -----
+
+from pydantic import BaseModel
+
+
+class BatchSegmentIn(BaseModel):
+    text: str
+    emotion: str | None = None
+    role: str | None = "narration"
+    segment_kind: str | None = "narration"
+
+
+class BatchChapterIn(BaseModel):
+    chapter_title: str
+    segments: list[BatchSegmentIn] = []
+
+
+class BatchRequest(BaseModel):
+    chapters: list[BatchChapterIn]
+
+
+class BatchSegmentOut(BaseModel):
+    id: str
+
+
+class BatchChapterOut(BaseModel):
+    id: str
+    segments: list[BatchSegmentOut]
+
+
+class BatchResponse(BaseModel):
+    chapters: list[BatchChapterOut]
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters:batch",
+    response_model=BatchResponse,
+)
+def batch_create_chapters(project_id: str, body: BatchRequest, db: Session = Depends(get_db)):
+    try:
+        result = svc.batch_create_structure(db, project_id, [c.model_dump() for c in body.chapters])
+    except LookupError:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    return BatchResponse(
+        chapters=[
+            BatchChapterOut(id=c["id"], segments=[BatchSegmentOut(id=s["id"]) for s in c["segments"]])
+            for c in result
+        ]
+    )
+
+
 # ----- P2 v3: Animation spec 批量应用 -----
 
 @router.post(

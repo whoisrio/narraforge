@@ -824,6 +824,48 @@ def mark_silent_segments_as_missing(
     }
 
 
+def batch_create_structure(db: Session, project_id: str, chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Replace all chapters+segments of a project in one transaction.
+
+    Resolves default voice from the project's first existing chapter
+    (or edge_tts default), deletes existing chapters, creates the new
+    structure, and returns assigned ids.
+    """
+    project = db.query(SegmentedProject).filter_by(id=project_id).first()
+    if project is None:
+        raise LookupError("project_not_found")
+
+    # default voice: from first existing chapter, or edge_tts default
+    default_voice = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
+    if project.chapters:
+        ch_voice = project.chapters[0].voice or {}
+        if ch_voice.get("voice") and ch_voice.get("engine") == "edge_tts":
+            default_voice = ch_voice
+        elif ch_voice.get("voice_id") and ch_voice.get("engine") in ("cosyvoice", "mimo_tts", "voxcpm"):
+            default_voice = ch_voice
+
+    # delete existing chapters (cascade deletes segments)
+    for ch in list(project.chapters):
+        db.delete(ch)
+    db.flush()
+
+    result = []
+    for index, ch_data in enumerate(chapters):
+        title = ch_data.get("chapter_title", f"Chapter {index + 1}")
+        chapter = create_chapter_for_project(db, project_id, title, index, voice=default_voice)
+        seg_result = []
+        for seg_data in ch_data.get("segments", []):
+            seg = create_segment_for_chapter(
+                db, chapter.id, seg_data["text"], len(seg_result),
+                emotion=seg_data.get("emotion"), role=seg_data.get("role"),
+                segment_kind=seg_data.get("segment_kind", "narration"),
+            )
+            seg_result.append({"id": seg.id})
+        result.append({"id": chapter.id, "segments": seg_result})
+    db.commit()
+    return result
+
+
 def create_chapter_for_project(
     db: Session,
     project_id: str,
