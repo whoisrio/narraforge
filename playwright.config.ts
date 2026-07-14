@@ -56,6 +56,20 @@ export default defineConfig({
       stdout: 'pipe',
       stderr: 'pipe',
     },
+    {
+      name: 'agent',
+      command: 'uv run langgraph dev --port 2024 --no-browser',
+      cwd: 'agent',
+      env: {
+        BACKEND_API_URL: 'http://127.0.0.1:8002',
+        LANGSMITH_API_KEY: '',
+      },
+      url: 'http://127.0.0.1:2024/assistants/narration/graph',
+      timeout: 120_000,
+      reuseExistingServer: !process.env.CI,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
   ],
   projects: [
     {
