@@ -1,0 +1,162 @@
+.root {
+  background: var(--color-surface);
+  border: 1px solid var(--color-primary);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px var(--glow-primary);
+}
+
+.scoreRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.stars { display: flex; gap: 1px; }
+
+.comment {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.critical {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--color-danger-light);
+  border: 1px solid var(--color-error);
+  border-radius: 6px;
+  color: var(--color-error);
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.dimensions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.dimension {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--color-surface-low);
+  border-radius: 6px;
+  border-left: 3px solid;
+  font-size: 12px;
+}
+
+.dimName { font-weight: 600; }
+
+.dimComment {
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.dimSuggestion {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  color: var(--color-primary-dark);
+  font-size: 11px;
+}
+
+.section {
+  margin-bottom: 12px;
+}
+
+.sectionLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 6px;
+}
+
+.stats {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.scriptEditor {
+  width: 100%;
+  min-height: 100px;
+  padding: 10px;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  resize: vertical;
+}
+
+.noteEditor {
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.rejectBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  border: 1px solid var(--color-error);
+  background: var(--color-surface);
+  color: var(--color-error);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.rejectBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.primaryBtn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 14px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-light));
+  color: var(--color-text-on-primary);
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px var(--glow-primary-strong);
+}
+
+.ghostBtn {
+  padding: 7px 14px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+}
