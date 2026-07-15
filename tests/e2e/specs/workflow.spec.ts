@@ -33,7 +33,7 @@ const LLM_TIMEOUT = 120_000;
 /** Timeout for synthesis */
 const SYNTH_TIMEOUT = 300_000;
 
-test.describe('Workflow from source document', () => {
+test.describe('@workflow from source document', () => {
   test.beforeEach(async ({ page }) => {
     await setLocaleToZhCN(page);
     await openTestProject(page);
