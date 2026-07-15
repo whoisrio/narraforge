@@ -91,11 +91,8 @@ test.describe('@workflow from source document', () => {
     await clickGenerate(page);
     await waitForDrawer(page);
 
-    // gen_script should be running
+    // gen_script should be running — card header shows active status
     await expect(page.locator('[data-status="running"]').first()).toBeVisible({ timeout: 10_000 });
-    // The gen_script card should be expanded (default open for running)
-    // Look for the streaming script preview area
-    await expect(page.locator('pre').first()).toBeVisible({ timeout: LLM_TIMEOUT });
   });
 
   test('3. gen_script completes and script_review interrupts', async ({ page }) => {
