@@ -56,7 +56,7 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
   const [started, setStarted] = useState(false);
 
   const stream = useStream<NarraWorkflowState>({
-    apiUrl: typeof window !== 'undefined' ? `${window.location.origin}/agent` : '/agent',
+    apiUrl: typeof window !== 'undefined' ? `http://${window.location.hostname}:2024` : 'http://127.0.0.1:2024',
     assistantId: 'narration',
     threadId,
     streamMode: ['values', 'messages', 'custom', 'updates'],
