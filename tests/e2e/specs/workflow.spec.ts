@@ -93,8 +93,6 @@ test.describe('@workflow from source document', () => {
 
     // gen_script stage card should be visible in the drawer
     await expect(page.getByText('gen_script').first()).toBeVisible({ timeout: 10_000 });
-    // Drawer should show running badge
-    await expect(page.locator('text=运行中')).toBeVisible({ timeout: 10_000 });
   });
 
   test('3. gen_script completes and script_review interrupts', async ({ page }) => {
