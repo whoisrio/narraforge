@@ -97,28 +97,32 @@ export function ProjectLibrary({
   const [drawerCollapsed, setDrawerCollapsed] = useState(false);
 
   const startWorkflow = async () => {
-    const existing = await agentClient.threads.search({
-      metadata: { project_id: projectId, kind: 'narration_workflow' },
-      limit: 50,
-    });
-    const active = existing.filter(
-      (t: any) => t.status === 'busy' || t.status === 'interrupted',
-    );
-    if (active.length) {
-      // Show the existing drawer instead of blocking
-      setDrawerThreadId(active[0].thread_id);
+    try {
+      const existing = await agentClient.threads.search({
+        metadata: { project_id: projectId, kind: 'narration_workflow' },
+        limit: 50,
+      });
+      const active = existing.filter(
+        (t: any) => t.status === 'busy' || t.status === 'interrupted',
+      );
+      if (active.length) {
+        setDrawerThreadId(active[0].thread_id);
+        setDrawerCollapsed(false);
+        return;
+      }
+      const thread = await agentClient.threads.create({
+        metadata: {
+          project_id: projectId,
+          project_name: projectName,
+          kind: 'narration_workflow',
+        },
+      });
+      setDrawerThreadId(thread.thread_id);
       setDrawerCollapsed(false);
-      return;
+    } catch (e: any) {
+      console.error('startWorkflow failed', e);
+      alert('启动工作流失败: ' + (e.message || '未知错误'));
     }
-    const thread = await agentClient.threads.create({
-      metadata: {
-        project_id: projectId,
-        project_name: projectName,
-        kind: 'narration_workflow',
-      },
-    });
-    setDrawerThreadId(thread.thread_id);
-    setDrawerCollapsed(false);
   };
 
   const setLibraryMode = (next: LibraryMode) => {

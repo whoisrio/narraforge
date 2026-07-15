@@ -1,0 +1,28 @@
+{
+  "folders": [
+    { "path": "backend" },
+    { "path": "agent" },
+    { "path": "frontend" }
+  ],
+  "settings": {
+    // 全局设置
+    "files.exclude": {
+      "**/__pycache__": true,
+      "**/.venv": false,
+      "**/node_modules": false   // 保留 node_modules 可见（方便跳转）
+    },
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "explicit"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "charliermarsh.ruff",
+      "dbaeumer.vscode-eslint",
+      "esbenp.prettier-vscode",
+      "bradlc.vscode-tailwindcss"
+    ]
+  }
+}
