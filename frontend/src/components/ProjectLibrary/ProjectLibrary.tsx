@@ -1,13 +1,14 @@
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import Markdown from 'react-markdown';
 import type { Chapter } from '../../types';
 import { useTranslation } from '../../i18n';
 import { CompareView } from './CompareView';
 import { SourceDocumentView } from './SourceDocumentView';
-import { WorkflowDrawer } from '../Workflow/WorkflowDrawer';
-import { DrawerIndicator } from '../Workflow/DrawerIndicator';
 import { agentClient } from '../../services/langgraph/client';
 import styles from './ProjectLibrary.module.css';
+
+const WorkflowDrawer = lazy(() => import('../Workflow/WorkflowDrawer').then(m => ({ default: m.WorkflowDrawer })));
+const DrawerIndicator = lazy(() => import('../Workflow/DrawerIndicator').then(m => ({ default: m.DrawerIndicator })));
 
 interface ProjectLibraryProps {
   chapters: Chapter[];
@@ -510,18 +511,22 @@ export function ProjectLibrary({
         )}
       </div>
       {drawerThreadId && !drawerCollapsed && projectId && (
-        <WorkflowDrawer
-          threadId={drawerThreadId}
-          projectId={projectId}
-          onClose={() => setDrawerThreadId(null)}
-          onCollapse={() => setDrawerCollapsed(true)}
-        />
+        <Suspense fallback={null}>
+          <WorkflowDrawer
+            threadId={drawerThreadId}
+            projectId={projectId}
+            onClose={() => setDrawerThreadId(null)}
+            onCollapse={() => setDrawerCollapsed(true)}
+          />
+        </Suspense>
       )}
       {drawerThreadId && drawerCollapsed && (
-        <DrawerIndicator
-          status="running"
-          onExpand={() => setDrawerCollapsed(false)}
-        />
+        <Suspense fallback={null}>
+          <DrawerIndicator
+            status="running"
+            onExpand={() => setDrawerCollapsed(false)}
+          />
+        </Suspense>
       )}
     </section>
   );
