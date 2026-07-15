@@ -111,7 +111,7 @@ async def script_review_node(state, runtime) -> dict:
             }
         )
         return {
-            "review_feedback": review,
+            "review_feedback": review.model_dump(),
             "review_status": "rejected",
             "current_stage": "gen_script",
             "review_retry_count": retry_count + 1,
@@ -163,7 +163,7 @@ async def script_review_node(state, runtime) -> dict:
             await _extract_preference(runtime, project_id, decision["comment"])
         return {
             "edited_script": edited_script,
-            "review_feedback": review,
+            "review_feedback": review.model_dump(),
             "review_status": "approved",
             "current_stage": "split_segment",
             "error": None,
@@ -188,7 +188,7 @@ async def script_review_node(state, runtime) -> dict:
     if feedback:
         await _extract_preference(runtime, project_id, feedback)
     return {
-        "review_feedback": review,
+        "review_feedback": review.model_dump(),
         "review_status": "rejected",
         "current_stage": "gen_script",
         "error": None,

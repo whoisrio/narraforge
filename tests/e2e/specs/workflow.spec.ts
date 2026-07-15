@@ -80,10 +80,10 @@ test.describe('@workflow from source document', () => {
     await clickGenerate(page);
     await waitForDrawer(page);
     // Timeline shows 4 stages
-    await expect(page.locator('text=gen_script')).toBeVisible();
-    await expect(page.locator('text=script_review')).toBeVisible();
-    await expect(page.locator('text=split_segment')).toBeVisible();
-    await expect(page.locator('text=synthesis')).toBeVisible();
+    await expect(page.getByText('gen_script').first()).toBeVisible();
+    await expect(page.getByText('script_review').first()).toBeVisible();
+    await expect(page.getByText('split_segment').first()).toBeVisible();
+    await expect(page.getByText('synthesis').first()).toBeVisible();
   });
 
   test('2. gen_script streams script text', async ({ page }) => {
@@ -133,7 +133,7 @@ test.describe('@workflow from source document', () => {
     await page.getByRole('button', { name: '批准' }).click();
 
     // Wait for split_segment to complete (look for structured output)
-    await expect(page.locator('text=合成').first()).toBeVisible({ timeout: LLM_TIMEOUT });
+    await expect(page.getByText('合成').first()).toBeVisible({ timeout: LLM_TIMEOUT });
 
     // Wait for synthesis to complete (drawer badge changes to 完成)
     await expect(page.locator('text=完成')).toBeVisible({ timeout: SYNTH_TIMEOUT });
@@ -233,7 +233,7 @@ test.describe('@workflow from source document', () => {
 
     // Click the gen_script stage card to expand L2 (it's already expanded by default for running,
     // but after completion it's collapsed)
-    const genScriptCard = page.locator('text=gen_script').first();
+    const genScriptCard = page.getByText('gen_script').first().first();
     await genScriptCard.click();
 
     // L2 should show script preview
