@@ -75,6 +75,8 @@ function navigateChapter(chapters: Chapter[], currentId: string, direction: 'pre
 export function ProjectLibrary({
   chapters,
   activeChapterId,
+  projectId,
+  projectName,
   sourceDocument,
   onSelectChapter,
   onRenameChapter,

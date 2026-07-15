@@ -93,3 +93,10 @@ backend/uploads_bak
 .playwright-cli
 home.yaml
 backend/voice_clone_e2e.db*
+
+
+#agent
+agent/.venv
+agent/.pytest_cache
+agent/.langgraph_api
+

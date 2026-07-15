@@ -32,6 +32,19 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 | `test-results/` | Per-run failure artifacts + screenshots (ignored, do not commit) |
 | `playwright-report/` | HTML reports (ignored, do not commit) |
 
+```text
+tests/e2e/
+├── specs/                  ← Automated Playwright browser specs (26 tests)
+├── fixtures/               ← Stable E2E input fixtures (audio, images)
+├── helpers/                ← Shared utilities
+│   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
+│   ├── dbReader.ts         ← DB-layer reader — direct SQLite access via node:sqlite
+│   ├── dualReadSnapshot.ts ← Dual-read + screenshot helper
+│   └── index.ts            ← Barrel exports
+├── global-setup.ts         ← Seed data before all tests
+└── README.md               ← Layout and artifact policy
+```
+
 ## Test Data Setup
 
 - `global-setup.ts` sets storage mode to `backend` and seeds test data before tests run.

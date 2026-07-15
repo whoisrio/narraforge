@@ -47,6 +47,10 @@ npm run dev
    ```bash
    cd backend && uv sync
    ```
+   If PyPI is unstable (common in China), use the Tsinghua mirror:
+   ```bash
+   uv sync --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+   ```
 
 3. **Database locked**: Delete and recreate
    ```bash
