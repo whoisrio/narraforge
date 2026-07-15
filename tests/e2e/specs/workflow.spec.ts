@@ -29,7 +29,7 @@ import {
 } from '../helpers/langgraphAssertions';
 
 /** Timeout for LLM calls (gen_script + review) */
-const LLM_TIMEOUT = 180_000;
+const LLM_TIMEOUT = 300_000;
 /** Timeout for synthesis */
 const SYNTH_TIMEOUT = 300_000;
 
