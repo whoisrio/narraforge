@@ -79,13 +79,11 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
       });
   }, []);
 
-  // start the run once via raw SDK (useStream.submit has version compatibility issues)
+  // start the run once
   useEffect(() => {
     if (!started && !stream.isLoading) {
-      agentClient.runs
-        .create(threadId, 'narration', { input: { project_id: projectId }, streamMode: ['values', 'messages', 'custom', 'updates'] } as any)
-        .then(() => setStarted(true))
-        .catch((e: unknown) => console.error('run create failed', e));
+      stream.submit({ project_id: projectId });
+      setStarted(true);
     }
   }, [started, stream.isLoading, threadId, projectId]);
 
