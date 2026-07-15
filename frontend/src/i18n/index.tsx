@@ -32,7 +32,6 @@ export const projectNavItems: NavItem[] = [
   { id: 'library', labelKey: 'projectNav.library', path: 'library' },
   { id: 'studio', labelKey: 'projectNav.studio', path: 'studio' },
   { id: 'voices', labelKey: 'projectNav.voices', path: 'voices' },
-  { id: 'workflow', labelKey: 'projectNav.workflow', path: 'workflow' },
   { id: 'settings', labelKey: 'projectNav.settings', path: 'settings' },
 ];
 
