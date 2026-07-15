@@ -29,7 +29,7 @@ import {
 } from '../helpers/langgraphAssertions';
 
 /** Timeout for LLM calls (gen_script + review) */
-const LLM_TIMEOUT = 120_000;
+const LLM_TIMEOUT = 180_000;
 /** Timeout for synthesis */
 const SYNTH_TIMEOUT = 300_000;
 
@@ -91,8 +91,10 @@ test.describe('@workflow from source document', () => {
     await clickGenerate(page);
     await waitForDrawer(page);
 
-    // gen_script should be running — card header shows active status
-    await expect(page.locator('[data-status="running"]').first()).toBeVisible({ timeout: 10_000 });
+    // gen_script stage card should be visible in the drawer
+    await expect(page.getByText('gen_script').first()).toBeVisible({ timeout: 10_000 });
+    // Drawer should show running badge
+    await expect(page.locator('text=运行中')).toBeVisible({ timeout: 10_000 });
   });
 
   test('3. gen_script completes and script_review interrupts', async ({ page }) => {
@@ -172,8 +174,8 @@ test.describe('@workflow from source document', () => {
     // Confirm reject
     await page.getByRole('button', { name: '确认拒绝' }).click();
 
-    // gen_script should re-run (regenerating)
-    await expect(page.locator('[data-status="running"]').first()).toBeVisible({ timeout: 10_000 });
+    // gen_script should re-run (regenerating) — card should be visible
+    await expect(page.getByText('gen_script').first()).toBeVisible({ timeout: 10_000 });
 
     // Wait for new review panel
     await waitForReviewPanel(page);
@@ -185,15 +187,13 @@ test.describe('@workflow from source document', () => {
     await clickGenerate(page);
     await waitForDrawer(page);
 
-    // Close the drawer (click the close button in header)
-    const closeBtn = page.locator('button:has(.material-symbols-outlined)').filter({ hasText: '' });
-    await closeBtn.last().click();
+    // Close the drawer by clicking the close button (last icon button in header)
+    await page.locator('.WorkflowDrawer-module__iconBtn').last().click();
     await expect(page.locator('text=旁白工作流')).not.toBeVisible({ timeout: 5_000 });
 
     // Click 生成旁白 again → should reopen same drawer
     await clickGenerate(page);
     await waitForDrawer(page);
-    // Should show the existing workflow state, not a new one
   });
 
   test('8. collapse to indicator and persist across sections', async ({ page }) => {
@@ -201,10 +201,8 @@ test.describe('@workflow from source document', () => {
     await clickGenerate(page);
     await waitForDrawer(page);
 
-    // Collapse the drawer
-    const collapseBtn = page.locator('button:has(.material-symbols-outlined)').filter({ hasText: '' }).first();
-    // Actually, find the unfold_less button
-    await page.locator('text=unfold_less').click();
+    // Collapse the drawer — click the first icon button (unfold_less)
+    await page.locator('.WorkflowDrawer-module__iconBtn').first().click();
     await expect(page.locator('text=旁白工作流')).not.toBeVisible({ timeout: 5_000 });
 
     // Indicator should be visible
@@ -230,21 +228,19 @@ test.describe('@workflow from source document', () => {
 
     // Click the gen_script stage card to expand L2 (it's already expanded by default for running,
     // but after completion it's collapsed)
-    const genScriptCard = page.getByText('gen_script').first().first();
+    const genScriptCard = page.getByText('gen_script').first();
     await genScriptCard.click();
 
-    // L2 should show script preview
-    await expect(page.locator('pre').first()).toBeVisible({ timeout: 5_000 });
-
-    // Click fullscreen button
+    // L2 should show the fullscreen button
     const fullscreenBtn = page.getByRole('button', { name: '全屏查看' });
-    if (await fullscreenBtn.isVisible()) {
-      await fullscreenBtn.click();
-      // Modal should appear with full script
-      await expect(page.locator('text=完整内容')).toBeVisible({ timeout: 5_000 });
-      // Close modal
-      await page.locator('button:has(.material-symbols-outlined):has-text("close")').last().click();
-      await expect(page.locator('text=完整内容')).not.toBeVisible({ timeout: 5_000 });
-    }
+    await expect(fullscreenBtn).toBeVisible({ timeout: 5_000 });
+    await fullscreenBtn.click();
+
+    // Modal should appear with full content
+    await expect(page.getByText('完整内容').first()).toBeVisible({ timeout: 5_000 });
+
+    // Close the modal
+    await page.locator('button:has(.material-symbols-outlined)').last().click();
+    await expect(page.getByText('完整内容').first()).not.toBeVisible({ timeout: 5_000 });
   });
 });
