@@ -56,7 +56,7 @@ test.describe('@workflow from source document', () => {
   }
 
   async function waitForReviewPanel(page: import('@playwright/test').Page) {
-    await expect(page.getByRole('button', { name: '批准' })).toBeVisible({ timeout: LLM_TIMEOUT });
+    await expect(page.getByRole('button', { name: /批准/ })).toBeVisible({ timeout: LLM_TIMEOUT });
   }
 
   async function extractThreadId(page: import('@playwright/test').Page): Promise<string> {
@@ -129,7 +129,7 @@ test.describe('@workflow from source document', () => {
     await waitForReviewPanel(page);
 
     // Approve
-    await page.getByRole('button', { name: '批准' }).click();
+    await page.getByRole('button', { name: /批准/ }).click();
 
     // Wait for split_segment to complete (look for structured output)
     await expect(page.getByText('合成').first()).toBeVisible({ timeout: LLM_TIMEOUT });
@@ -164,7 +164,7 @@ test.describe('@workflow from source document', () => {
     await waitForReviewPanel(page);
 
     // Click reject
-    await page.getByRole('button', { name: '拒绝' }).click();
+    await page.getByRole('button', { name: /拒绝/ }).click();
 
     // Fill feedback
     const feedbackInput = page.locator('textarea[placeholder*="描述需要改进"]');
@@ -179,7 +179,7 @@ test.describe('@workflow from source document', () => {
 
     // Wait for new review panel
     await waitForReviewPanel(page);
-    await expect(page.getByRole('button', { name: '批准' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /批准/ })).toBeVisible();
   });
 
   test('7. re-click shows existing drawer when workflow is running', async ({ page }) => {
