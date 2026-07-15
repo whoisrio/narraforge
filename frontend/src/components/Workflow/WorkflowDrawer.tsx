@@ -82,7 +82,7 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
   // start the run once if thread is idle
   useEffect(() => {
     if (!started && !stream.isLoading && stream.values && Object.keys(stream.values).length === 0) {
-      stream.submit({ input: { project_id: projectId } });
+      stream.submit({ project_id: projectId });
       setStarted(true);
     }
   }, [started, stream.isLoading, stream.values, projectId]);

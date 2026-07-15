@@ -106,7 +106,9 @@ export function ProjectLibrary({
       (t: any) => t.status === 'busy' || t.status === 'interrupted',
     );
     if (active.length) {
-      alert('项目已有运行中的工作流');
+      // Show the existing drawer instead of blocking
+      setDrawerThreadId(active[0].thread_id);
+      setDrawerCollapsed(false);
       return;
     }
     const thread = await agentClient.threads.create({
