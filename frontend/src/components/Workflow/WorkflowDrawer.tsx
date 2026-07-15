@@ -79,16 +79,15 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
       });
   }, []);
 
-  // start the run once if thread is idle
+  // start the run once via raw SDK (useStream.submit has version compatibility issues)
   useEffect(() => {
     if (!started && !stream.isLoading) {
-      const vals = (stream.values ?? {}) as Record<string, unknown>;
-      if (Object.keys(vals).length === 0) {
-        stream.submit({ project_id: projectId });
-        setStarted(true);
-      }
+      agentClient.runs
+        .create(threadId, 'narration', { input: { project_id: projectId }, streamMode: ['values', 'messages', 'custom', 'updates'] } as any)
+        .then(() => setStarted(true))
+        .catch((e: unknown) => console.error('run create failed', e));
     }
-  }, [started, stream.isLoading, stream.values, projectId]);
+  }, [started, stream.isLoading, threadId, projectId]);
 
   const values = stream.values ?? {};
   const currentStage = values.current_stage;
