@@ -36,3 +36,37 @@ class NarrationWorkflowState(TypedDict, total=False):
     current_stage: str
     review_retry_count: int
     error: str | None
+
+
+class KnowledgeVideoState(TypedDict, total=False):
+    """State for the knowledge_video workflow (see graph_knowledge_video.py)."""
+
+    # -- inputs ---------------------------------------------------------------
+    project_id: str
+    target_dir: str | None          # optional override for the remotion project dir
+
+    # -- preflight_check / gen_narration output --------------------------------
+    source_document: str
+    source_structure_map: list[dict[str, Any]]  # serialized SourceElement
+    narration_script: str
+    script_chapters: list[dict[str, Any]]
+
+    # -- quality_review output --------------------------------------------------
+    review_result: dict[str, Any]   # serialized QualityReviewResult
+    edited_script: str
+    review_status: Literal["approved", "rejected"]
+
+    # -- split_chapters output --------------------------------------------------
+    structured_segments: list[dict[str, Any]]   # carries _chapter_id / _segment_id
+
+    # -- synthesis output -------------------------------------------------------
+    synthesis_results: list[dict[str, Any]]
+
+    # -- scaffold_remotion / gen_animation_brief output -------------------------
+    remotion_project_dir: str
+    animation_brief: dict[str, Any]  # serialized AnimationBrief (+ start/end sec per segment)
+
+    # -- metadata ---------------------------------------------------------------
+    current_stage: str
+    review_retry_count: int
+    error: str | None

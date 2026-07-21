@@ -79,3 +79,71 @@ class ChapterWithSegmentIds(BaseModel):
 
     id: str
     segments: list[SegmentWithId]
+
+
+# ---------------------------------------------------------------------------
+# knowledge_video workflow
+# ---------------------------------------------------------------------------
+
+
+class QualityDimension(BaseModel):
+    """One quality-check dimension for the kv quality_review node."""
+
+    name: str
+    passed: bool
+    comment: str
+
+
+class QualityReviewResult(BaseModel):
+    """LLM auto quality-check output for the kv quality_review node."""
+
+    passed: bool
+    dimensions: list[QualityDimension]
+    issues: list[str] = Field(default_factory=list)
+
+
+class SourceElement(BaseModel):
+    """A code block or image reference found in the source document."""
+
+    kind: Literal["code", "image"]
+    ref: str
+    chapter_index: int
+    excerpt: str
+
+
+class VisualContent(BaseModel):
+    """What to show on screen while a segment is narrated."""
+
+    type: Literal["code", "image", "key_points", "text"]
+    description: str
+    source_ref: str | None = None
+
+
+class AnimationSpec(BaseModel):
+    """How to animate the visual content of a segment."""
+
+    effect: str
+    notes: str = ""
+
+
+class SegmentBrief(BaseModel):
+    """Storyboard brief for one narration segment."""
+
+    segment_position: int
+    narration_text: str
+    visual_content: VisualContent
+    animation: AnimationSpec
+
+
+class ChapterBrief(BaseModel):
+    """Storyboard briefs for one chapter."""
+
+    chapter_position: int
+    title: str
+    segments: list[SegmentBrief]
+
+
+class AnimationBrief(BaseModel):
+    """Full storyboard brief for the project (top-level must be an object)."""
+
+    chapters: list[ChapterBrief]
