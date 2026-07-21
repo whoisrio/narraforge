@@ -203,6 +203,49 @@ def test_apply_animation_spec_empty_segments(client):
     assert r.json()["theme_updated"] is True
 
 
+def test_apply_animation_spec_merges_arbitrary_brief_fields(client, db_session):
+    """kv workflow brief fields (visual_content/animation/start_sec...) must be kept."""
+    from app.models.segmented_project import (
+        SegmentedProject,
+        SegmentedProjectChapter,
+        SegmentedProjectSegment,
+    )
+
+    project = SegmentedProject(id="kv-proj", name="kv", schema_version=2)
+    chapter = SegmentedProjectChapter(id="kv-ch", project_id="kv-proj", position=0, name="c")
+    segment = SegmentedProjectSegment(
+        id="kv-seg", chapter_id="kv-ch", position=0, text="旁白", emotion="neutral"
+    )
+    db_session.add_all([project, chapter, segment])
+    db_session.commit()
+
+    resp = client.post(
+        "/api/segmented-projects/kv-proj/apply-animation-spec",
+        json={
+            "theme": None,
+            "segments": [
+                {
+                    "segment_id": "kv-seg",
+                    "narration_text": "旁白",
+                    "start_sec": 0.0,
+                    "end_sec": 4.2,
+                    "visual_content": {"type": "code", "description": "展示代码", "source_ref": None},
+                    "animation": {"effect": "typewriter", "notes": "逐行"},
+                }
+            ],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["segments_updated"] == 1
+
+    detail = client.get("/api/segmented-projects/kv-proj").json()
+    spec = detail["chapters"][0]["segments"][0]["animation_spec"]
+    assert spec["visual_content"]["type"] == "code"
+    assert spec["animation"]["effect"] == "typewriter"
+    assert spec["start_sec"] == 0.0
+    assert spec["narration_text"] == "旁白"
+
+
 def test_animation_spec_null_after_omitted(client):
     """save_project 不传 animation_spec, 已有值应保留."""
     _create_project_with_segments(client, "p-anim-8")

@@ -420,18 +420,14 @@ def apply_animation_spec(
         if seg is None:
             missing.append(seg_id)
             continue
-        # 合并: 只覆盖传入的非空字段, 保留未传的
+        # 合并: 覆盖传入的所有非 None 字段 (segment_id 除外), 保留未传的
         existing_raw = getattr(seg, "animation_spec_json", None)
         existing = _parse_animation_spec(existing_raw) or {}
         merged = dict(existing)
-        for key in (
-            "visual_concept", "layout", "mood",
-            "phases", "animations", "elements",
-            "emphasis", "asset_refs", "notes",
-        ):
-            v = it.get(key)
-            if v is not None:
-                merged[key] = v
+        for key, v in it.items():
+            if key == "segment_id" or v is None:
+                continue
+            merged[key] = v
         merged["generated_at"] = utcnow().isoformat()
         setattr(seg, "animation_spec_json", _dump_animation_spec(merged))
         updated += 1
