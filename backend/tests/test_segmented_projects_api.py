@@ -153,3 +153,44 @@ def test_project_round_trips_role_fields(client, tmp_path, monkeypatch):
     assert segment["segment_kind"] == "dialogue"
     assert segment["voice"]["source"] == "role"
     assert segment["voice"]["name"] == "林夏"
+
+
+def test_project_configs_json_round_trips_ui_settings(client, tmp_path, monkeypatch):
+    """Regression: project UI settings (description / export_directory) are stored in the
+    free-form `configs` JSON bucket, not dedicated columns. Verify create → get → list → put
+    all preserve those keys, and that `configs=None` on PUT clears them.
+    """
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+
+    payload = _payload("p-cfg")
+    payload["remotion_project_path"] = "/tmp/remotion"
+    payload["configs"] = {
+        "description": "给 DeepSeek 视频做旁白",
+        "export_directory": "public/narration",
+        "split_voice_mode": "dialogue",
+    }
+
+    created = client.post("/api/segmented-projects", json=payload)
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["remotion_project_path"] == "/tmp/remotion"
+    assert body["configs"] == {
+        "description": "给 DeepSeek 视频做旁白",
+        "export_directory": "public/narration",
+        "split_voice_mode": "dialogue",
+    }
+
+    fetched = client.get("/api/segmented-projects/p-cfg").json()
+    assert fetched["configs"]["description"] == "给 DeepSeek 视频做旁白"
+    assert fetched["configs"]["export_directory"] == "public/narration"
+    assert fetched["configs"]["split_voice_mode"] == "dialogue"
+
+    # PUT with a modified configs value replaces (full-state save).
+    payload["configs"] = {"export_directory": "assets/audio"}
+    updated = client.put("/api/segmented-projects/p-cfg", json=payload).json()
+    assert updated["configs"] == {"export_directory": "assets/audio"}
+
+    # PUT with configs=None clears.
+    payload["configs"] = None
+    cleared = client.put("/api/segmented-projects/p-cfg", json=payload).json()
+    assert cleared["configs"] is None

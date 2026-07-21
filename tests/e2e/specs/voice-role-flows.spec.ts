@@ -20,6 +20,32 @@ import {
   setLocaleToZhCN,
 } from '../helpers';
 
+const BASE_URL = 'http://127.0.0.1:8002';
+
+/** Delete roles by name via backend API. */
+async function deleteRolesByName(name: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/api/roles`);
+  if (!resp.ok) return;
+  const roles: Array<{ id: string; name: string }> = await resp.json();
+  for (const role of roles) {
+    if (role.name === name) {
+      await fetch(`${BASE_URL}/api/roles/${role.id}`, { method: 'DELETE' }).catch(() => {});
+    }
+  }
+}
+
+/** Delete voice profiles by name via backend API. */
+async function deleteVoiceProfilesByName(name: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/api/clone`);
+  if (!resp.ok) return;
+  const voices: Array<{ id: string; name: string }> = await resp.json();
+  for (const voice of voices) {
+    if (voice.name === name) {
+      await fetch(`${BASE_URL}/api/clone/${voice.id}`, { method: 'DELETE' }).catch(() => {});
+    }
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  1. MiMo 预置音色 → 创建角色 → 试听 → 保存                            */
 /* ------------------------------------------------------------------ */
@@ -99,6 +125,12 @@ test.describe('MiMo 预置音色角色创建', () => {
     expect(voice.engine).toBe('mimo_tts');
     expect(voice.voice_id).toBeTruthy();
   });
+
+  // Cleanup: delete the role and voice profile created by this test
+  test.afterAll(async () => {
+    await deleteRolesByName('E2E-预置测试');
+    await deleteVoiceProfilesByName('E2E-预置测试');
+  });
 });
 
 /* ------------------------------------------------------------------ */
@@ -171,6 +203,12 @@ test.describe('设计新音色角色创建', () => {
     expect(voice.voice_description).toBe(description);
 
     expect(errors).toEqual([]);
+  });
+
+  // Cleanup: delete the role and voice profile created by this test
+  test.afterAll(async () => {
+    await deleteRolesByName('E2E-设计测试');
+    await deleteVoiceProfilesByName('E2E-设计测试');
   });
 });
 

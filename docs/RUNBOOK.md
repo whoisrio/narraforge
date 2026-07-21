@@ -47,6 +47,10 @@ npm run dev
    ```bash
    cd backend && uv sync
    ```
+   If PyPI is unstable (common in China), use the Tsinghua mirror:
+   ```bash
+   uv sync --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+   ```
 
 3. **Database locked**: Delete and recreate
    ```bash
@@ -275,6 +279,21 @@ The segmented editor's backend mode uses ffmpeg to transcode and concatenate aud
 
 - **Cause**: Segments have different sample rates or formats.
 - **Fix**: The backend transcodes segments to a common format (mp3, 44100 Hz) before concatenation. If issues persist, check the source audio quality.
+
+---
+
+## LangGraph Dev Server Troubleshooting
+
+**Symptom**: A run is created (backend/agent receives the request) but never executes — the SSE stream shows only `: heartbeat`, and the run stays `pending` forever (all assistants affected, not just one graph).
+
+- **Cause**: The in-memory dev server persists its run queue in `agent/.langgraph_api/`. Runs that were mid-flight when a server was killed or hot-reloaded remain in `running` state forever (zombies). Once enough zombies accumulate, the single background worker stops dequeuing new runs, and restarting the server does NOT help — the poisoned queue is reloaded from disk.
+- **Fix**: Stop `langgraph dev`, remove (or move aside) `agent/.langgraph_api/`, then restart. Threads/checkpoints are session-scoped, so this is safe:
+  ```bash
+  # from agent/
+  mv .langgraph_api .langgraph_api.bak
+  uv run langgraph dev --port 2024
+  ```
+- **Prevention**: Prefer stopping the dev server cleanly (Ctrl-C once, let it shut down) and avoid restarting it while a run is mid-execution.
 
 ---
 

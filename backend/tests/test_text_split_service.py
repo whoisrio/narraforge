@@ -7,13 +7,16 @@ import pytest
 def test_rule_split_all_delimiters():
     from app.services.text_split_service import rule_split
     text = "你好，世界。今天是个好日子！我们一起出去玩？"
+    # "你好，"(3<5) 下一段 "世界。"(3<15) → 合并为 "你好，世界。"(6)
+    # 合并后长度 6 不小于 5，不再吸并后续段
     result = rule_split(text, ["，", "。", "！", "？"])
-    assert result == ["你好，", "世界。", "今天是个好日子！", "我们一起出去玩？"]
+    assert result == ["你好，世界。", "今天是个好日子！", "我们一起出去玩？"]
 
 
 def test_rule_split_only_period():
     from app.services.text_split_service import rule_split
     text = "你好，世界。今天好。"
+    # 仅按。切：["你好，世界。"(6), "今天好。"(4)]，首段>=5 不触发合并
     result = rule_split(text, ["。"])
     assert result == ["你好，世界。", "今天好。"]
 
@@ -27,16 +30,17 @@ def test_rule_split_no_delimiter_returns_single():
 def test_rule_split_filters_empty_and_pure_punct():
     from app.services.text_split_service import rule_split
     text = "你好。。。世界。"
+    # 先过滤得 ["你好。", "世界。"]，两段都 < 5 且下一段 < 15，合并
     result = rule_split(text, ["。"])
-    # 连续 "。" 产生的空段 / 纯标点段被过滤
-    assert result == ["你好。", "世界。"]
+    assert result == ["你好。世界。"]
 
 
 def test_rule_split_strips_whitespace_around_segments():
     from app.services.text_split_service import rule_split
     text = "  你好。  世界。  "
+    # 两段都短，合并
     result = rule_split(text, ["。"])
-    assert result == ["你好。", "世界。"]
+    assert result == ["你好。世界。"]
 
 
 def test_rule_split_handles_leading_punct():
@@ -57,6 +61,62 @@ def test_rule_split_empty_text_returns_empty_list():
     from app.services.text_split_service import rule_split
     assert rule_split("", ["，", "。"]) == []
     assert rule_split("   ", ["，", "。"]) == []
+
+
+# ------- rule_split 短段合并 (逗号密集场景) -------
+
+def test_rule_split_merges_short_segments():
+    """逗号密集时，短段 <5 且下一段 <15 → 合并到同一行。"""
+    from app.services.text_split_service import rule_split
+    # 往前看，又而无际，都是短段
+    text = "往前看，又而无际，他继续前行。"
+    result = rule_split(text, ["，", "。"])
+    # "往前看，"(4<5) + "又而无际，"(5) → 合并 → "往前看，又而无际，"(9)
+    # 9 不<5，不再吸并 "他继续前行。"
+    assert result == ["往前看，又而无际，", "他继续前行。"]
+
+
+def test_rule_split_merges_multiple_consecutive_shorts():
+    """连续多个极短段都合并到同一行，直到长度达阈。"""
+    from app.services.text_split_service import rule_split
+    # 3 个短段 + 1 个尾段
+    text = "啊，啊，啊，他开口了。"
+    result = rule_split(text, ["，", "。"])
+    # "啊，"(2)+"啊，"(2) → "啊，啊，"(4)
+    # 4<5 且 "啊，"(2)<15 → 继续 → "啊，啊，啊，"(6)
+    # 6 不<5 → 停。尾段独立
+    assert result == ["啊，啊，啊，", "他开口了。"]
+
+
+def test_rule_split_does_not_merge_when_next_too_long():
+    """下一段 >= next_max_len_to_merge 时不合并，避免产生过长行。"""
+    from app.services.text_split_service import rule_split
+    # 首段 3 字，下一段 15 字（含标点） → 不合并
+    text = "你好，今天天气非常非常好。。。。。。。。。。。。。"
+    # 构造一个確定>=15 的下一段，直接手写更清楚：
+    text = "你好，" + "天气非常好今天阳光充足不错啦。"
+    # 首段 = "你好，"(3)，下一段长度 15 (14 字 + 。) => 共 15
+    assert len("天气非常好今天阳光充足不错啦。") == 15
+    result = rule_split(text, ["，", "。"])
+    # 下一段 15 不 < 15 → 不合并
+    assert result == ["你好，", "天气非常好今天阳光充足不错啦。"]
+
+
+def test_rule_split_disable_merge_with_zero_threshold():
+    """min_len_to_merge=0 → 关闭合并，保留原先细粒度拆分。"""
+    from app.services.text_split_service import rule_split
+    text = "你好，世界。"
+    result = rule_split(text, ["，", "。"], min_len_to_merge=0)
+    assert result == ["你好，", "世界。"]
+
+
+def test_rule_split_custom_thresholds():
+    """自定义阈值：min_len_to_merge=3 时，长度怼为 3 的段不再合并。"""
+    from app.services.text_split_service import rule_split
+    text = "你好，世界。"  # ["你好，"(3), "世界。"(3)]
+    result = rule_split(text, ["，", "。"], min_len_to_merge=3)
+    # 3 不 < 3 → 不合并
+    assert result == ["你好，", "世界。"]
 
 
 # ------- llm_split -------

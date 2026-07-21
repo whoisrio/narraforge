@@ -248,8 +248,21 @@ def markdown_split(
 # rule_split
 # ---------------------------------------------------------------------------
 
-def rule_split(text: str, delimiters: list[str]) -> list[str]:
-    """按指定标点切分文本。保留标点在段尾。过滤空白段和纯标点段。"""
+def rule_split(
+    text: str,
+    delimiters: list[str],
+    min_len_to_merge: int = 5,
+    next_max_len_to_merge: int = 15,
+) -> list[str]:
+    """按指定标点切分文本。保留标点在段尾。过滤空白段和纯标点段。
+
+    合并规则（防止逗号密集时切出过多碎片段）：
+    - 若某段长度 < ``min_len_to_merge`` 且下一段长度 < ``next_max_len_to_merge``，
+      将下一段并入该段。贪心从左至右扫描，合并后若仍短继续吸并后续段。
+    - 传入 ``min_len_to_merge <= 0`` 可关闭合并，保留原始细粒度切分。
+
+    长度以段内字符数（Unicode codepoint 数，含末尾标点）计。
+    """
     if not text or not text.strip():
         return []
 
@@ -262,7 +275,7 @@ def rule_split(text: str, delimiters: list[str]) -> list[str]:
     pattern = re.compile(f"(?<=[{''.join(escaped)}])")
     parts = pattern.split(text)
 
-    result: list[str] = []
+    segments: list[str] = []
     for p in parts:
         s = p.strip()
         if not s:
@@ -270,8 +283,23 @@ def rule_split(text: str, delimiters: list[str]) -> list[str]:
         # 过滤纯标点段（仅由 delimiters 中的字符组成）
         if all(c in delimiters for c in s):
             continue
-        result.append(s)
-    return result
+        segments.append(s)
+
+    if min_len_to_merge <= 0 or not segments:
+        return segments
+
+    # 短段合并：当前段 < min_len_to_merge 且下一段 < next_max_len_to_merge → 合并
+    merged: list[str] = []
+    for seg in segments:
+        if (
+            merged
+            and len(merged[-1]) < min_len_to_merge
+            and len(seg) < next_max_len_to_merge
+        ):
+            merged[-1] = merged[-1] + seg
+        else:
+            merged.append(seg)
+    return merged
 
 
 # ---------------------------------------------------------------------------

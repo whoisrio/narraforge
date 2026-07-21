@@ -651,6 +651,7 @@ function VoiceRoleEditor({
                 const normalized = normalizeDraftForSave(draft);
                 const result = await fetchVoiceRolePreview(normalized, SAMPLE_TEXT);
                 const { base64 } = await resolveAudioBase64(result);
+                const isEdgeTtsPreset = draft.voice?.engine === 'edge_tts';
                 const profile = await voiceApi.createFromDesign({
                   audio_base64: base64,
                   engine: 'preset',
@@ -659,15 +660,18 @@ function VoiceRoleEditor({
                   project_id: projectId,
                   preview_text: SAMPLE_TEXT,
                   instruction: (draft.voice?.engine === 'mimo_tts' ? (draft.voice as MiMoParams).instruction : undefined) || '',
+                  default_voice: isEdgeTtsPreset ? (draft.voice as EdgeTTSParams).voice : undefined,
                 });
                 // MiMo 预置音色：转为 voiceclone 模式使用 VoiceProfile 参考音频
-                // Edge-TTS：保持 edge_tts 引擎，VoiceProfile 仅存储音频文件
+                // Edge-TTS：保持 edge_tts 引擎，存储 voice_id 以便试听
                 const v = draft.voice;
                 let savedVoice: EngineParams;
                 if (v?.engine === 'mimo_tts' && (v as MiMoParams).mode === 'preset') {
                   savedVoice = { ...v, mode: 'voiceclone' as const, voice_id: profile.id } as MiMoParams;
+                } else if (v?.engine === 'edge_tts') {
+                  savedVoice = { ...v, voice_id: profile.id } as EdgeTTSParams;
                 } else {
-                  savedVoice = (v?.engine === 'edge_tts' ? v : { engine: 'edge_tts' as const, voice: DEFAULT_EDGE_CAST_VOICE, rate: '+0%', volume: '+0%' }) as EdgeTTSParams;
+                  savedVoice = { engine: 'edge_tts' as const, voice: DEFAULT_EDGE_CAST_VOICE, rate: '+0%', volume: '+0%' } as EdgeTTSParams;
                 }
                 onSave({ ...draft, voice: savedVoice });
               } catch (err) {
@@ -1287,6 +1291,7 @@ export function ProjectVoices({
     let voiceId = '';
     if (v) {
       if (v.engine === 'mimo_tts') voiceId = (v as { voice_id?: string }).voice_id ?? '';
+      else if (v.engine === 'edge_tts') voiceId = (v as EdgeTTSParams).voice_id ?? '';
       else if (v.engine === 'cosyvoice' || v.engine === 'voxcpm') voiceId = (v as { voice_id?: string }).voice_id ?? '';
     }
     if (voiceId) {

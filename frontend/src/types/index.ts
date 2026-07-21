@@ -57,6 +57,7 @@ export interface EdgeTTSParams {
   voice: string;
   rate: string;
   volume: string;
+  voice_id?: string;
 }
 
 export interface MiMoParams {
@@ -411,6 +412,8 @@ export interface Segment {
   emotion?: EmotionType;
   role_id?: string | null;
   segment_kind: SegmentKind;
+  /** 动画分镜 brief（knowledge_video 工作流经 apply-animation-spec 写入的任意字段） */
+  animation_spec?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 
@@ -472,13 +475,6 @@ export interface SegmentedProject {
   chapters: Chapter[];
   active_chapter_id?: string;
   layout: 'vertical' | 'horizontal';
-  description?: string | null;
-  project_type?: string | null;
-  default_language?: string | null;
-  export_directory?: string | null;
-  export_naming_template?: string | null;
-  // P2 v2: 旁白文档当前活跃版本 (e.g. 'v2.1')
-  active_narration_version?: string | null;
   /** 默认关联的 Remotion 项目路径；导出文件优先写入其 public/audio */
   remotion_project_path?: string | null;
   /** Source document file path or identifier */
@@ -491,7 +487,19 @@ export interface SegmentedProject {
     duration_sec: number;
   } | null;
   default_narrator_role_id?: string | null;
-  configs?: { split_voice_mode?: 'narration' | 'dialogue'; [key: string]: unknown } | null;
+  /**
+   * Project-level free-form configs (persisted as JSON on backend).
+   * Sparse fields go here instead of dedicated columns.
+   */
+  configs?: {
+    /** 项目描述（仅 UI 展示） */
+    description?: string | null;
+    /** 导出目录（相对于 remotion_project_path），默认 'public/audio' */
+    export_directory?: string | null;
+    /** 拆分时默认用旁白/对话模式 */
+    split_voice_mode?: 'narration' | 'dialogue';
+    [key: string]: unknown;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -552,4 +560,75 @@ export interface SSMLAnnotationItem {
   text: string;
   ssml: string;
   rationale: string;
+}
+
+// ── Workflow Types ──
+
+export type WorkflowStatus = 'running' | 'interrupted' | 'completed' | 'failed' | 'cancelled';
+export type WorkflowStageName = 'gen_script' | 'script_review' | 'split_segment' | 'synthesis';
+
+export interface WorkflowStage {
+  name: WorkflowStageName;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  duration_sec: number | null;
+}
+
+export interface WorkflowRun {
+  id: string;
+  project_id: string;
+  thread_id: string;
+  status: WorkflowStatus;
+  current_stage: WorkflowStageName;
+  stages: WorkflowStage[];
+  interrupt_payload?: WorkflowInterruptPayload;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowInterruptPayload {
+  script: string;
+  review: WorkflowReviewResult;
+  available_actions: ('approve' | 'reject')[];
+}
+
+export interface WorkflowReviewDimension {
+  name: string;
+  status: 'pass' | 'warn' | 'fail';
+  comment: string;
+  suggestion: string | null;
+}
+
+export interface WorkflowReviewResult {
+  dimensions: WorkflowReviewDimension[];
+  overall_score: number;
+  overall_comment: string;
+  has_critical_issue: boolean;
+}
+
+export interface WorkflowStartRequest {
+  source_document?: string;
+}
+
+export interface WorkflowResumeRequest {
+  stage: WorkflowStageName;
+  action: 'approve' | 'reject';
+  edited_script?: string;
+  comment?: string;
+  feedback?: string;
+}
+
+export interface WorkflowReplayRequest {
+  from_stage: WorkflowStageName;
+}
+
+export interface WorkflowForkRequest {
+  from_stage: WorkflowStageName;
+  state_override: Record<string, unknown>;
+}
+
+// SSE 事件类型
+export interface WorkflowSSEEvent {
+  type: 'stage_start' | 'stage_progress' | 'stage_complete' | 'interrupt' | 'error' | 'workflow_complete';
+  data: Record<string, unknown>;
 }

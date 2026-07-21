@@ -136,7 +136,11 @@ class MigrateResponse(BaseModel):
 # ===== P2 v3: Animation Spec 批量应用 =====
 
 class AnimationSpecItem(BaseModel):
-    """单个 segment 的动画规格 (写到 segments.animation_spec_json)"""
+    """单个 segment 的动画规格 (写到 segments.animation_spec_json)
+
+    extra="allow": kv workflow 的 brief 字段 (narration_text / visual_content /
+    animation / start_sec ...) 原样透传给 apply_animation_spec 合并.
+    """
     segment_id: str
     visual_concept: str | None = None
     layout: str | None = None
@@ -147,6 +151,8 @@ class AnimationSpecItem(BaseModel):
     emphasis: list[str] | None = None
     asset_refs: list[str] | None = None
     notes: str | None = None
+
+    model_config = {"extra": "allow"}
 
 
 class ApplyAnimationSpecRequest(BaseModel):

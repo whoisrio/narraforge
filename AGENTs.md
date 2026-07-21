@@ -6,6 +6,12 @@ This file provides guidance to AI coding assistants when working in this reposit
 
 NarraForge is an AI narration workshop that integrates voice cloning, text-to-speech, and speech-to-subtitle workflows. It is designed to evolve into a segment-first narration and Remotion animation generation system.
 
+The **narration workflow** (4-stage: gen_script → script_review → split_segment → synthesis) is now a standalone **LangGraph agent** service in `agent/`. The agent runs via `langgraph dev` (in-memory) and communicates with the backend over HTTP. The frontend triggers the workflow from the 文本库 · 源文档 tab via a side drawer (not a separate workspace). Persistence is deferred (session-scoped; runs lost on agent restart).
+
+## key principles
+**MUST KEEP docs in Documentation updated**
+**THINK BEFORE CODE**
+
 ## Documentation
 
 | Document | Path | Description |
@@ -41,6 +47,18 @@ uv sync                              # Install dependencies with uv, not pip
 uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload
 ```
 
+### Agent
+
+```bash
+cd agent
+uv sync --extra test                  # Install deps
+uv run langgraph dev --port 2024      # Start agent server (in-memory)
+uv run --extra test pytest -q        # Run agent tests
+```
+
+The agent needs `agent/.env` with `BACKEND_API_URL`, `AGENT_LLM_API_KEY`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_MODEL`.
+Optional: `LANGSMITH_API_KEY` for prompt hot-reload (falls back to code defaults).
+
 ### API Testing
 
 ```bash
@@ -48,6 +66,16 @@ curl http://127.0.0.1:8002/health
 ```
 
 ## Architecture
+
+### Agent: LangGraph + Python 3.12+
+
+- `agent/app/` — Graph definition, nodes, prompts, schemas, LLM client, backend HTTP client.
+- Runs via `langgraph dev` (in-memory, no Docker/Postgres/Redis for dev). Persistence deferred.
+- Nodes call the backend over HTTP for project/chapter/segment/TTS operations.
+- Run linkage: LangGraph thread metadata (`{project_id, project_name, kind}`).
+- `GET /assistants/narration/graph` returns the graph topology (nodes + edges).
+- `POST /threads/{id}/runs/stream` streams execution (channels: values/messages/custom/interrupts).
+- `knowledge_video` is the second registered assistant (`agent/app/graph_knowledge_video.py`): source document → faithful narration transcription → basic quality review (human confirm) → chapter split → edge-tts synthesis → Remotion project scaffolding → animation storyboard brief. The frontend drawer selects the assistant by workflow kind (`WORKFLOW_KINDS` mapping).
 
 ### Backend: FastAPI + Python 3.12+
 
@@ -62,10 +90,13 @@ curl http://127.0.0.1:8002/health
 - `src/pages/` — TTSSynthesis, VoiceClone, SpeechToText, ModelConfig, Landing, and other page-level components.
 - `src/components/TTSSynthesis/` — GlobalControlBar, EdgeTTSPanel, MiMoTTSPanel, AudioPlayer, SynthesisHistory.
 - `src/components/SegmentedTTS/` — SegmentList, SegmentRow, SegmentEditPanel, TextInputPanel, ExportDialog.
+- `src/components/Workflow/` — WorkflowDrawer, PipelineTimeline, StageCard, ReviewPanel, StageDetailModal, DrawerIndicator.
 - `src/hooks/` — useSegmentedProject, useStorageMode, useVoiceRefresh, useTheme, and related hooks.
 - `src/services/` — api.ts, indexedDB.ts, segmentedProjectDB.ts, audioConcat.ts, and frontend service utilities.
+- `src/services/langgraph/` — client.ts, contracts.ts, types.ts (LangGraph SDK integration).
 - `src/styles/` — variables.css, global.css, and design tokens.
 - CSS Modules use the `camelCase` convention. For example, `emo_happy` in CSS becomes `styles.emoHappy` in TypeScript.
+- The narration workflow is triggered from the 文本库 · 源文档 tab via a side drawer (not a separate workspace). The `useStream` hook from `@langchain/langgraph-sdk` powers real-time progress.
 
 ### Database
 
@@ -84,51 +115,15 @@ Key tables include VoiceProfile, TTSConfig, TTSResult, TranscriptionRecord, Syst
 - `frontend` — Audio is stored in browser IndexedDB. This is the default mode and does not require backend audio persistence.
 - `backend` — Audio is stored through SQLite metadata plus filesystem assets under `backend/uploads/`.
 
-## Key Design Decisions
-
-- Edge-TTS is the default practical TTS engine because it requires no API key and is easy to run locally.
-- The primary color scheme is warm amber, with `#c47a3a` as the primary color. Do not introduce purple as a primary UI color.
-- CSS Modules use camelCase mappings.
-- Segmented projects are autosaved to IndexedDB with a 1-second debounce.
-- Smart splitting returns one emotion per segment. Supported emotions are happy, sad, angry, calm, neutral, and excited.
-- Global voice changes must not overwrite already generated segments.
-- Segments track generated voice information so stale audio can be detected when voice settings change.
-
-## Environment
-
-Required or commonly used variables in `backend/.env`:
-
-- `QWEN_API_KEY` — Qwen API key for CosyVoice.
-- `MIMO_API_KEY` — MiMo API key. Optional, used for MiMo TTS and LLM features.
-- `DATABASE_URL` — SQLite connection string. Default: `sqlite:///./voice_clone.db`.
-
 ## Testing
 
 ### Backend Tests
-
-All automated backend tests live under `backend/tests/`. Run them with the test extra enabled:
 
 ```bash
 cd backend && uv run --extra test pytest -q
 ```
 
-Backend pytest structure and conventions:
-
-- See `backend/tests/TEST_MAP.md` for the feature-to-test mapping and focused test selection guide.
-- `backend/tests/unit/` — Unit tests for services and models.
-- `backend/tests/integration/` — API and integration tests using the FastAPI `client` fixture.
-- `backend/tests/fixtures/` — pytest and factory helpers only. Do not place collected tests here.
-- `backend/tests/manual/` — Manual verification scripts only. Files must be named with the `manual_*.py` prefix and are ignored by pytest via `backend/pytest.ini`. Do not put auto-collected `test_*.py` files in this directory.
-- Real external service tests must be marked with `external` and require explicit opt-in. Qwen/DashScope external clone checks only run when `RUN_EXTERNAL_QWEN_TESTS=1` is set.
-
-Backend test isolation:
-
-- Tests use an in-memory SQLite database: `sqlite:///:memory:` from `backend/tests/conftest.py`. They do not use `backend/voice_clone.db`.
-- API tests must use the pytest `client` fixture so `get_db` is overridden to the test session.
-- Avoid module-level `TestClient(app)` because it can bypass test database isolation.
-- Tests that need backend persistence mode must explicitly call `set_storage_mode(db_session, "backend")`.
-- The default storage mode is `frontend`, so audio and SRT responses may return base64/content without backend history rows.
-- Mock TTS services according to the current contracts: Qwen/CosyVoice synthesis returns an audio file path; Edge-TTS returns `(audio_bytes, "mp3")`.
+See [`backend/tests/TEST_MAP.md`](backend/tests/TEST_MAP.md) for test structure, isolation rules, mock contracts, and feature-to-test mapping.
 
 ### Frontend Tests
 
@@ -137,63 +132,4 @@ All frontend test files with `.test.ts`, `.test.tsx`, `.spec.ts`, or `.spec.tsx`
 ### E2E Tests
 
 Cross-stack browser E2E tests live under `tests/e2e/`. All 26 specs pass with `npm run e2e`.
-
-**Directory layout:**
-
-```text
-tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (26 tests)
-├── fixtures/               ← Stable E2E input fixtures (audio, images)
-├── helpers/                ← Shared utilities
-│   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
-│   ├── dbReader.ts         ← DB-layer reader — direct SQLite access via node:sqlite
-│   ├── dualReadSnapshot.ts ← Dual-read + screenshot helper
-│   └── index.ts            ← Barrel exports
-├── global-setup.ts         ← Seed data before all tests
-└── README.md               ← Layout and artifact policy
-```
-
-**How to run:**
-
-```bash
-npm run e2e          # 26 tests, serial (--workers=1), HTML report
-npm run e2e:ui       # Playwright visual test explorer
-npm run e2e:report   # Open latest HTML report
-npm run e2e:clean    # Remove all test-results and playwright-report dirs
-```
-
-Tests run serially (`--workers=1`) because they share a single SQLite DB.
-Playwright's `webServer` config auto-starts backend on `:8002` and frontend on `:5173`.
-Do NOT manually start servers — the webServer handles it and bypasses WorkBuddy's sandbox (which would block `shutil.rmtree` during project deletion).
-
-**Dual-read verification:**
-
-Every test that writes to the backend also verifies from TWO independent layers:
-
-| Layer | Reader | Validator |
-|-------|--------|-----------|
-| API | `readBackendProject(page, id)` | `validateChapter()`, `validateSegment()` |
-| DB | `readDbProject(id)` | `validateDbProjectRow()` |
-
-The `verifyDbWithScreenshot()` helper wraps DB-read + validation + a labeled screenshot that appears in the HTML report.
-
-**Artifacts:**
-
-Generated screenshots, videos, traces, and reports go to ignored directories:
-- `test-results/` — per-run failure artifacts and `testInfo.attach()` screenshots
-- `playwright-report/` — HTML report (one directory per run with local-timezone timestamp)
-- Do NOT commit anything under these directories.
-
-**Config highlights:**
-
-- `screenshot: 'on'` — every test captures a viewport screenshot at completion
-- `PW_RUN` env var — set by `npm run e2e` to `$(date +%Y-%m-%dT%H-%M-%S)` for consistent per-run directory naming
-- `reuseExistingServer: !process.env.CI` — local runs reuse existing servers; CI always starts fresh
-
-## Notes
-
-- The backend runs on port 8002, not the default 8000.
-- The frontend Vite proxy maps `/api` to `http://127.0.0.1:8002`.
-- FunASR models are downloaded from ModelScope, not HuggingFace. The cache directory is `~/.cache/modelscope/hub/`.
-- `torchaudio` is an implicit dependency of FunASR and must be declared explicitly.
-- PyPI network access may be unstable in China. If needed, use `--index-url https://pypi.tuna.tsinghua.edu.cn/simple`.
+See [`docs/e2e-test-guide.md`](docs/e2e-test-guide.md) for running instructions, directory layout, data assertions, dual-read verification, and gap analysis.

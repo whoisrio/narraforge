@@ -378,7 +378,7 @@ A global toggle switches between:
 | `VoiceProfile` | id, name, audio_url, original_audio_url, cloned_preview_url, qwen_voice_id, mimo_voice_id, clone_engine (`qwen`/`mimo`/`voxcpm`), description, prompt_text, avatar |
 | `Segment` | id, text, ssml, params (SegmentEngineParams), status, emotion, role_id, role_snapshot, segment_kind, prosody_marks, voice_ref, overrides, generated_voice_id, duration_sec |
 | `Chapter` | id, name, engine, voice params, segments[], default_params, split_config, original_text, design_title |
-| `SegmentedProject` | id, name, chapters[], source_document, default_narrator_role_id, default_narrator_snapshot, active_narration_version, remotion_project_path |
+| `SegmentedProject` | id, name, chapters[], source_document, default_narrator_role_id, default_narrator_snapshot, remotion_project_path, configs (JSON: description / export_directory / split_voice_mode / …) |
 | `Role` | id, name, avatar, description, role_kind (`narrator`/`cast`), default_engine, default_voice, default_engine_params, favorite_styles |
 | `EmotionType` | happy, sad, angry, calm, neutral, excited |
 | `SegmentStatus` | idle, queued, pending, ready, failed |

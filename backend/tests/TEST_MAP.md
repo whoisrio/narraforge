@@ -24,6 +24,7 @@ RUN_EXTERNAL_QWEN_TESTS=1 uv run --extra test pytest tests/integration/test_exte
 - Automated tests do not use `backend/voice_clone.db`.
 - API tests must use the pytest `client` fixture so FastAPI `get_db` is overridden to the test session.
 - Do not create module-level `TestClient(app)` instances in tests; they can bypass test database isolation.
+- Mock TTS services according to the current contracts: Qwen/CosyVoice synthesis returns an audio file path; Edge-TTS returns `(audio_bytes, "mp3")`.
 - Default storage mode is `frontend`. Tests that assert backend history rows, backend audio URLs, or persisted SRT/audio files must explicitly call:
 
 ```python

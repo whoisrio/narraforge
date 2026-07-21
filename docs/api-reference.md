@@ -615,13 +615,25 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 ```json
 {
   "text": "长文本内容",
-  "delimiters": ["，", "。", "！", "？"]
+  "delimiters": ["，", "。", "！", "？"],
+  "min_len_to_merge": 5,
+  "next_max_len_to_merge": 15
 }
 ```
 
+**字段说明：**
+- `delimiters`: 切分标点。默认 `["，", "。", "！", "？"]`。
+- `min_len_to_merge` *(可选，默认 `5`)*：短段合并下限。若某一段字符长度 **小于** 此值，
+  且紧接的下一段长度小于 `next_max_len_to_merge`，则将两段并入同一行。传 `0` 可关闭合并。
+- `next_max_len_to_merge` *(可选，默认 `15`)*：合并时下一段长度上限（严格小于）。防止
+  跟长段合并后溢出合理长度。
+
+合并采用从左到右的贪心扫描：当前段合并后若仍短，会继续尝试吸并后续段，直到长度达阈
+或下一段过长。长度以段内字符数（含末尾标点）计。
+
 **Response:**
 ```json
-{ "segments": ["第一句，", "第二句。", "第三句！"] }
+{ "segments": ["你好，世界。", "今天好。"] }
 ```
 
 ### POST `/api/text-split/llm`
@@ -818,6 +830,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/split` | 文本分段 |
 | POST | `/api/segmented-projects/{id}/apply-animation-spec` | 批量应用动画规格 |
 | POST | `/api/segmented-projects/{id}/export-text-file-to-remotion` | 导出文本文件到 Remotion |
+| POST | `/api/segmented-projects/{id}/scaffold-remotion` | 创建/刷新 Remotion 工程（knowledge_video 工作流） |
 | POST | `/api/segmented-projects/migrate` | 批量迁移 IndexedDB 项目 |
 
 ### ProjectIn Schema
@@ -830,12 +843,16 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "layout": "vertical",
   "active_chapter_id": "chapter-id",
   "original_text": null,
-  "active_narration_version": null,
   "animation_theme": null,
   "remotion_project_path": null,
   "source_document": null,
   "default_narrator_role_id": null,
   "default_narrator_snapshot": null,
+  "configs": {
+    "description": null,
+    "export_directory": null,
+    "split_voice_mode": "narration"
+  },
   "chapters": [...]
 }
 ```
@@ -850,12 +867,15 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | `layout` | string | `"vertical"` | 布局方向 |
 | `active_chapter_id` | string | `null` | 当前活跃章节 ID |
 | `original_text` | string | `null` | 原始文本 |
-| `active_narration_version` | string | `null` | 当前活跃旁白版本号 |
 | `animation_theme` | string | `null` | 整体动画主题 |
 | `remotion_project_path` | string | `null` | Remotion 项目路径 |
 | `source_document` | string | `null` | 源文档 markdown 内容 |
 | `default_narrator_role_id` | string | `null` | 默认旁白角色 ID |
 | `default_narrator_snapshot` | object | `null` | 旁白角色音色配置快照 |
+| `configs` | object \| null | `null` | 项目级自由配置 JSON 桶（可变 keys，无需数据库迁移） |
+| `configs.description` | string | — | 项目描述（UI 展示） |
+| `configs.export_directory` | string | — | 导出目录（相对于 `remotion_project_path`），默认 `public/audio` |
+| `configs.split_voice_mode` | string | — | 拆分默认模式：`narration` \| `dialogue` |
 | `chapters` | array | `[]` | 章节列表 |
 
 ### ChapterIn Schema
@@ -955,6 +975,76 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "project": { ... }
 }
 ```
+
+### POST `/api/segmented-projects/{id}/apply-animation-spec`
+
+批量应用动画规格：一次性 POST 全部 segment spec，后端原子更新。字段合并：传什么覆盖什么，未传保留旧值；缺失的 segment_id 报告在 `missing_segment_ids`。
+
+**Request Body:**
+```json
+{
+  "theme": "整体动画主题",
+  "segments": [
+    {
+      "segment_id": "segment-id",
+      "visual_concept": "视觉概念",
+      "layout": "vertical",
+      "mood": "calm",
+      "phases": {},
+      "animations": {},
+      "elements": [],
+      "emphasis": [],
+      "asset_refs": [],
+      "notes": null
+    }
+  ]
+}
+```
+
+**字段合并规则:** `segments` 数组元素除上述既有白名单字段（`visual_concept` / `layout` / `mood` / `phases` / `animations` / `elements` / `emphasis` / `asset_refs` / `notes`）外，**任意非 None 字段都会合并进 `animation_spec_json`**（kv 分镜 brief 的 `narration_text` / `visual_content` / `animation` / `start_sec` / `end_sec` 等）。合并后自动写入 `generated_at` 时间戳。
+
+**Response:**
+```json
+{
+  "theme_updated": true,
+  "segments_updated": 3,
+  "segments_skipped": 0,
+  "missing_segment_ids": []
+}
+```
+
+### POST `/api/segmented-projects/{id}/scaffold-remotion`
+
+为 knowledge_video 工作流创建（或刷新）Remotion 工程。幂等：目标目录已存在 Remotion 工程（package.json 含 remotion 依赖）时跳过创建，仅刷新资产。
+
+**Request Body:**
+```json
+{
+  "target_dir": "/path/to/remotion-project",
+  "animation_brief": { "chapters": [] }
+}
+```
+
+**字段说明:**
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `target_dir` | string | `null` | 可选；缺省用项目的 `remotion_project_path` |
+| `animation_brief` | object | `null` | 可选；提供时写入工程根 `animation_brief.json` |
+
+**行为:**
+1. 工程不存在时执行 `npx create-video@latest --yes --blank .`（需服务端装有 Node.js，超时 600s）；
+2. 每章节导出拼接 MP3 到 `public/audio/`（按章节标题命名）；
+3. 每章节生成 `public/subtitles/chapter_<position>.srt`（按 segment 时长累加时间戳）；
+4. 写 `segment_manifest.json`（章节/资产/时长清单）与 `AGENTS.md`；
+5. 持久化 `remotion_project_path`。
+
+**Response:**
+```json
+{ "project_dir": "...", "created": true, "chapters": 2 }
+```
+
+**Errors:** 404 `project_not_found`；422 `remotion_target_not_set`；500 `npx_not_found` / `create_video_failed`。
 
 ### POST `/api/segmented-projects/migrate`
 

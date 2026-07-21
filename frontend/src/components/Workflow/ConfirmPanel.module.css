@@ -1,0 +1,42 @@
+.confirmPanel {
+  margin: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-warning, #d97706);
+  border-radius: 8px;
+  background: var(--color-warning-bg, rgba(217, 119, 6, 0.08));
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.message {
+  margin: 0 0 12px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirmBtn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-danger, #dc2626);
+  color: #fff;
+  cursor: pointer;
+}
+
+.cancelBtn {
+  padding: 6px 16px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}

@@ -6,6 +6,7 @@ export { collectErrors } from './errors';
 export { expectNoRawI18nKey, findRawI18nKeys } from './i18nGuard';
 export { setLocaleToZhCN } from './locale';
 export { seedTestProject } from './seed';
+export { readAgentThread, validateThreadState, verifyAgentStateWithScreenshot } from './langgraphAssertions';
 export {
   readActiveProject,
   readBackendProject,

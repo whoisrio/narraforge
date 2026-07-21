@@ -138,7 +138,7 @@ def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
     engine = voice.get("engine", "edge_tts")
     flat: dict[str, Any] = {"engine": engine}
     if engine == "edge_tts":
-        flat["edge_voice"] = voice.get("voice", "")
+        flat["edge_voice"] = voice.get("voice", "") or "zh-CN-YunxiNeural"
         flat["edge_rate"] = voice.get("rate", "+0%")
         flat["edge_volume"] = voice.get("volume", "+0%")
     elif engine == "cosyvoice":
@@ -420,18 +420,14 @@ def apply_animation_spec(
         if seg is None:
             missing.append(seg_id)
             continue
-        # 合并: 只覆盖传入的非空字段, 保留未传的
+        # 合并: 覆盖传入的所有非 None 字段 (segment_id 除外), 保留未传的
         existing_raw = getattr(seg, "animation_spec_json", None)
         existing = _parse_animation_spec(existing_raw) or {}
         merged = dict(existing)
-        for key in (
-            "visual_concept", "layout", "mood",
-            "phases", "animations", "elements",
-            "emphasis", "asset_refs", "notes",
-        ):
-            v = it.get(key)
-            if v is not None:
-                merged[key] = v
+        for key, v in it.items():
+            if key == "segment_id" or v is None:
+                continue
+            merged[key] = v
         merged["generated_at"] = utcnow().isoformat()
         setattr(seg, "animation_spec_json", _dump_animation_spec(merged))
         updated += 1
@@ -581,8 +577,8 @@ def synthesize_segment(
             role_params = role.voice.get("params", {}) if isinstance(role.voice, dict) else {}
 
     effective = _merge_params(_flatten_voice_for_synthesis(chapter.voice or {}), role_params, request_params)
-    logger.info("[synthesize_segment] role_params=%s request_params=%s merged engine=%s mimo_mode=%s",
-                 role_params, request_params, effective.get('engine'), effective.get('mimo_mode'))
+    logger.info("[synthesize_segment] chapter.voice=%s role_params=%s request_params=%s merged=%s",
+                 chapter.voice, role_params, request_params, effective)
 
     # Preserve role_id and segment_kind for reproducibility
     if role_id is not None:
@@ -822,3 +818,105 @@ def mark_silent_segments_as_missing(
         "already_missing": already_missing,
         "file_missing": file_missing,
     }
+
+
+def batch_create_structure(db: Session, project_id: str, chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Replace all chapters+segments of a project in one transaction.
+
+    Resolves default voice from the project's first existing chapter
+    (or edge_tts default), deletes existing chapters, creates the new
+    structure, and returns assigned ids.
+    """
+    project = db.query(SegmentedProject).filter_by(id=project_id).first()
+    if project is None:
+        raise LookupError("project_not_found")
+
+    # default voice: from first existing chapter, or edge_tts default
+    default_voice = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
+    if project.chapters:
+        ch_voice = project.chapters[0].voice or {}
+        if ch_voice.get("voice") and ch_voice.get("engine") == "edge_tts":
+            default_voice = ch_voice
+        elif ch_voice.get("voice_id") and ch_voice.get("engine") in ("cosyvoice", "mimo_tts", "voxcpm"):
+            default_voice = ch_voice
+
+    # delete existing chapters (cascade deletes segments)
+    for ch in list(project.chapters):
+        db.delete(ch)
+    db.flush()
+
+    result = []
+    for index, ch_data in enumerate(chapters):
+        title = ch_data.get("chapter_title", f"Chapter {index + 1}")
+        chapter = create_chapter_for_project(db, project_id, title, index, voice=default_voice)
+        seg_result = []
+        for seg_data in ch_data.get("segments", []):
+            seg = create_segment_for_chapter(
+                db, chapter.id, seg_data["text"], len(seg_result),
+                emotion=seg_data.get("emotion"), role=seg_data.get("role"),
+                segment_kind=seg_data.get("segment_kind", "narration"),
+            )
+            seg_result.append({"id": seg.id})
+        result.append({"id": chapter.id, "segments": seg_result})
+    db.commit()
+    return result
+
+
+def create_chapter_for_project(
+    db: Session,
+    project_id: str,
+    chapter_name: str,
+    position: int,
+    voice: dict[str, Any] | None = None,
+) -> SegmentedProjectChapter:
+    """Create a new chapter under an existing project.
+
+    Returns the persisted ``SegmentedProjectChapter`` ORM instance.
+    The caller is responsible for committing the session.
+    """
+    from uuid import uuid4
+
+    project = db.query(SegmentedProject).filter_by(id=project_id).first()
+    if project is None:
+        raise LookupError(f"project_not_found: {project_id}")
+
+    chapter = SegmentedProjectChapter(
+        id=str(uuid4()),
+        project_id=project_id,
+        position=position,
+        name=chapter_name,
+        voice=voice or {},
+    )
+    db.add(chapter)
+    db.flush()
+    return chapter
+
+
+def create_segment_for_chapter(
+    db: Session,
+    chapter_id: str,
+    text: str,
+    position: int,
+    *,
+    emotion: str | None = None,
+    role: str | None = None,
+    segment_kind: str = "narration",
+) -> SegmentedProjectSegment:
+    """Create a new segment under an existing chapter.
+
+    Returns the persisted ``SegmentedProjectSegment`` ORM instance.
+    The caller is responsible for committing the session.
+    """
+    from uuid import uuid4
+
+    segment = SegmentedProjectSegment(
+        id=str(uuid4()),
+        chapter_id=chapter_id,
+        position=position,
+        text=text,
+        emotion=emotion,
+        segment_kind=segment_kind,
+    )
+    db.add(segment)
+    db.flush()
+    return segment

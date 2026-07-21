@@ -48,6 +48,7 @@ class SegmentedProject(Base):
         order_by="SegmentedProjectChapter.position",
     )
 
+    
     def __repr__(self) -> str:  # pragma: no cover
         return f"<SegmentedProject(id={self.id}, name={self.name!r})>"
 

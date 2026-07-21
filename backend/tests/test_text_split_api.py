@@ -8,7 +8,31 @@ def test_rule_split_endpoint(client):
         "delimiters": ["，", "。"],
     })
     assert resp.status_code == 200
+    # 默认 min_len_to_merge=5 → 前两个短段合并，尾段保留
+    assert resp.json() == {"segments": ["你好，世界。", "今天好。"]}
+
+
+def test_rule_split_endpoint_disable_merge(client):
+    """传 min_len_to_merge=0 关闭合并，保留原细粒度。"""
+    resp = client.post("/api/text-split/rule", json={
+        "text": "你好，世界。今天好。",
+        "delimiters": ["，", "。"],
+        "min_len_to_merge": 0,
+    })
+    assert resp.status_code == 200
     assert resp.json() == {"segments": ["你好，", "世界。", "今天好。"]}
+
+
+def test_rule_split_endpoint_custom_thresholds(client):
+    """自定义阈值：很小的 next_max_len_to_merge → 不合并。"""
+    resp = client.post("/api/text-split/rule", json={
+        "text": "你好，世界。",
+        "delimiters": ["，", "。"],
+        "min_len_to_merge": 5,
+        "next_max_len_to_merge": 1,  # 下一段必须<1才合并 → 永不合并
+    })
+    assert resp.status_code == 200
+    assert resp.json() == {"segments": ["你好，", "世界。"]}
 
 
 def test_rule_split_empty_text_422(client):

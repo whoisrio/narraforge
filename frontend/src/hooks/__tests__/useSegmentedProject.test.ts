@@ -175,6 +175,30 @@ describe('segmentedReducer', () => {
     expect(next.project.name).toBe('New');
   });
 
+  it('SET_PROJECT_META routes description & export_directory into configs (not top-level)', () => {
+    const base = makeProject();
+    // remotion_project_path stays top-level; description/export_directory go into configs.
+    const step1 = segmentedReducer({ project: base }, {
+      type: 'SET_PROJECT_META',
+      meta: { remotion_project_path: '/tmp/remotion', description: 'hello', export_directory: 'public/audio' },
+    });
+    expect(step1.project.remotion_project_path).toBe('/tmp/remotion');
+    expect(step1.project.configs?.description).toBe('hello');
+    expect(step1.project.configs?.export_directory).toBe('public/audio');
+    // No legacy top-level fields leak through.
+    expect((step1.project as unknown as Record<string, unknown>).description).toBeUndefined();
+    expect((step1.project as unknown as Record<string, unknown>).export_directory).toBeUndefined();
+
+    // Existing configs keys (like split_voice_mode) must be preserved on partial update.
+    const step2 = segmentedReducer(step1, {
+      type: 'SET_PROJECT_META',
+      meta: { description: null },
+    });
+    expect(step2.project.configs?.description).toBeNull();
+    expect(step2.project.configs?.export_directory).toBe('public/audio');
+    expect(step2.project.remotion_project_path).toBe('/tmp/remotion');
+  });
+
   it('SET_LAYOUT changes layout', () => {
     const next = segmentedReducer({ project: makeProject() }, { type: 'SET_LAYOUT', layout: 'horizontal' });
     expect(next.project.layout).toBe('horizontal');

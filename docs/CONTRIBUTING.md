@@ -271,6 +271,16 @@ narraforge/
 | GET | `/schema` | Get configuration schema |
 | PUT | `/{provider}` | Update provider configuration |
 
+## Design Conventions
+
+- **Edge-TTS** is the default practical TTS engine because it requires no API key and is easy to run locally.
+- The primary color scheme is warm amber, with `#c47a3a` as the primary color. Do not introduce purple as a primary UI color.
+- CSS Modules use camelCase mappings. For example, `emo_happy` in CSS becomes `styles.emoHappy` in TypeScript.
+- Segmented projects are autosaved to IndexedDB with a 1-second debounce.
+- Smart splitting returns one emotion per segment. Supported emotions are happy, sad, angry, calm, neutral, and excited.
+- Global voice changes must not overwrite already generated segments.
+- Segments track generated voice information so stale audio can be detected when voice settings change.
+
 ## Tech Stack
 
 - **Backend**: FastAPI, SQLAlchemy, SQLite, Python 3.12+

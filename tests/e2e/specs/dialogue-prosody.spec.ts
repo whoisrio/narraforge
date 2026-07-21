@@ -17,11 +17,29 @@ import {
 } from '../helpers';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
+const BASE_URL = 'http://127.0.0.1:8002';
+
+// Track the role name created by this test for cleanup
+let createdRoleName = '';
+
+/** Delete roles by name prefix via backend API. */
+async function deleteRolesByPrefix(prefix: string): Promise<void> {
+  const resp = await fetch(`${BASE_URL}/api/roles`);
+  if (!resp.ok) return;
+  const roles: Array<{ id: string; name: string }> = await resp.json();
+  for (const role of roles) {
+    if (role.name.startsWith(prefix)) {
+      await fetch(`${BASE_URL}/api/roles/${role.id}`, { method: 'DELETE' }).catch(() => {});
+    }
+  }
+}
+
 // @feature §4.6 Voices — Role Management — create role, assign to dialogue segment
 // @feature §4.4 Segment Kind — dialogue view with role assignment
 test('创建角色并打开对话视图', async ({ page }) => {
   await setLocaleToZhCN(page);
   const roleName = `林夏-${Date.now()}`;
+  createdRoleName = roleName; // Track for cleanup
 
   // ── Step 1: Open project role page and launch role library dialog ──
   await goToRolePage(page);
@@ -114,4 +132,9 @@ test('创建角色并打开对话视图', async ({ page }) => {
       { projectId: project!.id, chapterId: activeCh.id, segId: segToReset.id },
     );
   }
+});
+
+// Cleanup: delete the role created by this test
+test.afterAll(async () => {
+  await deleteRolesByPrefix('林夏-');
 });

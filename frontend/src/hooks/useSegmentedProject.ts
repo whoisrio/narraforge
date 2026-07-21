@@ -71,6 +71,8 @@ function enrichSegment(raw: RawSegment): Segment {
     emotion: isEmotionType(raw.emotion) ? raw.emotion : undefined,
     role_id: raw.role_id ?? null,
     segment_kind: raw.segment_kind ?? 'narration',
+    // 透传后端 animation_spec（分镜 brief），否则分镜视图拿不到数据
+    animation_spec: raw.animation_spec ?? null,
     created_at: raw.created_at || now,
     updated_at: raw.updated_at || now,
   };
@@ -155,7 +157,7 @@ function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): S
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
-  | { type: 'SET_PROJECT_META'; meta: Partial<Pick<SegmentedProject, 'remotion_project_path' | 'description' | 'export_directory'>> }
+  | { type: 'SET_PROJECT_META'; meta: { remotion_project_path?: string | null; description?: string | null; export_directory?: string | null } }
   | { type: 'SET_SOURCE_DOCUMENT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
@@ -241,8 +243,19 @@ export function segmentedReducer(state: State, action: Action): State {
     }
     case 'RENAME_PROJECT':
       return { project: { ...p, name: action.name, updated_at: new Date().toISOString() } };
-    case 'SET_PROJECT_META':
-      return { project: { ...p, ...action.meta, updated_at: new Date().toISOString() } };
+    case 'SET_PROJECT_META': {
+      const { remotion_project_path, description, export_directory } = action.meta;
+      const nextConfigs = { ...(p.configs ?? {}) };
+      if ('description' in action.meta) nextConfigs.description = description ?? null;
+      if ('export_directory' in action.meta) nextConfigs.export_directory = export_directory ?? null;
+      const next: SegmentedProject = {
+        ...p,
+        ...("remotion_project_path" in action.meta ? { remotion_project_path: remotion_project_path ?? null } : {}),
+        configs: nextConfigs,
+        updated_at: new Date().toISOString(),
+      };
+      return { project: next };
+    }
     case 'SET_SOURCE_DOCUMENT':
       return { project: { ...p, source_document: action.text, updated_at: new Date().toISOString() } };
     case 'SET_LAYOUT':

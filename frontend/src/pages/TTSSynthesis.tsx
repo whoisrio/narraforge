@@ -1616,27 +1616,29 @@ export function TTSSynthesis({
                 onSplit={handleSplit}
               />
 
-              <ExportDialog
-                open={exportOpen}
-                projectId={project.id}
-                chapterId={activeChapter.id}
-                segments={activeChapter.segments}
-                chapterDesignTitle={activeChapter.design_title || activeChapter.name}
-                remotionProjectPath={project.remotion_project_path}
-                exportDirectory={project.export_directory}
-                defaultName={activeChapter.design_title || activeChapter.name}
-                globalStartOffset={chapterStartOffset}
-                onClose={() => setExportOpen(false)}
-              />
+              {exportOpen && (
+                <ExportDialog
+                  projectId={project.id}
+                  chapterId={activeChapter.id}
+                  segments={activeChapter.segments}
+                  chapterDesignTitle={activeChapter.design_title || activeChapter.name}
+                  remotionProjectPath={project.remotion_project_path}
+                  exportDirectory={project.configs?.export_directory ?? null}
+                  defaultName={activeChapter.design_title || activeChapter.name}
+                  globalStartOffset={chapterStartOffset}
+                  onClose={() => setExportOpen(false)}
+                />
+              )}
             </div>
           </div>
         </div>
         </VoiceStudioLayout>
         ) : projectSection === 'library' ? (
           <ProjectLibrary
+            projectId={project.id}
+            projectName={project.name}
             chapters={project.chapters}
             activeChapterId={project.active_chapter_id}
-            projectName={project.name}
             sourceDocument={project.source_document}
             onSelectChapter={handleSelectChapter}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
@@ -1685,8 +1687,8 @@ export function TTSSynthesis({
             remotionPath={project.remotion_project_path}
             storageMode={storageMode}
             chapterCount={project.chapters.length}
-            projectDescription={project.description}
-            exportDirectory={project.export_directory}
+            projectDescription={project.configs?.description ?? null}
+            exportDirectory={project.configs?.export_directory ?? null}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

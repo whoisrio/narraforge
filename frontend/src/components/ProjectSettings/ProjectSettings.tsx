@@ -1,8 +1,11 @@
-import type { SegmentedProject } from '../../types';
 import { useTranslation } from '../../i18n';
 import styles from './ProjectSettings.module.css';
 
-type ProjectSettingsMeta = Pick<SegmentedProject, 'description' | 'export_directory'>;
+/** Project settings written into the free-form `configs` JSON, not dedicated columns. */
+export type ProjectSettingsMeta = {
+  description?: string | null;
+  export_directory?: string | null;
+};
 
 interface ProjectSettingsProps {
   projectName: string;
@@ -13,7 +16,7 @@ interface ProjectSettingsProps {
   exportDirectory?: string | null;
   onRenameProject: (name: string) => void;
   onUpdateRemotionPath: (path: string | null) => void;
-  onUpdateProjectMeta: (meta: Partial<ProjectSettingsMeta>) => void;
+  onUpdateProjectMeta: (meta: ProjectSettingsMeta) => void;
   onBackToOverview: () => void;
 }
 
