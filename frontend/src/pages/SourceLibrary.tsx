@@ -33,10 +33,10 @@ function showToast(message: string, type: 'success' | 'error' = 'success') {
 
 // Mock projects (后续接 API) — 模拟 3 个项目
 const MOCK_PROJECTS: SegmentedProject[] = [
-  { schema_version: 2, id: '__scratchpad__', name: '📌 草稿台', chapters: [], layout: 'vertical', active_narration_version: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
-  { schema_version: 2, id: 'p-deepseek', name: 'DeepSeek 战略拆解', chapters: [], layout: 'vertical', active_narration_version: 'v2', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
-  { schema_version: 2, id: 'p-ymtc', name: 'YMTC 长江存储科普', chapters: [], layout: 'vertical', active_narration_version: 'v1', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
-  { schema_version: 2, id: 'p-moe', name: 'MoE 架构讲解', chapters: [], layout: 'vertical', active_narration_version: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
+  { schema_version: 2, id: '__scratchpad__', name: '📌 草稿台', chapters: [], layout: 'vertical', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
+  { schema_version: 2, id: 'p-deepseek', name: 'DeepSeek 战略拆解', chapters: [], layout: 'vertical', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
+  { schema_version: 2, id: 'p-ymtc', name: 'YMTC 长江存储科普', chapters: [], layout: 'vertical', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
+  { schema_version: 2, id: 'p-moe', name: 'MoE 架构讲解', chapters: [], layout: 'vertical', created_at: new Date().toISOString(), updated_at: new Date().toISOString() } as SegmentedProject,
 ];
 
 // Mock sources (按 project_id 索引)
@@ -115,7 +115,7 @@ export function SourceLibrary() {
   );
   const activeSources = sourcesByProject[activeProjectId] || [];
   const activeNarrations = narrationsByProject[activeProjectId] || [];
-  const currentVersion = activeVersion[activeProjectId] || activeProject.active_narration_version;
+  const currentVersion = activeVersion[activeProjectId] ?? null;
   const currentNarration = activeNarrations.find(n => n.version === currentVersion) || null;
 
   const isScratchpad = activeProjectId === '__scratchpad__';
@@ -183,7 +183,7 @@ export function SourceLibrary() {
     const name = t('sourceLibrary.newProject', { n: MOCK_PROJECTS.filter(p => p.id !== '__scratchpad__').length });
     const newProj: SegmentedProject = {
       schema_version: 2, id, name, chapters: [], layout: 'vertical',
-      active_narration_version: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     } as SegmentedProject;
     MOCK_PROJECTS.push(newProj);
     setActiveProjectId(id);
@@ -240,7 +240,7 @@ export function SourceLibrary() {
                       {project.id === '__scratchpad__' && <span className={styles.pinBadge}>{t('sourceLibrary.defaultBadge')}</span>}
                     </div>
                     <div className={styles.projectMeta}>
-                      {t('sourceLibrary.projectMeta', { sources: sourceCount, narrCount, wordCount: project.active_narration_version || '—' })}
+                      {t('sourceLibrary.projectMeta', { sources: sourceCount, narrCount, wordCount: '—' })}
                     </div>
                   </div>
                 </button>

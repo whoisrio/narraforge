@@ -475,13 +475,6 @@ export interface SegmentedProject {
   chapters: Chapter[];
   active_chapter_id?: string;
   layout: 'vertical' | 'horizontal';
-  description?: string | null;
-  project_type?: string | null;
-  default_language?: string | null;
-  export_directory?: string | null;
-  export_naming_template?: string | null;
-  // P2 v2: 旁白文档当前活跃版本 (e.g. 'v2.1')
-  active_narration_version?: string | null;
   /** 默认关联的 Remotion 项目路径；导出文件优先写入其 public/audio */
   remotion_project_path?: string | null;
   /** Source document file path or identifier */

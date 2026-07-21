@@ -190,7 +190,6 @@ export const enUS: Messages = {
       title: 'New Project',
       description: 'Create a new narration project',
     },
-    defaultVersion: 'Default Narration Version',
     status: {
       completed: 'Completed',
       inProgress: 'In Progress',

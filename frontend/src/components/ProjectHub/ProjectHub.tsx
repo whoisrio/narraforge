@@ -154,7 +154,9 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                   )}
                   <span className={styles.cardTitleBlock}>
                     <strong>{project.name}</strong>
-                    <small>{project.active_narration_version ?? t('projectHub.defaultVersion')}</small>
+                    {project.configs?.description ? (
+                      <small>{project.configs.description}</small>
+                    ) : null}
                   </span>
                   </button>
                 )}

@@ -188,7 +188,6 @@ export const zhCN = {
       title: '新建项目',
       description: '创建新的旁白项目',
     },
-    defaultVersion: '默认旁白版本',
     status: {
       completed: '完成',
       inProgress: '制作中',

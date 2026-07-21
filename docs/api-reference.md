@@ -842,7 +842,6 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "layout": "vertical",
   "active_chapter_id": "chapter-id",
   "original_text": null,
-  "active_narration_version": null,
   "animation_theme": null,
   "remotion_project_path": null,
   "source_document": null,
@@ -867,7 +866,6 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | `layout` | string | `"vertical"` | 布局方向 |
 | `active_chapter_id` | string | `null` | 当前活跃章节 ID |
 | `original_text` | string | `null` | 原始文本 |
-| `active_narration_version` | string | `null` | 当前活跃旁白版本号 |
 | `animation_theme` | string | `null` | 整体动画主题 |
 | `remotion_project_path` | string | `null` | Remotion 项目路径 |
 | `source_document` | string | `null` | 源文档 markdown 内容 |
