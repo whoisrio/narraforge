@@ -100,3 +100,4 @@ agent/.venv
 agent/.pytest_cache
 agent/.langgraph_api
 
+*.env.bak
