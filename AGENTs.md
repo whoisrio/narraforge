@@ -75,6 +75,7 @@ curl http://127.0.0.1:8002/health
 - Run linkage: LangGraph thread metadata (`{project_id, project_name, kind}`).
 - `GET /assistants/narration/graph` returns the graph topology (nodes + edges).
 - `POST /threads/{id}/runs/stream` streams execution (channels: values/messages/custom/interrupts).
+- `knowledge_video` is the second registered assistant (`agent/app/graph_knowledge_video.py`): source document → faithful narration transcription → basic quality review (human confirm) → chapter split → edge-tts synthesis → Remotion project scaffolding → animation storyboard brief. The frontend drawer selects the assistant by workflow kind (`WORKFLOW_KINDS` mapping).
 
 ### Backend: FastAPI + Python 3.12+
 
