@@ -70,12 +70,56 @@ class BackendClient:
         ]
 
     async def synthesize_segment(
-        self, project_id: str, chapter_id: str, segment_id: str
+        self,
+        project_id: str,
+        chapter_id: str,
+        segment_id: str,
+        params: dict | None = None,
     ) -> None:
-        """POST .../segments/{sid}/synthesize - run TTS for one segment."""
+        """POST .../segments/{sid}/synthesize - run TTS for one segment.
+
+        *params* overrides the chapter/role voice params (e.g. force a
+        specific edge-tts voice for the kv workflow).
+        """
         c = await self._ensure()
         r = await c.post(
             f"/api/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/synthesize",
-            json={"params": None, "text": None, "ssml": None, "keep_previous": True},
+            json={"params": params, "text": None, "ssml": None, "keep_previous": True},
         )
         r.raise_for_status()
+
+    async def scaffold_remotion(
+        self,
+        project_id: str,
+        target_dir: str | None = None,
+        animation_brief: dict | None = None,
+    ) -> dict:
+        """POST /api/segmented-projects/{pid}/scaffold-remotion.
+
+        Creates (or refreshes) the Remotion project; when *animation_brief*
+        is given, also writes ``animation_brief.json`` into the project root.
+        """
+        body: dict = {}
+        if target_dir:
+            body["target_dir"] = target_dir
+        if animation_brief is not None:
+            body["animation_brief"] = animation_brief
+        c = await self._ensure()
+        r = await c.post(
+            f"/api/segmented-projects/{project_id}/scaffold-remotion",
+            json=body,
+        )
+        r.raise_for_status()
+        return r.json()
+
+    async def apply_animation_spec(
+        self, project_id: str, items: list[dict], theme: str | None = None
+    ) -> dict:
+        """POST /api/segmented-projects/{pid}/apply-animation-spec."""
+        c = await self._ensure()
+        r = await c.post(
+            f"/api/segmented-projects/{project_id}/apply-animation-spec",
+            json={"theme": theme, "segments": items},
+        )
+        r.raise_for_status()
+        return r.json()
