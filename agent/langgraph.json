@@ -1,5 +1,8 @@
 {
   "dependencies": ["."],
-  "graphs": { "narration": "./app/graph.py:graph" },
+  "graphs": {
+    "narration": "./app/graph.py:graph",
+    "knowledge_video": "./app/graph_knowledge_video.py:graph"
+  },
   "env": ".env"
 }
