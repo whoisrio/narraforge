@@ -107,6 +107,9 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
     | ({ script: string; review: any; available_actions: string[] } & Partial<ConfirmOverwriteInterrupt>)
     | undefined;
   const isConfirmInterrupt = interrupt?.kind === 'confirm_overwrite';
+  // useStream (sdk 1.9.x) has no `respond`; interrupts resume via submit + command.resume
+  const respond = (payload: unknown) =>
+    stream.submit(null, { command: { resume: payload } } as any);
 
   return (
     <div className={styles.drawer}>
@@ -136,14 +139,14 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
         {interrupt && isConfirmInterrupt && (
           <ConfirmPanel
             interrupt={interrupt as ConfirmOverwriteInterrupt}
-            onRespond={(p) => stream.respond(p as any)}
+            onRespond={(p) => respond(p)}
           />
         )}
 
         {interrupt && !isConfirmInterrupt && (
           <ReviewPanel
             interrupt={interrupt}
-            onRespond={(p) => stream.respond(p as any)}
+            onRespond={(p) => respond(p)}
           />
         )}
 
@@ -221,7 +224,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
               </div>
             ))}
             {fullscreen === 'script_review' && interrupt && (
-              <ReviewPanel interrupt={interrupt} onRespond={(p) => { stream.respond(p as any); setFullscreen(null); }} />
+              <ReviewPanel interrupt={interrupt} onRespond={(p) => { respond(p); setFullscreen(null); }} />
             )}
           </div>
         </StageDetailModal>
