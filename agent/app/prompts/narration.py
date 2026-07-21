@@ -171,8 +171,7 @@ SPLIT_SEGMENT_SYSTEM_PROMPT = """\
 # ---------------------------------------------------------------------------
 # LangSmith-first prompt loader (falls back to the code defaults above)
 # ---------------------------------------------------------------------------
-from langsmith import Client
-from langsmith.client import convert_prompt_to_openai_format
+from app.prompts.loader import make_get_prompt
 
 _DEFAULTS = {
     "gen_script": GEN_SCRIPT_SYSTEM_PROMPT,
@@ -188,33 +187,4 @@ _LANGSMITH_NAMES = {
     "preference_extract": "narraforge-preference-extract",
 }
 
-_client: Client | None = None
-
-
-def get_prompt(name: str, **vars) -> str:
-    """Return the prompt text for *name*.
-
-    Tries LangSmith prompt hub first (``Client().pull_prompt``); on any
-    failure (no ``LANGSMITH_API_KEY``, prompt unpublished, network error)
-    falls back to the code-default constant. ``**vars`` are substituted into
-    the prompt (e.g. ``feedback=`` for ``preference_extract``).
-    """
-    if name not in _DEFAULTS:
-        raise KeyError(name)
-    default = _DEFAULTS[name]
-    ls_name = _LANGSMITH_NAMES.get(name)
-    if ls_name:
-        try:
-            global _client
-            if _client is None:
-                _client = Client()  # reads LANGSMITH_API_KEY; may raise if absent
-            pt = _client.pull_prompt(ls_name)
-            msgs = convert_prompt_to_openai_format(pt.invoke(vars))
-            for m in msgs:
-                if m.get("role") == "system" and m.get("content"):
-                    return m["content"]
-            if msgs and msgs[0].get("content"):
-                return msgs[0]["content"]
-        except Exception:
-            pass  # fall through to code default
-    return default.format(**vars) if vars else default
+get_prompt = make_get_prompt(_DEFAULTS, _LANGSMITH_NAMES)
