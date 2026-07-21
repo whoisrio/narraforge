@@ -848,6 +848,11 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "source_document": null,
   "default_narrator_role_id": null,
   "default_narrator_snapshot": null,
+  "configs": {
+    "description": null,
+    "export_directory": null,
+    "split_voice_mode": "narration"
+  },
   "chapters": [...]
 }
 ```
@@ -868,6 +873,10 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | `source_document` | string | `null` | 源文档 markdown 内容 |
 | `default_narrator_role_id` | string | `null` | 默认旁白角色 ID |
 | `default_narrator_snapshot` | object | `null` | 旁白角色音色配置快照 |
+| `configs` | object \| null | `null` | 项目级自由配置 JSON 桶（可变 keys，无需数据库迁移） |
+| `configs.description` | string | — | 项目描述（UI 展示） |
+| `configs.export_directory` | string | — | 导出目录（相对于 `remotion_project_path`），默认 `public/audio` |
+| `configs.split_voice_mode` | string | — | 拆分默认模式：`narration` \| `dialogue` |
 | `chapters` | array | `[]` | 章节列表 |
 
 ### ChapterIn Schema

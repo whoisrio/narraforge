@@ -1623,7 +1623,7 @@ export function TTSSynthesis({
                   segments={activeChapter.segments}
                   chapterDesignTitle={activeChapter.design_title || activeChapter.name}
                   remotionProjectPath={project.remotion_project_path}
-                  exportDirectory={project.export_directory}
+                  exportDirectory={project.configs?.export_directory ?? null}
                   defaultName={activeChapter.design_title || activeChapter.name}
                   globalStartOffset={chapterStartOffset}
                   onClose={() => setExportOpen(false)}
@@ -1687,8 +1687,8 @@ export function TTSSynthesis({
             remotionPath={project.remotion_project_path}
             storageMode={storageMode}
             chapterCount={project.chapters.length}
-            projectDescription={project.description}
-            exportDirectory={project.export_directory}
+            projectDescription={project.configs?.description ?? null}
+            exportDirectory={project.configs?.export_directory ?? null}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

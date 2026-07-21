@@ -494,7 +494,19 @@ export interface SegmentedProject {
     duration_sec: number;
   } | null;
   default_narrator_role_id?: string | null;
-  configs?: { split_voice_mode?: 'narration' | 'dialogue'; [key: string]: unknown } | null;
+  /**
+   * Project-level free-form configs (persisted as JSON on backend).
+   * Sparse fields go here instead of dedicated columns.
+   */
+  configs?: {
+    /** 项目描述（仅 UI 展示） */
+    description?: string | null;
+    /** 导出目录（相对于 remotion_project_path），默认 'public/audio' */
+    export_directory?: string | null;
+    /** 拆分时默认用旁白/对话模式 */
+    split_voice_mode?: 'narration' | 'dialogue';
+    [key: string]: unknown;
+  } | null;
   created_at: string;
   updated_at: string;
 }
