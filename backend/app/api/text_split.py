@@ -29,6 +29,16 @@ class RuleSplitRequest(BaseModel):
         default_factory=lambda: ["，", "。", "！", "？"],
         description="分隔符列表",
     )
+    min_len_to_merge: int = Field(
+        default=5,
+        ge=0,
+        description="短段合并阈值：当前段 < 此值时，尝试与下一段合并；0 为关闭合并",
+    )
+    next_max_len_to_merge: int = Field(
+        default=15,
+        ge=0,
+        description="合并时下一段长度上限：下一段 < 此值才能合并",
+    )
 
 
 class RuleSplitResponse(BaseModel):
@@ -71,9 +81,18 @@ class SSMLAnnotateResponse(BaseModel):
 
 @router.post("/rule", response_model=RuleSplitResponse)
 def split_rule(req: RuleSplitRequest):
-    """按指定标点切分文本。纯本地，无 LLM 依赖。"""
+    """按指定标点切分文本。纯本地，无 LLM 依赖。
+
+    后置短段合并：当一段长度少于 ``min_len_to_merge`` 且下一段长度少于
+    ``next_max_len_to_merge`` 时，将两段并入同一行，以避免逗号密集衍生的碎片段。
+    """
     try:
-        segments = rule_split(req.text, req.delimiters)
+        segments = rule_split(
+            req.text,
+            req.delimiters,
+            min_len_to_merge=req.min_len_to_merge,
+            next_max_len_to_merge=req.next_max_len_to_merge,
+        )
         return RuleSplitResponse(segments=segments)
     except Exception as e:
         logger.exception("rule_split failed")

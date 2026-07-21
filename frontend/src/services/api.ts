@@ -447,8 +447,15 @@ export const modelConfigApi = {
 // ---------------------------------------------------------------------------
 
 export const textSplitApi = {
-  ruleSplit: async (text: string, delimiters: string[]): Promise<string[]> => {
-    const { data } = await api.post<{ segments: string[] }>('/text-split/rule', { text, delimiters });
+  ruleSplit: async (
+    text: string,
+    delimiters: string[],
+    options?: { minLenToMerge?: number; nextMaxLenToMerge?: number },
+  ): Promise<string[]> => {
+    const payload: Record<string, unknown> = { text, delimiters };
+    if (options?.minLenToMerge !== undefined) payload.min_len_to_merge = options.minLenToMerge;
+    if (options?.nextMaxLenToMerge !== undefined) payload.next_max_len_to_merge = options.nextMaxLenToMerge;
+    const { data } = await api.post<{ segments: string[] }>('/text-split/rule', payload);
     return data.segments;
   },
 
