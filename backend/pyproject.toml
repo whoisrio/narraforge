@@ -29,6 +29,10 @@ dependencies = [
     "langgraph>=1.2.0",
     "langgraph-checkpoint-sqlite>=1.0.0",
     "aiosqlite>=0.20.0",
+    # Narration git versioning dependencies
+    "apscheduler>=3.10",
+    "pypinyin>=0.51",
+    "pyyaml>=6.0",
 ]
 
 [[tool.uv.index]]

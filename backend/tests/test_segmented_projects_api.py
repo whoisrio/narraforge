@@ -194,3 +194,36 @@ def test_project_configs_json_round_trips_ui_settings(client, tmp_path, monkeypa
     payload["configs"] = None
     cleared = client.put("/api/segmented-projects/p-cfg", json=payload).json()
     assert cleared["configs"] is None
+
+
+def test_chapter_narration_script_round_trips(client):
+    project_id = "p_test_nscript"
+    payload = {
+        "id": project_id,
+        "name": "T",
+        "layout": "vertical",
+        "chapters": [
+            {
+                "id": "c1",
+                "position": 0,
+                "name": "Ch1",
+                "voice": {"engine": "edge_tts"},
+                "split_config": {},
+                "narration_script": "# 第一章\n改写后的旁白稿。",
+                "segments": [],
+            }
+        ],
+    }
+    r = client.post("/api/segmented-projects", json=payload)
+    assert r.status_code in (200, 201), r.text
+
+    r = client.get(f"/api/segmented-projects/{project_id}")
+    assert r.status_code == 200
+    got = r.json()
+    assert got["chapters"][0]["narration_script"] == "# 第一章\n改写后的旁白稿。"
+
+    payload["chapters"][0]["narration_script"] = "改写 v2"
+    r = client.put(f"/api/segmented-projects/{project_id}", json=payload)
+    assert r.status_code == 200
+    r = client.get(f"/api/segmented-projects/{project_id}")
+    assert r.json()["chapters"][0]["narration_script"] == "改写 v2"
