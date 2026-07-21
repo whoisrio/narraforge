@@ -23,6 +23,7 @@ The **narration workflow** (4-stage: gen_script → script_review → split_segm
 | Runbook | `docs/RUNBOOK.md` | Deployment and operations guide. |
 | Contributing guide | `docs/CONTRIBUTING.md` | Development conventions and contribution guidelines. |
 | design guide | `docs/design/stitch_narraforge_story_global_prj/DESIGN.md` | UI design guidelines. |
+| Narration git versioning | `docs/narration-git-versioning.md` | Automatic snapshot pipeline for narration text — layout, IDs, cron, ops commands. |
 | Test MAP | `backend/tests/TEST_MAP.md` | Test case and function map doc |
 | E2E Test Guide | `docs/e2e-test-guide.md` | Running instructions, conventions, dual-read verification, and gap analysis |
 

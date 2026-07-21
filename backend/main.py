@@ -79,6 +79,14 @@ app.add_middleware(
 @app.on_event("startup")
 def startup():
     init_db()
+    from app.services.narration_versioning.scheduler import start as _start_versioning_scheduler
+    _start_versioning_scheduler()
+
+
+@app.on_event("shutdown")
+def shutdown():
+    from app.services.narration_versioning.scheduler import shutdown as _stop_versioning_scheduler
+    _stop_versioning_scheduler()
 
 
 @app.get("/")

@@ -98,6 +98,18 @@ Not an environment variable, but a **system dependency**. The backend transcodes
 - macOS: `brew install ffmpeg`
 - Ubuntu: `apt-get install -y ffmpeg`
 
+## Narration Git Versioning
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `NARRATION_REPO_PATH` | `backend/data/narration-repo/` | Meta repo location. |
+| `NARRATION_SNAPSHOT_ENABLED` | `1` | Set `0` to disable the daily snapshot job. |
+| `NARRATION_SNAPSHOT_CRON` | `0 3 * * *` | APScheduler cron expression. |
+| `NARRATION_GIT_AUTHOR_NAME` | `NarraForge Bot` | Commit author. |
+| `NARRATION_GIT_AUTHOR_EMAIL` | `bot@narraforge.local` | Commit email. |
+
+See `docs/narration-git-versioning.md` for the full feature description.
+
 ## Minimal `.env` for Local Development
 
 ```bash
