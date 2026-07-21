@@ -9,7 +9,6 @@ import { getTTSAudioBlob } from '../../services/indexedDB';
 import styles from './ExportDialog.module.css';
 
 interface ExportDialogProps {
-  open: boolean;
   projectId: string;
   chapterId: string;
   segments: Segment[];
@@ -35,7 +34,7 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-export function ExportDialog({ open, projectId, chapterId, segments, chapterDesignTitle, remotionProjectPath, exportDirectory, defaultName, globalStartOffset = 0, onClose }: ExportDialogProps) {
+export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitle, remotionProjectPath, exportDirectory, defaultName, globalStartOffset = 0, onClose }: ExportDialogProps) {
   const { mode: storageMode } = useStorageMode();
   const [name, setName] = useState(defaultName);
   const [options, setOptions] = useState<ExportOption[]>(['audio', 'json']);
@@ -163,8 +162,6 @@ export function ExportDialog({ open, projectId, chapterId, segments, chapterDesi
       setExporting(false);
     }
   }, [segments, name, options, targetLang, storageMode, projectId, chapterId, chapterDesignTitle, remotionProjectPath, exportDirectory, srtUseGlobalTime, globalStartOffset, t]);
-
-  if (!open) return null;
 
   return (
     <div className={styles.overlay} onClick={onClose}>

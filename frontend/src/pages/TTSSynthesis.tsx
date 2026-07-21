@@ -1616,18 +1616,19 @@ export function TTSSynthesis({
                 onSplit={handleSplit}
               />
 
-              <ExportDialog
-                open={exportOpen}
-                projectId={project.id}
-                chapterId={activeChapter.id}
-                segments={activeChapter.segments}
-                chapterDesignTitle={activeChapter.design_title || activeChapter.name}
-                remotionProjectPath={project.remotion_project_path}
-                exportDirectory={project.export_directory}
-                defaultName={activeChapter.design_title || activeChapter.name}
-                globalStartOffset={chapterStartOffset}
-                onClose={() => setExportOpen(false)}
-              />
+              {exportOpen && (
+                <ExportDialog
+                  projectId={project.id}
+                  chapterId={activeChapter.id}
+                  segments={activeChapter.segments}
+                  chapterDesignTitle={activeChapter.design_title || activeChapter.name}
+                  remotionProjectPath={project.remotion_project_path}
+                  exportDirectory={project.export_directory}
+                  defaultName={activeChapter.design_title || activeChapter.name}
+                  globalStartOffset={chapterStartOffset}
+                  onClose={() => setExportOpen(false)}
+                />
+              )}
             </div>
           </div>
         </div>
