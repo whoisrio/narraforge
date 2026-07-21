@@ -2,16 +2,19 @@ import { useEffect, useState } from 'react';
 import { useStream } from '@langchain/langgraph-sdk/react';
 import { agentClient } from '../../services/langgraph/client';
 import { NODE_STATE_KEYS } from '../../services/langgraph/contracts';
-import type { MilestoneEvent, NarraWorkflowState } from '../../services/langgraph/types';
+import type { MilestoneEvent, WorkflowState } from '../../services/langgraph/types';
 import { PipelineTimeline } from './PipelineTimeline';
 import { StageCard } from './StageCard';
 import { ReviewPanel } from './ReviewPanel';
+import { ConfirmPanel } from './ConfirmPanel';
+import type { ConfirmOverwriteInterrupt } from '../../services/langgraph/types';
 import { StageDetailModal } from './StageDetailModal';
 import styles from './WorkflowDrawer.module.css';
 
 interface Props {
   threadId: string;
   projectId: string;
+  assistantId?: string;
   onClose: () => void;
   onCollapse: () => void;
 }
@@ -28,15 +31,20 @@ const DEFAULT_NODES: GraphNode[] = [
   { id: 'synthesis', name: 'synthesis' },
 ];
 
-function summaryFor(nodeId: string, values: Partial<NarraWorkflowState>): string | undefined {
+function summaryFor(nodeId: string, values: Partial<WorkflowState>): string | undefined {
   switch (nodeId) {
     case 'gen_script':
+    case 'gen_narration':
       if (values.narration_script) return `${values.script_chapters?.length ?? 0} 章 · ${values.narration_script.length} 字`;
       return undefined;
     case 'script_review':
       if (values.review_feedback) return `评分 ${values.review_feedback.overall_score}/5`;
       return undefined;
+    case 'quality_review':
+      if (values.review_result) return values.review_result.passed ? '审查通过' : `审查发现 ${values.review_result.issues.length} 个问题`;
+      return undefined;
     case 'split_segment':
+    case 'split_chapters':
       if (values.structured_segments) {
         const total = values.structured_segments.reduce((s: number, c) => s + c.segments.length, 0);
         return `${values.structured_segments.length} 章 · ${total} 段`;
@@ -45,19 +53,25 @@ function summaryFor(nodeId: string, values: Partial<NarraWorkflowState>): string
     case 'synthesis':
       if (values.synthesis_results) return `${values.synthesis_results.length} 段`;
       return undefined;
+    case 'scaffold_remotion':
+      if (values.remotion_project_dir) return values.remotion_project_dir;
+      return undefined;
+    case 'gen_animation_brief':
+      if (values.animation_brief) return `${values.animation_brief.chapters.length} 章 brief`;
+      return undefined;
   }
   return undefined;
 }
 
-export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Props) {
+export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration', onClose, onCollapse }: Props) {
   const [nodes, setNodes] = useState<GraphNode[]>(DEFAULT_NODES);
   const [milestones, setMilestones] = useState<Record<string, MilestoneEvent[]>>({});
   const [fullscreen, setFullscreen] = useState<string | null>(null);
   const [started, setStarted] = useState(false);
 
-  const stream = useStream<NarraWorkflowState>({
+  const stream = useStream<WorkflowState>({
     apiUrl: typeof window !== 'undefined' ? `http://${window.location.hostname}:2024` : 'http://127.0.0.1:2024',
-    assistantId: 'narration',
+    assistantId,
     threadId,
     streamMode: ['values', 'messages', 'custom', 'updates'],
     onCustomEvent: (event: MilestoneEvent, { meta }: { meta?: { langgraph_node?: string } }) => {
@@ -69,7 +83,7 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
   // fetch graph topology once
   useEffect(() => {
     (agentClient.assistants as any)
-      .getGraph('narration')
+      .getGraph(assistantId)
       .then((g: any) => {
         const ns = (g.nodes ?? []).map((n: any) => ({ id: n.id, name: n.id }));
         if (ns.length) setNodes(ns);
@@ -77,7 +91,7 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
       .catch(() => {
         /* keep defaults */
       });
-  }, []);
+  }, [assistantId]);
 
   // start the run once
   useEffect(() => {
@@ -90,8 +104,9 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
   const values = stream.values ?? {};
   const currentStage = values.current_stage;
   const interrupt = stream.interrupts?.[0]?.value as
-    | { script: string; review: any; available_actions: string[] }
+    | ({ script: string; review: any; available_actions: string[] } & Partial<ConfirmOverwriteInterrupt>)
     | undefined;
+  const isConfirmInterrupt = interrupt?.kind === 'confirm_overwrite';
 
   return (
     <div className={styles.drawer}>
@@ -118,7 +133,14 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
       <div className={styles.body}>
         <PipelineTimeline nodes={nodes} values={values} currentStage={currentStage} />
 
-        {interrupt && (
+        {interrupt && isConfirmInterrupt && (
+          <ConfirmPanel
+            interrupt={interrupt as ConfirmOverwriteInterrupt}
+            onRespond={(p) => stream.respond(p as any)}
+          />
+        )}
+
+        {interrupt && !isConfirmInterrupt && (
           <ReviewPanel
             interrupt={interrupt}
             onRespond={(p) => stream.respond(p as any)}
@@ -126,7 +148,7 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
         )}
 
         {nodes.map((n) => {
-          if (interrupt && n.id === 'script_review') return null; // shown as ReviewPanel
+          if (interrupt && (n.id === 'script_review' || n.id === 'quality_review' || n.id === 'preflight_check')) return null;
           const keys = NODE_STATE_KEYS[n.id] ?? [];
           const completed = keys.every((k) => (values as any)[k] != null);
           const status: 'completed' | 'running' | 'pending' = completed
@@ -145,13 +167,13 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
               onFullscreen={() => setFullscreen(n.id)}
             >
               <div className={styles.stageDetail}>
-                {n.id === 'gen_script' && values.narration_script && (
+                {(n.id === 'gen_script' || n.id === 'gen_narration') && values.narration_script && (
                   <pre className={styles.scriptPreview}>
                     {values.narration_script.slice(0, 300)}
                     {values.narration_script.length > 300 ? '...' : ''}
                   </pre>
                 )}
-                {n.id === 'split_segment' && values.structured_segments && (
+                {(n.id === 'split_segment' || n.id === 'split_chapters') && values.structured_segments && (
                   <div>
                     {values.structured_segments.map((ch, i) => (
                       <div key={i} className={styles.chapterSummary}>
@@ -184,10 +206,10 @@ export function WorkflowDrawer({ threadId, projectId, onClose, onCollapse }: Pro
           onClose={() => setFullscreen(null)}
         >
           <div className={styles.fullscreenContent}>
-            {fullscreen === 'gen_script' && values.narration_script && (
+            {(fullscreen === 'gen_script' || fullscreen === 'gen_narration') && values.narration_script && (
               <pre className={styles.fullScript}>{values.narration_script}</pre>
             )}
-            {fullscreen === 'split_segment' && values.structured_segments?.map((ch, i) => (
+            {(fullscreen === 'split_segment' || fullscreen === 'split_chapters') && values.structured_segments?.map((ch, i) => (
               <div key={i} className={styles.fsChapter}>
                 <strong>{ch.chapter_title}</strong>
                 {ch.segments.map((seg, j) => (
