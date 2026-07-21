@@ -33,6 +33,9 @@ const LLM_TIMEOUT = 300_000;
 /** Timeout for synthesis */
 const SYNTH_TIMEOUT = 300_000;
 
+// NOTE(2026-07-21): narration workflow E2E 暂时停用（用户不再需要启用旧 workflow），
+// 整个 describe 块注释保留以便后续恢复。knowledge_video 链路见 knowledge-video-workflow.spec.ts。
+/*
 test.describe('@workflow from source document', () => {
   test.beforeEach(async ({ page }) => {
     await setLocaleToZhCN(page);
@@ -242,3 +245,4 @@ test.describe('@workflow from source document', () => {
     await expect(page.getByText('完整内容').first()).not.toBeVisible({ timeout: 5_000 });
   });
 });
+*/
