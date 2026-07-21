@@ -71,6 +71,8 @@ function enrichSegment(raw: RawSegment): Segment {
     emotion: isEmotionType(raw.emotion) ? raw.emotion : undefined,
     role_id: raw.role_id ?? null,
     segment_kind: raw.segment_kind ?? 'narration',
+    // 透传后端 animation_spec（分镜 brief），否则分镜视图拿不到数据
+    animation_spec: raw.animation_spec ?? null,
     created_at: raw.created_at || now,
     updated_at: raw.updated_at || now,
   };

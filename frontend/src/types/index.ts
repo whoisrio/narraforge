@@ -412,6 +412,8 @@ export interface Segment {
   emotion?: EmotionType;
   role_id?: string | null;
   segment_kind: SegmentKind;
+  /** 动画分镜 brief（knowledge_video 工作流经 apply-animation-spec 写入的任意字段） */
+  animation_spec?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 
