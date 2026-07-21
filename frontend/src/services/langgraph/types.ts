@@ -69,3 +69,65 @@ export interface MilestoneEvent {
   message: string;
   data: Record<string, unknown>;
 }
+
+/** TS mirror of agent/app/schemas.py kv additions + KnowledgeVideoState. */
+
+export interface QualityDimension {
+  name: string;
+  passed: boolean;
+  comment: string;
+}
+
+export interface QualityReviewResult {
+  passed: boolean;
+  dimensions: QualityDimension[];
+  issues: string[];
+}
+
+export interface VisualContent {
+  type: 'code' | 'image' | 'key_points' | 'text';
+  description: string;
+  source_ref: string | null;
+}
+
+export interface SegmentBrief {
+  segment_position: number;
+  narration_text: string;
+  start_sec?: number;
+  end_sec?: number;
+  visual_content: VisualContent;
+  animation: { effect: string; notes: string };
+}
+
+export interface ChapterBrief {
+  chapter_position: number;
+  title: string;
+  segments: SegmentBrief[];
+}
+
+export interface AnimationBrief {
+  chapters: ChapterBrief[];
+}
+
+export interface KnowledgeVideoState {
+  target_dir?: string | null;
+  source_structure_map?: Array<Record<string, unknown>>;
+  review_result?: QualityReviewResult;
+  remotion_project_dir?: string;
+  animation_brief?: AnimationBrief;
+}
+
+/** Drawer state: narration fields + kv additions (overlapping keys are compatible). */
+export type WorkflowState = NarraWorkflowState & KnowledgeVideoState;
+
+/** Preflight overwrite-confirm interrupt payload. */
+export interface ConfirmOverwriteInterrupt {
+  kind: 'confirm_overwrite';
+  stats: {
+    chapters: number;
+    segments: number;
+    synthesized_segments: number;
+    has_animation_brief: boolean;
+  };
+  available_actions: string[];
+}
