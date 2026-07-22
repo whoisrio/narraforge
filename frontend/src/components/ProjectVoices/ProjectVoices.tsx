@@ -143,8 +143,6 @@ function VoiceRoleEditor({
   onChange,
   onCancel,
   onSave,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onPreview,
   saving = false,
   projectId,
 }: {
@@ -215,7 +213,7 @@ function VoiceRoleEditor({
       : ((vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_description : undefined) ?? '');
     setLocalDesignDesc(desc);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vox?.engine, vox?.voice_description, designSubEngine]);
+  }, [vox?.engine, (vox as VoxCPMParams | undefined)?.voice_description, designSubEngine]);
 
   const setVoiceDescription = (desc: string) => {
     setLocalDesignDesc(desc);

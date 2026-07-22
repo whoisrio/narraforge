@@ -64,7 +64,8 @@ function toSnapshot(role: Role): RoleSnapshot {
     role_kind: role.role_kind ?? null,
     default_engine: role.default_engine,
     default_voice: role.default_voice,
-    default_engine_params: { ...role.default_engine_params },
+    // default_engine_params 为可选（V3 兼容字段），后端实际总会返回；断言保持原有展开语义
+    default_engine_params: { ...role.default_engine_params } as EngineParams,
     favorite_styles: [...role.favorite_styles],
   };
 }
@@ -164,6 +165,7 @@ export function SegmentList(props: SegmentListProps) {
                   segment={editingSegment}
                   voices={props.voices}
                   roles={props.roles}
+                  chapterEngine={props.chapterVoice?.engine ?? props.engine}
                   onClose={() => onEdit('')}
                   onUpdateText={props.onUpdateText || (() => {})}
                   onUpdateSSML={props.onUpdateSSML || (() => {})}

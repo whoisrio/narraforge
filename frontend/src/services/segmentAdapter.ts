@@ -13,7 +13,8 @@ import { resolveEffectiveVoice, isAudioStale } from './voiceResolution';
 /** 从 Segment 的 voice 字段提取旧式 params 对象 */
 export function getSegmentLegacyParams(seg: Segment): Record<string, unknown> {
   if (seg.voice.source === 'custom') {
-    return { engine: seg.voice.engine, ...seg.voice.params };
+    // Partial<> 断言仅为规避 TS2783（params 必含 engine），运行时行为不变
+    return { engine: seg.voice.engine, ...(seg.voice.params as Partial<EngineParams>) };
   }
   return { engine: seg.voice.source === 'role' ? ('edge_tts' as const) : ('edge_tts' as const) };
 }

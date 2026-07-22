@@ -80,9 +80,10 @@ export function resolveEffectiveVoice(
       }
 
       // Layer 3: custom segment params
+      // Partial<> 断言仅为规避 TS2783（params 必含 engine），运行时行为不变
       const customLayer: Record<string, unknown> = {
         engine: segVoice.engine,
-        ...(segVoice.params as Record<string, unknown>),
+        ...(segVoice.params as Partial<EngineParams>),
       };
 
       // 如果 custom engine 和当前 base engine 不同，替换

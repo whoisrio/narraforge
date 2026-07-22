@@ -1,14 +1,15 @@
 /**
  * segmentShims — Segment/Role type accessors
  */
-import type { Segment } from '../types';
+import type { EngineParams, Segment } from '../types';
 
 // ---- Segment params accessors ----
 
 /** 从 Segment.voice 提取 params */
 export function segParams(seg: Segment): Record<string, unknown> {
   if (seg.voice.source === 'custom') {
-    return { engine: seg.voice.engine, ...seg.voice.params };
+    // Partial<> 断言仅为规避 TS2783（params 必含 engine，显式 engine 会被覆盖），运行时行为不变
+    return { engine: seg.voice.engine, ...(seg.voice.params as Partial<EngineParams>) };
   }
   if (seg.generated_params) {
     return seg.generated_params as Record<string, unknown>;
@@ -26,7 +27,8 @@ export function segEngine(seg: Segment): string {
 /** 获取段落的 effective params */
 export function segEffectiveParams(seg: Segment): Record<string, unknown> {
   if (seg.voice.source === 'custom') {
-    return { engine: seg.voice.engine, ...seg.voice.params };
+    // 同上：Partial<> 断言仅为规避 TS2783，运行时行为不变
+    return { engine: seg.voice.engine, ...(seg.voice.params as Partial<EngineParams>) };
   }
   if (seg.generated_params) {
     return seg.generated_params as Record<string, unknown>;

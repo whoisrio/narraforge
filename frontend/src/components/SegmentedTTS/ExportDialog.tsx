@@ -5,6 +5,7 @@ import { useStorageMode } from '../../hooks/useStorageMode';
 import { segParams } from '../../services/segmentShims';
 import { segmentedProjectApi, subtitleLlmApi } from '../../services/api';
 import { buildSRTContent, concatAudioBuffers, encodeWAV } from '../../services/audioConcat';
+import { stripStyleTags } from '../../services/styleTags';
 import { getTTSAudioBlob } from '../../services/indexedDB';
 import styles from './ExportDialog.module.css';
 
@@ -105,6 +106,8 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
             const current = s.audio.current;
             if (!current?.id) continue;
             const blob = await getTTSAudioBlob(current.id);
+            // blob 为 null 时原逻辑会在 decodeAudioData 抛错并被下方 catch 跳过，此处显式跳过等价
+            if (!blob) continue;
             try {
               const ac = new AudioContext();
               const ab = await ac.decodeAudioData(await blob.arrayBuffer());
@@ -127,7 +130,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
           chapter_design_title: chapterDesignTitle,
           total_duration_sec: segsWithTs.reduce((a, s) => a + (s.audio.duration_sec ?? 0), 0),
           segments: segsWithTs.map(s => ({
-            text: s.text, ssml: '', params: segParams(s),
+            text: stripStyleTags(s.text), ssml: '', params: segParams(s),
             start_ms: s._startMs, end_ms: s._endMs, duration_sec: s.audio.duration_sec ?? 0,
           })),
         }, null, 2);
@@ -137,7 +140,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
       // SRT
       if (options.includes('srt')) {
         const srt = buildSRTContent(segsWithTs.map(s => ({
-          text: s.text, startMs: s._startMs, endMs: s._endMs,
+          text: stripStyleTags(s.text), startMs: s._startMs, endMs: s._endMs,
         })));
         await exportTextFile(`${sanitized}.srt`, srt, 'text/plain');
       }
@@ -146,7 +149,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
       if (options.includes('bilingual_srt')) {
         try {
           const srt = buildSRTContent(segsWithTs.map(s => ({
-            text: s.text, startMs: s._startMs, endMs: s._endMs,
+            text: stripStyleTags(s.text), startMs: s._startMs, endMs: s._endMs,
           })));
           const result = await subtitleLlmApi.translate(srt, targetLang, 'Chinese');
           await exportTextFile(`${sanitized}.bilingual.srt`, result.bilingual_srt, 'text/plain');

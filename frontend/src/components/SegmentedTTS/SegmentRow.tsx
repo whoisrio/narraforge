@@ -65,8 +65,8 @@ const ENGINE_LABELS: Record<string, string> = {
 };
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
-  happy: 'segment.segmentRow.happy', sad: 'segment.segmentRow.sad', angry: 'segment.segmentRow.angry',
-  calm: 'segment.segmentRow.calm', neutral: 'segment.segmentRow.neutral', excited: 'segment.segmentRow.excited',
+  happy: 'segmentEdit.emotion.happy', sad: 'segmentEdit.emotion.sad', angry: 'segmentEdit.emotion.angry',
+  calm: 'segmentEdit.emotion.calm', neutral: 'segmentEdit.emotion.neutral', excited: 'segmentEdit.emotion.excited',
 };
 
 const WF_SHAPES: number[][] = [
@@ -122,7 +122,7 @@ export function SegmentRow({
   // SSML is stored in generated_params (or custom voice.params for un-generated segments)
   const hasSSML: boolean = !!(
     (segment.generated_params as Record<string, unknown>)?.ssml
-    || (segment.voice.source === 'custom' && (segment.voice.params as Record<string, unknown>)?.ssml)
+    || (segment.voice.source === 'custom' && (segment.voice.params as unknown as Record<string, unknown>)?.ssml)
   );
   const emotion = segment.emotion || 'neutral';
   const emoCamel = emotion.charAt(0).toUpperCase() + emotion.slice(1); // happy -> Happy
@@ -209,7 +209,7 @@ export function SegmentRow({
       case 'chapter': {
         // Display from chapterVoice (applied voice), not generated_params or panel state.
         // generated_params is only for staleness comparison, not display.
-        const saved = (chapterVoice as Record<string, unknown>);
+        const saved = (chapterVoice as unknown as Record<string, unknown>);
         if (saved) {
           const srcEngine = String(saved.engine || effectiveEngine);
           return { engine: eng, voice: extractVoiceName(srcEngine, saved) };
@@ -233,13 +233,13 @@ export function SegmentRow({
       case 'custom': {
         const params = (isReady && segment.generated_params)
           ? (segment.generated_params as unknown as Record<string, unknown>)
-          : (vs.params as Record<string, unknown>);
+          : (vs.params as unknown as Record<string, unknown>);
         const voiceName = extractVoiceName(dispEngine, params);
         if (voiceName && voiceName !== t('segment.segmentRow.voiceNotSelected')) {
           return { engine: eng, voice: voiceName };
         }
         // Locked with no custom params yet — inherit display from saved voice
-        const fallback = (chapterVoice as Record<string, unknown>) || {};
+        const fallback = (chapterVoice as unknown as Record<string, unknown>) || {};
         const fbVn = extractVoiceName(dispEngine, fallback);
         return { engine: eng, voice: fbVn || voiceName || t('segment.segmentRow.customVoice') };
       }
@@ -253,13 +253,13 @@ export function SegmentRow({
   const voiceVoiceId = (() => {
     const vs = segment.voice;
     if (vs.source === 'custom') {
-      const cv = (vs.params as Record<string, unknown>)?.voice_id as string | undefined;
-      return cv || (chapterVoice as Record<string, unknown>)?.voice_id as string | undefined;
+      const cv = (vs.params as unknown as Record<string, unknown>)?.voice_id as string | undefined;
+      return cv || (chapterVoice as unknown as Record<string, unknown>)?.voice_id as string | undefined;
     }
     if (vs.source === 'role' && resolvedRole?.voice) {
       return (resolvedRole.voice as unknown as Record<string, unknown>).voice_id as string | undefined;
     }
-    return (chapterVoice as Record<string, unknown>)?.voice_id as string | undefined
+    return (chapterVoice as unknown as Record<string, unknown>)?.voice_id as string | undefined
       || globalVoiceId;
   })();
   const voiceObj = voices.find(v => {
@@ -272,14 +272,14 @@ export function SegmentRow({
   const edgeVoiceForGender: string = (() => {
     const vs = segment.voice;
     if (vs.source === 'custom') {
-      const cv = (vs.params as Record<string, unknown>)?.voice as string;
+      const cv = (vs.params as unknown as Record<string, unknown>)?.voice as string;
       if (cv) return cv;
-      return ((chapterVoice as Record<string, unknown>)?.voice as string) || '';
+      return ((chapterVoice as unknown as Record<string, unknown>)?.voice as string) || '';
     }
     if (vs.source === 'role' && resolvedRole?.voice) {
       return ((resolvedRole.voice as unknown as Record<string, unknown>).voice as string || '');
     }
-    return ((chapterVoice as Record<string, unknown>)?.voice as string) || globalEdgeVoice || '';
+    return ((chapterVoice as unknown as Record<string, unknown>)?.voice as string) || globalEdgeVoice || '';
   })();
 
   const resolveGender = (): string => {
@@ -319,12 +319,12 @@ export function SegmentRow({
     engine: staleEngine,
   };
   if (segment.voice.source === 'custom') {
-    Object.assign(defaultParamsForStale, segment.voice.params as Record<string, unknown>);
+    Object.assign(defaultParamsForStale, segment.voice.params as unknown as Record<string, unknown>);
   } else if (segment.voice.source === 'role' && resolvedRole?.voice) {
     Object.assign(defaultParamsForStale, resolvedRole.voice as unknown as Record<string, unknown>);
   } else if (chapterVoice) {
     // chapter source: use the saved/applied chapter voice, not live panel state
-    const cv = chapterVoice as Record<string, unknown>;
+    const cv = chapterVoice as unknown as Record<string, unknown>;
     if (staleEngine === 'edge_tts') {
       defaultParamsForStale.voice = cv.voice;
     } else if (staleEngine === 'mimo_tts') {
@@ -365,7 +365,7 @@ export function SegmentRow({
       });
 
   const currentGlobalVoiceLabel = (() => {
-    const cv = chapterVoice as Record<string, unknown> | undefined;
+    const cv = chapterVoice as unknown as Record<string, unknown> | undefined;
     const eng = (cv?.engine || effectiveEngine) as string;
     if (eng === 'edge_tts') {
       const v = (cv?.voice || globalEdgeVoice || '') as string;
@@ -424,6 +424,9 @@ export function SegmentRow({
           <span className={styles.compactVoiceEngine}>{displayEngine}</span>
         </div>
         <span className={styles.compactIdx}>#{idx}</span>
+        {segment.emotion && (
+          <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{t(EMOTION_LABELS[emotion])}</span>
+        )}
         {timeStart != null && (
           <span className={styles.compactTime}>
             {fmtTime(timeStart)}{timeEnd != null ? `–${fmtTime(timeEnd)}` : '–…'}

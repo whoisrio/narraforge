@@ -1,4 +1,4 @@
-import type { Role, RoleSnapshot } from '../../types';
+import type { EngineParams, Role, RoleSnapshot } from '../../types';
 import { useTranslation } from '../../i18n';
 import styles from './RolePicker.module.css';
 
@@ -18,7 +18,8 @@ function toSnapshot(role: Role): RoleSnapshot {
     description: role.description,
     default_engine: role.default_engine,
     default_voice: role.default_voice,
-    default_engine_params: { ...role.default_engine_params },
+    // default_engine_params 为可选（V3 兼容字段），后端实际总会返回；断言保持原有展开语义
+    default_engine_params: { ...role.default_engine_params } as EngineParams,
     favorite_styles: [...role.favorite_styles],
   };
 }

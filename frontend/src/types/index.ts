@@ -58,6 +58,8 @@ export interface EdgeTTSParams {
   rate: string;
   volume: string;
   voice_id?: string;
+  /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
+  mute_tags?: boolean;
 }
 
 export interface MiMoParams {
@@ -66,6 +68,8 @@ export interface MiMoParams {
   voice_id: string;
   instruction?: string;
   voice_description?: string;
+  /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
+  mute_tags?: boolean;
 }
 
 export interface CosyVoiceParams {
@@ -78,6 +82,9 @@ export interface CosyVoiceParams {
   pitch?: number;
   language?: string;
   enable_ssml?: boolean;
+  enable_markdown_filter?: boolean;
+  /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
+  mute_tags?: boolean;
 }
 
 export interface VoxCPMParams {
@@ -89,6 +96,8 @@ export interface VoxCPMParams {
   prompt_text?: string;
   cfg_value?: number;
   inference_timesteps?: number;
+  /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
+  mute_tags?: boolean;
 }
 
 export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams;
@@ -339,11 +348,11 @@ export interface RoleSnapshot {
 
   // ── V3 兼容层（后续移除）──
   /** @deprecated Use voice.engine */
-  default_engine: EngineParams['engine'];
+  default_engine?: EngineParams['engine'];
   /** @deprecated Use voice */
-  default_voice: string | null;
+  default_voice?: string | null;
   /** @deprecated Use voice */
-  default_engine_params: EngineParams;
+  default_engine_params?: EngineParams;
 }
 
 export interface Role extends RoleSnapshot {
@@ -425,27 +434,27 @@ export interface Segment {
   /** @deprecated Use voice */
   voice_ref?: VoiceRef;
   /** @deprecated Use audio.current?.id */
-  current_audio_id: string;
+  current_audio_id?: string;
   /** @deprecated Use audio.previous?.id */
-  previous_audio_id: string;
+  previous_audio_id?: string;
   /** @deprecated Use audio.current?.path */
-  current_audio_path: string | undefined;
+  current_audio_path?: string;
   /** @deprecated Use audio.previous?.path */
-  previous_audio_path: string | undefined;
+  previous_audio_path?: string;
   /** @deprecated Use audio.format */
-  audio_format: string;
+  audio_format?: string;
   /** @deprecated Use audio.duration_sec */
-  duration_sec: number;
+  duration_sec?: number;
   /** @deprecated Removed in V3 */
-  ssml: string;
+  ssml?: string;
   /** @deprecated Removed in V3 */
-  ssml_annotated_by_llm: boolean;
+  ssml_annotated_by_llm?: boolean;
   /** @deprecated Removed in V3 */
-  role_snapshot: RoleSnapshot | null;
+  role_snapshot?: RoleSnapshot | null;
   /** @deprecated Removed in V3 */
-  prosody_marks: ProsodyMark[];
+  prosody_marks?: ProsodyMark[];
   /** @deprecated Removed in V3 */
-  generated_voice_id: string;
+  generated_voice_id?: string;
 }
 
 /** 章节 — 每个章节有独立的模型、文本、片段 */

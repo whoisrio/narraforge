@@ -87,6 +87,8 @@ export const voiceApi = {
     instruction?: string;
     preview_text?: string;
     original_prompt_text?: string;
+    /** 预置音色的默认 voice 名称（后端 /clone/create-from-design 支持，用于区分 edge_tts/mimo 预置） */
+    default_voice?: string;
   }): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-from-design', params);
     return data;

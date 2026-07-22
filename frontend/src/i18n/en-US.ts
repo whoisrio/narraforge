@@ -460,7 +460,6 @@ export const enUS: Messages = {
     styleInstruction: 'Style Instruction',
     styleInstructionPlaceholder: 'Select preset or enter directly...',
     speed: 'Speed',
-    volume: 'Volume',
     pitch: 'Pitch',
   },
   appShell: {

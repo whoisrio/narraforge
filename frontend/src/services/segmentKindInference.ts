@@ -1,4 +1,4 @@
-import type { Role, RoleSnapshot, SegmentKind } from '../types';
+import type { EngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
 
 export type SplitVoiceMode = 'narration' | 'dialogue';
 

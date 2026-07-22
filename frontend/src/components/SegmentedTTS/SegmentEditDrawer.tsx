@@ -79,17 +79,17 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
           <div className={styles.paramGrid}>
             <label className={styles.label}>{t('segment.editDrawer.speed')}</label>
             <input type="range" min={0.5} max={2} step={0.1}
-              value={eff.speed ?? 1.0}
+              value={(eff.speed as number) ?? 1.0}
               onChange={(e) => onUpdateParams(segment.id, { speed: parseFloat(e.target.value) })} />
 
             <label className={styles.label}>{t('segment.editDrawer.pitch')}</label>
             <input type="range" min={0.5} max={2} step={0.1}
-              value={eff.pitch ?? 1.0}
+              value={(eff.pitch as number) ?? 1.0}
               onChange={(e) => onUpdateParams(segment.id, { pitch: parseFloat(e.target.value) })} />
 
             <label className={styles.label}>{t('segment.editDrawer.volume')}</label>
             <input type="range" min={0} max={100} step={1}
-              value={eff.volume ?? 80}
+              value={(eff.volume as number) ?? 80}
               onChange={(e) => onUpdateParams(segment.id, { volume: parseInt(e.target.value) })} />
           </div>
         </div>
