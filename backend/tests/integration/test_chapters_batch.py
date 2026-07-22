@@ -141,3 +141,30 @@ def test_save_project_stores_source_document_as_path(client, db_session):
     assert proj.source_document_path
     detail = client.get("/api/segmented-projects/p-src-path")
     assert detail.json()["source_document"] == "# 源文档\n正文。"
+
+
+def test_batch_chapter_engine_written_to_voice(client, db_session):
+    """Per-chapter `engine` is persisted into chapter.voice JSON, preserving other keys."""
+    save_project(db_session, ProjectIn(id="p-batch-eng", name="t", layout="vertical"))
+    create_chapter_for_project(
+        db_session, "p-batch-eng", "old", 0,
+        voice={"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"},
+    )
+    db_session.commit()
+
+    payload = {
+        "chapters": [
+            {"chapter_title": "Ch1", "engine": "voxcpm", "segments": [{"text": "a"}]},
+            {"chapter_title": "Ch2", "segments": [{"text": "b"}]},
+        ]
+    }
+    r = client.post("/api/segmented-projects/p-batch-eng/chapters:batch", json=payload)
+    assert r.status_code == 200, r.text
+
+    db_session.expire_all()
+    proj = db_session.query(SegmentedProject).get("p-batch-eng")
+    voice1 = proj.chapters[0].voice or {}
+    assert voice1["engine"] == "voxcpm"
+    assert voice1["voice"] == "zh-CN-YunxiNeural"  # 其他键保留
+    voice2 = proj.chapters[1].voice or {}
+    assert voice2["engine"] == "edge_tts"  # 未传 engine 时保持默认

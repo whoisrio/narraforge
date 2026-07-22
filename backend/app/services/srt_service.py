@@ -5,6 +5,8 @@ timestamps are computed by accumulating each segment's ``duration_sec``.
 """
 from __future__ import annotations
 
+from app.services.engine_capabilities import strip_inline_tags, strip_leading_style_tag
+
 
 def _fmt_timestamp(seconds: float) -> str:
     ms_total = round(seconds * 1000)
@@ -22,7 +24,7 @@ def build_srt(segments: list[dict], *, offset_sec: float = 0.0) -> str:
         duration = float(seg.get("duration_sec") or 0.0)
         start = cursor
         end = cursor + duration
-        text = (seg.get("text") or "").strip()
+        text = strip_inline_tags(strip_leading_style_tag((seg.get("text") or "").strip()))
         blocks.append(f"{i}\n{_fmt_timestamp(start)} --> {_fmt_timestamp(end)}\n{text}")
         cursor = end
     return "\n\n".join(blocks) + "\n"

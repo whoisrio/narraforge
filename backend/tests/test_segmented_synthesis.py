@@ -185,3 +185,103 @@ def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkey
     assert captured["engine"] == "edge_tts"
     # Role voice params (zh-CN-XiaoxiaoNeural) should override chapter defaults (zh-CN-YunjianNeural)
     assert captured["params"].edge_voice == "zh-CN-XiaoxiaoNeural"
+
+
+# ----- style tag engine adaptation (prepare_text_for_engine) -----
+
+
+def _run_synth_capture_text(db_session, tmp_path, monkeypatch, *,
+                            chapter_voice, seg_text, seg_emotion,
+                            request_params=None, text_override=None):
+    """Seed p1/c1/s1, patch engine, return the text actually passed to the engine."""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    _seed(db_session, tmp_path, monkeypatch)
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    seg.chapter.voice = chapter_voice
+    seg.text = seg_text
+    seg.emotion = seg_emotion
+    db_session.commit()
+
+    captured: dict[str, object] = {}
+
+    def fake_synth(text, p, db=None):
+        captured["text"] = text
+        captured["params"] = p
+        return b"RIFF\x00\x00\x00\x00WAVEfmt ", "wav"
+
+    with patch("app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
+        "app.services.segmented_project_service.synthesize_with_engine",
+        side_effect=fake_synth,
+    ):
+        svc.synthesize_segment(
+            db_session, "p1", "c1", "s1",
+            request_params=request_params, text_override=text_override,
+        )
+    return captured
+
+
+def test_synth_voxcpm_clone_keeps_inline_and_adds_leading(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "voxcpm", "mode": "clone", "voice_id": "v1", "style_control": "磁性"},
+        seg_text="(旧风格)你好[笑]世界", seg_emotion="happy",
+    )
+    assert captured["text"] == "(开心,磁性)你好[笑]世界"
+
+
+def test_synth_voxcpm_ultimate_strips_all_tags(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "voxcpm", "mode": "ultimate", "voice_id": "v1", "style_control": "磁性"},
+        seg_text="(旧风格)你好[笑]世界", seg_emotion="happy",
+    )
+    assert captured["text"] == "你好世界"
+
+
+def test_synth_mimo_strips_inline_and_adds_leading(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "mimo_tts", "mode": "preset", "voice_id": "白桦", "instruction": "声音沙哑"},
+        seg_text="你好[笑]世界", seg_emotion="happy",
+    )
+    assert captured["text"] == "(开心,声音沙哑)你好世界"
+
+
+def test_synth_cosyvoice_strips_all_tags(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "cosyvoice", "voice_id": "v1", "instruction": "温柔"},
+        seg_text="(旧风格)你好[笑]世界", seg_emotion="happy",
+    )
+    assert captured["text"] == "你好世界"
+
+
+def test_synth_edge_tts_strips_all_tags(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="(旧风格)你好[笑]世界", seg_emotion="happy",
+    )
+    assert captured["text"] == "你好世界"
+
+
+def test_synth_mute_tags_via_request_params(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "voxcpm", "mode": "clone", "voice_id": "v1", "style_control": "磁性"},
+        seg_text="(旧风格)你好[笑]世界", seg_emotion="happy",
+        request_params={"mute_tags": True},
+    )
+    assert captured["text"] == "你好世界"
+    assert captured["params"].mute_tags is True
+
+
+def test_synth_text_override_also_cleaned(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "mimo_tts", "mode": "preset", "voice_id": "白桦", "instruction": ""},
+        seg_text="原文", seg_emotion="sad",
+        text_override="(旧)临时改的[笑]文本",
+    )
+    assert captured["text"] == "(悲伤)临时改的文本"

@@ -28,6 +28,7 @@ from app.models.segmented_project import (
     SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
+from app.services.engine_capabilities import prepare_text_for_engine
 from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
@@ -160,6 +161,8 @@ def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
         flat["voxcpm_style_control"] = voice.get("style_control", "")
         flat["voxcpm_cfg_value"] = voice.get("cfg_value", 2.0)
         flat["voxcpm_inference_timesteps"] = voice.get("inference_timesteps", 10)
+    if voice.get("mute_tags") is not None:
+        flat["mute_tags"] = voice.get("mute_tags")
     return flat
 
 
@@ -603,6 +606,23 @@ def synthesize_segment(
     sp = SynthesizeParams(**effective)
     text_to_speak = text_override or seg.text or ""
 
+    # 风格 tag 引擎适配：按引擎能力清洗/标注待合成文本
+    style: str | None = None
+    if sp.engine == "voxcpm":
+        style = sp.voxcpm_style_control or None
+    elif sp.engine == "mimo_tts":
+        style = sp.mimo_instruction or None
+    elif sp.engine == "cosyvoice":
+        style = sp.instruction or None
+    text_to_speak = prepare_text_for_engine(
+        text_to_speak,
+        engine=sp.engine,
+        emotion=getattr(seg, "emotion", None),
+        style=style,
+        voxcpm_mode=sp.voxcpm_mode if sp.engine == "voxcpm" else None,
+        mute_tags=bool(sp.mute_tags),
+    )
+
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
 
@@ -876,6 +896,11 @@ def batch_create_structure(
         title = ch_data.get("chapter_title", f"Chapter {index + 1}")
         chapter = create_chapter_for_project(db, project_id, title, index, voice=default_voice)
         chapter.narration_script = ch_data.get("narration_script")
+        engine = ch_data.get("engine")
+        if engine:
+            voice = dict(chapter.voice or {})
+            voice["engine"] = engine
+            chapter.voice = voice
         seg_result = []
         for seg_data in ch_data.get("segments", []):
             seg = create_segment_for_chapter(

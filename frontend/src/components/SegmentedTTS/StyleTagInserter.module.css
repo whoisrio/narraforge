@@ -1,0 +1,45 @@
+.inserter {
+  margin-bottom: 6px;
+}
+
+.groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+}
+
+.group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.groupLabel {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.tagBtn {
+  font-size: 10px;
+  font-family: var(--font-family-mono);
+  padding: 2px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.tagBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.hint {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--color-warning);
+}

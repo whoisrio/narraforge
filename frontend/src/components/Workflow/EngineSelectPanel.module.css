@@ -1,0 +1,101 @@
+.panel {
+  margin: 12px;
+  padding: 16px;
+  border: 1px solid var(--color-primary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.countdownTrack {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-surface-hover);
+  overflow: hidden;
+}
+
+.countdownBar {
+  height: 100%;
+  background: var(--color-primary);
+  transition: width 1s linear;
+}
+
+.countdownText {
+  margin: 6px 0 12px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.engineList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.engineCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.engineCard:hover {
+  border-color: var(--color-primary);
+}
+
+.engineCardActive {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.engineName {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.defaultBadge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-hover);
+  color: var(--color-text-muted);
+}
+
+.engineCap {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirmBtn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  cursor: pointer;
+}
