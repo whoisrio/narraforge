@@ -14,8 +14,8 @@ def _patch(monkeypatch, script: str):
         "app.nodes.knowledge_video.gen_narration.get_stream_writer", lambda: (lambda p: None)
     )
 
-    async def fake_stream_llm(messages, on_chunk=None):
-        return script
+    async def fake_stream_llm(messages, **kw):
+        return script, None
 
     monkeypatch.setattr("app.nodes.knowledge_video.gen_narration.stream_llm", fake_stream_llm)
     monkeypatch.setattr(
@@ -47,9 +47,9 @@ async def test_reject_feedback_is_included_in_prompt(monkeypatch):
     _patch(monkeypatch, SCRIPT)
     seen = {}
 
-    async def fake_stream_llm(messages, on_chunk=None):
+    async def fake_stream_llm(messages, **kw):
         seen["user"] = messages[1]["content"]
-        return SCRIPT
+        return SCRIPT, None
 
     monkeypatch.setattr("app.nodes.knowledge_video.gen_narration.stream_llm", fake_stream_llm)
     state = {

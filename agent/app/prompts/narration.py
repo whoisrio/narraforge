@@ -144,21 +144,23 @@ SPLIT_SEGMENT_SYSTEM_PROMPT = """\
 
 ## 输出格式
 
-严格输出以下 JSON 格式，不要输出其他内容：
+严格输出以下 JSON 格式（顶层必须是包含 "chapters" 字段的对象），不要输出其他内容：
 
-[
-  {
-    "chapter_title": "章节标题",
-    "segments": [
-      {
-        "text": "段落文本",
-        "emotion": "neutral",
-        "role": "narration",
-        "segment_kind": "narration"
-      }
-    ]
-  }
-]
+{
+  "chapters": [
+    {
+      "chapter_title": "章节标题",
+      "segments": [
+        {
+          "text": "段落文本",
+          "emotion": "neutral",
+          "role": "narration",
+          "segment_kind": "narration"
+        }
+      ]
+    }
+  ]
+}
 
 ## 注意
 

@@ -1,7 +1,8 @@
 """Knowledge-video workflow StateGraph definition and compile.
 
 Pipeline: preflight_check -> gen_narration -> quality_review (interrupt)
--> split_chapters -> synthesis -> scaffold_remotion -> gen_animation_brief.
+-> select_tts_engine (interrupt) -> split_chapters -> synthesis
+-> scaffold_remotion -> gen_animation_brief.
 
 Exports ``build_graph`` (tests + runtime injection) and a module-level
 ``graph`` for langgraph.json (the server injects checkpointer/store).
@@ -19,12 +20,14 @@ from app.nodes.knowledge_video.quality_review import quality_review_node
 from app.nodes.knowledge_video.scaffold_remotion import scaffold_remotion_node
 from app.nodes.knowledge_video.split_chapters import split_chapters_node
 from app.nodes.knowledge_video.synthesis import kv_synthesis_node
+from app.nodes.select_tts_engine import make_select_tts_engine_node
 from app.state import KnowledgeVideoState
 
 STAGE_ORDER = [
     "preflight_check",
     "gen_narration",
     "quality_review",
+    "select_tts_engine",
     "split_chapters",
     "synthesis",
     "scaffold_remotion",
@@ -34,7 +37,7 @@ STAGE_ORDER = [
 
 def route_after_review(state: KnowledgeVideoState) -> str:
     if state.get("review_status") == "approved":
-        return "split_chapters"
+        return "select_tts_engine"
     return "gen_narration"
 
 
@@ -56,6 +59,7 @@ def build_graph(
         .add_node("preflight_check", preflight_check_node)
         .add_node("gen_narration", gen_narration_node)
         .add_node("quality_review", quality_review_node)
+        .add_node("select_tts_engine", make_select_tts_engine_node("split_chapters"))
         .add_node("split_chapters", split_chapters_node)
         .add_node("synthesis", kv_synthesis_node)
         .add_node("scaffold_remotion", scaffold_remotion_node)
@@ -64,6 +68,7 @@ def build_graph(
         .add_conditional_edges("preflight_check", route_after_preflight)
         .add_edge("gen_narration", "quality_review")
         .add_conditional_edges("quality_review", route_after_review)
+        .add_edge("select_tts_engine", "split_chapters")
         .add_edge("split_chapters", "synthesis")
         .add_edge("synthesis", "scaffold_remotion")
         .add_edge("scaffold_remotion", "gen_animation_brief")

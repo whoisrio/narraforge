@@ -26,15 +26,12 @@ def _patch(monkeypatch, review, decision):
     monkeypatch.setattr(
         "app.nodes.knowledge_video.quality_review.get_stream_writer", lambda: (lambda p: None)
     )
-    client = type("C", (), {})
+    async def fake_structured(schema, messages, **kw):
+        return review, None
 
-    async def fake_create(**kw):
-        return review
-
-    client.create = fake_create
     monkeypatch.setattr(
-        "app.nodes.knowledge_video.quality_review.get_instructor_client",
-        lambda: (client, "m"),
+        "app.nodes.knowledge_video.quality_review.structured_llm",
+        fake_structured,
     )
     monkeypatch.setattr(
         "app.nodes.knowledge_video.quality_review.knowledge_video.get_prompt",

@@ -84,15 +84,12 @@ def _patch(monkeypatch, brief):
         "app.nodes.knowledge_video.gen_animation_brief.get_stream_writer",
         lambda: (lambda p: None),
     )
-    client = type("C", (), {})
+    async def fake_structured(schema, messages, **kw):
+        return brief, None
 
-    async def fake_create(**kw):
-        return brief
-
-    client.create = fake_create
     monkeypatch.setattr(
-        "app.nodes.knowledge_video.gen_animation_brief.get_instructor_client",
-        lambda: (client, "m"),
+        "app.nodes.knowledge_video.gen_animation_brief.structured_llm",
+        fake_structured,
     )
     monkeypatch.setattr(
         "app.nodes.knowledge_video.gen_animation_brief.knowledge_video.get_prompt",

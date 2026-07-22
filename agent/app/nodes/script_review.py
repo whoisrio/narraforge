@@ -1,4 +1,4 @@
-"""ScriptReview node: LLM auto-review (instructor) + human-in-the-loop interrupt.
+"""ScriptReview node: LLM auto-review + human-in-the-loop interrupt.
 
 Auto-rejects (without interrupting) when the LLM score is low or a critical
 issue is found, up to ``MAX_AUTO_REJECT`` times -- then forces a human review
@@ -14,7 +14,8 @@ from uuid import uuid4
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 
-from app.llm import get_instructor_client
+from app.llm import structured_llm
+from app.nodes.util import with_usage
 from app.prompts import narration
 from app.schemas import Preference, ReviewResult
 
@@ -30,12 +31,9 @@ async def _extract_preference(runtime, project_id: str, feedback: str) -> None:
     if runtime.store is None or not feedback:
         return
     try:
-        client, model = get_instructor_client()
-        pref = await client.create(
-            response_model=Preference,
-            model=model,
-            max_retries=1,
-            messages=[
+        pref, _ = await structured_llm(
+            Preference,
+            [
                 {"role": "system", "content": "你是一个偏好提取器，从用户的反馈中提取具体的创作偏好。"},
                 {"role": "user", "content": narration.get_prompt("preference_extract", feedback=feedback)},
             ],
@@ -68,12 +66,9 @@ async def script_review_node(state, runtime) -> dict:
         {"type": "llm_call", "stage": "script_review", "message": "正在调用 LLM 进行脚本审查..."}
     )
 
-    client, model = get_instructor_client()
-    review: ReviewResult = await client.create(
-        response_model=ReviewResult,
-        model=model,
-        max_retries=2,
-        messages=[
+    review, usage = await structured_llm(
+        ReviewResult,
+        [
             {"role": "system", "content": narration.get_prompt("script_review")},
             {"role": "user", "content": f"请审查以下旁白脚本：\n\n{state['narration_script']}"},
         ],
@@ -107,16 +102,20 @@ async def script_review_node(state, runtime) -> dict:
                 "type": "auto_reject",
                 "stage": "script_review",
                 "message": f"LLM 审查未通过（评分 {review.overall_score}/5），自动重新生成...",
-                "data": {"review": review.model_dump(), "retry": retry_count + 1},
+                "data": {"review": review.model_dump(), "retry": retry_count + 1, "usage": usage},
             }
         )
-        return {
-            "review_feedback": review.model_dump(),
-            "review_status": "rejected",
-            "current_stage": "gen_script",
-            "review_retry_count": retry_count + 1,
-            "error": None,
-        }
+        return with_usage(
+            "script_review",
+            usage,
+            {
+                "review_feedback": review.model_dump(),
+                "review_status": "rejected",
+                "current_stage": "gen_script",
+                "review_retry_count": retry_count + 1,
+                "error": None,
+            },
+        )
 
     dims_summary = [
         {"name": d.name, "status": d.status, "comment": d.comment[:100]} for d in review.dimensions
@@ -131,6 +130,7 @@ async def script_review_node(state, runtime) -> dict:
                 "dimensions_summary": dims_summary,
                 "overall_comment": review.overall_comment,
                 "has_critical_issue": review.has_critical_issue,
+                "usage": usage,
             },
         }
     )
@@ -161,13 +161,17 @@ async def script_review_node(state, runtime) -> dict:
             except Exception:
                 pass
             await _extract_preference(runtime, project_id, decision["comment"])
-        return {
-            "edited_script": edited_script,
-            "review_feedback": review.model_dump(),
-            "review_status": "approved",
-            "current_stage": "split_segment",
-            "error": None,
-        }
+        return with_usage(
+            "script_review",
+            usage,
+            {
+                "edited_script": edited_script,
+                "review_feedback": review.model_dump(),
+                "review_status": "approved",
+                "current_stage": "split_segment",
+                "error": None,
+            },
+        )
 
     # Reject path: persist feedback, extract preference, loop back to gen_script.
     feedback = decision.get("feedback", "")
@@ -187,9 +191,13 @@ async def script_review_node(state, runtime) -> dict:
             pass
     if feedback:
         await _extract_preference(runtime, project_id, feedback)
-    return {
-        "review_feedback": review.model_dump(),
-        "review_status": "rejected",
-        "current_stage": "gen_script",
-        "error": None,
-    }
+    return with_usage(
+        "script_review",
+        usage,
+        {
+            "review_feedback": review.model_dump(),
+            "review_status": "rejected",
+            "current_stage": "gen_script",
+            "error": None,
+        },
+    )

@@ -9,9 +9,8 @@ dependencies = [
     "langgraph-cli[inmem]>=0.1.0",
     "pydantic>=2.13.4",
     "httpx>=0.27",
-    "instructor>=1.4",
     "langchain-core>=0.3",
-    "openai>=1.50",
+    "langchain-openai>=0.3",
     "langsmith>=0.3",
 ]
 

@@ -12,6 +12,7 @@ from langgraph.config import get_stream_writer
 from app import backend_client
 from app.llm import stream_llm
 from app.nodes.gen_script import parse_markdown_chapters
+from app.nodes.util import with_usage
 from app.prompts import knowledge_video
 from app.source_elements import extract_source_elements
 
@@ -59,24 +60,7 @@ async def gen_narration_node(state, runtime) -> dict:
         }
     )
 
-    chunk_count = 0
-    acc_len = 0
-
-    async def on_chunk(chunk: str):
-        nonlocal chunk_count, acc_len
-        chunk_count += 1
-        acc_len += len(chunk)
-        if chunk_count % 10 == 0:
-            await emit(
-                {
-                    "type": "llm_streaming",
-                    "stage": "gen_narration",
-                    "message": f"正在生成旁白稿... ({acc_len} 字)",
-                    "data": {"total_length": acc_len},
-                }
-            )
-
-    script = await stream_llm(
+    script, usage = await stream_llm(
         [
             {"role": "system", "content": knowledge_video.get_prompt("kv_gen_narration")},
             {
@@ -84,7 +68,6 @@ async def gen_narration_node(state, runtime) -> dict:
                 "content": f"请将以下文档转写为视频旁白稿：\n\n{source_document}{feedback_context}",
             },
         ],
-        on_chunk=on_chunk,
     )
 
     if not script or not script.strip():
@@ -101,14 +84,23 @@ async def gen_narration_node(state, runtime) -> dict:
         }
     )
     await emit(
-        {"type": "stage_complete", "stage": "gen_narration", "message": "旁白稿生成阶段完成"}
+        {
+            "type": "stage_complete",
+            "stage": "gen_narration",
+            "message": "旁白稿生成阶段完成",
+            "data": {"usage": usage},
+        }
     )
 
-    return {
-        "source_document": source_document,
-        "source_structure_map": source_structure_map,
-        "narration_script": script,
-        "script_chapters": chapters,
-        "current_stage": "quality_review",
-        "error": None,
-    }
+    return with_usage(
+        "gen_narration",
+        usage,
+        {
+            "source_document": source_document,
+            "source_structure_map": source_structure_map,
+            "narration_script": script,
+            "script_chapters": chapters,
+            "current_stage": "quality_review",
+            "error": None,
+        },
+    )

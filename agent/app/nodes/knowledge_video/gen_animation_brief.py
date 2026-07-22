@@ -11,7 +11,8 @@ from __future__ import annotations
 from langgraph.config import get_stream_writer
 
 from app import backend_client
-from app.llm import get_instructor_client
+from app.llm import structured_llm
+from app.nodes.util import with_usage
 from app.prompts import knowledge_video
 from app.schemas import AnimationBrief
 
@@ -83,12 +84,9 @@ async def gen_animation_brief_node(state, runtime) -> dict:
             "message": "正在调用 LLM 生成分镜 brief...",
         }
     )
-    client, model = get_instructor_client()
-    brief: AnimationBrief = await client.create(
-        response_model=AnimationBrief,
-        model=model,
-        max_retries=2,
-        messages=[
+    brief, usage = await structured_llm(
+        AnimationBrief,
+        [
             {"role": "system", "content": knowledge_video.get_prompt("kv_animation_brief")},
             {
                 "role": "user",
@@ -139,11 +137,15 @@ async def gen_animation_brief_node(state, runtime) -> dict:
             "type": "stage_complete",
             "stage": "gen_animation_brief",
             "message": f"分镜 brief 生成完成: {total} 段",
-            "data": {"segments_count": total},
+            "data": {"segments_count": total, "usage": usage},
         }
     )
-    return {
-        "animation_brief": brief_payload,
-        "current_stage": "completed",
-        "error": None,
-    }
+    return with_usage(
+        "gen_animation_brief",
+        usage,
+        {
+            "animation_brief": brief_payload,
+            "current_stage": "completed",
+            "error": None,
+        },
+    )

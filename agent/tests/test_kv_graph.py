@@ -12,6 +12,7 @@ def test_stage_order():
         "preflight_check",
         "gen_narration",
         "quality_review",
+        "select_tts_engine",
         "split_chapters",
         "synthesis",
         "scaffold_remotion",
@@ -20,7 +21,7 @@ def test_stage_order():
 
 
 def test_route_after_review():
-    assert route_after_review({"review_status": "approved"}) == "split_chapters"
+    assert route_after_review({"review_status": "approved"}) == "select_tts_engine"
     assert route_after_review({"review_status": "rejected"}) == "gen_narration"
     assert route_after_review({}) == "gen_narration"
 
