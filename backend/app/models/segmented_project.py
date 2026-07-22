@@ -30,7 +30,9 @@ class SegmentedProject(Base):
     original_text = Column(String, nullable=True)
     animation_theme = Column(String, nullable=True)
     remotion_project_path = Column(String, nullable=True)
-    source_document = Column(Text, nullable=True)
+    source_document = Column(Text, nullable=True)  # deprecated: 内容改存文件，见 source_document_path
+    source_document_path = Column(String, nullable=True)
+    narration_document_path = Column(String, nullable=True)
     default_narrator_role_id = Column(
         String,
         ForeignKey("roles.id", ondelete="SET NULL"),

@@ -136,11 +136,13 @@ class BatchSegmentIn(BaseModel):
 
 class BatchChapterIn(BaseModel):
     chapter_title: str
+    narration_script: str | None = None
     segments: list[BatchSegmentIn] = []
 
 
 class BatchRequest(BaseModel):
     chapters: list[BatchChapterIn]
+    narration_script: str | None = None
 
 
 class BatchSegmentOut(BaseModel):
@@ -162,7 +164,12 @@ class BatchResponse(BaseModel):
 )
 def batch_create_chapters(project_id: str, body: BatchRequest, db: Session = Depends(get_db)):
     try:
-        result = svc.batch_create_structure(db, project_id, [c.model_dump() for c in body.chapters])
+        result = svc.batch_create_structure(
+            db,
+            project_id,
+            [c.model_dump() for c in body.chapters],
+            narration_script=body.narration_script,
+        )
     except LookupError:
         raise HTTPException(status_code=404, detail="project_not_found")
     return BatchResponse(

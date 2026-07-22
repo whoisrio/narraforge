@@ -36,6 +36,31 @@ def write_original_text(project_id: str, text: str) -> None:
     p.write_text(text or "", encoding="utf-8")
 
 
+SOURCE_DOCUMENT_NAME = "source.md"
+NARRATION_DOCUMENT_NAME = "narration.md"
+
+
+def write_project_document(project_id: str, name: str, text: str) -> str:
+    """Write a project-level document (source/narration) and return its path.
+
+    项目级长文档（源文档、完整旁白稿）的内容只落文件，DB 存该路径。
+    """
+    p = project_dir(project_id) / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text or "", encoding="utf-8")
+    return str(p)
+
+
+def read_project_document(path: str | None) -> str | None:
+    """Read a project-level document by its stored path; None/missing -> None."""
+    if not path:
+        return None
+    p = Path(path)
+    if not p.exists():
+        return None
+    return p.read_text(encoding="utf-8")
+
+
 def write_chapter_original_text(project_id: str, chapter_id: str, text: str) -> None:
     p = chapter_dir(project_id, chapter_id) / "original.txt"
     p.parent.mkdir(parents=True, exist_ok=True)
