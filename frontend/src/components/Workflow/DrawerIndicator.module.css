@@ -12,7 +12,7 @@
   gap: 8px;
   font-size: 12px;
   cursor: pointer;
-  z-index: 49;
+  z-index: var(--z-fixed);
   color: var(--color-primary-dark);
 }
 

@@ -5,6 +5,7 @@ const submitMock = vi.fn();
 const streamMock = {
   values: {},
   isLoading: false,
+  isThreadLoading: false,
   interrupts: [
     {
       value: {
@@ -53,5 +54,24 @@ describe('WorkflowDrawer interrupt resume', () => {
     expect(resumeCalls).toHaveLength(1);
     expect(resumeCalls[0][0]).toBeNull();
     expect(resumeCalls[0][1].command.resume).toEqual({ action: 'confirm' });
+  });
+
+  it('does not auto-submit a new run when attaching to a thread with state', () => {
+    render(
+      <WorkflowDrawer
+        threadId="t1"
+        projectId="p1"
+        assistantId="knowledge_video"
+        onClose={() => {}}
+        onCollapse={() => {}}
+      />,
+    );
+
+    // 线程已有 interrupt 状态（等待人工确认），挂载时只接管不重启，
+    // 不应提交 { project_id } 新 run。
+    const freshRuns = submitMock.mock.calls.filter(
+      (args) => args[0] && args[0].project_id !== undefined,
+    );
+    expect(freshRuns).toHaveLength(0);
   });
 });

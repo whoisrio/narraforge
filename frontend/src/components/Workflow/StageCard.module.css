@@ -1,15 +1,20 @@
 .card {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
   overflow: hidden;
   box-shadow: var(--shadow-card);
+  transition: border-color var(--transition-normal), box-shadow var(--transition-normal);
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .card[data-status='running'] {
   border-color: var(--color-primary);
-  box-shadow: 0 2px 8px var(--glow-primary);
+  box-shadow: 0 2px 12px var(--glow-primary);
 }
 
 .header {
@@ -17,21 +22,28 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 9px 11px;
+  padding: 10px 12px;
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--color-text-primary);
+  transition: background var(--transition-fast);
 }
 
 .header:hover {
   background: var(--color-surface-hover);
 }
 
+.header:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: -2px;
+}
+
 .statusIcon {
-  font-size: 16px;
+  font-size: 17px;
   font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+  color: var(--color-text-disabled);
 }
 
 .card[data-status='completed'] .statusIcon {
@@ -49,43 +61,143 @@
 }
 
 .title {
-  font-weight: 600;
+  font-weight: var(--font-weight-semibold);
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+}
+
+/* LLM 状态 pill */
+
+.llmPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-container);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.llmPill[data-phase='streaming'] {
+  background: var(--color-primary-container);
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-medium);
+}
+
+.llmPill[data-phase='done'] {
+  color: var(--color-success);
+}
+
+.llmPillIcon {
+  font-size: 13px;
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
 }
 
 .summary {
   color: var(--color-text-muted);
   font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 头部全局信息区：summary + token 消耗，整体右对齐 */
+
+.headerMeta {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* token ↑↓Σ 徽标（mono 数字） */
+
+.tokenBadge {
+  display: inline-flex;
+  gap: 5px;
+  font-family: var(--font-family-mono);
+  font-size: 10px;
+  color: var(--color-text-muted);
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  padding: 2px 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tokenTotal {
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-semibold);
 }
 
 .caret {
-  font-size: 16px;
+  font-size: 17px;
   color: var(--color-text-muted);
+  flex-shrink: 0;
 }
 
 .body {
-  padding: 0 11px 10px;
+  position: relative;
+  padding: 10px 12px 12px;
   border-top: 1px solid var(--color-border-light);
-  padding-top: 10px;
-  margin-top: 2px;
 }
 
+/* 紧凑全屏触发：body 右上角图标按钮，不占整行 */
+
 .fullscreenBtn {
-  display: flex;
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  z-index: 1;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
-  width: 100%;
-  padding: 6px;
-  margin-top: 8px;
-  border: 1px solid var(--color-border-strong);
+  padding: 3px;
+  border: 1px solid var(--color-border-light);
   background: var(--color-surface);
-  border-radius: 6px;
-  color: var(--color-text-secondary);
-  font-size: 11px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
   cursor: pointer;
-  justify-content: center;
+  opacity: 0.75;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
 }
 
 .fullscreenBtn:hover {
+  opacity: 1;
   background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+
+/* 从此重跑（fork）：与全屏按钮同款紧凑样式，排在其左侧 */
+.forkBtn {
+  position: absolute;
+  top: 6px;
+  right: 36px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px;
+  border: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.forkBtn:hover {
+  opacity: 1;
+  background: var(--color-surface-hover);
+  color: var(--color-text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card[data-status='running'] .statusIcon {
+    animation: none;
+  }
 }

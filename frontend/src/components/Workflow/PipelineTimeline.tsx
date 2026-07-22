@@ -3,10 +3,18 @@ import type { NarraWorkflowState } from '../../services/langgraph/types';
 import styles from './PipelineTimeline.module.css';
 
 const STAGE_ICON: Record<string, string> = {
+  // narration
   gen_script: 'edit_note',
   script_review: 'rate_review',
   split_segment: 'content_cut',
   synthesis: 'mic',
+  // knowledge_video
+  preflight_check: 'fact_check',
+  gen_narration: 'record_voice_over',
+  quality_review: 'verified',
+  split_chapters: 'splitscreen',
+  scaffold_remotion: 'movie',
+  gen_animation_brief: 'animation',
 };
 
 interface Props {
