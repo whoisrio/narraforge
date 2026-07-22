@@ -889,6 +889,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "default_params": {},
   "split_config": {},
   "original_text": null,
+  "narration_script": null,
   "segments": [...]
 }
 ```

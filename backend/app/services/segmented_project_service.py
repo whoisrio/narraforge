@@ -189,6 +189,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 voice=voice,
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
+                narration_script=getattr(ch, "narration_script", None),
                 design_title=getattr(ch, "design_title", None),
                 created_at=_to_iso(ch.created_at),
                 updated_at=_to_iso(ch.updated_at),
@@ -288,6 +289,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.voice = ch_in.voice or {}
         ch.split_config = ch_in.split_config or {}
         ch.original_text = ch_in.original_text
+        setattr(ch, "narration_script", ch_in.narration_script)
         setattr(ch, "design_title", ch_in.design_title)
         if ch_in.created_at:
             ch.created_at = _parse_iso(ch_in.created_at)

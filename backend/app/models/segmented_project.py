@@ -67,6 +67,7 @@ class SegmentedProjectChapter(Base):
     voice = Column(JSON, nullable=False, default=dict)
     split_config = Column(JSON, nullable=False, default=dict)
     original_text = Column(String, nullable=True)
+    narration_script = Column(Text, nullable=True)
     design_title = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)

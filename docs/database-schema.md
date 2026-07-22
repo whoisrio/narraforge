@@ -193,6 +193,7 @@ Chapters within a segmented project. Each chapter groups segments with optional 
 | `voice` | JSON | No | `{}` | TTS voice configuration (EngineParams discriminated union) |
 | `split_config` | JSON | No | `{}` | Text splitting configuration |
 | `original_text` | String | Yes | `NULL` | Chapter-level original text |
+| `narration_script` | Text | Yes | `NULL` | L3 narration script (edited); source for segment splitting |
 | `design_title` | String | Yes | `NULL` | Design/display title |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update timestamp (auto-updates) |

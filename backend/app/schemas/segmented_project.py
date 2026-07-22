@@ -28,6 +28,7 @@ class ChapterIn(BaseModel):
     voice: dict[str, Any] = Field(default_factory=dict)
     split_config: dict[str, Any] = Field(default_factory=dict)
     original_text: str | None = None
+    narration_script: str | None = None
     design_title: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
