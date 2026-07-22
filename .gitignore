@@ -102,3 +102,4 @@ agent/.langgraph_api
 
 *.env.bak
 *.db*
+.kimi-code/
