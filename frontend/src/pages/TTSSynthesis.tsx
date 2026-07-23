@@ -21,7 +21,7 @@ import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, Role, RoleSnapshot, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 
@@ -48,7 +48,7 @@ function endsWithSentencePeriod(text: string): boolean {
   return /[。．.](?:[”"』」》）)]*)\s*$/.test(text.trim());
 }
 
-function getErrorMessage(error: unknown, fallback = t('common.generationFailed')): string {
+function getErrorMessage(error: unknown, fallback = staticT('common.generationFailed')): string {
   return error instanceof Error ? error.message : String(error || fallback);
 }
 
@@ -109,6 +109,8 @@ export function TTSSynthesis({
   const [voxcpmPromptText, setVoxcpmPromptText] = useState('');
   const [voxcpmCfgValue, setVoxcpmCfgValue] = useState(2.0);
   const [voxcpmInferenceTimesteps, setVoxcpmInferenceTimesteps] = useState(10);
+  // 禁用风格 tag（随 chapter.voice 持久化，合成时透传后端 SynthesizeParams.mute_tags）
+  const [muteTags, setMuteTags] = useState(false);
 
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
 
@@ -371,6 +373,7 @@ export function TTSSynthesis({
     const v = ch.voice;
     const engine = (v?.engine || 'edge_tts') as Engine;
     setEngine(engine);
+    setMuteTags(v?.mute_tags ?? false);
     if (engine === 'edge_tts') {
       setEdgeVoice((v as EdgeTTSParams).voice || '');
       setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
@@ -443,21 +446,22 @@ export function TTSSynthesis({
   /** Build EngineParams from current global state */
   const buildCurrentParams = useCallback((): EngineParams => {
     if (engine === 'edge_tts') {
-      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume) } as EdgeTTSParams;
+      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume), mute_tags: muteTags } as EdgeTTSParams;
     }
     if (engine === 'mimo_tts') {
-      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction } as MiMoParams;
+      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction, mute_tags: muteTags } as MiMoParams;
     }
     if (engine === 'voxcpm') {
-      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps } as VoxCPMParams;
+      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags } as VoxCPMParams;
     }
     return {
       engine: 'cosyvoice', voice_id: selectedVoiceId,
       instruction: params.instruction || '', speed: params.speed ?? 1.0, volume: params.volume ?? 80,
       pitch: params.pitch ?? 1.0, language: params.language || 'Chinese',
       enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false,
+      mute_tags: muteTags,
     };
-  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps]);
+  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags]);
 
   // 构建当前全局音色的 VoiceRef（用于新创建的 segment）
   const buildGlobalVoiceRef = useCallback((): import('../types').VoiceRef => {
@@ -860,7 +864,8 @@ export function TTSSynthesis({
         : voiceId;
 
       // Use effectiveParams directly as the snapshot (already EngineParams)
-      const updatedParams = effectiveParams;
+      // 交叉 Record<string, unknown> 仅为允许下面按 key 写入 design 检测覆盖（mimo_mode 等运行时字段），行为不变
+      const updatedParams = effectiveParams as EngineParams & Record<string, unknown>;
 
       // Design voice detection: design modes need to use clone APIs at synthesis time.
       // Roles store mimo_mode='voicedesign' or voxcpm_mode='design' to indicate design voices.
@@ -891,6 +896,8 @@ export function TTSSynthesis({
       // Backend mode: write to per-project asset directory via the new segmented endpoint
       if (storageMode === 'backend' && project?.id) {
         const requestParams: Record<string, unknown> = { engine: effectiveEngine };
+        // 禁用风格 tag：透传后端 SynthesizeParams.mute_tags（clone 音色建议开启）
+        if (effectiveParams.mute_tags) requestParams.mute_tags = true;
         if (effectiveEngine === 'edge_tts') {
           requestParams.edge_voice = effectiveEdgeVoice;
           requestParams.edge_rate = effectiveEdgeRate;
@@ -979,6 +986,8 @@ export function TTSSynthesis({
           resp = await voxcpmApi.tts({ text: textToSend, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         }
       } else {
+        // 原代码引用了未定义的 sp；按上下文恢复为 cosyvoice 的 effectiveParams（该分支原本会因 ReferenceError 崩溃）
+        const sp = effectiveParams as CosyVoiceParams;
         resp = await ttsApi.synthesize({ text: textToSend, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
@@ -1312,7 +1321,7 @@ export function TTSSynthesis({
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg?.audio.current?.id) return;
     try {
-      const blob = await getTTSAudioBlob(seg.current_audio_id);
+      const blob = await getTTSAudioBlob(seg.current_audio_id!);
       if (!blob) return;
       const reader = new FileReader();
       const base64 = await new Promise<string>((resolve) => {
@@ -1336,7 +1345,7 @@ export function TTSSynthesis({
       const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const eff = segEffectiveParams(seg);
       await saveTTSResult({ id: newId, text: seg.text, voice_id: (eff.voice_id as string) || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: (eff.speed as number) ?? 1, volume: (eff.volume as number) ?? 80, pitch: (eff.pitch as number) ?? 1, instruction: (eff.instruction as string) || '', language: (eff.language as string) || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
-      try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
+      try { await deleteTTSResult(seg.current_audio_id!); } catch { /* ignore */ }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration });
       showToast(t('tts.trimmedSilence', { ms: trimmedMs }));
     } catch (e) { console.error('Trim failed:', e); showToast(t('tts.trimFailed'), 'error'); }
@@ -1475,6 +1484,14 @@ export function TTSSynthesis({
                         projectId={project.id}
                       />
                     )}
+                    <label className={styles.sidebarMuteTags} title="开启后合成前自动移除文本中的风格 tag">
+                      <input
+                        type="checkbox"
+                        checked={muteTags}
+                        onChange={e => setMuteTags(e.target.checked)}
+                      />
+                      禁用风格 tag（clone 音色建议开启）
+                    </label>
                     <button
                       type="button"
                       className={styles.sidebarApplyBtn}

@@ -824,6 +824,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | GET | `/api/segmented-projects/{id}` | 获取完整项目（chapters + segments） |
 | PUT | `/api/segmented-projects/{id}` | 全量替换（reconcile） |
 | DELETE | `/api/segmented-projects/{id}` | 删除项目 + 资产目录 |
+| POST | `/api/segmented-projects/{id}/chapters:batch` | 批量重建章节+分片（agent split_segment） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` | 生成分片音频 |
 | GET | `/api/segmented-projects/{id}/audio/{cid}/{sid}` | 读取分片 mp3 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |
@@ -931,6 +932,51 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 - `segment.segment_kind`：分片类型，`dialogue`（台词）或 `narration`（旁白）。
 - `segment.prosody_marks`：子句级局部语气标注，每项含 `start`、`end`、`emotion`、`style_tags`、`instruction`、`intensity`。
 - `segment.voice_ref`：当前分片激活的音色来源信息。含 `name`（显示名称）、`source`（`role`/`global`/`custom`）、`voice_id`、`engine`、`role_id`（可选）。`source=role` 表示来自角色分配，`source=global` 表示跟随全局参数，`source=custom` 表示分片自定义覆盖。
+
+### POST `/api/segmented-projects/{id}/chapters:batch`
+
+批量重建项目全部章节与分片（替换式，单事务）：删除现有章节后按请求顺序重建，继承项目第一章节的 voice 作为默认。供 agent `split_segment` 节点使用。
+
+**Request Body:**
+```json
+{
+  "chapters": [
+    {
+      "chapter_title": "第一章",
+      "narration_script": "本章旁白稿全文（可选）",
+      "engine": "voxcpm",
+      "segments": [
+        { "text": "段落文本", "emotion": "neutral", "role": "narration", "segment_kind": "narration" }
+      ]
+    }
+  ],
+  "narration_script": "项目级完整旁白稿（可选）"
+}
+```
+
+**字段说明:**
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `chapters[].chapter_title` | string | 必填 | 章节标题 |
+| `chapters[].narration_script` | string | `null` | 本章旁白稿，持久化到章节的 `narration_script` 字段；未传则为 `null` |
+| `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`cosyvoice`/`mimo_tts`/`voxcpm`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
+| `chapters[].segments[].text` | string | 必填 | 分片文本 |
+| `chapters[].segments[].emotion` | string | `null` | 分片情绪 |
+| `chapters[].segments[].role` | string | `"narration"` | 分片角色 |
+| `chapters[].segments[].segment_kind` | string | `"narration"` | 分片类型 |
+| `narration_script` | string | `null` | 项目级完整旁白稿。内容写入项目资产目录的 `narration.md`，DB 只存 `narration_document_path`；未传不更新。detail 响应的 `narration_script` 字段读穿返回文件内容 |
+
+**Response:**
+```json
+{
+  "chapters": [
+    { "id": "chapter-id", "segments": [{ "id": "segment-id" }] }
+  ]
+}
+```
+
+> 项目级长文档（源文档 `source.md`、旁白稿 `narration.md`）的内容一律存文件，DB 仅存 `source_document_path` / `narration_document_path`；`GET /segmented-projects/{id}` 的 `source_document` / `narration_script` 字段读穿返回内容。旧 `source_document` TEXT 列仅作遗留回退。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize`
 

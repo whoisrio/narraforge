@@ -47,17 +47,36 @@ class BackendClient:
         return r.json()
 
     async def batch_create_structure(
-        self, project_id: str, structure: SegmentChapters
+        self,
+        project_id: str,
+        structure: SegmentChapters,
+        narration_scripts: list[str | None] | None = None,
+        engine: str | None = None,
+        full_script: str | None = None,
     ) -> list[ChapterWithSegmentIds]:
         """POST /api/segmented-projects/{pid}/chapters:batch.
 
         Replaces the project's chapters with the given structure (single
-        transaction) and returns the assigned chapter/segment ids.
+        transaction) and returns the assigned chapter/segment ids. When
+        *narration_scripts* is given (one entry per chapter, ``None`` when
+        the chapter's source text could not be matched), each chapter also
+        carries its original narration text. *engine* (the selected TTS
+        engine) is written onto every chapter when given. *full_script*
+        (the complete narration script) is stored on the project.
         """
+        payload = structure.model_dump()
+        if narration_scripts is not None:
+            for ch, narration in zip(payload["chapters"], narration_scripts):
+                ch["narration_script"] = narration
+        if engine is not None:
+            for ch in payload["chapters"]:
+                ch["engine"] = engine
+        if full_script is not None:
+            payload["narration_script"] = full_script
         c = await self._ensure()
         r = await c.post(
             f"/api/segmented-projects/{project_id}/chapters:batch",
-            json=structure.model_dump(),
+            json=payload,
         )
         r.raise_for_status()
         data = r.json()

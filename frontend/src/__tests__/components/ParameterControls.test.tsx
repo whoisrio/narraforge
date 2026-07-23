@@ -24,7 +24,7 @@ describe('ParameterControls', () => {
     expect(screen.getByLabelText('语言')).toBeInTheDocument();
     expect(screen.getByText(/语速/)).toBeInTheDocument();
     expect(screen.getByText(/音量/)).toBeInTheDocument();
-    expect(screen.getByText(/语调/)).toBeInTheDocument();
+    expect(screen.getByText(/音调/)).toBeInTheDocument();
     expect(screen.getByText('复刻指令')).toBeInTheDocument();
     expect(screen.getByText('启用 SSML')).toBeInTheDocument();
   });

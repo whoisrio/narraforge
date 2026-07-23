@@ -270,6 +270,14 @@
   transition: background 0.15s;
 }
 
+/* 情绪底色：compactCard 基础背景会压住 .emo*（文件内更靠后），
+   这里用双类选择器把情绪底色以半透明混合恢复，且仍让位于 hover/selected/playing。 */
+.compactCard.emoHappy { background: color-mix(in srgb, var(--emo-happy-bg) 82%, transparent); }
+.compactCard.emoSad { background: color-mix(in srgb, var(--emo-sad-bg) 82%, transparent); }
+.compactCard.emoAngry { background: color-mix(in srgb, var(--emo-angry-bg) 82%, transparent); }
+.compactCard.emoCalm { background: color-mix(in srgb, var(--emo-calm-bg) 82%, transparent); }
+.compactCard.emoExcited { background: color-mix(in srgb, var(--emo-excited-bg) 82%, transparent); }
+
 .compactCard:hover {
   background: var(--color-surface-hover);
 }

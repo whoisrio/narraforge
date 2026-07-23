@@ -172,7 +172,9 @@ Segmented TTS project containers (three-tier: project -> chapter -> segment).
 | `original_text` | String | Yes | `NULL` | Original input text |
 | `animation_theme` | String | Yes | `NULL` | Global animation theme (e.g. `dark-botanical`) |
 | `remotion_project_path` | String | Yes | `NULL` | Associated Remotion project path |
-| `source_document` | Text | Yes | `NULL` | Source document markdown content |
+| `source_document` | Text | Yes | `NULL` | **Deprecated** — legacy fallback only; new writes go to file, see `source_document_path` |
+| `source_document_path` | String | Yes | `NULL` | Path of the source document file (content lives on disk under the project's assets dir) |
+| `narration_document_path` | String | Yes | `NULL` | Path of the full narration script file (workflow 产出的完整旁白稿) |
 | `default_narrator_role_id` | String | Yes | `NULL` | **FK** -> `roles.id` (SET NULL). Default narrator role |
 | `configs` | JSON | Yes | `NULL` | Project-level configuration (split_voice_mode, etc.) |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |

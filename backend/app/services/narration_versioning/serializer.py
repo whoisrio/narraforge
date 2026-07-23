@@ -8,6 +8,7 @@ Layout (rooted at `root/projects/{project.id}/`):
         original.md      (only when original_text non-null)
         script.md        (only when narration_script non-null)
         segments.md      (one HTML comment header + text block per segment)
+    narration.md       (project-level full narration script, when non-null)
 
 YAML output uses sort_keys=True for deterministic diffs.
 Chapter subdirs no longer in the input are removed so `git status`
@@ -37,7 +38,8 @@ def write_project(project, root: Path) -> Path:
         "default_narrator_role_id": getattr(project, "default_narrator_role_id", None),
         "configs": getattr(project, "configs", None) or {},
     })
-    _write_text_or_delete(proj_dir / "source.md", getattr(project, "source_document", None))
+    _write_text_or_delete(proj_dir / "source.md", _project_document(project, "source_document_path", "source_document"))
+    _write_text_or_delete(proj_dir / "narration.md", _project_document(project, "narration_document_path", None))
 
     chapters_dir = proj_dir / "chapters"
     chapters_dir.mkdir(exist_ok=True)
@@ -69,6 +71,16 @@ def _write_yaml(path: Path, data: dict[str, Any]) -> None:
         yaml.safe_dump(data, sort_keys=True, allow_unicode=True, default_flow_style=False),
         encoding="utf-8",
     )
+
+
+def _project_document(project, path_attr: str, content_attr: str | None) -> str | None:
+    """项目级文档内容：优先按 DB 中存的路径读文件，回退到遗留 TEXT 列。"""
+    from app.core.segmented_assets import read_project_document
+
+    content = read_project_document(getattr(project, path_attr, None))
+    if content is None and content_attr:
+        content = getattr(project, content_attr, None)
+    return content
 
 
 def _write_text_or_delete(path: Path, text: str | None) -> None:

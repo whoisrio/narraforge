@@ -322,6 +322,16 @@
   border-color: var(--color-primary-dark);
 }
 
+.sidebarMuteTags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
 .sidebarModeSwitch {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

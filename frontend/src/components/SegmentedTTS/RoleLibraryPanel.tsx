@@ -12,6 +12,7 @@ interface RoleLibraryPanelProps {
 }
 
 function createEmptyRole(projectId?: string | null): RoleSnapshot {
+  // project_id 会随 draft 透传给 roleApi.createRole（后端需要），但 RoleSnapshot 未声明该字段，用断言保留运行时形状
   return {
     id: `role-${Date.now()}`,
     name: '',
@@ -20,9 +21,10 @@ function createEmptyRole(projectId?: string | null): RoleSnapshot {
     project_id: projectId ?? undefined,
     default_engine: 'edge_tts',
     default_voice: '',
-    default_engine_params: { engine: 'edge_tts' },
+    // 运行时就是只有 engine 的半成品草稿，并非完整 EdgeTTSParams —— 无更干净的类型表达，走 unknown 断言
+    default_engine_params: { engine: 'edge_tts' } as unknown as EngineParams,
     favorite_styles: [],
-  };
+  } as RoleSnapshot;
 }
 
 function roleToDraft(role: Role): RoleSnapshot {
@@ -33,7 +35,8 @@ function roleToDraft(role: Role): RoleSnapshot {
     description: role.description,
     default_engine: role.default_engine,
     default_voice: role.default_voice,
-    default_engine_params: { ...role.default_engine_params },
+    // default_engine_params 为可选（V3 兼容字段），后端实际总会返回；断言保持原有展开语义
+    default_engine_params: { ...role.default_engine_params } as EngineParams,
     favorite_styles: [...role.favorite_styles],
     voice: role.voice ? { ...role.voice } : undefined,
   };
@@ -48,7 +51,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
 
   useEffect(() => {
     if (!open) return;
-    roleApi.listRoles(projectId)
+    roleApi.listRoles(projectId ?? undefined)
       .then((items) => {
         setRoles(items);
         onRolesChanged(items);
@@ -70,11 +73,12 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
       const existing = roles.find((role) => role.id === draft.id);
       const payload: RoleSnapshot = {
         ...draft,
+        // voice 由 deprecated 的 default_* 字段拼成，形状不保证匹配 EngineParams 判别联合，仅做断言
         voice: {
           engine: draft.default_engine,
           voice: draft.default_voice,
           ...draft.default_engine_params,
-        },
+        } as unknown as EngineParams,
       };
       const saved = existing
         ? await roleApi.updateRole(draft.id, payload)
@@ -107,7 +111,8 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
   const setEngineParams = (params: Partial<EngineParams>) => {
     setDraft((prev) => ({
       ...prev,
-      default_engine_params: { ...prev.default_engine_params, ...params },
+      // 两个 Partial 的展开结果不再是判别联合成员，断言回 EngineParams（运行时不变）
+      default_engine_params: { ...prev.default_engine_params, ...params } as EngineParams,
     }));
   };
 
@@ -136,7 +141,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
               value={draft.default_engine}
               onChange={(event) => {
                 const engine = event.target.value as EngineParams['engine'];
-                setDraft((prev) => ({ ...prev, default_engine: engine, default_engine_params: { ...prev.default_engine_params, engine } }));
+                setDraft((prev) => ({ ...prev, default_engine: engine, default_engine_params: { ...prev.default_engine_params, engine } as EngineParams }));
               }}
             >
               <option value="edge_tts">Edge-TTS</option>

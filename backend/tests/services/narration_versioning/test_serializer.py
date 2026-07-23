@@ -47,6 +47,8 @@ def test_write_project_creates_expected_tree(tmp_path):
     proj_dir = root / "projects" / "deepseek-strategy"
     assert (proj_dir / "project.yaml").exists()
     assert (proj_dir / "source.md").read_text() == "# 源文档\n正文。"
+    # _make_project 无项目级 narration_script → 不写 narration.md
+    assert not (proj_dir / "narration.md").exists()
 
     ch_dir = proj_dir / "chapters" / "ch01-opening"
     assert (ch_dir / "chapter.yaml").exists()
@@ -58,6 +60,19 @@ def test_write_project_creates_expected_tree(tmp_path):
     assert "第一段文本。" in segs
     assert "<!-- s002 kind=dialogue role=role_xm emotion=happy" in segs
     assert "第三段\n带换行。" in segs
+
+
+def test_write_project_writes_full_narration(tmp_path):
+    proj = _make_project()
+    doc = tmp_path / "store" / "narration.md"
+    doc.parent.mkdir(parents=True)
+    doc.write_text("# 完整旁白稿\n全文。", encoding="utf-8")
+    proj.narration_document_path = str(doc)
+    root = tmp_path / "repo"
+    write_project(proj, root)
+
+    proj_dir = root / "projects" / "deepseek-strategy"
+    assert (proj_dir / "narration.md").read_text() == "# 完整旁白稿\n全文。"
 
 
 def test_write_is_idempotent(tmp_path):

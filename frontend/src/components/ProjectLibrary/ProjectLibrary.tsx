@@ -9,6 +9,7 @@ import { StoryboardPanel } from '../Storyboard/StoryboardPanel';
 import { DrawerIndicator } from '../Workflow/DrawerIndicator';
 import { agentClient } from '../../services/langgraph/client';
 import { WORKFLOW_KINDS, type WorkflowKind } from '../../services/langgraph/contracts';
+import { resolveWorkflowThread } from '../../services/langgraph/threads';
 import styles from './ProjectLibrary.module.css';
 
 interface ProjectLibraryProps {
@@ -102,31 +103,19 @@ export function ProjectLibrary({
   const startWorkflow = async (workflowKind: WorkflowKind) => {
     try {
       const binding = WORKFLOW_KINDS[workflowKind];
-      const existing = await agentClient.threads.search({
-        metadata: { project_id: projectId, kind: binding.kind },
-        limit: 50,
+      // 接管活跃线程；僵尸线程（断连取消、无审批负载）在内部自动清理
+      // projectId/projectName 由 TTSSynthesis 固定传入（project.id/project.name），此处仅作非空断言
+      const threadId = await resolveWorkflowThread(agentClient, {
+        project_id: projectId!,
+        project_name: projectName!,
+        kind: binding.kind,
       });
-      const active = existing.filter(
-        (t: any) => t.status === 'busy' || t.status === 'interrupted',
-      );
       setDrawerKind(workflowKind);
-      if (active.length) {
-        setDrawerThreadId(active[0].thread_id);
-        setDrawerCollapsed(false);
-        return;
-      }
-      const thread = await agentClient.threads.create({
-        metadata: {
-          project_id: projectId,
-          project_name: projectName,
-          kind: binding.kind,
-        },
-      });
-      setDrawerThreadId(thread.thread_id);
+      setDrawerThreadId(threadId);
       setDrawerCollapsed(false);
-    } catch (e: any) {
+    } catch (e) {
       console.error('startWorkflow failed', e);
-      alert('启动工作流失败: ' + (e.message || '未知错误'));
+      alert('启动工作流失败: ' + (e instanceof Error ? e.message : '未知错误'));
     }
   };
 

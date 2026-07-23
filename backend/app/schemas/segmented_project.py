@@ -45,6 +45,7 @@ class ProjectIn(BaseModel):
     animation_theme: str | None = None
     remotion_project_path: str | None = None
     source_document: str | None = None
+    narration_script: str | None = None
     default_narrator_role_id: str | None = None
     configs: dict[str, Any] | None = None
     created_at: str | None = None
@@ -72,7 +73,8 @@ class ProjectSummary(BaseModel):
 
 
 class ProjectDetail(ProjectIn):
-    pass
+    source_document_path: str | None = None
+    narration_document_path: str | None = None
 
 
 class SynthesizeSegmentRequest(BaseModel):
@@ -236,6 +238,9 @@ class SynthesizeParams(BaseModel):
 
     # Context (MiMo voice design)
     context: list[dict[str, str]] | None = None
+
+    # Style tags
+    mute_tags: bool = False
 
     # Metadata
     role_id: str | None = None

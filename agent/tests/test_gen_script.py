@@ -12,6 +12,17 @@ def test_parse_markdown_chapters_splits_on_headings():
     assert chapters[0]["content"] == "content one"
 
 
+def test_parse_markdown_chapters_splits_on_plain_text_markers():
+    # gen_script 写作规则把 markdown 标题转成纯文本【章节：...】标记，
+    # 解析器必须同样能切分（旁白落库的章节匹配依赖它）。
+    script = "开场白。\n【章节：Stream】\n内容一\n【章节：Event Stream】\n内容二"
+    chapters = parse_markdown_chapters(script)
+    assert [(c["title"], c["content"]) for c in chapters] == [
+        ("Stream", "内容一"),
+        ("Event Stream", "内容二"),
+    ]
+
+
 class _FakeStore:
     def __init__(self, items=None):
         self._items = items or []
@@ -43,12 +54,10 @@ def _make_writer(collector):
 @pytest.mark.asyncio
 async def test_gen_script_node_calls_llm_and_emits_milestones(monkeypatch):
     emitted = []
+    usage = {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15}
 
-    async def fake_stream(messages, on_chunk=None, **kw):
-        if on_chunk:
-            await on_chunk("hello ")
-            await on_chunk("world")
-        return "hello world"
+    async def fake_stream(messages, **kw):
+        return "hello world", usage
 
     monkeypatch.setattr("app.nodes.gen_script.stream_llm", fake_stream)
     monkeypatch.setattr("app.nodes.gen_script.get_stream_writer", lambda: _make_writer(emitted))
@@ -66,12 +75,14 @@ async def test_gen_script_node_calls_llm_and_emits_milestones(monkeypatch):
     assert "llm_call" in types
     assert "llm_response" in types
     assert "stage_complete" in types
+    stage_complete = next(e for e in emitted if e["type"] == "stage_complete")
+    assert stage_complete["data"]["usage"] == usage
 
 
 @pytest.mark.asyncio
 async def test_gen_script_node_empty_script_is_soft_error(monkeypatch):
-    async def fake_stream(messages, on_chunk=None, **kw):
-        return "   "
+    async def fake_stream(messages, **kw):
+        return "   ", None
 
     monkeypatch.setattr("app.nodes.gen_script.stream_llm", fake_stream)
     monkeypatch.setattr("app.nodes.gen_script.get_stream_writer", lambda: _make_writer([]))
@@ -84,8 +95,8 @@ async def test_gen_script_node_empty_script_is_soft_error(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_gen_script_node_backend_failure_is_soft_error(monkeypatch):
-    async def fake_stream(messages, on_chunk=None, **kw):
-        return "should not reach"
+    async def fake_stream(messages, **kw):
+        return "should not reach", None
 
     monkeypatch.setattr("app.nodes.gen_script.stream_llm", fake_stream)
     monkeypatch.setattr("app.nodes.gen_script.get_stream_writer", lambda: _make_writer([]))

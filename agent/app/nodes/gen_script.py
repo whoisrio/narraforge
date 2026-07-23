@@ -1,28 +1,35 @@
 """GenScript node: fetch source document from backend -> narration script (streamed)."""
 from __future__ import annotations
 
+import re
+
 from langgraph.config import get_stream_writer
 
 from app import backend_client
 from app.llm import stream_llm
+from app.nodes.util import with_usage
 from app.prompts import narration
 
 
 def parse_markdown_chapters(script: str) -> list[dict[str, str]]:
     """Parse a markdown narration script into ``[{title, content}]``.
 
-    Splits on ``#`` / ``##`` heading lines.
+    Splits on ``#`` / ``##`` heading lines, and on the plain-text chapter
+    markers ``【章节：标题】`` that the gen_script writing rules produce
+    (rule: headings converted to plain-text markers, no markdown symbols).
     """
     chapters: list[dict[str, str]] = []
     current_title: str | None = None
     current_lines: list[str] = []
     for line in script.split("\n"):
-        if line.startswith("# ") or line.startswith("## "):
+        stripped = line.strip()
+        marker = re.fullmatch(r"【章节：(.+)】", stripped)
+        if line.startswith("# ") or line.startswith("## ") or marker:
             if current_title is not None:
                 chapters.append(
                     {"title": current_title, "content": "\n".join(current_lines).strip()}
                 )
-            current_title = line.lstrip("#").strip()
+            current_title = marker.group(1).strip() if marker else line.lstrip("#").strip()
             current_lines = []
         else:
             current_lines.append(line)
@@ -86,24 +93,7 @@ async def gen_script_node(state, runtime) -> dict:
         }
     )
 
-    chunk_count = 0
-    acc_len = 0
-
-    async def on_chunk(chunk: str):
-        nonlocal chunk_count, acc_len
-        chunk_count += 1
-        acc_len += len(chunk)
-        if chunk_count % 10 == 0:
-            await emit(
-                {
-                    "type": "llm_streaming",
-                    "stage": "gen_script",
-                    "message": f"正在生成脚本... ({acc_len} 字)",
-                    "data": {"total_length": acc_len},
-                }
-            )
-
-    script = await stream_llm(
+    script, usage = await stream_llm(
         [
             {"role": "system", "content": narration.get_prompt("gen_script")},
             {
@@ -111,7 +101,6 @@ async def gen_script_node(state, runtime) -> dict:
                 "content": f"请将以下源文档转化为视频旁白脚本：\n\n{source_document}{feedback_context}",
             },
         ],
-        on_chunk=on_chunk,
     )
 
     if not script or not script.strip():
@@ -134,12 +123,23 @@ async def gen_script_node(state, runtime) -> dict:
             },
         }
     )
-    await emit({"type": "stage_complete", "stage": "gen_script", "message": "脚本生成阶段完成"})
+    await emit(
+        {
+            "type": "stage_complete",
+            "stage": "gen_script",
+            "message": "脚本生成阶段完成",
+            "data": {"usage": usage},
+        }
+    )
 
-    return {
-        "source_document": source_document,
-        "narration_script": script,
-        "script_chapters": chapters,
-        "current_stage": "script_review",
-        "error": None,
-    }
+    return with_usage(
+        "gen_script",
+        usage,
+        {
+            "source_document": source_document,
+            "narration_script": script,
+            "script_chapters": chapters,
+            "current_stage": "script_review",
+            "error": None,
+        },
+    )

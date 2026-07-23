@@ -34,6 +34,69 @@ async def test_batch_create_structure_posts_and_returns_ids(httpx_mock):
 
 
 @pytest.mark.asyncio
+async def test_batch_create_structure_sends_narration_scripts(httpx_mock):
+    httpx_mock.add_response(
+        method="POST",
+        url="http://test:8002/api/segmented-projects/p1/chapters:batch",
+        json={"chapters": [{"id": "ch1", "segments": [{"id": "s1"}]}]},
+    )
+    c = BackendClient("http://test:8002")
+    sc = SegmentChapters(
+        chapters=[ChapterStructure(chapter_title="c", segments=[Segment(text="t")])]
+    )
+    await c.batch_create_structure("p1", sc, narration_scripts=["第一章原文"])
+
+    import json
+
+    request = httpx_mock.get_request()
+    body = json.loads(request.content)
+    assert body["chapters"][0]["narration_script"] == "第一章原文"
+    await c.close()
+
+
+@pytest.mark.asyncio
+async def test_batch_create_structure_sends_full_script(httpx_mock):
+    """full_script 作为顶层 narration_script 写入项目。"""
+    httpx_mock.add_response(
+        method="POST",
+        url="http://test:8002/api/segmented-projects/p1/chapters:batch",
+        json={"chapters": [{"id": "ch1", "segments": [{"id": "s1"}]}]},
+    )
+    c = BackendClient("http://test:8002")
+    sc = SegmentChapters(
+        chapters=[ChapterStructure(chapter_title="c", segments=[Segment(text="t")])]
+    )
+    await c.batch_create_structure("p1", sc, full_script="完整旁白稿")
+
+    import json
+
+    body = json.loads(httpx_mock.get_request().content)
+    assert body["narration_script"] == "完整旁白稿"
+    await c.close()
+
+
+@pytest.mark.asyncio
+async def test_batch_create_structure_sends_engine(httpx_mock):
+    """engine 统一写到每个章节；不传则不带 engine 字段。"""
+    httpx_mock.add_response(
+        method="POST",
+        url="http://test:8002/api/segmented-projects/p1/chapters:batch",
+        json={"chapters": [{"id": "ch1", "segments": [{"id": "s1"}]}]},
+    )
+    c = BackendClient("http://test:8002")
+    sc = SegmentChapters(
+        chapters=[ChapterStructure(chapter_title="c", segments=[Segment(text="t")])]
+    )
+    await c.batch_create_structure("p1", sc, engine="voxcpm")
+
+    import json
+
+    body = json.loads(httpx_mock.get_request().content)
+    assert body["chapters"][0]["engine"] == "voxcpm"
+    await c.close()
+
+
+@pytest.mark.asyncio
 async def test_synthesize_segment_posts(httpx_mock):
     httpx_mock.add_response(
         method="POST",

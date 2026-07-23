@@ -52,10 +52,10 @@ function isEmotionType(value: unknown): value is EmotionType {
 
 function enrichSegment(raw: RawSegment): Segment {
   const now = new Date().toISOString();
-  const rawAudio = (raw as Record<string, unknown>).audio as Record<string, unknown> | undefined;
+  const rawAudio = raw.audio as Segment['audio'] | undefined;
   const hasAudio = !!(rawAudio?.current || rawAudio?.previous);
   const voice: VoiceSource = ((raw as Record<string, unknown>).voice as VoiceSource) ?? { source: 'chapter' } as VoiceSource;
-  const audio: Segment['audio'] = (rawAudio as Segment['audio']) ?? { format: 'mp3' };
+  const audio: Segment['audio'] = rawAudio ?? { format: 'mp3' };
   // Backend returns duration_sec under audio.current — lift to audio.duration_sec for frontend consistency
   if (!audio.duration_sec && audio.current?.duration_sec) {
     audio.duration_sec = audio.current.duration_sec;
@@ -168,7 +168,8 @@ export type Action =
   // Per-chapter settings
   | { type: 'SET_DEFAULT_PARAMS'; params: EngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
-  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> }
+  // meta 除 original_text/design_title 外还透传面板状态字段（engine/edge_voice/...），运行时会整体并入 chapter
+  | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> & Record<string, unknown> }
   | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null; voice_ref?: import('../types').VoiceRef }[] }
@@ -302,7 +303,7 @@ export function segmentedReducer(state: State, action: Action): State {
           } else if ((item as Record<string, unknown>).voice_ref) {
             const vr = (item as Record<string, unknown>).voice_ref as { source?: string; engine?: string; voice_id?: string } | undefined;
             if (vr?.source === 'role') seg.voice = { source: 'role', role_id: item.role_id || '' };
-            else if (vr?.source === 'custom') seg.voice = { source: 'custom', engine: (vr.engine as EngineParams['engine']) || 'edge_tts', params: {} };
+            else if (vr?.source === 'custom') seg.voice = { source: 'custom', engine: (vr.engine as EngineParams['engine']) || 'edge_tts', params: {} as EngineParams };
             else seg.voice = { source: 'chapter' };
           }
           return seg;
@@ -360,12 +361,13 @@ export function segmentedReducer(state: State, action: Action): State {
             // Caller resolved effective params → convert to custom with full params (replace, don't merge)
             const p = action.params as unknown as Record<string, unknown>;
             const engine = (p.engine as string) || 'edge_tts';
-            seg.voice = { source: 'custom', engine: engine as 'edge_tts', params: p, role_id: seg.role_id || undefined } as Segment['voice'];
+            seg.voice = { source: 'custom', engine: engine as 'edge_tts', params: p, role_id: seg.role_id || undefined } as unknown as Segment['voice'];
           } else if (seg.voice.source === 'custom') {
             seg.voice.params = { ...seg.voice.params, ...action.params as unknown as Record<string, unknown> };
           } else {
             // Fallback: create empty custom (will be incomplete — caller should use convertFromRole)
-            seg.voice = { source: 'custom', engine: 'edge_tts', params: action.params as unknown as Record<string, unknown> };
+            // Partial<EngineParams> 直接断言为 EngineParams：原有运行时装箱行为不变
+            seg.voice = { source: 'custom', engine: 'edge_tts', params: action.params as EngineParams };
           }
           seg.updated_at = new Date().toISOString();
         }
@@ -535,7 +537,8 @@ export function segmentedReducer(state: State, action: Action): State {
           } else {
             // Enable independent voice: copy current effective params to custom source
             // Source was 'chapter' or 'role' → now 'custom'
-            seg.voice = { source: 'custom' as const, engine: 'edge_tts', params: {} as Record<string, unknown> };
+            // 空 params 原为裸 {}，断言为 EngineParams 仅为过类型检查，运行时不变
+            seg.voice = { source: 'custom' as const, engine: 'edge_tts', params: {} as EngineParams };
           }
           seg.updated_at = new Date().toISOString();
         }

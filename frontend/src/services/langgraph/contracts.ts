@@ -22,6 +22,7 @@ export const NODE_STATE_KEYS: Record<string, string[]> = {
   // narration
   gen_script: ['narration_script'],
   script_review: ['review_feedback'],
+  select_tts_engine: ['tts_engine'],
   split_segment: ['structured_segments'],
   synthesis: ['synthesis_results'],
   // knowledge_video

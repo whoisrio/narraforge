@@ -1,0 +1,224 @@
+/* StageLLMPane — "live tape": LLM 实时流式输出 + 思考过程（reasoning）。
+   签名元素：mono 字体流式文本 + 琥珀色闪烁光标，与 UI 无衬线形成对比。
+   token 计数展示在 StageCard 头部全局信息区，这里只保留状态。 */
+
+.pane {
+  margin-bottom: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-low);
+  overflow: hidden;
+}
+
+.pane[data-phase='streaming'] {
+  border-color: var(--color-border-strong);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+/* ---- header strip ---- */
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+}
+
+.headIcon {
+  font-size: 15px;
+  color: var(--color-primary);
+  font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 20;
+}
+
+.headTitle {
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  color: var(--color-text-secondary);
+}
+
+.phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-container);
+  color: var(--color-text-muted);
+}
+
+.phase[data-phase='streaming'] {
+  background: var(--color-primary-container);
+  color: var(--color-primary-dark);
+  font-weight: var(--font-weight-medium);
+}
+
+.phase[data-phase='done'] {
+  background: var(--color-surface-container);
+  color: var(--color-success);
+}
+
+.pulseDot {
+  width: 5px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.8); }
+}
+
+/* ---- thinking process (reasoning_content) ---- */
+
+.thinking {
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-surface);
+}
+
+.thinkingSummary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.thinkingSummary::-webkit-details-marker {
+  display: none;
+}
+
+.thinkingSummary::after {
+  content: 'expand_more';
+  font-family: 'Material Symbols Outlined';
+  margin-left: auto;
+  font-size: 15px;
+  transition: transform 0.15s ease;
+}
+
+.thinking[open] .thinkingSummary::after {
+  transform: rotate(180deg);
+}
+
+.thinkingIcon {
+  font-size: 15px;
+  color: var(--color-primary);
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 20;
+}
+
+.thinkingBody {
+  padding: 2px 12px 10px 33px;
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* ---- streaming text ---- */
+
+.stream {
+  padding: 10px 12px;
+  font-family: var(--font-family-mono);
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.caret {
+  color: var(--color-primary);
+  animation: blink 1s steps(2, start) infinite;
+  margin-left: 1px;
+}
+
+@keyframes blink {
+  to { visibility: hidden; }
+}
+
+.placeholder {
+  color: var(--color-text-muted);
+}
+
+/* ---- completed: rendered markdown (sans, calmer) ---- */
+
+.markdown {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--color-text-primary);
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+  font-size: 13px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin: 10px 0 4px;
+}
+
+.markdown p {
+  margin: 6px 0;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 6px 0;
+  padding-left: 18px;
+}
+
+.markdown code {
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+  background: var(--color-surface-container);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.markdown pre {
+  background: var(--color-surface-container);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caret,
+  .pulseDot {
+    animation: none;
+  }
+}

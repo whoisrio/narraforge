@@ -8,7 +8,9 @@ from __future__ import annotations
 from langgraph.config import get_stream_writer
 
 from app import backend_client
-from app.llm import get_instructor_client
+from app.llm import structured_llm
+from app.nodes.split_segment import engine_tag_policy, match_chapter_narrations
+from app.nodes.util import with_usage
 from app.prompts import knowledge_video
 from app.schemas import SegmentChapters
 
@@ -25,28 +27,38 @@ async def split_chapters_node(state, runtime) -> dict:
     )
 
     script = state.get("edited_script") or state["narration_script"]
+    tts_engine = state.get("tts_engine") or "mimo_tts"
     await emit(
         {
             "type": "llm_call",
             "stage": "split_chapters",
-            "message": f"正在调用 LLM 拆分段落 (脚本长度: {len(script)} 字)...",
+            "message": f"正在调用 LLM 拆分段落 (脚本长度: {len(script)} 字, 引擎: {tts_engine})...",
         }
     )
 
-    client, model = get_instructor_client()
-    structure: SegmentChapters = await client.create(
-        response_model=SegmentChapters,
-        model=model,
-        max_retries=2,
-        messages=[
+    structure, usage = await structured_llm(
+        SegmentChapters,
+        [
             {"role": "system", "content": knowledge_video.get_prompt("kv_split_chapters")},
-            {"role": "user", "content": f"请将以下旁白稿拆分为结构化段落：\n\n{script}"},
+            {
+                "role": "user",
+                "content": (
+                    f"请将以下旁白稿拆分为结构化段落：\n\n{script}"
+                    f"\n\n{engine_tag_policy(tts_engine)}"
+                ),
+            },
         ],
     )
 
     backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
     try:
-        ids = await backend.batch_create_structure(project_id, structure)
+        ids = await backend.batch_create_structure(
+            project_id,
+            structure,
+            narration_scripts=match_chapter_narrations(script, structure),
+            engine=tts_engine,
+            full_script=script,
+        )
     except Exception as exc:
         await emit({"type": "error", "stage": "split_chapters", "message": f"持久化失败: {exc}"})
         return {
@@ -73,7 +85,16 @@ async def split_chapters_node(state, runtime) -> dict:
         }
     )
     await emit(
-        {"type": "stage_complete", "stage": "split_chapters", "message": "章节拆分阶段完成"}
+        {
+            "type": "stage_complete",
+            "stage": "split_chapters",
+            "message": "章节拆分阶段完成",
+            "data": {"usage": usage},
+        }
     )
 
-    return {"structured_segments": structured, "current_stage": "synthesis", "error": None}
+    return with_usage(
+        "split_chapters",
+        usage,
+        {"structured_segments": structured, "current_stage": "synthesis", "error": None},
+    )

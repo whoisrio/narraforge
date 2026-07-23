@@ -3,11 +3,15 @@ import { useTranslation } from '../../i18n';
 import type { Segment, EngineParams, EmotionType, VoiceProfile, MiMoPresetVoice, Role } from '../../types';
 import { ttsApi, mimoTtsApi } from '../../services/api';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
+import { StyleTagInserter } from './StyleTagInserter';
+import { getStyleCapability, normalizeVoxcpmMode } from '../../services/styleTags';
 import { segEngine, segEffectiveParams, segFieldOverridden, segOverrideFields } from '../../services/segmentShims';
 import styles from './SegmentEditPanel.module.css';
 
-type SegmentParamField = keyof EngineParams;
-type SegmentParamValue = EngineParams[SegmentParamField];
+// keyof EngineParams 在判别联合上只会得到公共键（engine/voice_id），
+// 这里需要的是「任意引擎参数键」，故显式列举
+type SegmentParamField = 'engine' | 'voice' | 'voice_id' | 'mode' | 'speed' | 'volume' | 'pitch' | 'instruction' | 'style_control' | 'language';
+type SegmentParamValue = string | number | boolean | undefined;
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
   happy: 'segmentEdit.emotion.happy', sad: 'segmentEdit.emotion.sad', angry: 'segmentEdit.emotion.angry',
@@ -18,6 +22,8 @@ interface SegmentEditPanelProps {
   segment: Segment | null;
   voices: VoiceProfile[];
   roles?: Role[];
+  /** 章节引擎（chapter.voice.engine），用于判断 inline tag 支持并提示。 */
+  chapterEngine?: string;
   onClose: () => void;
   onUpdateText: (id: string, text: string) => void;
   onUpdateSSML: (id: string, ssml: string) => void;
@@ -39,7 +45,7 @@ const ALL_EMOTIONS: { key: string; label: string; color: string; bg: string }[] 
 ];
 
 export function SegmentEditPanel({
-  segment, voices, roles, onClose, onUpdateText,
+  segment, voices, roles, chapterEngine, onClose, onUpdateText,
   onUpdateEmotion, onUndo, onRegenerate, onConfirmCustom, onAnnotateSSML, onSplit,
 }: SegmentEditPanelProps) {
   const { t } = useTranslation();
@@ -61,7 +67,8 @@ export function SegmentEditPanel({
       if (role?.voice) {
         const v = role.voice;
         // Store EngineParams directly — no flat-key conversion
-        const roleParams: Record<string, unknown> = { engine: v.engine, ...v };
+        // Partial<> 断言仅为规避 TS2783（v 必含 engine），运行时行为不变
+        const roleParams: Record<string, unknown> = { engine: v.engine, ...(v as Partial<EngineParams>) };
         setLocalParams({ ..._eff, ...roleParams });
         return;
       }
@@ -89,7 +96,7 @@ export function SegmentEditPanel({
 
   // Load Edge-TTS voices when engine is edge_tts
   useEffect(() => {
-    if (segEngine(segment) === 'edge_tts' || showParams) {
+    if (segEngine(segment!) === 'edge_tts' || showParams) {
       ttsApi.getEdgeVoices(edgeLang).then(setEdgeVoices).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -109,7 +116,7 @@ export function SegmentEditPanel({
 
   const handleParamChange = useCallback((field: SegmentParamField, value: SegmentParamValue) => {
     if (!segment) return;
-    const params: Partial<EngineParams> = {};
+    const params: Record<string, unknown> = {};
     if (field === 'engine') {
       params.engine = value as EngineParams['engine'];
       if (value === 'edge_tts') { params.voice = ''; }
@@ -128,7 +135,7 @@ export function SegmentEditPanel({
     else if (field === 'language') params.language = value as string;
 
     // All edits accumulate locally; only confirm button commits
-    setLocalParams(prev => ({ ...prev, ...params as unknown as Record<string, unknown> }));
+    setLocalParams(prev => ({ ...prev, ...params }));
   }, [segment, t]);
 
   if (!segment) return null;
@@ -182,6 +189,13 @@ export function SegmentEditPanel({
           </div>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>
+
+        {/* Style tag inserter (voxcpm inline tags; other engines show removal hint) */}
+        <StyleTagInserter
+          textareaRef={textareaRef}
+          onTextChange={handleTextChange}
+          inlineSupported={getStyleCapability(chapterEngine ?? segEngine(segment)).inline}
+        />
 
         {/* Text */}
         <textarea ref={textareaRef} className={styles.textarea} value={localText}
@@ -273,7 +287,7 @@ export function SegmentEditPanel({
               {isCosyVoice && (
                 <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                   <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
-                  <select className={styles.paramSelect} value={eff.voice_id || ''}
+                  <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
                     onChange={e => handleParamChange('voice_id', e.target.value)}>
                     {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
                       {voices.filter(v => v.voice?.model === 'cosyvoice').map(v => {
@@ -303,16 +317,16 @@ export function SegmentEditPanel({
                     <div className={styles.paramLabel}>{t('segmentEdit.speed')}</div>
                     <div className={styles.sliderRow}>
                       <input type="range" min={0.5} max={2.0} step={0.1} className={styles.range}
-                        value={eff.speed ?? 1.0} onChange={e => handleParamChange('speed', parseFloat(e.target.value))} />
-                      <span className={styles.sliderVal}>{(eff.speed ?? 1.0).toFixed(1)}×</span>
+                        value={(eff.speed as number) ?? 1.0} onChange={e => handleParamChange('speed', parseFloat(e.target.value))} />
+                      <span className={styles.sliderVal}>{((eff.speed as number) ?? 1.0).toFixed(1)}×</span>
                     </div>
                   </div>
                   <div className={styles.paramField}>
                     <div className={styles.paramLabel}>{t('segmentEdit.volume')}</div>
                     <div className={styles.sliderRow}>
                       <input type="range" min={0} max={100} step={1} className={styles.range}
-                        value={eff.volume ?? 80} onChange={e => handleParamChange('volume', parseInt(e.target.value))} />
-                      <span className={styles.sliderVal}>{eff.volume ?? 80}</span>
+                        value={(eff.volume as number) ?? 80} onChange={e => handleParamChange('volume', parseInt(e.target.value))} />
+                      <span className={styles.sliderVal}>{(eff.volume as number) ?? 80}</span>
                     </div>
                   </div>
                 </>
@@ -362,15 +376,15 @@ export function SegmentEditPanel({
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                     <div className={styles.paramLabel}>{t('segmentEdit.voiceMode')}</div>
                     <div className={styles.enginePills}>
-                      <button className={`${styles.enginePill} ${((eff.mode as string) || 'clone') === 'clone' ? styles.enginePillActive : ''}`}
+                      <button className={`${styles.enginePill} ${normalizeVoxcpmMode((eff.mode as string) || 'clone') === 'clone' ? styles.enginePillActive : ''}`}
                         onClick={() => handleParamChange('mode', 'clone')}>{t('segmentEdit.voxcpmClone')}</button>
-                      <button className={`${styles.enginePill} ${(eff.mode as string) === 'ultimate' ? styles.enginePillActive : ''}`}
+                      <button className={`${styles.enginePill} ${normalizeVoxcpmMode((eff.mode as string) || 'clone') === 'ultimate' ? styles.enginePillActive : ''}`}
                         onClick={() => handleParamChange('mode', 'ultimate')}>{t('segmentEdit.voxcpmUltimate')}</button>
                     </div>
                   </div>
                   <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                     <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
-                    <select className={styles.paramSelect} value={eff.voice_id || ''}
+                    <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
                       onChange={e => handleParamChange('voice_id', e.target.value)}>
                       {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
                       {voices.filter(v => v.voice?.model === 'voxcpm').map(v => (

@@ -39,14 +39,12 @@ def _review(score=4, critical=False, fail=False):
 
 
 def _patch_llm(monkeypatch, review):
-    """Patch get_instructor_client to return a fake client yielding *review*."""
-    client = type("C", (), {})()
+    """Patch structured_llm to return (*review*, no usage)."""
 
-    async def fake_create(**kw):
-        return review
+    async def fake_structured(schema, messages, **kw):
+        return review, None
 
-    client.create = fake_create
-    monkeypatch.setattr("app.nodes.script_review.get_instructor_client", lambda: (client, "m"))
+    monkeypatch.setattr("app.nodes.script_review.structured_llm", fake_structured)
     monkeypatch.setattr("app.nodes.script_review.get_stream_writer", lambda: (lambda p: None))
 
 

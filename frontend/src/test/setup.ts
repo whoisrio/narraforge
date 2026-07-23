@@ -1,6 +1,13 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Force zh-CN locale in tests: many legacy specs assert on Chinese strings, and
+// TranslationProvider's default is en-US (see i18n/index.tsx). Set localStorage
+// before any component mounts so the initial useState picks zh-CN.
+if (typeof window !== 'undefined') {
+  window.localStorage.setItem('narraforge-locale', 'zh-CN');
+}
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

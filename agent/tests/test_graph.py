@@ -17,33 +17,26 @@ from app.schemas import (
 
 def _mock_llm_review(monkeypatch, review):
     import app.nodes.script_review  # noqa: F811
-    client = type("C", (), {})
 
-    async def fake_create(**kw):
-        return review
+    async def fake_structured(schema, messages, **kw):
+        return review, None
 
-    client.create = fake_create
-    monkeypatch.setattr("app.nodes.script_review.get_instructor_client", lambda: (client, "m"))
+    monkeypatch.setattr("app.nodes.script_review.structured_llm", fake_structured)
 
 
 def _mock_llm_split(monkeypatch, structure):
     import app.nodes.split_segment  # noqa: F811
-    client = type("C", (), {})
 
-    async def fake_create(**kw):
-        return structure
+    async def fake_structured(schema, messages, **kw):
+        return structure, None
 
-    client.create = fake_create
-    monkeypatch.setattr("app.nodes.split_segment.get_instructor_client", lambda: (client, "m"))
+    monkeypatch.setattr("app.nodes.split_segment.structured_llm", fake_structured)
 
 
 def _mock_stream(monkeypatch):
     import app.nodes.gen_script  # noqa: F811
-    async def fake_stream(messages, on_chunk=None, **kw):
-        if on_chunk:
-            await on_chunk("hello ")
-            await on_chunk("world")
-        return "# Chapter 1\nrough script content"
+    async def fake_stream(messages, **kw):
+        return "# Chapter 1\nrough script content", None
 
     monkeypatch.setattr("app.nodes.gen_script.stream_llm", fake_stream)
 
@@ -52,12 +45,14 @@ def _silence_writers(monkeypatch):
     # Import the node modules first so monkeypatch can see their attributes
     import app.nodes.gen_script  # noqa: F811
     import app.nodes.script_review  # noqa: F811
+    import app.nodes.select_tts_engine  # noqa: F811
     import app.nodes.split_segment  # noqa: F811
     import app.nodes.synthesis  # noqa: F811
 
     empty = lambda p: None
     monkeypatch.setattr("app.nodes.gen_script.get_stream_writer", lambda: empty)
     monkeypatch.setattr("app.nodes.script_review.get_stream_writer", lambda: empty)
+    monkeypatch.setattr("app.nodes.select_tts_engine.get_stream_writer", lambda: empty)
     monkeypatch.setattr("app.nodes.split_segment.get_stream_writer", lambda: empty)
     monkeypatch.setattr("app.nodes.synthesis.get_stream_writer", lambda: empty)
 
@@ -75,7 +70,7 @@ class _FakeBackend:
     async def get_project(self, pid):
         return {"id": pid, "source_document": "source doc text"}
 
-    async def batch_create_structure(self, pid, structure):
+    async def batch_create_structure(self, pid, structure, narration_scripts=None, engine=None, full_script=None):
         return [ChapterWithSegmentIds(id="ch1", segments=[SegmentWithId(id="s1")])]
 
     async def synthesize_segment(self, pid, cid, sid):
@@ -92,9 +87,26 @@ def _mock_backend_client(monkeypatch):
     monkeypatch.setattr(bc, "BackendClient", lambda *a, **kw: fake)
 
 
+def test_route_after_review_points_to_select_tts_engine():
+    from app import graph as graph_mod
+
+    assert graph_mod.route_after_review({"review_status": "approved"}) == "select_tts_engine"
+    assert graph_mod.route_after_review({"review_status": "rejected"}) == "gen_script"
+
+
+def test_graph_compiles_with_select_tts_engine():
+    from app import graph as graph_mod
+
+    g = graph_mod.build_graph(checkpointer=None, store=None)
+    node_names = set(g.get_graph().nodes.keys())
+    for name in graph_mod.STAGE_ORDER:
+        assert name in node_names
+
+
 @pytest.mark.asyncio
 async def test_graph_runs_to_interrupt_then_approve_completes(monkeypatch):
-    """Full graph: start -> gen_script -> interrupt at script_review -> approve -> complete."""
+    """Full graph: start -> gen_script -> interrupt at script_review -> approve
+    -> interrupt at select_tts_engine -> choose engine -> complete."""
     review = ReviewResult(
         dimensions=[ReviewDimension(name="内容忠实度", status="pass", comment="ok")],
         overall_score=4,
@@ -127,13 +139,20 @@ async def test_graph_runs_to_interrupt_then_approve_completes(monkeypatch):
     # Interrupted at script_review
     assert "__interrupt__" in result
 
-    # Resume with approve
+    # Resume with approve -> runs into the select_tts_engine interrupt
     result2 = await g.ainvoke(
         Command(resume={"action": "approve", "edited_script": "e", "comment": "good"}),
         config,
     )
-    assert result2["current_stage"] == "completed"
-    assert len(result2["synthesis_results"]) == 1
+    assert "__interrupt__" in result2
+    interrupt_payload = result2["__interrupt__"][0].value
+    assert interrupt_payload["kind"] == "select_tts_engine"
+
+    # Resume with an engine choice -> split_segment -> synthesis -> end
+    result3 = await g.ainvoke(Command(resume={"engine": "edge_tts"}), config)
+    assert result3["current_stage"] == "completed"
+    assert result3["tts_engine"] == "edge_tts"
+    assert len(result3["synthesis_results"]) == 1
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
-"""Pydantic models - single source of truth for graph state + instructor validation.
+"""Pydantic models - single source of truth for graph state + LLM validation.
 
 These models are referenced by both the graph state (``state.py``) and the
-instructor ``response_model`` targets in the nodes. Keeping them in one place
+structured-output targets in the nodes. Keeping them in one place
 means the schema is the only contract between the LLM structured output and
 the rest of the system.
 """

@@ -14,16 +14,17 @@ from langgraph.graph import END, START, StateGraph
 
 from app.nodes.gen_script import gen_script_node
 from app.nodes.script_review import script_review_node
+from app.nodes.select_tts_engine import make_select_tts_engine_node
 from app.nodes.split_segment import split_segment_node
 from app.nodes.synthesis import synthesis_node
 from app.state import NarrationWorkflowState
 
-STAGE_ORDER = ["gen_script", "script_review", "split_segment", "synthesis"]
+STAGE_ORDER = ["gen_script", "script_review", "select_tts_engine", "split_segment", "synthesis"]
 
 
 def route_after_review(state: NarrationWorkflowState) -> str:
     if state.get("review_status") == "approved":
-        return "split_segment"
+        return "select_tts_engine"
     return "gen_script"
 
 
@@ -44,11 +45,13 @@ def build_graph(
         StateGraph(NarrationWorkflowState)
         .add_node("gen_script", gen_script_node)
         .add_node("script_review", script_review_node)
+        .add_node("select_tts_engine", make_select_tts_engine_node("split_segment"))
         .add_node("split_segment", split_segment_node)
         .add_node("synthesis", synthesis_node)
         .add_edge(START, "gen_script")
         .add_edge("gen_script", "script_review")
         .add_conditional_edges("script_review", route_after_review)
+        .add_edge("select_tts_engine", "split_segment")
         .add_edge("split_segment", "synthesis")
         .add_edge("synthesis", END)
     )

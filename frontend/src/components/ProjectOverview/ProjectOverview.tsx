@@ -31,7 +31,7 @@ function getChapterStatus(chapter: Chapter): ChapterStatus {
   return 'draft';
 }
 
-function formatRelativeTime(isoDate: string | null | undefined, t: (k: string, p?: Record<string, unknown>) => string): string {
+function formatRelativeTime(isoDate: string | null | undefined, t: (k: string, p?: Record<string, string | number>) => string): string {
   if (!isoDate) return '';
   const now = Date.now();
   const then = new Date(isoDate).getTime();
@@ -67,7 +67,7 @@ function engineLabel(engine: string): string {
 }
 
 function voiceLabel(role: Role): string {
-  const v = role.voice as Record<string, unknown>;
+  const v = role.voice as unknown as Record<string, unknown>;
   const params = (v?.params ?? {}) as Record<string, unknown>;
   const engine = (v?.engine as string) ?? 'edge_tts';
   if (engine === 'edge_tts') return (params.voice as string) || '';
@@ -88,7 +88,7 @@ function RolePreviewButton({ role }: { role: Role }) {
     }
     setError(false);
     try {
-      const v = role.voice as Record<string, unknown>;
+      const v = role.voice as unknown as Record<string, unknown>;
       const engine = (v?.engine as string) ?? 'edge_tts';
       let voiceId = '';
       if (engine === 'cosyvoice' || engine === 'mimo_tts' || engine === 'voxcpm') {
@@ -122,14 +122,15 @@ function RolePreviewButton({ role }: { role: Role }) {
             edge_rate: params.rate || '+0%',
             edge_volume: params.volume || '+0%',
             format: 'mp3',
-          });
+            // TTSResult 的 audio_base64/audio_format 为可选；此处理路径假定后端必返回（与原有声明一致）
+          }) as { audio_base64: string; audio_format: string };
         } else {
           const params = (v as { voice_id?: string; speed?: number; volume?: number; pitch?: number }) || {};
           resp = await ttsApi.synthesize({
             text, engine: engine as 'cosyvoice', voice_id: params.voice_id || '',
             speed: params.speed ?? 1, volume: params.volume ?? 80,
             pitch: params.pitch ?? 1, format: 'mp3',
-          });
+          }) as { audio_base64: string; audio_format: string };
         }
         const bytes = atob(resp.audio_base64);
         const arr = new Uint8Array(bytes.length);
@@ -280,7 +281,7 @@ export function ProjectOverview(props: ProjectOverviewProps) {
                     <div className={styles.castAvatar}>{role.name.slice(0, 1)}</div>
                     <div className={styles.castInfo}>
                       <strong>{role.name}</strong>
-                      <small>{engineLabel((role.voice as Record<string, unknown>)?.engine as string ?? 'edge_tts')} · {voiceLabel(role)}</small>
+                      <small>{engineLabel((role.voice as unknown as Record<string, unknown>)?.engine as string ?? 'edge_tts')} · {voiceLabel(role)}</small>
                     </div>
                     <RolePreviewButton role={role} />
                   </div>

@@ -28,6 +28,7 @@ from app.models.segmented_project import (
     SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
+from app.services.engine_capabilities import prepare_text_for_engine
 from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
@@ -160,6 +161,8 @@ def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
         flat["voxcpm_style_control"] = voice.get("style_control", "")
         flat["voxcpm_cfg_value"] = voice.get("cfg_value", 2.0)
         flat["voxcpm_inference_timesteps"] = voice.get("inference_timesteps", 10)
+    if voice.get("mute_tags") is not None:
+        flat["mute_tags"] = voice.get("mute_tags")
     return flat
 
 
@@ -202,7 +205,11 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         original_text=p.original_text,
         animation_theme=getattr(p, "animation_theme", None),
         remotion_project_path=getattr(p, "remotion_project_path", None),
-        source_document=getattr(p, "source_document", None),
+        source_document=assets.read_project_document(getattr(p, "source_document_path", None))
+            or getattr(p, "source_document", None),
+        narration_script=assets.read_project_document(getattr(p, "narration_document_path", None)),
+        source_document_path=getattr(p, "source_document_path", None),
+        narration_document_path=getattr(p, "narration_document_path", None),
         default_narrator_role_id=getattr(p, "default_narrator_role_id", None),
         configs=getattr(p, "configs", None),
         created_at=_to_iso(p.created_at),
@@ -267,7 +274,16 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     p.layout = project.layout
     p.active_chapter_id = project.active_chapter_id
     p.original_text = project.original_text
-    p.source_document = project.source_document
+    # 项目级长文档（源文档/旁白稿）内容落文件，DB 只存路径；旧 TEXT 列仅作遗留回退
+    if project.source_document is not None:
+        p.source_document_path = assets.write_project_document(
+            project.id, assets.SOURCE_DOCUMENT_NAME, project.source_document
+        )
+        p.source_document = None
+    if project.narration_script is not None:
+        p.narration_document_path = assets.write_project_document(
+            project.id, assets.NARRATION_DOCUMENT_NAME, project.narration_script
+        )
     setattr(p, "animation_theme", project.animation_theme)
     setattr(p, "remotion_project_path", project.remotion_project_path)
     setattr(p, "default_narrator_role_id", project.default_narrator_role_id)
@@ -590,6 +606,23 @@ def synthesize_segment(
     sp = SynthesizeParams(**effective)
     text_to_speak = text_override or seg.text or ""
 
+    # 风格 tag 引擎适配：按引擎能力清洗/标注待合成文本
+    style: str | None = None
+    if sp.engine == "voxcpm":
+        style = sp.voxcpm_style_control or None
+    elif sp.engine == "mimo_tts":
+        style = sp.mimo_instruction or None
+    elif sp.engine == "cosyvoice":
+        style = sp.instruction or None
+    text_to_speak = prepare_text_for_engine(
+        text_to_speak,
+        engine=sp.engine,
+        emotion=getattr(seg, "emotion", None),
+        style=style,
+        voxcpm_mode=sp.voxcpm_mode if sp.engine == "voxcpm" else None,
+        mute_tags=bool(sp.mute_tags),
+    )
+
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
 
@@ -822,16 +855,27 @@ def mark_silent_segments_as_missing(
     }
 
 
-def batch_create_structure(db: Session, project_id: str, chapters: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def batch_create_structure(
+    db: Session,
+    project_id: str,
+    chapters: list[dict[str, Any]],
+    narration_script: str | None = None,
+) -> list[dict[str, Any]]:
     """Replace all chapters+segments of a project in one transaction.
 
     Resolves default voice from the project's first existing chapter
     (or edge_tts default), deletes existing chapters, creates the new
-    structure, and returns assigned ids.
+    structure, and returns assigned ids. ``narration_script``（workflow 产出
+    的完整旁白稿）写入项目级字段；None 表示不更新。
     """
     project = db.query(SegmentedProject).filter_by(id=project_id).first()
     if project is None:
         raise LookupError("project_not_found")
+
+    if narration_script is not None:
+        project.narration_document_path = assets.write_project_document(
+            project_id, assets.NARRATION_DOCUMENT_NAME, narration_script
+        )
 
     # default voice: from first existing chapter, or edge_tts default
     default_voice = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
@@ -851,6 +895,12 @@ def batch_create_structure(db: Session, project_id: str, chapters: list[dict[str
     for index, ch_data in enumerate(chapters):
         title = ch_data.get("chapter_title", f"Chapter {index + 1}")
         chapter = create_chapter_for_project(db, project_id, title, index, voice=default_voice)
+        chapter.narration_script = ch_data.get("narration_script")
+        engine = ch_data.get("engine")
+        if engine:
+            voice = dict(chapter.voice or {})
+            voice["engine"] = engine
+            chapter.voice = voice
         seg_result = []
         for seg_data in ch_data.get("segments", []):
             seg = create_segment_for_chapter(

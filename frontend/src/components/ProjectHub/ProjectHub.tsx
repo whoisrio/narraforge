@@ -28,7 +28,7 @@ function projectStats(project: SegmentedProject) {
     0,
   );
   const duration = project.chapters.reduce(
-    (total, chapter) => total + chapter.segments.reduce((sum, segment) => sum + (segment.audio.duration_sec ?? 0), 0),
+    (total, chapter) => total + chapter.segments.reduce((sum, segment) => sum + (segment.audio?.duration_sec ?? 0), 0),
     0,
   );
   return { chapters, segments, generated, duration };

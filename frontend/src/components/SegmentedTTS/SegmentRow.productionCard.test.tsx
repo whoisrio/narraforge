@@ -49,8 +49,10 @@ describe('SegmentRow production card semantics', () => {
   it('does not expose the whole production card as a button when inner controls exist', () => {
     const { onSelect, onRegenerate, onDelete } = renderRow();
 
+    // Compact narration row currently renders: regenerate ▶, voice-lock 🔗/🔒, delete ✕.
+    // Ensure the whole card is not itself a button (accessibility contract).
     expect(screen.queryByRole('button', { name: /这是一个生产卡片分段/ })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button')).toHaveLength(2);
+    expect(screen.getAllByRole('button')).toHaveLength(3);
 
     fireEvent.click(screen.getByText('这是一个生产卡片分段'));
     expect(onSelect).toHaveBeenCalledWith('s1');

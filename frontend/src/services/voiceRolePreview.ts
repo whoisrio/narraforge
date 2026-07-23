@@ -8,7 +8,8 @@ function previewFormat(role: RoleSnapshot): 'mp3' | 'wav' {
 
 export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText: string): Promise<TTSResult> {
   const engine = role.default_engine ?? 'edge_tts';
-  const params = (role.default_engine_params ?? {}) as Record<string, unknown>;
+  // default_engine_params 是 EngineParams 判别联合（无索引签名），浅拷贝为 Record 以便按 key 读取
+  const params: Record<string, unknown> = { ...(role.default_engine_params ?? {}) };
   const format = previewFormat(role);
 
   if (engine === 'edge_tts') {

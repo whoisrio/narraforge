@@ -48,8 +48,21 @@ export interface NarraWorkflowState {
   structured_segments?: ChapterStructure[];
   synthesis_results?: SynthResult[];
   current_stage?: string;
+  /** select_tts_engine interrupt 确认后写入的合成引擎。 */
+  tts_engine?: string;
   review_retry_count?: number;
   error?: string | null;
+  /** 各节点 LLM token 用量（落 state，接管已完成线程也可读）。 */
+  stage_usage?: Record<string, TokenUsage>;
+}
+
+/** LLM token usage, mirroring LangChain `usage_metadata`. */
+export interface TokenUsage {
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens?: number;
+  /** Thinking-mode providers (Qwen) report reasoning consumption separately. */
+  reasoning_tokens?: number;
 }
 
 export type MilestoneType =
@@ -67,7 +80,8 @@ export interface MilestoneEvent {
   type: MilestoneType;
   stage: string;
   message: string;
-  data: Record<string, unknown>;
+  /** Arbitrary payload; LLM 节点的 stage_complete 事件带 usage 汇总。 */
+  data: Record<string, unknown> & { usage?: TokenUsage };
 }
 
 /** TS mirror of agent/app/schemas.py kv additions + KnowledgeVideoState. */
@@ -130,4 +144,12 @@ export interface ConfirmOverwriteInterrupt {
     has_animation_brief: boolean;
   };
   available_actions: string[];
+}
+
+/** TTS 引擎询问 interrupt 载荷；resume 提交 { engine: string }。 */
+export interface SelectEngineInterrupt {
+  kind: 'select_tts_engine';
+  available_engines: string[];
+  default_engine: string;
+  timeout_s: number;
 }

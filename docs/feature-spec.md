@@ -153,6 +153,25 @@ Four TTS engines are available:
 | **MiMo-TTS** | Cloud API | Preset voices, voice design, voice clone modes |
 | **VoxCPM** | Local GPU | Clone, ultimate clone, design modes; CFG/timestep params |
 
+#### Style Tag System
+
+Segments may carry two kinds of style markup (see `docs/dependecy-api-references/voice-style-tags.md`):
+
+- **Inline non-verbal tags** — `[laughing]`, `[sigh]`, `[Uhm]` etc. embedded in the segment text at the position where the sound should occur. Only **VoxCPM** (clone/design modes) supports them.
+- **Leading style tag** — a `(风格)` prefix derived from the segment's `emotion` and/or the chapter's style instruction, merged into one parenthesis pair joined by `,` (e.g. `(开心,磁性)`). Supported by **MiMo-TTS** and **VoxCPM**; MiMo only accepts it at the very beginning.
+
+Engine adaptation is rule-driven (mirrored tables: `backend/app/services/engine_capabilities.py` and `frontend/src/services/styleTags.ts`):
+
+| Engine / mode | Inline `[tag]` | Leading `(风格)` | Instruction |
+|---|---|---|---|
+| MiMo-TTS | stripped | kept (leading only) | user message |
+| VoxCPM clone/design | kept | kept | text prefix |
+| VoxCPM ultimate | stripped | stripped | — |
+| CosyVoice | stripped | — | dedicated param |
+| Edge-TTS | stripped | — | — |
+
+Rules: at synthesis time `prepare_text_for_engine` strips unsupported tags and injects the leading tag (emotion first, style after, comma-joined); a chapter-level **mute_tags** switch ("禁用风格 tag", recommended for clone voices) forces full stripping; SRT/subtitle exports always strip all tags. The narration workflow asks for the TTS engine (countdown interrupt with a default before segment splitting) and the LLM injects inline tags only when VoxCPM is selected. Tags can also be inserted manually in the segment editor via the tag inserter. Emotion chips render with per-emotion colors in both compact and expanded studio views.
+
 ### 4.4 Studio — Segmented Editor
 
 The Studio section is a professional timeline editor for multi-segment synthesis.

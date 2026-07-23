@@ -7,9 +7,14 @@ state is picklable by the LangGraph server's checkpoint system.
 """
 from __future__ import annotations
 
-from typing import Any, TypedDict
+import operator
+from typing import Annotated, Any, TypedDict
 
 from typing_extensions import Literal
+
+# 各节点 LLM 调用的 token 用量，按键合并（operator.ior）累积进 state，
+# 使前端在任意时刻（包括接管已完成线程）都能读到每阶段消耗。
+StageUsage = Annotated[dict[str, Any], operator.ior]
 
 
 class NarrationWorkflowState(TypedDict, total=False):
@@ -26,6 +31,9 @@ class NarrationWorkflowState(TypedDict, total=False):
     edited_script: str
     review_status: Literal["approved", "rejected"]
 
+    # -- select_tts_engine output ----------------------------------------------
+    tts_engine: str                     # mimo_tts / voxcpm / cosyvoice / edge_tts
+
     # -- split_segment output -------------------------------------------------
     structured_segments: list[dict[str, Any]]   # carries _chapter_id / _segment_id
 
@@ -36,6 +44,7 @@ class NarrationWorkflowState(TypedDict, total=False):
     current_stage: str
     review_retry_count: int
     error: str | None
+    stage_usage: StageUsage  # node id -> usage dict（含 reasoning_tokens）
 
 
 class KnowledgeVideoState(TypedDict, total=False):
@@ -56,6 +65,9 @@ class KnowledgeVideoState(TypedDict, total=False):
     edited_script: str
     review_status: Literal["approved", "rejected"]
 
+    # -- select_tts_engine output -----------------------------------------------
+    tts_engine: str                 # mimo_tts / voxcpm / cosyvoice / edge_tts
+
     # -- split_chapters output --------------------------------------------------
     structured_segments: list[dict[str, Any]]   # carries _chapter_id / _segment_id
 
@@ -70,3 +82,4 @@ class KnowledgeVideoState(TypedDict, total=False):
     current_stage: str
     review_retry_count: int
     error: str | None
+    stage_usage: StageUsage  # node id -> usage dict（含 reasoning_tokens）
