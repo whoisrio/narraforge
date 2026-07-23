@@ -458,6 +458,7 @@ export const zhCN = {
     styleInstruction: '风格指令',
     styleInstructionPlaceholder: '选择预设或直接输入...',
     speed: '语速',
+    volume: '音量',
     pitch: '音调',
   },
   appShell: {

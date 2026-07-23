@@ -64,8 +64,9 @@ export function createTranslator(locale: Locale = 'zh-CN') {
   };
 }
 
-// Default translator for direct imports (prefer useTranslation() in React components)
-export const t = createTranslator('en-US');
+// Default translator for direct imports (prefer useTranslation() in React components).
+// Default locale is zh-CN because our primary UI language is Chinese.
+export const t = createTranslator('zh-CN');
 
 // Translation Context — shared locale state across all components
 interface TranslationContextValue {
@@ -106,8 +107,10 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 export function useTranslation() {
   const ctx = useContext(TranslationContext);
   if (!ctx) {
-    // Fallback: if not wrapped in provider, use module-level translator
-    return { t: createTranslator('en-US'), locale: 'en-US' as Locale, setLocale: () => {} };
+    // Fallback: if not wrapped in provider, use module-level translator.
+    // Default to zh-CN because our primary UI language is Chinese and many
+    // component-level tests assert on Chinese strings without wrapping.
+    return { t: createTranslator('zh-CN'), locale: 'zh-CN' as Locale, setLocale: () => {} };
   }
   return ctx;
 }

@@ -69,6 +69,17 @@ vi.mock('../pages/ModelConfig', () => ({
   ModelConfig: () => <div data-testid="page-settings">Settings Page</div>,
 }));
 
+// Mock Landing to auto-navigate on mount so tests can assert the AppShell +
+// ProjectHub state directly (App boots into `home` view and shows Landing).
+vi.mock('../pages/Landing', () => ({
+  default: ({ onNavigate }: { onNavigate: (tab: 'tts-synthesis') => void }) => {
+    // useEffect-style call in the render body is fine for tests since
+    // Landing is only mounted once per test.
+    setTimeout(() => onNavigate('tts-synthesis'), 0);
+    return <div data-testid="page-landing" />;
+  },
+}));
+
 describe('App', () => {
   beforeEach(() => {
     vi.mocked(indexedDBStorage.deleteProject).mockResolvedValue(undefined);
@@ -76,10 +87,10 @@ describe('App', () => {
     vi.mocked(indexedDBStorage.listProjects).mockReturnValue(new Promise(() => {}));
   });
 
-  it('renders the global project hub with global navigation by default', () => {
+  it('renders the global project hub with global navigation by default', async () => {
     render(<App />);
 
-    expect(screen.getByTestId('app-shell')).toBeInTheDocument();
+    expect(await screen.findByTestId('app-shell')).toBeInTheDocument();
     expect(screen.getByText('NarraForge')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /项目/ })[0]).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: /字幕识别/ })).toBeInTheDocument();
@@ -92,7 +103,7 @@ describe('App', () => {
   it('enters project workspace only after clicking a project card', async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: /打开项目卡片/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /打开项目卡片/ }));
 
     expect(await screen.findByTestId('page-tts-synthesis')).toHaveTextContent('p-demo');
     expect(screen.getByTestId('page-tts-synthesis')).toHaveTextContent('hide-sidebar');
@@ -102,7 +113,7 @@ describe('App', () => {
   it('returns from project workspace to global project hub via the brand', async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: /打开项目卡片/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /打开项目卡片/ }));
     expect(await screen.findByTestId('page-tts-synthesis')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'NF' }));
@@ -110,10 +121,10 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByTestId('project-hub')).toBeInTheDocument());
   });
 
-  it('switches global navigation destinations from the global hub', () => {
+  it('switches global navigation destinations from the global hub', async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: /音色设计/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /音色设计/ }));
     expect(screen.getByRole('button', { name: /音色设计/ })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByTestId('page-voice-design')).toBeVisible();
 
@@ -128,7 +139,7 @@ describe('App', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: /删除项目卡片/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /删除项目卡片/ }));
 
     await waitFor(() => expect(indexedDBStorage.deleteProject).toHaveBeenCalledWith('p-demo'));
     expect(screen.getByTestId('project-hub')).toBeInTheDocument();
@@ -150,7 +161,7 @@ describe('App', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: /重命名项目卡片/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /重命名项目卡片/ }));
 
     await waitFor(() => expect(indexedDBStorage.saveProject).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'p-demo', name: '改名项目' }),
