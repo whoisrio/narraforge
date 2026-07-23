@@ -302,7 +302,6 @@ def export_text_file_to_remotion(
 
 class ScaffoldRemotionRequest(BaseModel):
     target_dir: str | None = None
-    animation_brief: dict | None = None
 
 
 @router.post("/segmented-projects/{project_id}/scaffold-remotion")
@@ -314,8 +313,7 @@ def scaffold_remotion(
     """Create (or refresh) the Remotion project for the kv workflow.
 
     Idempotent: an existing Remotion project is kept, only derived assets
-    (audio / subtitles / manifest / AGENTS.md / animation_brief.json) are
-    refreshed.
+    (audio / subtitles / manifest / AGENTS.md) are refreshed.
     """
     from app.services import remotion_scaffold_service
 
@@ -324,7 +322,6 @@ def scaffold_remotion(
             db,
             project_id,
             target_dir=body.target_dir,
-            animation_brief=body.animation_brief,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="project_not_found")

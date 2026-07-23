@@ -15,7 +15,6 @@ const STAGE_ICON: Record<string, string> = {
   review_decision: 'gavel',
   split_chapters: 'splitscreen',
   scaffold_remotion: 'movie',
-  gen_animation_brief: 'animation',
 };
 
 interface Props {

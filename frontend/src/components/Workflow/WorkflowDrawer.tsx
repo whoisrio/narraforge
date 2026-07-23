@@ -69,9 +69,6 @@ function summaryFor(nodeId: string, values: Partial<WorkflowState>): string | un
     case 'scaffold_remotion':
       if (values.remotion_project_dir) return values.remotion_project_dir;
       return undefined;
-    case 'gen_animation_brief':
-      if (values.animation_brief) return `${values.animation_brief.chapters.length} 章 brief`;
-      return undefined;
   }
   return undefined;
 }

@@ -4,6 +4,7 @@ from app.graph_knowledge_video import (
     build_graph,
     route_after_preflight,
     route_after_review_decision,
+    route_after_synthesis,
 )
 
 
@@ -17,7 +18,6 @@ def test_stage_order():
         "split_chapters",
         "synthesis",
         "scaffold_remotion",
-        "gen_animation_brief",
     ]
 
 
@@ -33,8 +33,15 @@ def test_route_after_preflight():
     assert route_after_preflight({"error": "用户取消"}) == "__end__"
 
 
+def test_route_after_synthesis():
+    assert route_after_synthesis({"error": None}) == "scaffold_remotion"
+    assert route_after_synthesis({}) == "scaffold_remotion"
+    assert route_after_synthesis({"error": "segment failed"}) == "__end__"
+
+
 def test_graph_compiles_with_all_nodes():
     graph = build_graph(checkpointer=None, store=None)
     node_names = set(graph.get_graph().nodes.keys())
     for name in STAGE_ORDER:
         assert name in node_names
+    assert "gen_animation_brief" not in node_names

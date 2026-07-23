@@ -102,4 +102,4 @@ async def test_interrupt_payload_contains_stats(monkeypatch):
     assert payload["stats"]["chapters"] == 1
     assert payload["stats"]["segments"] == 2
     assert payload["stats"]["synthesized_segments"] == 1
-    assert payload["stats"]["has_animation_brief"] is True
+    assert "has_animation_brief" not in payload["stats"]

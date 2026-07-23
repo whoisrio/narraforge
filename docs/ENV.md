@@ -110,6 +110,20 @@ Not an environment variable, but a **system dependency**. The backend transcodes
 
 See `docs/narration-git-versioning.md` for the full feature description.
 
+## Agent (LangGraph)
+
+Agent variables live in `agent/.env` (a separate file from `backend/.env`).
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `BACKEND_API_URL` | No | NarraForge backend base URL. | `http://127.0.0.1:8002` |
+| `AGENT_LLM_API_KEY` | Yes | LLM API key for narration + kv workflows. | *(empty)* |
+| `AGENT_LLM_BASE_URL` | Yes | LLM API base URL. | *(empty)* |
+| `AGENT_LLM_MODEL` | Yes | LLM model identifier. | *(empty)* |
+| `LANGSMITH_API_KEY` | No | Enables hot-reload of prompts from LangSmith Hub. Falls back to code defaults when unset. | *(empty)* |
+| `ANIMATION_ROOT_FOLDER` | Yes (kv workflow) | Root directory for scaffolded Remotion projects. Each project materialises at `${ANIMATION_ROOT_FOLDER}/${safe_project_name}`. The `scaffold_remotion` node halts the run when unset. | *(empty)* |
+| `VOXCPM_DEFAULT_ROLE_ID` | Yes when `voxcpm` selected | Default clone role id used by the kv synthesis node when the user picks `voxcpm`. Synthesis halts when unset. | *(empty)* |
+
 ## Minimal `.env` for Local Development
 
 ```bash

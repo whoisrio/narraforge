@@ -3,7 +3,7 @@
 Creates a blank Remotion project via ``npx create-video`` (skipped when the
 target dir already holds one), then refreshes derived assets: per-chapter
 concatenated audio, per-chapter SRT, ``segment_manifest.json`` and
-``AGENTS.md``. Optionally writes ``animation_brief.json``. Idempotent.
+``AGENTS.md``. Idempotent.
 """
 from __future__ import annotations
 
@@ -61,7 +61,6 @@ def _render_agents_md(project_name: str, chapters: list[dict]) -> str:
         "- `public/audio/` — 各章节旁白音频（MP3，按章节标题命名）",
         "- `public/subtitles/chapter_<position>.srt` — 各章节字幕",
         "- `segment_manifest.json` — 章节/资产清单（含时长）",
-        "- `animation_brief.json` — 动画分镜 brief（每段旁白的呈现内容与动画效果）",
         "",
         "## 预览",
         "```bash",
@@ -81,7 +80,6 @@ def scaffold_remotion_project(
     db: Session,
     project_id: str,
     target_dir: str | None = None,
-    animation_brief: dict | None = None,
 ) -> dict:
     project = svc.get_project_row(db, project_id)
     if project is None:
@@ -148,10 +146,5 @@ def scaffold_remotion_project(
     (root / "AGENTS.md").write_text(
         _render_agents_md(project.name, chapters_manifest), encoding="utf-8"
     )
-
-    if animation_brief is not None:
-        (root / "animation_brief.json").write_text(
-            json.dumps(animation_brief, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
 
     return {"project_dir": str(root), "created": created, "chapters": len(chapters_manifest)}

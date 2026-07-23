@@ -32,6 +32,9 @@ describe('NODE_STATE_KEYS', () => {
     expect(NODE_STATE_KEYS.review_decision).toEqual(['review_status']);
     expect(NODE_STATE_KEYS.split_chapters).toEqual(['structured_segments']);
     expect(NODE_STATE_KEYS.scaffold_remotion).toEqual(['remotion_project_dir']);
-    expect(NODE_STATE_KEYS.gen_animation_brief).toEqual(['animation_brief']);
+  });
+
+  it('no longer registers gen_animation_brief', () => {
+    expect(NODE_STATE_KEYS.gen_animation_brief).toBeUndefined();
   });
 });

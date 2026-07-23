@@ -1067,8 +1067,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 **Request Body:**
 ```json
 {
-  "target_dir": "/path/to/remotion-project",
-  "animation_brief": { "chapters": [] }
+  "target_dir": "/path/to/remotion-project"
 }
 ```
 
@@ -1077,7 +1076,6 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `target_dir` | string | `null` | 可选；缺省用项目的 `remotion_project_path` |
-| `animation_brief` | object | `null` | 可选；提供时写入工程根 `animation_brief.json` |
 
 **行为:**
 1. 工程不存在时执行 `npx create-video@latest --yes --blank .`（需服务端装有 Node.js，超时 600s）；

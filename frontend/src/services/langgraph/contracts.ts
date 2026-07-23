@@ -32,7 +32,6 @@ export const NODE_STATE_KEYS: Record<string, string[]> = {
   review_decision: ['review_status'],
   split_chapters: ['structured_segments'],
   scaffold_remotion: ['remotion_project_dir'],
-  gen_animation_brief: ['animation_brief'],
 };
 
 /** Input fields the frontend renders when starting a run. */
