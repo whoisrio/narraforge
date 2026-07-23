@@ -12,6 +12,7 @@ const STAGE_ICON: Record<string, string> = {
   preflight_check: 'fact_check',
   gen_narration: 'record_voice_over',
   quality_review: 'verified',
+  review_decision: 'gavel',
   split_chapters: 'splitscreen',
   scaffold_remotion: 'movie',
   gen_animation_brief: 'animation',

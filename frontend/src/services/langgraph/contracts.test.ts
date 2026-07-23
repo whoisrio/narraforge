@@ -29,6 +29,7 @@ describe('NODE_STATE_KEYS', () => {
     expect(NODE_STATE_KEYS.preflight_check).toEqual(['source_document']);
     expect(NODE_STATE_KEYS.gen_narration).toEqual(['narration_script']);
     expect(NODE_STATE_KEYS.quality_review).toEqual(['review_result']);
+    expect(NODE_STATE_KEYS.review_decision).toEqual(['review_status']);
     expect(NODE_STATE_KEYS.split_chapters).toEqual(['structured_segments']);
     expect(NODE_STATE_KEYS.scaffold_remotion).toEqual(['remotion_project_dir']);
     expect(NODE_STATE_KEYS.gen_animation_brief).toEqual(['animation_brief']);

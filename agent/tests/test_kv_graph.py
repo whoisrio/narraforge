@@ -3,7 +3,7 @@ from app.graph_knowledge_video import (
     STAGE_ORDER,
     build_graph,
     route_after_preflight,
-    route_after_review,
+    route_after_review_decision,
 )
 
 
@@ -12,6 +12,7 @@ def test_stage_order():
         "preflight_check",
         "gen_narration",
         "quality_review",
+        "review_decision",
         "select_tts_engine",
         "split_chapters",
         "synthesis",
@@ -20,10 +21,10 @@ def test_stage_order():
     ]
 
 
-def test_route_after_review():
-    assert route_after_review({"review_status": "approved"}) == "select_tts_engine"
-    assert route_after_review({"review_status": "rejected"}) == "gen_narration"
-    assert route_after_review({}) == "gen_narration"
+def test_route_after_review_decision():
+    assert route_after_review_decision({"review_status": "approved"}) == "select_tts_engine"
+    assert route_after_review_decision({"review_status": "rejected"}) == "gen_narration"
+    assert route_after_review_decision({}) == "gen_narration"
 
 
 def test_route_after_preflight():

@@ -457,10 +457,7 @@ export const enUS: Messages = {
     projectChaptered: 'Project-based · Chapter Segmented',
     stop: '⏹ Stop',
     annotate: '✨ Annotate',
-    styleInstruction: 'Style Instruction',
-    styleInstructionPlaceholder: 'Select preset or enter directly...',
     speed: 'Speed',
-    volume: 'Volume',
     pitch: 'Pitch',
   },
   appShell: {

@@ -297,6 +297,28 @@ The segmented editor's backend mode uses ffmpeg to transcode and concatenate aud
 
 ---
 
+## One-shot Maintenance Scripts
+
+### Segmented-asset layout migration (v3.3, 2026-07)
+
+Projects created before the human-readable rename use id-only filenames
+(`source.md`, `{chapter_id}/`, `{segment_id}.mp3`). New projects use
+name-embedded paths (`source-{project-name}-{id-short}.md`,
+`chapter-{title}-{project-name}-{id-short}/`, `segment-{position:03d}-{id-short}.mp3`).
+
+After pulling the rename, run the migration once per environment:
+
+```bash
+cd backend
+uv run python -m scripts.migrate_asset_layout
+```
+
+The script renames on-disk files/dirs *and* rewrites
+`SegmentedProject.source_document_path`, `narration_document_path`, and every
+`SegmentedProjectSegment.audio.current/previous.path`. Idempotent — safe to re-run.
+
+---
+
 ## Production Deployment
 
 1. Set `DEBUG=false` in `.env`

@@ -1,8 +1,13 @@
 """Knowledge-video workflow StateGraph definition and compile.
 
-Pipeline: preflight_check -> gen_narration -> quality_review (interrupt)
--> select_tts_engine (interrupt) -> split_chapters -> synthesis
--> scaffold_remotion -> gen_animation_brief.
+Pipeline: preflight_check -> gen_narration -> quality_review (LLM only)
+-> review_decision (interrupt) -> select_tts_engine (interrupt)
+-> split_chapters -> synthesis -> scaffold_remotion -> gen_animation_brief.
+
+quality_review and review_decision are split so that resume from the human
+interrupt does not re-execute the LLM auto-review; LangGraph replays the
+whole interrupting node on resume, so keeping the interrupt in an LLM-free
+node makes approve/reject actions cheap.
 
 Exports ``build_graph`` (tests + runtime injection) and a module-level
 ``graph`` for langgraph.json (the server injects checkpointer/store).
@@ -17,6 +22,7 @@ from app.nodes.knowledge_video.gen_animation_brief import gen_animation_brief_no
 from app.nodes.knowledge_video.gen_narration import gen_narration_node
 from app.nodes.knowledge_video.preflight import preflight_check_node
 from app.nodes.knowledge_video.quality_review import quality_review_node
+from app.nodes.knowledge_video.review_decision import review_decision_node
 from app.nodes.knowledge_video.scaffold_remotion import scaffold_remotion_node
 from app.nodes.knowledge_video.split_chapters import split_chapters_node
 from app.nodes.knowledge_video.synthesis import kv_synthesis_node
@@ -27,6 +33,7 @@ STAGE_ORDER = [
     "preflight_check",
     "gen_narration",
     "quality_review",
+    "review_decision",
     "select_tts_engine",
     "split_chapters",
     "synthesis",
@@ -35,7 +42,7 @@ STAGE_ORDER = [
 ]
 
 
-def route_after_review(state: KnowledgeVideoState) -> str:
+def route_after_review_decision(state: KnowledgeVideoState) -> str:
     if state.get("review_status") == "approved":
         return "select_tts_engine"
     return "gen_narration"
@@ -59,6 +66,7 @@ def build_graph(
         .add_node("preflight_check", preflight_check_node)
         .add_node("gen_narration", gen_narration_node)
         .add_node("quality_review", quality_review_node)
+        .add_node("review_decision", review_decision_node)
         .add_node("select_tts_engine", make_select_tts_engine_node("split_chapters"))
         .add_node("split_chapters", split_chapters_node)
         .add_node("synthesis", kv_synthesis_node)
@@ -67,7 +75,8 @@ def build_graph(
         .add_edge(START, "preflight_check")
         .add_conditional_edges("preflight_check", route_after_preflight)
         .add_edge("gen_narration", "quality_review")
-        .add_conditional_edges("quality_review", route_after_review)
+        .add_edge("quality_review", "review_decision")
+        .add_conditional_edges("review_decision", route_after_review_decision)
         .add_edge("select_tts_engine", "split_chapters")
         .add_edge("split_chapters", "synthesis")
         .add_edge("synthesis", "scaffold_remotion")
