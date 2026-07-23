@@ -74,9 +74,8 @@ class KnowledgeVideoState(TypedDict, total=False):
     # -- synthesis output -------------------------------------------------------
     synthesis_results: list[dict[str, Any]]
 
-    # -- scaffold_remotion / gen_animation_brief output -------------------------
+    # -- scaffold_remotion output -----------------------------------------------
     remotion_project_dir: str
-    animation_brief: dict[str, Any]  # serialized AnimationBrief (+ start/end sec per segment)
 
     # -- metadata ---------------------------------------------------------------
     current_stage: str

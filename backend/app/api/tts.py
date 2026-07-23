@@ -169,7 +169,11 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                 if seg is not None:
                     target_mp3 = assets.segment_audio_path(
                         request.segmented_project_id, request.segmented_chapter_id,
-                        request.segmented_segment_id, "mp3",
+                        chapter_title=seg.chapter.name or "",
+                        project_name=seg.chapter.project.name,
+                        segment_id=request.segmented_segment_id,
+                        position=seg.position or 0,
+                        fmt="mp3",
                     )
                     target_mp3.parent.mkdir(parents=True, exist_ok=True)
                     with open(audio_path, "rb") as f:

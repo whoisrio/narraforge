@@ -29,9 +29,9 @@ export const NODE_STATE_KEYS: Record<string, string[]> = {
   preflight_check: ['source_document'],
   gen_narration: ['narration_script'],
   quality_review: ['review_result'],
+  review_decision: ['review_status'],
   split_chapters: ['structured_segments'],
   scaffold_remotion: ['remotion_project_dir'],
-  gen_animation_brief: ['animation_brief'],
 };
 
 /** Input fields the frontend renders when starting a run. */

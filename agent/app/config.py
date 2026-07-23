@@ -25,3 +25,30 @@ def get_agent_llm_config() -> tuple[str, str, str]:
             "be set in agent/.env"
         )
     return api_key, base_url, model
+
+
+def get_animation_root_folder() -> str:
+    """Return the root directory for scaffolded Remotion projects.
+
+    Reads ``ANIMATION_ROOT_FOLDER``. Every knowledge_video run's Remotion
+    project is materialised at ``{ANIMATION_ROOT_FOLDER}/{safe_project_name}``.
+    Raises ``ValueError`` when unset (the scaffold node halts the workflow
+    so runs never silently fall back to some ad-hoc default).
+    """
+    value = (os.getenv("ANIMATION_ROOT_FOLDER") or "").strip()
+    if not value:
+        raise ValueError(
+            "ANIMATION_ROOT_FOLDER must be set in agent/.env (root dir for "
+            "scaffolded Remotion projects)"
+        )
+    return value
+
+
+def get_voxcpm_default_role_id() -> str | None:
+    """Return the default VoxCPM clone role id, or ``None`` when unset.
+
+    kv-synthesis uses this when the selected engine is ``voxcpm`` (no other
+    default is meaningful for cloned voices). ``None`` -> synthesis halts.
+    """
+    value = (os.getenv("VOXCPM_DEFAULT_ROLE_ID") or "").strip()
+    return value or None

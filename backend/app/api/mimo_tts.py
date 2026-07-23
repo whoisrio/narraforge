@@ -122,7 +122,12 @@ async def _save_and_respond(
         )
         if seg is not None:
             target_mp3 = assets.segment_audio_path(
-                segmented_project_id, segmented_chapter_id, segmented_segment_id, "mp3",
+                segmented_project_id, segmented_chapter_id,
+                chapter_title=seg.chapter.name or "",
+                project_name=seg.chapter.project.name,
+                segment_id=segmented_segment_id,
+                position=seg.position or 0,
+                fmt="mp3",
             )
             target_mp3.parent.mkdir(parents=True, exist_ok=True)
             with open(audio_path, "rb") as f:

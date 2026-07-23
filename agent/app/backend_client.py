@@ -111,18 +111,15 @@ class BackendClient:
         self,
         project_id: str,
         target_dir: str | None = None,
-        animation_brief: dict | None = None,
     ) -> dict:
         """POST /api/segmented-projects/{pid}/scaffold-remotion.
 
-        Creates (or refreshes) the Remotion project; when *animation_brief*
-        is given, also writes ``animation_brief.json`` into the project root.
+        Creates (or refreshes) the Remotion project at *target_dir* and
+        stages per-chapter audio + SRT + manifest. Idempotent.
         """
         body: dict = {}
         if target_dir:
             body["target_dir"] = target_dir
-        if animation_brief is not None:
-            body["animation_brief"] = animation_brief
         c = await self._ensure()
         r = await c.post(
             f"/api/segmented-projects/{project_id}/scaffold-remotion",

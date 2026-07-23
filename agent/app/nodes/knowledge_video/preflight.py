@@ -34,15 +34,12 @@ async def preflight_check_node(state, runtime) -> dict:
     chapters = project.get("chapters") or []
     total_segments = 0
     synthesized = 0
-    has_brief = False
     for ch in chapters:
         for seg in ch.get("segments") or []:
             total_segments += 1
             audio = seg.get("audio") or {}
             if isinstance(audio, dict) and (audio.get("current") or {}).get("path"):
                 synthesized += 1
-            if seg.get("animation_spec"):
-                has_brief = True
 
     if not chapters:
         writer(
@@ -58,7 +55,6 @@ async def preflight_check_node(state, runtime) -> dict:
         "chapters": len(chapters),
         "segments": total_segments,
         "synthesized_segments": synthesized,
-        "has_animation_brief": has_brief,
     }
     writer(
         {

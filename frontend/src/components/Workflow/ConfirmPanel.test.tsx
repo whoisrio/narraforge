@@ -8,7 +8,6 @@ const interrupt = {
     chapters: 3,
     segments: 12,
     synthesized_segments: 8,
-    has_animation_brief: true,
   },
   available_actions: ['confirm', 'cancel'],
 };

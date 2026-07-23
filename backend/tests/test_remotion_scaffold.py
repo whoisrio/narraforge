@@ -96,19 +96,6 @@ def test_existing_project_skips_creation_and_refreshes(monkeypatch, tmp_path):
     assert (tmp_path / "segment_manifest.json").exists()
 
 
-def test_animation_brief_written(monkeypatch, tmp_path):
-    (tmp_path / "package.json").write_text(
-        json.dumps({"dependencies": {"remotion": "^4.0.0"}})
-    )
-    project = _project(remotion_path=str(tmp_path))
-    _patch_common(monkeypatch, project)
-
-    brief = {"chapters": [{"chapter_position": 0, "title": "第一章", "segments": []}]}
-    rss.scaffold_remotion_project(_Db(), "p1", animation_brief=brief)
-    written = json.loads((tmp_path / "animation_brief.json").read_text())
-    assert written["chapters"][0]["title"] == "第一章"
-
-
 def test_no_target_raises_value_error(monkeypatch):
     project = _project(remotion_path=None)
     monkeypatch.setattr(rss.svc, "get_project_row", lambda db, pid: project)

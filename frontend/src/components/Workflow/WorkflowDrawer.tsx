@@ -52,6 +52,10 @@ function summaryFor(nodeId: string, values: Partial<WorkflowState>): string | un
     case 'quality_review':
       if (values.review_result) return values.review_result.passed ? '审查通过' : `审查发现 ${values.review_result.issues.length} 个问题`;
       return undefined;
+    case 'review_decision':
+      if (values.review_status === 'approved') return '人工已确认';
+      if (values.review_status === 'rejected') return '人工要求重写';
+      return undefined;
     case 'split_segment':
     case 'split_chapters':
       if (values.structured_segments) {
@@ -64,9 +68,6 @@ function summaryFor(nodeId: string, values: Partial<WorkflowState>): string | un
       return undefined;
     case 'scaffold_remotion':
       if (values.remotion_project_dir) return values.remotion_project_dir;
-      return undefined;
-    case 'gen_animation_brief':
-      if (values.animation_brief) return `${values.animation_brief.chapters.length} 章 brief`;
       return undefined;
   }
   return undefined;
@@ -92,20 +93,24 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
   // fetch graph topology once
   // SDK Client 类型未暴露 getGraph，局部收窄到所需形状。
   useEffect(() => {
-    (agentClient.assistants as unknown as {
-      getGraph: (assistantId: string) => Promise<{ nodes?: { id: string }[] }>;
+    let cancelled = false;
+
+    agentClient.assistants.getGraph(assistantId)
+    .then((g) => {
+      if (cancelled) return;
+      // 过滤 __start__/__end__ 伪节点，只渲染业务阶段卡片
+      const ns = (g.nodes ?? [])
+        .map((n) => ({ id: String(n.id), name: String(n.id) }))
+        .filter((n) => !n.id.startsWith('__'));
+      if (ns.length) setNodes(ns);
     })
-      .getGraph(assistantId)
-      .then((g) => {
-        // 过滤 __start__/__end__ 伪节点，只渲染业务阶段卡片
-        const ns = (g.nodes ?? [])
-          .map((n) => ({ id: n.id, name: n.id }))
-          .filter((n) => !n.id.startsWith('__'));
-        if (ns.length) setNodes(ns);
-      })
-      .catch(() => {
-        /* keep defaults */
-      });
+    .catch(() => {
+      /* keep defaults */
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [assistantId]);
 
   // start the run once (ref 守卫避免 setState 触发级联渲染)。
@@ -275,7 +280,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
         )}
 
         {nodes.map((n) => {
-          if (activeInterrupt && (n.id === 'script_review' || n.id === 'quality_review' || n.id === 'preflight_check' || (isSelectEngineInterrupt && n.id === 'synthesis'))) return null;
+          if (activeInterrupt && (n.id === 'script_review' || n.id === 'review_decision' || n.id === 'quality_review' || n.id === 'preflight_check' || (isSelectEngineInterrupt && n.id === 'synthesis'))) return null;
           const keys = NODE_STATE_KEYS[n.id] ?? [];
           const completed = keys.every((k) => values[k as keyof WorkflowState] != null);
           const status: 'completed' | 'running' | 'pending' = completed

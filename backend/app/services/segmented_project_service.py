@@ -277,12 +277,14 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     # 项目级长文档（源文档/旁白稿）内容落文件，DB 只存路径；旧 TEXT 列仅作遗留回退
     if project.source_document is not None:
         p.source_document_path = assets.write_project_document(
-            project.id, assets.SOURCE_DOCUMENT_NAME, project.source_document
+            project.id, kind="source",
+            project_name=project.name, text=project.source_document,
         )
         p.source_document = None
     if project.narration_script is not None:
         p.narration_document_path = assets.write_project_document(
-            project.id, assets.NARRATION_DOCUMENT_NAME, project.narration_script
+            project.id, kind="narration",
+            project_name=project.name, text=project.narration_script,
         )
     setattr(p, "animation_theme", project.animation_theme)
     setattr(p, "remotion_project_path", project.remotion_project_path)
@@ -350,7 +352,14 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
                         current = audio_data.get('current')
                         if current and isinstance(current, dict):
                             fmt = current.get('format', 'mp3')
-                            assets.remove_segment_audio(project.id, ch.id, seg.id, fmt)
+                            assets.remove_segment_audio(
+                                project.id, ch.id,
+                                chapter_title=ch.name or "",
+                                project_name=project.name,
+                                segment_id=seg.id,
+                                position=seg.position or 0,
+                                fmt=fmt,
+                            )
                         # Also handle 'previous' audio for re-generation scenarios
                         previous = audio_data.get('previous')
                         if previous and isinstance(previous, dict) and isinstance(previous.get('path'), str):
@@ -382,10 +391,27 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
 def _mirror_to_filesystem(p: SegmentedProject, project: ProjectIn) -> None:
     assets.write_original_text(p.id, p.original_text or "")
     for ch_in, ch in zip(project.chapters, p.chapters):
-        assets.write_chapter_original_text(p.id, ch.id, ch.original_text or "")
-        assets.ensure_project_layout(p.id, ch.id)
-        for s_in in ch_in.segments:
-            assets.write_segment_text(p.id, ch.id, s_in.id, s_in.text or "")
+        assets.write_chapter_original_text(
+            p.id, ch.id,
+            chapter_title=ch.name or "",
+            project_name=project.name,
+            text=ch.original_text or "",
+        )
+        assets.ensure_chapter_layout(
+            p.id, ch.id,
+            chapter_title=ch.name or "",
+            project_name=project.name,
+        )
+        for pos, s_in in enumerate(ch_in.segments):
+            position = s_in.position if s_in.position is not None else pos
+            assets.write_segment_text(
+                p.id, ch.id,
+                chapter_title=ch.name or "",
+                project_name=project.name,
+                segment_id=s_in.id,
+                position=position,
+                text=s_in.text or "",
+            )
     assets.write_manifest(p.id, project_to_detail(p).model_dump(mode="json"))
 
 
@@ -488,7 +514,14 @@ def update_segment_after_synth(
     seg.chapter.updated_at = utcnow()
     seg.chapter.project.updated_at = utcnow()
     db.flush()
-    assets.write_segment_text(seg.project_id, seg.chapter_id, seg.id, seg.text or "")
+    assets.write_segment_text(
+        seg.project_id, seg.chapter_id,
+        chapter_title=seg.chapter.name or "",
+        project_name=seg.chapter.project.name,
+        segment_id=seg.id,
+        position=seg.position or 0,
+        text=seg.text or "",
+    )
     db.commit()
 
 
@@ -627,7 +660,12 @@ def synthesize_segment(
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
 
     audio_bytes, _native_fmt = synthesize_with_engine(text_to_speak, sp, db=db)
-    assets.ensure_project_layout(project_id, chapter_id)
+    chapter_title = chapter.name or ""
+    project_name = chapter.project.name
+    assets.ensure_chapter_layout(
+        project_id, chapter_id,
+        chapter_title=chapter_title, project_name=project_name,
+    )
 
     existing_audio = seg.audio or {}
     prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
@@ -635,7 +673,11 @@ def synthesize_segment(
     prev_duration: float | None = prev_current.get("duration_sec")
 
     if is_ffmpeg_available():
-        target_mp3 = assets.segment_audio_path(project_id, chapter_id, seg.id, "mp3")
+        target_mp3 = assets.segment_audio_path(
+            project_id, chapter_id,
+            chapter_title=chapter_title, project_name=project_name,
+            segment_id=seg.id, position=seg.position or 0, fmt="mp3",
+        )
         leading_keep_ms = 80
         trailing_keep_ms = 100 if _ends_with_sentence_period(str(text_to_speak)) else 80
         try:
@@ -658,7 +700,11 @@ def synthesize_segment(
         if duration_sec is None and audio_bytes:
             duration_sec = _duration_from_bytes(audio_bytes, "mp3")
     else:
-        wav_path = assets.segment_audio_path(project_id, chapter_id, seg.id, "wav")
+        wav_path = assets.segment_audio_path(
+            project_id, chapter_id,
+            chapter_title=chapter_title, project_name=project_name,
+            segment_id=seg.id, position=seg.position or 0, fmt="wav",
+        )
         wav_path.write_bytes(audio_bytes)
         new_rel = wav_path.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "wav"
@@ -746,7 +792,11 @@ def _chapter_audio_export_path(
         target_dir = root / rel_dir
         target_dir.mkdir(parents=True, exist_ok=True)
         return target_dir / filename
-    return assets.chapter_dir(project_id, chapter_id) / "exports" / filename
+    return assets.chapter_dir(
+        project_id, chapter_id,
+        chapter_title=chapter.name or "",
+        project_name=project.name,
+    ) / "exports" / filename
 
 
 def copy_file_to_remotion_export_target(
@@ -874,7 +924,8 @@ def batch_create_structure(
 
     if narration_script is not None:
         project.narration_document_path = assets.write_project_document(
-            project_id, assets.NARRATION_DOCUMENT_NAME, narration_script
+            project_id, kind="narration",
+            project_name=project.name, text=narration_script,
         )
 
     # default voice: from first existing chapter, or edge_tts default

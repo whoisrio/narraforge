@@ -98,37 +98,11 @@ export interface QualityReviewResult {
   issues: string[];
 }
 
-export interface VisualContent {
-  type: 'code' | 'image' | 'key_points' | 'text';
-  description: string;
-  source_ref: string | null;
-}
-
-export interface SegmentBrief {
-  segment_position: number;
-  narration_text: string;
-  start_sec?: number;
-  end_sec?: number;
-  visual_content: VisualContent;
-  animation: { effect: string; notes: string };
-}
-
-export interface ChapterBrief {
-  chapter_position: number;
-  title: string;
-  segments: SegmentBrief[];
-}
-
-export interface AnimationBrief {
-  chapters: ChapterBrief[];
-}
-
 export interface KnowledgeVideoState {
   target_dir?: string | null;
   source_structure_map?: Array<Record<string, unknown>>;
   review_result?: QualityReviewResult;
   remotion_project_dir?: string;
-  animation_brief?: AnimationBrief;
 }
 
 /** Drawer state: narration fields + kv additions (overlapping keys are compatible). */
@@ -141,7 +115,6 @@ export interface ConfirmOverwriteInterrupt {
     chapters: number;
     segments: number;
     synthesized_segments: number;
-    has_animation_brief: boolean;
   };
   available_actions: string[];
 }

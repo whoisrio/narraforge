@@ -302,7 +302,6 @@ def export_text_file_to_remotion(
 
 class ScaffoldRemotionRequest(BaseModel):
     target_dir: str | None = None
-    animation_brief: dict | None = None
 
 
 @router.post("/segmented-projects/{project_id}/scaffold-remotion")
@@ -314,8 +313,7 @@ def scaffold_remotion(
     """Create (or refresh) the Remotion project for the kv workflow.
 
     Idempotent: an existing Remotion project is kept, only derived assets
-    (audio / subtitles / manifest / AGENTS.md / animation_brief.json) are
-    refreshed.
+    (audio / subtitles / manifest / AGENTS.md) are refreshed.
     """
     from app.services import remotion_scaffold_service
 
@@ -324,7 +322,6 @@ def scaffold_remotion(
             db,
             project_id,
             target_dir=body.target_dir,
-            animation_brief=body.animation_brief,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="project_not_found")
@@ -453,8 +450,17 @@ def _write_audio_blob(
     if seg is None:
         raise LookupError("segment_not_found")
     data = base64.b64decode(aud.data_base64)
-    assets.ensure_project_layout(project_id, aud.chapter_id)
-    target = assets.segment_audio_path(project_id, aud.chapter_id, seg.id, "mp3")
+    chapter_title = seg.chapter.name or ""
+    project_name = seg.chapter.project.name
+    assets.ensure_chapter_layout(
+        project_id, aud.chapter_id,
+        chapter_title=chapter_title, project_name=project_name,
+    )
+    target = assets.segment_audio_path(
+        project_id, aud.chapter_id,
+        chapter_title=chapter_title, project_name=project_name,
+        segment_id=seg.id, position=seg.position or 0, fmt="mp3",
+    )
     target.write_bytes(data)
     # Store path relative to settings.segmented_dir (root) for consistency with synth
     rel = target.relative_to(settings.segmented_dir).as_posix()

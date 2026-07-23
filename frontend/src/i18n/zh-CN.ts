@@ -455,10 +455,7 @@ export const zhCN = {
     projectChaptered: '项目制 · 章节分段',
     stop: '⏹ 停止',
     annotate: '✨ 标注',
-    styleInstruction: '风格指令',
-    styleInstructionPlaceholder: '选择预设或直接输入...',
     speed: '语速',
-    volume: '音量',
     pitch: '音调',
   },
   appShell: {

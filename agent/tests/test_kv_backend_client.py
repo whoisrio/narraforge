@@ -60,7 +60,8 @@ async def test_scaffold_remotion_posts_body():
 
 
 @pytest.mark.asyncio
-async def test_scaffold_remotion_with_animation_brief():
+async def test_scaffold_remotion_default_body_empty():
+    """No target_dir → body is an empty object (backend uses stored path)."""
     import json as _json
 
     seen = {}
@@ -70,9 +71,8 @@ async def test_scaffold_remotion_with_animation_brief():
         return httpx.Response(200, json={"project_dir": "/tmp/x", "created": False, "chapters": 1})
 
     client = _make_client(handler)
-    brief = {"chapters": []}
-    await client.scaffold_remotion("p1", animation_brief=brief)
-    assert seen["json"] == {"animation_brief": brief}
+    await client.scaffold_remotion("p1")
+    assert seen["json"] == {}
 
 
 @pytest.mark.asyncio

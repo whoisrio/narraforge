@@ -10,7 +10,7 @@ const streamMock = {
     {
       value: {
         kind: 'confirm_overwrite',
-        stats: { chapters: 1, segments: 2, synthesized_segments: 0, has_animation_brief: false },
+        stats: { chapters: 1, segments: 2, synthesized_segments: 0 },
         available_actions: ['confirm', 'cancel'],
       },
     },
