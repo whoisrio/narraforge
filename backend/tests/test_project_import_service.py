@@ -72,7 +72,7 @@ def test_import_round_trip_creates_new_project_with_remapped_ids(db_session, tmp
     assert seg.text == "你好世界"
     # audio path rewritten to a real file under the new project dir
     new_rel = seg.audio["current"]["path"]
-    assert new_rel.startswith(f"{detail.id}/")
+    assert new_rel.startswith("dao-chu-yuan")
     abs_audio = config.settings.segmented_dir / new_rel
     assert abs_audio.exists()
     assert abs_audio.read_bytes() == b"FAKE_MP3"
@@ -90,7 +90,7 @@ def test_import_does_not_overwrite_original(db_session, tmp_path, monkeypatch):
     assert orig.name == "导出源"
     orig_seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
     assert orig_seg.text == "你好世界"
-    assert orig_seg.audio["current"]["path"].startswith("p1/")
+    assert orig_seg.audio["current"]["path"].startswith("dao-chu-yuan/")
 
 
 def test_import_rejects_bad_bundle_version(db_session, tmp_path, monkeypatch):

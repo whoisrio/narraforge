@@ -1,6 +1,7 @@
 """Business logic for segmented project CRUD and asset mirroring."""
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -301,12 +302,56 @@ def _delete_dropped_audio_files(seg: SegmentedProjectSegment, new_audio: dict) -
                 pass
 
 
+def _relocate_project_assets(p: SegmentedProject, old_name: str, new_name: str) -> None:
+    """Project renamed: move the asset dir to the new slug and rewrite stored paths.
+
+    Runs inside save_project's transaction. If the move fails we leave BOTH
+    the directory and DB paths untouched (old paths remain valid) — degraded
+    but never half-migrated.
+    """
+    old_dir = assets.project_dir(p.id, old_name)
+    new_dir = assets.project_dir(p.id, new_name)
+    if old_dir == new_dir or not old_dir.exists():
+        return
+    if new_dir.exists():
+        logger.warning("rename relocation skipped, target exists: %s", new_dir)
+        return
+    try:
+        new_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(old_dir), str(new_dir))
+    except OSError as e:
+        logger.warning("rename relocation failed for project %s: %s", p.id, e)
+        return
+
+    old_prefix, new_prefix = old_dir.name, new_dir.name
+    for ch in p.chapters:
+        for seg in ch.segments:
+            audio = seg.audio
+            if not isinstance(audio, dict):
+                continue
+            updated = copy.deepcopy(audio)
+            changed = False
+            for key in ("current", "previous"):
+                rel = _audio_path_str(updated.get(key))
+                if rel and (rel == old_prefix or rel.startswith(old_prefix + "/")):
+                    updated[key]["path"] = new_prefix + rel[len(old_prefix):]
+                    changed = True
+            if changed:
+                seg.audio = updated
+    for attr in ("source_document_path", "narration_document_path"):
+        stored = getattr(p, attr, None)
+        if isinstance(stored, str) and stored.startswith(str(old_dir)):
+            setattr(p, attr, str(new_dir) + stored[len(str(old_dir)):])
+
+
 def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     """Full-state save: reconcile chapters/segments with DB. Filesystem mirrored after flush."""
     p = db.query(SegmentedProject).filter_by(id=project.id).first()
     if p is None:
         p = SegmentedProject(id=project.id)
         db.add(p)
+
+    rename_from = p.name if p.name and p.name != project.name else None
 
     p.name = project.name
     p.schema_version = project.schema_version
@@ -385,33 +430,27 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         # Remove orphan segments
         for seg in list(ch.segments):
             if seg.id not in keep_segment_ids:
-                # Clean up audio files from disk before removing the DB row
+                # Clean up audio files from disk before removing the DB row.
+                # Prefer the DB-stored path (works for any historical layout);
+                # reconstructing the current-scheme path is only a fallback.
                 if seg.audio:
                     try:
                         audio_data = seg.audio if isinstance(seg.audio, dict) else json.loads(seg.audio)
-                        current = audio_data.get('current')
-                        if current and isinstance(current, dict):
-                            fmt = current.get('format', 'mp3')
-                            assets.remove_segment_audio(
-                                project.id, ch.id,
-                                chapter_title=ch.name or "",
-                                project_name=project.name,
-                                segment_id=seg.id,
-                                position=seg.position or 0,
-                                fmt=fmt,
-                            )
-                        # Also handle 'previous' audio for re-generation scenarios
-                        previous = audio_data.get('previous')
-                        if previous and isinstance(previous, dict) and isinstance(previous.get('path'), str):
-                            prev_path_str = previous['path']
-                            try:
-                                prev_path = Path(prev_path_str)
-                                if not prev_path.is_absolute():
-                                    prev_path = assets.settings.segmented_dir / prev_path
-                                if prev_path.exists():
-                                    prev_path.unlink()
-                            except (OSError, Exception):
-                                pass
+                        removed = False
+                        for slot in ("current", "previous"):
+                            entry = audio_data.get(slot)
+                            if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+                                removed = assets.delete_audio_file(entry["path"]) or removed
+                        if not removed:
+                            current = audio_data.get('current')
+                            if current and isinstance(current, dict):
+                                fmt = current.get('format', 'mp3')
+                                assets.remove_segment_audio(
+                                    project.id, ch.id,
+                                    project_name=project.name,
+                                    segment_id=seg.id,
+                                    fmt=fmt,
+                                )
                     except Exception:
                         pass
                 db.delete(seg)
@@ -421,6 +460,11 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         if ch.id not in keep_chapter_ids:
             db.delete(ch)
 
+    # Rename relocation happens AFTER reconcile: the payload carries stale
+    # (pre-rename) paths, so we rewrite the final DB state, not the payload.
+    if rename_from:
+        _relocate_project_assets(p, rename_from, project.name)
+
     db.flush()
     db.refresh(p)
     _mirror_to_filesystem(p, project)
@@ -429,30 +473,25 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
 
 
 def _mirror_to_filesystem(p: SegmentedProject, project: ProjectIn) -> None:
-    assets.write_original_text(p.id, p.original_text or "")
+    assets.write_original_text(p.id, p.original_text or "", project_name=p.name)
     for ch_in, ch in zip(project.chapters, p.chapters):
         assets.write_chapter_original_text(
             p.id, ch.id,
-            chapter_title=ch.name or "",
-            project_name=project.name,
+            project_name=p.name,
             text=ch.original_text or "",
         )
         assets.ensure_chapter_layout(
             p.id, ch.id,
-            chapter_title=ch.name or "",
-            project_name=project.name,
+            project_name=p.name,
         )
-        for pos, s_in in enumerate(ch_in.segments):
-            position = s_in.position if s_in.position is not None else pos
+        for s_in in ch_in.segments:
             assets.write_segment_text(
                 p.id, ch.id,
-                chapter_title=ch.name or "",
-                project_name=project.name,
+                project_name=p.name,
                 segment_id=s_in.id,
-                position=position,
                 text=s_in.text or "",
             )
-    assets.write_manifest(p.id, project_to_detail(p).model_dump(mode="json"))
+    assets.write_manifest(p.id, project_to_detail(p).model_dump(mode="json"), project_name=p.name)
 
 
 def delete_project(db: Session, project_id: str) -> bool:
@@ -464,7 +503,7 @@ def delete_project(db: Session, project_id: str) -> bool:
     db.query(SourceDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.delete(p)
     db.commit()
-    assets.remove_project_dir(project_id)
+    assets.remove_project_dir(project_id, p.name)
     return True
 
 

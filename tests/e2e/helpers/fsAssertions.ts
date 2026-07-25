@@ -3,18 +3,41 @@
  *
  * Used to verify that destructive operations (delete project, delete segment,
  * regenerate all) actually remove associated files from disk.
+ *
+ * Layout (plan B): data/projects/{project-slug}/chapters/{chapter-id}/segments/{segment-id}.{ext}
+ * The project dir is the name slug — resolve it from the manifest, which
+ * records the DB id (`projectDirNameForId`).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { expect } from '@playwright/test';
 
-const E2E_SEGMENTED_DIR = path.resolve(__dirname, '..', '..', '..', 'backend', 'uploads', 'segmented');
+const E2E_SEGMENTED_DIR = path.resolve(__dirname, '..', '..', '..', 'backend', 'data', 'projects');
 
 /**
- * Assert that a segmented project directory has been fully removed from disk.
+ * Resolve a project's asset dir name (its name slug) by scanning manifests
+ * for the given DB project id. Returns undefined when not found.
  */
-export function expectProjectDirGone(projectId: string): void {
-  const dir = path.join(E2E_SEGMENTED_DIR, projectId);
+export function projectDirNameForId(projectId: string): string | undefined {
+  if (!fs.existsSync(E2E_SEGMENTED_DIR)) return undefined;
+  for (const dirName of fs.readdirSync(E2E_SEGMENTED_DIR)) {
+    const manifestPath = path.join(E2E_SEGMENTED_DIR, dirName, 'manifest.json');
+    if (!fs.existsSync(manifestPath)) continue;
+    try {
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      if (manifest?.id === projectId) return dirName;
+    } catch { /* ignore unreadable manifest */ }
+  }
+  return undefined;
+}
+
+/**
+ * Assert that a project asset directory has been fully removed from disk.
+ * Pass the dir NAME (slug) — resolve it via projectDirNameForId BEFORE the
+ * project is deleted.
+ */
+export function expectProjectDirGone(dirName: string): void {
+  const dir = path.join(E2E_SEGMENTED_DIR, dirName);
   expect(
     retryUntilGone(dir, 5000),
     `Project directory should be deleted: ${dir}`
@@ -24,9 +47,9 @@ export function expectProjectDirGone(projectId: string): void {
 /**
  * Assert that a segment's audio file has been removed from disk.
  */
-export function expectSegmentFileGone(projectId: string, chapterId: string, segmentId: string): void {
+export function expectSegmentFileGone(projectDirName: string, chapterId: string, segmentId: string): void {
   const candidates = ['mp3', 'wav'].map(ext =>
-    path.join(E2E_SEGMENTED_DIR, projectId, 'chapters', chapterId, 'segments', `${segmentId}.${ext}`)
+    path.join(E2E_SEGMENTED_DIR, projectDirName, 'chapters', chapterId, 'segments', `${segmentId}.${ext}`)
   );
   for (const f of candidates) {
     expect(
@@ -54,9 +77,9 @@ function retryUntilGone(p: string, maxWaitMs: number): boolean {
 /**
  * Assert that a segment's audio file EXISTS on disk (verify synthesis actually wrote it).
  */
-export function expectSegmentFileExists(projectId: string, chapterId: string, segmentId: string): void {
+export function expectSegmentFileExists(projectDirName: string, chapterId: string, segmentId: string): void {
   const candidates = ['mp3', 'wav'].map(ext =>
-    path.join(E2E_SEGMENTED_DIR, projectId, 'chapters', chapterId, 'segments', `${segmentId}.${ext}`)
+    path.join(E2E_SEGMENTED_DIR, projectDirName, 'chapters', chapterId, 'segments', `${segmentId}.${ext}`)
   );
   const found = candidates.find(f => fs.existsSync(f));
   expect(found,
@@ -68,8 +91,8 @@ export function expectSegmentFileExists(projectId: string, chapterId: string, se
  * List audio files currently on disk for a segment.
  * Returns array of paths (empty if no files yet).
  */
-export function listSegmentFiles(projectId: string, chapterId: string, segmentId: string): string[] {
-  const segDir = path.join(E2E_SEGMENTED_DIR, projectId, 'chapters', chapterId, 'segments');
+export function listSegmentFiles(projectDirName: string, chapterId: string, segmentId: string): string[] {
+  const segDir = path.join(E2E_SEGMENTED_DIR, projectDirName, 'chapters', chapterId, 'segments');
   if (!fs.existsSync(segDir)) return [];
   const prefix = `${segmentId}.`;
   return fs.readdirSync(segDir)

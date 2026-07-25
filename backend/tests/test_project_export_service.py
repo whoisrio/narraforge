@@ -88,7 +88,7 @@ def test_export_is_non_destructive(db_session, tmp_path, monkeypatch):
 
     seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
     # original audio path untouched
-    assert seg.audio["current"]["path"].startswith("p1/chapters/")
+    assert seg.audio["current"]["path"].startswith("test-xiang-mu/chapters/")
     p = db_session.query(SegmentedProject).filter_by(id="p1").one()
     assert p.name == "Test项目"
 

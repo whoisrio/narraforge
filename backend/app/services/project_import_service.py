@@ -196,19 +196,18 @@ def _rewrite_voice_audio_for_import(vp, new_vid, files) -> dict:
 
 def _write_text_mirror(project: SegmentedProject, chapter_titles: dict[str, str],
                        project_name: str) -> None:
-    assets.write_original_text(project.id, project.original_text or "")
+    assets.write_original_text(project.id, project.original_text or "", project_name=project_name)
     for ch in project.chapters:
         title = chapter_titles.get(ch.id, ch.name)
-        assets.ensure_chapter_layout(project.id, ch.id, chapter_title=title,
-                                     project_name=project_name)
-        assets.write_chapter_original_text(project.id, ch.id, chapter_title=title,
+        assets.ensure_chapter_layout(project.id, ch.id, project_name=project_name)
+        assets.write_chapter_original_text(project.id, ch.id,
                                            project_name=project_name, text=ch.original_text or "")
         for pos, seg in enumerate(sorted(ch.segments, key=lambda s: s.position)):
-            assets.write_segment_text(project.id, ch.id, chapter_title=title,
+            assets.write_segment_text(project.id, ch.id,
                                       project_name=project_name, segment_id=seg.id,
-                                      position=seg.position if seg.position is not None else pos,
                                       text=seg.text or "")
-    assets.write_manifest(project.id, project_to_detail(project).model_dump(mode="json"))
+    assets.write_manifest(project.id, project_to_detail(project).model_dump(mode="json"),
+                          project_name=project_name)
 
 
 def _parse_dt(s: str | None) -> datetime | None:

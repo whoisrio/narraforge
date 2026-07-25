@@ -1,27 +1,28 @@
 """Filesystem helpers for the segmented editor's per-project asset directory.
 
-The layout is human-browsable: project/chapter/segment paths embed the
-project name, chapter title, and segment position so a file manager view is
-meaningful. A short id suffix (first 6 chars of the entity id) is always
-appended to guarantee uniqueness when names/titles collide.
+Layout (unified data root, plan B):
 
-    projects/{project_id}/
-        source-{project-name}-{project-id-short}.md
-        narration-{project-name}-{project-id-short}.md
-        original.txt
-        chapters/
-            chapter-{chapter-title}-{project-name}-{chapter-id-short}/
-                original.txt
-                segments/
-                    segment-{position:03d}-{segment-id-short}.mp3
-                    segment-{position:03d}-{segment-id-short}.txt
-                    segment-{position:03d}-{segment-id-short}.ssml
+    data/projects/{project-slug}/
+        manifest.json           (id → name/title mapping)
+        source.md / narration.md / original.txt
+        chapters/{chapter-id}/
+            original.txt
+            segments/{segment-id}.mp3|txt|ssml
 
-The project *directory* itself stays keyed by id (not name) so renaming a
-project is a metadata-only change and doesn't require moving files.
+Design rules:
+
+- The project directory uses the name slug (pinyin) for browsability; name
+  collisions get a deterministic ``-{hash4}`` suffix of the DB id.
+- Chapter/segment paths use raw, immutable DB ids — renaming a chapter
+  title never moves a file.
+- Readers NEVER guess paths: DB stores the full (relative) path for every
+  asset; constructors here are for WRITING new files only.
+- DB-stored paths are relative to ``settings.segmented_dir`` (the asset
+  root, alias ``projects_dir``).
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
@@ -30,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.services.narration_versioning.ids import project_slug
 
 logger = logging.getLogger(__name__)
 
@@ -41,50 +43,63 @@ _UNSAFE_CHARS = re.compile(r"[/\\:*?\"<>|\s]+")
 
 
 def short_id(entity_id: str) -> str:
-    """First 6 chars of the id, stable across renames.
-
-    Empty/short ids are returned unchanged so callers get a deterministic
-    result even in edge cases (tests, hand-crafted fixtures).
-    """
+    """First 6 chars of the id, stable across renames."""
     if not entity_id:
         return ""
     return entity_id[:_SHORT_ID_LEN]
 
 
 def safe_name_part(value: str) -> str:
-    """Filesystem-safe filename fragment: whitespace/separators -> ``_``.
-
-    - Preserves unicode (CJK is fine on all real filesystems we target).
-    - Collapses runs of unsafe chars to a single ``_``.
-    - Strips a leading ``.`` (would hide the file on POSIX).
-    - Falls back to ``"untitled"`` when the result is empty so no path
-      component is ever silently blank.
-    """
+    """Filesystem-safe filename fragment: whitespace/separators -> ``_``."""
     text = (value or "").strip()
     text = _UNSAFE_CHARS.sub("_", text)
     text = text.lstrip(".")
     return text or "untitled"
 
 
+def _hash4(value: str) -> str:
+    return hashlib.blake2s(str(value).encode("utf-8"), digest_size=2).hexdigest()
+
+
 # ----- project-level paths -------------------------------------------------
 
 
-def project_dir(project_id: str) -> Path:
-    return settings.segmented_dir / project_id
+def _project_dirname(project_id: str, project_name: str | None) -> str:
+    """Slug of the project name; hash-suffixed when the slug is taken by
+    ANOTHER project (detected via its manifest)."""
+    if not project_name:
+        return project_id
+    slug = project_slug(project_name)
+    if slug == project_id:
+        return slug
+    candidate = settings.segmented_dir / slug
+    if candidate.exists():
+        manifest_file = candidate / "manifest.json"
+        owner = None
+        if manifest_file.exists():
+            try:
+                owner = (json.loads(manifest_file.read_text(encoding="utf-8")) or {}).get("id")
+            except (ValueError, OSError):
+                owner = None
+        if owner is not None and owner != project_id:
+            return f"{slug}-{_hash4(project_id)}"
+    return slug
 
 
-def source_document_path(project_id: str, project_name: str) -> Path:
-    name = f"source-{safe_name_part(project_name)}-{short_id(project_id)}.md"
-    return project_dir(project_id) / name
+def project_dir(project_id: str, project_name: str | None = None) -> Path:
+    return settings.segmented_dir / _project_dirname(project_id, project_name)
 
 
-def narration_document_path(project_id: str, project_name: str) -> Path:
-    name = f"narration-{safe_name_part(project_name)}-{short_id(project_id)}.md"
-    return project_dir(project_id) / name
+def source_document_path(project_id: str, project_name: str | None = None) -> Path:
+    return project_dir(project_id, project_name) / "source.md"
+
+
+def narration_document_path(project_id: str, project_name: str | None = None) -> Path:
+    return project_dir(project_id, project_name) / "narration.md"
 
 
 def write_project_document(
-    project_id: str, *, kind: str, project_name: str, text: str
+    project_id: str, *, kind: str, project_name: str | None = None, text: str
 ) -> str:
     """Write a project-level document (kind='source'|'narration'); return path.
 
@@ -111,8 +126,8 @@ def read_project_document(path: str | None) -> str | None:
     return p.read_text(encoding="utf-8")
 
 
-def write_original_text(project_id: str, text: str) -> None:
-    p = project_dir(project_id) / "original.txt"
+def write_original_text(project_id: str, text: str, project_name: str | None = None) -> None:
+    p = project_dir(project_id, project_name) / "original.txt"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text or "", encoding="utf-8")
 
@@ -120,39 +135,23 @@ def write_original_text(project_id: str, text: str) -> None:
 # ----- chapter-level paths -------------------------------------------------
 
 
-def _chapter_dirname(chapter_id: str, chapter_title: str, project_name: str) -> str:
-    return (
-        f"chapter-{safe_name_part(chapter_title)}"
-        f"-{safe_name_part(project_name)}"
-        f"-{short_id(chapter_id)}"
-    )
-
-
 def chapter_dir(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
 ) -> Path:
-    return (
-        project_dir(project_id)
-        / "chapters"
-        / _chapter_dirname(chapter_id, chapter_title, project_name)
-    )
+    return project_dir(project_id, project_name) / "chapters" / chapter_id
 
 
 def ensure_chapter_layout(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
+    **_: Any,
 ) -> Path:
-    d = (
-        chapter_dir(project_id, chapter_id, chapter_title=chapter_title, project_name=project_name)
-        / "segments"
-    )
+    d = chapter_dir(project_id, chapter_id, project_name=project_name) / "segments"
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -161,14 +160,11 @@ def write_chapter_original_text(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
     text: str,
+    **_: Any,
 ) -> None:
-    p = (
-        chapter_dir(project_id, chapter_id, chapter_title=chapter_title, project_name=project_name)
-        / "original.txt"
-    )
+    p = chapter_dir(project_id, chapter_id, project_name=project_name) / "original.txt"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text or "", encoding="utf-8")
 
@@ -177,13 +173,10 @@ def remove_chapter_dir(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
+    **_: Any,
 ) -> None:
-    d = chapter_dir(
-        project_id, chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
-    )
+    d = chapter_dir(project_id, chapter_id, project_name=project_name)
     if d.exists():
         shutil.rmtree(d, ignore_errors=True)
 
@@ -191,46 +184,30 @@ def remove_chapter_dir(
 # ----- segment-level paths -------------------------------------------------
 
 
-def segment_basename(*, position: int, segment_id: str) -> str:
-    """``segment-{position:03d}-{id-short}`` (no extension).
-
-    Position-first so files sort naturally in a file explorer; id-short
-    disambiguates across re-ordering/renaming and keeps the name short.
-    """
-    return f"segment-{position:03d}-{short_id(segment_id)}"
-
-
 def segment_audio_path(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
     segment_id: str,
-    position: int,
     fmt: str,
+    **_: Any,
 ) -> Path:
-    cdir = chapter_dir(
-        project_id, chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
-    )
-    return cdir / "segments" / f"{segment_basename(position=position, segment_id=segment_id)}.{fmt}"
+    return chapter_dir(project_id, chapter_id, project_name=project_name) / "segments" / f"{segment_id}.{fmt}"
 
 
 def write_segment_text(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
     segment_id: str,
-    position: int,
     text: str,
+    **_: Any,
 ) -> None:
     p = segment_audio_path(
         project_id, chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
-        segment_id=segment_id, position=position, fmt="txt",
+        project_name=project_name, segment_id=segment_id, fmt="txt",
     )
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text or "", encoding="utf-8")
@@ -240,35 +217,56 @@ def write_segment_ssml(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
     segment_id: str,
-    position: int,
     ssml: str,
+    **_: Any,
 ) -> None:
     p = segment_audio_path(
         project_id, chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
-        segment_id=segment_id, position=position, fmt="ssml",
+        project_name=project_name, segment_id=segment_id, fmt="ssml",
     )
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(ssml or "", encoding="utf-8")
+
+
+def delete_audio_file(rel_path: str | None) -> bool:
+    """Delete an audio file by its DB-stored path (relative to the asset root).
+
+    This is the PREFERRED deletion path: the DB knows exactly where the file
+    is, regardless of the naming scheme it was written with. Returns True
+    when a file was actually removed.
+    """
+    if not rel_path:
+        return False
+    p = Path(rel_path)
+    if not p.is_absolute():
+        p = settings.segmented_dir / p
+    try:
+        p.unlink()
+        return True
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return False
 
 
 def remove_segment_audio(
     project_id: str,
     chapter_id: str,
     *,
-    chapter_title: str,
-    project_name: str,
+    project_name: str | None = None,
     segment_id: str,
-    position: int,
     fmt: str,
+    **_: Any,
 ) -> None:
+    """Fallback deletion by reconstructing the current-scheme path.
+
+    Prefer ``delete_audio_file`` whenever the DB-stored path is available.
+    """
     p = segment_audio_path(
         project_id, chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
-        segment_id=segment_id, position=position, fmt=fmt,
+        project_name=project_name, segment_id=segment_id, fmt=fmt,
     )
     try:
         p.unlink()
@@ -279,21 +277,21 @@ def remove_segment_audio(
 # ----- manifest & top-level cleanup ----------------------------------------
 
 
-def write_manifest(project_id: str, payload: dict[str, Any]) -> None:
-    p = project_dir(project_id) / "manifest.json"
+def write_manifest(project_id: str, payload: dict[str, Any], project_name: str | None = None) -> None:
+    p = project_dir(project_id, project_name) / "manifest.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def read_manifest(project_id: str) -> dict[str, Any] | None:
-    p = project_dir(project_id) / "manifest.json"
+def read_manifest(project_id: str, project_name: str | None = None) -> dict[str, Any] | None:
+    p = project_dir(project_id, project_name) / "manifest.json"
     if not p.exists():
         return None
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def remove_project_dir(project_id: str) -> None:
-    d = project_dir(project_id)
+def remove_project_dir(project_id: str, project_name: str | None = None) -> None:
+    d = project_dir(project_id, project_name)
     if d.exists():
         shutil.rmtree(d, ignore_errors=True)
         logger.info("Removed segmented project dir %s", d)

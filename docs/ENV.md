@@ -75,6 +75,14 @@ Used for CosyVoice voice registration, which requires a publicly accessible audi
 | `BUCKET_NAME` | No | Qiniu Cloud bucket name | *(empty)* |
 | `BUCKET_DOMAIN` | No | Qiniu Cloud bucket domain | *(empty)* |
 
+## Storage Paths
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `SEGMENTED_DIR` | No | Root of per-project asset dirs (segment audio, text mirrors). DB `audio.path` values are relative to this root. | `backend/data/projects` |
+
+应用数据统一放在 `backend/data/` 下（`narration-repo/` 文本版本库、`projects/` 项目资产）。`uploads/`、`output/` 为遗留目录（voices/tts-history/srt 归并见设计文档）。
+
 ## Logging
 
 | Variable | Required | Description | Default |

@@ -26,7 +26,7 @@ import {
   seedTestProject,
 } from '../helpers';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
-import { expectSegmentFileGone } from '../helpers/fsAssertions';
+import { expectSegmentFileGone, projectDirNameForId } from '../helpers/fsAssertions';
 import { readDbProject } from '../helpers/dbReader';
 
 test.describe('段落操作', () => {
@@ -334,7 +334,7 @@ test.describe('段落操作', () => {
 
     // Filesystem: deleted segment's audio file must be removed
     const deletedSegId = activeChapterBefore!.segments[activeChapterBefore!.segments.length - 1].id;
-    expectSegmentFileGone('test-e2e-project', activeChapterBefore!.id, deletedSegId);
+    expectSegmentFileGone(projectDirNameForId('test-e2e-project')!, activeChapterBefore!.id, deletedSegId);
 
     expect(errors).toEqual([]);
   });
@@ -433,7 +433,7 @@ test.describe('段落操作', () => {
     const CHAPTER_ID = 'test-chapter-1';
     const relAudioPath = `test-e2e-project/chapters/${CHAPTER_ID}/segments/seg-audio-kept.mp3`;
     const absAudioPath = path.resolve(
-      __dirname, '..', '..', '..', 'backend', 'uploads', 'segmented',
+      __dirname, '..', '..', '..', 'backend', 'data', 'projects',
       'test-e2e-project', 'chapters', CHAPTER_ID, 'segments', 'seg-audio-kept.mp3',
     );
 
