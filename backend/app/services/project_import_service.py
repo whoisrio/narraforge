@@ -186,7 +186,7 @@ def _rewrite_voice_audio_for_import(vp, new_vid, files) -> dict:
     rel = preview.get("preview_audio_path")
     if rel and rel in files:
         ext = Path(rel).suffix.lstrip(".") or "mp3"
-        target_dir = settings.clone_voices_dir
+        target_dir = settings.voices_previews_dir
         target_dir.mkdir(parents=True, exist_ok=True)
         target = target_dir / f"{new_vid}.{ext}"
         target.write_bytes(files[rel])

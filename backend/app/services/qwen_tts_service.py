@@ -532,7 +532,7 @@ class QwenTTSService:
 
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             file_name = f"{voice_id}_{timestamp}.{format}"
-            output_path = settings.clone_voices_dir / file_name
+            output_path = settings.voices_previews_dir / file_name
 
             # 下载音频（dashscope 链接无需鉴权，禁用代理避免本地代理干扰）
             download_resp = req.get(

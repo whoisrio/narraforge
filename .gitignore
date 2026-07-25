@@ -108,4 +108,4 @@ agent/.langgraph_api
 *.env.bak
 *.db*
 .kimi-code/
-backend/uploads-segmented-backup-*.tgz
+backend/*-backup-*.tgz

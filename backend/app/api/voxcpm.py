@@ -111,12 +111,12 @@ def _resolve_voice_audio_path(voice_id: str, db: Session, prefer: str = "preview
             if resolved.is_file():
                 return str(resolved)
 
-    # uploads/voices/ 目录下查找
-    voices_dir = settings.voices_dir
-    for ext in [".wav", ".mp3", ".ogg", ".webm", ".m4a"]:
-        candidate = voices_dir / f"{voice_id}{ext}"
-        if candidate.is_file():
-            return str(candidate)
+    # data/voices/profiles/ 下查找（旧 uploads/voices/ 作回退）
+    for base in (settings.voices_profiles_dir, settings.voices_dir):
+        for ext in [".wav", ".mp3", ".ogg", ".webm", ".m4a"]:
+            candidate = base / f"{voice_id}{ext}"
+            if candidate.is_file():
+                return str(candidate)
 
     raise HTTPException(
         status_code=404,
@@ -153,7 +153,7 @@ async def _save_and_respond(
     # 后端存储模式：保存文件并记录到数据库
     audio_id = str(uuid.uuid4())
     audio_filename = f"{audio_id}.{format}"
-    audio_path = settings.uploads_dir / "tts_results" / audio_filename
+    audio_path = settings.tts_history_dir / audio_filename
     audio_path.parent.mkdir(parents=True, exist_ok=True)
 
     async with aiofiles.open(audio_path, "wb") as f:

@@ -250,7 +250,7 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="edge_voice is required for edge_tts engine")
 
     audio_id = str(uuid.uuid4())
-    audio_path = settings.voices_dir / f"tts_{audio_id}.mp3"
+    audio_path = settings.tts_history_dir / f"tts_{audio_id}.mp3"
 
     try:
         from app.services.edge_tts_service import get_edge_tts_service
@@ -394,13 +394,13 @@ async def get_tts_audio(audio_id: str, db: Session = Depends(get_db)):
         media_type = "audio/mpeg" if ext == "mp3" else f"audio/{ext}"
         return FileResponse(record.audio_path, media_type=media_type)
 
-    # 兼容旧记录 / 旧 batch 临时文件命名：uploads/voices/tts_{id}.{ext}
-    voices_dir = settings.voices_dir
-    for ext in ["wav", "mp3", "ogg"]:
-        legacy_path = voices_dir / f"tts_{audio_id}.{ext}"
-        if os.path.exists(legacy_path):
-            media_type = f"audio/{ext}" if ext != "mp3" else "audio/mpeg"
-            return FileResponse(legacy_path, media_type=media_type)
+    # 兼容旧记录 / 旧 batch 临时文件命名：tts_{id}.{ext}（新根优先，旧目录回退）
+    for base in (settings.tts_history_dir, settings.voices_dir):
+        for ext in ["wav", "mp3", "ogg"]:
+            legacy_path = base / f"tts_{audio_id}.{ext}"
+            if os.path.exists(legacy_path):
+                media_type = f"audio/{ext}" if ext != "mp3" else "audio/mpeg"
+                return FileResponse(legacy_path, media_type=media_type)
 
     raise HTTPException(status_code=404, detail="Audio not found")
 

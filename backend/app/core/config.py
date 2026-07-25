@@ -30,14 +30,19 @@ class Settings(BaseSettings):
     # Paths
     base_dir: Path = Path(__file__).parent.parent.parent
     data_dir: Path = base_dir / "data"
-    uploads_dir: Path = base_dir / "uploads"
-    voices_dir: Path = uploads_dir / "voices"
+    uploads_dir: Path = base_dir / "uploads"  # legacy (PR-B 收敛到 data/ 后废弃)
     videos_dir: Path = uploads_dir / "videos"
-    srt_output_dir: Path = uploads_dir / "srt"
     # 项目资产根（原 uploads/segmented）。DB 中的 audio.path 均相对此目录。
     segmented_dir: Path = data_dir / "projects"
-    output_dir: Path = base_dir / "output"
-    clone_voices_dir: Path = output_dir / "clone_voices"
+    # 音色库（原 uploads/voices + output/clone_voices 两处合并）
+    voices_profiles_dir: Path = data_dir / "voices" / "profiles"   # 克隆样本原音
+    voices_previews_dir: Path = data_dir / "voices" / "previews"   # 克隆/引擎试听
+    voices_dir: Path = uploads_dir / "voices"  # legacy：历史样本/TTS 历史音频，迁移后仅作回退读取
+    tts_history_dir: Path = data_dir / "tts-history"  # TTS 历史音频（合并 voices/tts_* 与 uploads/tts_results）
+    srt_output_dir: Path = data_dir / "srt"
+    temp_dir: Path = data_dir / "temp"
+    output_dir: Path = base_dir / "output"  # legacy（PR-B 收敛后废弃）
+    clone_voices_dir: Path = output_dir / "clone_voices"  # legacy alias，迁移后由 voices_previews_dir 取代
     logs_dir: Path = base_dir / "logs"
 
     @property
@@ -120,11 +125,13 @@ class Settings(BaseSettings):
         merged = {**env_values, **kwargs}
         super().__init__(**merged)
         # Ensure directories exist
-        self.voices_dir.mkdir(parents=True, exist_ok=True)
         self.videos_dir.mkdir(parents=True, exist_ok=True)
         self.srt_output_dir.mkdir(parents=True, exist_ok=True)
         self.segmented_dir.mkdir(parents=True, exist_ok=True)
-        self.clone_voices_dir.mkdir(parents=True, exist_ok=True)
+        self.voices_profiles_dir.mkdir(parents=True, exist_ok=True)
+        self.voices_previews_dir.mkdir(parents=True, exist_ok=True)
+        self.tts_history_dir.mkdir(parents=True, exist_ok=True)
+        self.temp_dir.mkdir(parents=True, exist_ok=True)
         self.logs_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod

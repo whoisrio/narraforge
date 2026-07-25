@@ -114,7 +114,7 @@ Key tables include VoiceProfile, TTSConfig, TTSResult, TranscriptionRecord, Syst
 ### Storage Modes
 
 - `frontend` — Audio is stored in browser IndexedDB. This is the default mode and does not require backend audio persistence.
-- `backend` — Audio is stored through SQLite metadata plus filesystem assets under `backend/data/` (project assets in `data/projects/{project-slug}/`; text version repo in `data/narration-repo/`).
+- `backend` — Audio is stored through SQLite metadata plus filesystem assets under `backend/data/` (project assets in `data/projects/{project-slug}/`; voices in `data/voices/`; TTS history in `data/tts-history/`; text version repo in `data/narration-repo/`).
 
 ## Testing
 

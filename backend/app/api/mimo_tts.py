@@ -108,7 +108,7 @@ async def _save_and_respond(
 
     # 后端存储模式
     ext = audio_fmt if audio_fmt in ("wav", "mp3") else "wav"
-    audio_path = settings.clone_voices_dir / f"mimo_{audio_id}.{ext}"
+    audio_path = settings.voices_previews_dir / f"mimo_{audio_id}.{ext}"
     with open(audio_path, "wb") as f:
         f.write(audio_bytes)
 
