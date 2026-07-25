@@ -1,14 +1,20 @@
 """Serialize a SegmentedProject-like object to a git-friendly file tree.
 
-Layout (rooted at `root/projects/{project.id}/`):
+Layout (rooted at `root/projects/{project-slug}/`):
     project.yaml
     source.md            (only when source_document non-null)
-    chapters/{chapter.id}/
+    chapters/{chapter-id}/
         chapter.yaml
         original.md      (only when original_text non-null)
         script.md        (only when narration_script non-null)
         segments.md      (one HTML comment header + text block per segment)
     narration.md       (project-level full narration script, when non-null)
+
+Directory and segment-header names are derived at write time from the
+project name / chapter position+title / segment position (see ids.py) —
+database primary keys are NEVER used for naming, so no DB migration is
+needed to get the semantic layout. The real DB ids are still recorded
+inside project.yaml / chapter.yaml for traceability and stale-dir sweeps.
 
 YAML output uses sort_keys=True for deterministic diffs.
 Chapter subdirs no longer in the input are removed so `git status`
@@ -16,6 +22,7 @@ reflects deletions.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -23,9 +30,36 @@ from typing import Any
 
 import yaml
 
+from .ids import chapter_id as semantic_chapter_id
+from .ids import project_slug
 
-def write_project(project, root: Path) -> Path:
-    proj_dir = root / "projects" / project.id
+
+def _short_hash(s: str) -> str:
+    return hashlib.blake2s(str(s).encode("utf-8"), digest_size=2).hexdigest()
+
+
+def project_dir_name(project, taken: set[str] | None = None) -> str:
+    """Semantic directory name for a project: slug of its name.
+
+    When *taken* is provided (one set per snapshot run), name collisions
+    get a deterministic ``-{4-char hash of DB id}`` suffix.
+    """
+    base = project_slug(getattr(project, "name", None))
+    if taken is None:
+        return base
+    name = base
+    if name in taken:
+        name = f"{base}-{_short_hash(getattr(project, 'id', ''))}"
+        n = 1
+        while name in taken:
+            name = f"{base}-{_short_hash(getattr(project, 'id', ''))}-{n}"
+            n += 1
+    taken.add(name)
+    return name
+
+
+def write_project(project, root: Path, taken: set[str] | None = None) -> Path:
+    proj_dir = root / "projects" / project_dir_name(project, taken)
     proj_dir.mkdir(parents=True, exist_ok=True)
 
     _write_yaml(proj_dir / "project.yaml", {
@@ -45,7 +79,10 @@ def write_project(project, root: Path) -> Path:
     chapters_dir.mkdir(exist_ok=True)
     written = set()
     for ch in project.chapters:
-        ch_dir = chapters_dir / ch.id
+        ch_dir = chapters_dir / semantic_chapter_id(
+            (getattr(ch, "position", 0) or 0) + 1,
+            getattr(ch, "design_title", None) or getattr(ch, "name", None),
+        )
         ch_dir.mkdir(exist_ok=True)
         written.add(ch_dir.name)
         _write_yaml(ch_dir / "chapter.yaml", {
@@ -93,16 +130,17 @@ def _write_text_or_delete(path: Path, text: str | None) -> None:
 
 def _write_segments_md(path: Path, segments) -> None:
     parts: list[str] = []
-    for seg in segments:
-        parts.append(_segment_header(seg))
+    ordered = sorted(segments, key=lambda s: getattr(s, "position", 0) or 0)
+    for i, seg in enumerate(ordered, start=1):
+        parts.append(_segment_header(seg, f"s{i:03d}"))
         parts.append(seg.text if seg.text is not None else "")
         parts.append("")
     body = "\n".join(parts).rstrip() + "\n"
     path.write_text(body, encoding="utf-8")
 
 
-def _segment_header(seg) -> str:
-    parts = [seg.id, f"kind={seg.segment_kind}"]
+def _segment_header(seg, sid: str) -> str:
+    parts = [sid, f"kind={seg.segment_kind}"]
     if getattr(seg, "role_id", None):
         parts.append(f"role={seg.role_id}")
     if getattr(seg, "emotion", None):

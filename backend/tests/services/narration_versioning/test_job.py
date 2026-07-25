@@ -123,3 +123,23 @@ def test_snapshot_push_failure_records_error_but_commit_succeeds(client, db_sess
     assert result.commit_sha is not None  # local commit succeeded
     assert result.pushed is False
     assert result.push_error  # error captured
+
+
+def test_snapshot_sweeps_stale_dirs_of_current_projects_but_keeps_foreign(client, db_session, tmp_path):
+    """Legacy-id / pre-rename dirs for projects in THIS db get removed;
+    dirs belonging to other databases (e.g. e2e seed) are preserved."""
+    _seed_project(client, pid="legacy-uid-abc123", name="DeepSeek 策略")
+    repo = tmp_path / "repo"
+    stale = repo / "projects" / "legacy-uid-abc123"
+    stale.mkdir(parents=True)
+    (stale / "project.yaml").write_text("id: legacy-uid-abc123\nname: DeepSeek 策略\n", encoding="utf-8")
+    (stale / "old.md").write_text("stale", encoding="utf-8")
+    foreign = repo / "projects" / "test-e2e-project"
+    foreign.mkdir(parents=True)
+    (foreign / "project.yaml").write_text("id: test-e2e-project\nname: test\n", encoding="utf-8")
+
+    snapshot_all(repo=repo, session=db_session)
+
+    assert not stale.exists()
+    assert (repo / "projects" / "deepseek-ce-lve").exists()
+    assert foreign.exists()

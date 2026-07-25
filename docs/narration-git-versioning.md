@@ -22,9 +22,20 @@ Path is overridable via `NARRATION_REPO_PATH`.
 
 ## Semantic IDs
 
-- **project-slug** — lowercased pinyin/ASCII, max 40 chars, collisions get `-{4-char blake2s hex}`.
-- **chapter-id** — `ch{NN}-{title-slug}` from (position, design_title/name); `ch{NN}` when title is empty.
-- **segment-id** — `s{NNN}`, frozen at first split; deleted IDs never reused.
+Names in the file tree are derived **at write time** from content — database
+primary keys are never used for naming and never need to change:
+
+- **project-slug** — lowercased pinyin/ASCII of the project name, max 40 chars; collisions within one snapshot run get `-{4-char blake2s hex of DB id}`.
+- **chapter-id** — `ch{NN}-{title-slug}` from (position+1, design_title/name); `ch{NN}` when title is empty.
+- **segment-id** — `s{NNN}` assigned by position order (1-based) at write time. Note: numbers follow the current ordering, so inserting/removing segments renumbers later ones (frozen IDs would need a persisted mapping and are deliberately out of scope).
+
+The real DB ids are still recorded inside `project.yaml` / `chapter.yaml`
+for traceability. On each snapshot, project dirs belonging to projects in
+the current database but written under an outdated name (legacy DB-id dirs,
+pre-rename slugs) are swept; dirs of other databases sharing the repo are
+left untouched. To isolate environments, give each its own
+`NARRATION_REPO_PATH` (the e2e overlay `.env.e2e` uses
+`./data/narration-repo-e2e`).
 
 Segments are stored as one HTML-comment header + text block per row:
 
@@ -68,16 +79,6 @@ Projects:
 cd backend
 uv run python -c "from app.services.narration_versioning.job import snapshot_all; print(snapshot_all())"
 ```
-
-### Migrate legacy IDs to semantic form
-
-```bash
-cd backend
-uv run python -m scripts.migrate_narration_ids --dry-run   # preview
-uv run python -m scripts.migrate_narration_ids             # apply
-```
-
-Idempotent; safe to re-run.
 
 ### Inspect history
 
