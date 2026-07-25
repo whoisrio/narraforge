@@ -9,6 +9,8 @@
  * @feature docs/feature-spec.md §4.4 Per-Segment features (delete, merge)
  */
 import { expect, test } from '@playwright/test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
   collectErrors,
   setLocaleToZhCN,
@@ -25,6 +27,7 @@ import {
 } from '../helpers';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 import { expectSegmentFileGone } from '../helpers/fsAssertions';
+import { readDbProject } from '../helpers/dbReader';
 
 test.describe('段落操作', () => {
   test.beforeAll(async ({ browser }) => {
@@ -414,6 +417,84 @@ test.describe('段落操作', () => {
     validateChapter(activeChapterAfter!);
 
     await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-segment-operations-dbProject4');
+
+    expect(errors).toEqual([]);
+  });
+
+  // @feature §4.4 Per-Segment features — merge with audio: confirm dialog + audio cleanup
+  test('向上合并带音频段落：确认弹窗出现，合并后保留段音频文件被清理', async ({ page }) => {
+    await setLocaleToZhCN(page);
+    const errors = collectErrors(page);
+
+    // ── Step 0: give the first segment a REAL audio file + DB audio.current ──
+    // (fix: hasAudio used the deprecated current_audio_id, so the confirm dialog
+    // and the audio cleanup never fired; and the kept segment's file was orphaned)
+    const BACKEND = 'http://127.0.0.1:8002';
+    const CHAPTER_ID = 'test-chapter-1';
+    const relAudioPath = `test-e2e-project/chapters/${CHAPTER_ID}/segments/seg-audio-kept.mp3`;
+    const absAudioPath = path.resolve(
+      __dirname, '..', '..', '..', 'backend', 'uploads', 'segmented',
+      'test-e2e-project', 'chapters', CHAPTER_ID, 'segments', 'seg-audio-kept.mp3',
+    );
+
+    const getResp = await page.request.get(`${BACKEND}/api/segmented-projects/test-e2e-project`);
+    expect(getResp.ok()).toBeTruthy();
+    const project = await getResp.json();
+    const chapter = project.chapters.find((c: { id: string }) => c.id === CHAPTER_ID)!;
+    // Prior tests in this file shrink chapter 1; restore a second segment if needed.
+    if (chapter.segments.length < 2) {
+      const clone = JSON.parse(JSON.stringify(chapter.segments[0]));
+      clone.id = `${CHAPTER_ID}-seg-merge-e2e`;
+      clone.text = '远村灯火，点点明灭。';
+      clone.audio = { format: 'mp3' };
+      chapter.segments.push(clone);
+    }
+    expect(chapter.segments.length).toBeGreaterThan(1);
+    const keptSeg = chapter.segments[0];
+    const removedSeg = chapter.segments[1];
+    keptSeg.audio = { current: { path: relAudioPath, format: 'mp3' }, format: 'mp3' };
+    const putResp = await page.request.put(`${BACKEND}/api/segmented-projects/test-e2e-project`, { data: project });
+    expect(putResp.ok()).toBeTruthy();
+
+    fs.mkdirSync(path.dirname(absAudioPath), { recursive: true });
+    fs.writeFileSync(absAudioPath, Buffer.from('fake-mp3'));
+    expect(fs.existsSync(absAudioPath)).toBe(true);
+
+    // ── Step 1: studio — open merge menu on the SECOND row, choose 向上合并 ──
+    await goToStudio(page);
+    const segmentRows = page.locator('[class*="compactCard"]');
+    await expect(segmentRows.first()).toBeVisible({ timeout: 10_000 });
+    const initialCount = await segmentRows.count();
+
+    const secondRow = segmentRows.nth(1);
+    await secondRow.getByTitle(/合并/).click();
+    await page.getByRole('button', { name: /向上合并/ }).click();
+
+    // ── Step 2: confirm dialog MUST appear (kept segment has audio) ──
+    await expect(page.getByText(/合并将删除/)).toBeVisible({ timeout: 5_000 });
+    await page.getByRole('button', { name: '继续' }).click();
+
+    // ── Step 3: merge committed — count -1, texts merged ──
+    await page.waitForTimeout(1_000);
+    expect(await segmentRows.count()).toBe(initialCount - 1);
+
+    await page.waitForTimeout(1_500); // wait for autosave
+    const projectAfter = await readBackendProject(page, 'test-e2e-project');
+    const chapterAfter = projectAfter!.chapters.find((c) => c.id === CHAPTER_ID)!;
+    const merged = chapterAfter.segments[0];
+    expect(merged.text).toBe(`${keptSeg.text}${removedSeg.text}`);
+    // kept segment's audio state cleared (text changed)
+    expect(merged.audio?.current).toBeFalsy();
+    for (const seg of chapterAfter.segments) validateSegment(seg);
+
+    // ── Step 4: DB dual-read — audio cleared in the raw row too ──
+    const dbBundle = await readDbProject('test-e2e-project');
+    const dbSeg = dbBundle!.segments.find((s) => s.id === keptSeg.id)!;
+    const dbAudio = typeof dbSeg.audio === 'string' ? JSON.parse(dbSeg.audio) : dbSeg.audio;
+    expect(dbAudio?.current).toBeFalsy();
+
+    // ── Step 5: filesystem — the kept segment's dropped audio file is gone ──
+    expect(fs.existsSync(absAudioPath)).toBe(false);
 
     expect(errors).toEqual([]);
   });

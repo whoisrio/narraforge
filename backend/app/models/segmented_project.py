@@ -71,6 +71,7 @@ class SegmentedProjectChapter(Base):
     original_text = Column(String, nullable=True)
     narration_script = Column(Text, nullable=True)
     design_title = Column(String, nullable=True)
+    sync_state = Column(JSON, nullable=True)  # layer-sync Phase A: {l1_hash, l2_hash, segments_hash}
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -106,6 +107,7 @@ class SegmentedProjectSegment(Base):
     audio = Column(JSON, nullable=True)
     generated_at = Column(DateTime, nullable=True)
     animation_spec_json = Column(Text, nullable=True)
+    split_anchor = Column(JSON, nullable=True)  # layer-sync Phase B: {offset_start, offset_end, baseline_text}
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

@@ -528,6 +528,25 @@ export function TTSSynthesis({
     lastSavedUpdatedAtRef.current = migrated.updated_at;
   }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
 
+  // Lighter reload after an in-place mutation (e.g. layer-sync action): refetch
+  // project data without jumping to the overview section.
+  const reloadProjectData = useCallback(async () => {
+    if (!project?.id) return;
+    const p = await projectStorage.getProject(project.id);
+    if (!p) return;
+    const migrated = migrateV1(p);
+    initialLoadDoneRef.current = false;
+    dispatch({ type: 'LOAD_PROJECT', project: migrated });
+    setProject(migrated);
+    const ch = getActiveChapter(migrated);
+    if (ch) restoreChapterSettings(ch);
+    if (storageMode === 'backend') {
+      await draftSync.adoptBackendVersion(migrated);
+    }
+    initialLoadDoneRef.current = true;
+    lastSavedUpdatedAtRef.current = migrated.updated_at;
+  }, [project?.id, projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
+
   const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
     const np = createInitialProject();
     np.name = name || t('tts.newProject', { num: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
@@ -626,10 +645,17 @@ export function TTSSynthesis({
     if (keepIdx < 0 || keepIdx >= segs.length - 1) return;
     const cur = segs[keepIdx];
     const nxt = segs[keepIdx + 1];
-    const hasAudio = !!(cur.current_audio_id || nxt.current_audio_id);
+    // Block merging segments with in-flight synthesis — the late GENERATE_SUCCESS
+    // would attach audio generated from the old text to the merged new text.
+    if (cur.status === 'pending' || cur.status === 'queued' ||
+        nxt.status === 'pending' || nxt.status === 'queued') {
+      showToast(t('tts.mergeBlockedGenerating'), 'error');
+      return;
+    }
+    const hasAudio = !!(cur.audio.current || nxt.audio.current);
     const doMerge = async () => {
-      if (cur.current_audio_id) { try { await deleteTTSResult(cur.current_audio_id); } catch { /* ignore */ } }
-      if (nxt.current_audio_id) { try { await deleteTTSResult(nxt.current_audio_id); } catch { /* ignore */ } }
+      if (cur.audio.current?.id) { try { await deleteTTSResult(cur.audio.current.id); } catch { /* ignore */ } }
+      if (nxt.audio.current?.id) { try { await deleteTTSResult(nxt.audio.current.id); } catch { /* ignore */ } }
       dispatch({ type: 'MERGE_SEGMENTS', id, direction });
     };
     if (hasAudio) {
@@ -647,9 +673,9 @@ export function TTSSynthesis({
   const handleSplit = useCallback((id: string, position: number) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
-    const hasAudio = !!seg.current_audio_id;
+    const hasAudio = !!seg.audio.current;
     const doSplit = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+      if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
       dispatch({ type: 'SPLIT_SEGMENT', id, position });
     };
     if (hasAudio) {
@@ -668,12 +694,12 @@ export function TTSSynthesis({
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
     const doDelete = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
-      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
+      if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
+      if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
       dispatch({ type: 'DELETE_SEGMENT', id });
     };
     const preview = seg.text.length > 20 ? seg.text.slice(0, 20) + '…' : seg.text;
-    const audioWarn = seg.current_audio_id ? t('tts.audioWillBeDeleted') : '';
+    const audioWarn = seg.audio.current ? t('tts.audioWillBeDeleted') : '';
     setConfirmDialog({
       open: true, title: t('tts.deleteSegment'),
       message: `${t('tts.deleteSegmentConfirm')}\n「${preview}」${audioWarn}`,
@@ -1377,7 +1403,9 @@ export function TTSSynthesis({
         <ProjectShell
           projectName={project.name}
           projectSubtitle={isScratchpadProject ? t('tts.quickDraft') : t('tts.projectChaptered')}
+          projectId={project.id}
           activeSection={projectSection}
+          onProjectChanged={() => { void reloadProjectData(); }}
           chapterName={activeChapter.name}
           segmentCount={activeChapter.segments.length}
           generatedCount={generatedSegmentCount}

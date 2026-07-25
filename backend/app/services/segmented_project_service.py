@@ -262,6 +262,45 @@ def get_segment_row(
     return seg
 
 
+def _audio_path_str(ref: object) -> str | None:
+    """Extract the filesystem path from an audio.current/previous ref, if any."""
+    if isinstance(ref, dict):
+        p = ref.get("path")
+        if isinstance(p, str) and p:
+            return p
+    return None
+
+
+def _delete_dropped_audio_files(seg: SegmentedProjectSegment, new_audio: dict) -> None:
+    """Delete audio files the incoming audio state no longer references.
+
+    Covers the merge flow: the frontend clears a kept segment's audio, and
+    without this the old file would be orphaned on disk. Paths still referenced
+    (e.g. old ``current`` demoted to ``previous`` after regeneration) are kept.
+    """
+    old = seg.audio
+    if isinstance(old, str):
+        try:
+            old = json.loads(old)
+        except (ValueError, TypeError):
+            old = None
+    if not isinstance(old, dict):
+        return
+    keep = {p for p in (_audio_path_str(new_audio.get("current")),
+                        _audio_path_str(new_audio.get("previous"))) if p}
+    for key in ("current", "previous"):
+        path_str = _audio_path_str(old.get(key))
+        if path_str and path_str not in keep:
+            try:
+                fp = Path(path_str)
+                if not fp.is_absolute():
+                    fp = assets.settings.segmented_dir / fp
+                if fp.exists():
+                    fp.unlink()
+            except Exception:
+                pass
+
+
 def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     """Full-state save: reconcile chapters/segments with DB. Filesystem mirrored after flush."""
     p = db.query(SegmentedProject).filter_by(id=project.id).first()
@@ -333,6 +372,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             if s_in.generated_params is not None:
                 seg.generated_params = s_in.generated_params
             if s_in.audio is not None:
+                _delete_dropped_audio_files(seg, s_in.audio)
                 setattr(seg, "audio", s_in.audio)
             seg.generated_at = _parse_iso(s_in.generated_at)
             if s_in.animation_spec is not None:
@@ -960,9 +1000,45 @@ def batch_create_structure(
                 segment_kind=seg_data.get("segment_kind", "narration"),
             )
             seg_result.append({"id": seg.id})
+        # layer-sync: this chapter is freshly derived (L2 from L1) and split
+        # (L3 from L2) in one go -> snapshot all three hashes as the baseline.
+        from app.services.layer_sync_service import mark_consistent
+        mark_consistent(chapter)
         result.append({"id": chapter.id, "segments": seg_result})
     db.commit()
     return result
+
+
+def resplit_from_script(db: Session, project_id: str, chapter_id: str):
+    """Layer-sync Phase B: re-split segments from the chapter's current L2.
+
+    Discards all existing segments (role/emotion/voice config lost) and
+    regenerates them via ``rule_split`` on ``chapter.narration_script``.
+    Re-baselines L2/L3 (+ split_anchor). Returns the refreshed ProjectDetail.
+    """
+    from uuid import uuid4
+
+    from app.services.layer_sync_service import mark_split
+    from app.services.text_split_service import rule_split
+
+    chapter = get_chapter_row(db, project_id, chapter_id)
+    if chapter is None:
+        raise LookupError("chapter_not_found")
+    delimiters = (chapter.split_config or {}).get("delimiters", ["，", "。"])
+    items = rule_split(chapter.narration_script or "", delimiters)
+    for s in list(chapter.segments):
+        db.delete(s)
+    db.flush()
+    for i, text in enumerate(items):
+        db.add(SegmentedProjectSegment(
+            id=str(uuid4()), chapter_id=chapter.id, position=i, text=text,
+            segment_kind="narration", voice={"source": "chapter"},
+        ))
+    db.flush()
+    db.refresh(chapter)
+    mark_split(chapter)
+    db.commit()
+    return get_project_detail(db, project_id)
 
 
 def create_chapter_for_project(

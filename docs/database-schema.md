@@ -197,6 +197,7 @@ Chapters within a segmented project. Each chapter groups segments with optional 
 | `original_text` | String | Yes | `NULL` | Chapter-level original text |
 | `narration_script` | Text | Yes | `NULL` | L3 narration script (edited); source for segment splitting |
 | `design_title` | String | Yes | `NULL` | Design/display title |
+| `sync_state` | JSON | Yes | `NULL` | Layer-sync staleness baseline: `{l1_hash, l2_hash, segments_hash}` (blake2s-8), written by `mark_l2_derived` / `mark_split` |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update timestamp (auto-updates) |
 
@@ -220,6 +221,7 @@ Individual text segments within a chapter. Each segment holds text, role, voice 
 | `audio` | JSON | Yes | `NULL` | Audio state: `{current, previous, format, duration_sec}` |
 | `generated_at` | DateTime | Yes | `NULL` | Last generation timestamp |
 | `animation_spec_json` | Text | Yes | `NULL` | Animation spec |
+| `split_anchor` | JSON | Yes | `NULL` | Layer-sync Phase B anchor in chapter `narration_script`: `{offset_start, offset_end, baseline_text}`; written at split, used for L3->L2 localisation merge |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update (auto) |
 

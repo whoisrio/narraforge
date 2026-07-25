@@ -92,6 +92,55 @@ def test_save_project_preserves_existing_backend_audio_when_payload_omits_path(d
     assert seg.generated_params == {"engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"}
 
 
+def test_save_project_deletes_audio_file_dropped_by_payload(db_session, tmp_path, monkeypatch):
+    """Merge clears a kept segment's audio -> the old file must not be orphaned."""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+
+    audio_file = tmp_path / "p1/chapters/c-p1/audio/s-p1.mp3"
+    audio_file.parent.mkdir(parents=True, exist_ok=True)
+    audio_file.write_bytes(b"fake-mp3")
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
+    seg.audio = {"current": {"path": "p1/chapters/c-p1/audio/s-p1.mp3", "format": "mp3"}}
+    db_session.commit()
+
+    payload = _seed_project()
+    payload.chapters[0].segments[0].audio = {"format": "mp3"}
+    save_project(db_session, payload)
+    db_session.commit()
+
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
+    assert (seg.audio or {}).get("current") is None
+    assert not audio_file.exists()
+
+
+def test_save_project_keeps_audio_file_still_referenced_as_previous(db_session, tmp_path, monkeypatch):
+    """Regenerate moves old current -> previous; the file must survive the PUT."""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+
+    old_file = tmp_path / "p1/chapters/c-p1/audio/s-p1-old.mp3"
+    old_file.parent.mkdir(parents=True, exist_ok=True)
+    old_file.write_bytes(b"fake-mp3")
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
+    seg.audio = {"current": {"path": "p1/chapters/c-p1/audio/s-p1-old.mp3", "format": "mp3"}}
+    db_session.commit()
+
+    payload = _seed_project()
+    payload.chapters[0].segments[0].audio = {
+        "current": {"path": "p1/chapters/c-p1/audio/s-p1.mp3", "format": "mp3"},
+        "previous": {"path": "p1/chapters/c-p1/audio/s-p1-old.mp3", "format": "mp3"},
+    }
+    save_project(db_session, payload)
+    db_session.commit()
+
+    assert old_file.exists()
+
+
 def test_save_project_removes_orphan_chapters(db_session, tmp_path, monkeypatch):
     from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
