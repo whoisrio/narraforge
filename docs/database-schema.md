@@ -237,12 +237,14 @@ Individual text segments within a chapter. Each segment holds text, role, voice 
 
 ```json
 {
-  "current": {"id": "idx_a", "path": "/project/ch1/seg.wav"},
+  "current": {"id": "idx_a", "path": "{project-slug}/chapters/{chapter-id}/segments/{segment-id}.mp3"},
   "previous": {"id": "idx_old"},
-  "format": "wav",
+  "format": "mp3",
   "duration_sec": 2.3
 }
 ```
+
+`path` 是相对于资产根（默认 `backend/data/projects/`，环境变量 `SEGMENTED_DIR` 可覆盖）的相对路径，也可能是绝对路径（历史数据）。读取端一律以 DB 存储路径为准；新写入的文件遵循统一布局（设计见 `docs/superpowers/specs/2026-07-25-unified-data-root-asset-naming-design.md`）。
 
 ---
 

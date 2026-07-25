@@ -29,14 +29,21 @@ class Settings(BaseSettings):
 
     # Paths
     base_dir: Path = Path(__file__).parent.parent.parent
+    data_dir: Path = base_dir / "data"
     uploads_dir: Path = base_dir / "uploads"
     voices_dir: Path = uploads_dir / "voices"
     videos_dir: Path = uploads_dir / "videos"
     srt_output_dir: Path = uploads_dir / "srt"
-    segmented_dir: Path = uploads_dir / "segmented"
+    # 项目资产根（原 uploads/segmented）。DB 中的 audio.path 均相对此目录。
+    segmented_dir: Path = data_dir / "projects"
     output_dir: Path = base_dir / "output"
     clone_voices_dir: Path = output_dir / "clone_voices"
     logs_dir: Path = base_dir / "logs"
+
+    @property
+    def projects_dir(self) -> Path:
+        """Alias for segmented_dir (unified data root naming)."""
+        return self.segmented_dir
 
     def to_relative(self, abs_path: str | Path) -> str:
         """绝对路径 → 相对路径（相对于 base_dir）"""

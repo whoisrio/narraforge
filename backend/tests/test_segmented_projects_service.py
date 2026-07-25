@@ -46,8 +46,8 @@ def test_save_project_inserts_rows(db_session, tmp_path, monkeypatch):
     assert len(p.chapters) == 1
     assert len(p.chapters[0].segments) == 1
     assert p.chapters[0].segments[0].text == "hello"
-    assert (project_dir("p1") / "original.txt").read_text(encoding="utf-8") == "全文"
-    m = read_manifest("p1")
+    assert (project_dir("p1", "Test") / "original.txt").read_text(encoding="utf-8") == "全文"
+    m = read_manifest("p1", "Test")
     assert m is not None
     assert m["id"] == "p1"
 
@@ -180,11 +180,11 @@ def test_delete_project_removes_rows_and_dir(db_session, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     save_project(db_session, _seed_project())
     db_session.commit()
-    assert project_dir("p1").exists()
+    assert project_dir("p1", "Test").exists()
     delete_project(db_session, "p1")
     db_session.commit()
     assert db_session.query(SegmentedProject).count() == 0
-    assert not project_dir("p1").exists()
+    assert not project_dir("p1", "Test").exists()
 
 
 def test_to_iso_handles_naive_and_aware():
@@ -245,3 +245,44 @@ def test_save_project_persists_voice(db_session, tmp_path, monkeypatch):
     assert seg.voice["voice_id"] == "zh-CN-YunxiNeural"
     assert seg.voice["engine"] == "edge_tts"
     assert seg.voice["role_id"] == "role-narrator"
+
+
+def test_project_rename_relocates_assets_and_rewrites_paths(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    from app.core import segmented_assets as assets
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+
+    # plant an audio file under the old slug dir
+    old_dir = assets.project_dir("p1", "Test")
+    audio_file = old_dir / "chapters" / "c-p1" / "segments" / "s-p1.mp3"
+    audio_file.parent.mkdir(parents=True, exist_ok=True)
+    audio_file.write_bytes(b"fake")
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
+    seg.audio = {"current": {"path": f"{old_dir.name}/chapters/c-p1/segments/s-p1.mp3", "format": "mp3"}}
+    db_session.commit()
+
+    payload = _seed_project()
+    payload.name = "Renamed项目"
+    payload.chapters[0].segments[0].audio = {"current": {"path": f"{old_dir.name}/chapters/c-p1/segments/s-p1.mp3", "format": "mp3"}}
+    save_project(db_session, payload)
+    db_session.commit()
+
+    new_dir = tmp_path / "renamed-xiang-mu"
+    assert not old_dir.exists()
+    assert (new_dir / "chapters" / "c-p1" / "segments" / "s-p1.mp3").exists()
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p1").one()
+    assert seg.audio["current"]["path"] == "renamed-xiang-mu/chapters/c-p1/segments/s-p1.mp3"
+
+
+def test_project_rename_without_assets_is_noop(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+    payload = _seed_project()
+    payload.name = "另一个名字"
+    save_project(db_session, payload)
+    db_session.commit()
+    assert db_session.query(SegmentedProject).filter_by(id="p1").one().name == "另一个名字"

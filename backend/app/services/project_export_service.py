@@ -213,8 +213,10 @@ def _read_segment_file(rel_path: str) -> bytes:
 def _assert_assets_under_project_dir(project: SegmentedProject) -> None:
     """Refuse export when any segment audio / project doc lives outside the
     project directory (legacy scattered layout). Migration fixes this."""
+    from app.core import segmented_assets as assets
+
     root = settings.segmented_dir.resolve()
-    proj_root = (root / project.id).resolve()
+    proj_root = assets.project_dir(project.id, project.name).resolve()
 
     def _under(rel_or_abs: str | None) -> None:
         if not rel_or_abs:

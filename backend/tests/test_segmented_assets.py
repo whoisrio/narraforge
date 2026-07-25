@@ -1,151 +1,122 @@
-"""Tests for the human-readable naming layout of segmented project assets.
+"""Tests for segmented asset path construction (plan B: unified data root).
 
-The paths are keyed by project/chapter *name* + a short id suffix for
-uniqueness — never by id alone or by name alone:
+New layout:
 
-    projects/{project_id}/
-        source-{project-name}-{project-id-short}.md
-        narration-{project-name}-{project-id-short}.md
-        chapters/
-            chapter-{chapter-title}-{project-name}-{chapter-id-short}/
-                original.txt
-                segments/
-                    segment-{position:03d}-{segment-id-short}.mp3
-                    segment-{position:03d}-{segment-id-short}.txt
-                    segment-{position:03d}-{segment-id-short}.ssml
+    data/projects/{project-slug}/
+        manifest.json
+        source.md / narration.md / original.txt
+        chapters/{chapter-id}/
+            original.txt
+            segments/{segment-id}.mp3|txt|ssml
 
-Rationale: browsable in a file manager (names are meaningful), yet a short id
-suffix (first 6 chars of the UUID/id) guarantees uniqueness across projects
-that share a name or chapters that share a title.
+Project dir uses the name slug (pinyin); chapter/segment paths use raw DB
+ids so renames never move files.
 """
 from pathlib import Path
 
-from app.core.config import settings
-from app.core.segmented_assets import (
-    chapter_dir,
-    ensure_chapter_layout,
-    project_dir,
-    read_manifest,
-    remove_project_dir,
-    safe_name_part,
-    segment_audio_path,
-    segment_basename,
-    short_id,
-    source_document_path,
-    narration_document_path,
-    write_chapter_original_text,
-    write_manifest,
-    write_project_document,
-    write_segment_ssml,
-    write_segment_text,
-)
+from app.core import segmented_assets as assets
+
+
+class P:
+    """minimal project/chapter stand-ins"""
+    id = "1784872201849-6-xnfikk"
+    name = "langgraph-stream"
+
+
+CID = "1784872201849-5-e63qdw"
+SID = "1784872305255-25-i8i202"
 
 
 def test_short_id_takes_stable_prefix():
-    assert short_id("1783497432116-2-a3o1cf") == "178349"
-    assert short_id("abc") == "abc"
-    assert short_id("") == ""
+    assert assets.short_id("abcdef-123") == "abcdef"
+    assert assets.short_id("ab") == "ab"
+    assert assets.short_id("") == ""
 
 
 def test_safe_name_part_strips_and_replaces_unsafe_chars():
-    assert safe_name_part("我的 项目 / v2") == "我的_项目_v2"
-    # Leading dots are stripped so we don't create hidden files or leak
-    # traversal-looking prefixes into a browsable path.
-    assert safe_name_part("  ../etc/passwd  ") == "_etc_passwd"
-    # Falls back to a sentinel so paths never contain an empty part.
-    assert safe_name_part("") == "untitled"
-    assert safe_name_part("   ") == "untitled"
+    assert assets.safe_name_part("hello world") == "hello_world"
+    assert assets.safe_name_part(".hidden") == "hidden"
+    assert assets.safe_name_part("") == "untitled"
 
 
-def test_project_dir_still_keyed_by_id():
-    """Project dir stays id-keyed so renaming a project doesn't move files."""
-    d = project_dir("p1")
-    assert d == settings.segmented_dir / "p1"
+def test_project_dir_uses_name_slug(tmp_path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    d = assets.project_dir(P.id, P.name)
+    assert d == tmp_path / "langgraph-stream"
 
 
-def test_source_and_narration_paths_include_project_name_and_short_id():
-    pid = "1783497432116-2-a3o1cf"
-    src = source_document_path(pid, "DeepSeek 解说")
-    nar = narration_document_path(pid, "DeepSeek 解说")
-    assert src.parent == project_dir(pid)
-    assert src.name == "source-DeepSeek_解说-178349.md"
-    assert nar.name == "narration-DeepSeek_解说-178349.md"
+def test_project_dir_falls_back_to_id_when_name_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    assert assets.project_dir(P.id, None) == tmp_path / P.id
 
 
-def test_chapter_dir_includes_title_project_name_and_short_id():
-    pid = "1783497432116-2-a3o1cf"
-    cid = "1783497432116-1-9ihllc"
-    d = chapter_dir(pid, cid, chapter_title="引言", project_name="DeepSeek 解说")
-    expected = (
-        project_dir(pid) / "chapters"
-        / "chapter-引言-DeepSeek_解说-178349"
+def test_project_dir_collision_gets_hash_suffix(tmp_path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    # first project claims the slug dir (with its manifest)
+    d1 = assets.project_dir("proj-aaa", "test")
+    d1.mkdir(parents=True)
+    assets.write_manifest("proj-aaa", {"id": "proj-aaa"}, project_name="test")
+    # second project with the same name gets a deterministic hash suffix
+    d2 = assets.project_dir("proj-bbb", "test")
+    assert d2.name.startswith("test-") and d2.name != "test"
+    # stable on repeated calls
+    assert assets.project_dir("proj-bbb", "test") == d2
+    # original owner still resolves to the bare slug
+    assert assets.project_dir("proj-aaa", "test") == d1
+
+
+def test_chapter_dir_uses_raw_chapter_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    d = assets.chapter_dir(P.id, CID, project_name=P.name)
+    assert d == tmp_path / "langgraph-stream" / "chapters" / CID
+
+
+def test_segment_audio_path_uses_raw_segment_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    p = assets.segment_audio_path(
+        P.id, CID, project_name=P.name, segment_id=SID, fmt="mp3",
     )
-    assert d == expected
+    assert p == tmp_path / "langgraph-stream" / "chapters" / CID / "segments" / f"{SID}.mp3"
 
 
-def test_segment_paths_use_position_and_short_segment_id():
-    pid = "p1"
-    cid = "c1"
-    base = segment_basename(position=3, segment_id="abc123def456")
-    assert base == "segment-003-abc123"
-
-    audio = segment_audio_path(
-        pid, cid,
-        chapter_title="第 一 章", project_name="Proj",
-        segment_id="abc123def456", position=3, fmt="mp3",
-    )
-    assert audio.name == "segment-003-abc123.mp3"
-    assert audio.parent.name == "segments"
-    assert audio.parent.parent == chapter_dir(pid, cid, chapter_title="第 一 章", project_name="Proj")
+def test_project_document_paths_are_fixed_names(tmp_path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    assert assets.source_document_path(P.id, P.name) == tmp_path / "langgraph-stream" / "source.md"
+    assert assets.narration_document_path(P.id, P.name) == tmp_path / "langgraph-stream" / "narration.md"
 
 
-def test_write_and_read_manifest_unchanged(tmp_path: Path, monkeypatch):
-    """manifest.json still lives at the project dir root, unchanged name."""
-    monkeypatch.setattr(settings, "segmented_dir", tmp_path)
-    write_manifest("p1", {"project": {"id": "p1", "name": "x"}})
-    assert read_manifest("p1") == {"project": {"id": "p1", "name": "x"}}
-
-
-def test_write_project_document_creates_named_file(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(settings, "segmented_dir", tmp_path)
-    pid = "1783497432116-2-a3o1cf"
-    path = write_project_document(pid, kind="source", project_name="My Proj", text="hello")
-    assert Path(path).name == "source-My_Proj-178349.md"
-    assert Path(path).read_text(encoding="utf-8") == "hello"
+def test_write_and_read_manifest(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    assets.write_manifest(P.id, {"id": P.id, "name": P.name}, project_name=P.name)
+    m = assets.read_manifest(P.id, P.name)
+    assert m is not None and m["id"] == P.id
+    assert (tmp_path / "langgraph-stream" / "manifest.json").exists()
 
 
 def test_write_chapter_original_and_segment_files(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(settings, "segmented_dir", tmp_path)
-    pid = "1783497432116-2-a3o1cf"
-    cid = "1783497432116-1-9ihllc"
-    ensure_chapter_layout(pid, cid, chapter_title="引言", project_name="P")
-    write_chapter_original_text(pid, cid, chapter_title="引言", project_name="P", text="ch original")
-    write_segment_text(
-        pid, cid, chapter_title="引言", project_name="P",
-        segment_id="s1abcdef", position=0, text="seg body",
-    )
-    write_segment_ssml(
-        pid, cid, chapter_title="引言", project_name="P",
-        segment_id="s1abcdef", position=0, ssml="<speak/>",
-    )
-    cdir = chapter_dir(pid, cid, chapter_title="引言", project_name="P")
-    assert (cdir / "original.txt").read_text(encoding="utf-8") == "ch original"
-    seg_dir = cdir / "segments"
-    assert (seg_dir / "segment-000-s1abcd.txt").read_text(encoding="utf-8") == "seg body"
-    assert (seg_dir / "segment-000-s1abcd.ssml").read_text(encoding="utf-8") == "<speak/>"
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    assets.write_chapter_original_text(P.id, CID, project_name=P.name, text="原文")
+    assets.write_segment_text(P.id, CID, project_name=P.name, segment_id=SID, text="段文本")
+    assets.write_segment_ssml(P.id, CID, project_name=P.name, segment_id=SID, ssml="<speak/>")
+    base = tmp_path / "langgraph-stream" / "chapters" / CID
+    assert (base / "original.txt").read_text() == "原文"
+    assert (base / "segments" / f"{SID}.txt").read_text() == "段文本"
+    assert (base / "segments" / f"{SID}.ssml").read_text() == "<speak/>"
 
 
-def test_remove_project_dir_still_works(tmp_path: Path, monkeypatch):
-    monkeypatch.setattr(settings, "segmented_dir", tmp_path)
-    write_manifest("p1", {"x": 1})
-    remove_project_dir("p1")
-    assert not project_dir("p1").exists()
+def test_remove_project_dir(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    d = assets.project_dir(P.id, P.name)
+    d.mkdir(parents=True)
+    assets.remove_project_dir(P.id, P.name)
+    assert not d.exists()
 
 
-def test_disambiguates_when_names_collide():
-    """Two projects with the same name still produce distinct file paths
-    because the id-short suffix differs."""
-    p1_src = source_document_path("aaa111-x", "SameName")
-    p2_src = source_document_path("bbb222-y", "SameName")
-    assert p1_src != p2_src
-    assert p1_src.name != p2_src.name
+def test_remove_segment_audio_by_db_path(tmp_path: Path, monkeypatch):
+    """Deletion prefers the DB-stored path (works for ANY historical layout)."""
+    monkeypatch.setattr(assets.settings, "segmented_dir", tmp_path)
+    legacy = tmp_path / "old-uid" / "chapters" / "weird-name" / "segments" / "segment-000-x.mp3"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_bytes(b"x")
+    assets.delete_audio_file("old-uid/chapters/weird-name/segments/segment-000-x.mp3")
+    assert not legacy.exists()
