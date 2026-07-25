@@ -856,6 +856,8 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | POST | `/api/segmented-projects/{id}/apply-animation-spec` | 批量应用动画规格 |
 | POST | `/api/segmented-projects/{id}/export-text-file-to-remotion` | 导出文本文件到 Remotion |
 | POST | `/api/segmented-projects/{id}/scaffold-remotion` | 创建/刷新 Remotion 工程（knowledge_video 工作流） |
+| GET | `/api/segmented-projects/{id}/export` | 导出项目为自包含 ZIP 包（文本+角色+音色+音频） |
+| POST | `/api/segmented-projects/import` | 从 ZIP 包导入为新项目（ID 重映射，不覆盖） |
 | POST | `/api/segmented-projects/migrate` | 批量迁移 IndexedDB 项目 |
 
 ### ProjectIn Schema
@@ -1114,6 +1116,24 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 ```
 
 **Errors:** 404 `project_not_found`；422 `animation_root_not_configured`；500 `npx_not_found` / `create_video_failed`。
+
+### GET `/api/segmented-projects/{id}/export`
+
+导出项目为自包含 ZIP 包（`{name}.narraforge.zip`），含 `manifest.json`（DB 行快照）+ `assets/`（segment 音频、voice 试听/参考音频）+ `text/`（源/旁白文档人读副本）。非破坏：不修改原项目。草稿项目禁止导出。
+
+**Response:** `application/zip`（Content-Disposition 附件下载，文件名 RFC 5987 编码）。
+
+**Errors:** 403 `cannot_export_scratchpad`；404 `project_not_found`；422 `project_assets_not_under_project_dir`（资产未迁移到项目目录，先跑 `migrate_asset_layout`）。
+
+### POST `/api/segmented-projects/import`
+
+从 ZIP 包导入为**新项目**：ID 全重映射，不覆盖同名。FK（chapter/segment/role/voice_profile）重写；音频文件落盘并重写路径；`remotion_project_path` 清空；文本镜像重建。
+
+**Request:** `multipart/form-data`，字段 `file` = ZIP。
+
+**Response:** `201` + 新项目 `ProjectDetail`。
+
+**Errors:** 422 `invalid_bundle`（非 ZIP / manifest 损坏）或 `unsupported bundle_version`。
 
 ### POST `/api/segmented-projects/migrate`
 

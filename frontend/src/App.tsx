@@ -5,7 +5,7 @@ import { TTSSynthesis } from './pages/TTSSynthesis';
 import { SpeechToText } from './pages/SpeechToText';
 import { ModelConfig } from './pages/ModelConfig';
 import { ProjectHub } from './components/ProjectHub/ProjectHub';
-import { configApi } from './services/api';
+import { configApi, segmentedProjectApi } from './services/api';
 import { indexedDBStorage, type SegmentedProjectStorage } from './services/segmentedProjectStorage';
 import { backendStorage } from './services/backendSegmentedProjectStorage';
 import { createInitialProject } from './hooks/useSegmentedProject';
@@ -138,6 +138,25 @@ function AppContent() {
     await refreshProjects();
   };
 
+  const handleExportProject = async (projectId: string) => {
+    try {
+      await segmentedProjectApi.exportProject(projectId);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : t('projectHub.import.failed'));
+    }
+  };
+
+  const handleImportProject = async (file: File) => {
+    try {
+      await segmentedProjectApi.importProject(file);
+      await refreshProjects();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { detail?: string } } };
+      const detail = e?.response?.data?.detail;
+      window.alert(detail ? `${t('projectHub.import.failed')}: ${detail}` : t('projectHub.import.failed'));
+    }
+  };
+
   const activeGlobalNav: GlobalNavId =
     activeTab === 'speech-to-text' ? 'subtitles'
       : activeTab === 'voice-clone' ? 'voice-design'
@@ -186,6 +205,8 @@ function AppContent() {
                     onCreateProject={(name, logo) => { void handleCreateProject(name, logo); }}
                     onDeleteProject={(projectId) => { void handleDeleteProjectFromHub(projectId); }}
                     onRenameProject={(projectId, name) => { void handleRenameProjectFromHub(projectId, name); }}
+                    onExportProject={(projectId) => { void handleExportProject(projectId); }}
+                    onImportProject={(file) => { void handleImportProject(file); }}
                   />
                 )}
                 {activeTab === 'tts-synthesis' && activeProjectId && storageModeLoaded && (

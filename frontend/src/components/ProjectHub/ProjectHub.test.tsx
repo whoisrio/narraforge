@@ -172,4 +172,43 @@ describe('ProjectHub', () => {
     expect(onCreateProject).toHaveBeenCalledWith(expect.any(String), null);
     expect(screen.getByText('还没有项目')).toBeInTheDocument();
   });
+
+  it('invokes onExportProject with the project id from the action menu', () => {
+    const onExportProject = vi.fn();
+
+    render(
+      <ProjectHub
+        projects={[makeProject('p-1', 'DeepSeek 解说', 1, 2)]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onRenameProject={vi.fn()}
+        onExportProject={onExportProject}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /项目操作 DeepSeek 解说/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /导出项目/ }));
+    expect(onExportProject).toHaveBeenCalledWith('p-1');
+  });
+
+  it('invokes onImportProject with the chosen file', () => {
+    const onImportProject = vi.fn();
+
+    render(
+      <ProjectHub
+        projects={[]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onRenameProject={vi.fn()}
+        onImportProject={onImportProject}
+      />,
+    );
+
+    const input = screen.getByLabelText(/导入项目/) as HTMLInputElement;
+    const file = new File(['zip'], 'proj.narraforge.zip', { type: 'application/zip' });
+    fireEvent.change(input, { target: { files: [file] } });
+    expect(onImportProject).toHaveBeenCalledWith(file);
+  });
 });
