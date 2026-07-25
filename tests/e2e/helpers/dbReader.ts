@@ -369,6 +369,19 @@ export async function readDbWorkflowRuns(projectId: string): Promise<DbWorkflowR
 }
 
 /**
+ * Read a raw `system_configs` value by key (e.g. 'animation_root_folder',
+ * 'storage_mode'). Returns null when the key is absent. Used for dual-read
+ * verification of global settings independent of the API layer.
+ */
+export async function readDbSystemConfig(key: string): Promise<string | null> {
+  const db = getDb();
+  const row = db.prepare('SELECT value FROM system_configs WHERE key = ?').get(key) as
+    | { value: string }
+    | undefined;
+  return row?.value ?? null;
+}
+
+/**
  * Validate a raw DB WorkflowRun row against the schema.
  * Throws on any contract violation.
  */

@@ -132,5 +132,5 @@ All frontend test files with `.test.ts`, `.test.tsx`, `.spec.ts`, or `.spec.tsx`
 
 ### E2E Tests
 
-Cross-stack browser E2E tests live under `tests/e2e/`. All 26 specs pass with `npm run e2e`.
+Cross-stack browser E2E tests live under `tests/e2e/`. All 31 tests pass with `npm run e2e`.
 See [`docs/e2e-test-guide.md`](docs/e2e-test-guide.md) for running instructions, directory layout, data assertions, dual-read verification, and gap analysis.
