@@ -6,7 +6,7 @@ import type { Page } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const BASE_URL = 'http://127.0.0.1:8002';
+const BASE_URL = 'http://127.0.0.1:8012';
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 
 /** Delete all roles with the given name to avoid duplicates from prior runs. */

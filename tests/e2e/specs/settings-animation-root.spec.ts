@@ -12,7 +12,7 @@ import { readDbSystemConfig } from '../helpers/dbReader';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-const BACKEND = 'http://127.0.0.1:8002';
+const BACKEND = 'http://127.0.0.1:8012';
 
 /** Scope to the AnimationRootSetting <section> on the /settings page. */
 function animRootSection(page: import('@playwright/test').Page) {

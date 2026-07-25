@@ -17,7 +17,7 @@ import {
 } from '../helpers';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
-const BASE_URL = 'http://127.0.0.1:8002';
+const BASE_URL = 'http://127.0.0.1:8012';
 
 // Track the role name created by this test for cleanup
 let createdRoleName = '';

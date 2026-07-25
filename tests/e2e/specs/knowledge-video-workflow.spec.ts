@@ -30,7 +30,7 @@ import {
 import { readDbProject, validateDbProjectRow } from '../helpers/dbReader';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
-const BACKEND = 'http://127.0.0.1:8002';
+const BACKEND = 'http://127.0.0.1:8012';
 
 test.describe('知识视频工作流', () => {
   test.beforeEach(async ({ page }) => {

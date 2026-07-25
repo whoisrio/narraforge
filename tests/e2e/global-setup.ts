@@ -16,7 +16,7 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     let healthJson: any = null;
     while (Date.now() - start < maxWait) {
       try {
-        const resp = await page.request.get('http://127.0.0.1:8002/health');
+        const resp = await page.request.get('http://127.0.0.1:8012/health');
         if (resp.ok()) {
           healthJson = await resp.json();
           break;
@@ -37,7 +37,7 @@ async function globalSetup(_config: FullConfig): Promise<void> {
     console.log(`[global-setup] Backend app_env=${healthJson.app_env} ✓`);
 
     // Set storage mode to backend so the frontend reads projects from SQLite (not IndexedDB)
-    const modeResp = await page.request.put('http://127.0.0.1:8002/api/config/storage-mode', {
+    const modeResp = await page.request.put('http://127.0.0.1:8012/api/config/storage-mode', {
       data: { storage_mode: 'backend' },
     });
     if (modeResp.ok()) {

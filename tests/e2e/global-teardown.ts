@@ -12,7 +12,7 @@
 import type { FullConfig } from '@playwright/test';
 import { chromium } from '@playwright/test';
 
-const BASE_URL = 'http://127.0.0.1:8002';
+const BASE_URL = 'http://127.0.0.1:8012';
 
 /** Roles that should survive teardown (seeded by global-setup). */
 const KEEP_ROLES = new Set(['小明', '小红']);
@@ -25,6 +25,20 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
   const page = await browser.newPage();
 
   try {
+    // ── 0. SAFETY GUARD: never delete from a non-e2e backend ──
+    // If the port was hijacked by a dev/prod backend (dual-bind), deleting
+    // "non-seeded" data would wipe the developer's real database — this
+    // happened in production. Verify app_env before ANY destructive call.
+    const healthResp = await page.request.get(`${BASE_URL}/health`).catch(() => null);
+    const health = healthResp?.ok() ? await healthResp.json() : null;
+    if (health?.app_env !== 'e2e') {
+      console.warn(
+        `[global-teardown] SKIPPING all deletions: app_env=${health?.app_env ?? 'unreachable'} ` +
+        `(expected 'e2e'). Refusing to touch a non-e2e database.`,
+      );
+      return;
+    }
+
     // ── 1. Delete non-seeded roles ──
     const rolesResp = await page.request.get(`${BASE_URL}/api/roles`);
     if (rolesResp.ok()) {

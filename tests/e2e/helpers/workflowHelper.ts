@@ -6,7 +6,7 @@
 import type { Page } from '@playwright/test';
 import { expect } from '@playwright/test';
 
-const BASE_URL = 'http://127.0.0.1:8002';
+const BASE_URL = 'http://127.0.0.1:8012';
 
 /** WorkflowRun shape returned by the backend API. */
 export interface WorkflowRunApi {
