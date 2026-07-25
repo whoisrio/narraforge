@@ -81,7 +81,16 @@ Used for CosyVoice voice registration, which requires a publicly accessible audi
 |----------|----------|-------------|---------|
 | `SEGMENTED_DIR` | No | Root of per-project asset dirs (segment audio, text mirrors). DB `audio.path` values are relative to this root. | `backend/data/projects` |
 
-应用数据统一放在 `backend/data/` 下（`narration-repo/` 文本版本库、`projects/` 项目资产）。`uploads/`、`output/` 为遗留目录（voices/tts-history/srt 归并见设计文档）。
+应用数据统一放在 `backend/data/` 下：
+
+- `narration-repo/` — 文本版本库（git）
+- `projects/` — 项目资产（段音频、文本镜像）
+- `voices/profiles/` — 克隆样本原音；`voices/previews/` — 克隆/引擎试听
+- `tts-history/` — TTS 历史音频
+- `srt/` — 字幕识别产物
+- `temp/` — 临时文件
+
+`uploads/`、`output/` 为遗留目录，由 `scripts/migrate_to_data_root.py` 与 `scripts/migrate_to_unified_storage.py` 收敛（dry-run 默认，`--apply` 执行，幂等）。
 
 ## Logging
 

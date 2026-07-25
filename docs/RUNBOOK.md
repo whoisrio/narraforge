@@ -306,16 +306,33 @@ Projects created before the human-readable rename use id-only filenames
 name-embedded paths (`source-{project-name}-{id-short}.md`,
 `chapter-{title}-{project-name}-{id-short}/`, `segment-{position:03d}-{id-short}.mp3`).
 
-After pulling the rename, run the migration once per environment:
+## Storage Migrations (unified data root)
+
+应用数据统一收敛到 `backend/data/`（设计：`docs/superpowers/specs/2026-07-25-unified-data-root-asset-naming-design.md`）。
+拉取包含该变更的代码后，**每个环境各执行一次**（脚本幂等，可重跑）：
 
 ```bash
+# 1. 停后端；备份
+cp backend/voice_clone.db backend/voice_clone.db.bak-pre-migration
+tar -czf assets-backup-$(date +%Y%m%d).tgz backend/uploads backend/output
+
+# 2. dry-run 审阅（不写盘）
 cd backend
-uv run python -m scripts.migrate_asset_layout
+uv run python -m scripts.migrate_to_data_root            # 项目资产 → data/projects
+uv run python -m scripts.migrate_to_unified_storage      # voices/tts-history/srt 归位
+
+# 3. 执行
+uv run python -m scripts.migrate_to_data_root --apply
+uv run python -m scripts.migrate_to_unified_storage --apply
+
+# 4. 起后端并抽查音频端点
 ```
 
-The script renames on-disk files/dirs *and* rewrites
-`SegmentedProject.source_document_path`, `narration_document_path`, and every
-`SegmentedProjectSegment.audio.current/previous.path`. Idempotent — safe to re-run.
+说明：
+
+- 无 flag day：读取端以 DB 存储路径为准，先升级代码、后择机迁移完全可行。
+- 新部署环境无需任何迁移。
+- `SEGMENTED_DIR` 等环境变量覆盖优先于默认值（自定义存储根的环境同样适用）。
 
 ---
 

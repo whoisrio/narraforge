@@ -162,7 +162,7 @@ async def upload_voice(
         # 保存原始 webm 到临时文件
         temp_dir = tempfile.gettempdir()
         temp_webm_path = os.path.join(temp_dir, f"{file_id}.webm")
-        final_mp3_path = settings.voices_dir / f"{safe_name}_{ts}.mp3"
+        final_mp3_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.mp3"
 
         try:
             # 保存上传的文件
@@ -190,7 +190,7 @@ async def upload_voice(
     else:
         # 直接保存其他格式
         file_extension = file_ext
-        file_path = settings.voices_dir / f"{safe_name}_{ts}.{file_extension}"
+        file_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.{file_extension}"
 
         async with aiofiles.open(file_path, "wb") as f:
             content = await file.read()
@@ -256,7 +256,7 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_dir = tempfile.gettempdir()
     temp_audio_path = os.path.join(temp_dir, f"{file_id}.mp3")
-    final_audio_path = settings.voices_dir / f"{safe_name}_{ts}.mp3"
+    final_audio_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.mp3"
 
     try:
         # 下载音频（禁用代理）
@@ -508,10 +508,10 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
     # 文件名：角色名_时间戳（可读性好）
     safe_name = (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    audio_path = settings.clone_voices_dir / f"{safe_name}_{ts}.{audio_ext}"
+    audio_path = settings.voices_previews_dir / f"{safe_name}_{ts}.{audio_ext}"
 
     # 保存音频文件
-    settings.clone_voices_dir.mkdir(parents=True, exist_ok=True)
+    settings.voices_previews_dir.mkdir(parents=True, exist_ok=True)
     with open(audio_path, "wb") as f:
         f.write(audio_bytes)
 
@@ -591,9 +591,9 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
     audio_ext = request.audio_format or "wav"
     safe_name = (voice.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    preview_path = settings.clone_voices_dir / f"{safe_name}_{ts}.{audio_ext}"
+    preview_path = settings.voices_previews_dir / f"{safe_name}_{ts}.{audio_ext}"
 
-    settings.clone_voices_dir.mkdir(parents=True, exist_ok=True)
+    settings.voices_previews_dir.mkdir(parents=True, exist_ok=True)
     with open(preview_path, "wb") as f:
         f.write(audio_bytes)
 

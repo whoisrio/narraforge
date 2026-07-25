@@ -404,7 +404,7 @@ class VoxCPMService:
 
     def _save_wav_temp(self, wav_bytes: bytes) -> str:
         """将 WAV 字节保存到临时文件，返回路径"""
-        fd, path = tempfile.mkstemp(suffix=".wav", dir=str(settings.uploads_dir))
+        fd, path = tempfile.mkstemp(suffix=".wav", dir=str(settings.temp_dir))
         with os.fdopen(fd, "wb") as f:
             f.write(wav_bytes)
         return path
