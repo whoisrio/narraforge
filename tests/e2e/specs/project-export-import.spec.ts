@@ -14,7 +14,7 @@ import * as path from 'node:path';
 import { collectErrors, setLocaleToZhCN, enterWorkspace, readBackendProjects } from '../helpers';
 import { readDbProjects } from '../helpers/dbReader';
 
-const BACKEND = 'http://127.0.0.1:8002';
+const BACKEND = 'http://127.0.0.1:8012';
 const SOURCE_PROJECT_ID = 'test-e2e-project';
 
 test.describe('项目导出 / 导入', () => {

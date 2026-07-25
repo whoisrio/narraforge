@@ -14,7 +14,7 @@ import {
   setLocaleToZhCN,
 } from '../helpers';
 
-const BASE_URL = 'http://127.0.0.1:8002';
+const BASE_URL = 'http://127.0.0.1:8012';
 const SAMPLE_AUDIO = path.resolve(__dirname, '..', 'fixtures', 'sample-audio', 'temp_audio.mp3');
 const CLONE_NAME = `e2e-mimo-${Date.now()}`;
 

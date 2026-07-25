@@ -20,7 +20,7 @@ import {
   setLocaleToZhCN,
 } from '../helpers';
 
-const BASE_URL = 'http://127.0.0.1:8002';
+const BASE_URL = 'http://127.0.0.1:8012';
 
 /** Delete roles by name via backend API. */
 async function deleteRolesByName(name: string): Promise<void> {

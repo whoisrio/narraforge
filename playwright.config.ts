@@ -29,7 +29,7 @@ export default defineConfig({
     ['html', { outputFolder: path.join('playwright-report', runDir) }],
   ],
   use: {
-    baseURL: 'http://127.0.0.1:5173',
+    baseURL: 'http://127.0.0.1:5174',
     trace: 'on-first-retry',
     screenshot: 'on',
     video: 'on',
@@ -37,10 +37,10 @@ export default defineConfig({
   webServer: [
     {
       name: 'backend',
-      command: 'uv run python -m uvicorn main:app --host 127.0.0.1 --port 8002',
+      command: 'uv run python -m uvicorn main:app --host 127.0.0.1 --port 8012',
       cwd: 'backend',
       env: { ENV_FILE: process.env.E2E_ENV_FILE || '.env.e2e' },
-      url: 'http://127.0.0.1:8002/health',
+      url: 'http://127.0.0.1:8012/health',
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
@@ -48,9 +48,10 @@ export default defineConfig({
     },
     {
       name: 'frontend',
-      command: 'npm run dev -- --host 127.0.0.1 --port 5173',
+      command: 'npm run dev -- --host 127.0.0.1 --port 5174',
       cwd: 'frontend',
-      url: 'http://127.0.0.1:5173',
+      url: 'http://127.0.0.1:5174',
+      env: { VITE_BACKEND_URL: 'http://127.0.0.1:8012' },
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
@@ -61,7 +62,7 @@ export default defineConfig({
       command: 'uv run langgraph dev --port 2024 --no-browser',
       cwd: 'agent',
       env: {
-        BACKEND_API_URL: 'http://127.0.0.1:8002',
+        BACKEND_API_URL: 'http://127.0.0.1:8012',
         LANGSMITH_API_KEY: '',
       },
       url: 'http://127.0.0.1:2024/assistants/narration/graph',

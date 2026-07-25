@@ -16,7 +16,7 @@ import { expect, test } from '@playwright/test';
 import { collectErrors, setLocaleToZhCN, enterWorkspace, readBackendProject } from '../helpers';
 import { readDbProject } from '../helpers/dbReader';
 
-const BACKEND = 'http://127.0.0.1:8002';
+const BACKEND = 'http://127.0.0.1:8012';
 const PROJECT_ID = 'test-e2e-project';
 const CHAPTER_ID = 'test-chapter-1';
 

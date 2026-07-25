@@ -2,7 +2,9 @@
 
 ## Running E2E Tests
 
-Playwright auto-starts both backend (port 8002) and frontend (port 5173) via `webServer` in `playwright.config.ts`.
+Playwright auto-starts both backend (port **8012**) and frontend (port **5174**) via `webServer` in `playwright.config.ts`.
+These dedicated ports let the e2e stack coexist with a running dev environment (backend 8002 / frontend 5173) — no more dual-bind cross-traffic.
+The teardown also refuses to delete anything unless the backend reports `app_env=e2e`.
 No need to manually start services.
 
 ```bash
