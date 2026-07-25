@@ -474,6 +474,7 @@ export const enUS: Messages = {
     confirmCustomVoice: 'This segment will use a custom voice and will no longer follow global/role settings. Confirm?',
     mergeSegments: 'Merge Segments',
     mergeSegmentsConfirm: '{direction} merge will delete generated audio for both segments. Continue?',
+    mergeBlockedGenerating: 'A segment is being synthesized — merge after it finishes',
     splitSegment: 'Split Segment',
     splitSegmentConfirm: 'Splitting will delete the generated audio for this segment. Continue?',
     audioWillBeDeleted: '\nGenerated audio will also be deleted.',

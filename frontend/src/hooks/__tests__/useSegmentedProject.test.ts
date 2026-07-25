@@ -401,4 +401,85 @@ describe('voice source transitions (V3)', () => {
     expect(ac(next.project).segments[0].voice.source).toBe('role');
     expect(ac(next.project).segments[0].status).toBe('ready');
   });
+
+  describe('MERGE_SEGMENTS', () => {
+    function seg(id: string, text: string, overrides: Partial<Segment> = {}): Segment {
+      return {
+        id, text, voice: { source: 'chapter' }, audio: { format: 'mp3' },
+        segment_kind: 'narration', status: 'idle',
+        created_at: '', updated_at: '',
+        ...overrides,
+      };
+    }
+
+    it('merge down keeps current row, absorbs next, resets audio state', () => {
+      const p = makeProject({}, {
+        segments: [
+          seg('a', '甲'),
+          seg('b', '乙', {
+            status: 'ready',
+            audio: { format: 'mp3', current: { id: 'audio-b' }, duration_sec: 2.5 },
+            generated_params: { engine: 'edge_tts' },
+          }),
+          seg('c', '丙'),
+        ],
+      });
+      const next = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'b', direction: 'down' });
+      const segs = ac(next.project).segments;
+      expect(segs.map(s => s.id)).toEqual(['a', 'b']);
+      expect(segs[1].text).toBe('乙丙');
+      expect(segs[1].status).toBe('idle');
+      expect(segs[1].audio.current).toBeUndefined();
+      expect(segs[1].generated_params).toBeUndefined();
+      expect(segs[1].duration_sec).toBeUndefined();
+      expect(segs[1].current_audio_id).toBeUndefined();
+      expect(segs[1].current_audio_path).toBeUndefined();
+    });
+
+    it('merge up keeps previous row, absorbs clicked row, moves selection to kept row', () => {
+      const p = makeProject({}, {
+        segments: [seg('a', '甲'), seg('b', '乙'), seg('c', '丙')],
+        selected_segment_id: 'b',
+      });
+      const next = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'b', direction: 'up' });
+      const ch = ac(next.project);
+      expect(ch.segments.map(s => s.id)).toEqual(['a', 'c']);
+      expect(ch.segments[0].text).toBe('甲乙');
+      expect(ch.selected_segment_id).toBe('a');
+    });
+
+    it('keeps selection when the removed row was not selected', () => {
+      const p = makeProject({}, {
+        segments: [seg('a', '甲'), seg('b', '乙'), seg('c', '丙')],
+        selected_segment_id: 'a',
+      });
+      const next = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'b', direction: 'down' });
+      expect(ac(next.project).selected_segment_id).toBe('a');
+    });
+
+    it('is a no-op when either side is pending (in-flight synthesis)', () => {
+      const p = makeProject({}, {
+        segments: [seg('a', '甲'), seg('b', '乙', { status: 'pending' })],
+      });
+      const next = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'a', direction: 'down' });
+      expect(ac(next.project).segments.map(s => s.id)).toEqual(['a', 'b']);
+      expect(ac(next.project).segments[0].text).toBe('甲');
+    });
+
+    it('is a no-op when either side is queued', () => {
+      const p = makeProject({}, {
+        segments: [seg('a', '甲', { status: 'queued' }), seg('b', '乙')],
+      });
+      const next = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'a', direction: 'down' });
+      expect(ac(next.project).segments.map(s => s.id)).toEqual(['a', 'b']);
+    });
+
+    it('rejects out-of-range merges (first row up / last row down)', () => {
+      const p = makeProject({}, { segments: [seg('a', '甲'), seg('b', '乙')] });
+      const up = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'a', direction: 'up' });
+      expect(ac(up.project).segments).toHaveLength(2);
+      const down = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'b', direction: 'down' });
+      expect(ac(down.project).segments).toHaveLength(2);
+    });
+  });
 });

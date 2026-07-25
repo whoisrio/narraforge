@@ -472,6 +472,7 @@ export const zhCN = {
     confirmCustomVoice: '此段将使用自定义音色，不再跟随全局/角色设置。确认？',
     mergeSegments: '合并分段',
     mergeSegmentsConfirm: '{direction}合并将删除两段的已生成音频，是否继续？',
+    mergeBlockedGenerating: '分段正在合成中，请完成后再合并',
     splitSegment: '拆分分段',
     splitSegmentConfirm: '拆分将删除该段的已生成音频，是否继续？',
     audioWillBeDeleted: '\n已生成的音频也将一并删除。',

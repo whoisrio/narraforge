@@ -556,12 +556,23 @@ export function segmentedReducer(state: State, action: Action): State {
         if (keepIdx < 0 || keepIdx >= s.length - 1) return ch;
         const cur = s[keepIdx];
         const nxt = s[keepIdx + 1];
+        // Never merge a segment with in-flight synthesis — the late GENERATE_SUCCESS
+        // would attach audio generated from the OLD text to the merged NEW text.
+        if (cur.status === 'pending' || cur.status === 'queued' ||
+            nxt.status === 'pending' || nxt.status === 'queued') return ch;
         // Merge text (no space — Chinese doesn't need it)
         cur.text = cur.text + nxt.text;
-        // Clear audio since text changed
+        // Clear audio since text changed (also drop stale params snapshot / deprecated fields)
         cur.audio = { format: 'mp3' };
         cur.status = 'idle';
         cur.error = undefined;
+        cur.generated_params = undefined;
+        cur.duration_sec = undefined;
+        cur.current_audio_id = undefined;
+        cur.current_audio_path = undefined;
+        cur.previous_audio_id = undefined;
+        cur.previous_audio_path = undefined;
+        cur.generated_voice_id = undefined;
         cur.updated_at = new Date().toISOString();
         // Remove next segment
         s.splice(keepIdx + 1, 1);

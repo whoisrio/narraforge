@@ -645,10 +645,17 @@ export function TTSSynthesis({
     if (keepIdx < 0 || keepIdx >= segs.length - 1) return;
     const cur = segs[keepIdx];
     const nxt = segs[keepIdx + 1];
-    const hasAudio = !!(cur.current_audio_id || nxt.current_audio_id);
+    // Block merging segments with in-flight synthesis — the late GENERATE_SUCCESS
+    // would attach audio generated from the old text to the merged new text.
+    if (cur.status === 'pending' || cur.status === 'queued' ||
+        nxt.status === 'pending' || nxt.status === 'queued') {
+      showToast(t('tts.mergeBlockedGenerating'), 'error');
+      return;
+    }
+    const hasAudio = !!(cur.audio.current || nxt.audio.current);
     const doMerge = async () => {
-      if (cur.current_audio_id) { try { await deleteTTSResult(cur.current_audio_id); } catch { /* ignore */ } }
-      if (nxt.current_audio_id) { try { await deleteTTSResult(nxt.current_audio_id); } catch { /* ignore */ } }
+      if (cur.audio.current?.id) { try { await deleteTTSResult(cur.audio.current.id); } catch { /* ignore */ } }
+      if (nxt.audio.current?.id) { try { await deleteTTSResult(nxt.audio.current.id); } catch { /* ignore */ } }
       dispatch({ type: 'MERGE_SEGMENTS', id, direction });
     };
     if (hasAudio) {
@@ -666,9 +673,9 @@ export function TTSSynthesis({
   const handleSplit = useCallback((id: string, position: number) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
-    const hasAudio = !!seg.current_audio_id;
+    const hasAudio = !!seg.audio.current;
     const doSplit = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
+      if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
       dispatch({ type: 'SPLIT_SEGMENT', id, position });
     };
     if (hasAudio) {
@@ -687,12 +694,12 @@ export function TTSSynthesis({
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
     const doDelete = async () => {
-      if (seg.current_audio_id) { try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ } }
-      if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
+      if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
+      if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
       dispatch({ type: 'DELETE_SEGMENT', id });
     };
     const preview = seg.text.length > 20 ? seg.text.slice(0, 20) + '…' : seg.text;
-    const audioWarn = seg.current_audio_id ? t('tts.audioWillBeDeleted') : '';
+    const audioWarn = seg.audio.current ? t('tts.audioWillBeDeleted') : '';
     setConfirmDialog({
       open: true, title: t('tts.deleteSegment'),
       message: `${t('tts.deleteSegmentConfirm')}\n「${preview}」${audioWarn}`,
