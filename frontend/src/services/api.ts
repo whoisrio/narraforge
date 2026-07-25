@@ -272,6 +272,21 @@ export const configApi = {
     const { data } = await api.put<{ storage_mode: string }>('/config/storage-mode', { storage_mode: mode });
     return data;
   },
+
+  getAnimationRoot: async (): Promise<{ value: string | null }> => {
+    const { data } = await api.get<{ value: string | null }>('/config/animation-root');
+    return data;
+  },
+
+  setAnimationRoot: async (value: string): Promise<{ value: string | null }> => {
+    const { data } = await api.put<{ value: string | null }>('/config/animation-root', { value });
+    return data;
+  },
+
+  testAnimationRoot: async (value: string): Promise<{ ok: boolean; error: string | null }> => {
+    const { data } = await api.post<{ ok: boolean; error: string | null }>('/config/animation-root/test', { value });
+    return data;
+  },
 };
 
 export interface TranscribeResult {

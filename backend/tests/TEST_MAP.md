@@ -68,6 +68,8 @@ db_session.commit()
 | Animation specs | Segmented project animation fields/API | `tests/test_animation_spec_api.py` | Animation spec persistence and batch apply behavior. |
 | Audio encoding | `app/core/audio_encoder.py` | `tests/test_audio_encoder.py` | ffmpeg transcode, duration probe, and invalid input behavior. |
 | Config crypto | Config encryption helpers | `tests/test_config_crypto.py` | Fernet/RSA encryption and encrypted value format. |
+| System config (storage mode + animation root) | `app/core/system_config_service.py`, `app/api/config.py` | `tests/unit/test_system_config_service.py`, `tests/test_config_animation_root_api.py` | `animation_root_folder` get/set round-trip, path validation (creatable/writable), and GET/PUT/test endpoints. |
+| Remotion scaffold | `app/services/remotion_scaffold_service.py`, `app/api/segmented_projects.py` (scaffold-remotion) | `tests/test_remotion_scaffold.py` | Target resolution hierarchy (`target_dir` > `remotion_project_path` > global setting), `safe_project_dirname`, create/refresh idempotency, 422 `animation_root_not_configured`. Agent node: `agent/tests/test_kv_scaffold.py` (forwards override only, 422 guidance). Frontend: `src/components/Settings/AnimationRootSetting.test.tsx`. |
 
 ## Manual Tests
 

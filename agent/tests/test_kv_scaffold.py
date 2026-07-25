@@ -1,23 +1,22 @@
-"""Tests for the kv scaffold_remotion node."""
+"""Tests for the kv scaffold_remotion node.
+
+After the global-setting refactor, the node no longer reads
+``ANIMATION_ROOT_FOLDER`` env and no longer resolves the target dir itself:
+it only forwards a per-run ``state["target_dir"]`` override when present, and
+otherwise lets the backend resolve (global DB setting > per-project path).
+``safe_project_dirname`` moved to the backend service.
+"""
+import httpx
 import pytest
 
-from app.nodes.knowledge_video.scaffold_remotion import (
-    safe_project_dirname,
-    scaffold_remotion_node,
-)
+from app.nodes.knowledge_video.scaffold_remotion import scaffold_remotion_node
 
 
 class _FakeBackend:
-    def __init__(self, result=None, exc=None, project=None):
+    def __init__(self, result=None, exc=None):
         self._result = result
         self._exc = exc
-        self._project = project or {"name": "示例项目"}
         self.calls = []
-        self.project_calls = []
-
-    async def get_project(self, pid):
-        self.project_calls.append(pid)
-        return self._project
 
     async def scaffold_remotion(self, pid, target_dir=None, animation_brief=None):
         self.calls.append(
@@ -41,80 +40,73 @@ def _patch_writer(monkeypatch):
     )
 
 
-# ---------------------------------------------------------------------------
-# safe_project_dirname
-# ---------------------------------------------------------------------------
-
-
-def test_safe_project_dirname_replaces_illegal_chars():
-    assert safe_project_dirname("hello/world") == "hello_world"
-    assert safe_project_dirname("a:b*c?d\"e<f>g|h\\i") == "a_b_c_d_e_f_g_h_i"
-
-
-def test_safe_project_dirname_keeps_chinese_and_spaces_collapsed():
-    assert safe_project_dirname("知识 视频 项目") == "知识_视频_项目"
-
-
-def test_safe_project_dirname_falls_back_when_empty():
-    assert safe_project_dirname("") == "project"
-    assert safe_project_dirname("   ") == "project"
-    assert safe_project_dirname("///") == "project"
-
-
-# ---------------------------------------------------------------------------
-# scaffold_remotion_node
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_uses_animation_root_folder_and_project_name(monkeypatch, tmp_path):
-    _patch_writer(monkeypatch)
-    monkeypatch.setenv("ANIMATION_ROOT_FOLDER", str(tmp_path))
-    backend = _FakeBackend(
-        result={"project_dir": str(tmp_path / "示例项目"), "created": True, "chapters": 2},
-        project={"name": "示例项目"},
+def _http_status_error(status: int, detail: str) -> httpx.HTTPStatusError:
+    request = httpx.Request(
+        "POST", "http://x/api/segmented-projects/p1/scaffold-remotion"
     )
-    state = {"project_id": "p1"}
-    result = await scaffold_remotion_node(state, _FakeRuntime(backend))
-
-    assert backend.calls[0]["target_dir"] == str(tmp_path / "示例项目")
-    # 不再传 animation_brief
-    assert backend.calls[0]["animation_brief"] is None
-    assert result["remotion_project_dir"] == str(tmp_path / "示例项目")
-    assert result["current_stage"] == "completed"
-    assert result["error"] is None
+    response = httpx.Response(
+        status_code=status, request=request, json={"detail": detail}
+    )
+    return httpx.HTTPStatusError("error", request=request, response=response)
 
 
 @pytest.mark.asyncio
-async def test_state_target_dir_overrides_env(monkeypatch, tmp_path):
-    """显式传 target_dir 时优先级最高（例如用户在 UI 手动指定）。"""
+async def test_passes_target_dir_when_state_has_it(monkeypatch):
     _patch_writer(monkeypatch)
-    monkeypatch.setenv("ANIMATION_ROOT_FOLDER", str(tmp_path))
     backend = _FakeBackend(
         result={"project_dir": "/explicit/dir", "created": False, "chapters": 1},
     )
     state = {"project_id": "p1", "target_dir": "/explicit/dir"}
     result = await scaffold_remotion_node(state, _FakeRuntime(backend))
+
     assert backend.calls[0]["target_dir"] == "/explicit/dir"
+    assert result["remotion_project_dir"] == "/explicit/dir"
+    assert result["current_stage"] == "completed"
+    assert result["error"] is None
+
+
+@pytest.mark.asyncio
+async def test_omits_target_dir_when_state_absent(monkeypatch):
+    """No per-run override -> backend resolves (global setting / project path)."""
+    _patch_writer(monkeypatch)
+    backend = _FakeBackend(
+        result={"project_dir": "/resolved/by/backend", "created": True, "chapters": 2},
+    )
+    state = {"project_id": "p1"}
+    result = await scaffold_remotion_node(state, _FakeRuntime(backend))
+
+    assert backend.calls[0]["target_dir"] is None
+    assert result["remotion_project_dir"] == "/resolved/by/backend"
     assert result["current_stage"] == "completed"
 
 
 @pytest.mark.asyncio
-async def test_missing_env_halts_with_error(monkeypatch):
+async def test_no_env_reading_anymore(monkeypatch):
+    """ANIMATION_ROOT_FOLDER env must not be read; node works without it."""
     _patch_writer(monkeypatch)
     monkeypatch.delenv("ANIMATION_ROOT_FOLDER", raising=False)
-    backend = _FakeBackend()
-    state = {"project_id": "p1"}
-    result = await scaffold_remotion_node(state, _FakeRuntime(backend))
-    assert "ANIMATION_ROOT_FOLDER" in result["error"]
-    assert result["current_stage"] == "scaffold_remotion"
-    assert backend.calls == []
+    backend = _FakeBackend(
+        result={"project_dir": "/x", "created": True, "chapters": 0},
+    )
+    result = await scaffold_remotion_node({"project_id": "p1"}, _FakeRuntime(backend))
+    assert result["error"] is None
+    assert result["current_stage"] == "completed"
 
 
 @pytest.mark.asyncio
-async def test_backend_failure_sets_error(monkeypatch, tmp_path):
+async def test_animation_root_not_configured_emits_guidance(monkeypatch):
     _patch_writer(monkeypatch)
-    monkeypatch.setenv("ANIMATION_ROOT_FOLDER", str(tmp_path))
+    backend = _FakeBackend(exc=_http_status_error(422, "animation_root_not_configured"))
+    result = await scaffold_remotion_node({"project_id": "p1"}, _FakeRuntime(backend))
+
+    assert result["current_stage"] == "scaffold_remotion"
+    assert "设置页" in result["error"]
+    assert "ANIMATION_ROOT_FOLDER" not in result["error"]
+
+
+@pytest.mark.asyncio
+async def test_backend_failure_sets_error(monkeypatch):
+    _patch_writer(monkeypatch)
     backend = _FakeBackend(exc=RuntimeError("npx_not_found"))
     result = await scaffold_remotion_node(
         {"project_id": "p1"}, _FakeRuntime(backend)
@@ -124,13 +116,10 @@ async def test_backend_failure_sets_error(monkeypatch, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_never_sends_animation_brief(monkeypatch, tmp_path):
-    """新契约：scaffold_remotion 不再传 animation_brief。"""
+async def test_never_sends_animation_brief(monkeypatch):
     _patch_writer(monkeypatch)
-    monkeypatch.setenv("ANIMATION_ROOT_FOLDER", str(tmp_path))
     backend = _FakeBackend(
-        result={"project_dir": str(tmp_path / "proj"), "created": False, "chapters": 0},
-        project={"name": "proj"},
+        result={"project_dir": "/proj", "created": False, "chapters": 0},
     )
     await scaffold_remotion_node({"project_id": "p1"}, _FakeRuntime(backend))
     assert backend.calls[0]["animation_brief"] is None

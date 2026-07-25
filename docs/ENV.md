@@ -121,8 +121,9 @@ Agent variables live in `agent/.env` (a separate file from `backend/.env`).
 | `AGENT_LLM_BASE_URL` | Yes | LLM API base URL. | *(empty)* |
 | `AGENT_LLM_MODEL` | Yes | LLM model identifier. | *(empty)* |
 | `LANGSMITH_API_KEY` | No | Enables hot-reload of prompts from LangSmith Hub. Falls back to code defaults when unset. | *(empty)* |
-| `ANIMATION_ROOT_FOLDER` | Yes (kv workflow) | Root directory for scaffolded Remotion projects. Each project materialises at `${ANIMATION_ROOT_FOLDER}/${safe_project_name}`. The `scaffold_remotion` node halts the run when unset. | *(empty)* |
 | `VOXCPM_DEFAULT_ROLE_ID` | Yes when `voxcpm` selected | Default clone role id used by the kv synthesis node when the user picks `voxcpm`. Synthesis halts when unset. | *(empty)* |
+
+> **Deprecated:** `ANIMATION_ROOT_FOLDER` has been removed. The Remotion scaffold root is now a **global setting** managed in the backend DB and editable from the UI (`/settings` → “Remotion 脚手架根目录”). See `GET/PUT /api/config/animation-root`. Any leftover `ANIMATION_ROOT_FOLDER` entry in `agent/.env` is ignored.
 
 ## Minimal `.env` for Local Development
 

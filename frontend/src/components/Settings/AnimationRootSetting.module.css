@@ -1,0 +1,119 @@
+.card {
+  border: 1px solid rgba(216, 194, 180, 0.45);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.76);
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+}
+
+.header {
+  padding: 16px 20px 8px;
+  background: rgba(255, 255, 255, 0.58);
+  border-bottom: 1px solid rgba(216, 194, 180, 0.3);
+}
+
+.kicker {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--color-primary-dark);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.desc {
+  margin: 6px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.label {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(216, 194, 180, 0.6);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.04);
+}
+
+.actions {
+  display: flex;
+  gap: 10px;
+}
+
+.primary,
+.secondary {
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.primary {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.secondary {
+  border: 1px solid rgba(216, 194, 180, 0.6);
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--color-text-primary);
+}
+
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.success {
+  margin: 0;
+  color: var(--color-success, #2f8f4b);
+  font-size: 13px;
+}
+
+.error {
+  margin: 0;
+  color: var(--color-danger, #c0392b);
+  font-size: 13px;
+  word-break: break-all;
+}

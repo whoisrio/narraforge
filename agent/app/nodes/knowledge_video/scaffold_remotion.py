@@ -1,44 +1,20 @@
 """ScaffoldRemotion node (knowledge_video): materialise the Remotion project.
 
-Target dir resolution:
+Target dir resolution lives in the backend: per-run override
+``state["target_dir"]`` > per-project ``remotion_project_path`` > global DB
+setting ``{animation_root_folder}/{safe_project_name}``. When nothing is
+configured the backend returns 422 ``animation_root_not_configured`` and this
+node surfaces a guidance message pointing to the settings page.
 
-1. Explicit ``state["target_dir"]`` (user override, e.g. UI-specified).
-2. Otherwise ``{ANIMATION_ROOT_FOLDER}/{safe_project_dirname(project.name)}``.
-
-``ANIMATION_ROOT_FOLDER`` is a hard requirement — no fallback. The backend
-scaffold endpoint is idempotent (existing project dirs are refreshed
-in place: per-chapter audio + SRT + segment_manifest.json + AGENTS.md).
-
-No LLM is involved here anymore: this node purely stages assets for the
-downstream Remotion animation work; there is no ``animation_brief`` created.
+No LLM is involved here: this node purely stages assets for the downstream
+Remotion animation work; there is no ``animation_brief`` created.
 """
 from __future__ import annotations
 
-import re
-from pathlib import Path
-
+import httpx
 from langgraph.config import get_stream_writer
 
 from app import backend_client
-from app.config import get_animation_root_folder
-
-# Windows/POSIX 双兼容的非法字符集合 + 空白折叠成 "_"。
-_ILLEGAL_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
-_WHITESPACE_RE = re.compile(r"\s+")
-
-
-def safe_project_dirname(name: str) -> str:
-    """Return a filesystem-safe directory name for the Remotion project.
-
-    Rules: strip illegal characters, collapse whitespace to ``_``, fall
-    back to ``"project"`` when the sanitised name is empty. Keeps CJK
-    intact so the directory stays human-readable.
-    """
-    if not name:
-        return "project"
-    cleaned = _ILLEGAL_CHARS_RE.sub("_", name)
-    cleaned = _WHITESPACE_RE.sub("_", cleaned).strip("_. ")
-    return cleaned or "project"
 
 
 async def scaffold_remotion_node(state, runtime) -> dict:
@@ -56,27 +32,25 @@ async def scaffold_remotion_node(state, runtime) -> dict:
         }
     )
 
-    # Resolve target directory (state override wins; else env + project name).
+    # Per-run override only; otherwise the backend resolves
+    # (global DB setting > per-project remotion_project_path).
     target_dir = state.get("target_dir")
     backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
-    if not target_dir:
-        try:
-            root = get_animation_root_folder()
-        except ValueError as exc:
-            msg = str(exc)
-            await emit({"type": "error", "stage": "scaffold_remotion", "message": msg})
-            return {"error": msg, "current_stage": "scaffold_remotion"}
-        try:
-            project = await backend.get_project(project_id)
-        except Exception as exc:
-            msg = f"获取项目失败: {exc}"
-            await emit({"type": "error", "stage": "scaffold_remotion", "message": msg})
-            return {"error": msg, "current_stage": "scaffold_remotion"}
-        dirname = safe_project_dirname(project.get("name") or "")
-        target_dir = str(Path(root).expanduser() / dirname)
 
     try:
         result = await backend.scaffold_remotion(project_id, target_dir=target_dir)
+    except httpx.HTTPStatusError as exc:
+        detail = ""
+        try:
+            detail = exc.response.json().get("detail", "")
+        except Exception:
+            pass
+        if detail == "animation_root_not_configured":
+            msg = "未配置 Remotion 脚手架根目录，请到设置页填写"
+        else:
+            msg = f"Remotion 工程生成失败: {exc}"
+        await emit({"type": "error", "stage": "scaffold_remotion", "message": msg})
+        return {"error": msg, "current_stage": "scaffold_remotion"}
     except Exception as exc:
         msg = f"Remotion 工程生成失败: {exc}"
         await emit({"type": "error", "stage": "scaffold_remotion", "message": msg})

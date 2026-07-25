@@ -1,7 +1,6 @@
 import pytest
 from app.config import (
     get_agent_llm_config,
-    get_animation_root_folder,
     get_backend_url,
     get_voxcpm_default_role_id,
 )
@@ -31,23 +30,6 @@ def test_get_agent_llm_config_missing_raises(monkeypatch):
     monkeypatch.delenv("AGENT_LLM_MODEL", raising=False)
     with pytest.raises(ValueError):
         get_agent_llm_config()
-
-
-def test_animation_root_folder_reads_env(monkeypatch):
-    monkeypatch.setenv("ANIMATION_ROOT_FOLDER", "/tmp/remotion-root")
-    assert get_animation_root_folder() == "/tmp/remotion-root"
-
-
-def test_animation_root_folder_missing_raises(monkeypatch):
-    monkeypatch.delenv("ANIMATION_ROOT_FOLDER", raising=False)
-    with pytest.raises(ValueError):
-        get_animation_root_folder()
-
-
-def test_animation_root_folder_blank_raises(monkeypatch):
-    monkeypatch.setenv("ANIMATION_ROOT_FOLDER", "   ")
-    with pytest.raises(ValueError):
-        get_animation_root_folder()
 
 
 def test_voxcpm_default_role_id_returns_none_when_unset(monkeypatch):

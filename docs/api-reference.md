@@ -753,7 +753,10 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/config/storage-mode` | 获取存储模式 |
-| POST | `/api/config/storage-mode` | 设置存储模式 |
+| PUT | `/api/config/storage-mode` | 设置存储模式 |
+| GET | `/api/config/animation-root` | 获取全局 Remotion 脚手架根目录 |
+| PUT | `/api/config/animation-root` | 设置全局 Remotion 脚手架根目录（校验可创建且可写） |
+| POST | `/api/config/animation-root/test` | 探测路径可用性，不保存 |
 | GET | `/api/model-config` | 获取所有提供商配置 |
 | PUT | `/api/model-config/{provider}/{field}` | 更新配置值 |
 | POST | `/api/model-config/{provider}/{field}/clear` | 清除配置值 |
@@ -761,7 +764,15 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 ### 存储模式
 
 - `frontend` — 音频存储在浏览器 IndexedDB
-- `backend` — 音频存储在后端 SQLite + 文件系统
+- `backend` - 音频存储在后端 SQLite + 文件系统
+
+### Remotion 脚手架根目录 (`/api/config/animation-root`)
+
+全局设置：`knowledge_video` 工作流在未指定 `target_dir` 且项目无 `remotion_project_path` 时，于 `{animation_root_folder}/{safe_project_name}` 创建 Remotion 工程。路径为 backend 服务器本机路径。
+
+- `GET /api/config/animation-root` -> `{ "value": str | null }`
+- `PUT /api/config/animation-root` body `{ "value": str }` -> 校验非空、可 `mkdir -p`、可写；失败 422（`path_empty` / `cannot_create_directory: ...` / `directory_not_writable: ...`）；成功返回 `{ "value": str }`。
+- `POST /api/config/animation-root/test` body `{ "value": str }` -> 同样探测但不保存，返回 `{ "ok": bool, "error": str | null }`。
 
 ---
 
@@ -1075,7 +1086,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `target_dir` | string | `null` | 可选；缺省用项目的 `remotion_project_path` |
+| `target_dir` | string | `null` | 可选；缺省依次回退：项目的 `remotion_project_path` -> 全局设置 `{animation_root_folder}/{safe_project_name}`（见 `GET/PUT /api/config/animation-root`）。三者皆空时返回 422。 |
 
 **行为:**
 1. 工程不存在时执行 `npx create-video@latest --yes --blank .`（需服务端装有 Node.js，超时 600s）；
@@ -1089,7 +1100,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 { "project_dir": "...", "created": true, "chapters": 2 }
 ```
 
-**Errors:** 404 `project_not_found`；422 `remotion_target_not_set`；500 `npx_not_found` / `create_video_failed`。
+**Errors:** 404 `project_not_found`；422 `animation_root_not_configured`；500 `npx_not_found` / `create_video_failed`。
 
 ### POST `/api/segmented-projects/migrate`
 

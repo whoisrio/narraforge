@@ -41,3 +41,26 @@ def set_storage_mode(db: Session, mode: str) -> None:
 def is_frontend_storage(db: Session) -> bool:
     """判断当前是否为前端存储模式"""
     return get_storage_mode(db) == STORAGE_MODE_FRONTEND
+
+
+# ----- Animation root folder (Remotion scaffold global setting) -----
+
+ANIMATION_ROOT_FOLDER_KEY = "animation_root_folder"
+
+
+def get_animation_root_folder(db: Session) -> str | None:
+    """读取全局 Remotion 脚手架根目录；未设置或空字符串返回 None。"""
+    value = get_config(db, ANIMATION_ROOT_FOLDER_KEY, default="").strip()
+    return value or None
+
+
+def set_animation_root_folder(db: Session, value: str) -> None:
+    """写入全局 Remotion 脚手架根目录（strip + expanduser）。
+
+    不主动 commit，由调用方控制事务（与 set_storage_mode 一致）。
+    """
+    from pathlib import Path
+
+    stripped = value.strip()
+    normalized = str(Path(stripped).expanduser()) if stripped else ""
+    set_config(db, ANIMATION_ROOT_FOLDER_KEY, normalized)

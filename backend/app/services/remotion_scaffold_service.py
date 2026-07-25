@@ -9,18 +9,37 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
+from app.core.system_config_service import get_animation_root_folder
 from app.services import segmented_project_service as svc
 from app.services.srt_service import build_srt
 
 logger = logging.getLogger(__name__)
 
 CREATE_VIDEO_TIMEOUT_SEC = 600
+
+# Windows/POSIX 兼容的非法字符集合 + 空白折叠成 "_"。与历史 agent 版本一致。
+_ILLEGAL_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_WHITESPACE_RE = re.compile(r"\s+")
+
+
+def safe_project_dirname(name: str) -> str:
+    """返回文件系统安全的 Remotion 工程目录名。
+
+    规则：剥离非法字符、折叠空白为 ``_``、空结果回退 ``"project"``，保留 CJK。
+    与 agent 旧版完全一致，保证已生成的项目路径不变。
+    """
+    if not name:
+        return "project"
+    cleaned = _ILLEGAL_CHARS_RE.sub("_", name)
+    cleaned = _WHITESPACE_RE.sub("_", cleaned).strip("_. ")
+    return cleaned or "project"
 
 
 def _is_remotion_project(root: Path) -> bool:
@@ -87,7 +106,11 @@ def scaffold_remotion_project(
 
     target = target_dir or getattr(project, "remotion_project_path", None)
     if not target:
-        raise ValueError("remotion_target_not_set")
+        root_setting = get_animation_root_folder(db)
+        if root_setting:
+            target = str(Path(root_setting) / safe_project_dirname(project.name or ""))
+    if not target:
+        raise ValueError("animation_root_not_configured")
     root = Path(target).expanduser()
 
     created = False

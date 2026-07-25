@@ -2,9 +2,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from pathlib import Path
+import tempfile
 
 from app.core.database import get_db
-from app.core.system_config_service import get_storage_mode, set_storage_mode, STORAGE_MODE_BACKEND, STORAGE_MODE_FRONTEND
+from app.core.system_config_service import (
+    get_storage_mode,
+    set_storage_mode,
+    STORAGE_MODE_BACKEND,
+    STORAGE_MODE_FRONTEND,
+    get_animation_root_folder,
+    set_animation_root_folder,
+)
 from app.models import TTSConfig, ModelProvider, Emotion
 
 router = APIRouter()
@@ -171,3 +180,53 @@ def set_storage_mode_endpoint(data: StorageModeRequest, db: Session = Depends(ge
     set_storage_mode(db, data.storage_mode)
     db.commit()
     return {"storage_mode": data.storage_mode}
+
+
+# ---------------------------------------------------------------------------
+# Remotion 脚手架根目录（全局设置）
+# ---------------------------------------------------------------------------
+
+class AnimationRootRequest(BaseModel):
+    value: str
+
+
+def _probe_animation_root(value: str) -> tuple[bool, str | None]:
+    """探测路径是否可创建且可写。返回 (ok, error_code_or_None)。"""
+    stripped = value.strip()
+    if not stripped:
+        return False, "path_empty"
+    path = Path(stripped).expanduser()
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        return False, f"cannot_create_directory: {exc}"
+    try:
+        with tempfile.NamedTemporaryFile(dir=path, delete=True):
+            pass
+    except OSError as exc:
+        return False, f"directory_not_writable: {exc}"
+    return True, None
+
+
+@router.get("/animation-root")
+def get_animation_root_endpoint(db: Session = Depends(get_db)):
+    """获取全局 Remotion 脚手架根目录。"""
+    return {"value": get_animation_root_folder(db)}
+
+
+@router.put("/animation-root")
+def set_animation_root_endpoint(data: AnimationRootRequest, db: Session = Depends(get_db)):
+    """设置全局 Remotion 脚手架根目录（校验可创建且可写）。"""
+    ok, error = _probe_animation_root(data.value)
+    if not ok:
+        raise HTTPException(status_code=422, detail=error)
+    set_animation_root_folder(db, data.value)
+    db.commit()
+    return {"value": get_animation_root_folder(db)}
+
+
+@router.post("/animation-root/test")
+def test_animation_root_endpoint(data: AnimationRootRequest):
+    """探测路径可用性但不保存。"""
+    ok, error = _probe_animation_root(data.value)
+    return {"ok": ok, "error": error}

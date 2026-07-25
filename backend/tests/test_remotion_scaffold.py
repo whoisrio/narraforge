@@ -1,5 +1,6 @@
 """Unit tests for remotion_scaffold_service (npx + audio export are mocked)."""
 import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -99,7 +100,8 @@ def test_existing_project_skips_creation_and_refreshes(monkeypatch, tmp_path):
 def test_no_target_raises_value_error(monkeypatch):
     project = _project(remotion_path=None)
     monkeypatch.setattr(rss.svc, "get_project_row", lambda db, pid: project)
-    with pytest.raises(ValueError, match="remotion_target_not_set"):
+    monkeypatch.setattr(rss, "get_animation_root_folder", lambda db: None)
+    with pytest.raises(ValueError, match="animation_root_not_configured"):
         rss.scaffold_remotion_project(_Db(), "p1")
 
 
@@ -144,4 +146,105 @@ def test_scaffold_endpoint_422_without_target(client, monkeypatch):
     )
     resp = client.post("/api/segmented-projects/p1/scaffold-remotion", json={})
     assert resp.status_code == 422
-    assert resp.json()["detail"] == "remotion_target_not_set"
+    assert resp.json()["detail"] == "animation_root_not_configured"
+
+
+# ---------------------------------------------------------------------------
+# safe_project_dirname (ported from agent; behavior must stay identical)
+# ---------------------------------------------------------------------------
+
+
+def test_safe_project_dirname_replaces_illegal_chars():
+    assert rss.safe_project_dirname("hello/world") == "hello_world"
+    assert rss.safe_project_dirname('a:b*c?d"e<f>g|h\\i') == "a_b_c_d_e_f_g_h_i"
+
+
+def test_safe_project_dirname_keeps_cjk_and_collapses_whitespace():
+    assert rss.safe_project_dirname("知识 视频 项目") == "知识_视频_项目"
+
+
+def test_safe_project_dirname_falls_back_when_empty():
+    assert rss.safe_project_dirname("") == "project"
+    assert rss.safe_project_dirname("   ") == "project"
+    assert rss.safe_project_dirname("///") == "project"
+
+
+# ---------------------------------------------------------------------------
+# Resolution hierarchy: target_dir > project path > global setting > error
+# ---------------------------------------------------------------------------
+
+
+def _stub_create_video(monkeypatch):
+    """Stub npx create-video: writes package.json into the subprocess cwd."""
+    monkeypatch.setattr(rss.shutil, "which", lambda name: "/usr/bin/npx")
+
+    def fake_run(cmd, **kw):
+        cwd = Path(kw.get("cwd", "."))
+        cwd.mkdir(parents=True, exist_ok=True)
+        (cwd / "package.json").write_text(
+            json.dumps({"dependencies": {"remotion": "^4.0.0"}})
+        )
+
+        class _Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return _Proc()
+
+    monkeypatch.setattr(rss.subprocess, "run", fake_run)
+
+
+def test_global_setting_used_when_no_target_or_project_path(monkeypatch, tmp_path):
+    project = _project(remotion_path=None)
+    _patch_common(monkeypatch, project)
+    _stub_create_video(monkeypatch)
+    root = tmp_path / "anim-root"
+    monkeypatch.setattr(rss, "get_animation_root_folder", lambda db: str(root))
+
+    result = rss.scaffold_remotion_project(_Db(), "p1")
+
+    expected = str(root / "demo")
+    assert result["project_dir"] == expected
+    assert project.remotion_project_path == expected
+    assert result["created"] is True
+
+
+def test_project_path_wins_over_global(monkeypatch, tmp_path):
+    (tmp_path / "package.json").write_text(
+        json.dumps({"dependencies": {"remotion": "^4.0.0"}})
+    )
+    project = _project(remotion_path=str(tmp_path))
+    _patch_common(monkeypatch, project)
+    monkeypatch.setattr(
+        rss, "get_animation_root_folder", lambda db: str(tmp_path / "other")
+    )
+
+    def boom(cmd, **kw):
+        raise AssertionError("subprocess should not be called")
+
+    monkeypatch.setattr(rss.subprocess, "run", boom)
+
+    result = rss.scaffold_remotion_project(_Db(), "p1")
+    assert result["project_dir"] == str(tmp_path)
+
+
+def test_target_dir_wins_over_global_and_project(monkeypatch, tmp_path):
+    project = _project(remotion_path=str(tmp_path / "project-path"))
+    _patch_common(monkeypatch, project)
+    _stub_create_video(monkeypatch)
+    monkeypatch.setattr(
+        rss, "get_animation_root_folder", lambda db: str(tmp_path / "global")
+    )
+
+    explicit = tmp_path / "explicit"
+    result = rss.scaffold_remotion_project(_Db(), "p1", target_dir=str(explicit))
+    assert result["project_dir"] == str(explicit)
+
+
+def test_all_empty_raises_animation_root_not_configured(monkeypatch):
+    project = _project(remotion_path=None)
+    monkeypatch.setattr(rss.svc, "get_project_row", lambda db, pid: project)
+    monkeypatch.setattr(rss, "get_animation_root_folder", lambda db: None)
+    with pytest.raises(ValueError, match="animation_root_not_configured"):
+        rss.scaffold_remotion_project(_Db(), "p1")

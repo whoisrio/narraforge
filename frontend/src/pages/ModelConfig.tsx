@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { modelConfigApi } from '../services/api';
 import type { ModelConfigs, ModelConfigFieldValue } from '../types';
 import { useTranslation } from '../i18n';
+import { AnimationRootSetting } from '../components/Settings/AnimationRootSetting';
 import styles from './ModelConfig.module.css';
 
 /** 每个 provider 对应的图标文件名（放在 frontend/public/ 下） */
@@ -259,6 +260,8 @@ export function ModelConfig() {
           );
         })}
       </div>
+
+      <AnimationRootSetting />
 
       {toast && (
         <div className={`${styles.toast} ${styles[toast.type]}`}>
