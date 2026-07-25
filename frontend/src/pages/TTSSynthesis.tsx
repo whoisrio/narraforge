@@ -1377,6 +1377,7 @@ export function TTSSynthesis({
         <ProjectShell
           projectName={project.name}
           projectSubtitle={isScratchpadProject ? t('tts.quickDraft') : t('tts.projectChaptered')}
+          projectId={project.id}
           activeSection={projectSection}
           chapterName={activeChapter.name}
           segmentCount={activeChapter.segments.length}

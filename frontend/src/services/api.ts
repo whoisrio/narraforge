@@ -604,7 +604,19 @@ export const segmentedProjectApi = {
     const { data } = await api.post<import('../types').SegmentedProject>('/segmented-projects/import', formData);
     return data;
   },
+  getSyncStatus: async (projectId: string, chapterId: string): Promise<ChapterSyncStatus> => {
+    const { data } = await api.get<ChapterSyncStatus>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/sync-status`,
+    );
+    return data;
+  },
 };
+
+export interface ChapterSyncStatus {
+  l1_dirty: boolean;
+  l2_dirty: boolean;
+  l3_dirty: boolean;
+}
 
 export const roleApi = {
   listRoles: async (projectId?: string): Promise<import('../types').Role[]> => {

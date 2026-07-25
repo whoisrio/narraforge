@@ -166,6 +166,12 @@ export const enUS: Messages = {
     short: 'Voice',
     defaultNarrator: 'Default Narrator',
   },
+  sync: {
+    l1: 'Original',
+    l2: 'Script',
+    l3: 'Segments',
+    chaptersStale: 'This chapter text has drifted from upstream/downstream',
+  },
   settings: {
     storage: 'Storage',
     storageMode: 'Storage Mode',

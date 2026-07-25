@@ -960,6 +960,10 @@ def batch_create_structure(
                 segment_kind=seg_data.get("segment_kind", "narration"),
             )
             seg_result.append({"id": seg.id})
+        # layer-sync: this chapter is freshly derived (L2 from L1) and split
+        # (L3 from L2) in one go -> snapshot all three hashes as the baseline.
+        from app.services.layer_sync_service import mark_consistent
+        mark_consistent(chapter)
         result.append({"id": chapter.id, "segments": seg_result})
     db.commit()
     return result

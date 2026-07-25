@@ -853,6 +853,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | GET | `/api/segmented-projects/{id}/audio/{cid}/{sid}` | 读取分片 mp3 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/split` | 文本分段 |
+| GET | `/api/segmented-projects/{id}/chapters/{cid}/sync-status` | 章节分层文本陈旧检测（L1/L2/L3 脏标记） |
 | POST | `/api/segmented-projects/{id}/apply-animation-spec` | 批量应用动画规格 |
 | POST | `/api/segmented-projects/{id}/export-text-file-to-remotion` | 导出文本文件到 Remotion |
 | POST | `/api/segmented-projects/{id}/scaffold-remotion` | 创建/刷新 Remotion 工程（knowledge_video 工作流） |
@@ -1017,6 +1018,17 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 ```
 
 **Response:** 完整 `ProjectDetail` 对象。
+
+### GET `/api/segmented-projects/{id}/chapters/{cid}/sync-status`
+
+Layer-sync Phase A：返回章节三层文本（L1 原文 / L2 改写稿 / L3 分段）的陈旧标记。
+
+**Response:**
+```json
+{ "l1_dirty": false, "l2_dirty": false, "l3_dirty": true }
+```
+
+某层 hash 未设置（未拆分/旧章节）时对应 `false`。前端章节头据此显示 badge。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/split`
 

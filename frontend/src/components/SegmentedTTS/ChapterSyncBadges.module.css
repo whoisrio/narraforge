@@ -1,0 +1,16 @@
+.badges {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 4px;
+}
+
+.badge {
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(217, 119, 6, 0.16);
+  color: #b45309;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}

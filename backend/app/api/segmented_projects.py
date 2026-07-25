@@ -336,6 +336,16 @@ def scaffold_remotion(
 
 # ----- split -----
 
+@router.get("/segmented-projects/{project_id}/chapters/{chapter_id}/sync-status")
+def get_sync_status(project_id: str, chapter_id: str, db: Session = Depends(get_db)):
+    """Layer-sync Phase A: L1/L2/L3 staleness flags for a chapter."""
+    chapter = svc.get_chapter_row(db, project_id, chapter_id)
+    if chapter is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    from app.services.layer_sync_service import sync_status
+    return sync_status(chapter)
+
+
 @router.post(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/split",
     response_model=SplitResponse,
@@ -381,6 +391,7 @@ def split_chapter(
                 "voice": c.voice or {},
                 "split_config": c.split_config or {},
                 "original_text": c.original_text,
+                "narration_script": c.narration_script,
                 "design_title": getattr(c, "design_title", None),
                 "segments": (
                     [
@@ -409,6 +420,12 @@ def split_chapter(
         ],
     )
     detail = svc.save_project(db, payload)
+    # layer-sync: split just regenerated segments from L2 -> re-baseline L2/L3.
+    from app.services.layer_sync_service import mark_split
+    ch_row = svc.get_chapter_row(db, project_id, chapter_id)
+    if ch_row is not None:
+        mark_split(ch_row)
+        db.commit()
     return SplitResponse(
         items=[SplitItem(text=t) for t in items],
         project=detail,

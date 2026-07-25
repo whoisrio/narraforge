@@ -164,6 +164,12 @@ export const zhCN = {
     short: '声音',
     defaultNarrator: '默认旁白',
   },
+  sync: {
+    l1: '原文',
+    l2: '改写稿',
+    l3: '分段',
+    chaptersStale: '该章节文本已改动，与上下游不一致',
+  },
   settings: {
     storage: '存储',
     storageMode: '存储模式',

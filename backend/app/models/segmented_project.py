@@ -71,6 +71,7 @@ class SegmentedProjectChapter(Base):
     original_text = Column(String, nullable=True)
     narration_script = Column(Text, nullable=True)
     design_title = Column(String, nullable=True)
+    sync_state = Column(JSON, nullable=True)  # layer-sync Phase A: {l1_hash, l2_hash, segments_hash}
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
