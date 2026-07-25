@@ -16,7 +16,7 @@ from app.core.database import SessionLocal
 from app.models.segmented_project import SegmentedProject
 
 from . import config
-from .git_ops import add_all, commit, ensure_repo
+from .git_ops import add_all, commit, ensure_repo, push as git_push, GitError
 from .serializer import write_project
 
 log = logging.getLogger(__name__)
@@ -27,10 +27,22 @@ class SnapshotResult:
     commit_sha: str | None
     projects_snapshotted: int
     repo_path: Path
+    pushed: bool = False
+    push_error: str | None = None
 
 
-def snapshot_all(*, repo: Path | None = None, session: Session | None = None) -> SnapshotResult:
-    """Run the full snapshot pipeline. Returns a result summary."""
+def snapshot_all(
+    *,
+    repo: Path | None = None,
+    session: Session | None = None,
+    remote_url: str | None = None,
+) -> SnapshotResult:
+    """Run the full snapshot pipeline. Returns a result summary.
+
+    Serializes every project, commits if changed, and (when *remote_url* is
+    non-empty) pushes to ``origin``. A push failure is recorded in
+    ``push_error`` but does not undo the local commit.
+    """
     repo_dir = repo or config.repo_path()
     ensure_repo(
         repo_dir,
@@ -52,10 +64,24 @@ def snapshot_all(*, repo: Path | None = None, session: Session | None = None) ->
             log.info("narration snapshot: %s (%d projects)", sha[:8], len(projects))
         else:
             log.info("narration snapshot: no changes")
+
+        pushed = False
+        push_error: str | None = None
+        if remote_url:
+            try:
+                git_push(repo_dir, remote_url, branch="main")
+                pushed = True
+                log.info("narration snapshot pushed to %s", remote_url)
+            except GitError as exc:
+                push_error = str(exc)
+                log.warning("narration snapshot push failed: %s", exc)
+
         return SnapshotResult(
             commit_sha=sha,
             projects_snapshotted=len(projects),
             repo_path=repo_dir,
+            pushed=pushed,
+            push_error=push_error,
         )
     finally:
         if own_session:

@@ -757,6 +757,9 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | GET | `/api/config/animation-root` | 获取全局 Remotion 脚手架根目录 |
 | PUT | `/api/config/animation-root` | 设置全局 Remotion 脚手架根目录（校验可创建且可写） |
 | POST | `/api/config/animation-root/test` | 探测路径可用性，不保存 |
+| GET | `/api/config/narration-git-remote` | 获取 narration git 远端地址 |
+| PUT | `/api/config/narration-git-remote` | 设置 narration git 远端地址（空=清除，只本地 commit） |
+| POST | `/api/config/narration-git/snapshot` | 手动触发 narration 快照（commit，remote 已配则 push） |
 | GET | `/api/model-config` | 获取所有提供商配置 |
 | PUT | `/api/model-config/{provider}/{field}` | 更新配置值 |
 | POST | `/api/model-config/{provider}/{field}/clear` | 清除配置值 |
@@ -773,6 +776,16 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 - `GET /api/config/animation-root` -> `{ "value": str | null }`
 - `PUT /api/config/animation-root` body `{ "value": str }` -> 校验非空、可 `mkdir -p`、可写；失败 422（`path_empty` / `cannot_create_directory: ...` / `directory_not_writable: ...`）；成功返回 `{ "value": str }`。
 - `POST /api/config/animation-root/test` body `{ "value": str }` -> 同样探测但不保存，返回 `{ "ok": bool, "error": str | null }`。
+
+### Narration Git 版本管理 (`/api/config/narration-git-*`)
+
+全局设置：narration 文本每日 03:00 自动快照到本地 git 仓库（`NARRATION_REPO_PATH`，默认 `backend/data/narration-repo/`）。配置远端后，快照 commit 后会 `git push origin main`；未配远端只本地 commit。
+
+- `GET /api/config/narration-git-remote` -> `{ "value": str | null }`
+- `PUT /api/config/narration-git-remote` body `{ "value": str }` -> 空字符串清除；成功返回 `{ "value": str | null }`。
+- `POST /api/config/narration-git/snapshot` -> 手动触发一次 `snapshot_all`：`{ "commit_sha": str|null, "projects": int, "pushed": bool, "push_error": str|null, "remote_configured": bool }`。push 失败不抛（本地 commit 仍生效），错误进 `push_error`。
+
+远端鉴权：remote URL 内嵌凭证（`https://user:token@host/repo.git`）或 SSH key。多环境 push 同一远端会非快进冲突（普通 push，不 force）。
 
 ---
 

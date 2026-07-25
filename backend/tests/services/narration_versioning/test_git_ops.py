@@ -1,8 +1,10 @@
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from app.services.narration_versioning.git_ops import (
-    ensure_repo, add_all, has_staged_changes, commit, git_log,
+    GitError, ensure_repo, add_all, has_staged_changes, commit, git_log, push,
 )
 
 
@@ -81,3 +83,51 @@ def test_git_log_filtered_by_path(tmp_path):
     log_b = git_log(repo, path_filter="projects/b", limit=10)
     assert len(log_a) == 2
     assert len(log_b) == 1
+
+
+# ── push ──
+
+def _bare_remote(tmp_path: Path) -> Path:
+    remote = tmp_path / "remote.git"
+    subprocess.check_call(["git", "init", "--bare", "-q", str(remote)])
+    return remote
+
+
+def _seed_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "r"
+    ensure_repo(repo, author_name="a", author_email="a@a")
+    (repo / "x.md").write_text("hi")
+    add_all(repo)
+    commit(repo, "seed")
+    return repo
+
+
+def test_push_creates_origin_and_pushes_to_bare_remote(tmp_path):
+    remote = _bare_remote(tmp_path)
+    repo = _seed_repo(tmp_path)
+    push(repo, str(remote), branch="main")
+    # origin now points at remote
+    assert subprocess.check_output(
+        ["git", "remote", "get-url", "origin"], cwd=repo, text=True
+    ).strip() == str(remote)
+    # remote received the commit
+    log = subprocess.check_output(
+        ["git", "log", "--all", "--pretty=%s"], cwd=remote, text=True
+    )
+    assert "seed" in log
+
+
+def test_push_updates_existing_origin_url(tmp_path):
+    remote = _bare_remote(tmp_path)
+    repo = _seed_repo(tmp_path)
+    subprocess.check_call(["git", "remote", "add", "origin", "/dummy/old"], cwd=repo)
+    push(repo, str(remote), branch="main")
+    assert subprocess.check_output(
+        ["git", "remote", "get-url", "origin"], cwd=repo, text=True
+    ).strip() == str(remote)
+
+
+def test_push_failure_raises_git_error(tmp_path):
+    repo = _seed_repo(tmp_path)
+    with pytest.raises(GitError):
+        push(repo, "/nonexistent/path/remote.git", branch="main")

@@ -287,6 +287,21 @@ export const configApi = {
     const { data } = await api.post<{ ok: boolean; error: string | null }>('/config/animation-root/test', { value });
     return data;
   },
+
+  getNarrationGitRemote: async (): Promise<{ value: string | null }> => {
+    const { data } = await api.get<{ value: string | null }>('/config/narration-git-remote');
+    return data;
+  },
+  setNarrationGitRemote: async (value: string): Promise<{ value: string | null }> => {
+    const { data } = await api.put<{ value: string | null }>('/config/narration-git-remote', { value });
+    return data;
+  },
+  snapshotNarrationGit: async (): Promise<{
+    commit_sha: string | null; projects: number; pushed: boolean; push_error: string | null; remote_configured: boolean;
+  }> => {
+    const { data } = await api.post('/config/narration-git/snapshot');
+    return data;
+  },
 };
 
 export interface TranscribeResult {

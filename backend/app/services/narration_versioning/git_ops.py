@@ -45,6 +45,19 @@ def commit(repo: Path, message: str) -> str | None:
     return _run(["git", "rev-parse", "HEAD"], cwd=repo).stdout.strip()
 
 
+def push(repo: Path, remote_url: str, branch: str = "main") -> None:
+    """Point ``origin`` at *remote_url* (add or update) and push the branch.
+
+    Raises ``GitError`` on push failure (e.g. non-fast-forward, unreachable
+    remote). Does not force: a rejected push surfaces as an error so history
+    is never silently overwritten.
+    """
+    seturl = _run_raw(["git", "remote", "set-url", "origin", remote_url], cwd=repo)
+    if seturl.returncode != 0:
+        _run(["git", "remote", "add", "origin", remote_url], cwd=repo)
+    _run(["git", "push", "origin", branch], cwd=repo)
+
+
 @dataclass
 class GitLogEntry:
     sha: str

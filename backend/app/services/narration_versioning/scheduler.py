@@ -53,11 +53,19 @@ def shutdown() -> None:
 
 def _safe_snapshot() -> None:
     try:
-        result = snapshot_all()
+        from app.core.database import SessionLocal
+        from app.core.system_config_service import get_narration_git_remote
+        session = SessionLocal()
+        try:
+            remote = get_narration_git_remote(session)
+        finally:
+            session.close()
+        result = snapshot_all(remote_url=remote)
         log.info(
-            "narration snapshot done: sha=%s, projects=%d",
+            "narration snapshot done: sha=%s, projects=%d, pushed=%s",
             (result.commit_sha or "no-op")[:8],
             result.projects_snapshotted,
+            result.pushed,
         )
     except Exception:  # noqa: BLE001
         log.exception("narration snapshot failed")

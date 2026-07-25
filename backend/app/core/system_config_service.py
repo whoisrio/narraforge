@@ -48,6 +48,20 @@ def is_frontend_storage(db: Session) -> bool:
 ANIMATION_ROOT_FOLDER_KEY = "animation_root_folder"
 
 
+NARRATION_GIT_REMOTE_KEY = "narration_git_remote"
+
+
+def get_narration_git_remote(db: Session) -> str | None:
+    """读取 narration git 远端地址；未设置或空字符串返回 None。"""
+    value = get_config(db, NARRATION_GIT_REMOTE_KEY, default="").strip()
+    return value or None
+
+
+def set_narration_git_remote(db: Session, value: str) -> None:
+    """写入 narration git 远端地址（strip）。不主动 commit。"""
+    set_config(db, NARRATION_GIT_REMOTE_KEY, value.strip())
+
+
 def get_animation_root_folder(db: Session) -> str | None:
     """读取全局 Remotion 脚手架根目录；未设置或空字符串返回 None。"""
     value = get_config(db, ANIMATION_ROOT_FOLDER_KEY, default="").strip()

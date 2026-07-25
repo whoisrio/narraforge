@@ -31,3 +31,27 @@ def test_get_treats_empty_as_unset(db_session):
     scs.set_animation_root_folder(db_session, "   ")
     db_session.commit()
     assert scs.get_animation_root_folder(db_session) is None
+
+
+# ----- narration git remote -----
+
+def test_git_remote_unset_returns_none(db_session):
+    assert scs.get_narration_git_remote(db_session) is None
+
+
+def test_git_remote_round_trip(db_session):
+    scs.set_narration_git_remote(db_session, "https://github.com/me/narraforge.git")
+    db_session.commit()
+    assert scs.get_narration_git_remote(db_session) == "https://github.com/me/narraforge.git"
+
+
+def test_git_remote_strips_whitespace(db_session):
+    scs.set_narration_git_remote(db_session, "  git@host:repo.git  ")
+    db_session.commit()
+    assert scs.get_narration_git_remote(db_session) == "git@host:repo.git"
+
+
+def test_git_remote_empty_treated_as_unset(db_session):
+    scs.set_narration_git_remote(db_session, "   ")
+    db_session.commit()
+    assert scs.get_narration_git_remote(db_session) is None
