@@ -215,6 +215,13 @@ export const zhCN = {
       open: '打开项目',
       rename: '重命名',
       delete: '删除项目',
+      export: '导出项目',
+    },
+    import: {
+      button: '导入项目',
+      aria: '导入项目压缩包',
+      success: '项目已导入',
+      failed: '导入失败',
     },
     rename: {
       label: '项目名称',

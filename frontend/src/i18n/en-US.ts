@@ -217,6 +217,13 @@ export const enUS: Messages = {
       open: 'Open Project',
       rename: 'Rename',
       delete: 'Delete Project',
+      export: 'Export Project',
+    },
+    import: {
+      button: 'Import Project',
+      aria: 'Import project bundle',
+      success: 'Project imported',
+      failed: 'Import failed',
     },
     rename: {
       label: 'Project Name',

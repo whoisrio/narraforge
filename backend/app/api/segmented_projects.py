@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import base64
+import io
+import json
 import logging
+import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core import segmented_assets as assets
@@ -470,3 +473,51 @@ def _write_audio_blob(
     seg.chapter.updated_at = utcnow()
     seg.chapter.project.updated_at = utcnow()
     db.commit()
+
+
+# ----- project export / import -----
+
+@router.get("/segmented-projects/{project_id}/export")
+def export_project_endpoint(project_id: str, db: Session = Depends(get_db)):
+    """Export a project as a self-contained ZIP bundle. Non-destructive."""
+    _reject_scratchpad(project_id, "cannot_export_scratchpad")
+    from urllib.parse import quote
+
+    from app.services.project_export_service import export_project
+
+    try:
+        data, filename = export_project(db, project_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    ascii_name = filename.encode("ascii", "ignore").decode("ascii") or "project.narraforge.zip"
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{ascii_name}"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            )
+        },
+    )
+
+
+@router.post(
+    "/segmented-projects/import",
+    response_model=ProjectDetail,
+    status_code=201,
+)
+def import_project_endpoint(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Import a project from a ZIP bundle. Creates a NEW project (never overwrites)."""
+    from app.services.project_import_service import import_project
+
+    zip_bytes = file.file.read()
+    try:
+        detail = import_project(db, zip_bytes)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except (KeyError, zipfile.BadZipFile, json.JSONDecodeError):
+        raise HTTPException(status_code=422, detail="invalid_bundle")
+    return detail

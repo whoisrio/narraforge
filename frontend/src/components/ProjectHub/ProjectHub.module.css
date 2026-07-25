@@ -78,6 +78,30 @@
   line-height: 1;
 }
 
+.heroImport {
+  display: flex;
+  align-items: center;
+}
+
+.hiddenFileInput {
+  display: none;
+}
+
+.importBtn {
+  padding: 8px 14px;
+  border: 1px solid rgba(216, 194, 180, 0.6);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.importBtn:hover {
+  border-color: var(--color-primary);
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

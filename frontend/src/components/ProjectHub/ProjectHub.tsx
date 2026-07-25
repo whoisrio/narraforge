@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { SegmentedProject } from '../../types';
 import { useTranslation } from '../../i18n';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
@@ -10,6 +10,8 @@ interface ProjectHubProps {
   onCreateProject: (name: string, logo?: string | null) => void;
   onDeleteProject: (projectId: string) => void;
   onRenameProject: (projectId: string, name: string) => void;
+  onExportProject?: (projectId: string) => void;
+  onImportProject?: (file: File) => void;
 }
 
 function projectStats(project: SegmentedProject) {
@@ -45,7 +47,7 @@ function projectInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || 'N';
 }
 
-export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteProject, onRenameProject }: ProjectHubProps) {
+export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteProject, onRenameProject, onExportProject, onImportProject }: ProjectHubProps) {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -53,8 +55,17 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
   const [createName, setCreateName] = useState('');
   const [createLogo, setCreateLogo] = useState<string | null>(null);
   const { t } = useTranslation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const totalSegments = projects.reduce((total, project) => total + projectStats(project).segments, 0);
   const totalGenerated = projects.reduce((total, project) => total + projectStats(project).generated, 0);
+
+  const handleImportFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && onImportProject) {
+      onImportProject(file);
+    }
+    event.target.value = '';
+  };
 
   const startRename = (project: SegmentedProject) => {
     setEditingProjectId(project.id);
@@ -97,6 +108,21 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
           <div><span>{t('projectHub.stats.segments')}</span><strong>{totalSegments}</strong></div>
           <div><span>{t('projectHub.stats.generated')}</span><strong>{totalGenerated}</strong></div>
         </div>
+        {onImportProject && (
+          <div className={styles.heroImport}>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".zip,application/zip"
+              aria-label={t('projectHub.import.aria')}
+              className={styles.hiddenFileInput}
+              onChange={handleImportFile}
+            />
+            <button type="button" className={styles.importBtn} onClick={() => fileInputRef.current?.click()}>
+              {t('projectHub.import.button')}
+            </button>
+          </div>
+        )}
       </header>
 
       <div className={styles.grid}>
@@ -201,6 +227,15 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                       <div className={styles.actionMenu} role="menu" aria-label={`${project.name} ${t('projectHub.actions.delete')}`}>
                         <button type="button" role="menuitem" onClick={() => onOpenProject(project.id)}>{t('projectHub.actions.open')}</button>
                         <button type="button" role="menuitem" onClick={() => startRename(project)}>{t('projectHub.actions.rename')}</button>
+                        {onExportProject && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { setOpenMenuProjectId(null); onExportProject(project.id); }}
+                          >
+                            {t('projectHub.actions.export')}
+                          </button>
+                        )}
                         <button
                           type="button"
                           role="menuitem"

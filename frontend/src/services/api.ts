@@ -555,6 +555,40 @@ export const segmentedProjectApi = {
     );
     return data;
   },
+  exportProject: async (projectId: string): Promise<void> => {
+    let resp;
+    try {
+      resp = await api.get(`/segmented-projects/${projectId}/export`, { responseType: 'blob' });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: Blob | { detail?: string } } };
+      const data = e?.response?.data;
+      let detail = '';
+      if (data instanceof Blob) {
+        try { detail = (JSON.parse(await data.text())).detail; } catch { /* ignore */ }
+      } else if (data?.detail) {
+        detail = data.detail;
+      }
+      throw new Error(detail || 'export_failed');
+    }
+    const disp = resp.headers['content-disposition'] || '';
+    const star = disp.match(/filename\*=UTF-8''([^;]+)/i);
+    const plain = disp.match(/filename="([^"]+)"/i);
+    const filename = star ? decodeURIComponent(star[1]) : plain ? plain[1] : `${projectId}.narraforge.zip`;
+    const url = URL.createObjectURL(resp.data);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+  importProject: async (file: File): Promise<import('../types').SegmentedProject> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const { data } = await api.post<import('../types').SegmentedProject>('/segmented-projects/import', formData);
+    return data;
+  },
 };
 
 export const roleApi = {
