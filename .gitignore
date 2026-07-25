@@ -4,6 +4,9 @@ backend/logs/
 *.mp3
 *.webm
 
+# Runtime data (narration git versioning repo)
+backend/data/narration-repo/
+
 # Python
 __pycache__/
 *.py[cod]
