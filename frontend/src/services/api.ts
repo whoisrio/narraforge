@@ -610,6 +610,18 @@ export const segmentedProjectApi = {
     );
     return data;
   },
+  resplitFromScript: async (projectId: string, chapterId: string): Promise<import('../types').SegmentedProject> => {
+    const { data } = await api.post<import('../types').SegmentedProject>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/resplit-from-script`,
+    );
+    return data;
+  },
+  rewriteScriptFromSegments: async (projectId: string, chapterId: string): Promise<{ narration_script: string }> => {
+    const { data } = await api.post<{ narration_script: string }>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/rewrite-script-from-segments`,
+    );
+    return data;
+  },
 };
 
 export interface ChapterSyncStatus {

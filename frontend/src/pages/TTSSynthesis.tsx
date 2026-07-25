@@ -528,6 +528,25 @@ export function TTSSynthesis({
     lastSavedUpdatedAtRef.current = migrated.updated_at;
   }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
 
+  // Lighter reload after an in-place mutation (e.g. layer-sync action): refetch
+  // project data without jumping to the overview section.
+  const reloadProjectData = useCallback(async () => {
+    if (!project?.id) return;
+    const p = await projectStorage.getProject(project.id);
+    if (!p) return;
+    const migrated = migrateV1(p);
+    initialLoadDoneRef.current = false;
+    dispatch({ type: 'LOAD_PROJECT', project: migrated });
+    setProject(migrated);
+    const ch = getActiveChapter(migrated);
+    if (ch) restoreChapterSettings(ch);
+    if (storageMode === 'backend') {
+      await draftSync.adoptBackendVersion(migrated);
+    }
+    initialLoadDoneRef.current = true;
+    lastSavedUpdatedAtRef.current = migrated.updated_at;
+  }, [project?.id, projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
+
   const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
     const np = createInitialProject();
     np.name = name || t('tts.newProject', { num: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
@@ -1379,6 +1398,7 @@ export function TTSSynthesis({
           projectSubtitle={isScratchpadProject ? t('tts.quickDraft') : t('tts.projectChaptered')}
           projectId={project.id}
           activeSection={projectSection}
+          onProjectChanged={() => { void reloadProjectData(); }}
           chapterName={activeChapter.name}
           segmentCount={activeChapter.segments.length}
           generatedCount={generatedSegmentCount}

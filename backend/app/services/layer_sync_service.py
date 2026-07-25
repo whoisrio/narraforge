@@ -58,11 +58,62 @@ def mark_l2_derived(chapter: Any) -> None:
 
 
 def mark_split(chapter: Any) -> None:
-    """L3 was (re)split from L2: snapshot l2_hash + segments_hash. l1_hash untouched."""
+    """L3 was (re)split from L2: snapshot l2_hash + segments_hash. l1_hash untouched.
+
+    Phase B also writes per-segment ``split_anchor`` (offset + baseline) so the
+    L3->L2 localisation merge can locate each segment later.
+    """
     st = _state(chapter)
     st["l2_hash"] = hash_text(getattr(chapter, "narration_script", None))
     st["segments_hash"] = segments_hash(getattr(chapter, "segments", None))
     chapter.sync_state = st
+    _write_split_anchors(chapter)
+
+
+def _write_split_anchors(chapter: Any) -> None:
+    """Record each segment's char span in narration_script + its baseline text."""
+    script = getattr(chapter, "narration_script", None) or ""
+    segs = sorted(getattr(chapter, "segments", None) or [],
+                  key=lambda s: getattr(s, "position", 0) or 0)
+    offset = 0
+    for seg in segs:
+        text = getattr(seg, "text", None) or ""
+        idx = script.find(text, offset) if text else offset
+        if idx < 0:
+            idx = offset  # degenerate fallback (text not a contiguous substring)
+        seg.split_anchor = {
+            "offset_start": idx,
+            "offset_end": idx + len(text),
+            "baseline_text": text,
+        }
+        offset = idx + len(text)
+
+
+def rewrite_script_from_segments(chapter: Any) -> str:
+    """L3->L2 localisation merge: write edited segment texts back into L2.
+
+    Replaces each edited segment's span (per ``split_anchor``) with its current
+    text, preserving L2 content not covered by any segment (headers, blank
+    lines). Requires L2 unchanged since split (``l2_dirty == false``); raises
+    ``ValueError("l2_dirty_conflict")`` otherwise. Re-baselines after.
+    """
+    if sync_status(chapter)["l2_dirty"]:
+        raise ValueError("l2_dirty_conflict")
+    script = getattr(chapter, "narration_script", None) or ""
+    segs = sorted(
+        getattr(chapter, "segments", None) or [],
+        key=lambda s: (getattr(s, "split_anchor", None) or {}).get("offset_start", 0),
+        reverse=True,
+    )
+    for seg in segs:
+        anchor = getattr(seg, "split_anchor", None)
+        if not anchor:
+            continue
+        if (getattr(seg, "text", None) or "") != anchor.get("baseline_text", ""):
+            script = script[:anchor["offset_start"]] + (getattr(seg, "text", None) or "") + script[anchor["offset_end"]:]
+    chapter.narration_script = script
+    mark_split(chapter)  # re-derive offsets/baseline + re-baseline hashes
+    return script
 
 
 def mark_consistent(chapter: Any) -> None:

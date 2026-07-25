@@ -171,6 +171,13 @@ export const enUS: Messages = {
     l2: 'Script',
     l3: 'Segments',
     chaptersStale: 'This chapter text has drifted from upstream/downstream',
+    modalTitle: 'Chapter text sync',
+    conflictWarning: 'Both the script and segments changed; syncing one side loses the other side edits.',
+    resplit: 'Re-split from script',
+    resplitDesc: 'Discards existing segment role/emotion/voice config and regenerates segments from the script.',
+    rewrite: 'Write segments back to script',
+    rewriteDesc: 'Writes segment text edits back into the script, preserving non-segment script content.',
+    syncing: 'Syncing…',
   },
   settings: {
     storage: 'Storage',

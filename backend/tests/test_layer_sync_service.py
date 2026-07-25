@@ -8,6 +8,7 @@ from app.services.layer_sync_service import (
     mark_l2_derived,
     mark_split,
     mark_consistent,
+    rewrite_script_from_segments,
 )
 
 
@@ -15,7 +16,8 @@ def _chapter(original="", script="", segs=None, sync_state=None):
     return SimpleNamespace(
         original_text=original,
         narration_script=script,
-        segments=[SimpleNamespace(text=t) for t in (segs or [])],
+        segments=[SimpleNamespace(text=t, position=i, split_anchor=None)
+                  for i, t in enumerate(segs or [])],
         sync_state=sync_state,
     )
 
@@ -127,3 +129,51 @@ def test_mark_consistent_sets_all_three():
     ch = _chapter(original="o", script="s", segs=["t"])
     mark_consistent(ch)
     assert set(ch.sync_state.keys()) == {"l1_hash", "l2_hash", "segments_hash"}
+
+
+# ── Phase B: split_anchor + sync actions ──
+
+def test_mark_split_writes_split_anchor_offsets():
+    ch = _chapter(script="第一句。第二句。", segs=["第一句。", "第二句。"])
+    mark_split(ch)
+    s1, s2 = ch.segments
+    assert s1.split_anchor == {"offset_start": 0, "offset_end": 4, "baseline_text": "第一句。"}
+    assert s2.split_anchor == {"offset_start": 4, "offset_end": 8, "baseline_text": "第二句。"}
+
+
+def test_mark_split_handles_duplicate_segment_texts():
+    ch = _chapter(script="重复。重复。", segs=["重复。", "重复。"])
+    mark_split(ch)
+    s1, s2 = ch.segments
+    assert s1.split_anchor["offset_start"] == 0
+    assert s2.split_anchor["offset_start"] == 3  # second occurrence, not 0
+
+
+def test_rewrite_script_from_segments_edits_one_segment():
+    ch = _chapter(script="第一句。第二句。", segs=["第一句。", "第二句。"])
+    mark_consistent(ch)
+    # edit only segment 1
+    ch.segments[0].text = "改过的第一句。"
+    new_script = rewrite_script_from_segments(ch)
+    assert new_script == "改过的第一句。第二句。"
+    # re-baselined: l3 no longer dirty
+    assert sync_status(ch)["l3_dirty"] is False
+    assert sync_status(ch)["l2_dirty"] is False
+
+
+def test_rewrite_script_preserves_non_segment_l2_text():
+    # L2 has a header line not part of any segment
+    ch = _chapter(script="# 标题\n第一句。第二句。", segs=["第一句。", "第二句。"])
+    mark_consistent(ch)
+    ch.segments[1].text = "改第二句。"
+    new_script = rewrite_script_from_segments(ch)
+    assert new_script == "# 标题\n第一句。改第二句。"
+
+
+def test_rewrite_raises_when_l2_dirty():
+    ch = _chapter(script="第一句。第二句。", segs=["第一句。", "第二句。"])
+    mark_consistent(ch)
+    ch.narration_script = "L2 被改过了"  # l2_dirty now true
+    import pytest
+    with pytest.raises(ValueError, match="l2_dirty"):
+        rewrite_script_from_segments(ch)

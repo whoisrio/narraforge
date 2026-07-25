@@ -143,3 +143,61 @@ def test_sync_status_endpoint_unsplit_chapter_all_false(client, db_session, tmp_
     db_session.commit()
     assert client.get(f"/api/segmented-projects/p1/chapters/{ch.id}/sync-status").json() == \
         {"l1_dirty": False, "l2_dirty": False, "l3_dirty": False}
+
+
+# ── Phase B: sync actions ──
+
+def test_rewrite_endpoint_writes_l3_edits_back_to_l2(client, db_session, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    svc.save_project(db_session, _seed())
+    db_session.commit()
+    ch = _chapter(db_session)
+    from app.services.layer_sync_service import mark_consistent
+    mark_consistent(ch); db_session.commit()
+    cid = ch.id
+    ch.segments[0].text = "改过的第一句。"
+    db_session.commit()
+
+    resp = client.post(f"/api/segmented-projects/p1/chapters/{cid}/rewrite-script-from-segments")
+    assert resp.status_code == 200
+    assert resp.json()["narration_script"] == "改过的第一句。第二句。"
+    sync = client.get(f"/api/segmented-projects/p1/chapters/{cid}/sync-status").json()
+    assert sync["l2_dirty"] is False and sync["l3_dirty"] is False
+
+
+def test_rewrite_endpoint_409_when_l2_dirty(client, db_session, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    svc.save_project(db_session, _seed())
+    db_session.commit()
+    ch = _chapter(db_session)
+    from app.services.layer_sync_service import mark_consistent
+    mark_consistent(ch); db_session.commit()
+    cid = ch.id
+    ch.narration_script = "L2 被改过了"
+    ch.segments[0].text = "L3 也改了"
+    db_session.commit()
+
+    resp = client.post(f"/api/segmented-projects/p1/chapters/{cid}/rewrite-script-from-segments")
+    assert resp.status_code == 409
+
+
+def test_resplit_endpoint_regenerates_segments_from_l2(client, db_session, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    svc.save_project(db_session, _seed())
+    db_session.commit()
+    ch = _chapter(db_session)
+    from app.services.layer_sync_service import mark_consistent
+    mark_consistent(ch); db_session.commit()
+    cid = ch.id
+    # edit L2 -> l2 dirty; resplit should regenerate segments from the new L2
+    ch.narration_script = "新第一句。新第二句。新第三句。"
+    db_session.commit()
+
+    resp = client.post(f"/api/segmented-projects/p1/chapters/{cid}/resplit-from-script")
+    assert resp.status_code == 200
+    body = resp.json()
+    new_chapter = next(c for c in body["chapters"] if c["id"] == cid)
+    seg_texts = [s["text"] for s in new_chapter["segments"]]
+    assert seg_texts == ["新第一句。", "新第二句。", "新第三句。"]
+    sync = client.get(f"/api/segmented-projects/p1/chapters/{cid}/sync-status").json()
+    assert sync["l2_dirty"] is False and sync["l3_dirty"] is False

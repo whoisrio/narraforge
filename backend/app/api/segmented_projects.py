@@ -346,6 +346,36 @@ def get_sync_status(project_id: str, chapter_id: str, db: Session = Depends(get_
     return sync_status(chapter)
 
 
+@router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/resplit-from-script")
+def resplit_from_script_endpoint(project_id: str, chapter_id: str, db: Session = Depends(get_db)):
+    """Layer-sync Phase B: re-split segments from the chapter's L2 (narration_script).
+
+    Discards existing segment role/emotion/voice config. Frontend MUST confirm.
+    """
+    try:
+        return svc.resplit_from_script(db, project_id, chapter_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+
+
+@router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/rewrite-script-from-segments")
+def rewrite_script_from_segments_endpoint(project_id: str, chapter_id: str, db: Session = Depends(get_db)):
+    """Layer-sync Phase B: write edited segment texts back into L2 (localisation merge).
+
+    Returns 409 when L2 itself has changed since the last split.
+    """
+    chapter = svc.get_chapter_row(db, project_id, chapter_id)
+    if chapter is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    from app.services.layer_sync_service import rewrite_script_from_segments
+    try:
+        new_script = rewrite_script_from_segments(chapter)
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    db.commit()
+    return {"narration_script": new_script}
+
+
 @router.post(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/split",
     response_model=SplitResponse,

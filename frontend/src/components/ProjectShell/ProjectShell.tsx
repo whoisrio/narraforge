@@ -1,8 +1,9 @@
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useTranslation, projectNavItems } from '../../i18n';
 import type { Chapter } from '../../types';
 import { segmentedProjectApi, type ChapterSyncStatus } from '../../services/api';
 import { ChapterSyncBadges } from '../SegmentedTTS/ChapterSyncBadges';
+import { ChapterSyncModal } from '../SegmentedTTS/ChapterSyncModal';
 import styles from './ProjectShell.module.css';
 
 
@@ -23,6 +24,7 @@ interface ProjectShellProps {
   onAddChapter?: () => void;
   onRenameChapter?: (chapterId: string, name: string) => void;
   onDeleteChapter?: (chapterId: string) => void;
+  onProjectChanged?: () => void;
   rightPanelCollapsed?: boolean;
   children: ReactNode;
   onSectionChange: (section: ProjectSectionId) => void;
@@ -59,6 +61,7 @@ export function ProjectShell({
   onAddChapter,
   onRenameChapter,
   onDeleteChapter,
+  onProjectChanged,
   rightPanelCollapsed = true,
   children,
   onSectionChange,
@@ -68,6 +71,8 @@ export function ProjectShell({
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   const [chapterNameDraft, setChapterNameDraft] = useState('');
   const [syncMap, setSyncMap] = useState<Record<string, ChapterSyncStatus>>({});
+  const [syncModal, setSyncModal] = useState<{ chapterId: string; status: ChapterSyncStatus } | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
   const { t } = useTranslation();
 
   const chapterIds = (chapters ?? []).map((c) => c.id).join(',');
@@ -103,6 +108,45 @@ export function ProjectShell({
       .catch(() => {});
     return () => { alive = false; };
   }, [projectId, activeChapterId]);
+
+  const refetchSyncStatus = useCallback(async (chapterId: string) => {
+    if (!projectId) return;
+    try {
+      const st = await segmentedProjectApi.getSyncStatus(projectId, chapterId);
+      setSyncMap((prev) => ({ ...prev, [chapterId]: st }));
+    } catch { /* ignore */ }
+  }, [projectId]);
+
+  const handleResplit = useCallback(async (chapterId: string) => {
+    if (!projectId) return;
+    if (!window.confirm(t('sync.resplitDesc'))) return;
+    setSyncBusy(true);
+    try {
+      await segmentedProjectApi.resplitFromScript(projectId, chapterId);
+      setSyncModal(null);
+      await refetchSyncStatus(chapterId);
+      onProjectChanged?.();
+    } catch {
+      window.alert(t('sync.syncing'));
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [projectId, t, refetchSyncStatus, onProjectChanged]);
+
+  const handleRewrite = useCallback(async (chapterId: string) => {
+    if (!projectId) return;
+    setSyncBusy(true);
+    try {
+      await segmentedProjectApi.rewriteScriptFromSegments(projectId, chapterId);
+      setSyncModal(null);
+      await refetchSyncStatus(chapterId);
+      onProjectChanged?.();
+    } catch {
+      window.alert(t('sync.syncing'));
+    } finally {
+      setSyncBusy(false);
+    }
+  }, [projectId, refetchSyncStatus, onProjectChanged]);
 
   const startRename = (chapter: Chapter) => {
     setEditingChapterId(chapter.id);
@@ -189,7 +233,7 @@ export function ProjectShell({
                       >
                         <span className={styles.chapterListIndex}>{String(index + 1).padStart(2, '0')}</span>
                         {!collapsed && <span className={styles.chapterListName}>{chapter.name}</span>}
-                        {!collapsed && <ChapterSyncBadges status={syncMap[chapter.id] || null} />}
+                        {!collapsed && <ChapterSyncBadges status={syncMap[chapter.id] ?? null} onClick={syncMap[chapter.id] ? () => setSyncModal({ chapterId: chapter.id, status: syncMap[chapter.id] }) : undefined} />}
                       </button>
                       {!collapsed && (
                         <span className={styles.chapterItemActions}>
@@ -245,6 +289,15 @@ export function ProjectShell({
 
         <div className={styles.workspaceBody}>{children}</div>
       </div>
+      {syncModal && (
+        <ChapterSyncModal
+          status={syncModal.status}
+          busy={syncBusy}
+          onClose={() => setSyncModal(null)}
+          onResplit={() => void handleResplit(syncModal.chapterId)}
+          onRewrite={() => void handleRewrite(syncModal.chapterId)}
+        />
+      )}
     </section>
   );
 }

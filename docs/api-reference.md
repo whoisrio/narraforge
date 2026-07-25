@@ -854,6 +854,8 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/split` | 文本分段 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/sync-status` | 章节分层文本陈旧检测（L1/L2/L3 脏标记） |
+| POST | `/api/segmented-projects/{id}/chapters/{cid}/resplit-from-script` | 以 L2 改写稿重新拆分 segments（丢弃旧段配置） |
+| POST | `/api/segmented-projects/{id}/chapters/{cid}/rewrite-script-from-segments` | 以 L3 分段定位合并回写 L2 改写稿 |
 | POST | `/api/segmented-projects/{id}/apply-animation-spec` | 批量应用动画规格 |
 | POST | `/api/segmented-projects/{id}/export-text-file-to-remotion` | 导出文本文件到 Remotion |
 | POST | `/api/segmented-projects/{id}/scaffold-remotion` | 创建/刷新 Remotion 工程（knowledge_video 工作流） |
@@ -1029,6 +1031,35 @@ Layer-sync Phase A：返回章节三层文本（L1 原文 / L2 改写稿 / L3 �
 ```
 
 某层 hash 未设置（未拆分/旧章节）时对应 `false`。前端章节头据此显示 badge。
+
+### POST `/api/segmented-projects/{id}/chapters/{cid}/resplit-from-script`
+
+Layer-sync Phase B：以当前 L2（`narration_script`）重新拆分 segments。
+按章节 `split_config.delimiters` 走 `rule_split`，全部旧 segment（含 role/emotion/voice 配置）丢弃并分配新 ID，随后重基线 `sync_state` 与每段 `split_anchor`。
+
+**Request Body:** 无。
+
+**Response:** 完整 `ProjectDetail` 对象（含新 segments）。
+
+**错误:** 404 `chapter_not_found`。
+
+⚠ 前端必须先弹确认，明示"将丢弃 N 段的 role/emotion/voice 配置"。
+
+### POST `/api/segmented-projects/{id}/chapters/{cid}/rewrite-script-from-segments`
+
+Layer-sync Phase B：把 L3 分段文本的改动定位合并回写 L2。
+前置条件 `l2_dirty == false`；从后往前按每段 `split_anchor.offset_*` 把 `text != baseline_text` 的段替换进 L2，未被任何 segment 覆盖的 L2 内容（标题/空行等）保留。完成后重基线 `sync_state` 并重算所有段的 `split_anchor`。
+
+**Request Body:** 无。
+
+**Response:**
+```json
+{ "narration_script": "回写后的完整改写稿" }
+```
+
+**错误:** 404 `chapter_not_found`；409 `l2_dirty_conflict`（L2 自上次拆分后也被编辑，前端走冲突分支）。
+
+边界：无 `split_anchor` 的段（新增段）跳过；删除的段对应 L2 区域保留；L3 不允许重排。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/split`
 

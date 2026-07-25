@@ -169,6 +169,13 @@ export const zhCN = {
     l2: '改写稿',
     l3: '分段',
     chaptersStale: '该章节文本已改动，与上下游不一致',
+    modalTitle: '章节文本同步',
+    conflictWarning: '改写稿和分段都改动了，选择一侧同步会丢失另一侧的改动。',
+    resplit: '以改写稿重新拆分',
+    resplitDesc: '丢弃现有分段的 role/emotion/voice 配置，按改写稿重新生成分段。',
+    rewrite: '以分段回写改写稿',
+    rewriteDesc: '把分段文本的改动回写到改写稿，保留改写稿中未被分段的部分。',
+    syncing: '同步中…',
   },
   settings: {
     storage: '存储',
