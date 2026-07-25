@@ -80,3 +80,46 @@ def test_snapshot_message_contains_project_slug(client, db_session, tmp_path):
         ["git", "log", "-1", "--format=%B"], cwd=repo, text=True,
     )
     assert "deepseek-strategy" in log_out
+
+
+# ── push integration ──
+
+def _bare_remote(tmp_path):
+    remote = tmp_path / "remote.git"
+    subprocess.check_call(["git", "init", "--bare", "-q", str(remote)])
+    return remote
+
+
+def test_snapshot_pushes_when_remote_given(client, db_session, tmp_path):
+    _seed_project(client)
+    repo = tmp_path / "repo"
+    remote = _bare_remote(tmp_path)
+    result = snapshot_all(repo=repo, session=db_session, remote_url=str(remote))
+    assert result.commit_sha is not None
+    assert result.pushed is True
+    assert result.push_error is None
+    # remote received the commit
+    log = subprocess.check_output(
+        ["git", "log", "--all", "--pretty=%s"], cwd=remote, text=True
+    )
+    assert "snapshot:" in log
+
+
+def test_snapshot_no_push_when_no_remote(client, db_session, tmp_path):
+    _seed_project(client)
+    repo = tmp_path / "repo"
+    result = snapshot_all(repo=repo, session=db_session, remote_url=None)
+    assert result.pushed is False
+    assert result.push_error is None
+    assert result.commit_sha is not None  # local commit still happened
+
+
+def test_snapshot_push_failure_records_error_but_commit_succeeds(client, db_session, tmp_path):
+    _seed_project(client)
+    repo = tmp_path / "repo"
+    result = snapshot_all(
+        repo=repo, session=db_session, remote_url="/nonexistent/remote.git"
+    )
+    assert result.commit_sha is not None  # local commit succeeded
+    assert result.pushed is False
+    assert result.push_error  # error captured

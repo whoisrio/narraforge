@@ -3,6 +3,7 @@ import { modelConfigApi } from '../services/api';
 import type { ModelConfigs, ModelConfigFieldValue } from '../types';
 import { useTranslation } from '../i18n';
 import { AnimationRootSetting } from '../components/Settings/AnimationRootSetting';
+import { NarrationGitSetting } from '../components/Settings/NarrationGitSetting';
 import styles from './ModelConfig.module.css';
 
 /** 每个 provider 对应的图标文件名（放在 frontend/public/ 下） */
@@ -262,6 +263,7 @@ export function ModelConfig() {
       </div>
 
       <AnimationRootSetting />
+      <NarrationGitSetting />
 
       {toast && (
         <div className={`${styles.toast} ${styles[toast.type]}`}>

@@ -93,6 +93,8 @@ backend/uploads_bak
 .playwright-cli
 home.yaml
 backend/voice_clone_e2e.db*
+# narration git snapshot repo (runtime-generated)
+backend/data/
 
 
 #agent

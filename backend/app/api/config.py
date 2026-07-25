@@ -13,6 +13,8 @@ from app.core.system_config_service import (
     STORAGE_MODE_FRONTEND,
     get_animation_root_folder,
     set_animation_root_folder,
+    get_narration_git_remote,
+    set_narration_git_remote,
 )
 from app.models import TTSConfig, ModelProvider, Emotion
 
@@ -230,3 +232,42 @@ def test_animation_root_endpoint(data: AnimationRootRequest):
     """探测路径可用性但不保存。"""
     ok, error = _probe_animation_root(data.value)
     return {"ok": ok, "error": error}
+
+
+# ---------------------------------------------------------------------------
+# Narration git remote + 手动快照
+# ---------------------------------------------------------------------------
+
+
+class GitRemoteRequest(BaseModel):
+    value: str
+
+
+@router.get("/narration-git-remote")
+def get_git_remote_endpoint(db: Session = Depends(get_db)):
+    """获取 narration git 远端地址。"""
+    return {"value": get_narration_git_remote(db)}
+
+
+@router.put("/narration-git-remote")
+def set_git_remote_endpoint(data: GitRemoteRequest, db: Session = Depends(get_db)):
+    """设置 narration git 远端地址（空字符串 = 清除，只本地 commit）。"""
+    set_narration_git_remote(db, data.value)
+    db.commit()
+    return {"value": get_narration_git_remote(db)}
+
+
+@router.post("/narration-git/snapshot")
+def narration_git_snapshot_endpoint(db: Session = Depends(get_db)):
+    """手动触发一次 narration 快照（序列化 + commit），remote 已配则 push。"""
+    from app.services.narration_versioning.job import snapshot_all
+
+    remote = get_narration_git_remote(db)
+    result = snapshot_all(remote_url=remote)
+    return {
+        "commit_sha": result.commit_sha,
+        "projects": result.projects_snapshotted,
+        "pushed": result.pushed,
+        "push_error": result.push_error,
+        "remote_configured": bool(remote),
+    }

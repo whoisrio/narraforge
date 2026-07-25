@@ -88,6 +88,21 @@ git log -- projects/deepseek-ce-lve
 git show HEAD -- projects/deepseek-ce-lve/chapters/ch01-kai-chang-bai/script.md
 ```
 
+## Push to remote
+
+The daily snapshot can also push to a configured remote. The remote URL is a
+**global setting** (DB key `narration_git_remote`), editable from `/settings`
+(see `GET/PUT /api/config/narration-git-remote`).
+
+- Remote unset (empty) -> local commit only, no push.
+- Remote set -> after commit, `git push origin main` (regular push, **no force**).
+- A manual `POST /api/config/narration-git/snapshot` (or the `/settings`「立即提交并推送」
+  button) runs the same snapshot + push on demand.
+
+Auth: embed credentials in the URL (`https://user:token@host/repo.git`) or rely on
+an SSH key. Multi-environment pushes to the same remote diverge histories and
+will be rejected on non-fast-forward (use separate branches/remotes per env).
+
 ## Design boundaries
 
 - **One-way.** The repo is derived state; the app-DB is the source of truth. Never edit files in the repo expecting them to sync back.
