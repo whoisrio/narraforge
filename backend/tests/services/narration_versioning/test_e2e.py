@@ -37,11 +37,12 @@ def test_snapshot_writes_expected_tree_and_commits(client, db_session, tmp_path)
     assert result.commit_sha is not None
     assert result.projects_snapshotted == 1
 
-    proj_dir = repo / "projects" / "e2e-project"
+    # dirs are named from name/position, not DB ids
+    proj_dir = repo / "projects" / "duan-dao-duan-ce-shi"
     assert (proj_dir / "project.yaml").exists()
     assert "正文。" in (proj_dir / "source.md").read_text()
 
-    ch_dir = proj_dir / "chapters" / "ch01"
+    ch_dir = proj_dir / "chapters" / "ch02-xu-zhang"
     assert "改写。" in (ch_dir / "script.md").read_text()
     segs = (ch_dir / "segments.md").read_text()
     assert "<!-- s001 kind=narration -->" in segs
@@ -77,7 +78,7 @@ def test_edit_then_second_snapshot_produces_second_commit(client, db_session, tm
     assert log_out.count("\n") == 2
 
     diff = subprocess.check_output(
-        ["git", "diff", "HEAD~1", "HEAD", "--", "projects/e2e-project/chapters/ch01/script.md"],
+        ["git", "diff", "HEAD~1", "HEAD", "--", "projects/duan-dao-duan-ce-shi/chapters/ch02-xu-zhang/script.md"],
         cwd=repo, text=True,
     )
     assert "改写 v2。" in diff

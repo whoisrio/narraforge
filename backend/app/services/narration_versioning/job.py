@@ -22,6 +22,34 @@ from .serializer import write_project
 log = logging.getLogger(__name__)
 
 
+def _sweep_stale_project_dirs(repo: Path, current_ids: set[str], written: set[str]) -> None:
+    """Remove project dirs that belong to projects in THIS database but were
+    written under an outdated name (legacy DB-id dirs, pre-rename slugs).
+
+    Dirs whose project.yaml id is NOT in ``current_ids`` belong to other
+    databases sharing the repo (e.g. the e2e seed project) and are kept.
+    """
+    import shutil
+
+    import yaml
+
+    projects_root = repo / "projects"
+    if not projects_root.exists():
+        return
+    for d in projects_root.iterdir():
+        if not d.is_dir() or d.name in written:
+            continue
+        meta = d / "project.yaml"
+        if not meta.exists():
+            continue
+        try:
+            pid = (yaml.safe_load(meta.read_text(encoding="utf-8")) or {}).get("id")
+        except yaml.YAMLError:
+            continue
+        if pid in current_ids:
+            shutil.rmtree(d, ignore_errors=True)
+
+
 @dataclass
 class SnapshotResult:
     commit_sha: str | None
@@ -53,9 +81,17 @@ def snapshot_all(
     own_session = session is None
     session = session or SessionLocal()
     try:
-        projects = session.query(SegmentedProject).all()
+        projects = (
+            session.query(SegmentedProject)
+            .order_by(SegmentedProject.created_at)
+            .all()
+        )
+        taken: set[str] = set()
+        written: set[str] = set()
         for p in projects:
-            write_project(p, repo_dir)
+            d = write_project(p, repo_dir, taken)
+            written.add(d.name)
+        _sweep_stale_project_dirs(repo_dir, {p.id for p in projects}, written)
 
         add_all(repo_dir)
         message = _commit_message(projects)
