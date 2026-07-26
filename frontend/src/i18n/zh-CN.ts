@@ -506,6 +506,8 @@ export const zhCN = {
     roleUpdated: '角色已更新',
     roleCreated: '角色已创建',
     roleSaveFailed: '角色保存失败',
+    removeRole: '移除角色',
+    removeRoleConfirm: '从本项目移除角色「{name}」？已合成的分段音频会保留，分段将失去角色引用（全局角色库中仍保留该角色）。',
     roleRemovedFromProject: '角色已从项目移除',
     removeRoleFailed: '移除角色失败',
     previewFailedCheckService: '试听失败：请检查后端 TTS 服务、模型配置和音色参数',
@@ -698,6 +700,7 @@ export const zhCN = {
       nameEmpty: '角色名不能为空',
       saveFailed: '角色保存失败',
       deleteFailed: '角色删除失败',
+      deleteConfirm: '删除角色「{name}」及其音色配置？该角色将从所有项目移除；已合成的分段音频会保留，但分段将失去角色引用。',
       delete: '删除',
     },
     migration: {
