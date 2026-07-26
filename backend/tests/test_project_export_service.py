@@ -167,3 +167,36 @@ def test_export_bundles_source_and_narration_docs(db_session, tmp_path, monkeypa
     assert manifest["project"]["narration_document"] == "text/narration.md"
     assert z.read("text/source.md").decode("utf-8") == "源文档内容"
     assert z.read("text/narration.md").decode("utf-8") == "旁白稿内容"
+
+
+def test_export_succeeds_with_legacy_layout_audio_path(db_session, tmp_path, monkeypatch):
+    """Audio under a legacy dir (inside the asset root, outside the slug dir)
+    must still export — the bundler reads DB-stored paths, not the layout."""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    svc.save_project(db_session, _seed())
+    db_session.commit()
+    legacy = tmp_path / "p1" / "chapters" / "chapter-old-name-abc123" / "segments" / "segment-000-abc123.mp3"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_bytes(b"FAKE_MP3")
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    seg.audio = {"format": "mp3", "current": {"id": None, "path": "p1/chapters/chapter-old-name-abc123/segments/segment-000-abc123.mp3"}}
+    db_session.commit()
+
+    z = _export_zip(db_session)
+    assert z.read("assets/segments/s1.mp3") == b"FAKE_MP3"
+
+
+def test_export_skips_missing_audio_files(db_session, tmp_path, monkeypatch):
+    """Dead refs (file deleted) must not crash the export; marked missing."""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    svc.save_project(db_session, _seed())
+    db_session.commit()
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    seg.audio = {"format": "mp3", "current": {"id": None, "path": "p1/chapters/gone/segments/nope.mp3"}}
+    db_session.commit()
+
+    z = _export_zip(db_session)
+    manifest = json.loads(z.read("manifest.json"))
+    seg_row = manifest["segments"][0]
+    assert seg_row["audio"]["current"].get("missing") is True
+    assert "assets/segments/s1.mp3" not in z.namelist()
