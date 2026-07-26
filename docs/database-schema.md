@@ -198,6 +198,7 @@ Chapters within a segmented project. Each chapter groups segments with optional 
 | `narration_script` | Text | Yes | `NULL` | L3 narration script (edited); source for segment splitting |
 | `design_title` | String | Yes | `NULL` | Design/display title |
 | `sync_state` | JSON | Yes | `NULL` | Layer-sync staleness baseline: `{l1_hash, l2_hash, segments_hash}` (blake2s-8), written by `mark_l2_derived` / `mark_split` |
+| `audio_adjust` | JSON | Yes | `NULL` | Post-synthesis adjust record: `{tempo, volume_db, applied_at, segments}`；`NULL` = 未调整（首次调整原始音频存入 `audio.previous`） |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update timestamp (auto-updates) |
 

@@ -1690,6 +1690,7 @@ export function TTSSynthesis({
               {adjustOpen && (
                 <AdjustAudioDialog
                   readyCount={generatedSegmentCount}
+                  currentAdjust={activeChapter.audio_adjust ?? null}
                   busy={adjustBusy}
                   onCancel={() => setAdjustOpen(false)}
                   onConfirm={(tempo, volumeDb) => { void handleAdjustAudio(tempo, volumeDb); }}

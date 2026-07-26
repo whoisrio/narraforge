@@ -81,6 +81,8 @@ export const zhCN = {
     apply: '应用',
     applying: '处理中…',
     done: '已调整 {count} 段音频',
+    current: '当前已应用：{tempo}× / {volume} dB',
+    revert: '还原原始音频',
   },
   studio: {
     title: '配音工作室',

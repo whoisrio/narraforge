@@ -196,6 +196,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 original_text=ch.original_text,
                 narration_script=getattr(ch, "narration_script", None),
                 design_title=getattr(ch, "design_title", None),
+                audio_adjust=getattr(ch, "audio_adjust", None),
                 created_at=_to_iso(ch.created_at),
                 updated_at=_to_iso(ch.updated_at),
                 segments=segs,
@@ -394,6 +395,9 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.original_text = ch_in.original_text
         setattr(ch, "narration_script", ch_in.narration_script)
         setattr(ch, "design_title", ch_in.design_title)
+        # audio_adjust 由 adjust-audio 端点维护；payload 未携带时保留原值
+        if ch_in.audio_adjust is not None:
+            setattr(ch, "audio_adjust", ch_in.audio_adjust)
         if ch_in.created_at:
             ch.created_at = _parse_iso(ch_in.created_at)
         ch.updated_at = utcnow()
@@ -1058,16 +1062,18 @@ def adjust_chapter_audio(
     volume_db: float = 0.0,
 ) -> dict[str, Any]:
     """Post-synthesis adjustment: apply atempo/volume to all ready segments
-    of a chapter with ffmpeg. The previous audio is preserved as
-    ``audio.previous`` (copy at ``{segment-id}.prev.{fmt}``) so the change
-    can be undone; current duration is re-probed afterwards.
+    of a chapter with ffmpeg.
+
+    Absolute semantics: the chapter keeps an ``audio_adjust`` record of the
+    currently applied params. Re-adjusting always renders from the ORIGINAL
+    audio (stashed in ``audio.previous`` on first adjust) — never cascades
+    on top of already-processed audio. Applying identity (1.0x / 0dB) with
+    a record present reverts to the original and clears the record.
     """
     if not 0.5 <= tempo <= 2.0:
         raise ValueError("tempo_out_of_range")
     if not -12.0 <= volume_db <= 12.0:
         raise ValueError("volume_db_out_of_range")
-    if abs(tempo - 1.0) < 1e-9 and abs(volume_db) < 1e-9:
-        raise ValueError("no_adjustment")
     if not is_ffmpeg_available():
         raise ValueError("ffmpeg_unavailable")
 
@@ -1075,40 +1081,72 @@ def adjust_chapter_audio(
     if chapter is None:
         raise LookupError("chapter_not_found")
 
+    record = getattr(chapter, "audio_adjust", None)
+    identity = abs(tempo - 1.0) < 1e-9 and abs(volume_db) < 1e-9
+    if identity and not record:
+        raise ValueError("no_adjustment")
+
     root = assets.settings.segmented_dir
     adjusted = 0
     for seg in chapter.segments:
         audio = seg.audio if isinstance(seg.audio, dict) else None
-        cur = (audio or {}).get("current")
-        rel = cur.get("path") if isinstance(cur, dict) else None
-        if not isinstance(rel, str) or not rel:
+        if not audio:
             continue
-        src = Path(rel)
-        if not src.is_absolute():
-            src = root / src
-        if not src.exists():
+        cur = audio.get("current") or {}
+        prev = audio.get("previous") or {}
+        cur_rel = cur.get("path") if isinstance(cur, dict) else None
+        prev_rel = prev.get("path") if isinstance(prev, dict) else None
+        if not isinstance(cur_rel, str) or not cur_rel:
             continue
 
-        fmt = cur.get("format") or src.suffix.lstrip(".") or "mp3"
-        prev_abs = src.with_name(f"{seg.id}.prev.{fmt}")
-        shutil.copy2(src, prev_abs)
-        adjust_audio_speed_volume(src, src, tempo=tempo, volume_db=volume_db)
-        new_duration = probe_audio_duration(src)
+        def _abs(rel: str) -> Path:
+            p = Path(rel)
+            return p if p.is_absolute() else root / p
 
+        # Base: original audio — the stashed previous once a record exists,
+        # otherwise the current file (first adjust).
+        base_rel = prev_rel if (record and isinstance(prev_rel, str) and prev_rel) else cur_rel
+        base_abs = _abs(base_rel)
+        cur_abs = _abs(cur_rel)
+        if not base_abs.exists():
+            continue
+
+        fmt = cur.get("format") or cur_abs.suffix.lstrip(".") or "mp3"
         updated = copy.deepcopy(audio)
-        try:
-            prev_rel = prev_abs.relative_to(root).as_posix()
-        except ValueError:
-            prev_rel = str(prev_abs)
-        prev_entry: dict[str, Any] = {"path": prev_rel}
-        if cur.get("duration_sec") is not None:
-            prev_entry["duration_sec"] = cur["duration_sec"]
-        updated["previous"] = prev_entry
+
+        if identity:
+            # Revert: current becomes a copy of the original.
+            shutil.copy2(base_abs, cur_abs)
+        else:
+            if not record:
+                # First adjust: stash the original as previous (overwrites any
+                # prior previous — adjust undo supersedes regen undo).
+                prev_abs = cur_abs.with_name(f"{seg.id}.prev.{fmt}")
+                shutil.copy2(cur_abs, prev_abs)
+                try:
+                    new_prev_rel = prev_abs.relative_to(root).as_posix()
+                except ValueError:
+                    new_prev_rel = str(prev_abs)
+                prev_entry: dict[str, Any] = {"path": new_prev_rel}
+                if cur.get("duration_sec") is not None:
+                    prev_entry["duration_sec"] = cur["duration_sec"]
+                updated["previous"] = prev_entry
+                base_abs = prev_abs
+            adjust_audio_speed_volume(base_abs, cur_abs, tempo=tempo, volume_db=volume_db)
+
+        new_duration = probe_audio_duration(cur_abs)
         updated["current"]["duration_sec"] = new_duration
         seg.audio = updated
         seg.updated_at = utcnow()
         adjusted += 1
 
+    if adjusted > 0 or identity:
+        chapter.audio_adjust = None if identity else {
+            "tempo": tempo,
+            "volume_db": volume_db,
+            "applied_at": utcnow().isoformat(),
+            "segments": adjusted,
+        }
     chapter.updated_at = utcnow()
     chapter.project.updated_at = utcnow()
     db.commit()

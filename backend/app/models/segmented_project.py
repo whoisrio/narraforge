@@ -72,6 +72,7 @@ class SegmentedProjectChapter(Base):
     narration_script = Column(Text, nullable=True)
     design_title = Column(String, nullable=True)
     sync_state = Column(JSON, nullable=True)  # layer-sync Phase A: {l1_hash, l2_hash, segments_hash}
+    audio_adjust = Column(JSON, nullable=True)  # post-synthesis adjust record: {tempo, volume_db, applied_at, segments}
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

@@ -60,12 +60,30 @@ test.describe('合成后音频调整', () => {
     expect(prev?.path).toBeTruthy();
     expect(prev?.duration_sec).toBeCloseTo(beforeDuration, 1);
 
-    // ── 4. DB 双读 ──
+    // ── 4. DB 双读 + audio_adjust 记录 ──
     const db = await readDbProject(PROJECT_ID);
     const dbSeg = db!.segments.find((s) => s.id === segId)!;
     const dbAudio = typeof dbSeg.audio === 'string' ? JSON.parse(dbSeg.audio) : dbSeg.audio;
     expect(dbAudio.previous?.path).toBeTruthy();
     expect(dbAudio.current?.duration_sec).toBeCloseTo(afterDuration, 1);
+
+    // ── 5. 重开弹窗：滑块回显已应用参数 ──
+    await page.getByRole('button', { name: '调整音频' }).click();
+    const dialog2 = page.getByRole('dialog', { name: /调整音频/ });
+    await expect(dialog2).toBeVisible();
+    await expect(dialog2.getByText(/当前已应用：2×/)).toBeVisible();
+    await expect(dialog2.getByLabel('速度')).toHaveValue('2');
+
+    // ── 6. 还原原始：调回 1x/0dB → 时长复原、记录清除 ──
+    await dialog2.getByLabel('速度').fill('1');
+    await dialog2.getByLabel('音量').fill('0');
+    await dialog2.getByRole('button', { name: '还原原始音频' }).click();
+    await expect(dialog2).toBeHidden({ timeout: 30_000 });
+
+    const reverted = await getChapter(page);
+    const revertedSeg = reverted.segments.find((s: { id: string }) => s.id === segId)!;
+    expect(revertedSeg.audio?.current?.duration_sec).toBeCloseTo(beforeDuration, 1);
+    expect(reverted.audio_adjust ?? null).toBeNull();
 
     expect(errors).toEqual([]);
   });

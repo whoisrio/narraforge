@@ -458,6 +458,13 @@ export interface Segment {
 }
 
 /** 章节 — 每个章节有独立的模型、文本、片段 */
+export interface AudioAdjustRecord {
+  tempo: number;
+  volume_db: number;
+  applied_at?: string;
+  segments?: number;
+}
+
 export interface Chapter {
   id: string;
   name: string;
@@ -465,6 +472,8 @@ export interface Chapter {
   voice: EngineParams;
   original_text?: string;
   design_title?: string;
+  /** Post-synthesis adjust params currently applied (null/undefined = 未调整) */
+  audio_adjust?: AudioAdjustRecord | null;
   segments: Segment[];
   selected_segment_id?: string;
   split_config: {

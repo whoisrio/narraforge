@@ -42,3 +42,23 @@ describe('AdjustAudioDialog', () => {
     expect(screen.getByText('adjustAudio.apply')).toBeDisabled();
   });
 });
+
+describe('AdjustAudioDialog with existing record', () => {
+  const record = { tempo: 1.5, volume_db: 3 };
+
+  it('initializes sliders from the record and shows current params', () => {
+    render(<AdjustAudioDialog {...baseProps} currentAdjust={record} />);
+    expect(screen.getByLabelText('adjustAudio.tempo')).toHaveValue('1.5');
+    expect(screen.getByLabelText('adjustAudio.volume')).toHaveValue('3');
+    expect(screen.getByText(/adjustAudio.current/)).toBeInTheDocument();
+  });
+
+  it('disables apply when params unchanged, enables revert at identity', () => {
+    render(<AdjustAudioDialog {...baseProps} currentAdjust={record} />);
+    expect(screen.getByText('adjustAudio.apply')).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('adjustAudio.tempo'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('adjustAudio.volume'), { target: { value: '0' } });
+    const revert = screen.getByText('adjustAudio.revert');
+    expect(revert).toBeEnabled();
+  });
+});
