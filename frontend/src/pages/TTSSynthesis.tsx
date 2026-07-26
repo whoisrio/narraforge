@@ -7,9 +7,10 @@ import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMP
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
+import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi } from '../services/api';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
@@ -118,6 +119,8 @@ export function TTSSynthesis({
   const [project, setProject] = useState<SegmentedProject>(createScratchpadProject);
   const [projectList, setProjectList] = useState<SegmentedProject[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
+  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [adjustBusy, setAdjustBusy] = useState(false);
   const [srtDurationMode, setSrtDurationMode] = useState<'chapter' | 'global'>('chapter');
   const [generating, setGenerating] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
@@ -547,8 +550,25 @@ export function TTSSynthesis({
     lastSavedUpdatedAtRef.current = migrated.updated_at;
   }, [project?.id, projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
 
-  const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
-    const np = createInitialProject();
+  const handleAdjustAudio = useCallback(async (tempo: number, volumeDb: number) => {
+    if (!project?.id || !activeChapter?.id) return;
+    setAdjustBusy(true);
+    try {
+      const result = await segmentedProjectApi.adjustChapterAudio(project.id, activeChapter.id, {
+        tempo: tempo === 1 ? undefined : tempo,
+        volume_db: volumeDb === 0 ? undefined : volumeDb,
+      });
+      setAdjustOpen(false);
+      showToast(t('adjustAudio.done', { count: result.adjusted }), 'success');
+      await reloadProjectData();
+    } catch (e) {
+      showToast(t('tts.playFailed', { ctx: 'adjust', msg: e instanceof Error ? e.message : String(e) }), 'error');
+    } finally {
+      setAdjustBusy(false);
+    }
+  }, [project?.id, activeChapter?.id, reloadProjectData, showToast, t]);
+
+  const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {    const np = createInitialProject();
     np.name = name || t('tts.newProject', { num: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
     if (logo) np.logo = logo;
     await projectStorage.saveProject(np, { mode: 'immediate' });
@@ -1432,6 +1452,7 @@ export function TTSSynthesis({
           durationSec={activeChapterDuration}
           remotionPath={project.remotion_project_path}
           onExport={() => setExportOpen(true)}
+          onAdjustAudio={() => setAdjustOpen(true)}
           onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
           onSidebarCollapseChange={setRightPanelCollapsed}
           sidebarContent={
@@ -1661,6 +1682,14 @@ export function TTSSynthesis({
                 onSplit={handleSplit}
               />
 
+              {adjustOpen && (
+                <AdjustAudioDialog
+                  readyCount={generatedSegmentCount}
+                  busy={adjustBusy}
+                  onCancel={() => setAdjustOpen(false)}
+                  onConfirm={(tempo, volumeDb) => { void handleAdjustAudio(tempo, volumeDb); }}
+                />
+              )}
               {exportOpen && (
                 <ExportDialog
                   projectId={project.id}
