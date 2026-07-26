@@ -346,6 +346,29 @@ def get_sync_status(project_id: str, chapter_id: str, db: Session = Depends(get_
     return sync_status(chapter)
 
 
+class AdjustAudioRequest(BaseModel):
+    tempo: float | None = None
+    volume_db: float | None = None
+
+
+@router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/adjust-audio")
+def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioRequest, db: Session = Depends(get_db)):
+    """Post-synthesis audio adjustment (atempo / volume) for a chapter's ready segments.
+
+    Previous audio is preserved as audio.previous; duration is re-probed.
+    """
+    try:
+        return svc.adjust_chapter_audio(
+            db, project_id, chapter_id,
+            tempo=body.tempo if body.tempo is not None else 1.0,
+            volume_db=body.volume_db if body.volume_db is not None else 0.0,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 @router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/resplit-from-script")
 def resplit_from_script_endpoint(project_id: str, chapter_id: str, db: Session = Depends(get_db)):
     """Layer-sync Phase B: re-split segments from the chapter's L2 (narration_script).

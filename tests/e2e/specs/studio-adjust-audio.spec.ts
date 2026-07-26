@@ -1,0 +1,72 @@
+/**
+ * 合成后音频调整（速度/音量）E2E.
+ *
+ * 合成一段音频 -> 工作室「调整音频」-> 提速 2x -> 验证时长缩短、
+ * previous 保留、DB 双读、磁盘文件变化。
+ *
+ * @feature backend/app/api/segmented_projects.py (adjust-audio)
+ */
+import { expect, test } from '@playwright/test';
+import { collectErrors, setLocaleToZhCN, goToStudio } from '../helpers';
+import { readDbProject } from '../helpers/dbReader';
+
+const BACKEND = 'http://127.0.0.1:8012';
+const PROJECT_ID = 'test-e2e-project';
+const CHAPTER_ID = 'test-chapter-1';
+
+async function getChapter(page: import('@playwright/test').Page) {
+  const resp = await page.request.get(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
+  expect(resp.ok()).toBeTruthy();
+  const project = await resp.json();
+  return project.chapters.find((c: { id: string }) => c.id === CHAPTER_ID)!;
+}
+
+test.describe('合成后音频调整', () => {
+  test('提速 2x -> 时长缩短 + previous 保留（UI + API + DB）', async ({ page }) => {
+    const errors = collectErrors(page);
+    await setLocaleToZhCN(page);
+
+    // ── 1. 合成第一段（edge_tts 可离线） ──
+    const chapter = await getChapter(page);
+    const segId = chapter.segments[0].id;
+    const synthResp = await page.request.post(
+      `${BACKEND}/api/segmented-projects/${PROJECT_ID}/chapters/${CHAPTER_ID}/segments/${segId}/synthesize`,
+      { data: {} },
+    );
+    expect(synthResp.ok()).toBeTruthy();
+
+    const before = await getChapter(page);
+    const beforeSeg = before.segments.find((s: { id: string }) => s.id === segId)!;
+    const beforeDuration = beforeSeg.audio?.current?.duration_sec as number;
+    expect(beforeDuration).toBeGreaterThan(0);
+
+    // ── 2. 工作室 → 展开播放栏 → 调整音频 → 提速 2x → 应用 ──
+    await goToStudio(page);
+    await page.getByRole('button', { name: '展开播放栏' }).click();
+    await page.getByRole('button', { name: '调整音频' }).click();
+    const dialog = page.getByRole('dialog', { name: /调整音频/ });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('速度').fill('2');
+    await dialog.getByRole('button', { name: '应用' }).click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+    // ── 3. API：时长约缩短一半，previous 保留 ──
+    const after = await getChapter(page);
+    const afterSeg = after.segments.find((s: { id: string }) => s.id === segId)!;
+    const afterDuration = afterSeg.audio?.current?.duration_sec as number;
+    expect(afterDuration).toBeGreaterThan(0);
+    expect(afterDuration).toBeLessThan(beforeDuration * 0.75);
+    const prev = afterSeg.audio?.previous;
+    expect(prev?.path).toBeTruthy();
+    expect(prev?.duration_sec).toBeCloseTo(beforeDuration, 1);
+
+    // ── 4. DB 双读 ──
+    const db = await readDbProject(PROJECT_ID);
+    const dbSeg = db!.segments.find((s) => s.id === segId)!;
+    const dbAudio = typeof dbSeg.audio === 'string' ? JSON.parse(dbSeg.audio) : dbSeg.audio;
+    expect(dbAudio.previous?.path).toBeTruthy();
+    expect(dbAudio.current?.duration_sec).toBeCloseTo(afterDuration, 1);
+
+    expect(errors).toEqual([]);
+  });
+});

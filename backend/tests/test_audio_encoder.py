@@ -60,3 +60,44 @@ def test_probe_audio_duration_for_real_mp3(tmp_path: Path):
     assert abs(duration - expected_ms / 1000) < 0.06, (
         f"expected ~{expected_ms/1000:.2f}s, got {duration:.2f}s"
     )
+
+
+def test_adjust_speed_halves_duration(tmp_path: Path):
+    if not is_ffmpeg_available():
+        pytest.skip("ffmpeg not installed")
+    from app.core.audio_encoder import adjust_audio_speed_volume, probe_audio_duration
+    src = tmp_path / "src.wav"
+    src.write_bytes(_silent_wav_bytes(400))
+    out = tmp_path / "out.mp3"
+    adjust_audio_speed_volume(src, out, tempo=2.0)
+    d_in = probe_audio_duration(src)
+    d_out = probe_audio_duration(out)
+    assert d_in is not None and d_out is not None
+    assert d_out < d_in * 0.75  # roughly half (encoder padding tolerance)
+
+
+def test_adjust_volume_changes_output_but_keeps_duration(tmp_path: Path):
+    if not is_ffmpeg_available():
+        pytest.skip("ffmpeg not installed")
+    from app.core.audio_encoder import adjust_audio_speed_volume, probe_audio_duration
+    src = tmp_path / "src.wav"
+    src.write_bytes(_silent_wav_bytes(400))
+    out = tmp_path / "out.mp3"
+    adjust_audio_speed_volume(src, out, volume_db=6.0)
+    d_in = probe_audio_duration(src)
+    d_out = probe_audio_duration(out)
+    assert d_in is not None and d_out is not None
+    assert abs(d_out - d_in) < 0.15  # volume does not change duration
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_adjust_identity_copies_through(tmp_path: Path):
+    if not is_ffmpeg_available():
+        pytest.skip("ffmpeg not installed")
+    from app.core.audio_encoder import adjust_audio_speed_volume
+    src = tmp_path / "src.wav"
+    content = _silent_wav_bytes(100)
+    src.write_bytes(content)
+    out = tmp_path / "out.mp3"
+    adjust_audio_speed_volume(src, out)
+    assert out.exists() and out.stat().st_size > 0

@@ -894,6 +894,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/split` | 文本分段 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/sync-status` | 章节分层文本陈旧检测（L1/L2/L3 脏标记） |
+| POST | `/api/segmented-projects/{id}/chapters/{cid}/adjust-audio` | 合成后音频调整（速度/音量，ffmpeg 批处理） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/resplit-from-script` | 以 L2 改写稿重新拆分 segments（丢弃旧段配置） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/rewrite-script-from-segments` | 以 L3 分段定位合并回写 L2 改写稿 |
 | POST | `/api/segmented-projects/{id}/apply-animation-spec` | 批量应用动画规格 |
@@ -1071,6 +1072,24 @@ Layer-sync Phase A：返回章节三层文本（L1 原文 / L2 改写稿 / L3 �
 ```
 
 某层 hash 未设置（未拆分/旧章节）时对应 `false`。前端章节头据此显示 badge。
+
+### POST `/api/segmented-projects/{id}/chapters/{cid}/adjust-audio`
+
+合成后音频调整：对本章所有已生成音频（`audio.current` 存在且文件在位）用 ffmpeg 做 `atempo`（0.5–2.0，不变调）和/或 `volume`（-12 ~ +12 dB）批处理。
+旧音频复制为 `{segment-id}.prev.{fmt}` 并写入 `audio.previous`（可撤销）；处理后重新 probe 每段 `duration_sec`。
+
+**Request Body:**
+```json
+{ "tempo": 1.5, "volume_db": 3 }
+```
+两者至少提供一个非恒等值。
+
+**Response:**
+```json
+{ "adjusted": 5, "project": { ... } }
+```
+
+**错误:** 404 `chapter_not_found`；422 `tempo_out_of_range` / `volume_db_out_of_range` / `no_adjustment` / `ffmpeg_unavailable`。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/resplit-from-script`
 

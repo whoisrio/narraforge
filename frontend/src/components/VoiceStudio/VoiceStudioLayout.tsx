@@ -13,6 +13,7 @@ interface VoiceStudioLayoutProps {
   sidebarContent?: ReactNode;
   onSidebarCollapseChange?: (collapsed: boolean) => void;
   onExport: () => void;
+  onAdjustAudio?: () => void;
   onPlayAll: () => void;
 }
 
@@ -35,6 +36,7 @@ export function VoiceStudioLayout({
   sidebarContent,
   onSidebarCollapseChange,
   onExport,
+  onAdjustAudio,
   onPlayAll,
 }: VoiceStudioLayoutProps) {
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
@@ -110,6 +112,9 @@ export function VoiceStudioLayout({
         {!transportCollapsed && (
         <div className={styles.exportGroup}>
           <span className={styles.remotionPath}>{remotionPath || '未设置 Remotion 路径'}</span>
+          {onAdjustAudio && (
+          <button type="button" className={styles.ghostButton ?? styles.primaryButton} onClick={onAdjustAudio}>{t('studio.adjustAudio')}</button>
+        )}
           <button type="button" className={styles.primaryButton} onClick={onExport}>{t('studio.exportLabel')}</button>
         </div>
         )}

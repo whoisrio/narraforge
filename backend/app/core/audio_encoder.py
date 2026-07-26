@@ -255,3 +255,50 @@ def probe_audio_duration(audio_path: Path) -> float | None:
             pass
 
     return None
+
+
+def adjust_audio_speed_volume(
+    input_path: Path,
+    output_path: Path,
+    *,
+    tempo: float = 1.0,
+    volume_db: float = 0.0,
+    bitrate: str = "96k",
+) -> Path:
+    """Adjust playback speed (atempo) and/or volume of an audio file with ffmpeg.
+
+    tempo 0.5–2.0 (pitch preserved), volume_db negative/positive dB gain.
+    Identity adjustments (tempo=1, volume_db=0) still transcode to mp3.
+    Atomic write via temp file; raises AudioEncoderError on failure.
+    """
+    if not is_ffmpeg_available():
+        raise AudioEncoderError("ffmpeg is not installed")
+
+    input_path = Path(input_path)
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    filters: list[str] = []
+    if abs(tempo - 1.0) > 1e-9:
+        filters.append(f"atempo={tempo}")
+    if abs(volume_db) > 1e-9:
+        filters.append(f"volume={volume_db}dB")
+
+    out_tmp = output_path.with_suffix(output_path.suffix + ".tmp")
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(input_path)]
+    if filters:
+        cmd += ["-af", ",".join(filters)]
+    cmd += ["-codec:a", "libmp3lame", "-b:a", bitrate, "-f", "mp3", str(out_tmp)]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, timeout=120)
+        if proc.returncode != 0:
+            raise AudioEncoderError(
+                f"ffmpeg adjust failed (code {proc.returncode}): {proc.stderr.decode(errors='replace')}"
+            )
+        out_tmp.replace(output_path)
+    finally:
+        try:
+            out_tmp.unlink()
+        except FileNotFoundError:
+            pass
+    return output_path

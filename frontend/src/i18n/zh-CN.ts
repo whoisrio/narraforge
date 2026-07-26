@@ -72,6 +72,16 @@ export const zhCN = {
     defaultPreviewText: '这是一段试听文本。',
     voxcpmLocal: 'VoxCPM (本地)',
   },
+  adjustAudio: {
+    title: '调整音频（速度 / 音量）',
+    affected: '将处理本章 {count} 段已生成音频（旧音频保留为 previous，可撤销）',
+    tempo: '速度',
+    volume: '音量',
+    hint: '速度 0.5–2.0 倍（不变调）；音量 -12 ~ +12 dB。处理在服务器用 ffmpeg 完成。',
+    apply: '应用',
+    applying: '处理中…',
+    done: '已调整 {count} 段音频',
+  },
   studio: {
     title: '配音工作室',
     listView: '列表视图',
@@ -90,6 +100,7 @@ export const zhCN = {
     compactView: '紧凑',
     expandedView: '展开',
     exportLabel: '导出',
+    adjustAudio: '调整音频',
   },
   projectOverview: {
     productionProgress: '制作进度',

@@ -74,6 +74,16 @@ export const enUS: Messages = {
     defaultPreviewText: 'This is a preview text.',
     voxcpmLocal: 'VoxCPM (Local)',
   },
+  adjustAudio: {
+    title: 'Adjust audio (tempo / volume)',
+    affected: 'Will process {count} generated segments in this chapter (previous audio is kept for undo)',
+    tempo: 'Tempo',
+    volume: 'Volume',
+    hint: 'Tempo 0.5–2.0x (pitch preserved); volume -12 to +12 dB. Processed server-side with ffmpeg.',
+    apply: 'Apply',
+    applying: 'Processing…',
+    done: 'Adjusted {count} segments',
+  },
   studio: {
     title: 'Voice Studio',
     listView: 'List View',
@@ -92,6 +102,7 @@ export const enUS: Messages = {
     compactView: 'Compact',
     expandedView: 'Expanded',
     exportLabel: 'Export',
+    adjustAudio: 'Adjust Audio',
   },
   projectOverview: {
     productionProgress: 'Production Progress',

@@ -663,6 +663,17 @@ export const segmentedProjectApi = {
     );
     return data;
   },
+  adjustChapterAudio: async (
+    projectId: string,
+    chapterId: string,
+    params: { tempo?: number; volume_db?: number },
+  ): Promise<{ adjusted: number; project: import('../types').SegmentedProject }> => {
+    const { data } = await api.post<{ adjusted: number; project: import('../types').SegmentedProject }>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/adjust-audio`,
+      params,
+    );
+    return data;
+  },
   rewriteScriptFromSegments: async (projectId: string, chapterId: string): Promise<{ narration_script: string }> => {
     const { data } = await api.post<{ narration_script: string }>(
       `/segmented-projects/${projectId}/chapters/${chapterId}/rewrite-script-from-segments`,

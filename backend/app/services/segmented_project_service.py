@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core import segmented_assets as assets
 from app.core.audio_encoder import (
     AudioEncoderError,
+    adjust_audio_speed_volume,
     concat_to_mp3,
     is_ffmpeg_available,
     probe_audio_duration,
@@ -1046,6 +1047,72 @@ def batch_create_structure(
         result.append({"id": chapter.id, "segments": seg_result})
     db.commit()
     return result
+
+
+def adjust_chapter_audio(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    *,
+    tempo: float = 1.0,
+    volume_db: float = 0.0,
+) -> dict[str, Any]:
+    """Post-synthesis adjustment: apply atempo/volume to all ready segments
+    of a chapter with ffmpeg. The previous audio is preserved as
+    ``audio.previous`` (copy at ``{segment-id}.prev.{fmt}``) so the change
+    can be undone; current duration is re-probed afterwards.
+    """
+    if not 0.5 <= tempo <= 2.0:
+        raise ValueError("tempo_out_of_range")
+    if not -12.0 <= volume_db <= 12.0:
+        raise ValueError("volume_db_out_of_range")
+    if abs(tempo - 1.0) < 1e-9 and abs(volume_db) < 1e-9:
+        raise ValueError("no_adjustment")
+    if not is_ffmpeg_available():
+        raise ValueError("ffmpeg_unavailable")
+
+    chapter = get_chapter_row(db, project_id, chapter_id)
+    if chapter is None:
+        raise LookupError("chapter_not_found")
+
+    root = assets.settings.segmented_dir
+    adjusted = 0
+    for seg in chapter.segments:
+        audio = seg.audio if isinstance(seg.audio, dict) else None
+        cur = (audio or {}).get("current")
+        rel = cur.get("path") if isinstance(cur, dict) else None
+        if not isinstance(rel, str) or not rel:
+            continue
+        src = Path(rel)
+        if not src.is_absolute():
+            src = root / src
+        if not src.exists():
+            continue
+
+        fmt = cur.get("format") or src.suffix.lstrip(".") or "mp3"
+        prev_abs = src.with_name(f"{seg.id}.prev.{fmt}")
+        shutil.copy2(src, prev_abs)
+        adjust_audio_speed_volume(src, src, tempo=tempo, volume_db=volume_db)
+        new_duration = probe_audio_duration(src)
+
+        updated = copy.deepcopy(audio)
+        try:
+            prev_rel = prev_abs.relative_to(root).as_posix()
+        except ValueError:
+            prev_rel = str(prev_abs)
+        prev_entry: dict[str, Any] = {"path": prev_rel}
+        if cur.get("duration_sec") is not None:
+            prev_entry["duration_sec"] = cur["duration_sec"]
+        updated["previous"] = prev_entry
+        updated["current"]["duration_sec"] = new_duration
+        seg.audio = updated
+        seg.updated_at = utcnow()
+        adjusted += 1
+
+    chapter.updated_at = utcnow()
+    chapter.project.updated_at = utcnow()
+    db.commit()
+    return {"adjusted": adjusted, "project": get_project_detail(db, project_id)}
 
 
 def resplit_from_script(db: Session, project_id: str, chapter_id: str):
