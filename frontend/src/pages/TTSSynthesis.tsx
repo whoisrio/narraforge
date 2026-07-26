@@ -538,6 +538,13 @@ export function TTSSynthesis({
     const p = await projectStorage.getProject(project.id);
     if (!p) return;
     const migrated = migrateV1(p);
+    // SELECT_CHAPTER intentionally doesn't bump updated_at (autosave skips it),
+    // so the backend's active_chapter_id may be stale — the in-memory selection
+    // is authoritative for a reload triggered by a local action.
+    const currentActiveId = project.active_chapter_id;
+    if (currentActiveId && migrated.chapters.some(c => c.id === currentActiveId)) {
+      migrated.active_chapter_id = currentActiveId;
+    }
     initialLoadDoneRef.current = false;
     dispatch({ type: 'LOAD_PROJECT', project: migrated });
     setProject(migrated);
@@ -548,7 +555,7 @@ export function TTSSynthesis({
     }
     initialLoadDoneRef.current = true;
     lastSavedUpdatedAtRef.current = migrated.updated_at;
-  }, [project?.id, projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
+  }, [project?.id, project?.active_chapter_id, projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
 
   const handleAdjustAudio = useCallback(async (tempo: number, volumeDb: number) => {
     if (!project?.id || !activeChapter?.id) return;
