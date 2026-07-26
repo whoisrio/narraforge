@@ -1136,6 +1136,8 @@ def adjust_chapter_audio(
 
         new_duration = probe_audio_duration(cur_abs)
         updated["current"]["duration_sec"] = new_duration
+        # 顶层 duration_sec 是时间轴/SRT/章节时长的读取源，必须同步
+        updated["duration_sec"] = new_duration
         seg.audio = updated
         seg.updated_at = utcnow()
         adjusted += 1

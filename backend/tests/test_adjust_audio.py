@@ -79,6 +79,8 @@ def test_adjust_audio_speed_and_volume(client, db_session, tmp_path, monkeypatch
         new_d = probe_audio_duration(cur_abs)
         assert new_d is not None and new_d < old_durations[sid] * 0.75
         assert abs((cur.get("duration_sec") or 0) - new_d) < 0.01
+        # 顶层 duration_sec（时间轴/SRT 的读取源）同步更新
+        assert abs((audio.get("duration_sec") or 0) - new_d) < 0.01
 
     # untouched segment stays without audio
     seg3 = db_session.query(SegmentedProjectSegment).filter_by(id="s3").one()
@@ -130,6 +132,8 @@ def test_adjust_identity_reverts_to_original(client, db_session, tmp_path, monke
     seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
     d = probe_audio_duration(config.settings.segmented_dir / seg.audio["current"]["path"])
     assert d is not None and abs(d - old_durations["s1"]) < 0.15
+    # 顶层 duration_sec（时间轴/SRT 读取源）在还原后也同步回原始时长
+    assert abs((seg.audio.get("duration_sec") or 0) - d) < 0.01
     proj = client.get("/api/segmented-projects/p1").json()
     assert proj["chapters"][0]["audio_adjust"] is None
 

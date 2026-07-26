@@ -56,6 +56,8 @@ test.describe('合成后音频调整', () => {
     const afterDuration = afterSeg.audio?.current?.duration_sec as number;
     expect(afterDuration).toBeGreaterThan(0);
     expect(afterDuration).toBeLessThan(beforeDuration * 0.75);
+    // 顶层 duration_sec（时间轴/SRT 读取源）同步更新
+    expect(afterSeg.audio?.duration_sec).toBeCloseTo(afterDuration, 2);
     const prev = afterSeg.audio?.previous;
     expect(prev?.path).toBeTruthy();
     expect(prev?.duration_sec).toBeCloseTo(beforeDuration, 1);
@@ -83,6 +85,8 @@ test.describe('合成后音频调整', () => {
     const reverted = await getChapter(page);
     const revertedSeg = reverted.segments.find((s: { id: string }) => s.id === segId)!;
     expect(revertedSeg.audio?.current?.duration_sec).toBeCloseTo(beforeDuration, 1);
+    // 顶层 duration_sec（时间轴/SRT 读取源）还原后也回到原始时长
+    expect(revertedSeg.audio?.duration_sec).toBeCloseTo(beforeDuration, 1);
     expect(reverted.audio_adjust ?? null).toBeNull();
 
     expect(errors).toEqual([]);
