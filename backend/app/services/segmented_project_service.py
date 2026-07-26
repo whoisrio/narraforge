@@ -1136,6 +1136,9 @@ def adjust_chapter_audio(
 
         new_duration = probe_audio_duration(cur_abs)
         updated["current"]["duration_sec"] = new_duration
+        # 清除顶层 duration_sec（前端兼容字段），避免前端 normalize 时
+        # 因旧值 truthy 而跳过从 current.duration_sec 的复制。
+        updated.pop("duration_sec", None)
         seg.audio = updated
         seg.updated_at = utcnow()
         adjusted += 1

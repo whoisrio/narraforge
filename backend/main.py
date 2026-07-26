@@ -1,5 +1,6 @@
 import logging
 import logging.handlers
+import os
 import sys
 from pathlib import Path
 
@@ -19,7 +20,23 @@ def setup_logging():
     - 同时输出到控制台和文件
     - 文件按大小轮转，避免单个文件过大
     - 通过环境变量控制日志级别
+    - Windows 控制台编码修复：强制 stdout/stderr 使用 UTF-8，
+      避免中文在 GBK 终端下显示为乱码
     """
+
+    # ---- Windows 控制台 UTF-8 编码修复 ----
+    # 默认情况下，中文 Windows 控制台使用 gbk 编码，
+    # Python 的 print/logging 输出的中文会被错解为乱码。
+    # 同时设置环境变量，确保子进程也继承 UTF-8 模式。
+    if sys.platform == "win32":
+        os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+        os.environ.setdefault("PYTHONUTF8", "1")
+        for _stream in (sys.stdout, sys.stderr):
+            try:
+                _stream.reconfigure(encoding="utf-8", errors="backslashreplace")
+            except (AttributeError, OSError):
+                pass  # 非控制台环境（重定向 / CI）可能失败，忽略
+
     # 获取日志级别
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
     
@@ -33,7 +50,7 @@ def setup_logging():
     # 创建日志格式器
     formatter = logging.Formatter(settings.log_format)
     
-    # 1. 控制台处理器 - 输出到 stdout
+    # 1. 控制台处理器 - 输出到 stdout（使用 UTF-8 包装器）
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)

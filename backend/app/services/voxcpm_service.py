@@ -117,10 +117,26 @@ class VoxCPMService:
             if dtype and dtype != "auto":
                 os.environ["VOXCPM_DTYPE"] = dtype
 
-            self.model = VoxCPMModel.from_pretrained(
-                model_path,
-                load_denoiser=False,
-            )
+            # 修复 Windows 线程池中 sys.stdout / sys.stderr 不可写导致的
+            # OSError: [Errno 22] Invalid argument。
+            # voxcpm 的 __init__ 通过 print(..., file=sys.stderr) 写日志；
+            # tqdm 等上游依赖也往 sys.stdout 写进度条 —— 线程池子线程中
+            # 这两个文件描述符可能处于无效状态（管道断开/编码问题），直接崩溃。
+            import sys as _sys
+            _stdout_backup = _sys.stdout
+            _stderr_backup = _sys.stderr
+            _sys.stdout = open(os.devnull, "w", encoding="utf-8")
+            _sys.stderr = open(os.devnull, "w", encoding="utf-8")
+            try:
+                self.model = VoxCPMModel.from_pretrained(
+                    model_path,
+                    load_denoiser=False,
+                )
+            finally:
+                for _fd in (_sys.stdout, _sys.stderr):
+                    _fd.close()
+                _sys.stdout = _stdout_backup
+                _sys.stderr = _stderr_backup
 
             # 获取实际使用的设备
             try:
@@ -327,9 +343,25 @@ class VoxCPMService:
                         torch.cuda.manual_seed_all(seed)
                 except ImportError:
                     pass
-            
+
             logger.info(f'\nkwargs: {generate_kwargs}')
-            wav = self.model.generate(**generate_kwargs)
+
+            # 保护 stdout/stderr：voxcpm 推理过程中的 tqdm 进度条同样运行在
+            # 线程池子线程中，Windows 下 sys.stderr/stdout 可能不可写，导致
+            # OSError: [Errno 22] Invalid argument（与加载阶段相同根因）。
+            import sys as _sys
+            _stdout_backup = _sys.stdout
+            _stderr_backup = _sys.stderr
+            _sys.stdout = open(os.devnull, "w", encoding="utf-8")
+            _sys.stderr = open(os.devnull, "w", encoding="utf-8")
+            try:
+                wav = self.model.generate(**generate_kwargs)
+            finally:
+                for _fd in (_sys.stdout, _sys.stderr):
+                    _fd.close()
+                _sys.stdout = _stdout_backup
+                _sys.stderr = _stderr_backup
+
             elapsed = round(time.time() - start_time, 2)
 
             # 计算音频时长
