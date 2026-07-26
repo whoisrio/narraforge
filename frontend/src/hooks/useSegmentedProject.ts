@@ -56,10 +56,11 @@ function enrichSegment(raw: RawSegment): Segment {
   const hasAudio = !!(rawAudio?.current || rawAudio?.previous);
   const voice: VoiceSource = ((raw as Record<string, unknown>).voice as VoiceSource) ?? { source: 'chapter' } as VoiceSource;
   const audio: Segment['audio'] = rawAudio ?? { format: 'mp3' };
-  // Backend returns duration_sec under audio.current — lift to audio.duration_sec for frontend consistency
-  if (!audio.duration_sec && audio.current?.duration_sec) {
-    audio.duration_sec = audio.current.duration_sec;
-  }
+  // Always use audio.current.duration_sec as the authoritative source.
+  // The top-level duration_sec can be stale (leaked from a prior autosave),
+  // and the old !audio.duration_sec guard would silently keep the wrong value
+  // after post-synthesis speed adjustment. Force-overwrite every time.
+  audio.duration_sec = audio.current?.duration_sec;
   const base: Segment = {
     id: raw.id ?? uid(),
     text: raw.text ?? '',
