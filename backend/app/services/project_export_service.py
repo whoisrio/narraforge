@@ -184,16 +184,26 @@ def _rewrite_segment_audio(seg, files: dict[str, bytes]) -> dict | None:
     prev_src = (audio.get("previous") or {}).get("path")
 
     if cur_src:
-        bundle = f"assets/segments/{seg.id}.{_ext(audio.get('current'), cur_src)}"
-        files[bundle] = _read_segment_file(cur_src)
-        audio["current"]["path"] = bundle
+        content = _try_read_segment_file(cur_src)
+        if content is None:
+            audio["current"]["missing"] = True
+        else:
+            bundle = f"assets/segments/{seg.id}.{_ext(audio.get('current'), cur_src)}"
+            files[bundle] = content
+            audio["current"]["path"] = bundle
     if prev_src:
         if prev_src == cur_src:
-            audio["previous"]["path"] = audio["current"]["path"]
+            audio["previous"]["path"] = audio["current"].get("path")
+            if audio["current"].get("missing"):
+                audio["previous"]["missing"] = True
         else:
-            bundle = f"assets/segments/{seg.id}.prev.{_ext(audio.get('previous'), prev_src)}"
-            files[bundle] = _read_segment_file(prev_src)
-            audio["previous"]["path"] = bundle
+            content = _try_read_segment_file(prev_src)
+            if content is None:
+                audio["previous"]["missing"] = True
+            else:
+                bundle = f"assets/segments/{seg.id}.prev.{_ext(audio.get('previous'), prev_src)}"
+                files[bundle] = content
+                audio["previous"]["path"] = bundle
     return audio
 
 
@@ -207,16 +217,25 @@ def _read_segment_file(rel_path: str) -> bytes:
     return (settings.segmented_dir / rel_path).read_bytes()
 
 
+def _try_read_segment_file(rel_path: str) -> bytes | None:
+    try:
+        return _read_segment_file(rel_path)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+
+
 # ── guard ─────────────────────────────────────────────────────────────────
 
 
 def _assert_assets_under_project_dir(project: SegmentedProject) -> None:
     """Refuse export when any segment audio / project doc lives outside the
-    project directory (legacy scattered layout). Migration fixes this."""
+    backend workspace (base_dir). Paths in ANY historical layout under the
+    workspace are fine — the bundler reads DB-stored paths, not dir names;
+    missing files are skipped, never fatal."""
     from app.core import segmented_assets as assets
 
     root = settings.segmented_dir.resolve()
-    proj_root = assets.project_dir(project.id, project.name).resolve()
+    workspace = settings.base_dir.resolve()
 
     def _under(rel_or_abs: str | None) -> None:
         if not rel_or_abs:
@@ -224,10 +243,14 @@ def _assert_assets_under_project_dir(project: SegmentedProject) -> None:
         p = Path(rel_or_abs)
         if not p.is_absolute():
             p = root / p
-        try:
-            Path(p).resolve().relative_to(proj_root)
-        except ValueError:
-            raise ValueError("project_assets_not_under_project_dir")
+        resolved = Path(p).resolve()
+        for allowed in (root, workspace):
+            try:
+                resolved.relative_to(allowed)
+                return
+            except ValueError:
+                continue
+        raise ValueError("project_assets_not_under_project_dir")
 
     for seg in _iter_segments(project):
         audio = seg.audio or {}
