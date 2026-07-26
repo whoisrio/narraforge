@@ -1698,9 +1698,9 @@ export function TTSSynthesis({
             onUpdateSourceDocument={(text) => dispatch({ type: 'SET_SOURCE_DOCUMENT', text })}
             onAddChapter={handleAddChapter}
             onDeleteChapter={handleDeleteChapter}
+            onProjectChanged={() => { void reloadProjectData(); }}
             onEnterStudio={(chapterId) => {
-              handleSelectChapter(chapterId);
-              setProjectSection('studio');
+              handleSelectChapter(chapterId);              setProjectSection('studio');
             }}
           />
         ) : projectSection === 'voices' ? (

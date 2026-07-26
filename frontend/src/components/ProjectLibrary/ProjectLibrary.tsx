@@ -7,9 +7,11 @@ import { SourceDocumentView } from './SourceDocumentView';
 import { WorkflowDrawer } from '../Workflow/WorkflowDrawer';
 import { StoryboardPanel } from '../Storyboard/StoryboardPanel';
 import { DrawerIndicator } from '../Workflow/DrawerIndicator';
+import { ChapterSplitModal } from './ChapterSplitModal';
 import { agentClient } from '../../services/langgraph/client';
 import { WORKFLOW_KINDS, type WorkflowKind } from '../../services/langgraph/contracts';
 import { resolveWorkflowThread } from '../../services/langgraph/threads';
+import { segmentedProjectApi } from '../../services/api';
 import styles from './ProjectLibrary.module.css';
 
 interface ProjectLibraryProps {
@@ -28,6 +30,7 @@ interface ProjectLibraryProps {
   onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
   onModeChange?: (mode: 'overview' | 'chapter' | 'fulltext') => void;
+  onProjectChanged?: () => void;
 }
 
 type LibraryMode = 'overview' | 'chapter' | 'fulltext';
@@ -89,6 +92,7 @@ export function ProjectLibrary({
   onDeleteChapter,
   onEnterStudio,
   onModeChange,
+  onProjectChanged,
 }: ProjectLibraryProps) {
   const { t } = useTranslation();
   const [mode, setMode] = useState<LibraryMode>('overview');
@@ -99,6 +103,28 @@ export function ProjectLibrary({
   const [drawerThreadId, setDrawerThreadId] = useState<string | null>(null);
   const [drawerCollapsed, setDrawerCollapsed] = useState(false);
   const [drawerKind, setDrawerKind] = useState<WorkflowKind>('narration');
+  const [splitModal, setSplitModal] = useState<{ fullText: string } | null>(null);
+  const [splitLoading, setSplitLoading] = useState(false);
+
+  const joinedChapterText = useMemo(
+    () => chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n'),
+    [chapters],
+  );
+
+  const openSplitModal = async () => {
+    if (!projectId) return;
+    setSplitLoading(true);
+    try {
+      const detail = await segmentedProjectApi.getProject(projectId) as unknown as { narration_script?: string | null };
+      const fullText = (detail.narration_script || '').trim() || joinedChapterText || (sourceDocument ?? '');
+      if (fullText.trim()) setSplitModal({ fullText });
+    } catch {
+      const fullText = joinedChapterText || (sourceDocument ?? '');
+      if (fullText.trim()) setSplitModal({ fullText });
+    } finally {
+      setSplitLoading(false);
+    }
+  };
 
   const startWorkflow = async (workflowKind: WorkflowKind) => {
     try {
@@ -478,6 +504,15 @@ export function ProjectLibrary({
               <div className={styles.headerStat}><span>{t('projectLibrary.wordCount')}</span><strong>{totals.chars}</strong></div>
               <div className={styles.headerStat}><span>{t('projectLibrary.segments')}</span><strong>{totals.segments}</strong></div>
               <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>{t('projectLibrary.viewFulltext')}</button>
+              <button
+                type="button"
+                className={styles.ghostButton}
+                onClick={() => void openSplitModal()}
+                disabled={splitLoading || !projectId}
+                title={t('projectLibrary.splitChapters')}
+              >
+                {splitLoading ? t('chapterSplit.detecting') : t('projectLibrary.splitChapters')}
+              </button>
               <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>{t('projectLibrary.newChapter')}</button>
             </>
           )}
@@ -539,6 +574,15 @@ export function ProjectLibrary({
             onExpand={() => setDrawerCollapsed(false)}
           />
               )}
+      {splitModal && projectId && (
+        <ChapterSplitModal
+          projectId={projectId}
+          fullText={splitModal.fullText}
+          existingChapterCount={chapters.length}
+          onClose={() => setSplitModal(null)}
+          onApplied={() => { setSplitModal(null); onProjectChanged?.(); }}
+        />
+      )}
     </section>
   );
 }

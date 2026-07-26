@@ -506,7 +506,43 @@ export const textSplitApi = {
     );
     return data;
   },
+
+  markdownDetect: async (text: string): Promise<MarkdownDetectResponse> => {
+    const { data } = await api.post<MarkdownDetectResponse>('/text-split/markdown-detect', { text });
+    return data;
+  },
+
+  markdownSplit: async (text: string, levels: number[], minChars?: number): Promise<MarkdownSplitResponse> => {
+    const payload: Record<string, unknown> = { text, levels };
+    if (minChars !== undefined) payload.min_chars = minChars;
+    const { data } = await api.post<MarkdownSplitResponse>('/text-split/markdown-split', payload);
+    return data;
+  },
 };
+
+export interface MarkdownChapterItem {
+  index: number;
+  title: string;
+  level: number;
+  start_char: number;
+  end_char: number;
+  char_count: number;
+  preview?: string | null;
+}
+
+export interface MarkdownDetectResponse {
+  doc_title: string | null;
+  candidates: MarkdownChapterItem[];
+  chapters: MarkdownChapterItem[];
+  total_chars: number;
+}
+
+export interface MarkdownSplitResponse {
+  doc_title: string | null;
+  chapters: MarkdownChapterItem[];
+  total_chars: number;
+  used_levels: number[];
+}
 // ---------------------------------------------------------------------------
 // Text Analysis API (script parsing: chapter/role/dialogue detection)
 // ---------------------------------------------------------------------------
@@ -613,6 +649,17 @@ export const segmentedProjectApi = {
   resplitFromScript: async (projectId: string, chapterId: string): Promise<import('../types').SegmentedProject> => {
     const { data } = await api.post<import('../types').SegmentedProject>(
       `/segmented-projects/${projectId}/chapters/${chapterId}/resplit-from-script`,
+    );
+    return data;
+  },
+  batchCreateChapters: async (
+    projectId: string,
+    chapters: { chapter_title: string; narration_script?: string }[],
+    narrationScript?: string,
+  ): Promise<{ chapters: { id: string; segments: { id: string }[] }[] }> => {
+    const { data } = await api.post<{ chapters: { id: string; segments: { id: string }[] }[] }>(
+      `/segmented-projects/${projectId}/chapters:batch`,
+      { chapters, narration_script: narrationScript ?? null },
     );
     return data;
   },

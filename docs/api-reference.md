@@ -609,6 +609,46 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | POST | `/api/text-split/rule` | 按标点规则拆分 |
 | POST | `/api/text-split/llm` | LLM 语义智能拆分 |
 | POST | `/api/text-split/ssml-annotate` | LLM SSML 标注 |
+| POST | `/api/text-split/markdown-detect` | 探测 markdown 标题层级（H1-H6 候选 + 推荐章节） |
+| POST | `/api/text-split/markdown-split` | 按指定标题层级拆分 markdown 全文为章节 |
+
+### POST `/api/text-split/markdown-detect`
+
+**Request Body:**
+```json
+{ "text": "markdown 全文", "min_chars": 80, "front_matter_mode": "prepend_to_first" }
+```
+
+`front_matter_mode`：`prepend_to_first`（首个标题前内容并入第一章）/ `own_chapter` / `skip`。
+
+**Response:**
+```json
+{
+  "doc_title": "文档标题",
+  "candidates": [{ "index": 0, "title": "第一章", "level": 2, "start_char": 8, "end_char": 100, "char_count": 92, "preview": "..." }],
+  "chapters": [],
+  "total_chars": 1234
+}
+```
+
+### POST `/api/text-split/markdown-split`
+
+按用户指定的 `levels` 切分（如 `[2]` 只按 H2，`[1, 2]` 按 H1+H2），短于 `min_chars` 的相邻章节自动合并。返回 flat 章节列表（`index/title/level/start_char/end_char/char_count/preview`）。前端按 `start_char/end_char` 从原文切片后调 `chapters:batch` 应用。
+
+**Request Body:**
+```json
+{ "text": "markdown 全文", "levels": [2], "min_chars": 80, "front_matter_mode": "prepend_to_first" }
+```
+
+**Response:**
+```json
+{
+  "doc_title": "文档标题",
+  "chapters": [{ "index": 0, "title": "夜路 (含引言)", "level": 2, "start_char": 8, "end_char": 100, "char_count": 92, "preview": "..." }],
+  "total_chars": 1234,
+  "used_levels": [2]
+}
+```
 
 ### POST `/api/text-split/rule`
 
