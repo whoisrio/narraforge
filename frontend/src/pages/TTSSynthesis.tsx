@@ -800,18 +800,23 @@ export function TTSSynthesis({
   const handleDeleteRole = useCallback(async (roleId: string) => {
     const target = roles.find(role => role.id === roleId);
     if (!target) return;
-    try {
-      // 仅从当前项目移除，不全局删除
-      // 1. 清除所有引用该角色的 segment 的 role_id 和 role_snapshot
-      dispatch({ type: 'CLEAR_ROLE_FROM_SEGMENTS', roleId });
-      // 2. 从本地角色列表移除（不调用 roleApi.deleteRole）
-      setRoles(prev => prev.filter(role => role.id !== roleId));
-      showToast(t('tts.roleRemovedFromProject'));
-    } catch (error) {
-      console.error('Remove role from project failed:', error);
-      showToast(t('tts.removeRoleFailed'), 'error');
-    }
-  }, [roles, dispatch, showToast]);
+    setConfirmDialog({
+      open: true,
+      title: t('tts.removeRole'),
+      message: t('tts.removeRoleConfirm', { name: target.name }),
+      variant: 'warning',
+      confirmLabel: t('common.delete'),
+      onConfirm: () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        // 仅从当前项目移除，不全局删除
+        // 1. 清除所有引用该角色的 segment 的 role_id 和 role_snapshot
+        dispatch({ type: 'CLEAR_ROLE_FROM_SEGMENTS', roleId });
+        // 2. 从本地角色列表移除（不调用 roleApi.deleteRole）
+        setRoles(prev => prev.filter(role => role.id !== roleId));
+        showToast(t('tts.roleRemovedFromProject'));
+      },
+    });
+  }, [roles, dispatch, showToast, t]);
 
   const handlePreviewRole = useCallback(async (role: RoleSnapshot, sampleText: string) => {
     setPreviewingRoleId(role.id);

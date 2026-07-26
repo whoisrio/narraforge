@@ -98,6 +98,10 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
 
   const removeRole = async (roleId: string) => {
     setError(null);
+    const target = roles.find((r) => r.id === roleId);
+    if (!window.confirm(
+      t('segment.roleLibrary.deleteConfirm', { name: target?.name ?? roleId }),
+    )) return;
     try {
       await roleApi.deleteRole(roleId);
       const next = roles.filter((role) => role.id !== roleId);

@@ -508,6 +508,8 @@ export const enUS: Messages = {
     roleUpdated: 'Role updated',
     roleCreated: 'Role created',
     roleSaveFailed: 'Failed to save role',
+    removeRole: 'Remove role',
+    removeRoleConfirm: 'Remove role "{name}" from this project? Synthesized segment audio is kept; segments lose the role reference (the role stays in the global library).',
     roleRemovedFromProject: 'Role removed from project',
     removeRoleFailed: 'Failed to remove role',
     previewFailedCheckService: 'Preview failed: please check backend TTS service, model configuration, and voice parameters',
@@ -700,6 +702,7 @@ export const enUS: Messages = {
       nameEmpty: 'Role name cannot be empty',
       saveFailed: 'Failed to save role',
       deleteFailed: 'Failed to delete role',
+      deleteConfirm: 'Delete role "{name}" and its voice? It will be removed from all projects. Synthesized segment audio is kept, but segments lose the role reference.',
       delete: 'Delete',
     },
     migration: {
