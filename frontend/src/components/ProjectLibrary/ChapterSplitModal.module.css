@@ -1,0 +1,145 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.card {
+  background: var(--bg-primary, #fff);
+  border-radius: 12px;
+  width: min(640px, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-color, #e5e5e5);
+}
+
+.header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border-color, #e5e5e5);
+}
+
+.docTitle {
+  font-weight: 600;
+  margin: 0 0 10px;
+}
+
+.levels {
+  border: 1px solid var(--border-color, #e5e5e5);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 12px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.levels legend {
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  padding: 0 4px;
+}
+
+.levelItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.secondaryBtn,
+.primaryBtn,
+.ghostBtn {
+  border-radius: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  border: 1px solid var(--border-color, #d0d0d0);
+  background: var(--bg-secondary, #f5f5f5);
+}
+
+.primaryBtn {
+  background: var(--accent, #b45309);
+  border-color: var(--accent, #b45309);
+  color: #fff;
+}
+
+.primaryBtn:disabled,
+.secondaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghostBtn {
+  background: transparent;
+}
+
+.previewList {
+  margin-top: 14px;
+  border-top: 1px dashed var(--border-color, #e5e5e5);
+  padding-top: 10px;
+}
+
+.previewMeta {
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+}
+
+.previewList ol {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.chapterMeta {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+}
+
+.previewText {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+  white-space: pre-wrap;
+}
+
+.warning {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--warning-bg, #fff7ed);
+  color: var(--warning-text, #9a3412);
+  font-size: 13px;
+}
+
+.error {
+  color: var(--error-text, #b91c1c);
+}
