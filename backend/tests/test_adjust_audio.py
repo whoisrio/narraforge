@@ -91,3 +91,50 @@ def test_adjust_audio_validation(client, db_session, tmp_path, monkeypatch):
     assert client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 3.0}).status_code == 422
     assert client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"volume_db": 20}).status_code == 422
     assert client.post("/api/segmented-projects/p1/chapters/nope/adjust-audio", json={"tempo": 1.5}).status_code == 404
+
+
+def test_adjust_records_params_and_readjusts_from_original(client, db_session, tmp_path, monkeypatch):
+    _seed_with_audio(db_session, tmp_path, monkeypatch)
+
+    r1 = client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 2.0})
+    assert r1.status_code == 200
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    first_prev_path = seg.audio["previous"]["path"]
+    first_prev_bytes = (config.settings.segmented_dir / first_prev_path).read_bytes()
+
+    r2 = client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 1.5})
+    assert r2.status_code == 200
+    db_session.expire_all()
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    # previous 仍是第一次的原始文件（未被覆盖）
+    assert seg.audio["previous"]["path"] == first_prev_path
+    assert (config.settings.segmented_dir / first_prev_path).read_bytes() == first_prev_bytes
+    # 第二次是从原始出的 1.5x（时长 ≈ 原始/1.5），不是 2x 之上再叠（≈原始/3）
+    new_d = probe_audio_duration(config.settings.segmented_dir / seg.audio["current"]["path"])
+    assert new_d is not None
+    assert new_d > 0.2  # > original/2，证明不是级联
+    # 参数记录更新为 1.5
+    proj = client.get("/api/segmented-projects/p1").json()
+    ch = proj["chapters"][0]
+    assert ch["audio_adjust"]["tempo"] == 1.5
+
+
+def test_adjust_identity_reverts_to_original(client, db_session, tmp_path, monkeypatch):
+    old_durations = _seed_with_audio(db_session, tmp_path, monkeypatch)
+
+    client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 2.0})
+    r = client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 1.0, "volume_db": 0})
+    assert r.status_code == 200
+
+    db_session.expire_all()
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    d = probe_audio_duration(config.settings.segmented_dir / seg.audio["current"]["path"])
+    assert d is not None and abs(d - old_durations["s1"]) < 0.15
+    proj = client.get("/api/segmented-projects/p1").json()
+    assert proj["chapters"][0]["audio_adjust"] is None
+
+
+def test_identity_without_prior_adjust_is_noop_422(client, db_session, tmp_path, monkeypatch):
+    _seed_with_audio(db_session, tmp_path, monkeypatch)
+    r = client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 1.0, "volume_db": 0})
+    assert r.status_code == 422

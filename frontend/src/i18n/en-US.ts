@@ -83,6 +83,8 @@ export const enUS: Messages = {
     apply: 'Apply',
     applying: 'Processing…',
     done: 'Adjusted {count} segments',
+    current: 'Currently applied: {tempo}× / {volume} dB',
+    revert: 'Revert to original',
   },
   studio: {
     title: 'Voice Studio',

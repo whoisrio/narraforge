@@ -30,6 +30,7 @@ class ChapterIn(BaseModel):
     original_text: str | None = None
     narration_script: str | None = None
     design_title: str | None = None
+    audio_adjust: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None
     segments: list[SegmentIn] = Field(default_factory=list)

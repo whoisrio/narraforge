@@ -1076,13 +1076,14 @@ Layer-sync Phase A：返回章节三层文本（L1 原文 / L2 改写稿 / L3 �
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/adjust-audio`
 
 合成后音频调整：对本章所有已生成音频（`audio.current` 存在且文件在位）用 ffmpeg 做 `atempo`（0.5–2.0，不变调）和/或 `volume`（-12 ~ +12 dB）批处理。
-旧音频复制为 `{segment-id}.prev.{fmt}` 并写入 `audio.previous`（可撤销）；处理后重新 probe 每段 `duration_sec`。
+
+**绝对语义**：首次调整把原始音频存入 `audio.previous`；再次调整始终从原始音频渲染（不在成品上级联）；已应用参数记录在 `chapter.audio_adjust`（`{tempo, volume_db, applied_at, segments}`）。传恒等参数（1.0×/0dB）且有记录时视为**还原原始**并清除记录（无记录则 422 `no_adjustment`）。
 
 **Request Body:**
 ```json
 { "tempo": 1.5, "volume_db": 3 }
 ```
-两者至少提供一个非恒等值。
+两者至少提供一个非恒等值（除非已有记录）。
 
 **Response:**
 ```json
