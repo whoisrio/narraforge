@@ -87,4 +87,47 @@ test.describe('合成后音频调整', () => {
 
     expect(errors).toEqual([]);
   });
+
+  test('应用调整后停留在当前章节（不跳回第一章）', async ({ page }) => {
+    const errors = collectErrors(page);
+    await setLocaleToZhCN(page);
+
+    // ── 1. 在第二章合成一段音频（先还原可能残留的调整记录，e2e 库跨 run 持久） ──
+    const CH2 = 'test-chapter-2';
+    await page.request.post(
+      `${BACKEND}/api/segmented-projects/${PROJECT_ID}/chapters/${CH2}/adjust-audio`,
+      { data: { tempo: 1.0, volume_db: 0 } },
+    ).catch(() => {});
+    const ch2Resp = await page.request.get(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
+    const proj = await ch2Resp.json();
+    const ch2 = proj.chapters.find((c: { id: string }) => c.id === CH2)!;
+    const segId = ch2.segments[0].id;
+    const synthResp = await page.request.post(
+      `${BACKEND}/api/segmented-projects/${PROJECT_ID}/chapters/${CH2}/segments/${segId}/synthesize`,
+      { data: {} },
+    );
+    expect(synthResp.ok()).toBeTruthy();
+
+    // ── 2. 切到第二章 → 调整音量 → 应用 ──
+    await goToStudio(page);
+    await page.getByRole('button', { name: /选择章节 第2章/ }).click();
+    await expect(page.getByText('破庙的门半掩着').first()).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole('button', { name: '展开播放栏' }).click();
+    await page.getByRole('button', { name: '调整音频' }).click();
+    const dialog = page.getByRole('dialog', { name: /调整音频/ });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('音量').fill('3');
+    await dialog.getByRole('button', { name: '应用' }).click();
+    await expect(dialog).toBeHidden({ timeout: 30_000 });
+
+    // ── 3. 应用后仍停留在第二章 ──
+    await expect(page.getByText('破庙的门半掩着').first()).toBeVisible({ timeout: 10_000 });
+    const afterResp = await page.request.get(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
+    const after = await afterResp.json();
+    const afterCh2 = after.chapters.find((c: { id: string }) => c.id === CH2)!;
+    expect(afterCh2.audio_adjust?.volume_db).toBe(3);
+
+    expect(errors).toEqual([]);
+  });
 });
