@@ -237,3 +237,9 @@
 - 拆分出的章节名默认带零填充序号前缀（`01. `、`02. ` …），与章节卡片的 CH 徽章一致。
 - 实现：`ChapterSplitModal` 预览与应用都用 `numberedTitle(idx, title)` = `String(idx+1).padStart(2,'0') + '. ' + title`；仅作用于按标题拆分流程（agent split_segment 不受影响）。
 - 验证: ChapterSplitModal 测试断言 `01. 第一章`/`02. 第二章`；E2E dual-read 断言 `titles[0]` 以 `01.` 开头、`titles[1]==='02. 破庙'`。
+
+## 后续修复 4（用户反馈：段落拆分默认选中除“、”外的所有选项）
+
+- 默认 `split_config.delimiters` 改为 `['，','。','！','？','；']`（`DELIMITER_OPTIONS` 去掉 `、`）。
+- 统一更新所有默认源：前端 `useSegmentedProject`（`makeChapter`/`migrateV1`/`createInitialProject`）、后端 `create_chapter_for_project`、`text_split.SplitRequest` 默认、两处 `split_config.get(...)` fallback。`ADD_CHAPTER` 仍继承活动章节 split_config（默认源头在首章/后端建章）。
+- 验证: 前端 `createInitialProject` 测试断言 5 个分隔符；后端 `test_batch_chapter_has_default_split_config` 断言 `['，','。','！','？','；']`。

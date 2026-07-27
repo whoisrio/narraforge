@@ -1194,7 +1194,7 @@ def resplit_from_script(db: Session, project_id: str, chapter_id: str):
     chapter = get_chapter_row(db, project_id, chapter_id)
     if chapter is None:
         raise LookupError("chapter_not_found")
-    delimiters = (chapter.split_config or {}).get("delimiters", ["，", "。"])
+    delimiters = (chapter.split_config or {}).get("delimiters", ["，", "。", "！", "？", "；"])
     items = rule_split(chapter.narration_script or "", delimiters)
     for s in list(chapter.segments):
         db.delete(s)
@@ -1235,7 +1235,7 @@ def create_chapter_for_project(
         position=position,
         name=chapter_name,
         voice=voice or {},
-        split_config={"delimiters": ["，", "。"], "mode": "rule"},
+        split_config={"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"},
     )
     db.add(chapter)
     db.flush()

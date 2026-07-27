@@ -211,14 +211,18 @@ describe('segmentedReducer', () => {
     expect(p.chapters).toHaveLength(1);
     expect(p.chapters[0].segments).toEqual([]);
     expect(p.active_chapter_id).toBe(p.chapters[0].id);
+    // 默认拆分选项：除“、”外全选
+    expect(p.chapters[0].split_config.delimiters).toEqual(['，', '。', '！', '？', '；']);
   });
 
-  it('ADD_CHAPTER creates a new chapter and sets it active', () => {
+  it('ADD_CHAPTER creates a new chapter, sets it active, and inherits split_config', () => {
     const p = makeProject();
     const next = segmentedReducer({ project: p }, { type: 'ADD_CHAPTER', name: '第二章' });
     expect(next.project.chapters).toHaveLength(2);
     expect(next.project.chapters[1].name).toBe('第二章');
     expect(next.project.active_chapter_id).toBe(next.project.chapters[1].id);
+    // 新章继承活动章节的 split_config（默认源头在 createInitialProject / 后端建章）
+    expect(next.project.chapters[1].split_config).toEqual(p.chapters[0].split_config);
   });
 
   it('DELETE_CHAPTER removes chapter and switches active', () => {

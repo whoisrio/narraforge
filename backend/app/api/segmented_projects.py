@@ -422,7 +422,7 @@ def split_chapter(
     if body.mode == "rule":
         items = rule_split(
             body.text,
-            body.delimiters or chapter.split_config.get("delimiters", ["，", "。"]),
+            body.delimiters or chapter.split_config.get("delimiters", ["，", "。", "！", "？", "；"]),
         )
     else:
         items_raw = llm_split(body.text)

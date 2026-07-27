@@ -189,7 +189,8 @@ def test_batch_chapter_has_default_split_config(client, db_session):
 
     detail = client.get("/api/segmented-projects/p-batch-sc")
     sc = detail.json()["chapters"][0]["split_config"]
-    assert isinstance(sc.get("delimiters"), list) and sc["delimiters"]
+    # 默认选中除“、”外的所有拆分选项
+    assert sc.get("delimiters") == ["，", "。", "！", "？", "；"]
     assert sc.get("mode") in ("rule", "llm")
 
 
