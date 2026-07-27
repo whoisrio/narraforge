@@ -160,6 +160,7 @@ export type Action =
   | { type: 'RENAME_PROJECT'; name: string }
   | { type: 'SET_PROJECT_META'; meta: { remotion_project_path?: string | null; description?: string | null; export_directory?: string | null } }
   | { type: 'SET_SOURCE_DOCUMENT'; text: string }
+  | { type: 'SET_NARRATION_SCRIPT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
   | { type: 'ADD_CHAPTER'; name: string }
@@ -260,6 +261,8 @@ export function segmentedReducer(state: State, action: Action): State {
     }
     case 'SET_SOURCE_DOCUMENT':
       return { project: { ...p, source_document: action.text, updated_at: new Date().toISOString() } };
+    case 'SET_NARRATION_SCRIPT':
+      return { project: { ...p, narration_script: action.text, updated_at: new Date().toISOString() } };
     case 'SET_LAYOUT':
       return { project: { ...p, layout: action.layout, updated_at: new Date().toISOString() } };
 

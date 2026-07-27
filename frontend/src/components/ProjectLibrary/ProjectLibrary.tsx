@@ -8,6 +8,8 @@ import { WorkflowDrawer } from '../Workflow/WorkflowDrawer';
 import { StoryboardPanel } from '../Storyboard/StoryboardPanel';
 import { DrawerIndicator } from '../Workflow/DrawerIndicator';
 import { ChapterSplitModal } from './ChapterSplitModal';
+import { NarrationDocView } from './NarrationDocView';
+import { countTextChars, estimateDurationSec, formatSeconds } from './utils';
 import { agentClient } from '../../services/langgraph/client';
 import { WORKFLOW_KINDS, type WorkflowKind } from '../../services/langgraph/contracts';
 import { resolveWorkflowThread } from '../../services/langgraph/threads';
@@ -20,12 +22,14 @@ interface ProjectLibraryProps {
   projectId?: string;
   projectName?: string;
   sourceDocument?: string | null;
+  narrationScript?: string | null;
   onSelectChapter: (id: string) => void;
   onRenameChapter: (id: string, name: string) => void;
   onRenameProject?: (name: string) => void;
   onUpdateChapterText: (id: string, text: string) => void;
   onUpdateChapterDesignTitle: (id: string, designTitle: string) => void;
   onUpdateSourceDocument?: (text: string) => void;
+  onUpdateNarrationScript?: (text: string) => void;
   onAddChapter: (name?: string) => void;
   onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
@@ -38,21 +42,6 @@ type LibraryTab = 'source' | 'narration' | 'storyboard';
 
 function chapterText(chapter: Chapter): string {
   return chapter.original_text ?? chapter.segments.map(segment => segment.text).join('\n');
-}
-
-function countTextChars(text: string): number {
-  return text.replace(/\s/g, '').length;
-}
-
-function estimateDurationSec(text: string): number {
-  return countTextChars(text) / 5;
-}
-
-function formatSeconds(seconds: number): string {
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const rest = Math.round(seconds % 60);
-  return `${minutes}m ${rest}s`;
 }
 
 function chapterAudioDuration(chapter: Chapter): number {
@@ -83,11 +72,13 @@ export function ProjectLibrary({
   projectId,
   projectName,
   sourceDocument,
+  narrationScript,
   onSelectChapter,
   onRenameChapter,
   onUpdateChapterText,
   onUpdateChapterDesignTitle,
   onUpdateSourceDocument,
+  onUpdateNarrationScript,
   onAddChapter,
   onDeleteChapter,
   onEnterStudio,
@@ -115,6 +106,8 @@ export function ProjectLibrary({
     if (!projectId) return;
     setSplitLoading(true);
     try {
+      const fromProp = (narrationScript ?? '').trim();
+      if (fromProp) { setSplitModal({ fullText: fromProp }); return; }
       const detail = await segmentedProjectApi.getProject(projectId) as unknown as { narration_script?: string | null };
       const fullText = (detail.narration_script || '').trim() || joinedChapterText || (sourceDocument ?? '');
       if (fullText.trim()) setSplitModal({ fullText });
@@ -296,47 +289,32 @@ export function ProjectLibrary({
   }
 
   if (mode === 'fulltext') {
-    const allText = chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n');
-    const allChars = countTextChars(allText);
-    const allDuration = estimateDurationSec(allText);
     return (
-      <section className={styles.chapterEditorRoot}>
-        <header className={styles.editorHeader}>
-          <h2 className={styles.chapterTitleInput} style={{ border: 'none', background: 'none', cursor: 'default' }}>{t('projectLibrary.fulltextView')}</h2>
-          <div className={styles.editorMetrics}>
-            <span>{allChars} {t('projectLibrary.wordCount')}</span>
-            <span>{t('projectLibrary.estimated')} {formatSeconds(allDuration)}</span>
-            <span>{chapters.length} {t('projectLibrary.chapterCount')}</span>
-          </div>
-        </header>
-
-        <div className={styles.markdownPreview}>
-          <Markdown>{allText || `*${t('projectLibrary.noContent')}*`}</Markdown>
-        </div>
-
-        <div className={styles.bottomBar}>
-          <button
-            type="button"
-            className={styles.ghostButton}
-            onClick={() => setLibraryMode('overview')}
-          >
-            ← {t('projectLibrary.backToLibrary')}
-          </button>
-          <div className={styles.bottomBarDivider} />
-          <button
-            type="button"
-            className={styles.ghostButton}
-            onClick={() => {
-              if (activeChapter) {
-                onSelectChapter(activeChapter.id);
-                setLibraryMode('chapter');
-              }
-            }}
-          >
-            {t('projectLibrary.viewByChapter')}
-          </button>
-        </div>
-      </section>
+      <>
+        <NarrationDocView
+          narrationScript={narrationScript ?? null}
+          joinedChapterText={joinedChapterText}
+          chapterCount={chapters.length}
+          onUpdateNarrationScript={(text) => onUpdateNarrationScript?.(text)}
+          onSplit={() => void openSplitModal()}
+          onBack={() => setLibraryMode('overview')}
+          onViewByChapter={() => {
+            if (activeChapter) {
+              onSelectChapter(activeChapter.id);
+              setLibraryMode('chapter');
+            }
+          }}
+        />
+        {splitModal && projectId && (
+          <ChapterSplitModal
+            projectId={projectId}
+            fullText={splitModal.fullText}
+            existingChapterCount={chapters.length}
+            onClose={() => setSplitModal(null)}
+            onApplied={() => { setSplitModal(null); onProjectChanged?.(); }}
+          />
+        )}
+      </>
     );
   }
 
@@ -473,7 +451,7 @@ export function ProjectLibrary({
               className={`${styles.tab} ${activeTab === 'narration' ? styles.tabActive : ''}`}
               onClick={() => { setActiveTab('narration'); setComparing(false); }}
             >
-              {t('projectLibrary.narrationDoc')}
+              {t('projectLibrary.narrationDoc.tab')}
             </button>
             <button
               type="button"

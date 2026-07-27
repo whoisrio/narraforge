@@ -207,3 +207,14 @@
 - `docs/feature-spec.md`: 补「手动导入旁白文档」工作流说明。
 - `backend/tests/TEST_MAP.md`: 若新增测试用例则登记。
 - `docs/e2e-test-guide.md`: e2e 计数 +1。
+
+## 实现说明（落地与设计的偏差）
+
+- 全文视图改造抽成了独立展示组件 `NarrationDocView`（`frontend/src/components/ProjectLibrary/NarrationDocView.tsx`）, 不再内联在 `ProjectLibrary` 的 `mode === 'fulltext'` 分支里。
+  原因: 隔离可测、`ProjectLibrary` 已过大; 辅助函数 `countTextChars`/`estimateDurationSec`/`formatSeconds` 抽到 `utils.ts` 共享。
+- TDD 过程发现一个回归 bug: `mode === 'fulltext'` 是提前 `return`, 而 `ChapterSplitModal` 渲染在主 return 体里, 导致 fulltext 模式下点拆分 `setSplitModal` 被调用但 modal 不渲染。
+  修复: fulltext 分支用 fragment 同时渲染 `NarrationDocView` + `ChapterSplitModal`, 并加单测 `fulltext view form B: split button opens the chapter-split modal` 锁定。
+- i18n: `projectLibrary.narrationDoc` 由字符串（tab 标签）改为对象（`tab`/`title`/`emptyHint`/`paste`/`generateFromChapters`/`fallbackPreviewLabel`/`editorPlaceholder`）; tab 标签引用从 `t('projectLibrary.narrationDoc')` 改为 `t('projectLibrary.narrationDoc.tab')`。
+- `openSplitModal` 优先用 `narrationScript` prop（内存最新值）, 避免 draftSync 防抖延迟导致拆分读到旧的后端值。
+- 后端零改动, 复用 `PUT ProjectIn.narration_script` + `narration_document_path` 文件落盘。
+- 验证: vitest 323 passed / 1 skipped, tsc 干净, backend pytest 477 passed, e2e 43 passed（含新增 `narration-manual-import-split.spec.ts` 2 条）。

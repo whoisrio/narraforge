@@ -497,6 +497,8 @@ export interface SegmentedProject {
   remotion_project_path?: string | null;
   /** Source document file path or identifier */
   source_document?: string | null;
+  /** 项目级旁白文档源稿（后端落盘 narration_document_path） */
+  narration_script?: string | null;
   /** Backend list endpoint summary for project-card stats when chapters are not hydrated. */
   summary_stats?: {
     chapter_count: number;

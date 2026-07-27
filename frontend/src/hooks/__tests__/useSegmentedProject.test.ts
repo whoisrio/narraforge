@@ -350,6 +350,23 @@ describe('segmentedReducer', () => {
     });
     expect(next.project.default_narrator_role_id).toBe('role-narrator');
   });
+
+  it('SET_NARRATION_SCRIPT sets project-level narration_script', () => {
+    const next = segmentedReducer(
+      { project: makeProject() },
+      { type: 'SET_NARRATION_SCRIPT', text: '# 标题\n\n正文' },
+    );
+    expect(next.project.narration_script).toBe('# 标题\n\n正文');
+  });
+
+  it('SET_NARRATION_SCRIPT overwrites existing narration_script', () => {
+    const step1 = segmentedReducer(
+      { project: makeProject() },
+      { type: 'SET_NARRATION_SCRIPT', text: '旧稿' },
+    );
+    const step2 = segmentedReducer(step1, { type: 'SET_NARRATION_SCRIPT', text: '新稿' });
+    expect(step2.project.narration_script).toBe('新稿');
+  });
 });
 
 describe('voice source transitions (V3)', () => {
