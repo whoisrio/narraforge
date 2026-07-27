@@ -31,6 +31,11 @@ function chapterBody(slice: string): string {
     .trim();
 }
 
+/** 拆分出的章节默认带零填充序号前缀（01. 02. …），与章节卡片的 CH 徽章一致。 */
+function numberedTitle(index: number, title: string): string {
+  return `${String(index + 1).padStart(2, '0')}. ${title}`;
+}
+
 /**
  * 从完整旁白文档按 markdown 标题拆分章节：
  * detect 探测层级 → 用户选 levels → split 预览 → chapters:batch 应用（替换现有章节）。
@@ -99,10 +104,10 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
     setBusy(true);
     setError(null);
     try {
-      const chapters = preview.chapters.map((ch: MarkdownChapterItem) => {
+      const chapters = preview.chapters.map((ch: MarkdownChapterItem, idx: number) => {
         const body = chapterBody(fullText.slice(ch.start_char, ch.end_char));
         return {
-          chapter_title: ch.title,
+          chapter_title: numberedTitle(idx, ch.title),
           narration_script: body,
           original_text: body,
         };
@@ -156,9 +161,9 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
                     {t('chapterSplit.previewMeta', { count: preview.chapters.length, chars: preview.total_chars })}
                   </p>
                   <ol>
-                    {preview.chapters.map((ch) => (
+                    {preview.chapters.map((ch, idx) => (
                       <li key={ch.index}>
-                        <strong>{ch.title}</strong>
+                        <strong>{numberedTitle(idx, ch.title)}</strong>
                         <span className={styles.chapterMeta}>H{ch.level} · {ch.char_count} {t('chapterSplit.chars')}</span>
                         {ch.preview && <p className={styles.previewText}>{ch.preview}</p>}
                       </li>

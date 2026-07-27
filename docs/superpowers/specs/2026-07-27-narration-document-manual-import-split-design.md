@@ -231,3 +231,9 @@
 - 根因：`create_chapter_for_project` 不设 `split_config`，模型列默认 `{}`（空），batch 建的章节 `split_config = {}`；前端 `TextInputPanel` 直接 `splitConfig.delimiters.includes` -> `undefined.includes` 崩溃。章节优先的章节由前端 reducer 建带 delimiters，所以没这问题。
 - 修复（双层）：后端 `create_chapter_for_project` 设默认 `split_config={delimiters:["，","。"],mode:"rule"}`（根因）；前端 `TextInputPanel` 防御性默认 `delimiters??[]`/`mode??'rule'`（兼容历史空 split_config 章节）。
 - 验证: vitest 326 / backend pytest 480 / e2e 43 全绿；新增后端 `test_batch_chapter_has_default_split_config`、前端 TextInputPanel 空 split_config 不崩测试，E2E 断言拆分章节 `split_config.delimiters` 非空。
+
+## 后续修复 3（用户反馈：拆分章节默认带序号）
+
+- 拆分出的章节名默认带零填充序号前缀（`01. `、`02. ` …），与章节卡片的 CH 徽章一致。
+- 实现：`ChapterSplitModal` 预览与应用都用 `numberedTitle(idx, title)` = `String(idx+1).padStart(2,'0') + '. ' + title`；仅作用于按标题拆分流程（agent split_segment 不受影响）。
+- 验证: ChapterSplitModal 测试断言 `01. 第一章`/`02. 第二章`；E2E dual-read 断言 `titles[0]` 以 `01.` 开头、`titles[1]==='02. 破庙'`。

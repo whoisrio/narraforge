@@ -69,8 +69,8 @@ describe('ChapterSplitModal', () => {
     render(<ChapterSplitModal {...baseProps} />);
     fireEvent.click(await screen.findByText('chapterSplit.preview'));
     await waitFor(() => expect(markdownSplit).toHaveBeenCalledWith(FULL_TEXT, [2]));
-    expect(await screen.findByText('第一章')).toBeInTheDocument();
-    expect(screen.getByText('第二章')).toBeInTheDocument();
+    expect(await screen.findByText('01. 第一章')).toBeInTheDocument();
+    expect(screen.getByText('02. 第二章')).toBeInTheDocument();
   });
 
   it('apply with existing chapters asks for confirm, then replaces with body text (heading stripped) + original_text', async () => {
@@ -80,7 +80,7 @@ describe('ChapterSplitModal', () => {
     const onApplied = vi.fn();
     render(<ChapterSplitModal {...baseProps} onApplied={onApplied} />);
     fireEvent.click(await screen.findByText('chapterSplit.preview'));
-    await screen.findByText('第一章');
+    await screen.findByText('01. 第一章');
 
     // 已有章节 -> 点应用先弹确认
     fireEvent.click(screen.getByText('chapterSplit.apply'));
@@ -93,10 +93,10 @@ describe('ChapterSplitModal', () => {
     expect(pid).toBe('p1');
     expect(chapters).toHaveLength(2);
     // 标题行被剥离，正文 + original_text 都落到章节上（章节卡片有内容、studio 可拆）
-    expect(chapters[0].chapter_title).toBe('第一章');
+    expect(chapters[0].chapter_title).toBe('01. 第一章');
     expect(chapters[0].narration_script).toBe('内容一。');
     expect(chapters[0].original_text).toBe('内容一。');
-    expect(chapters[1].chapter_title).toBe('第二章');
+    expect(chapters[1].chapter_title).toBe('02. 第二章');
     expect(chapters[1].narration_script).toBe('内容二。');
     expect(chapters[1].original_text).toBe('内容二。');
     // 项目级 narration_script 仍是完整文档
@@ -110,7 +110,7 @@ describe('ChapterSplitModal', () => {
     batchCreateChapters.mockResolvedValue({ chapters: [] });
     render(<ChapterSplitModal {...baseProps} existingChapterCount={0} />);
     fireEvent.click(await screen.findByText('chapterSplit.preview'));
-    await screen.findByText('第一章');
+    await screen.findByText('01. 第一章');
 
     fireEvent.click(screen.getByText('chapterSplit.apply'));
     // 无已有章节 -> 不弹确认，直接应用
@@ -123,7 +123,7 @@ describe('ChapterSplitModal', () => {
     markdownSplit.mockResolvedValue(SPLIT);
     render(<ChapterSplitModal {...baseProps} />);
     fireEvent.click(await screen.findByText('chapterSplit.preview'));
-    await screen.findByText('第一章');
+    await screen.findByText('01. 第一章');
 
     fireEvent.click(screen.getByText('chapterSplit.apply'));
     const confirm = screen.getByRole('alertdialog', { name: 'chapterSplit.confirmTitle' });

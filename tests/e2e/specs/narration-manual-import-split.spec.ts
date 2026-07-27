@@ -106,7 +106,7 @@ test.describe('手动导入旁白文档并拆分', () => {
       // UI：返回章节列表，章节已替换且带正文内容
       await page.getByRole('button', { name: /返回文本库/ }).click();
       await expect(page.getByText(/夜路/).first()).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByText('破庙', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('02. 破庙', { exact: true }).first()).toBeVisible();
       // 章节卡片有正文（original_text 已落库，不再是只有标题）
       await expect(page.getByText(/夜色渐浓/).first()).toBeVisible();
 
@@ -114,8 +114,9 @@ test.describe('手动导入旁白文档并拆分', () => {
       const afterResp = await page.request.get(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
       const after = await afterResp.json();
       const titles = after.chapters.map((c: { name: string }) => c.name);
+      expect(titles[0]).toMatch(/^01\./);
       expect(titles[0]).toContain('夜路');
-      expect(titles[1]).toBe('破庙');
+      expect(titles[1]).toBe('02. 破庙');
       expect(after.chapters[0].narration_script).toContain('夜色渐浓');
       expect(after.chapters[0].narration_script).not.toContain('## 夜路');
       expect(after.chapters[0].original_text).toContain('夜色渐浓');
@@ -128,8 +129,9 @@ test.describe('手动导入旁白文档并拆分', () => {
       expect(db).toBeTruthy();
       expect(db!.project.narration_document_path).toBeTruthy();
       const dbTitles = db!.chapters.map((c) => c.name);
+      expect(dbTitles[0]).toMatch(/^01\./);
       expect(dbTitles[0]).toContain('夜路');
-      expect(dbTitles[1]).toBe('破庙');
+      expect(dbTitles[1]).toBe('02. 破庙');
     } finally {
       await page.request.delete(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
     }
