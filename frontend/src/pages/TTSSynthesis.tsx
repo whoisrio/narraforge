@@ -1727,6 +1727,7 @@ export function TTSSynthesis({
             chapters={project.chapters}
             activeChapterId={project.active_chapter_id}
             sourceDocument={project.source_document}
+            narrationScript={project.narration_script}
             onSelectChapter={handleSelectChapter}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onModeChange={(mode) => setLibraryFulltext(mode === 'fulltext')}
@@ -1738,6 +1739,7 @@ export function TTSSynthesis({
               dispatch({ type: 'SET_CHAPTER_META_BY_ID', id, meta: { design_title: designTitle } });
             }}
             onUpdateSourceDocument={(text) => dispatch({ type: 'SET_SOURCE_DOCUMENT', text })}
+            onUpdateNarrationScript={(text) => dispatch({ type: 'SET_NARRATION_SCRIPT', text })}
             onAddChapter={handleAddChapter}
             onDeleteChapter={handleDeleteChapter}
             onProjectChanged={() => { void reloadProjectData(); }}

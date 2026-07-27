@@ -15,7 +15,7 @@ function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
     name,
     voice: defaultVoice,
     segments: [],
-    split_config: inheritFrom?.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    split_config: inheritFrom?.split_config || { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
     created_at: now,
     updated_at: now,
   };
@@ -88,7 +88,7 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
       return {
         ...ch,
         voice: voice,
-        split_config: ch.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+        split_config: ch.split_config || { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
         design_title: ch.design_title ?? ch.name,
         segments: (ch.segments || []).map((s) => enrichSegment(s)),
       };
@@ -110,7 +110,7 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
     original_text: r.original_text,
     segments: r.segments || [],
     selected_segment_id: r.selected_segment_id,
-    split_config: r.split_config || { delimiters: ['，', '。', '！', '？'], mode: 'rule' },
+    split_config: r.split_config || { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
     created_at: r.created_at || now,
     updated_at: r.updated_at || now,
   };
@@ -160,6 +160,7 @@ export type Action =
   | { type: 'RENAME_PROJECT'; name: string }
   | { type: 'SET_PROJECT_META'; meta: { remotion_project_path?: string | null; description?: string | null; export_directory?: string | null } }
   | { type: 'SET_SOURCE_DOCUMENT'; text: string }
+  | { type: 'SET_NARRATION_SCRIPT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
   | { type: 'ADD_CHAPTER'; name: string }
@@ -260,6 +261,8 @@ export function segmentedReducer(state: State, action: Action): State {
     }
     case 'SET_SOURCE_DOCUMENT':
       return { project: { ...p, source_document: action.text, updated_at: new Date().toISOString() } };
+    case 'SET_NARRATION_SCRIPT':
+      return { project: { ...p, narration_script: action.text, updated_at: new Date().toISOString() } };
     case 'SET_LAYOUT':
       return { project: { ...p, layout: action.layout, updated_at: new Date().toISOString() } };
 

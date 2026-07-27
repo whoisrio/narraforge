@@ -137,7 +137,7 @@ The project workspace has 5 sections accessible via the left rail:
 | Section | Component | Description |
 |---------|-----------|-------------|
 | **Overview** | `ProjectOverview` | Project summary, chapter list, narrator info, quick navigation |
-| **Library** | `ProjectLibrary` | Source document + narration chapters with fulltext view |
+| **Library** | `ProjectLibrary` | Source document + narration chapters; fulltext view is an adaptive narration-document editor (`NarrationDocView`): empty `narration_script` shows joined-chapter preview + paste/generate-from-chapters entries, non-empty shows edit/preview toggle + split-by-heading button |
 | **Studio** | `VoiceStudioLayout` | Main segmented TTS editor with chapter sidebar |
 | **Voices** | `ProjectVoices` | Role management: narrator + cast roles with voice configuration |
 | **Settings** | `ProjectSettings` | Project metadata, export config, Remotion path |

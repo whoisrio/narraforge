@@ -78,24 +78,28 @@ test.describe('按标题拆分章节', () => {
       const previewItems = modal.locator('ol li strong');
       await expect(previewItems).toHaveCount(2, { timeout: 10_000 });
       await expect(previewItems.nth(0)).toHaveText(/夜路/);
-      await expect(previewItems.nth(1)).toHaveText('破庙');
+      await expect(previewItems.nth(1)).toHaveText('02. 破庙');
       // 替换警告（项目已有 1 章）
-      await expect(modal.getByText(/将替换现有 1 个章节/)).toBeVisible();
+      await expect(modal.getByText(/将删除现有 1 个章节/)).toBeVisible();
 
-      // 应用
+      // 应用（已有 1 章 -> 先弹确认）
       await modal.getByRole('button', { name: '应用到项目' }).click();
+      const confirm = page.getByRole('alertdialog', { name: '确认替换章节' });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole('button', { name: '确认替换' }).click();
       await expect(modal).toBeHidden({ timeout: 15_000 });
 
       // ── 2. UI：章节列表已替换 ──
       await expect(page.getByText(/夜路/).first()).toBeVisible({ timeout: 15_000 });
-      await expect(page.getByText('破庙', { exact: true }).first()).toBeVisible();
+      await expect(page.getByText('02. 破庙', { exact: true }).first()).toBeVisible();
 
       // ── 3. API：章节内容正确 ──
       const afterResp = await page.request.get(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
       const after = await afterResp.json();
       const titles = after.chapters.map((c: { name: string }) => c.name);
+      expect(titles[0]).toMatch(/^01\./);
       expect(titles[0]).toContain('夜路');
-      expect(titles[1]).toBe('破庙');
+      expect(titles[1]).toBe('02. 破庙');
       const ch1 = after.chapters[0];
       expect(ch1.narration_script).toContain('夜色渐浓');
       const ch2 = after.chapters[1];
@@ -109,8 +113,9 @@ test.describe('按标题拆分章节', () => {
       const db = await readDbProject(PROJECT_ID);
       expect(db).toBeTruthy();
       const dbTitles = db!.chapters.map((c) => c.name);
+      expect(dbTitles[0]).toMatch(/^01\./);
       expect(dbTitles[0]).toContain('夜路');
-      expect(dbTitles[1]).toBe('破庙');
+      expect(dbTitles[1]).toBe('02. 破庙');
       expect(db!.project.narration_document_path).toBeTruthy();
     } finally {
       await page.request.delete(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);

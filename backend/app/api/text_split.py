@@ -26,7 +26,7 @@ router = APIRouter()
 class RuleSplitRequest(BaseModel):
     text: str = Field(..., min_length=1, description="待拆分文本")
     delimiters: list[str] = Field(
-        default_factory=lambda: ["，", "。", "！", "？"],
+        default_factory=lambda: ["，", "。", "！", "？", "；"],
         description="分隔符列表",
     )
     min_len_to_merge: int = Field(

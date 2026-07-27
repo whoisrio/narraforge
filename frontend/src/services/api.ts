@@ -654,7 +654,7 @@ export const segmentedProjectApi = {
   },
   batchCreateChapters: async (
     projectId: string,
-    chapters: { chapter_title: string; narration_script?: string }[],
+    chapters: { chapter_title: string; narration_script?: string; original_text?: string }[],
     narrationScript?: string,
   ): Promise<{ chapters: { id: string; segments: { id: string }[] }[] }> => {
     const { data } = await api.post<{ chapters: { id: string; segments: { id: string }[] }[] }>(

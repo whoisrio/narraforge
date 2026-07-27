@@ -1,7 +1,19 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Chapter } from '../../types';
 import { ProjectLibrary } from './ProjectLibrary';
+
+const markdownDetect = vi.fn();
+vi.mock('../../services/api', () => ({
+  textSplitApi: {
+    markdownDetect: (...a: unknown[]) => markdownDetect(...a),
+    markdownSplit: vi.fn(),
+  },
+  segmentedProjectApi: {
+    getProject: vi.fn(),
+    batchCreateChapters: vi.fn(),
+  },
+}));
 
 const baseParams = {
   engine: 'edge_tts' as const,
@@ -228,6 +240,81 @@ describe('ProjectLibrary', () => {
 
     expect(onSelectChapter).toHaveBeenCalledWith('ch-2');
     expect(onAddChapter).toHaveBeenCalledWith('第三章：正式开场');
+  });
+
+  it('fulltext view form A: generate narration doc from joined chapter text', () => {
+    const onUpdateNarrationScript = vi.fn();
+    render(
+      <ProjectLibrary
+        chapters={[makeChapter('ch-1', '第一章', '这是第一章完整旁白文本。')]}
+        activeChapterId="ch-1"
+        narrationScript={null}
+        onUpdateNarrationScript={onUpdateNarrationScript}
+        onSelectChapter={vi.fn()}
+        onRenameChapter={vi.fn()}
+        onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
+        onAddChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
+        onEnterStudio={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /查看全文/ }));
+    // 形态 A：转换入口可见，拆分按钮隐藏
+    expect(screen.getByRole('button', { name: /从现有章节生成旁白文档/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /按标题拆分章节/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /从现有章节生成旁白文档/ }));
+    expect(onUpdateNarrationScript).toHaveBeenCalledWith('这是第一章完整旁白文本。');
+  });
+
+  it('fulltext view form B: shows split button when narration_script is set', () => {
+    render(
+      <ProjectLibrary
+        chapters={[makeChapter('ch-1', '第一章', '这是第一章完整旁白文本。')]}
+        activeChapterId="ch-1"
+        narrationScript={'# 标题\n\n正文内容'}
+        onUpdateNarrationScript={vi.fn()}
+        onSelectChapter={vi.fn()}
+        onRenameChapter={vi.fn()}
+        onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
+        onAddChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
+        onEnterStudio={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /查看全文/ }));
+    expect(screen.getByRole('button', { name: /按标题拆分章节/ })).toBeInTheDocument();
+    expect(screen.queryByText(/从现有章节生成旁白文档/)).not.toBeInTheDocument();
+  });
+
+  it('fulltext view form B: split button opens the chapter-split modal', async () => {
+    markdownDetect.mockResolvedValue({ doc_title: '', candidates: [], chapters: [], total_chars: 0 });
+    render(
+      <ProjectLibrary
+        projectId="p1"
+        chapters={[makeChapter('ch-1', '第一章', '这是第一章完整旁白文本。')]}
+        activeChapterId="ch-1"
+        narrationScript={'## 标题一\n\n内容一。'}
+        onUpdateNarrationScript={vi.fn()}
+        onSelectChapter={vi.fn()}
+        onRenameChapter={vi.fn()}
+        onUpdateChapterText={vi.fn()}
+        onUpdateChapterDesignTitle={vi.fn()}
+        onAddChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
+        onEnterStudio={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /查看全文/ }));
+    fireEvent.click(screen.getByRole('button', { name: '按标题拆分章节' }));
+    // 回归保护：fulltext 提前返回分支必须也渲染 ChapterSplitModal
+    await waitFor(() =>
+      expect(screen.getByRole('dialog', { name: '按标题拆分章节' })).toBeInTheDocument(),
+    );
   });
 });
 

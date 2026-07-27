@@ -39,7 +39,8 @@ export function TextInputPanel({
 }: TextInputPanelProps) {
   const { t } = useTranslation();
   const [text, setText] = useState(sourceText ?? '');
-  const mode = splitConfig.mode;
+  const mode = splitConfig.mode ?? 'rule';
+  const delimiters = splitConfig.delimiters ?? [];
   const [isSplitting, setIsSplitting] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [localSplitVoiceMode, setLocalSplitVoiceMode] = useState<SplitVoiceMode>('narration');
@@ -92,7 +93,7 @@ export function TextInputPanel({
       if (mode === 'llm') {
         await onLLMSplit(text, splitVoiceMode);
       } else {
-        const segments = await textSplitApi.ruleSplit(text, splitConfig.delimiters);
+        const segments = await textSplitApi.ruleSplit(text, delimiters);
         onSplit(segments, text, splitVoiceMode);
       }
       setDetailsOpen(false);
@@ -100,7 +101,7 @@ export function TextInputPanel({
       if (mode === 'llm') {
         console.warn('LLM split failed, falling back to rule:', error);
         try {
-          const segments = await textSplitApi.ruleSplit(text, splitConfig.delimiters);
+          const segments = await textSplitApi.ruleSplit(text, delimiters);
           onSplit(segments, text, splitVoiceMode);
           setDetailsOpen(false);
         } catch (fallbackError: unknown) {
@@ -116,9 +117,9 @@ export function TextInputPanel({
   };
 
   const toggleDelimiter = (d: string) => {
-    const next = splitConfig.delimiters.includes(d)
-      ? splitConfig.delimiters.filter((x: string) => x !== d)
-      : [...splitConfig.delimiters, d];
+    const next = delimiters.includes(d)
+      ? delimiters.filter((x: string) => x !== d)
+      : [...delimiters, d];
     onSplitConfigChange({ ...splitConfig, delimiters: next });
   };
 
@@ -212,8 +213,8 @@ export function TextInputPanel({
                 <span className={styles.settingLabel}>{t('segment.textInput.separator')}</span>
                 <div className={styles.delimiters}>
                   {DELIMITER_OPTIONS.map(d => (
-                    <label key={d} className={`${styles.delimChip} ${splitConfig.delimiters.includes(d) ? styles.delimActive : ''}`}>
-                      <input type="checkbox" checked={splitConfig.delimiters.includes(d)}
+                    <label key={d} className={`${styles.delimChip} ${delimiters.includes(d) ? styles.delimActive : ''}`}>
+                      <input type="checkbox" checked={delimiters.includes(d)}
                         onChange={() => toggleDelimiter(d)} hidden />
                       {d}
                     </label>
