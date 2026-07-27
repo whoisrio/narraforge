@@ -1,7 +1,13 @@
 """Integration test for the chapters:batch endpoint (used by split_segment node)."""
+from app.core import config
+from app.core import segmented_assets as assets
 from app.models.segmented_project import SegmentedProject
 from app.schemas.segmented_project import ProjectIn
-from app.services.segmented_project_service import create_chapter_for_project, save_project
+from app.services.segmented_project_service import (
+    create_chapter_for_project,
+    create_segment_for_chapter,
+    save_project,
+)
 
 
 def test_batch_create_chapters_and_segments(client, db_session):
@@ -168,3 +174,45 @@ def test_batch_chapter_engine_written_to_voice(client, db_session):
     assert voice1["voice"] == "zh-CN-YunxiNeural"  # 其他键保留
     voice2 = proj.chapters[1].voice or {}
     assert voice2["engine"] == "edge_tts"  # 未传 engine 时保持默认
+
+
+def test_batch_persists_chapter_original_text(client, db_session):
+    """original_text in batch payload is persisted per chapter so the chapter card shows content."""
+    save_project(db_session, ProjectIn(id="p-batch-ot", name="t", layout="vertical"))
+    db_session.commit()
+
+    payload = {
+        "chapters": [
+            {"chapter_title": "Ch1", "original_text": "第一章正文内容。", "narration_script": "第一章正文内容。"},
+            {"chapter_title": "Ch2"},
+        ]
+    }
+    r = client.post("/api/segmented-projects/p-batch-ot/chapters:batch", json=payload)
+    assert r.status_code == 200, r.text
+
+    detail = client.get("/api/segmented-projects/p-batch-ot")
+    chapters = detail.json()["chapters"]
+    assert chapters[0]["original_text"] == "第一章正文内容。"
+    assert chapters[1]["original_text"] is None
+
+
+def test_batch_deletes_existing_chapter_audio(client, db_session, tmp_path, monkeypatch):
+    """Replacing chapters via batch deletes the old chapters' audio files from disk."""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, ProjectIn(id="p-batch-audio", name="t", layout="vertical"))
+    ch = create_chapter_for_project(db_session, "p-batch-audio", "old", 0)
+    seg = create_segment_for_chapter(db_session, ch.id, "旧段落。", 0)
+    abs_path = assets.segment_audio_path("p-batch-audio", ch.id, project_name="t", segment_id=seg.id, fmt="mp3")
+    abs_path.parent.mkdir(parents=True, exist_ok=True)
+    abs_path.write_bytes(b"fake-audio")
+    rel = abs_path.relative_to(tmp_path).as_posix()
+    seg.audio = {"format": "mp3", "current": {"path": rel, "duration_sec": 0.4}}
+    db_session.commit()
+    assert abs_path.exists()
+
+    payload = {"chapters": [{"chapter_title": "new", "segments": []}]}
+    r = client.post("/api/segmented-projects/p-batch-audio/chapters:batch", json=payload)
+    assert r.status_code == 200, r.text
+
+    # 旧章节的音频文件已被清理（不是只删 DB 行）
+    assert not abs_path.exists()

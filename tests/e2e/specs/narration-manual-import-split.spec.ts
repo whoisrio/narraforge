@@ -96,20 +96,29 @@ test.describe('手动导入旁白文档并拆分', () => {
       await modal.getByRole('button', { name: '预览拆分' }).click();
       const previewItems = modal.locator('ol li strong');
       await expect(previewItems).toHaveCount(2, { timeout: 10_000 });
+      // 已有 1 章 -> 点应用先弹确认（删现有章节 + 音频）
       await modal.getByRole('button', { name: '应用到项目' }).click();
+      const confirm = page.getByRole('alertdialog', { name: '确认替换章节' });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole('button', { name: '确认替换' }).click();
       await expect(modal).toBeHidden({ timeout: 15_000 });
 
-      // UI：章节已替换
+      // UI：返回章节列表，章节已替换且带正文内容
+      await page.getByRole('button', { name: /返回文本库/ }).click();
       await expect(page.getByText(/夜路/).first()).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('破庙', { exact: true }).first()).toBeVisible();
+      // 章节卡片有正文（original_text 已落库，不再是只有标题）
+      await expect(page.getByText(/夜色渐浓/).first()).toBeVisible();
 
-      // API：章节内容正确
+      // API：章节正文正确（标题行被剩掉）+ original_text 落库
       const afterResp = await page.request.get(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
       const after = await afterResp.json();
       const titles = after.chapters.map((c: { name: string }) => c.name);
       expect(titles[0]).toContain('夜路');
       expect(titles[1]).toBe('破庙');
       expect(after.chapters[0].narration_script).toContain('夜色渐浓');
+      expect(after.chapters[0].narration_script).not.toContain('## 夜路');
+      expect(after.chapters[0].original_text).toContain('夜色渐浓');
       expect(after.narration_script).toContain('夜行记');
 
       // DB 双读：narration_document_path 落盘

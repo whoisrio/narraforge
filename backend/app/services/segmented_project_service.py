@@ -274,6 +274,26 @@ def _audio_path_str(ref: object) -> str | None:
     return None
 
 
+def _delete_segment_audio_files(seg: SegmentedProjectSegment) -> None:
+    """Delete a segment's generated audio files (current + previous) from disk.
+
+    Used when chapters are replaced wholesale (e.g. re-splitting by heading):
+    the DB rows are cascade-deleted, but the audio assets on disk would be
+    orphaned without this. Reads the stored path from ``seg.audio`` so it works
+    for any historical layout.
+    """
+    if not seg.audio:
+        return
+    try:
+        audio_data = seg.audio if isinstance(seg.audio, dict) else json.loads(seg.audio)
+    except Exception:
+        return
+    for slot in ("current", "previous"):
+        entry = audio_data.get(slot)
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+            assets.delete_audio_file(entry["path"])
+
+
 def _delete_dropped_audio_files(seg: SegmentedProjectSegment, new_audio: dict) -> None:
     """Delete audio files the incoming audio state no longer references.
 
@@ -1021,8 +1041,11 @@ def batch_create_structure(
         elif ch_voice.get("voice_id") and ch_voice.get("engine") in ("cosyvoice", "mimo_tts", "voxcpm"):
             default_voice = ch_voice
 
-    # delete existing chapters (cascade deletes segments)
+    # delete existing chapters (cascade deletes segments) and clean up their
+    # generated audio files on disk so re-splitting does not orphan assets.
     for ch in list(project.chapters):
+        for seg in list(ch.segments):
+            _delete_segment_audio_files(seg)
         db.delete(ch)
     db.flush()
 
@@ -1031,6 +1054,7 @@ def batch_create_structure(
         title = ch_data.get("chapter_title", f"Chapter {index + 1}")
         chapter = create_chapter_for_project(db, project_id, title, index, voice=default_voice)
         chapter.narration_script = ch_data.get("narration_script")
+        chapter.original_text = ch_data.get("original_text")
         engine = ch_data.get("engine")
         if engine:
             voice = dict(chapter.voice or {})

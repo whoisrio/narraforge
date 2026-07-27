@@ -140,6 +140,7 @@ class BatchSegmentIn(BaseModel):
 class BatchChapterIn(BaseModel):
     chapter_title: str
     narration_script: str | None = None
+    original_text: str | None = None
     engine: str | None = None
     segments: list[BatchSegmentIn] = []
 

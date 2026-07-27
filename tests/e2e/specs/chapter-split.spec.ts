@@ -80,10 +80,13 @@ test.describe('按标题拆分章节', () => {
       await expect(previewItems.nth(0)).toHaveText(/夜路/);
       await expect(previewItems.nth(1)).toHaveText('破庙');
       // 替换警告（项目已有 1 章）
-      await expect(modal.getByText(/将替换现有 1 个章节/)).toBeVisible();
+      await expect(modal.getByText(/将删除现有 1 个章节/)).toBeVisible();
 
-      // 应用
+      // 应用（已有 1 章 -> 先弹确认）
       await modal.getByRole('button', { name: '应用到项目' }).click();
+      const confirm = page.getByRole('alertdialog', { name: '确认替换章节' });
+      await expect(confirm).toBeVisible();
+      await confirm.getByRole('button', { name: '确认替换' }).click();
       await expect(modal).toBeHidden({ timeout: 15_000 });
 
       // ── 2. UI：章节列表已替换 ──

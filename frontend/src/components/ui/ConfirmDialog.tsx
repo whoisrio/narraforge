@@ -26,7 +26,7 @@ export function ConfirmDialog({
 
   return (
     <div className={styles.overlay} onClick={onCancel}>
-      <div className={styles.dialog} onClick={(e) => e.stopPropagation()}>
+      <div className={styles.dialog} role="alertdialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className={variant === 'danger' ? styles.headerDanger : styles.headerWarning}>
           <span className={styles.icon}>{variant === 'danger' ? '🗑' : '⚠'}</span>
           <h3 className={styles.title}>{title}</h3>

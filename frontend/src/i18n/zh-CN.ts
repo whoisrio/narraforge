@@ -135,9 +135,12 @@ export const zhCN = {
     preview: '预览拆分',
     previewMeta: '共 {count} 章 · {chars} 字符',
     chars: '字',
-    replaceWarning: '将替换现有 {count} 个章节（含分段与音频配置）',
+    replaceWarning: '将删除现有 {count} 个章节及其已生成的音频',
     apply: '应用到项目',
     applying: '应用中…',
+    confirmTitle: '确认替换章节',
+    confirmMessage: '将删除现有 {count} 个章节及其已生成的音频，无法撤销。确定用拆分结果替换？',
+    confirmLabel: '确认替换',
   },
   projectLibrary: {
     title: '文本库',

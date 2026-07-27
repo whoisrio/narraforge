@@ -1005,7 +1005,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 ### POST `/api/segmented-projects/{id}/chapters:batch`
 
-批量重建项目全部章节与分片（替换式，单事务）：删除现有章节后按请求顺序重建，继承项目第一章节的 voice 作为默认。供 agent `split_segment` 节点使用。
+批量重建项目全部章节与分片（替换式，单事务）：删除现有章节（含其分片音频文件清理）后按请求顺序重建，继承项目第一章节的 voice 作为默认。供 agent `split_segment` 节点使用。
 
 **Request Body:**
 ```json
@@ -1013,7 +1013,8 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "chapters": [
     {
       "chapter_title": "第一章",
-      "narration_script": "本章旁白稿全文（可选）",
+      "narration_script": "本章旁白稿正文（可选）",
+      "original_text": "本章旁白稿正文（可选，章节卡片/工作室拆分以此为源）",
       "engine": "voxcpm",
       "segments": [
         { "text": "段落文本", "emotion": "neutral", "role": "narration", "segment_kind": "narration" }
@@ -1029,7 +1030,8 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `chapters[].chapter_title` | string | 必填 | 章节标题 |
-| `chapters[].narration_script` | string | `null` | 本章旁白稿，持久化到章节的 `narration_script` 字段；未传则为 `null` |
+| `chapters[].narration_script` | string | `null` | 本章旁白稿正文（L2，不含标题行），持久化到章节的 `narration_script` 字段；未传则为 `null` |
+| `chapters[].original_text` | string | `null` | 本章旁白稿正文，持久化到章节的 `original_text` 字段（章节卡片显示与工作室拆分源文本）；未传则为 `null` |
 | `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`cosyvoice`/`mimo_tts`/`voxcpm`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
 | `chapters[].segments[].text` | string | 必填 | 分片文本 |
 | `chapters[].segments[].emotion` | string | `null` | 分片情绪 |

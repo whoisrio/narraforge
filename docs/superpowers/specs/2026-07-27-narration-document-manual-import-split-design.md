@@ -218,3 +218,10 @@
 - `openSplitModal` 优先用 `narrationScript` prop（内存最新值）, 避免 draftSync 防抖延迟导致拆分读到旧的后端值。
 - 后端零改动, 复用 `PUT ProjectIn.narration_script` + `narration_document_path` 文件落盘。
 - 验证: vitest 323 passed / 1 skipped, tsc 干净, backend pytest 477 passed, e2e 43 passed（含新增 `narration-manual-import-split.spec.ts` 2 条）。
+
+## 后续修复（用户反馈：拆分后只有标题没内容 + 需确认/清理）
+
+- **章节无内容**: 根因是 `batch_create_structure` 只设 `narration_script`（L2）不设 `original_text`，而章节卡片/工作室拆分源都用 `original_text`；ChapterSplitModal 又不带 segments。修复：`BatchChapterIn` 加 `original_text`，ChapterSplitModal 切片后剩掉标题行得到正文，`original_text`+`narration_script` 都落正文（与 agent `parse_markdown_chapters` 语义一致，L2 不含标题便于 studio 重拆）。
+- **确认提示**: 已有章节时点「应用到项目」先弹 `ConfirmDialog`（`role="alertdialog"`，危险色），明确“将删除现有 N 个章节及其已生成的音频”，确认后才替换；无章节时直接应用。
+- **清理生成内容**: `batch_create_structure` 删旧章节前先调 `_delete_segment_audio_files` 清理各 segment 的 current/previous 音频文件，避免重拆分时音频孤立（原先只删 DB 行）。
+- 验证: vitest 325 / backend pytest 479 / e2e 43 全绿；新增后端 `test_batch_persists_chapter_original_text`、`test_batch_deletes_existing_chapter_audio`，前端 ChapterSplitModal 确认+正文剩标题测试。

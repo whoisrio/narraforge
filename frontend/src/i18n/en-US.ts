@@ -137,9 +137,12 @@ export const enUS: Messages = {
     preview: 'Preview split',
     previewMeta: '{count} chapters · {chars} chars',
     chars: 'chars',
-    replaceWarning: 'This replaces the existing {count} chapters (segments and audio config included)',
+    replaceWarning: 'Deletes the existing {count} chapters and their generated audio',
     apply: 'Apply to project',
     applying: 'Applying…',
+    confirmTitle: 'Replace chapters?',
+    confirmMessage: 'This deletes the existing {count} chapters and their generated audio. This cannot be undone. Replace with the split result?',
+    confirmLabel: 'Replace',
   },
   projectLibrary: {
     title: 'Library',

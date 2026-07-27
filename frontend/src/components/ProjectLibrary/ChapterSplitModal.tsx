@@ -7,6 +7,7 @@ import {
   type MarkdownDetectResponse,
   type MarkdownSplitResponse,
 } from '../../services/api';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import styles from './ChapterSplitModal.module.css';
 
 interface ChapterSplitModalProps {
@@ -20,6 +21,16 @@ interface ChapterSplitModalProps {
 
 type Phase = 'detecting' | 'configure' | 'error';
 
+/** 剩掉切片里的 markdown 标题行，得到章节正文。与 agent parse_markdown_chapters
+ * 语义一致（L2 narration_script 不含标题），studio 拆分段落时也不会把标题当正文。 */
+function chapterBody(slice: string): string {
+  return slice
+    .split('\n')
+    .filter((line) => !/^#{1,6}\s/.test(line.trimStart()))
+    .join('\n')
+    .trim();
+}
+
 /**
  * 从完整旁白文档按 markdown 标题拆分章节：
  * detect 探测层级 → 用户选 levels → split 预览 → chapters:batch 应用（替换现有章节）。
@@ -32,6 +43,7 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
   const [levels, setLevels] = useState<number[]>([2]);
   const [preview, setPreview] = useState<MarkdownSplitResponse | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -87,10 +99,14 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
     setBusy(true);
     setError(null);
     try {
-      const chapters = preview.chapters.map((ch: MarkdownChapterItem) => ({
-        chapter_title: ch.title,
-        narration_script: fullText.slice(ch.start_char, ch.end_char),
-      }));
+      const chapters = preview.chapters.map((ch: MarkdownChapterItem) => {
+        const body = chapterBody(fullText.slice(ch.start_char, ch.end_char));
+        return {
+          chapter_title: ch.title,
+          narration_script: body,
+          original_text: body,
+        };
+      });
       await segmentedProjectApi.batchCreateChapters(projectId, chapters, fullText);
       onApplied();
     } catch (e) {
@@ -163,13 +179,23 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
           <button
             type="button"
             className={styles.primaryBtn}
-            onClick={() => void apply()}
+            onClick={() => (existingChapterCount > 0 ? setConfirmReplace(true) : void apply())}
             disabled={busy || !preview || preview.chapters.length === 0}
           >
             {busy ? t('chapterSplit.applying') : t('chapterSplit.apply')}
           </button>
         </footer>
       </section>
+      <ConfirmDialog
+        open={confirmReplace}
+        title={t('chapterSplit.confirmTitle')}
+        message={t('chapterSplit.confirmMessage', { count: existingChapterCount })}
+        confirmLabel={t('chapterSplit.confirmLabel')}
+        cancelLabel={t('common.cancel')}
+        variant="danger"
+        onConfirm={() => { setConfirmReplace(false); void apply(); }}
+        onCancel={() => setConfirmReplace(false)}
+      />
     </div>
   );
 }
