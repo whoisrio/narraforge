@@ -120,6 +120,8 @@ test.describe('手动导入旁白文档并拆分', () => {
       expect(after.chapters[0].narration_script).not.toContain('## 夜路');
       expect(after.chapters[0].original_text).toContain('夜色渐浓');
       expect(after.narration_script).toContain('夜行记');
+      // 章节带可用 split_config（进 studio 规则拆分不会因 delimiters 缺失而崩）
+      expect(after.chapters[0].split_config.delimiters.length).toBeGreaterThan(0);
 
       // DB 双读：narration_document_path 落盘
       const db = await readDbProject(PROJECT_ID);

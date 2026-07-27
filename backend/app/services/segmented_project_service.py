@@ -1235,6 +1235,7 @@ def create_chapter_for_project(
         position=position,
         name=chapter_name,
         voice=voice or {},
+        split_config={"delimiters": ["，", "。"], "mode": "rule"},
     )
     db.add(chapter)
     db.flush()

@@ -176,6 +176,23 @@ def test_batch_chapter_engine_written_to_voice(client, db_session):
     assert voice2["engine"] == "edge_tts"  # 未传 engine 时保持默认
 
 
+def test_batch_chapter_has_default_split_config(client, db_session):
+    """Chapters created via batch get a usable split_config (delimiters + mode),
+    not an empty {} - so the studio's rule-split settings don't crash on
+    splitConfig.delimiters.includes."""
+    save_project(db_session, ProjectIn(id="p-batch-sc", name="t", layout="vertical"))
+    db_session.commit()
+
+    payload = {"chapters": [{"chapter_title": "Ch1", "original_text": "内容。", "segments": []}]}
+    r = client.post("/api/segmented-projects/p-batch-sc/chapters:batch", json=payload)
+    assert r.status_code == 200, r.text
+
+    detail = client.get("/api/segmented-projects/p-batch-sc")
+    sc = detail.json()["chapters"][0]["split_config"]
+    assert isinstance(sc.get("delimiters"), list) and sc["delimiters"]
+    assert sc.get("mode") in ("rule", "llm")
+
+
 def test_batch_persists_chapter_original_text(client, db_session):
     """original_text in batch payload is persisted per chapter so the chapter card shows content."""
     save_project(db_session, ProjectIn(id="p-batch-ot", name="t", layout="vertical"))

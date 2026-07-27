@@ -225,3 +225,9 @@
 - **确认提示**: 已有章节时点「应用到项目」先弹 `ConfirmDialog`（`role="alertdialog"`，危险色），明确“将删除现有 N 个章节及其已生成的音频”，确认后才替换；无章节时直接应用。
 - **清理生成内容**: `batch_create_structure` 删旧章节前先调 `_delete_segment_audio_files` 清理各 segment 的 current/previous 音频文件，避免重拆分时音频孤立（原先只删 DB 行）。
 - 验证: vitest 325 / backend pytest 479 / e2e 43 全绿；新增后端 `test_batch_persists_chapter_original_text`、`test_batch_deletes_existing_chapter_audio`，前端 ChapterSplitModal 确认+正文剩标题测试。
+
+## 后续修复 2（用户反馈：拆分章节进 studio 规则拆分报错 includes of undefined）
+
+- 根因：`create_chapter_for_project` 不设 `split_config`，模型列默认 `{}`（空），batch 建的章节 `split_config = {}`；前端 `TextInputPanel` 直接 `splitConfig.delimiters.includes` -> `undefined.includes` 崩溃。章节优先的章节由前端 reducer 建带 delimiters，所以没这问题。
+- 修复（双层）：后端 `create_chapter_for_project` 设默认 `split_config={delimiters:["，","。"],mode:"rule"}`（根因）；前端 `TextInputPanel` 防御性默认 `delimiters??[]`/`mode??'rule'`（兼容历史空 split_config 章节）。
+- 验证: vitest 326 / backend pytest 480 / e2e 43 全绿；新增后端 `test_batch_chapter_has_default_split_config`、前端 TextInputPanel 空 split_config 不崩测试，E2E 断言拆分章节 `split_config.delimiters` 非空。

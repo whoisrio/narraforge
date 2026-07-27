@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { textSplitApi } from '../../services/api';
+import type { Chapter } from '../../types';
 import { TextInputPanel } from './TextInputPanel';
 
 vi.mock('../../services/api', () => ({
@@ -154,5 +155,26 @@ describe('TextInputPanel Library source linking', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^重新拆分$/ }));
     await waitFor(() => expect(onSplit).toHaveBeenCalledWith(['新文本'], '新文本。', 'narration'));
+  });
+
+  it('renders delimiter settings without crashing when split_config is empty (backend-created chapter)', () => {
+    // batch_create_structure 建的章节 split_config 为 {}（无 delimiters/mode），
+    // 打开拆分设置时不能崩 splitConfig.delimiters.includes。
+    render(
+      <TextInputPanel
+        splitConfig={{} as Chapter['split_config']}
+        onSplitConfigChange={vi.fn()}
+        onSplit={vi.fn()}
+        onLLMSplit={vi.fn()}
+        segmentTexts={[]}
+        segmentCount={0}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /拆分设置/ }));
+
+    // 分隔符 chips 正常渲染（未崩）
+    expect(screen.getByText('，')).toBeInTheDocument();
+    expect(screen.getByText('。')).toBeInTheDocument();
   });
 });
