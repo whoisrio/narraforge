@@ -859,8 +859,10 @@ def export_chapter_audio_mp3(
         if abs_path.exists():
             input_paths.append(abs_path)
         else:
-            audio["missing"] = True
-            seg.audio = audio
+            audio = copy.deepcopy(seg.audio or {})
+            if isinstance(audio, dict):
+                audio["missing"] = True
+                seg.audio = audio
 
     if not input_paths:
         db.commit()

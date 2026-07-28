@@ -26,6 +26,8 @@ The **narration workflow** (4-stage: gen_script → script_review → split_segm
 | Narration git versioning | `docs/narration-git-versioning.md` | Automatic snapshot pipeline for narration text — layout, IDs, cron, ops commands. |
 | Test MAP | `backend/tests/TEST_MAP.md` | Test case and function map doc |
 | E2E Test Guide | `docs/e2e-test-guide.md` | Running instructions, conventions, dual-read verification, and gap analysis |
+| Frontend audit | `docs/frontend-audit.md` | Static audit of i18n, layout/styling, and interaction/UX issues, with prioritized remediation roadmap |
+| Backend data audit | `docs/backend-data-audit.md` | Audit of DB persistence layer (models, migrations, integrity) and frontend↔backend API contracts, with prioritized remediation roadmap |
 
 **KEEP these documents updated by every PR**!
 

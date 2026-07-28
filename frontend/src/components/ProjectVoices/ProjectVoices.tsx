@@ -192,6 +192,7 @@ function VoiceRoleEditor({
   const [designAudioBase64, setDesignAudioBase64] = useState('');
   const [designAudioSrc, setDesignAudioSrc] = useState('');
   const [designError, setDesignError] = useState('');
+  const [voiceOptionsWarning, setVoiceOptionsWarning] = useState('');
   const [designProfileId, setDesignProfileId] = useState('');
 
   // 已保存的设计音色预览（从 VoiceProfile 加载）
@@ -307,8 +308,16 @@ function VoiceRoleEditor({
   }, [draft, designAudioBase64, designAudioSrc, designSubEngine, localDesignDesc, projectId]);
 
   useEffect(() => {
-    ttsApi.getEdgeVoices('Chinese').then(setEdgeVoices).catch(() => {});
-    mimoTtsApi.getPresetVoices().then(setMimoPresetVoices).catch(() => {});
+    // edge 音色有 COMMON_EDGE_VOICES 兜底，失败只降级不阻断；
+    // mimo 预置音色失败时下拉为空——两种情况都给用户可见的降级提示。
+    ttsApi.getEdgeVoices('Chinese').then(setEdgeVoices).catch((err) => {
+      console.error('加载 Edge 音色列表失败:', err);
+      setVoiceOptionsWarning(t('projectVoices.voiceOptionsLoadFailed'));
+    });
+    mimoTtsApi.getPresetVoices().then(setMimoPresetVoices).catch((err) => {
+      console.error('加载 MiMo 预置音色列表失败:', err);
+      setVoiceOptionsWarning(t('projectVoices.voiceOptionsLoadFailed'));
+    });
   }, []);
 
   // 当已保存的角色有 clone voice id 时，按 ID 查询对应的 VoiceProfile
@@ -615,6 +624,9 @@ function VoiceRoleEditor({
 
   return (
     <section className={styles.editorPanel} aria-label={t('projectVoices.voiceRoleEditor')}>
+      {voiceOptionsWarning && (
+        <p className={styles.designError} role="alert">{voiceOptionsWarning}</p>
+      )}
       <div className={styles.editorBar}>
         <div>
           <span className={styles.kicker}>Voice Role</span>
@@ -779,7 +791,7 @@ function VoiceRoleEditor({
                         </select>
                       </label>
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                        <StyleInstructionPicker value={(vox as MiMoParams).instruction ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
+                        <StyleInstructionPicker value={(vox as MiMoParams).instruction ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label={t('voxcpm.styleInstruction')} placeholder={t('voxcpm.styleInstructionPlaceholder')} dense />
                       </div>
                     </>
                   )}
@@ -857,7 +869,7 @@ function VoiceRoleEditor({
                         <span className={styles.sliderVal}>{((vox as CosyVoiceParams).pitch ?? 1).toFixed(2)}</span>
                       </label>
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                        <StyleInstructionPicker value={(vox as CosyVoiceParams).instruction ?? ''} onChange={(value) => setParams({ instruction: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
+                        <StyleInstructionPicker value={(vox as CosyVoiceParams).instruction ?? ''} onChange={(value) => setParams({ instruction: value })} label={t('voxcpm.styleInstruction')} placeholder={t('voxcpm.styleInstructionPlaceholder')} dense />
                       </div>
                       <label className={styles.paramField}>{t('tts.language')}
                         <select className={styles.paramSelect} value={(vox as CosyVoiceParams).language || 'Chinese'} onChange={(event) => setParams({ language: event.target.value })}>
@@ -950,7 +962,7 @@ function VoiceRoleEditor({
                         </div>
                       )}
                       <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                        <StyleInstructionPicker value={(vox?.engine === 'mimo_tts' ? (vox as MiMoParams).instruction : undefined) ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
+                        <StyleInstructionPicker value={(vox?.engine === 'mimo_tts' ? (vox as MiMoParams).instruction : undefined) ?? ''} onChange={(value) => setParams({ mimo_instruction: value })} label={t('voxcpm.styleInstruction')} placeholder={t('voxcpm.styleInstructionPlaceholder')} dense />
                       </div>
                     </>
                   )}
@@ -1041,7 +1053,7 @@ function VoiceRoleEditor({
                       )}
                       {voxcpmCloneMode === 'clone' && (
                         <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
-                          <StyleInstructionPicker value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).style_control : undefined) ?? ''} onChange={(value) => setParams({ voxcpm_style_control: value })} label={t('tts.styleInstruction')} placeholder={t('tts.styleInstructionPlaceholder')} dense />
+                          <StyleInstructionPicker value={(vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).style_control : undefined) ?? ''} onChange={(value) => setParams({ voxcpm_style_control: value })} label={t('voxcpm.styleInstruction')} placeholder={t('voxcpm.styleInstructionPlaceholder')} dense />
                         </div>
                       )}
                       {voxcpmCloneMode === 'ultimate' && (

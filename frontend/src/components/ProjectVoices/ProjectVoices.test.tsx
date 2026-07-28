@@ -393,3 +393,25 @@ describe('design voice loading in editor', () => {
     expect(textarea.value).toBe('温柔女声，语速适中');
   });
 });
+
+
+describe('voice option list load failure (U2)', () => {
+  it('shows a visible warning when preset voice lists fail to load', async () => {
+    const { ttsApi, mimoTtsApi } = await import('../../services/api');
+    vi.mocked(ttsApi.getEdgeVoices).mockRejectedValue(new Error('boom'));
+    vi.mocked(mimoTtsApi.getPresetVoices).mockRejectedValue(new Error('boom'));
+
+    render(
+      <ProjectVoices
+        roles={[]}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    // 音色选项列表在编辑器打开时才加载，先打开编辑器
+    fireEvent.click(await screen.findByRole('button', { name: /创建角色/ }));
+
+    expect(await screen.findByText('部分音色列表加载失败，下拉选项可能不完整')).toBeInTheDocument();
+  });
+});

@@ -527,7 +527,7 @@ export function SegmentRow({
             {hasOverride && (
               <button
                 className={styles.indVoiceToggle}
-                title={t('segment.segmentRow.clickToCancelIndependent')}
+                title={t('segment.segmentRow.unlockTooltip')}
                 onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
               >
                 {t('segment.segmentRow.locked')}
@@ -536,7 +536,7 @@ export function SegmentRow({
             {!hasOverride && isReady && (
               <button
                 className={styles.indVoiceToggleOff}
-                title={t('segment.segmentRow.clickToLockIndependent')}
+                title={t('segment.segmentRow.lockTooltip')}
                 onClick={(e) => { e.stopPropagation(); onToggleIndependentVoice?.(segment.id); }}
               >
                 {t('segment.segmentRow.global')}

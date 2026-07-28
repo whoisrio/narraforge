@@ -122,6 +122,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       onRefresh?.();
     } catch (err) {
       console.error('Delete failed:', err);
+      setSyncMessage({ type: 'error', text: t('voiceList.deleteFailed') });
     } finally {
       setDeleting(false);
       setShowDeleteConfirm(false);

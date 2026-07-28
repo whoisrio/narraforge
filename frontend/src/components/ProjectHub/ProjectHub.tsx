@@ -88,7 +88,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
   };
 
   const handleCreate = () => {
-    const name = createName.trim() || `${t('projectHub.createDefault')} ${projects.filter(p => !p.name.startsWith(t('projectHub.tempProject'))).length + 1}`;
+    const name = createName.trim() || `${t('project.createDefault')} ${projects.filter(p => !p.name.startsWith(t('projectHub.tempProject'))).length + 1}`;
     onCreateProject(name, createLogo);
     setShowCreateDialog(false);
     setCreateName('');

@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional
+import copy
 import uuid
 import os
 import base64
@@ -180,7 +181,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                         target_mp3.write_bytes(f.read())
                     # Use segmented_dir as base for consistency with synth endpoint (Task 7 deviation)
                     rel = target_mp3.relative_to(settings.segmented_dir).as_posix()
-                    audio = seg.audio or {}
+                    audio = copy.deepcopy(seg.audio or {})
                     audio["current"] = {"path": rel, "format": "mp3"}
                     seg.audio = audio
                     seg.generated_params = {

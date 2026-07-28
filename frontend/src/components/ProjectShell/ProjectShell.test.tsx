@@ -1,6 +1,19 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectShell } from './ProjectShell';
+
+vi.mock('../../services/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../services/api')>();
+  return {
+    ...actual,
+    segmentedProjectApi: {
+      ...actual.segmentedProjectApi,
+      getSyncStatus: vi.fn().mockResolvedValue({ l1_dirty: false, l2_dirty: true, l3_dirty: false }),
+      resplitFromScript: vi.fn().mockRejectedValue(new Error('boom')),
+      rewriteScriptFromSegments: vi.fn().mockRejectedValue(new Error('boom')),
+    },
+  };
+});
 
 function renderProjectShell(activeSection: 'overview' | 'library' | 'studio' | 'voices' | 'settings' = 'studio') {
   const onSectionChange = vi.fn();
@@ -118,5 +131,39 @@ describe('ProjectShell', () => {
     fireEvent.click(screen.getByRole('button', { name: '选择章节 第二章' }));
 
     expect(onSelectChapter).toHaveBeenCalledWith('ch-2');
+  });
+
+  it('alerts a failure message (not "syncing") when resplit-from-script fails', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(
+      <ProjectShell
+        projectId="p1"
+        projectName="草稿项目"
+        activeSection="studio"
+        locale="zh-CN"
+        chapterName="第一章"
+        chapters={[
+          { id: 'ch-1', name: '第一章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+        ]}
+        activeChapterId="ch-1"
+        onSelectChapter={vi.fn()}
+        onRenameChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
+        onSectionChange={vi.fn()}
+      >
+        <div>Studio content</div>
+      </ProjectShell>,
+    );
+
+    // 等待 sync badge 出现并打开同步弹窗
+    const badge = await screen.findByLabelText('该章节文本已改动，与上下游不一致');
+    fireEvent.click(badge);
+    fireEvent.click(await screen.findByRole('button', { name: '以改写稿重新拆分' }));
+
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    const message = alertSpy.mock.calls[0][0];
+    expect(message).not.toBe('同步中…');
+    expect(message).toBe('同步失败，请稍后重试');
   });
 });
