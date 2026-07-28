@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.core.config import settings
@@ -7,6 +7,15 @@ engine = create_engine(
     settings.database_url,
     connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
 )
+
+if "sqlite" in settings.database_url:
+    # SQLite 默认不强制外键：不开这个 PRAGMA，模型里所有 ondelete= 声明都是死代码
+    # （曾导致删除 Role 后 segments.role_id 等悬挂引用）。
+    @event.listens_for(engine, "connect")
+    def _sqlite_enable_foreign_keys(dbapi_conn, _connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
@@ -66,10 +75,9 @@ _P5_VOICE_AVATAR_ALTER_STMTS = (
 )
 
 # P6: voice clone original/preview audio paths.
-_P6_CLONE_AUDIO_PATHS_ALTER_STMTS = (
-    "ALTER TABLE voice_profiles ADD COLUMN original_audio_path VARCHAR",
-    "ALTER TABLE voice_profiles ADD COLUMN cloned_preview_path VARCHAR",
-)
+# (Obsolete) both columns were superseded by P9000/P9004 (voice/voice_params/preview)
+# and dropped by P9006; re-adding them each startup caused a re-add/drop ping-pong.
+_P6_CLONE_AUDIO_PATHS_ALTER_STMTS = ()
 
 # P7: source document for library.
 _P7_SOURCE_DOCUMENT_ALTER_STMTS = (
@@ -87,16 +95,12 @@ _P9_VOICE_PROJECT_SCOPE_ALTER_STMTS = (
 )
 
 # P10: voice engine metadata (voices_engine nested structure).
-_P10_VOICE_ENGINE_ALTER_STMTS = (
-    "ALTER TABLE voice_profiles ADD COLUMN voice_engine_type VARCHAR",
-    "ALTER TABLE voice_profiles ADD COLUMN engine_type VARCHAR",
-    "ALTER TABLE voice_profiles ADD COLUMN engine_sub_type VARCHAR",
-    "ALTER TABLE voice_profiles ADD COLUMN engine_params JSON",
-)
+# (Obsolete) all four columns were superseded by P9000/P9004 and dropped by P9006;
+# re-adding them each startup caused a ping-pong.
+_P10_VOICE_ENGINE_ALTER_STMTS = ()
 
 # P11: rename audio_path → source_audio_path, drop original_audio_path.
 _P11_SOURCE_AUDIO_ALTER_STMTS = (
-    "ALTER TABLE voice_profiles ADD COLUMN source_audio_path VARCHAR",
     # 项目级配置 JSON 字段 (split_voice_mode 等)
     "ALTER TABLE segmented_projects ADD COLUMN configs JSON",
 )
@@ -130,6 +134,20 @@ _P16_SPLIT_ANCHOR_ALTER_STMTS = (
 # P17: post-synthesis audio adjust - chapter-level adjust record JSON.
 _P17_AUDIO_ADJUST_ALTER_STMTS = (
     "ALTER TABLE segmented_project_chapters ADD COLUMN audio_adjust JSON",
+)
+
+# Aggregate of every legacy ALTER group, in migration order. Used by _run_migrations
+# and the idempotency test. Zombie-column-adding statements (P6/P10 + P11 source_audio_path)
+# were removed so a modern DB is not re-polluted each startup (P9006 would drop them again).
+_ALL_ALTER_STMTS = (
+    _P2_V2_ALTER_STMTS + _P2_V3_ALTER_STMTS + _P3_ROLE_PROSODY_ALTER_STMTS
+    + _P4_ROLE_KIND_ALTER_STMTS + _P5_VOICE_AVATAR_ALTER_STMTS
+    + _P6_CLONE_AUDIO_PATHS_ALTER_STMTS + _P7_SOURCE_DOCUMENT_ALTER_STMTS
+    + _P8_PROMPT_TEXT_ALTER_STMTS + _P9_VOICE_PROJECT_SCOPE_ALTER_STMTS
+    + _P10_VOICE_ENGINE_ALTER_STMTS + _P11_SOURCE_AUDIO_ALTER_STMTS
+    + _P12_VOICE_REF_ALTER_STMTS + _P13_NARRATION_SCRIPT_ALTER_STMTS
+    + _P14_PROJECT_NARRATION_ALTER_STMTS + _P15_LAYER_SYNC_ALTER_STMTS
+    + _P16_SPLIT_ANCHOR_ALTER_STMTS + _P17_AUDIO_ADJUST_ALTER_STMTS
 )
 
 
@@ -282,33 +300,57 @@ def _migrate_absolute_to_relative(conn):
         logger.warning(f"[migration] P13 skipped: {e}")
 
 
+def _run_migrations(conn):
+    import logging
+    for stmt in _ALL_ALTER_STMTS:
+        if _run_alter_or_skip(conn, stmt):
+            logging.getLogger(__name__).info(f"[migration] applied: {stmt}")
+    # P11 data migration: copy audio_path → source_audio_path
+    _migrate_source_audio_path(conn)
+    # P12: move design source→preview, drop audio_path/original_audio_path
+    _migrate_design_preview_and_drop_legacy(conn)
+    # P13: convert absolute paths to relative paths
+    _migrate_absolute_to_relative(conn)
+    # P9000: v3 schema migration (voice/audio/engine JSON + drop old columns)
+    _migrate_v3_reduce_schema(conn)
+    # P9002: unify chapter voice params (default_params → voice EngineParams)
+    _migrate_chapter_voice(conn)
+    # P9003: migrate segment voice.params + generated_params to EngineParams format
+    _migrate_segment_voice_params(conn)
+    # P9003.5: add voice_profiles.v2 columns (voice, voice_params, preview)
+    # Must run before P9004 which needs these columns to exist
+    _migrate_vp_v2_columns(conn)
+    # P9004: migrate voice_profiles engine → voice, engine_params → voice_params
+    _migrate_voice_profile(conn)
+    # P9005: add project_id to roles table
+    _migrate_add_role_project_id(conn)
+    # P9006: restore constraints lost by the old buggy table recreate
+    _repair_lost_constraints(conn)
+
+
 def init_db():
+    # 确保所有模型已注册到 Base.metadata——直接调用 init_db 时（脚本/迁移工具）
+    # 不能依赖 main 的导入顺序，否则 create_all 和约束修复都会静默跳过。
+    from app import models  # noqa: F401
+
     Base.metadata.create_all(bind=engine)
-    # 跑 P2 v2 + v3 列迁移 (幂等)
-    with engine.begin() as conn:
-        import logging
-        for stmt in _P2_V2_ALTER_STMTS + _P2_V3_ALTER_STMTS + _P3_ROLE_PROSODY_ALTER_STMTS + _P4_ROLE_KIND_ALTER_STMTS + _P5_VOICE_AVATAR_ALTER_STMTS + _P6_CLONE_AUDIO_PATHS_ALTER_STMTS + _P7_SOURCE_DOCUMENT_ALTER_STMTS + _P8_PROMPT_TEXT_ALTER_STMTS + _P9_VOICE_PROJECT_SCOPE_ALTER_STMTS + _P10_VOICE_ENGINE_ALTER_STMTS + _P11_SOURCE_AUDIO_ALTER_STMTS + _P12_VOICE_REF_ALTER_STMTS + _P13_NARRATION_SCRIPT_ALTER_STMTS + _P14_PROJECT_NARRATION_ALTER_STMTS + _P15_LAYER_SYNC_ALTER_STMTS + _P16_SPLIT_ANCHOR_ALTER_STMTS + _P17_AUDIO_ADJUST_ALTER_STMTS:
-            if _run_alter_or_skip(conn, stmt):
-                logging.getLogger(__name__).info(f"[migration] applied: {stmt}")
-        # P11 data migration: copy audio_path → source_audio_path
-        _migrate_source_audio_path(conn)
-        # P12: move design source→preview, drop audio_path/original_audio_path
-        _migrate_design_preview_and_drop_legacy(conn)
-        # P13: convert absolute paths to relative paths
-        _migrate_absolute_to_relative(conn)
-        # P9000: v3 schema migration (voice/audio/engine JSON + drop old columns)
-        _migrate_v3_reduce_schema(conn)
-        # P9002: unify chapter voice params (default_params → voice EngineParams)
-        _migrate_chapter_voice(conn)
-        # P9003: migrate segment voice.params + generated_params to EngineParams format
-        _migrate_segment_voice_params(conn)
-        # P9003.5: add voice_profiles.v2 columns (voice, voice_params, preview)
-        # Must run before P9004 which needs these columns to exist
-        _migrate_vp_v2_columns(conn)
-        # P9004: migrate voice_profiles engine → voice, engine_params → voice_params
-        _migrate_voice_profile(conn)
-        # P9005: add project_id to roles table
-        _migrate_add_role_project_id(conn)
+    if "sqlite" in settings.database_url:
+        # PRAGMA foreign_keys 只能在事务外切换，所以用 autocommit 连接手动
+        # 管理迁移事务：先关 FK（表重建需要），跑迁移，提交后再开回来。
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            try:
+                conn.exec_driver_sql("BEGIN")
+                _run_migrations(conn)
+                conn.exec_driver_sql("COMMIT")
+            except Exception:
+                conn.exec_driver_sql("ROLLBACK")
+                raise
+            finally:
+                conn.exec_driver_sql("PRAGMA foreign_keys=ON")
+    else:
+        with engine.begin() as conn:
+            _run_migrations(conn)
 
 
 def _migrate_v3_reduce_schema(conn):
@@ -634,13 +676,19 @@ def _migrate_voice_profile(conn):
             logger.info("[migration] P9004: voice column already populated (%d rows), skipping", populated)
             return
 
-    rows = conn.execute(text(
-        "SELECT id, engine, engine_params, cloned_preview_path, source_audio_path FROM voice_profiles"
-    )).fetchall()
+    # Only SELECT legacy columns that actually exist (fresh DBs lack engine_params etc.
+    # since the P6/P10/P11 zombie-adding ALTERs were removed). Missing ones default to None.
+    select_cols = ["id"] + [c for c in ("engine", "engine_params", "cloned_preview_path", "source_audio_path") if c in cols]
+    rows = conn.execute(text(f"SELECT {', '.join(select_cols)} FROM voice_profiles")).fetchall()
 
     updated = 0
     for row in rows:
-        vp_id, engine_json, ep_json, cp_path, src_path = row
+        d = dict(zip(select_cols, row))
+        vp_id = d["id"]
+        engine_json = d.get("engine")
+        ep_json = d.get("engine_params")
+        cp_path = d.get("cloned_preview_path")
+        src_path = d.get("source_audio_path")
         engine_data = json.loads(engine_json) if isinstance(engine_json, str) else (engine_json or {})
         ep_data = json.loads(ep_json) if isinstance(ep_json, str) else (ep_json or {})
 
@@ -801,19 +849,187 @@ def _build_voice_from_legacy(params_dict, voice_ref_dict, locked_params_list, ss
     return {"source": "chapter"}
 
 
-def _drop_columns_via_recreate(conn, table_name, columns_to_drop):
-    """Drop columns from a SQLite table by recreating it without those columns."""
+def _preserved_col_defs(conn, table_name, keep_cols, existing_tables=None):
+    """Build column/constraint definitions preserving PK/NOT NULL/DEFAULT/FK
+    from the live table (unlike the old bare name+type recreate).
+    FK clauses referencing tables that no longer exist (historical corruption
+    from RENAME reference-rewriting) are dropped."""
     col_info = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
-    keep_cols = [(c[1], c[2]) for c in col_info if c[1] not in set(columns_to_drop)]
+    col_defs = []
+    pk_cols = []
+    for _cid, name, col_type, notnull, default_val, pk in col_info:
+        if name not in keep_cols:
+            continue
+        d = f'"{name}" {col_type}'
+        if notnull:
+            d += " NOT NULL"
+        if default_val is not None:
+            d += f" DEFAULT {default_val}"
+        if pk:
+            pk_cols.append((pk, name))
+        col_defs.append(d)
+    if pk_cols:
+        cols = ", ".join(f'"{n}"' for _, n in sorted(pk_cols))
+        col_defs.append(f"PRIMARY KEY ({cols})")
+    # (id, seq, table, from, to, on_update, on_delete, match)
+    for fk in conn.execute(text(f"PRAGMA foreign_key_list({table_name})")).fetchall():
+        if fk[3] not in keep_cols:
+            continue
+        if existing_tables is not None and fk[2] not in existing_tables:
+            continue  # 历史损坏：引用的表已不存在
+        stmt = f'FOREIGN KEY ("{fk[3]}") REFERENCES "{fk[2]}"("{fk[4]}")'
+        if fk[6] and fk[6].upper() != "NO ACTION":
+            stmt += f" ON DELETE {fk[6]}"
+        col_defs.append(stmt)
+    return col_defs
 
-    # 1. Create temp table
-    col_defs = ", ".join(f'"{n}" {t}' for n, t in keep_cols)
-    conn.execute(text(f"CREATE TABLE IF NOT EXISTS {table_name}_tmp ({col_defs})"))
 
-    # 2. Copy data
-    col_names = ", ".join(f'"{n}"' for n, _ in keep_cols)
-    conn.execute(text(f"INSERT INTO {table_name}_tmp ({col_names}) SELECT {col_names} FROM {table_name}"))
+def _preserved_index_stmts(conn, table_name, keep_cols):
+    stmts = []
+    for idx in conn.execute(text(f"PRAGMA index_list({table_name})")).fetchall():
+        idx_name = idx[1]
+        if idx_name.startswith("sqlite_"):
+            continue
+        cols = [c[2] for c in conn.execute(text(f'PRAGMA index_info("{idx_name}")')).fetchall()]
+        cols = [c for c in cols if c in keep_cols]
+        if not cols:
+            continue
+        unique = "UNIQUE " if idx[2] else ""
+        col_list = ", ".join(f'"{c}"' for c in cols)
+        stmts.append(f'CREATE {unique}INDEX IF NOT EXISTS "{idx_name}" ON "{table_name}" ({col_list})')
+    return stmts
 
-    # 3. Swap
+
+def _swap_in_recreated_table(conn, table_name, create_sql, col_names, select_exprs, params, index_ddls):
+    """Rebuild a table without ever renaming the original.
+
+    Order: CREATE {t}_new → copy → DROP {t} → RENAME {t}_new to {t}.
+    Renaming the original table is avoided because SQLite rewrites other
+    tables' REFERENCES to the temp name during RENAME (PRAGMA
+    legacy_alter_table is not reliable across our migration paths), and the
+    dev DB already carries such corrupted references historically.
+    """
+    conn.execute(text(create_sql))
+    cols = ", ".join(f'"{c}"' for c in col_names)
+    conn.execute(
+        text(f'INSERT INTO {table_name}_new ({cols}) SELECT {", ".join(select_exprs)} FROM {table_name}'),
+        params,
+    )
     conn.execute(text(f"DROP TABLE {table_name}"))
-    conn.execute(text(f"ALTER TABLE {table_name}_tmp RENAME TO {table_name}"))
+    conn.execute(text(f"ALTER TABLE {table_name}_new RENAME TO {table_name}"))
+    for ddl in index_ddls:
+        conn.execute(text(ddl))
+
+
+def _drop_columns_via_recreate(conn, table_name, columns_to_drop):
+    """Drop columns from a SQLite table by recreating it without those columns.
+
+    Preserves PK/NOT NULL/DEFAULT/FK/indexes — an earlier version kept only
+    column name+type and silently stripped all constraints (see D4/P9006).
+    """
+    col_info = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+    drop = set(columns_to_drop)
+    keep = [c[1] for c in col_info if c[1] not in drop]
+    if len(keep) == len(col_info):
+        return
+
+    existing = set(inspect(conn).get_table_names())
+    col_defs = _preserved_col_defs(conn, table_name, set(keep), existing)
+    idx_stmts = _preserved_index_stmts(conn, table_name, set(keep))
+    create_sql = f"CREATE TABLE {table_name}_new ({', '.join(col_defs)})"
+    _swap_in_recreated_table(
+        conn, table_name, create_sql,
+        col_names=keep, select_exprs=[f'"{c}"' for c in keep], params={},
+        index_ddls=idx_stmts,
+    )
+
+
+# Tables historically rebuilt by the buggy _drop_columns_via_recreate.
+_CONSTRAINT_REPAIR_TABLES = (
+    "segmented_projects",
+    "segmented_project_chapters",
+    "segmented_project_segments",
+    "voice_profiles",
+    "roles",
+)
+
+
+def _repair_lost_constraints(conn):
+    """P9006: restore PK/NOT NULL/FK lost by the old buggy table recreate,
+    and repair FK clauses referencing tables that no longer exist (historical
+    RENAME reference-rewriting corruption).
+
+    Damaged tables are rebuilt from the SQLAlchemy model schema (the models are
+    the source of truth), which also drops leftover zombie columns.
+    Idempotent: intact tables are skipped.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    existing = set(inspect(conn).get_table_names())
+    for table_name in _CONSTRAINT_REPAIR_TABLES:
+        if table_name not in existing:
+            continue
+        col_info = conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()
+        has_pk = any(c[5] for c in col_info)
+        live_fks = {
+            (fk[3], fk[2])
+            for fk in conn.execute(text(f"PRAGMA foreign_key_list({table_name})")).fetchall()
+        }
+        dangling_fk = any(ref not in existing for _, ref in live_fks)
+        table = Base.metadata.tables.get(table_name)
+        if table is None:
+            continue
+        model_fks = {(fk.parent.name, fk.column.table.name) for fk in table.foreign_keys}
+        missing_fk = not model_fks.issubset(live_fks)
+        model_col_names = {c.name for c in table.columns}
+        zombie_cols = {c[1] for c in col_info} - model_col_names
+        if has_pk and not dangling_fk and not missing_fk and not zombie_cols:
+            continue
+        logger.warning(
+            f"[migration] P9006: repairing {table_name} "
+            f"(pk={'ok' if has_pk else 'lost'}, dangling_fk={dangling_fk}, "
+            f"missing_fk={missing_fk}, zombie_cols={sorted(zombie_cols)})"
+        )
+        live_cols = [c[1] for c in col_info]
+        # 复制数据时，模型里 NOT NULL 的列若在老数据里是 NULL（老表无约束，可能发生），
+        # 用模型的 Python 默认值兜底，否则 INSERT 会被新约束拒绝。
+        import json as _json
+        params: dict = {}
+        exprs = []
+        copy_cols = []
+        for col in table.columns:
+            if col.name not in live_cols:
+                continue
+            copy_cols.append(col.name)
+            if not col.nullable:
+                fallback = _column_python_default(col)
+                if fallback is not None:
+                    key = f"fb_{col.name}"
+                    params[key] = _json.dumps(fallback, ensure_ascii=False) if isinstance(fallback, (dict, list)) else fallback
+                    exprs.append(f'COALESCE("{col.name}", :{key})')
+                    continue
+            exprs.append(f'"{col.name}"')
+        # 用编译后的模型 DDL 建临时表（换名），再安全换表。
+        from sqlalchemy.schema import CreateIndex, CreateTable
+        create_sql = str(CreateTable(table).compile(dialect=conn.dialect))
+        tmp_sql = create_sql.replace(f"CREATE TABLE {table_name} ", f"CREATE TABLE {table_name}_new ", 1)
+        if tmp_sql == create_sql:
+            raise RuntimeError(f"P9006: cannot rewrite CREATE TABLE for {table_name}")
+        index_ddls = [str(CreateIndex(idx).compile(dialect=conn.dialect)) for idx in table.indexes]
+        _swap_in_recreated_table(conn, table_name, tmp_sql, copy_cols, exprs, params, index_ddls)
+
+
+def _column_python_default(col):
+    """Best-effort value of a SQLAlchemy Column's Python-side default."""
+    d = col.default
+    if d is None:
+        return None
+    if not d.is_callable:
+        return d.arg
+    try:
+        return d.arg()
+    except TypeError:
+        try:
+            return d.arg(None)
+        except Exception:  # noqa: BLE001
+            return None

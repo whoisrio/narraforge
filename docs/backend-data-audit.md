@@ -141,3 +141,8 @@ Legend: ⬜ pending · 🔄 in progress · ✅ done (date + verifying test)
 | B-P0-2 | D3 5 JSON mutate-then-reassign sites | `deepcopy` / fresh-dict + regression tests | ✅ 2026-07-28 — `test_json_column_dirty.py` (6 tests; also fixed a latent seg-None 500→404 ordering bug in the audio endpoint) |
 | B-P0-3 | A1 config.py tuple 404 returns | `raise HTTPException(404)` | ✅ 2026-07-28 — `test_config_models_api.py` (3 tests) |
 | B-P0-4 | A2 `/clone/list-from-qwen` NameError | Inject `db` dependency | ✅ 2026-07-28 — `test_clone_list_from_qwen.py` |
+| B-P1-1 | D1 FK pragma never enabled + dangling role refs | `PRAGMA foreign_keys=ON` on connect; explicit cleanup in `delete_role` (segment role_id, project default narrator, voice JSON role refs); `create_role` normalizes `__scratchpad__` project_id -> NULL (global) so scratchpad-context roles don't violate the now-enforced FK | ✅ 2026-07-28 - `test_role_delete_cleanup.py` (3 tests); dialogue-prosody e2e green |
+| B-P1-2 | D4 `_drop_columns_via_recreate` loses PK/NOT NULL/DEFAULT + no version table | Recreate preserves constraints; P9006 `_repair_lost_constraints` rebuilds damaged tables from the model (also drops zombie columns) | ✅ 2026-07-28 - `test_table_recreate_constraints.py` |
+| B-P1-3 | Legacy ALTER groups re-add zombie columns each startup (ping-pong with P9006) | `_ALL_ALTER_STMTS` aggregate; removed obsolete P6/P10 + P11 `source_audio_path` zombie-adding ALTERs; P9004 dynamic SELECT guards missing legacy cols; `_run_migrations` iterates the aggregate | ✅ 2026-07-28 - `test_migration_idempotency.py` (2 tests); real dev DB inits clean |
+
+After P0/P1, the backend suite is **501 passed** and the e2e suite is **43 passed** (2026-07-28).
