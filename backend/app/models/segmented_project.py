@@ -39,6 +39,7 @@ class SegmentedProject(Base):
         nullable=True,
     )
     configs = Column(JSON, nullable=True)
+    logo = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

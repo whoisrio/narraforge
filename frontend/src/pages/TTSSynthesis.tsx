@@ -1604,7 +1604,7 @@ export function TTSSynthesis({
 
             <div className={styles.sourceProductionBar} aria-label="Source Text production controls">
               <div className={styles.productionActions}>
-                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ {t('studio.batchSynthesize')}</button>
+                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll} disabled={generating}>⚡ {t('studio.batchSynthesize')}</button>
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
                   {playAllActive ? t('tts.stop') : `▶ ${t('studio.playAll')}`}
                 </button>

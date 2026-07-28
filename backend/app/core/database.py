@@ -136,6 +136,11 @@ _P17_AUDIO_ADJUST_ALTER_STMTS = (
     "ALTER TABLE segmented_project_chapters ADD COLUMN audio_adjust JSON",
 )
 
+# P18: project logo (data URL / remote URL) - previously frontend-only, lost on PUT.
+_P18_PROJECT_LOGO_ALTER_STMTS = (
+    "ALTER TABLE segmented_projects ADD COLUMN logo VARCHAR",
+)
+
 # Aggregate of every legacy ALTER group, in migration order. Used by _run_migrations
 # and the idempotency test. Zombie-column-adding statements (P6/P10 + P11 source_audio_path)
 # were removed so a modern DB is not re-polluted each startup (P9006 would drop them again).
@@ -148,6 +153,7 @@ _ALL_ALTER_STMTS = (
     + _P12_VOICE_REF_ALTER_STMTS + _P13_NARRATION_SCRIPT_ALTER_STMTS
     + _P14_PROJECT_NARRATION_ALTER_STMTS + _P15_LAYER_SYNC_ALTER_STMTS
     + _P16_SPLIT_ANCHOR_ALTER_STMTS + _P17_AUDIO_ADJUST_ALTER_STMTS
+    + _P18_PROJECT_LOGO_ALTER_STMTS
 )
 
 
@@ -351,6 +357,27 @@ def init_db():
     else:
         with engine.begin() as conn:
             _run_migrations(conn)
+
+    # e2e-only hygiene: the e2e DB persists across runs and historically accumulated
+    # orphan roles/voice_profiles whose project_id referenced the frontend-only
+    # "__scratchpad__" placeholder (or deleted projects). With FK now enforced, no
+    # new orphans are created; this clears the legacy ones on each fresh backend
+    # start. Guarded by app_env so production is never touched.
+    if getattr(settings, "app_env", "production") == "e2e":
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE segmented_project_segments SET role_id = NULL "
+                "WHERE role_id IN (SELECT id FROM roles WHERE project_id IS NOT NULL "
+                "AND project_id NOT IN (SELECT id FROM segmented_projects))"
+            ))
+            conn.execute(text(
+                "DELETE FROM roles WHERE project_id IS NOT NULL "
+                "AND project_id NOT IN (SELECT id FROM segmented_projects)"
+            ))
+            conn.execute(text(
+                "DELETE FROM voice_profiles WHERE project_id IS NOT NULL "
+                "AND project_id NOT IN (SELECT id FROM segmented_projects)"
+            ))
 
 
 def _migrate_v3_reduce_schema(conn):

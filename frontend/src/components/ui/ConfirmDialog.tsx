@@ -1,7 +1,7 @@
 import { useTranslation } from '../../i18n';
 import styles from './ConfirmDialog.module.css';
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
   open: boolean;
   title: string;
   message: string;

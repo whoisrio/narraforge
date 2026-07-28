@@ -172,4 +172,13 @@ Legend: ⬜ pending · 🔄 in progress · ✅ done (date + verifying test)
 | F-P0-2 | U2 silent error swallows | User-visible feedback at `VoiceList.tsx:123`, `ProjectVoices.tsx:310`, `App.tsx:115-139` | ✅ 2026-07-28 — `VoiceList.test.tsx`; App.tsx handlers now try/catch + alert (`projectHub.{create,rename,delete}Failed`); WorkflowDrawer rerun failure alerts; ProjectVoices option-list load failure shows a `role="alert"` warning in the editor panel (`projectVoices.voiceOptionsLoadFailed`, regression test in `ProjectVoices.test.tsx`). `vitest run` 332 passed |
 | F-P0-3 | I1 28 missing i18n keys | Repoint references + static guard test in `i18n.test.ts` | ✅ 2026-07-28 — 17 keys repointed to existing synonyms, 11 keys added (zh+en symmetric); guard test lives at `src/i18n/missing-keys.test.ts`; also fixed latent `deleteChapterConfirm` interpolation param mismatch (`segCount/audioInfo` → `segments/audioPart`). `vitest run` 331 passed |
 | F-P0-4 | Dead code | Delete `App.css`, `pages/SourceLibrary.tsx`, 4 dead `components/SourceLibrary/` components, `SynthesisHistory.tsx` | ✅ 2026-07-28 — `tsc -b` clean, `vitest run` 331 passed |
-| B-P0-5 | A3 dead workflow contract | Delete `workflowApi`, `WorkflowRun` types, `ReviewEditor.tsx` | ✅ 2026-07-28 — also removed dead `useWorkflowStream.ts`; `tsc -b` clean, `vitest run` 326 passed |
+| B-P0-5 | A3 dead workflow contract | Delete `workflowApi`, `WorkflowRun` types, `ReviewEditor.tsx` | ✅ 2026-07-28 - also removed dead `useWorkflowStream.ts`; `tsc -b` clean, `vitest run` 326 passed |
+| F-P1-1 | U6 double-submit protection | `ProjectHub` create-project busy guard (creatingRef, resets on dialog open); `TTSSynthesis` batch-synthesize `disabled={generating}` | ✅ 2026-07-28 - e2e project-crud + studio flows green |
+| F-P1-2 | U3 `ui/Modal` no Esc / focus trap / focus return | Esc close, Tab focus trap, focus move-in on open + return on close, `role=dialog` `aria-modal` | ✅ 2026-07-28 - `ui/Modal.test.tsx` (4 tests) |
+| F-P1-3 | `ConfirmDialog` not exported from `ui/index` | Re-export `ConfirmDialog` + `ConfirmDialogProps` | ✅ 2026-07-28 - `tsc -b` clean |
+
+**Deferred (large / e2e-breaking, separate PRs):**
+- F-P1-4 shared `Toast` (aria-live + timer cleanup) + replace the 11 native `alert/confirm` call sites — blocked by 2 e2e specs that use `page.on('dialog')` (project-crud, layer-sync); needs coordinated e2e migration.
+- F-P1-5 converge the 14 hand-rolled overlays onto `ui/Modal` + route z-index through tokens — large mechanical change.
+
+After P0/P1, frontend `vitest run` is **336 passed** and the e2e suite is **43 passed** (2026-07-28).

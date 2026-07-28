@@ -48,6 +48,7 @@ class ProjectIn(BaseModel):
     source_document: str | None = None
     narration_script: str | None = None
     default_narrator_role_id: str | None = None
+    logo: str | None = None
     configs: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None

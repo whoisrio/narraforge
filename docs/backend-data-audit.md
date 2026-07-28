@@ -144,5 +144,13 @@ Legend: ⬜ pending · 🔄 in progress · ✅ done (date + verifying test)
 | B-P1-1 | D1 FK pragma never enabled + dangling role refs | `PRAGMA foreign_keys=ON` on connect; explicit cleanup in `delete_role` (segment role_id, project default narrator, voice JSON role refs); `create_role` normalizes `__scratchpad__` project_id -> NULL (global) so scratchpad-context roles don't violate the now-enforced FK | ✅ 2026-07-28 - `test_role_delete_cleanup.py` (3 tests); dialogue-prosody e2e green |
 | B-P1-2 | D4 `_drop_columns_via_recreate` loses PK/NOT NULL/DEFAULT + no version table | Recreate preserves constraints; P9006 `_repair_lost_constraints` rebuilds damaged tables from the model (also drops zombie columns) | ✅ 2026-07-28 - `test_table_recreate_constraints.py` |
 | B-P1-3 | Legacy ALTER groups re-add zombie columns each startup (ping-pong with P9006) | `_ALL_ALTER_STMTS` aggregate; removed obsolete P6/P10 + P11 `source_audio_path` zombie-adding ALTERs; P9004 dynamic SELECT guards missing legacy cols; `_run_migrations` iterates the aggregate | ✅ 2026-07-28 - `test_migration_idempotency.py` (2 tests); real dev DB inits clean |
+| B-P1-4 | A4 VoxCPM synth response shape drifts (`id` not `audio_id`, no `params`) | VoxCPM `_save_and_respond` now returns `audio_id` + `params` in both storage modes, matching tts.py/mimo_tts.py | ✅ 2026-07-28 - aligns with frontend `TTSResult` type |
+| B-P1-5 | A10 `SegmentedProject.logo` lost on PUT (frontend-only) | New `logo` column + P18 migration; `ProjectIn.logo` + get/save round-trip | ✅ 2026-07-28 - `test_project_logo_persists_across_save_and_get` |
+| B-P1-6 | A7 `TTSRequest.engine` over-promises (9 engines, only cosyvoice/edge_tts) | Narrowed frontend type to `'cosyvoice' \| 'edge_tts'` | ✅ 2026-07-28 - `tsc -b` clean |
+| B-P1-7 | e2e DB accumulates orphan roles/voice_profiles (project_id referencing deleted/scratchpad projects) | `init_db` e2e-mode cleanup nulls dangling segment.role_id and deletes orphan roles/voice_profiles; guarded by `app_env=='e2e'` so prod is untouched | ✅ 2026-07-28 - e2e 43 green |
 
-After P0/P1, the backend suite is **501 passed** and the e2e suite is **43 passed** (2026-07-28).
+**Deferred (large / risky, separate PRs):**
+- B-P1-8 `response_model` on the ~57 untyped endpoints + unify list envelopes (A11) - large mechanical change.
+- B-P1-9 `extra="forbid"` on `RoleIn`/`ChapterIn`/`ProjectIn` - depends on full frontend-type alignment (logo done; `selected_segment_id` is UI state, intentionally not persisted); risky for the autosave `...project` spread until every extra field is reconciled.
+
+After P0/P1, the backend suite is **502 passed** and the e2e suite is **43 passed** (2026-07-28).

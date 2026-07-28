@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -8,10 +8,20 @@ export interface ModalProps {
   footer?: React.ReactNode;
 }
 
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, footer }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previouslyFocused = useRef<HTMLElement | null>(null);
+
+  // Lock body scroll + move focus into the modal on open; restore on close.
   useEffect(() => {
     if (isOpen) {
+      previouslyFocused.current = document.activeElement as HTMLElement | null;
       document.body.style.overflow = 'hidden';
+      const focusable = modalRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      (focusable ?? modalRef.current)?.focus();
     } else {
       document.body.style.overflow = '';
     }
@@ -19,6 +29,47 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       document.body.style.overflow = '';
     };
   }, [isOpen]);
+
+  // Return focus to the element that had it before the modal opened.
+  useEffect(() => {
+    if (!isOpen && previouslyFocused.current) {
+      previouslyFocused.current.focus?.();
+      previouslyFocused.current = null;
+    }
+  }, [isOpen]);
+
+  // Esc to close + Tab focus trap.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusables = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+        ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
+        if (focusables.length === 0) {
+          e.preventDefault();
+          modalRef.current?.focus();
+          return;
+        }
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -81,8 +132,16 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
   return (
     <div style={overlayStyle} onClick={onClose}>
-      <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
-        {(title) && (
+      <div
+        style={modalStyle}
+        ref={modalRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {title && (
           <div style={headerStyle}>
             <h2 style={{ margin: 0, fontSize: 'var(--font-size-lg)', fontWeight: 'var(--font-weight-semibold)', color: 'var(--color-text-primary)' }}>{title}</h2>
             <button

@@ -87,7 +87,10 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
     setRenameDraft('');
   };
 
+  const creatingRef = useRef(false);
   const handleCreate = () => {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     const name = createName.trim() || `${t('project.createDefault')} ${projects.filter(p => !p.name.startsWith(t('projectHub.tempProject'))).length + 1}`;
     onCreateProject(name, createLogo);
     setShowCreateDialog(false);
@@ -126,7 +129,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
       </header>
 
       <div className={styles.grid}>
-        <button type="button" className={styles.createCard} onClick={() => setShowCreateDialog(true)}>
+        <button type="button" className={styles.createCard} onClick={() => { creatingRef.current = false; setShowCreateDialog(true); }}>
           <span className={styles.createIcon}>+</span>
           <strong>{t('projectHub.createCard.title')}</strong>
           <small>{t('projectHub.createCard.description')}</small>

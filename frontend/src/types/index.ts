@@ -147,8 +147,7 @@ export interface MiMoPresetVoice {
 // TTS Request params
 export interface TTSRequest {
   text: string;
-  engine?: 'cosyvoice' | 'edge_tts' | 'mimo_preset' | 'mimo_voicedesign' | 'mimo_voiceclone'
-    | 'voxcpm_tts' | 'voxcpm_design' | 'voxcpm_clone' | 'voxcpm_ultimate';
+  engine?: 'cosyvoice' | 'edge_tts';
   voice_id: string;
   language?: 'Chinese' | 'English' | 'Japanese' | 'Korean';
   speed?: number; // 0.5 - 2.0
