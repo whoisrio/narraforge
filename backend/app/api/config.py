@@ -95,7 +95,7 @@ def update_config(config_id: str, data: ConfigUpdate, db: Session = Depends(get_
     """更新模型配置"""
     config = db.query(TTSConfig).filter(TTSConfig.id == config_id).first()
     if not config:
-        return {"error": "Config not found"}, 404
+        raise HTTPException(status_code=404, detail="config_not_found")
 
     if data.name is not None:
         config.name = data.name
@@ -132,7 +132,7 @@ def delete_config(config_id: str, db: Session = Depends(get_db)):
     """删除模型配置"""
     config = db.query(TTSConfig).filter(TTSConfig.id == config_id).first()
     if not config:
-        return {"error": "Config not found"}, 404
+        raise HTTPException(status_code=404, detail="config_not_found")
 
     db.delete(config)
     db.commit()
@@ -148,7 +148,7 @@ def set_default_config(config_id: str, db: Session = Depends(get_db)):
 
     config = db.query(TTSConfig).filter(TTSConfig.id == config_id).first()
     if not config:
-        return {"error": "Config not found"}, 404
+        raise HTTPException(status_code=404, detail="config_not_found")
 
     config.is_default = True
     db.commit()

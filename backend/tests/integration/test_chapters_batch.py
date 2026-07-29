@@ -194,6 +194,22 @@ def test_batch_chapter_has_default_split_config(client, db_session):
     assert sc.get("mode") in ("rule", "llm")
 
 
+def test_project_logo_persists_across_save_and_get(client, db_session):
+    """logo (A10) survives create + PUT + GET round-trip (previously frontend-only, dropped on save)."""
+    save_project(db_session, ProjectIn(id="p-logo", name="t", layout="vertical", logo="data:image/png;base64,xxx"))
+    db_session.commit()
+
+    detail = client.get("/api/segmented-projects/p-logo")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["logo"] == "data:image/png;base64,xxx"
+
+    # PUT (save_project) preserves + can update logo
+    save_project(db_session, ProjectIn(id="p-logo", name="t", layout="vertical", logo="https://x/y.png"))
+    db_session.commit()
+    detail2 = client.get("/api/segmented-projects/p-logo")
+    assert detail2.json()["logo"] == "https://x/y.png"
+
+
 def test_batch_persists_chapter_original_text(client, db_session):
     """original_text in batch payload is persisted per chapter so the chapter card shows content."""
     save_project(db_session, ProjectIn(id="p-batch-ot", name="t", layout="vertical"))

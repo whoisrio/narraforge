@@ -102,14 +102,19 @@ function AppContent() {
   };
 
   const handleCreateProject = async (name?: string, logo?: string | null) => {
-    const project = createInitialProject();
-    project.name = name || `${t('project.createDefault')} ${projects.length + 1}`;
-    if (logo) project.logo = logo;
-    await projectStorage.saveProject(project, { mode: 'immediate' });
-    await refreshProjects();
-    setActiveTab('tts-synthesis');
-    setActiveView('tts-synthesis');
-    setActiveProjectId(project.id);
+    try {
+      const project = createInitialProject();
+      project.name = name || `${t('project.createDefault')} ${projects.length + 1}`;
+      if (logo) project.logo = logo;
+      await projectStorage.saveProject(project, { mode: 'immediate' });
+      await refreshProjects();
+      setActiveTab('tts-synthesis');
+      setActiveView('tts-synthesis');
+      setActiveProjectId(project.id);
+    } catch (err) {
+      console.error('Create project failed:', err);
+      window.alert(t('projectHub.createFailed'));
+    }
   };
 
   const handleDeleteProjectFromHub = async (projectId: string) => {
@@ -117,25 +122,35 @@ function AppContent() {
     const targetName = target?.name ?? t('project.unknownProject');
     const confirmMessage = t('tts.deleteProjectConfirm', { name: targetName });
     if (!window.confirm(confirmMessage)) return;
-    await projectStorage.deleteProject(projectId);
-    await refreshProjects();
-    if (activeProjectId === projectId) {
-      setActiveProjectId(null);
+    try {
+      await projectStorage.deleteProject(projectId);
+      await refreshProjects();
+      if (activeProjectId === projectId) {
+        setActiveProjectId(null);
+      }
+    } catch (err) {
+      console.error('Delete project failed:', err);
+      window.alert(t('projectHub.deleteFailed'));
     }
   };
 
   const handleRenameProjectFromHub = async (projectId: string, name: string) => {
     const nextName = name.trim();
     if (!nextName) return;
-    // Always fetch full project data (with chapters) to avoid overwriting with summary data
-    const existingProject = await projectStorage.getProject(projectId);
-    if (!existingProject) return;
-    await projectStorage.saveProject({
-      ...existingProject,
-      name: nextName,
-      updated_at: new Date().toISOString(),
-    }, { mode: 'immediate' });
-    await refreshProjects();
+    try {
+      // Always fetch full project data (with chapters) to avoid overwriting with summary data
+      const existingProject = await projectStorage.getProject(projectId);
+      if (!existingProject) return;
+      await projectStorage.saveProject({
+        ...existingProject,
+        name: nextName,
+        updated_at: new Date().toISOString(),
+      }, { mode: 'immediate' });
+      await refreshProjects();
+    } catch (err) {
+      console.error('Rename project failed:', err);
+      window.alert(t('projectHub.renameFailed'));
+    }
   };
 
   const handleExportProject = async (projectId: string) => {

@@ -466,7 +466,7 @@ export function VoiceClone() {
                 onClick={handleSyncQwen}
                 disabled={syncing}
               >
-                {syncing ? t('common.loading') : t('voiceClone.syncCloud')}
+                {syncing ? t('common.loading') : t('voiceDesign.syncCloud')}
               </button>
               {syncMessage && (
                 <div className={syncMessage.type === 'success' ? styles.statusMsg : styles.errorMsg}>

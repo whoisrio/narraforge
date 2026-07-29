@@ -50,13 +50,17 @@ def get_role(db: Session, role_id: str) -> Role | None:
 def create_role(db: Session, payload: RoleIn) -> Role:
     if get_role(db, payload.id) is not None:
         raise ValueError("role_already_exists")
+    # The frontend uses "__scratchpad__" as a placeholder project id when no real
+    # project is open (e.g. the global role library). It is not a real DB row, so
+    # normalize it to NULL (global role) - otherwise the enforced FK rejects the insert.
+    project_id = payload.project_id if payload.project_id != "__scratchpad__" else None
     role = Role(
         id=payload.id,
         name=payload.name,
         avatar=payload.avatar,
         description=payload.description,
         role_kind=payload.role_kind,
-        project_id=payload.project_id,
+        project_id=project_id,
         voice=payload.voice,
         favorite_styles=payload.favorite_styles,
     )
@@ -81,6 +85,37 @@ def delete_role(db: Session, role_id: str) -> bool:
     role = get_role(db, role_id)
     if role is None:
         return False
+    _clean_role_references(db, role_id)
     db.delete(role)
     db.flush()
     return True
+
+
+def _clean_role_references(db: Session, role_id: str) -> None:
+    """删除角色前显式清理悬挂引用。
+
+    DB 层 ondelete=SET NULL 依赖 SQLite PRAGMA foreign_keys=ON（已在 engine
+    connect 时开启），这里显式清理是跨数据库都成立的保障；
+    voice JSON 里的 {"source": "role", "role_id": ...} 没有任何 FK 可管，
+    必须重置回 chapter 跟随。
+    """
+    from app.models.segmented_project import (
+        SegmentedProject,
+        SegmentedProjectSegment,
+    )
+
+    db.query(SegmentedProjectSegment).filter(
+        SegmentedProjectSegment.role_id == role_id
+    ).update({"role_id": None}, synchronize_session=False)
+    db.query(SegmentedProject).filter(
+        SegmentedProject.default_narrator_role_id == role_id
+    ).update({"default_narrator_role_id": None}, synchronize_session=False)
+
+    for seg in db.query(SegmentedProjectSegment).all():
+        voice = seg.voice
+        if (
+            isinstance(voice, dict)
+            and voice.get("source") == "role"
+            and voice.get("role_id") == role_id
+        ):
+            seg.voice = {"source": "chapter"}

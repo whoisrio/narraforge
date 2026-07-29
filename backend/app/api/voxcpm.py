@@ -143,11 +143,13 @@ async def _save_and_respond(
         # 前端存储模式：返回 base64
         audio_base64 = base64.b64encode(wav_bytes).decode("utf-8")
         return {
+            "audio_id": str(uuid.uuid4()),
             "audio_base64": audio_base64,
             "audio_format": format,
             "engine": f"voxcpm_{engine_mode}",
             "text": text,
             "voice_id": voice_id,
+            "params": {"engine": "voxcpm", "cfg_value": cfg_value, "inference_timesteps": inference_timesteps},
         }
 
     # 后端存储模式：保存文件并记录到数据库
@@ -179,13 +181,14 @@ async def _save_and_respond(
     db.refresh(record)
 
     return {
-        "id": record.id,
+        "audio_id": record.id,
         "audio_url": f"/api/tts/audio/{record.id}",
         "audio_format": format,
         "engine": f"voxcpm_{engine_mode}",
         "text": text,
         "voice_id": voice_id,
         "voice_name": voice_name,
+        "params": {"engine": "voxcpm", "cfg_value": cfg_value, "inference_timesteps": inference_timesteps},
     }
 
 

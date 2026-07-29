@@ -206,7 +206,8 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
         checkpoint: { checkpoint_ns: '', checkpoint_id: checkpointId, checkpoint_map: {} },
       });
     } catch {
-      // 历史查询失败时静默放弃，不影响当前展示
+      // 历史查询失败不能静默：用户点了重跑却毫无反应是最差的反馈
+      alert(`从「${nodeId}」重跑失败：无法获取历史检查点，请稍后重试。`);
     }
   };
 

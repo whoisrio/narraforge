@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel
+import copy
 import uuid
 import aiofiles
 import os
@@ -626,7 +627,7 @@ def list_voices(project_id: str | None = None, db: Session = Depends(get_db)):
 
 
 @router.get("/list-from-qwen")
-async def list_voices_from_qwen():
+async def list_voices_from_qwen(db: Session = Depends(get_db)):
     """从千问 API 获取已克隆的声音列表"""
     tts_service = await get_tts_service(db)
     voices = await tts_service.list_cloned_voices()
@@ -669,7 +670,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 existing_count += 1
                 # 更新已有记录
                 existing.name = name
-                voice_data = existing.voice or {}
+                voice_data = copy.deepcopy(existing.voice or {})
                 voice_data["role"] = qwen_voice.get("role", "custom")
                 existing.voice = voice_data
                 db.commit()
@@ -743,8 +744,8 @@ def update_voice_description(voice_id: str, request: UpdateDescriptionRequest, d
     if request.prompt_text is not None:
         voice_data = dict(voice.voice or {})
         model = voice_data.get("model", "")
-        vp = dict(voice.voice_params or {})
-        model_vp = dict(vp.get(model, {}) or {})
+        vp = copy.deepcopy(voice.voice_params or {})
+        model_vp = vp.get(model, {}) or {}
         model_vp.setdefault("params", {})["prompt_text"] = request.prompt_text.strip() or None
         vp[model] = model_vp
         voice.voice_params = vp

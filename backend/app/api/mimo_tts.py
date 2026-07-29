@@ -23,7 +23,6 @@ from app.core.config import settings
 from app.core.system_config_service import is_frontend_storage
 from app.models.tts_result import TTSResultRecord
 from app.services.mimo_tts_service import get_mimo_tts_service
-from app.core.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -116,11 +115,14 @@ async def _save_and_respond(
     if segmented_project_id and segmented_chapter_id and segmented_segment_id:
         from app.services import segmented_project_service as svc
         from app.core import segmented_assets as assets
-        from datetime import datetime
         seg = svc.get_segment_row(
             db, segmented_project_id, segmented_chapter_id, segmented_segment_id,
         )
         if seg is not None:
+            existing_audio = seg.audio or {}
+            prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
+            prev_rel: str | None = prev_current.get("path")
+            prev_duration = prev_current.get("duration_sec")
             target_mp3 = assets.segment_audio_path(
                 segmented_project_id, segmented_chapter_id,
                 chapter_title=seg.chapter.name or "",
@@ -133,16 +135,18 @@ async def _save_and_respond(
             with open(audio_path, "rb") as f:
                 target_mp3.write_bytes(f.read())
             rel = target_mp3.relative_to(settings.segmented_dir).as_posix()
-            seg.current_audio_path = rel
-            seg.audio_format = "mp3"
-            seg.generated_params = {
-                "engine": "mimo_tts", "voice_id": voice_label,
-                "instruction": instruction,
-            }
-            seg.generated_at = utcnow()
-            seg.updated_at = utcnow()
-            seg.chapter.updated_at = utcnow()
-            seg.chapter.project.updated_at = utcnow()
+            svc.update_segment_after_synth(
+                db, seg,
+                current_audio_path=rel,
+                previous_audio_path=prev_rel,
+                previous_duration_sec=prev_duration,
+                audio_format="mp3",
+                duration_sec=None,
+                generated_params={
+                    "engine": "mimo_tts", "voice_id": voice_label,
+                    "instruction": instruction,
+                },
+            )
             db.commit()
             try:
                 os.remove(audio_path)

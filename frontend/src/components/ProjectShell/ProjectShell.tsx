@@ -127,7 +127,7 @@ export function ProjectShell({
       await refetchSyncStatus(chapterId);
       onProjectChanged?.();
     } catch {
-      window.alert(t('sync.syncing'));
+      window.alert(t('sync.syncFailed'));
     } finally {
       setSyncBusy(false);
     }
@@ -142,7 +142,7 @@ export function ProjectShell({
       await refetchSyncStatus(chapterId);
       onProjectChanged?.();
     } catch {
-      window.alert(t('sync.syncing'));
+      window.alert(t('sync.syncFailed'));
     } finally {
       setSyncBusy(false);
     }

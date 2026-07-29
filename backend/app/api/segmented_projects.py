@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import io
 import json
 import logging
@@ -223,10 +224,12 @@ def get_segment_audio(
     db: Session = Depends(get_db),
 ):
     seg = svc.get_segment_row(db, project_id, chapter_id, segment_id)
+    if seg is None:
+        raise HTTPException(status_code=404, detail="audio_not_found")
     audio = seg.audio or {}
     current = audio.get("current", {}) if isinstance(audio, dict) else {}
     current_path = current.get("path")
-    if seg is None or not current_path:
+    if not current_path:
         raise HTTPException(status_code=404, detail="audio_not_found")
     # Note: audio path is stored relative to settings.segmented_dir (root),
     # not project_dir, per the convention established in Task 7.
@@ -235,6 +238,7 @@ def get_segment_audio(
         raise HTTPException(status_code=400, detail="invalid_audio_path")
     if not abs_path.exists():
         if isinstance(audio, dict):
+            audio = copy.deepcopy(audio)
             audio["missing"] = True
             seg.audio = audio
         db.commit()

@@ -247,7 +247,7 @@ export function TTSSynthesis({
       // 真实项目加载失败，不静默降级到草稿
       if (!full && initialProjectId) {
         console.error(`[TTSSynthesis] Project ${initialProjectId} not found in ${storageMode} storage`);
-        showToast(t('tts.projectLoadFailedStorageMode', { mode: storageMode }), 'error');
+        showToast(t('tts.projectLoadFailedWithMode', { mode: storageMode }), 'error');
         onBackToProjects?.();
         return;
       }
@@ -408,7 +408,7 @@ export function TTSSynthesis({
   }, [project.chapters, dispatch, restoreChapterSettings]);
 
   const handleAddChapter = useCallback((requestedName?: string) => {
-    const fallbackName = t('tts.newChapter', { num: project.chapters.length + 1 });
+    const fallbackName = t('tts.newChapterName', { n: project.chapters.length + 1 });
     const name = requestedName?.trim() || fallbackName;
     dispatch({ type: 'ADD_CHAPTER', name });
     // New chapter inherits settings from previous active chapter, so no need to reset global state
@@ -438,7 +438,7 @@ export function TTSSynthesis({
     const audioCount = ch?.segments.filter(s => s.audio.current?.id).length || 0;
     setConfirmDialog({
       open: true, title: t('tts.deleteChapter'),
-      message: t('tts.deleteChapterConfirm', { name: ch?.name || t('tts.thisChapter'), segCount, audioInfo: audioCount > 0 ? t('tts.audioCount', { count: audioCount }) : '' }),
+      message: t('tts.deleteChapterConfirm', { name: ch?.name || t('tts.thisChapter'), segments: segCount, audioPart: audioCount > 0 ? t('tts.audioCount', { count: audioCount }) : '' }),
       variant: 'warning', confirmLabel: t('common.delete'),
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDeleteChapter(chapterId); },
     });
@@ -569,14 +569,14 @@ export function TTSSynthesis({
       showToast(t('adjustAudio.done', { count: result.adjusted }), 'success');
       await reloadProjectData();
     } catch (e) {
-      showToast(t('tts.playFailed', { ctx: 'adjust', msg: e instanceof Error ? e.message : String(e) }), 'error');
+      showToast(t('tts.playbackFailed', { context: 'adjust', message: e instanceof Error ? e.message : String(e) }), 'error');
     } finally {
       setAdjustBusy(false);
     }
   }, [project?.id, activeChapter?.id, reloadProjectData, showToast, t]);
 
   const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {    const np = createInitialProject();
-    np.name = name || t('tts.newProject', { num: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
+    np.name = name || t('tts.newProjectName', { n: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
     if (logo) np.logo = logo;
     await projectStorage.saveProject(np, { mode: 'immediate' });
     const list = sortProjectsWithScratchpad(await projectStorage.listProjects());
@@ -649,8 +649,8 @@ export function TTSSynthesis({
     if (!seg) return;
     setConfirmDialog({
       open: true,
-      title: t('tts.useCustomVoice'),
-      message: t('tts.useCustomVoiceConfirm'),
+      title: t('tts.customVoice'),
+      message: t('tts.confirmCustomVoice'),
       onConfirm: () => {
         setConfirmDialog(prev => ({ ...prev, open: false }));
         // Take all params from the panel display (effective + local edits)
@@ -831,7 +831,7 @@ export function TTSSynthesis({
       await playVoiceRolePreview(role, sampleText);
     } catch (error) {
       console.error('Preview role failed:', error);
-      showToast(t('tts.previewFailed'), 'error');
+      showToast(t('tts.previewFailedCheckService'), 'error');
     } finally {
       setPreviewingRoleId(null);
     }
@@ -1169,7 +1169,7 @@ export function TTSSynthesis({
       const updates = targetSegs.map((s, i) => ({ id: s.id, ssml: result.annotations[i]?.ssml ?? `<speak>${s.text}</speak>` }));
       dispatch({ type: 'BATCH_SET_SSML', updates, by_llm: true });
       for (const s of targetSegs) { dispatch({ type: 'UPDATE_PARAMS', id: s.id, params: { enable_ssml: true } }); }
-      showToast(t('tts.ssmlAnnotated', { count: targetSegs.length }));
+      showToast(t('tts.ssmlAnnotatedForN', { count: targetSegs.length }));
     } catch { showToast(t('tts.ssmlAnnotateFailed'), 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
 
@@ -1224,7 +1224,7 @@ export function TTSSynthesis({
         current_audio_path: seg?.audio.current?.path,
       });
       const msg = getErrorMessage(e, String(e));
-      showToast(t('tts.playFailed', { ctx, msg }), 'error');
+      showToast(t('tts.playbackFailed', { context: ctx, message: msg }), 'error');
     };
 
     try {
@@ -1265,12 +1265,12 @@ export function TTSSynthesis({
       // Path mismatch: segment has backend audio_path but storage mode is frontend.
       // This happens when the user generated audio in backend mode then switched modes.
       if (seg.audio.current?.path && !seg.current_audio_id) {
-        showToast(t('tts.audioInBackend'), 'error');
+        showToast(t('tts.audioOnBackendSwitchMode'), 'error');
         return;
       }
       const blob = await getTTSAudioBlob(seg.current_audio_id!);
       if (!blob) {
-        showToast(t('tts.localAudioMissing'), 'error');
+        showToast(t('tts.localAudioNotFound'), 'error');
         return;
       }
       const url = URL.createObjectURL(blob);
@@ -1604,7 +1604,7 @@ export function TTSSynthesis({
 
             <div className={styles.sourceProductionBar} aria-label="Source Text production controls">
               <div className={styles.productionActions}>
-                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll}>⚡ {t('studio.batchSynthesize')}</button>
+                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll} disabled={generating}>⚡ {t('studio.batchSynthesize')}</button>
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
                   {playAllActive ? t('tts.stop') : `▶ ${t('studio.playAll')}`}
                 </button>

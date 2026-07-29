@@ -214,6 +214,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         source_document_path=getattr(p, "source_document_path", None),
         narration_document_path=getattr(p, "narration_document_path", None),
         default_narrator_role_id=getattr(p, "default_narrator_role_id", None),
+        logo=getattr(p, "logo", None),
         configs=getattr(p, "configs", None),
         created_at=_to_iso(p.created_at),
         updated_at=_to_iso(p.updated_at),
@@ -396,6 +397,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     setattr(p, "remotion_project_path", project.remotion_project_path)
     setattr(p, "default_narrator_role_id", project.default_narrator_role_id)
     setattr(p, "configs", project.configs)
+    setattr(p, "logo", project.logo)
     if project.created_at:
         p.created_at = _parse_iso(project.created_at)
     p.updated_at = utcnow()
@@ -859,8 +861,10 @@ def export_chapter_audio_mp3(
         if abs_path.exists():
             input_paths.append(abs_path)
         else:
-            audio["missing"] = True
-            seg.audio = audio
+            audio = copy.deepcopy(seg.audio or {})
+            if isinstance(audio, dict):
+                audio["missing"] = True
+                seg.audio = audio
 
     if not input_paths:
         db.commit()

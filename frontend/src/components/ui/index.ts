@@ -27,3 +27,6 @@ export type { EmptyStateProps } from './EmptyState';
 
 export { Alert } from './Alert';
 export type { AlertProps } from './Alert';
+
+export { ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps } from './ConfirmDialog';
