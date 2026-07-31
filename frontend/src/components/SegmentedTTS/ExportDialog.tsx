@@ -38,8 +38,8 @@ function downloadBlob(blob: Blob, filename: string) {
 export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitle, remotionProjectPath, exportDirectory, defaultName, globalStartOffset = 0, onClose }: ExportDialogProps) {
   const { mode: storageMode } = useStorageMode();
   const [name, setName] = useState(defaultName);
-  const [options, setOptions] = useState<ExportOption[]>(['audio', 'json']);
-  const [srtUseGlobalTime, setSrtUseGlobalTime] = useState(globalStartOffset > 0);
+  const [options, setOptions] = useState<ExportOption[]>(['audio', 'srt']);
+  const [srtUseGlobalTime, setSrtUseGlobalTime] = useState(false);
   const [targetLang, setTargetLang] = useState('English');
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +176,6 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
         </div>
         <div className={styles.options}>
           <label><input type="checkbox" checked={options.includes('audio')} onChange={() => toggleOpt('audio')} /> {storageMode === 'backend' ? t('export.audioMp3') : t('export.audioWav')}</label>
-          <label><input type="checkbox" checked={options.includes('json')} onChange={() => toggleOpt('json')} /> {t('export.scriptJson')}</label>
           <label><input type="checkbox" checked={options.includes('srt')} onChange={() => toggleOpt('srt')} /> {t('export.srtSubtitle')}</label>
           {options.includes('srt') && globalStartOffset > 0 && (
             <label style={{ marginLeft: '20px', fontSize: '0.9em' }}>

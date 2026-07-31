@@ -164,6 +164,11 @@ test.describe('批量合成与导出', () => {
     await expect(page.getByText('MP3 音频', { exact: true })).toBeVisible();
     await expect(page.getByText('SRT 字幕', { exact: true })).toBeVisible();
 
+    // Defaults: MP3 audio + SRT subtitle selected; script JSON hidden
+    await expect(page.getByRole('checkbox', { name: 'MP3 音频', exact: true })).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'SRT 字幕', exact: true })).toBeChecked();
+    await expect(page.getByText('脚本 JSON', { exact: true })).toBeHidden();
+
     // Close dialog
     await page.getByRole('button', { name: '取消' }).click();
     await expect(page.getByText('导出选项')).not.toBeVisible({ timeout: 5_000 });
