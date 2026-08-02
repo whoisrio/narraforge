@@ -571,6 +571,8 @@ export const zhCN = {
     backToProjects: '返回项目总览',
     chapters: '章节列表',
     noChapter: '未选择章节',
+    moveChapterUp: '上移章节 {name}',
+    moveChapterDown: '下移章节 {name}',
   },
   landing: {
     heroKicker: 'Narration-driven video engineering',
@@ -796,6 +798,8 @@ export const zhCN = {
       generate: '生成',
       play: '播放',
       pause: '暂停',
+      moveUp: '上移段落',
+      moveDown: '下移段落',
     },
     chatBubble: {
       emptyLine: '空台词',

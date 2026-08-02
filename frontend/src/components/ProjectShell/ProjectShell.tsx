@@ -24,6 +24,7 @@ interface ProjectShellProps {
   onAddChapter?: () => void;
   onRenameChapter?: (chapterId: string, name: string) => void;
   onDeleteChapter?: (chapterId: string) => void;
+  onMoveChapter?: (chapterId: string, direction: 'up' | 'down') => void;
   onProjectChanged?: () => void;
   rightPanelCollapsed?: boolean;
   children: ReactNode;
@@ -61,6 +62,7 @@ export function ProjectShell({
   onAddChapter,
   onRenameChapter,
   onDeleteChapter,
+  onMoveChapter,
   onProjectChanged,
   rightPanelCollapsed = true,
   children,
@@ -237,6 +239,26 @@ export function ProjectShell({
                       </button>
                       {!collapsed && (
                         <span className={styles.chapterItemActions}>
+                          {onMoveChapter && chapters.length > 1 && (
+                            <>
+                              <button
+                                type="button"
+                                className={styles.chapterItemAction}
+                                aria-label={t('projectShell.moveChapterUp', { name: chapter.name })}
+                                title={t('projectShell.moveChapterUp', { name: chapter.name })}
+                                disabled={index === 0}
+                                onClick={(e) => { e.stopPropagation(); onMoveChapter(chapter.id, 'up'); }}
+                              >↑</button>
+                              <button
+                                type="button"
+                                className={styles.chapterItemAction}
+                                aria-label={t('projectShell.moveChapterDown', { name: chapter.name })}
+                                title={t('projectShell.moveChapterDown', { name: chapter.name })}
+                                disabled={index === chapters.length - 1}
+                                onClick={(e) => { e.stopPropagation(); onMoveChapter(chapter.id, 'down'); }}
+                              >↓</button>
+                            </>
+                          )}
                           <button
                             type="button"
                             className={styles.chapterItemAction}

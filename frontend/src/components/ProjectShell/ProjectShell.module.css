@@ -277,6 +277,18 @@
   color: var(--color-primary);
 }
 
+.chapterItemAction:disabled,
+.chapterItemActionDanger:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.chapterItemAction:disabled:hover,
+.chapterItemActionDanger:disabled:hover {
+  background: rgba(255, 255, 255, 0.42);
+  color: var(--color-text-muted);
+}
+
 .chapterItemActionDanger:hover {
   background: rgba(163, 58, 32, 0.1);
   color: var(--color-error);

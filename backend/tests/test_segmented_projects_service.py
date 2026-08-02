@@ -65,6 +65,79 @@ def test_save_project_removes_orphan_segments(db_session, tmp_path, monkeypatch)
     assert segs == []
 
 
+def _seed_two_chapter_project(pid: str = "p1") -> ProjectIn:
+    """Project with two chapters (each with two segments) for reorder tests."""
+    return ProjectIn(
+        id=pid, name="Test", schema_version=2, layout="vertical",
+        chapters=[
+            {
+                "id": f"c-a-{pid}", "position": 0, "name": "A", "engine": "edge_tts",
+                "voice": {"engine": "edge_tts"},
+                "split_config": {"delimiters": ["。"], "mode": "rule"},
+                "segments": [
+                    {"id": f"s-a1-{pid}", "position": 0, "text": "a1", "voice": {"source": "chapter"}},
+                    {"id": f"s-a2-{pid}", "position": 1, "text": "a2", "voice": {"source": "chapter"}},
+                ],
+            },
+            {
+                "id": f"c-b-{pid}", "position": 1, "name": "B", "engine": "edge_tts",
+                "voice": {"engine": "edge_tts"},
+                "split_config": {"delimiters": ["。"], "mode": "rule"},
+                "segments": [
+                    {"id": f"s-b1-{pid}", "position": 0, "text": "b1", "voice": {"source": "chapter"}},
+                    {"id": f"s-b2-{pid}", "position": 1, "text": "b2", "voice": {"source": "chapter"}},
+                ],
+            },
+        ],
+    )
+
+
+def test_save_project_persists_reordered_chapter_positions(db_session, tmp_path, monkeypatch):
+    """Reorder contract: a PUT sending chapters in a new order with renumbered
+    `position` must persist that order. The frontend reducer renumbers before
+    saving; this test guards the backend half of that contract."""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+
+    # Reorder: B first (position 0), A second (position 1).
+    reordered = _seed_two_chapter_project()
+    reordered.chapters = [
+        reordered.chapters[1].model_copy(update={"position": 0}),
+        reordered.chapters[0].model_copy(update={"position": 1}),
+    ]
+    save_project(db_session, reordered)
+    db_session.commit()
+
+    detail = get_project_detail(db_session, "p1")
+    assert [c.id for c in detail.chapters] == ["c-b-p1", "c-a-p1"]
+    assert [c.position for c in detail.chapters] == [0, 1]
+
+
+def test_save_project_persists_reordered_segment_positions(db_session, tmp_path, monkeypatch):
+    """Reorder contract: a PUT sending a chapter's segments in a new order with
+    renumbered `position` must persist that order within the chapter."""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+
+    reordered = _seed_two_chapter_project()
+    ch_a = reordered.chapters[0]
+    ch_a.segments = [
+        ch_a.segments[1].model_copy(update={"position": 0}),
+        ch_a.segments[0].model_copy(update={"position": 1}),
+    ]
+    save_project(db_session, reordered)
+    db_session.commit()
+
+    detail = get_project_detail(db_session, "p1")
+    ch = next(c for c in detail.chapters if c.id == "c-a-p1")
+    assert [s.id for s in ch.segments] == ["s-a2-p1", "s-a1-p1"]
+    assert [s.position for s in ch.segments] == [0, 1]
+
+
 def test_save_project_preserves_existing_backend_audio_when_payload_omits_path(db_session, tmp_path, monkeypatch):
     from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)

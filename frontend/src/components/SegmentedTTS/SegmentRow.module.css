@@ -255,6 +255,7 @@
 }
 .actBtnDanger:hover:not(:disabled) { border-color: var(--color-error); color: var(--color-error); background: var(--color-danger-light); }
 .actBtnDanger:disabled { opacity: 0.3; cursor: not-allowed; }
+.actBtn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* ---- Compact mode ---- */
 .compactCard {
@@ -439,6 +440,35 @@
 }
 
 .compactDelBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* Compact move up/down buttons */
+.compactActBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: all var(--transition-fast);
+}
+
+.compactActBtn:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+}
+
+.compactActBtn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }

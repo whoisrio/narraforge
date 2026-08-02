@@ -1453,6 +1453,7 @@ export function TTSSynthesis({
           onAddChapter={handleAddChapter}
           onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
           onDeleteChapter={handleDeleteChapter}
+          onMoveChapter={(id, direction) => dispatch({ type: 'MOVE_CHAPTER', id, direction })}
           rightPanelCollapsed={projectSection === 'studio' ? rightPanelCollapsed : true}
           onSectionChange={setProjectSection}
           onBackToProjects={onBackToProjects}

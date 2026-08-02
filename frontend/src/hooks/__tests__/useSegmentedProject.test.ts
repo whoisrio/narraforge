@@ -103,6 +103,57 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments.map(s => s.id)).toEqual(['c', 'a', 'b']);
   });
 
+  it('REORDER renumbers segment positions to match the new array order', () => {
+    // Backend trusts `position` on save (falls back to array index only when null).
+    // Stale positions would silently revert a reorder, so the reducer must renumber.
+    const segments: Segment[] = [
+      { id: 'a', text: 'a', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '', position: 0 },
+      { id: 'b', text: 'b', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '', position: 1 },
+      { id: 'c', text: 'c', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '', position: 2 },
+    ];
+    const p = makeProject({}, { segments });
+    const next = segmentedReducer({ project: p }, { type: 'REORDER', fromIndex: 2, toIndex: 0 });
+    expect(ac(next.project).segments.map(s => s.position)).toEqual([0, 1, 2]);
+  });
+
+  it('MOVE_CHAPTER moves a chapter up and renumbers positions', () => {
+    const now = new Date().toISOString();
+    const chapters: Chapter[] = [
+      { id: 'ch-a', name: 'A', voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, segments: [], split_config: { delimiters: ['。'], mode: 'rule' }, created_at: now, updated_at: now, position: 0 },
+      { id: 'ch-b', name: 'B', voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, segments: [], split_config: { delimiters: ['。'], mode: 'rule' }, created_at: now, updated_at: now, position: 1 },
+      { id: 'ch-c', name: 'C', voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, segments: [], split_config: { delimiters: ['。'], mode: 'rule' }, created_at: now, updated_at: now, position: 2 },
+    ];
+    const p: SegmentedProject = { schema_version: 2, id: 'p1', name: 'Test', chapters, active_chapter_id: 'ch-c', layout: 'vertical', created_at: now, updated_at: now };
+    const next = segmentedReducer({ project: p }, { type: 'MOVE_CHAPTER', id: 'ch-c', direction: 'up' });
+    expect(next.project.chapters.map(c => c.id)).toEqual(['ch-a', 'ch-c', 'ch-b']);
+    expect(next.project.chapters.map(c => c.position)).toEqual([0, 1, 2]);
+  });
+
+  it('MOVE_CHAPTER moves a chapter down and renumbers positions', () => {
+    const now = new Date().toISOString();
+    const chapters: Chapter[] = [
+      { id: 'ch-a', name: 'A', voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, segments: [], split_config: { delimiters: ['。'], mode: 'rule' }, created_at: now, updated_at: now, position: 0 },
+      { id: 'ch-b', name: 'B', voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, segments: [], split_config: { delimiters: ['。'], mode: 'rule' }, created_at: now, updated_at: now, position: 1 },
+    ];
+    const p: SegmentedProject = { schema_version: 2, id: 'p1', name: 'Test', chapters, active_chapter_id: 'ch-a', layout: 'vertical', created_at: now, updated_at: now };
+    const next = segmentedReducer({ project: p }, { type: 'MOVE_CHAPTER', id: 'ch-a', direction: 'down' });
+    expect(next.project.chapters.map(c => c.id)).toEqual(['ch-b', 'ch-a']);
+    expect(next.project.chapters.map(c => c.position)).toEqual([0, 1]);
+  });
+
+  it('MOVE_CHAPTER is a no-op at the top/bottom boundary', () => {
+    const now = new Date().toISOString();
+    const chapters: Chapter[] = [
+      { id: 'ch-a', name: 'A', voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, segments: [], split_config: { delimiters: ['。'], mode: 'rule' }, created_at: now, updated_at: now, position: 0 },
+      { id: 'ch-b', name: 'B', voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, segments: [], split_config: { delimiters: ['。'], mode: 'rule' }, created_at: now, updated_at: now, position: 1 },
+    ];
+    const p: SegmentedProject = { schema_version: 2, id: 'p1', name: 'Test', chapters, active_chapter_id: 'ch-a', layout: 'vertical', created_at: now, updated_at: now };
+    const up = segmentedReducer({ project: p }, { type: 'MOVE_CHAPTER', id: 'ch-a', direction: 'up' });
+    expect(up.project.chapters.map(c => c.id)).toEqual(['ch-a', 'ch-b']);
+    const down = segmentedReducer({ project: p }, { type: 'MOVE_CHAPTER', id: 'ch-b', direction: 'down' });
+    expect(down.project.chapters.map(c => c.id)).toEqual(['ch-a', 'ch-b']);
+  });
+
   it('GENERATE_SUCCESS sets audio on segment', () => {
     const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3', current: { id: 'old_current' }, previous: { id: 'old_prev' } }, segment_kind: 'narration', status: 'pending',
       created_at: '', updated_at: '' };

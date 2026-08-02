@@ -147,6 +147,11 @@ function updateChapter(p: SegmentedProject, chapterId: string, updater: (ch: Cha
   };
 }
 
+/** Renumber `position` to match array index for every chapter in the project. */
+function renumberChapters(chapters: Chapter[]): Chapter[] {
+  return chapters.map((c, i) => ({ ...c, position: i }));
+}
+
 function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): SegmentedProject {
   const ch = getActiveChapter(p);
   if (!ch) return p;
@@ -167,6 +172,7 @@ export type Action =
   | { type: 'DELETE_CHAPTER'; id: string }
   | { type: 'SELECT_CHAPTER'; id: string }
   | { type: 'RENAME_CHAPTER'; id: string; name: string }
+  | { type: 'MOVE_CHAPTER'; id: string; direction: 'up' | 'down' }
   // Per-chapter settings
   | { type: 'SET_DEFAULT_PARAMS'; params: EngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
@@ -283,6 +289,18 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: { ...p, active_chapter_id: action.id } };
     case 'RENAME_CHAPTER':
       return { project: updateChapter(p, action.id, ch => ({ ...ch, name: action.name, updated_at: new Date().toISOString() })) };
+    case 'MOVE_CHAPTER': {
+      const idx = p.chapters.findIndex(c => c.id === action.id);
+      if (idx < 0) return state;
+      const swapWith = action.direction === 'up' ? idx - 1 : idx + 1;
+      // Boundary: first chapter can't move up, last can't move down.
+      if (swapWith < 0 || swapWith >= p.chapters.length) return state;
+      const chapters = p.chapters.map(c => ({ ...c }));
+      const tmp = chapters[idx];
+      chapters[idx] = chapters[swapWith];
+      chapters[swapWith] = tmp;
+      return { project: { ...p, chapters: renumberChapters(chapters), updated_at: new Date().toISOString() } };
+    }
 
     // ---- Per-chapter settings ----
     case 'SET_DEFAULT_PARAMS':
@@ -435,7 +453,11 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const [removed] = s.splice(action.fromIndex, 1);
         s.splice(action.toIndex, 0, removed);
-        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+        // Renumber positions to match the new array order. The backend trusts
+        // `position` on save (falls back to array index only when null), so
+        // stale positions would silently revert the reorder.
+        const renumbered = s.map((seg, i) => ({ ...seg, position: i }));
+        return { ...ch, segments: renumbered, updated_at: new Date().toISOString() };
       })};
     }
     case 'MARK_QUEUED': {
