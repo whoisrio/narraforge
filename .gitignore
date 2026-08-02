@@ -96,6 +96,9 @@ backend/uploads_bak
 .playwright-cli
 home.yaml
 backend/voice_clone_e2e.db*
+# local backups (kept locally, not versioned) - 2026-08-02
+backend/backup*.zip
+backend/voice_clone_backup*.zip
 # narration git snapshot repo (runtime-generated)
 backend/data/
 
