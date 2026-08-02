@@ -573,6 +573,8 @@ export const enUS: Messages = {
     backToProjects: 'Back to Projects',
     chapters: 'Chapters',
     noChapter: 'No Chapter Selected',
+    moveChapterUp: 'Move chapter up {name}',
+    moveChapterDown: 'Move chapter down {name}',
   },
   landing: {
     heroKicker: 'Narration-driven video engineering',
@@ -798,6 +800,8 @@ export const enUS: Messages = {
       generate: 'Generate',
       play: 'Play',
       pause: 'Pause',
+      moveUp: 'Move segment up',
+      moveDown: 'Move segment down',
     },
     chatBubble: {
       emptyLine: 'Empty line',

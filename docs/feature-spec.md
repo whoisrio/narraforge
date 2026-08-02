@@ -44,7 +44,7 @@ Opening a project enters the workspace with a left rail (`ProjectShell`) contain
 - Project identity (name + subtitle)
 - "Back to projects" button
 - Section navigation (5 sections, see below)
-- Chapter list (visible in Library/Studio sections)
+- Chapter list (visible in Library/Studio sections): select, rename, delete, and reorder (↑/↓) chapters; the active chapter's voice config is inherited by new chapters
 
 ---
 
@@ -225,7 +225,7 @@ Additional per-segment features:
 - Text editing, SSML annotation (CosyVoice), engine/voice override
 - Override tracking via `overrides` array
 - Undo regenerate (swap current/previous audio)
-- Insert/delete/reorder segments
+- Insert/delete/reorder segments (↑/↓ buttons per row; reorder renumbers `position` to match array order so the backend persists the new sequence)
 - Role assignment (narrator or cast)
 
 #### Stale Detection

@@ -133,6 +133,69 @@ describe('ProjectShell', () => {
     expect(onSelectChapter).toHaveBeenCalledWith('ch-2');
   });
 
+  it('renders chapter move up/down buttons and invokes onMoveChapter', () => {
+    const onMoveChapter = vi.fn();
+    render(
+      <ProjectShell
+        projectName="草稿项目"
+        activeSection="studio"
+        locale="zh-CN"
+        chapterName="第一章"
+        chapters={[
+          { id: 'ch-1', name: '第一章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+          { id: 'ch-2', name: '第二章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+          { id: 'ch-3', name: '第三章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+        ]}
+        activeChapterId="ch-1"
+        onSelectChapter={vi.fn()}
+        onRenameChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
+        onMoveChapter={onMoveChapter}
+        onSectionChange={vi.fn()}
+      >
+        <div>Studio content</div>
+      </ProjectShell>,
+    );
+
+    // Middle chapter can move both ways
+    fireEvent.click(screen.getByRole('button', { name: '上移章节 第二章' }));
+    expect(onMoveChapter).toHaveBeenCalledWith('ch-2', 'up');
+    fireEvent.click(screen.getByRole('button', { name: '下移章节 第二章' }));
+    expect(onMoveChapter).toHaveBeenCalledWith('ch-2', 'down');
+
+    // First chapter: move up disabled, move down enabled
+    expect(screen.getByRole('button', { name: '上移章节 第一章' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '下移章节 第一章' })).toBeEnabled();
+
+    // Last chapter: move up enabled, move down disabled
+    expect(screen.getByRole('button', { name: '上移章节 第三章' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '下移章节 第三章' })).toBeDisabled();
+  });
+
+  it('does not render chapter move buttons when onMoveChapter is not provided', () => {
+    render(
+      <ProjectShell
+        projectName="草稿项目"
+        activeSection="studio"
+        locale="zh-CN"
+        chapterName="第一章"
+        chapters={[
+          { id: 'ch-1', name: '第一章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+        ]}
+        activeChapterId="ch-1"
+        onSelectChapter={vi.fn()}
+        onRenameChapter={vi.fn()}
+        onDeleteChapter={vi.fn()}
+        onSectionChange={vi.fn()}
+      >
+        <div>Studio content</div>
+      </ProjectShell>,
+    );
+
+    expect(screen.queryByRole('button', { name: /上移章节/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /下移章节/ })).not.toBeInTheDocument();
+  });
+
   it('alerts a failure message (not "syncing") when resplit-from-script fails', async () => {
     const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
     vi.spyOn(window, 'confirm').mockReturnValue(true);

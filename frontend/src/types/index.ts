@@ -414,6 +414,8 @@ export interface Segment {
   text: string;
   voice: VoiceSource;
   status: SegmentStatus;
+  /** Order within the chapter (0-based, matches array index). Backend trusts this on save. */
+  position?: number;
   error?: string;
   audio: SegmentAudio;
   generated_params?: Partial<EngineParams>;
@@ -469,6 +471,8 @@ export interface Chapter {
   name: string;
   /** Chapter-level voice defaults (EngineParams discriminated union) */
   voice: EngineParams;
+  /** Order within the project (0-based, matches array index). Backend trusts this on save. */
+  position?: number;
   original_text?: string;
   design_title?: string;
   /** Post-synthesis adjust params currently applied (null/undefined = 未调整) */

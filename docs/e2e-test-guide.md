@@ -8,7 +8,7 @@ The teardown also refuses to delete anything unless the backend reports `app_env
 No need to manually start services.
 
 ```bash
-npm run e2e          # Full suite (43 tests, --workers=1, HTML report)
+npm run e2e          # Full suite (45 tests, --workers=1, HTML report)
 npm run e2e:ui       # Playwright visual test explorer
 npm run e2e:report   # Open latest HTML report
 npm run e2e:clean    # Remove all test-results/ and playwright-report/ dirs
@@ -27,7 +27,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs (43 tests, all Chinese locale) |
+| `tests/e2e/specs/` | Automated browser E2E specs (45 tests, all Chinese locale) |
 | `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
 | `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
 | `tests/e2e/global-setup.ts` | Seed data before all tests |
@@ -36,7 +36,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 ```text
 tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (43 tests)
+├── specs/                  ← Automated Playwright browser specs (45 tests)
 ├── fixtures/               ← Stable E2E input fixtures (audio, images)
 ├── helpers/                ← Shared utilities
 │   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
@@ -145,7 +145,7 @@ CSS Modules hash class names. Use partial match selectors:
 
 ### i18n Considerations
 
-- All 43 tests set `setLocaleToZhCN(page)` and use Chinese test names.
+- All 45 tests set `setLocaleToZhCN(page)` and use Chinese test names.
 - Components using `useTranslation()` render correctly in Chinese.
 - Components using static `t` from `i18n` always render in English — watch for these.
 
@@ -171,10 +171,11 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G2 | **CosyVoice / VoxCPM role creation** | voice-role-flows only tests MiMo preset; other engines not verified | Extend `voice-role-flows.spec.ts` | Medium |
 | G3 | **Voice Clone flow** | MiMo clone: upload → preview → create → verify — covered by `voice-clone.spec.ts` | `voice-clone.spec.ts` | Medium | ✅ Done |
 | G4 | **Actual audio playback** | Only checks player UI visibility; does not verify audio src is valid and duration > 0 | Extend existing studio specs | Medium |
-| G5 | **English locale UI** | All 43 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
+| G5 | **English locale UI** | All 45 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
 | G6 | **Error recovery** | Synthesis-failure retry, state rollback, user feedback — untested | Extend `studio-segment-operations` / `studio-batch-export` | Low |
 | G7 | **Mobile / responsive** | No viewport-dimension tests | New `responsive.spec.ts` | Low |
 | G8 | **Knowledge video workflow entry + storyboard** | 工作流类型入口 + 分镜视图（brief API 预置 + 双层验证） | `knowledge-video-workflow.spec.ts` | Medium | ✅ Done |
+| G9 | **Chapter & segment reorder** | 章节侧边栏 + 段落行 ↑/↓ 调整顺序，UI->API->DB `position` 三层一致 | `reorder.spec.ts` | Medium | ✅ Done |
 
 **Additional rules**:
 - G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;

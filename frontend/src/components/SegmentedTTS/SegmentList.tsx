@@ -101,7 +101,13 @@ export function SegmentList(props: SegmentListProps) {
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
     onAnnotateSSML: props.onAnnotateSSML, onDuplicate: props.onDuplicate,
     onToggleIndependentVoice: props.onToggleIndependentVoice,
-    onMerge: props.onMerge, isLast: i === segments.length - 1,
+    onMerge: props.onMerge,
+    onMove: segments.length > 1 ? (direction: 'up' | 'down') => {
+      const from = i;
+      const to = direction === 'up' ? i - 1 : i + 1;
+      props.onReorder(from, to);
+    } : undefined,
+    isLast: i === segments.length - 1,
   });
 
   if (layout === 'horizontal') {

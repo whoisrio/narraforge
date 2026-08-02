@@ -48,6 +48,7 @@ interface SegmentRowProps {
   onDuplicate?: (id: string) => void;
   onToggleIndependentVoice?: (id: string) => void;
   onMerge?: (id: string, direction: 'up' | 'down') => void;
+  onMove?: (direction: 'up' | 'down') => void;
   isLast: boolean;
 }
 
@@ -88,7 +89,7 @@ export function SegmentRow({
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
   layout, timeStart, timeEnd, roles, roleSnapshot, chapterVoice,
   onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
-  onMerge, isLast,
+  onMerge, onMove, isLast,
 }: SegmentRowProps) {
   const { t } = useTranslation();
   const [charIdx, setCharIdx] = useState(-1);
@@ -129,6 +130,8 @@ export function SegmentRow({
   const hasOverride = segment.voice.source === 'custom';
   const useIndependentVoice = hasOverride;
   const idx = String(index).padStart(2, '0');
+  const canMoveUp = index > 1;
+  const canMoveDown = !isLast;
   const waveform = getWaveform(segment.id);
 
   // Resolve the effective role (for role-based and custom-with-role sources)
@@ -457,6 +460,16 @@ export function SegmentRow({
         {segment.voice.source === 'role' && (
           <span className={styles.compactVoiceLock + ' ' + styles.compactVoiceLockActive} title={t('segment.segmentRow.roleLocked')}>🔒</span>
         )}
+        {onMove && (
+          <>
+            <button className={styles.compactActBtn} title={t('segment.segmentRow.moveUp')} aria-label={t('segment.segmentRow.moveUp')}
+              disabled={!canMoveUp}
+              onClick={(e) => { e.stopPropagation(); onMove('up'); }}>↑</button>
+            <button className={styles.compactActBtn} title={t('segment.segmentRow.moveDown')} aria-label={t('segment.segmentRow.moveDown')}
+              disabled={!canMoveDown}
+              onClick={(e) => { e.stopPropagation(); onMove('down'); }}>↓</button>
+          </>
+        )}
         {onMerge && (
           <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} compact />
         )}
@@ -571,6 +584,16 @@ export function SegmentRow({
             {isReady && onTrimSilence && (
               <button className={styles.actBtn} title={t('segment.segmentRow.trim')}
                 onClick={(e) => { e.stopPropagation(); onTrimSilence(segment.id); }}>✂</button>
+            )}
+            {onMove && (
+              <>
+                <button className={styles.actBtn} title={t('segment.segmentRow.moveUp')} aria-label={t('segment.segmentRow.moveUp')}
+                  disabled={!canMoveUp}
+                  onClick={(e) => { e.stopPropagation(); onMove('up'); }}>↑</button>
+                <button className={styles.actBtn} title={t('segment.segmentRow.moveDown')} aria-label={t('segment.segmentRow.moveDown')}
+                  disabled={!canMoveDown}
+                  onClick={(e) => { e.stopPropagation(); onMove('down'); }}>↓</button>
+              </>
             )}
             {onMerge && (
               <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} />
