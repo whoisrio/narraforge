@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 import { ConfirmContext, type ConfirmFn, type ConfirmOptions } from './confirmContext';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -20,25 +20,31 @@ let _idCounter = 0;
  *
  * Confirms are queued: a second `confirm()` while one is open waits until the
  * first resolves, then shows. This avoids overlapping dialogs.
+ *
+ * The queue lives in a ref (mutated outside React's state updater) and a
+ * dummy state bumps the render to show/hide the dialog. This keeps the
+ * updater pure - resolving the promise is a side effect and must not happen
+ * inside `setState` (StrictMode double-invokes updaters).
  */
 export function ConfirmProvider({ children }: { children: ReactNode }) {
-  const [queue, setQueue] = useState<PendingConfirm[]>([]);
-
-  const resolveCurrent = useCallback((ok: boolean) => {
-    setQueue(prev => {
-      const [head, ...rest] = prev;
-      head?.resolve(ok);
-      return rest;
-    });
-  }, []);
+  const queueRef = useRef<PendingConfirm[]>([]);
+  const [, bump] = useState(0);
 
   const confirm = useCallback<ConfirmFn>((options) => {
     return new Promise<boolean>(resolve => {
-      setQueue(prev => [...prev, { id: `confirm-${++_idCounter}`, options, resolve }]);
+      queueRef.current.push({ id: `confirm-${++_idCounter}`, options, resolve });
+      bump(n => n + 1);
     });
   }, []);
 
-  const current = queue[0];
+  const resolveCurrent = useCallback((ok: boolean) => {
+    const [head, ...rest] = queueRef.current;
+    queueRef.current = rest;
+    head?.resolve(ok);
+    bump(n => n + 1);
+  }, []);
+
+  const current = queueRef.current[0];
 
   return (
     <ConfirmContext.Provider value={confirm}>

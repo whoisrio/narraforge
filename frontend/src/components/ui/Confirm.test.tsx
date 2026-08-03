@@ -65,4 +65,14 @@ describe('useConfirm', () => {
     await act(async () => { /* flush promise */ });
     expect(getResult()).toBe(false);
   });
+
+  it('resolves false when Escape is pressed', async () => {
+    renderApp();
+    fireEvent.click(screen.getByText('ask'));
+    await screen.findByRole('alertdialog');
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await act(async () => { /* flush promise */ });
+    expect(getResult()).toBe(false);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
 });
