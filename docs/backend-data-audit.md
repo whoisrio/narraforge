@@ -148,9 +148,10 @@ Legend: ⬜ pending · 🔄 in progress · ✅ done (date + verifying test)
 | B-P1-5 | A10 `SegmentedProject.logo` lost on PUT (frontend-only) | New `logo` column + P18 migration; `ProjectIn.logo` + get/save round-trip | ✅ 2026-07-28 - `test_project_logo_persists_across_save_and_get` |
 | B-P1-6 | A7 `TTSRequest.engine` over-promises (9 engines, only cosyvoice/edge_tts) | Narrowed frontend type to `'cosyvoice' \| 'edge_tts'` | ✅ 2026-07-28 - `tsc -b` clean |
 | B-P1-7 | e2e DB accumulates orphan roles/voice_profiles (project_id referencing deleted/scratchpad projects) | `init_db` e2e-mode cleanup nulls dangling segment.role_id and deletes orphan roles/voice_profiles; guarded by `app_env=='e2e'` so prod is untouched | ✅ 2026-07-28 - e2e 43 green |
+| B-P1-8a | A5 `/clone/upload` + `/clone/upload-from-url` returned trimmed 5-field dicts typed as `VoiceProfile` (runtime `undefined` fields) | New `schemas/voice_profile.py` (`VoiceProfileOut` matching `voice_to_dict`); both endpoints now return `voice_to_dict(voice)`; `response_model=VoiceProfileOut` added to upload/upload-from-url/create-clone/create-clone-mimo/create-clone-voxcpm/create-from-design/get/list; frontend `VoiceClone.tsx` uses `voiceSourceAudioUrl(id)` instead of the removed `audio_url` | ✅ 2026-08-03 - `test_api_clone.py` (4) + `test_clone_api.py::test_upload_voice_success` updated; e2e 45 green |
 
 **Deferred (large / risky, separate PRs):**
-- B-P1-8 `response_model` on the ~57 untyped endpoints + unify list envelopes (A11) - large mechanical change.
+- B-P1-8 `response_model` on the remaining untyped endpoints (tts/voxcpm/mimo_tts/config/speech_to_text/...) + unify list envelopes (A11) - large mechanical change; clone voice endpoints done in B-P1-8a. Needs TTSResult/config schemas created first.
 - B-P1-9 `extra="forbid"` on `RoleIn`/`ChapterIn`/`ProjectIn` - depends on full frontend-type alignment (logo done; `selected_segment_id` is UI state, intentionally not persisted); risky for the autosave `...project` spread until every extra field is reconciled.
 
 After P0/P1, the backend suite is **502 passed** and the e2e suite is **43 passed** (2026-07-28).

@@ -46,7 +46,7 @@ db_session.commit()
 
 | Feature area | Main code | Tests | Notes |
 |---|---|---|---|
-| Voice upload, list, detail, delete | `app/api/clone.py`, `app/models/voice_profile.py` | `tests/integration/test_clone_api.py`, `tests/test_api_clone.py`, `tests/unit/test_voice_profile_model.py` | Uses test DB and temp audio files. |
+| Voice upload, list, detail, delete | `app/api/clone.py`, `app/models/voice_profile.py`, `app/schemas/voice_profile.py` (`VoiceProfileOut`), `app/api/_voice_helpers.py` (`voice_to_dict`) | `tests/integration/test_clone_api.py`, `tests/test_api_clone.py`, `tests/unit/test_voice_profile_model.py` | Uses test DB and temp audio files. A5 fix: `/upload` + `/upload-from-url` return full `voice_to_dict` shape (not trimmed dicts); `response_model=VoiceProfileOut` on upload/upload-from-url/create-clone/create-clone-mimo/create-clone-voxcpm/create-from-design/get/list. |
 | Qwen/CosyVoice clone registration | `app/api/clone.py`, `app/services/qwen_tts_service.py` | `tests/integration/test_clone_api.py`, `tests/unit/test_qwen_tts_service.py` | Automated tests mock Qwen. Real Qwen calls are external tests only. |
 | External audio URL behavior | GitHub/Qwen URL checks | `tests/integration/test_external_url_clone.py` | Marked `external`; requires `RUN_EXTERNAL_QWEN_TESTS=1` for real Qwen calls. |
 | Qwen/CosyVoice TTS API | `app/api/tts.py`, `app/services/qwen_tts_service.py` | `tests/integration/test_tts_api.py`, `tests/test_api_tts.py`, `tests/unit/test_qwen_tts_service.py` | Current contract: Qwen/CosyVoice synthesis returns an audio file path. |

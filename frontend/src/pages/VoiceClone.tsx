@@ -548,8 +548,7 @@ export function VoiceClone() {
                 <AudioPreview file={pendingFile} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
               )}
               {urlVoice && (
-                // 后端 upload-from-url 的响应可能带有额外的 audio_url 字段（VoiceProfile 未声明），断言保留原读取行为
-                <AudioPreview voiceId={urlVoice.id} audioUrl={(urlVoice as VoiceProfile & { audio_url?: string }).audio_url} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
+                <AudioPreview voiceId={urlVoice.id} audioUrl={voiceSourceAudioUrl(urlVoice.id)} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
               )}
             </div>
           )}

@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 
 from app.api._voice_helpers import voice_to_dict
+from app.schemas.voice_profile import VoiceProfileOut
 import logging
 
 from app.core.database import get_db
@@ -134,7 +135,7 @@ class DesignVoiceRequest(BaseModel):
 
 # ============ Routes ============
 
-@router.post("/upload")
+@router.post("/upload", response_model=VoiceProfileOut)
 async def upload_voice(
     file: UploadFile = File(...),
     prompt_text: str = Form(None),
@@ -208,16 +209,10 @@ async def upload_voice(
     db.commit()
     db.refresh(voice)
 
-    return {
-        "id": voice.id,
-        "name": voice.name,
-        "audio_url": f"/api/clone/audio/{voice.id}",
-        "is_cloned": (voice.voice or {}).get("voice_type") == "clone",
-        "prompt_text": (voice.voice_params or {}).get("", {}).get("params", {}).get("prompt_text"),
-    }
+    return voice_to_dict(voice)
 
 
-@router.post("/upload-from-url")
+@router.post("/upload-from-url", response_model=VoiceProfileOut)
 async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Depends(get_db)):
     """
     从外部 URL 上传音频文件 - 支持直接传入七牛云、AWS S3 等外部存储的音频 URL
@@ -303,16 +298,10 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
     db.commit()
     db.refresh(voice)
 
-    return {
-        "id": voice.id,
-        "name": voice.name,
-        "audio_url": f"/api/clone/audio/{voice.id}",
-        "external_audio_url": audio_url,
-        "is_cloned": (voice.voice or {}).get("voice_type") == "clone",
-    }
+    return voice_to_dict(voice)
 
 
-@router.post("/create-clone")
+@router.post("/create-clone", response_model=VoiceProfileOut)
 async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
     """注册克隆声音 - 调用千问 API"""
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
@@ -384,7 +373,7 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Voice registration failed: {str(e)}")
 
 
-@router.post("/create-clone-mimo")
+@router.post("/create-clone-mimo", response_model=VoiceProfileOut)
 async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_db)):
     """
     MiMo 声音复刻 - 仅保存音频并标记为 MiMo 复刻，无需注册到云端。
@@ -432,7 +421,7 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
         raise HTTPException(status_code=500, detail=f"MiMo voice clone failed: {str(e)}")
 
 
-@router.post("/create-clone-voxcpm")
+@router.post("/create-clone-voxcpm", response_model=VoiceProfileOut)
 async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(get_db)):
     """
     VoxCPM 声音复刻 - 仅保存音频并标记为 VoxCPM 复刻，无需云端注册。
@@ -483,7 +472,7 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
         raise HTTPException(status_code=500, detail=f"VoxCPM voice clone failed: {str(e)}")
 
 
-@router.post("/create-from-design")
+@router.post("/create-from-design", response_model=VoiceProfileOut)
 async def create_voice_from_design(request: DesignVoiceRequest, db: Session = Depends(get_db)):
     """
     从音色设计的预览音频创建 VoiceProfile。
@@ -613,7 +602,7 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
 
 
 
-@router.get("/list")
+@router.get("/list", response_model=list[VoiceProfileOut])
 def list_voices(project_id: str | None = None, db: Session = Depends(get_db)):
     """获取声音列表。无 project_id 时返回全局声音；有 project_id 时返回全局 + 该项目的声音。"""
     from sqlalchemy import or_
@@ -788,7 +777,7 @@ async def get_voice_audio(voice_id: str, field: str = None, db: Session = Depend
     raise HTTPException(status_code=404, detail="Audio not found")
 
 
-@router.get("/{voice_id}")
+@router.get("/{voice_id}", response_model=VoiceProfileOut)
 def get_voice(voice_id: str, db: Session = Depends(get_db)):
     """获取单个声音详情"""
     from app.api._voice_helpers import voice_to_dict
