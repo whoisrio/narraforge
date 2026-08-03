@@ -36,3 +36,90 @@ def test_migrations_idempotent_no_zombie_columns():
         _run_migrations(conn)
         cols = {c[1] for c in conn.execute(text("PRAGMA table_info(voice_profiles)")).fetchall()}
         assert not (cols & ZOMBIE_COLS)
+
+
+# ── P9007: position dedup + unique indexes (D6) ──
+
+def test_p9007_deduplicates_positions_and_creates_indexes():
+    """P9007 must fix duplicate positions and create unique indexes."""
+    from app.core.database import _migrate_deduplicate_positions
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.connect() as conn:
+        # Create tables WITHOUT unique constraints (simulate a pre-D6 DB).
+        conn.execute(text("""
+            CREATE TABLE segmented_projects (
+                id VARCHAR NOT NULL PRIMARY KEY, name VARCHAR NOT NULL,
+                schema_version INTEGER NOT NULL, layout VARCHAR NOT NULL DEFAULT 'vertical'
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE segmented_project_chapters (
+                id VARCHAR NOT NULL PRIMARY KEY,
+                project_id VARCHAR NOT NULL REFERENCES segmented_projects(id) ON DELETE CASCADE,
+                position INTEGER NOT NULL, name VARCHAR NOT NULL,
+                voice JSON NOT NULL DEFAULT '{}', split_config JSON NOT NULL DEFAULT '{}',
+                created_at DATETIME
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE segmented_project_segments (
+                id VARCHAR NOT NULL PRIMARY KEY,
+                chapter_id VARCHAR NOT NULL REFERENCES segmented_project_chapters(id) ON DELETE CASCADE,
+                position INTEGER NOT NULL, text VARCHAR NOT NULL DEFAULT '',
+                segment_kind VARCHAR NOT NULL DEFAULT 'narration',
+                voice JSON NOT NULL DEFAULT '{}',
+                created_at DATETIME
+            )
+        """))
+
+        # Insert duplicate segment positions.
+        conn.execute(text(
+            "INSERT INTO segmented_projects (id, name, schema_version, layout) "
+            "VALUES ('p1', 'Test', 2, 'vertical')"
+        ))
+        conn.execute(text(
+            "INSERT INTO segmented_project_chapters (id, project_id, position, name, voice, split_config) "
+            "VALUES ('c1', 'p1', 0, 'Ch', '{}', '{}')"
+        ))
+        for i in range(3):
+            conn.execute(text(
+                "INSERT INTO segmented_project_segments "
+                "(id, chapter_id, position, text, segment_kind, voice) "
+                "VALUES (:sid, 'c1', 0, :txt, 'narration', '{}')"
+            ), {"sid": f"s{i}", "txt": f"seg {i}"})
+        conn.commit()
+
+        # Run dedup.
+        _migrate_deduplicate_positions(conn)
+
+        # No duplicate positions remain.
+        dups = conn.execute(text(
+            "SELECT chapter_id, position, COUNT(*) FROM segmented_project_segments "
+            "GROUP BY chapter_id, position HAVING COUNT(*) > 1"
+        )).fetchall()
+        assert dups == []
+
+        # Unique index exists.
+        indexes = {
+            row[1] for row in conn.execute(text("PRAGMA index_list(segmented_project_segments)")).fetchall()
+        }
+        assert "uq_segment_chapter_position" in indexes
+
+        # Re-run is idempotent.
+        _migrate_deduplicate_positions(conn)
+        dups2 = conn.execute(text(
+            "SELECT chapter_id, position, COUNT(*) FROM segmented_project_segments "
+            "GROUP BY chapter_id, position HAVING COUNT(*) > 1"
+        )).fetchall()
+        assert dups2 == []
+
+
+def test_p9007_noop_when_no_duplicates():
+    """P9007 is a clean no-op on a database with no duplicate positions."""
+    from app.core.database import _migrate_deduplicate_positions
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.connect() as conn:
+        Base.metadata.create_all(bind=conn)
+        _migrate_deduplicate_positions(conn)  # should not raise

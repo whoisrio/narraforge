@@ -306,6 +306,72 @@ def _migrate_absolute_to_relative(conn):
         logger.warning(f"[migration] P13 skipped: {e}")
 
 
+def _migrate_deduplicate_positions(conn):
+    """P9007 (D6): deduplicate (parent_id, position) pairs, then create unique
+    indexes and FK indexes.  Idempotent: CREATE INDEX IF NOT EXISTS is safe to
+    re-run, and the dedup is a no-op when no duplicates exist."""
+    import logging
+    logger = logging.getLogger(__name__)
+    existing_tables = set(inspect(conn).get_table_names())
+
+    # ── 1. Deduplicate segment positions ──
+    if "segmented_project_segments" in existing_tables:
+        dup_chapters = conn.execute(text(
+            "SELECT chapter_id FROM segmented_project_segments "
+            "GROUP BY chapter_id, position HAVING COUNT(*) > 1"
+        )).fetchall()
+        for (chapter_id,) in dup_chapters:
+            rows = conn.execute(text(
+                "SELECT id FROM segmented_project_segments "
+                "WHERE chapter_id = :cid ORDER BY position, COALESCE(created_at, ''), id"
+            ), {"cid": chapter_id}).fetchall()
+            for new_pos, (seg_id,) in enumerate(rows):
+                conn.execute(text(
+                    "UPDATE segmented_project_segments SET position = :pos WHERE id = :sid"
+                ), {"pos": new_pos, "sid": seg_id})
+            logger.info(
+                f"[migration] P9007: deduped {len(rows)} segment positions in chapter {chapter_id}"
+            )
+
+    # ── 2. Deduplicate chapter positions ──
+    if "segmented_project_chapters" in existing_tables:
+        dup_projects = conn.execute(text(
+            "SELECT project_id FROM segmented_project_chapters "
+            "GROUP BY project_id, position HAVING COUNT(*) > 1"
+        )).fetchall()
+        for (project_id,) in dup_projects:
+            rows = conn.execute(text(
+                "SELECT id FROM segmented_project_chapters "
+                "WHERE project_id = :pid ORDER BY position, COALESCE(created_at, ''), id"
+            ), {"pid": project_id}).fetchall()
+            for new_pos, (ch_id,) in enumerate(rows):
+                conn.execute(text(
+                    "UPDATE segmented_project_chapters SET position = :pos WHERE id = :cid"
+                ), {"pos": new_pos, "cid": ch_id})
+            logger.info(
+                f"[migration] P9007: deduped {len(rows)} chapter positions in project {project_id}"
+            )
+
+    # ── 3. Create unique indexes (IF NOT EXISTS for idempotency) ──
+    index_stmts = [
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_chapter_project_position "
+        "ON segmented_project_chapters(project_id, position)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS uq_segment_chapter_position "
+        "ON segmented_project_segments(chapter_id, position)",
+        "CREATE INDEX IF NOT EXISTS ix_chapters_project_id "
+        "ON segmented_project_chapters(project_id)",
+        "CREATE INDEX IF NOT EXISTS ix_segments_chapter_id "
+        "ON segmented_project_segments(chapter_id)",
+    ]
+    for stmt in index_stmts:
+        try:
+            conn.execute(text(stmt))
+        except Exception as e:
+            logger.warning(f"[migration] P9007 index skipped: {e}")
+
+    logger.info("[migration] P9007: position dedup + indexes complete")
+
+
 def _run_migrations(conn):
     import logging
     for stmt in _ALL_ALTER_STMTS:
@@ -332,6 +398,8 @@ def _run_migrations(conn):
     _migrate_add_role_project_id(conn)
     # P9006: restore constraints lost by the old buggy table recreate
     _repair_lost_constraints(conn)
+    # P9007: deduplicate positions + add unique constraints + FK indexes (D6)
+    _migrate_deduplicate_positions(conn)
 
 
 def init_db():

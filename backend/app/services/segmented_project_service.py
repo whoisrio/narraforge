@@ -403,7 +403,15 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     p.updated_at = utcnow()
 
     # Chapters
+    # Phase 1: move existing positions to negative sentinel values so that
+    # swap reorders (A:0→1, B:1→0) don't violate the unique constraint
+    # during the batched UPDATE.  SQLite enforces UNIQUE per-row, not
+    # per-statement, so A:0→1 would collide with B's still-current position 1.
     existing_chapters = {c.id: c for c in p.chapters}
+    for tmp_idx, ch in enumerate(p.chapters):
+        ch.position = -(tmp_idx + 1)
+    db.flush()
+    # Phase 2: assign final positions from the payload.
     keep_chapter_ids: set[str] = set()
     for ch_idx, ch_in in enumerate(project.chapters):
         ch = existing_chapters.get(ch_in.id)
@@ -425,8 +433,11 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.updated_at = utcnow()
         keep_chapter_ids.add(ch_in.id)
 
-        # Segments
+        # Segments — same two-phase approach as chapters.
         existing_segments = {s.id: s for s in ch.segments}
+        for tmp_idx, seg in enumerate(ch.segments):
+            seg.position = -(tmp_idx + 1)
+        db.flush()
         keep_segment_ids: set[str] = set()
         for seg_idx, s_in in enumerate(ch_in.segments):
             seg = existing_segments.get(s_in.id)

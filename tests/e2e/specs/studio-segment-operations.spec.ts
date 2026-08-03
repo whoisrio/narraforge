@@ -447,6 +447,7 @@ test.describe('段落操作', () => {
       clone.id = `${CHAPTER_ID}-seg-merge-e2e`;
       clone.text = '远村灯火，点点明灭。';
       clone.audio = { format: 'mp3' };
+      clone.position = chapter.segments.length;
       chapter.segments.push(clone);
     }
     expect(chapter.segments.length).toBeGreaterThan(1);

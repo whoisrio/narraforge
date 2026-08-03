@@ -11,7 +11,9 @@ from sqlalchemy import (
     Integer,
     Float,
     ForeignKey,
+    Index,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 
@@ -58,6 +60,10 @@ class SegmentedProject(Base):
 
 class SegmentedProjectChapter(Base):
     __tablename__ = "segmented_project_chapters"
+    __table_args__ = (
+        UniqueConstraint("project_id", "position", name="uq_chapter_project_position"),
+        Index("ix_chapters_project_id", "project_id"),
+    )
 
     id = Column(String, primary_key=True)
     project_id = Column(
@@ -92,6 +98,10 @@ class SegmentedProjectChapter(Base):
 
 class SegmentedProjectSegment(Base):
     __tablename__ = "segmented_project_segments"
+    __table_args__ = (
+        UniqueConstraint("chapter_id", "position", name="uq_segment_chapter_position"),
+        Index("ix_segments_chapter_id", "chapter_id"),
+    )
 
     id = Column(String, primary_key=True)
     chapter_id = Column(
