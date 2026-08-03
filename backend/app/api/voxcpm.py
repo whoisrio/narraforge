@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
 from app.models.tts_result import TTSResultRecord
 from app.models.voice_profile import VoiceProfile
@@ -318,7 +319,7 @@ async def unload_model():
     return result
 
 
-@router.post("/tts")
+@router.post("/tts", response_model=TTSResultOut)
 async def tts(request: VoxCPMTTSRequest, db: Session = Depends(get_db)):
     """纯文本 TTS 合成（无参考音频）"""
     service = await get_voxcpm_service()
@@ -353,7 +354,7 @@ async def tts(request: VoxCPMTTSRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"合成失败: {e}")
 
 
-@router.post("/design")
+@router.post("/design", response_model=TTSResultOut)
 async def voice_design(request: VoxCPMDesignRequest, db: Session = Depends(get_db)):
     """Voice Design — 纯文本描述生成全新音色"""
     service = await get_voxcpm_service()
@@ -392,7 +393,7 @@ async def voice_design(request: VoxCPMDesignRequest, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"Voice Design 失败: {e}")
 
 
-@router.post("/clone")
+@router.post("/clone", response_model=TTSResultOut)
 async def clone(request: VoxCPMCloneRequest, db: Session = Depends(get_db)):
     """Controllable Clone — 参考音频克隆 + 可选风格控制"""
     logger.info(f"VoxCPM clone request: voice_id={request.voice_id}, text={request.text[:50]}")
@@ -436,7 +437,7 @@ async def clone(request: VoxCPMCloneRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Clone 失败: {e}")
 
 
-@router.post("/ultimate-clone")
+@router.post("/ultimate-clone", response_model=TTSResultOut)
 async def ultimate_clone(
     request: VoxCPMUltimateCloneRequest, db: Session = Depends(get_db)
 ):

@@ -13,6 +13,7 @@ import aiofiles
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.schemas.tts import TTSResultOut, TTSHistoryOut
 from app.core.system_config_service import is_frontend_storage
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_result import TTSResultRecord
@@ -80,7 +81,7 @@ def _result_to_dict(r: TTSResultRecord) -> dict:
     }
 
 
-@router.post("/synthesize")
+@router.post("/synthesize", response_model=TTSResultOut)
 async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
     """合成语音 - 支持多引擎"""
     if request.engine == "edge_tts":
@@ -323,7 +324,7 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=f"Edge-TTS synthesis failed: {str(e)}")
 
 
-@router.get("/history")
+@router.get("/history", response_model=TTSHistoryOut)
 def get_synthesis_history(db: Session = Depends(get_db)):
     """获取合成历史列表"""
     records = (

@@ -86,7 +86,9 @@ class TestTTSAPI:
         data = response.json()
         assert data["audio_id"] == "backend"
         assert data["audio_url"] == "/api/tts/audio/backend"
-        assert "audio_base64" not in data
+        # Backend mode returns audio_url; audio_base64 is null (response_model
+        # always serializes the schema field, previously it was omitted).
+        assert data["audio_base64"] is None
 
     def test_synthesize_speech_tts_service_error(self, client: TestClient, mock_tts_service):
         mock_tts_service.synthesize_speech.side_effect = Exception("TTS service error")
@@ -194,3 +196,43 @@ class TestTTSAPI:
         assert len(results) == 5
         for _, status_code in results:
             assert status_code == 200
+
+
+# TTSResultOut response_model contract (B-P1-8): every synthesize response
+# includes the required audio_id + text + params, plus the optional schema
+# fields (serialized as null when unset, e.g. backend mode has no audio_base64).
+TTS_RESULT_FIELDS = {"audio_id", "text", "params", "audio_base64", "audio_url",
+                     "audio_format", "voice_id", "voice_name", "engine"}
+
+
+class TestTTSResultContract:
+    def test_synthesize_response_has_full_contract(self, client: TestClient, mock_tts_service, tmp_path):
+        audio_path = _write_audio_file(tmp_path, "contract.wav")
+        mock_tts_service.synthesize_speech.return_value = audio_path
+        response = client.post("/api/tts/synthesize", json={
+            "text": "contract check", "voice_id": "cosyvoice-v3-test",
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert TTS_RESULT_FIELDS.issubset(data.keys())
+        # required fields are non-null
+        assert data["audio_id"]
+        assert data["text"] == "contract check"
+        assert isinstance(data["params"], dict)
+
+    def test_history_response_has_results_wrapper(self, client: TestClient, db_session):
+        from app.models.tts_result import TTSResultRecord
+        db_session.add(TTSResultRecord(
+            id="h1", text="hi", voice_id="v1", voice_name="n", audio_path="p",
+            audio_format="mp3", speed=1.0, volume=80, pitch=1.0,
+            instruction="", language="Chinese",
+        ))
+        db_session.commit()
+        response = client.get("/api/tts/history")
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        item = next(i for i in data["results"] if i["id"] == "h1")
+        for f in ("id", "text", "voice_id", "voice_name", "audio_url",
+                  "audio_format", "speed", "volume", "pitch", "created_at"):
+            assert f in item
