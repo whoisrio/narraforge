@@ -1,6 +1,6 @@
 """P9006 follow-up: legacy ALTER groups must not re-add zombie columns on
 modern DBs (re-add/drop ping-pong every startup otherwise)."""
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 
 from app.core.database import (
     _ALL_ALTER_STMTS,
@@ -163,3 +163,44 @@ def test_p9007_noop_when_no_duplicates():
             f"Expected exactly 1 unique index on (chapter_id, position), got {unique_count}. "
             "P9007 should skip creating a named index when create_all's auto-index exists."
         )
+
+
+# ── P9008: drop zombie table narration_documents (D5) ──
+
+def test_p9008_drops_narration_documents():
+    """P9008 must drop the zombie narration_documents table."""
+    from app.core.database import _migrate_drop_zombie_table
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.connect() as conn:
+        # Simulate a pre-D5 DB with the zombie table.
+        conn.execute(text("""
+            CREATE TABLE narration_documents (
+                id VARCHAR NOT NULL PRIMARY KEY,
+                project_id VARCHAR NOT NULL,
+                version VARCHAR NOT NULL,
+                body_markdown TEXT NOT NULL
+            )
+        """))
+        conn.execute(text(
+            "INSERT INTO narration_documents (id, project_id, version, body_markdown) "
+            "VALUES ('d1', 'p1', 'v1', 'test')"
+        ))
+        conn.commit()
+
+        tables_before = set(inspect(conn).get_table_names())
+        assert "narration_documents" in tables_before
+
+        _migrate_drop_zombie_table(conn)
+
+        tables_after = set(inspect(conn).get_table_names())
+        assert "narration_documents" not in tables_after
+
+
+def test_p9008_noop_when_table_absent():
+    """P9008 is a clean no-op when narration_documents doesn't exist."""
+    from app.core.database import _migrate_drop_zombie_table
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.connect() as conn:
+        _migrate_drop_zombie_table(conn)  # should not raise

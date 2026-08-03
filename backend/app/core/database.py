@@ -406,6 +406,22 @@ def _migrate_deduplicate_positions(conn):
     logger.info("[migration] P9007: position dedup + indexes complete")
 
 
+def _migrate_drop_zombie_table(conn):
+    """P9008 (D5): drop the zombie `narration_documents` table.
+
+    The table has 0 code references, 0 rows, and its FK points to the
+    non-existent `segmented_projects_old` (corruption from the old buggy
+    table recreate).  Safe to drop unconditionally.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    existing = set(inspect(conn).get_table_names())
+    if "narration_documents" not in existing:
+        return
+    conn.execute(text("DROP TABLE narration_documents"))
+    logger.info("[migration] P9008: dropped zombie table narration_documents")
+
+
 def _run_migrations(conn):
     import logging
     for stmt in _ALL_ALTER_STMTS:
@@ -434,6 +450,8 @@ def _run_migrations(conn):
     _repair_lost_constraints(conn)
     # P9007: deduplicate positions + add unique constraints + FK indexes (D6)
     _migrate_deduplicate_positions(conn)
+    # P9008: drop zombie table narration_documents (D5)
+    _migrate_drop_zombie_table(conn)
 
 
 def init_db():
