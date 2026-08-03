@@ -788,6 +788,7 @@ def synthesize_segment(
     prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
     prev_rel: str | None = prev_current.get("path")
     prev_duration: float | None = prev_current.get("duration_sec")
+    adjust_applied = False
 
     if is_ffmpeg_available():
         target_mp3 = assets.segment_audio_path(
@@ -816,6 +817,52 @@ def synthesize_segment(
         # Fallback: compute duration from raw bytes when ffprobe is unavailable
         if duration_sec is None and audio_bytes:
             duration_sec = _duration_from_bytes(audio_bytes, "mp3")
+
+        # Apply chapter-level audio_adjust (atempo/volume) to the freshly
+        # synthesized audio, mirroring adjust_chapter_audio's contract:
+        # stash the fresh original as audio.previous (.prev.mp3) and render
+        # the adjusted version into current. A later bulk re-adjust renders
+        # from this previous (no cascade); an identity revert restores it.
+        adj_rec = chapter.audio_adjust if isinstance(chapter.audio_adjust, dict) else None
+        adj_tempo = (adj_rec or {}).get("tempo")
+        adj_vol = (adj_rec or {}).get("volume_db")
+        if (
+            adj_tempo is not None and abs(float(adj_tempo) - 1.0) > 1e-9
+        ) or (
+            adj_vol is not None and abs(float(adj_vol)) > 1e-9
+        ):
+            adj_tempo_v = float(adj_tempo) if adj_tempo is not None else 1.0
+            adj_vol_v = float(adj_vol) if adj_vol is not None else 0.0
+            prev_abs = target_mp3.with_name(f"{seg.id}.prev.mp3")
+            shutil.copy2(target_mp3, prev_abs)
+            try:
+                adjust_audio_speed_volume(
+                    prev_abs, target_mp3,
+                    tempo=adj_tempo_v, volume_db=adj_vol_v,
+                )
+            except AudioEncoderError as e:
+                logger.warning(
+                    "chapter adjust skipped for segment %s: %s", seg.id, e,
+                )
+                try:
+                    prev_abs.unlink()
+                except FileNotFoundError:
+                    pass
+            else:
+                prev_rel = prev_abs.relative_to(
+                    assets.settings.segmented_dir,
+                ).as_posix()
+                prev_duration = duration_sec
+                try:
+                    duration_sec = probe_audio_duration(target_mp3)
+                except Exception as e:  # noqa: BLE001
+                    logger.warning(
+                        "probe after adjust failed for %s: %s", seg.id, e,
+                    )
+                _delete_dropped_audio_files(
+                    seg, {"current": {"path": new_rel}, "previous": {"path": prev_rel}},
+                )
+                adjust_applied = True
     else:
         wav_path = assets.segment_audio_path(
             project_id, chapter_id,
@@ -827,7 +874,7 @@ def synthesize_segment(
         audio_format = "wav"
         duration_sec = _duration_from_bytes(audio_bytes, "wav") if audio_bytes else None
 
-    if not keep_previous and prev_rel:
+    if not adjust_applied and not keep_previous and prev_rel:
         try:
             (assets.settings.segmented_dir / prev_rel).unlink()
         except FileNotFoundError:
