@@ -29,8 +29,10 @@ class TestCloneAPI:
         data = response.json()
         assert "id" in data
         assert "name" in data
-        assert "audio_url" in data
-        assert data["is_cloned"] is False
+        # A5: upload now returns the full VoiceProfile shape (voice_to_dict),
+        # not the trimmed {audio_url, is_cloned, ...} dict.
+        assert data["voice"] == {"model": "", "voice_type": "upload"}
+        assert data["has_source"] is True
         assert data["name"] == "test_audio.wav"
 
     def test_upload_voice_no_file(self, client: TestClient):
