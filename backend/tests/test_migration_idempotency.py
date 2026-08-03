@@ -116,10 +116,50 @@ def test_p9007_deduplicates_positions_and_creates_indexes():
 
 
 def test_p9007_noop_when_no_duplicates():
-    """P9007 is a clean no-op on a database with no duplicate positions."""
+    """P9007 is a clean no-op on a fresh DB with no duplicates.
+    Also verifies the unique index exists (from create_all auto-index)."""
     from app.core.database import _migrate_deduplicate_positions
 
     engine = create_engine("sqlite:///:memory:")
     with engine.connect() as conn:
         Base.metadata.create_all(bind=conn)
         _migrate_deduplicate_positions(conn)  # should not raise
+
+        # Unique constraint is present (auto-index from __table_args__).
+        seg_indexes = {
+            row[1] for row in conn.execute(
+                text("PRAGMA index_list(segmented_project_segments)")
+            ).fetchall()
+        }
+        # SQLite auto-index names vary; check that *some* unique index exists
+        # on the (chapter_id, position) columns.
+        has_unique_seg = any(
+            conn.execute(text(f"PRAGMA index_info({name})")).fetchall()
+            for name in seg_indexes
+            if any(
+                r[2] in ("chapter_id", "position")
+                for r in conn.execute(text(f"PRAGMA index_info({name})")).fetchall()
+            )
+        )
+        # At minimum, the PK exists; the unique constraint is enforced by
+        # create_all via __table_args__.
+        assert len(seg_indexes) >= 2  # PK + unique constraint
+
+        # P9007 must NOT create a second unique index on the same columns
+        # (the auto-index from __table_args__ already covers it).
+        unique_seg_count = sum(
+            1 for name in seg_indexes
+            if conn.execute(text(f"PRAGMA index_list(segmented_project_segments)")).fetchall()
+        )
+        # Count only truly unique indexes on (chapter_id, position).
+        unique_count = 0
+        for row in conn.execute(text("PRAGMA index_list(segmented_project_segments)")).fetchall():
+            if not row[2]:  # not unique
+                continue
+            cols = {r[2] for r in conn.execute(text(f"PRAGMA index_info({row[1]})")).fetchall()}
+            if cols == {"chapter_id", "position"}:
+                unique_count += 1
+        assert unique_count == 1, (
+            f"Expected exactly 1 unique index on (chapter_id, position), got {unique_count}. "
+            "P9007 should skip creating a named index when create_all's auto-index exists."
+        )

@@ -306,10 +306,26 @@ def _migrate_absolute_to_relative(conn):
         logger.warning(f"[migration] P13 skipped: {e}")
 
 
+def _has_unique_index_on(conn, table_name: str, column_names: set[str]) -> bool:
+    """Check whether *any* unique index on the exact set of columns already
+    exists (including SQLite auto-indexes created by UNIQUE constraints)."""
+    for row in conn.execute(text(f"PRAGMA index_list({table_name})")).fetchall():
+        # row: (seq, name, unique, partial, ...)
+        if not row[2]:        # not unique
+            continue
+        idx_cols = {
+            r[2] for r in conn.execute(text(f"PRAGMA index_info({row[1]})")).fetchall()
+        }
+        if idx_cols == column_names:
+            return True
+    return False
+
+
 def _migrate_deduplicate_positions(conn):
     """P9007 (D6): deduplicate (parent_id, position) pairs, then create unique
-    indexes and FK indexes.  Idempotent: CREATE INDEX IF NOT EXISTS is safe to
-    re-run, and the dedup is a no-op when no duplicates exist."""
+    indexes and FK indexes.  Idempotent: dedup is a no-op when no duplicates
+    exist, and named indexes are skipped when an equivalent unique index
+    (including auto-indexes from create_all) already exists."""
     import logging
     logger = logging.getLogger(__name__)
     existing_tables = set(inspect(conn).get_table_names())
@@ -352,22 +368,40 @@ def _migrate_deduplicate_positions(conn):
                 f"[migration] P9007: deduped {len(rows)} chapter positions in project {project_id}"
             )
 
-    # ── 3. Create unique indexes (IF NOT EXISTS for idempotency) ──
-    index_stmts = [
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_chapter_project_position "
-        "ON segmented_project_chapters(project_id, position)",
-        "CREATE UNIQUE INDEX IF NOT EXISTS uq_segment_chapter_position "
-        "ON segmented_project_segments(chapter_id, position)",
+    # ── 3. Create unique indexes ──
+    # Skip named unique indexes when create_all already made an equivalent
+    # auto-index (fresh DB path).  IF NOT EXISTS checks by name, so it can't
+    # detect the auto-index and would create a duplicate.
+    unique_index_checks = [
+        ("segmented_project_chapters", {"project_id", "position"},
+         "CREATE UNIQUE INDEX uq_chapter_project_position "
+         "ON segmented_project_chapters(project_id, position)"),
+        ("segmented_project_segments", {"chapter_id", "position"},
+         "CREATE UNIQUE INDEX uq_segment_chapter_position "
+         "ON segmented_project_segments(chapter_id, position)"),
+    ]
+    for table, cols, ddl in unique_index_checks:
+        if table not in existing_tables:
+            continue
+        if _has_unique_index_on(conn, table, cols):
+            continue
+        try:
+            conn.execute(text(ddl))
+        except Exception as e:
+            logger.warning(f"[migration] P9007 unique index skipped: {e}")
+
+    # FK indexes — always safe to create IF NOT EXISTS (no auto-index equivalent).
+    fk_index_stmts = [
         "CREATE INDEX IF NOT EXISTS ix_chapters_project_id "
         "ON segmented_project_chapters(project_id)",
         "CREATE INDEX IF NOT EXISTS ix_segments_chapter_id "
         "ON segmented_project_segments(chapter_id)",
     ]
-    for stmt in index_stmts:
+    for stmt in fk_index_stmts:
         try:
             conn.execute(text(stmt))
         except Exception as e:
-            logger.warning(f"[migration] P9007 index skipped: {e}")
+            logger.warning(f"[migration] P9007 FK index skipped: {e}")
 
     logger.info("[migration] P9007: position dedup + indexes complete")
 
