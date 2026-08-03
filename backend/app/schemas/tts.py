@@ -10,9 +10,10 @@ backend-mode returns `audio_url`; voxcpm adds a top-level `engine`). The
 """
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class TTSResultOut(BaseModel):
@@ -25,6 +26,8 @@ class TTSResultOut(BaseModel):
     voice_id: str | None = None
     voice_name: str | None = None
     engine: str | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class TTSResultRecordOut(BaseModel):
@@ -41,6 +44,22 @@ class TTSResultRecordOut(BaseModel):
     language: str | None = None
     created_at: str | None = None
 
+    model_config = {"from_attributes": True}
+
+    @field_validator("created_at", mode="before")
+    @classmethod
+    def coerce_created_at(cls, v):
+        """Defensive: if an ORM object is ever returned directly (bypassing
+        `_result_to_dict`, which already calls `.isoformat()`), coerce the raw
+        `datetime` to an ISO string so `str` validation doesn't fail."""
+        if v is None or isinstance(v, str):
+            return v
+        if isinstance(v, datetime):
+            return v.isoformat()
+        return str(v)
+
 
 class TTSHistoryOut(BaseModel):
     results: list[TTSResultRecordOut]
+
+    model_config = {"from_attributes": True}

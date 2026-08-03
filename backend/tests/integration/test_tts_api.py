@@ -236,3 +236,52 @@ class TestTTSResultContract:
         for f in ("id", "text", "voice_id", "voice_name", "audio_url",
                   "audio_format", "speed", "volume", "pitch", "created_at"):
             assert f in item
+
+
+def test_mimo_preset_response_contract(client: TestClient, monkeypatch):
+    """mimo /preset 走独立的 _save_and_respond 路径，也要满足 TTSResultOut 契约."""
+    import app.api.mimo_tts as mimo_api
+
+    class FakeMimoService:
+        async def synthesize_preset(self, **kwargs):
+            return b"fake mimo audio"
+
+    async def fake_get_service(db=None):
+        return FakeMimoService()
+
+    monkeypatch.setattr(mimo_api, "get_mimo_tts_service", fake_get_service)
+
+    response = client.post("/api/mimo-tts/preset", json={"text": "hi", "voice": "冰糖"})
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert TTS_RESULT_FIELDS.issubset(data.keys())
+    assert data["audio_id"]
+    assert data["text"] == "hi"
+    assert isinstance(data["params"], dict)
+
+
+def test_voxcpm_tts_response_contract(client: TestClient, monkeypatch):
+    """voxcpm /tts 顶层带 engine，也要满足 TTSResultOut 契约."""
+    import app.api.voxcpm as voxcpm_api
+
+    class FakeVoxcpmService:
+        loaded = True
+        async def synthesize(self, **kwargs):
+            return b"fake wav bytes"
+        async def load_model(self):
+            return {"success": True}
+
+    async def fake_get_service():
+        return FakeVoxcpmService()
+
+    monkeypatch.setattr(voxcpm_api, "get_voxcpm_service", fake_get_service)
+
+    response = client.post("/api/voxcpm/tts", json={"text": "hi"})
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert TTS_RESULT_FIELDS.issubset(data.keys())
+    assert data["audio_id"]
+    assert data["text"] == "hi"
+    assert isinstance(data["params"], dict)
+    # voxcpm is the one engine that surfaces a top-level `engine`.
+    assert data["engine"]

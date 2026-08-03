@@ -65,6 +65,8 @@ class BatchTTSRequest(BaseModel):
 
 
 def _result_to_dict(r: TTSResultRecord) -> dict:
+    # Shape must match `TTSResultRecordOut` (app/schemas/tts.py); the
+    # `/history` endpoint validates against it via response_model.
     return {
         "id": r.id,
         "text": r.text,
