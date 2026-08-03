@@ -134,12 +134,13 @@ describe('App', () => {
   });
 
   it('deletes a project from the global hub without entering the workspace', async () => {
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     vi.mocked(indexedDBStorage.listProjects).mockResolvedValue([]);
 
     render(<App />);
 
     fireEvent.click(await screen.findByRole('button', { name: /删除项目卡片/ }));
+    // Delete confirmation now uses ConfirmDialog (not window.confirm).
+    fireEvent.click(await screen.findByRole('button', { name: '删除' }));
 
     await waitFor(() => expect(indexedDBStorage.deleteProject).toHaveBeenCalledWith('p-demo'));
     expect(screen.getByTestId('project-hub')).toBeInTheDocument();

@@ -4,6 +4,7 @@ import { ttsApi } from '../../services/api';
 import { getTTSHistory } from '../../services/indexedDB';
 import { useStorageMode } from '../../hooks/useStorageMode';
 import { useTranslation } from '../../i18n';
+import { useToast } from '../ui/useToast';
 import styles from './MultiAudioSelector.module.css';
 
 interface AudioItem {
@@ -45,6 +46,7 @@ async function loadFrontendHistory(): Promise<AudioItem[]> {
 
 export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelectorProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const { mode } = useStorageMode();
   const [items, setItems] = useState<AudioItem[]>([]);
   const [selectedOrder, setSelectedOrder] = useState<string[]>([]);
@@ -90,7 +92,7 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
       .filter(Boolean) as AudioItem[];
 
     if (orderedItems.length === 0) {
-      alert(t('multiAudioSelector.selectAtLeastOne'));
+      toast.error(t('multiAudioSelector.selectAtLeastOne'));
       return;
     }
 
@@ -110,7 +112,7 @@ export function MultiAudioSelector({ onTranscribe, processing }: MultiAudioSelec
     }
 
     onTranscribe(files);
-  }, [selectedOrder, items, onTranscribe, t]);
+  }, [selectedOrder, items, onTranscribe, t, toast]);
 
   const selectedList = selectedOrder
     .map((id) => items.find((it) => it.id === id))

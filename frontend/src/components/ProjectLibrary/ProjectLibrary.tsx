@@ -8,6 +8,7 @@ import { WorkflowDrawer } from '../Workflow/WorkflowDrawer';
 import { StoryboardPanel } from '../Storyboard/StoryboardPanel';
 import { DrawerIndicator } from '../Workflow/DrawerIndicator';
 import { ChapterSplitModal } from './ChapterSplitModal';
+import { useToast } from '../ui/useToast';
 import { NarrationDocView } from './NarrationDocView';
 import { countTextChars, estimateDurationSec, formatSeconds } from './utils';
 import { agentClient } from '../../services/langgraph/client';
@@ -86,6 +87,7 @@ export function ProjectLibrary({
   onProjectChanged,
 }: ProjectLibraryProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [mode, setMode] = useState<LibraryMode>('overview');
   const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
   const [comparing, setComparing] = useState(false);
@@ -134,7 +136,7 @@ export function ProjectLibrary({
       setDrawerCollapsed(false);
     } catch (e) {
       console.error('startWorkflow failed', e);
-      alert('启动工作流失败: ' + (e instanceof Error ? e.message : '未知错误'));
+      toast.error('启动工作流失败: ' + (e instanceof Error ? e.message : '未知错误'));
     }
   };
 

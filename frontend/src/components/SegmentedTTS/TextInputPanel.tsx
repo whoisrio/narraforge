@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '../../i18n';
+import { useToast } from '../ui/useToast';
 import { textSplitApi } from '../../services/api';
 import { stripMarkdownForTTS } from '../../utils/stripMarkdownForTTS';
 import type { Chapter } from '../../types';
@@ -38,6 +39,7 @@ export function TextInputPanel({
   showVoiceModeSwitch = true,
 }: TextInputPanelProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [text, setText] = useState(sourceText ?? '');
   const mode = splitConfig.mode ?? 'rule';
   const delimiters = splitConfig.delimiters ?? [];
@@ -105,11 +107,11 @@ export function TextInputPanel({
           onSplit(segments, text, splitVoiceMode);
           setDetailsOpen(false);
         } catch (fallbackError: unknown) {
-          alert(t('textInput.llmFailedRuleFailed', { llm: t('textInput.modeLLM'), rule: t('textInput.modeRule') }) + ': ' + (getErrorMessage(error) || getErrorMessage(fallbackError)));
+          toast.error(t('textInput.llmFailedRuleFailed', { llm: t('textInput.modeLLM'), rule: t('textInput.modeRule') }) + ': ' + (getErrorMessage(error) || getErrorMessage(fallbackError)));
         }
       } else {
         console.error('Rule split failed:', error);
-        alert(t('textInput.splitFailedMsg', { split: t('textInput.split') }) + ': ' + getErrorMessage(error));
+        toast.error(t('textInput.splitFailedMsg', { split: t('textInput.split') }) + ': ' + getErrorMessage(error));
       }
     } finally {
       setIsSplitting(false);

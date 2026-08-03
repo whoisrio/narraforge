@@ -25,6 +25,7 @@ import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
+import { useToast } from '../components/ui/useToast';
 
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
@@ -123,7 +124,7 @@ export function TTSSynthesis({
   const [adjustBusy, setAdjustBusy] = useState(false);
   const [srtDurationMode, setSrtDurationMode] = useState<'chapter' | 'global'>('chapter');
   const [generating, setGenerating] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'error' | 'success' } | null>(null);
+  const toast = useToast();
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [roles, setRoles] = useState<Role[]>([]);
   const [, setPreviewingRoleId] = useState<string | null>(null);
@@ -351,9 +352,9 @@ export function TTSSynthesis({
   }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+    if (type === 'error') toast.error(message);
+    else toast.success(message);
+  }, [toast]);
 
   useEffect(() => { ttsApi.getVoices({ project_id: project.id }).then(setVoices).catch(() => {}); }, [refreshCounter, project.id]);
 
@@ -1798,11 +1799,6 @@ export function TTSSynthesis({
         onCancel={() => setConfirmDialog(prev => ({ ...prev, open: false }))}
       />
 
-      {toast && (
-        <div className={`${styles.toast} ${toast.type === 'error' ? styles.toast_error : styles.toast_success}`}>
-          {toast.message}
-        </div>
-      )}
       {showMigration && (
         <MigrationPrompt
           localCount={localCount}

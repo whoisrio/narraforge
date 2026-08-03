@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { modelConfigApi } from '../services/api';
 import type { ModelConfigs, ModelConfigFieldValue } from '../types';
 import { useTranslation } from '../i18n';
+import { useToast } from '../components/ui/useToast';
 import { AnimationRootSetting } from '../components/Settings/AnimationRootSetting';
 import { NarrationGitSetting } from '../components/Settings/NarrationGitSetting';
 import styles from './ModelConfig.module.css';
@@ -32,13 +33,13 @@ export function ModelConfig() {
   const [configs, setConfigs] = useState<ModelConfigs | null>(null);
   const [editStates, setEditStates] = useState<Record<string, ProviderEditState>>({});
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const toast = useToast();
   const { t } = useTranslation();
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3000);
-  }, []);
+    if (type === 'error') toast.error(message);
+    else toast.success(message);
+  }, [toast]);
 
   // 加载配置
   useEffect(() => {
@@ -264,12 +265,6 @@ export function ModelConfig() {
 
       <AnimationRootSetting />
       <NarrationGitSetting />
-
-      {toast && (
-        <div className={`${styles.toast} ${styles[toast.type]}`}>
-          {toast.message}
-        </div>
-      )}
     </div>
   );
 }

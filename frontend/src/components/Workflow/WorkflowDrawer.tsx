@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
+import { useToast } from '../ui/useToast';
+import { useConfirm } from '../ui/useConfirm';
 import { useStream } from '@langchain/langgraph-sdk/react';
 import { agentClient } from '../../services/langgraph/client';
 import { NODE_STATE_KEYS } from '../../services/langgraph/contracts';
@@ -78,6 +80,8 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
   const [milestones, setMilestones] = useState<Record<string, MilestoneEvent[]>>({});
   const [fullscreen, setFullscreen] = useState<string | null>(null);
   const startedRef = useRef(false);
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const stream = useStream<WorkflowState, { CustomEventType: MilestoneEvent }>({
     apiUrl: typeof window !== 'undefined' ? `http://${window.location.hostname}:2024` : 'http://127.0.0.1:2024',
@@ -192,12 +196,17 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
 
   // 指定节点重跑（fork）：确认后从该节点首次完成的 checkpoint 恢复执行。
   const handleFork = async (nodeId: string) => {
-    if (!window.confirm(`从「${nodeId}」节点重跑？该节点及之后的进度将被覆盖。`)) return;
+    const ok = await confirm({
+      title: '重跑节点',
+      message: `从「${nodeId}」节点重跑？该节点及之后的进度将被覆盖。`,
+      variant: 'warning',
+    });
+    if (!ok) return;
     try {
       const history = await agentClient.threads.getHistory(threadId, { limit: 100 });
       const checkpointId = pickForkCheckpoint(history as unknown as HistoryCheckpoint[], nodeId);
       if (!checkpointId) {
-        alert(`无法从「${nodeId}」重跑：未找到该节点执行前的历史检查点。`);
+        toast.error(`无法从「${nodeId}」重跑：未找到该节点执行前的历史检查点。`);
         return;
       }
       // SDK SubmitOptions 用 checkpoint（非 checkpointId）；checkpoint_ns 空串为默认命名空间。
@@ -207,7 +216,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
       });
     } catch {
       // 历史查询失败不能静默：用户点了重跑却毫无反应是最差的反馈
-      alert(`从「${nodeId}」重跑失败：无法获取历史检查点，请稍后重试。`);
+      toast.error(`从「${nodeId}」重跑失败：无法获取历史检查点，请稍后重试。`);
     }
   };
 

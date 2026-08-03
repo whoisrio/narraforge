@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '../../i18n';
+import { useToast } from '../ui/useToast';
 import { Button, Card } from '../ui';
 
 interface AudioRecorderProps {
@@ -8,6 +9,7 @@ interface AudioRecorderProps {
 
 export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [recording, setRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [volumeLevel, setVolumeLevel] = useState(0);
@@ -121,7 +123,7 @@ export function AudioRecorder({ onRecordComplete }: AudioRecorderProps) {
 
     } catch (err) {
       console.error('Failed to start recording:', err);
-      alert(t('audioRecorder.micAccessDenied'));
+      toast.error(t('audioRecorder.micAccessDenied'));
     }
   };
 

@@ -320,43 +320,6 @@
   border-color: var(--color-border-strong, var(--color-border-strong));
 }
 
-/* ---- Toast ---- */
-.toast {
-  position: fixed;
-  bottom: 32px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 10px 28px;
-  border-radius: 9999px;
-  font-family: var(--font-family-body, 'Plus Jakarta Sans', sans-serif);
-  font-size: 14px;
-  font-weight: 500;
-  z-index: 9999;
-  animation: toastIn 0.3s ease;
-  box-shadow: 0 8px 24px rgba(26, 24, 20, 0.12);
-}
-
-.toast.success {
-  background: var(--color-success, var(--color-success));
-  color: var(--color-surface);
-}
-
-.toast.error {
-  background: var(--color-danger, var(--color-error));
-  color: var(--color-surface);
-}
-
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
 /* ---- Loading ---- */
 .loading {
   display: flex;

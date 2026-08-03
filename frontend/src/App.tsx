@@ -13,6 +13,10 @@ import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
 import { VoiceRefreshProvider } from './hooks/VoiceRefreshProvider';
 import { ThemeProvider } from './hooks/useTheme';
 import { TranslationProvider, useTranslation } from './i18n';
+import { ToastProvider } from './components/ui/Toast';
+import { useToast } from './components/ui/useToast';
+import { ConfirmProvider } from './components/ui/Confirm';
+import { useConfirm } from './components/ui/useConfirm';
 import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import type { SegmentedProject } from './types';
@@ -53,6 +57,8 @@ function AppContent() {
 
   const projectStorage = storageForMode(storageMode);
   const { t } = useTranslation();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   useEffect(() => {
     configApi.getStorageMode().then(
@@ -113,15 +119,20 @@ function AppContent() {
       setActiveProjectId(project.id);
     } catch (err) {
       console.error('Create project failed:', err);
-      window.alert(t('projectHub.createFailed'));
+      toast.error(t('projectHub.createFailed'));
     }
   };
 
   const handleDeleteProjectFromHub = async (projectId: string) => {
     const target = projects.find(project => project.id === projectId);
     const targetName = target?.name ?? t('project.unknownProject');
-    const confirmMessage = t('tts.deleteProjectConfirm', { name: targetName });
-    if (!window.confirm(confirmMessage)) return;
+    const ok = await confirm({
+      title: t('tts.deleteProject'),
+      message: t('tts.deleteProjectConfirm', { name: targetName }),
+      variant: 'danger',
+      confirmLabel: t('common.delete'),
+    });
+    if (!ok) return;
     try {
       await projectStorage.deleteProject(projectId);
       await refreshProjects();
@@ -130,7 +141,7 @@ function AppContent() {
       }
     } catch (err) {
       console.error('Delete project failed:', err);
-      window.alert(t('projectHub.deleteFailed'));
+      toast.error(t('projectHub.deleteFailed'));
     }
   };
 
@@ -149,7 +160,7 @@ function AppContent() {
       await refreshProjects();
     } catch (err) {
       console.error('Rename project failed:', err);
-      window.alert(t('projectHub.renameFailed'));
+      toast.error(t('projectHub.renameFailed'));
     }
   };
 
@@ -157,7 +168,7 @@ function AppContent() {
     try {
       await segmentedProjectApi.exportProject(projectId);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : t('projectHub.import.failed'));
+      toast.error(err instanceof Error ? err.message : t('projectHub.import.failed'));
     }
   };
 
@@ -168,7 +179,7 @@ function AppContent() {
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } };
       const detail = e?.response?.data?.detail;
-      window.alert(detail ? `${t('projectHub.import.failed')}: ${detail}` : t('projectHub.import.failed'));
+      toast.error(detail ? `${t('projectHub.import.failed')}: ${detail}` : t('projectHub.import.failed'));
     }
   };
 
@@ -255,7 +266,11 @@ export default function App() {
   return (
     <ThemeProvider>
       <TranslationProvider>
-        <AppContent />
+        <ToastProvider>
+          <ConfirmProvider>
+            <AppContent />
+          </ConfirmProvider>
+        </ToastProvider>
       </TranslationProvider>
     </ThemeProvider>
   );

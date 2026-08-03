@@ -402,6 +402,7 @@ export const zhCN = {
     edit: '编辑',
     save: '保存',
     close: '关闭',
+    dismissNotification: '关闭通知',
     generationFailed: '生成失败',
     draftProject: '草稿项目',
     narration: '旁白',
@@ -853,6 +854,7 @@ export const zhCN = {
       regenerate: '↻ 重新生成',
       saveClose: '✓ 保存关闭',
       confirmDiscard: '未保存修改将丢失，确认放弃？',
+      discardTitle: '放弃修改',
     },
     chatSegmentView: {
       description: '旁白与台词按生产顺序排列，保留生成、播放和局部语气标记。',
