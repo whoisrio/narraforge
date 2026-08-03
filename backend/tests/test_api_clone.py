@@ -73,3 +73,20 @@ def test_list_voices_returns_full_voice_profile_shape(client: TestClient, db_ses
     assert any(v["id"] == "v-list" for v in items)
     matched = next(v for v in items if v["id"] == "v-list")
     assert VOICE_PROFILE_FIELDS.issubset(matched.keys())
+
+
+def test_create_from_design_returns_full_voice_profile_shape(client: TestClient):
+    """create-from-design 走独立的 base64->save->preview 路径，也要返回完整形状."""
+    import base64
+    audio_b64 = base64.b64encode(b"fake preview audio" * 2000).decode()
+    response = client.post("/api/clone/create-from-design", json={
+        "audio_base64": audio_b64,
+        "engine": "preset",
+        "name": "designed-voice",
+        "preview_text": "试听文本",
+    })
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert VOICE_PROFILE_FIELDS.issubset(data.keys())
+    assert data["name"] == "designed-voice"
+    assert data["has_preview"] is True

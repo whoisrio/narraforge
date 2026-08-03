@@ -98,7 +98,7 @@ def convert_audio_to_mp3(input_path: str, output_path: str) -> bool:
 
 class RegisterRequest(BaseModel):
     voice_id: str
-    name: str = None
+    name: str | None = None
     role: str = "custom"
     avatar: str | None = None
     project_id: str | None = None
@@ -107,7 +107,7 @@ class RegisterRequest(BaseModel):
 
 class UploadFromUrlRequest(BaseModel):
     audio_url: str
-    name: str = None
+    name: str | None = None
     role: str = "custom"
     prompt_text: Optional[str] = None
     project_id: str | None = None
