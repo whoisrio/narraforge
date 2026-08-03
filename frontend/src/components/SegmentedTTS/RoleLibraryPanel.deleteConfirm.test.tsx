@@ -1,5 +1,6 @@
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { ConfirmProvider } from '../ui/Confirm';
 
 vi.mock('../../i18n', () => ({
   useTranslation: () => ({ t: (k: string, p?: Record<string, unknown>) => (p ? `${k}:${JSON.stringify(p)}` : k), locale: 'zh-CN', setLocale: () => {} }),
@@ -25,28 +26,32 @@ const ROLES = [
 
 function renderPanel() {
   listRoles.mockResolvedValue(ROLES);
-  return render(<RoleLibraryPanel open onClose={vi.fn()} onRolesChanged={vi.fn()} projectId="p1" />);
+  return render(
+    <ConfirmProvider>
+      <RoleLibraryPanel open onClose={vi.fn()} onRolesChanged={vi.fn()} projectId="p1" />
+    </ConfirmProvider>,
+  );
 }
 
 describe('RoleLibraryPanel delete confirm', () => {
   it('does NOT delete when confirm is cancelled', async () => {
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     renderPanel();
     const del = await screen.findByText('segment.roleLibrary.delete');
     fireEvent.click(del);
-    expect(confirmSpy).toHaveBeenCalled();
+    // ConfirmDialog appears; cancel it.
+    fireEvent.click(await screen.findByRole('button', { name: 'common.cancel' }));
     expect(deleteRole).not.toHaveBeenCalled();
-    confirmSpy.mockRestore();
   });
 
   it('deletes after confirm and passes role name in the message', async () => {
     deleteRole.mockResolvedValue(undefined);
-    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderPanel();
     const del = await screen.findByText('segment.roleLibrary.delete');
     fireEvent.click(del);
-    expect(confirmSpy.mock.calls[0][0]).toContain('小明');
+    // The confirm dialog message includes the role name.
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog).toHaveTextContent('小明');
+    fireEvent.click(screen.getByRole('button', { name: 'common.confirm' }));
     await waitFor(() => expect(deleteRole).toHaveBeenCalledWith('r1'));
-    confirmSpy.mockRestore();
   });
 });

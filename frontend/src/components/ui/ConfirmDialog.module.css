@@ -20,6 +20,9 @@
 }
 
 .dialog {
+  /* z-index intentionally left to the overlay's stacking context. Migrating
+     this (and the other hand-rolled overlays at z-index:1000) onto the token
+     scale is tracked as F-P1-5 (overlay convergence). */
   width: 380px;
   max-width: 90vw;
   background: var(--color-surface);

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useTranslation } from '../../i18n';
 import styles from './ConfirmDialog.module.css';
 
@@ -22,6 +23,20 @@ export function ConfirmDialog({
   const { t } = useTranslation();
   const resolvedConfirmLabel = confirmLabel ?? t('common.confirm');
   const resolvedCancelLabel = cancelLabel ?? t('common.cancel');
+
+  // Esc dismisses (equivalent to cancel). Only active while open.
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onCancel]);
+
   if (!open) return null;
 
   return (
@@ -37,10 +52,14 @@ export function ConfirmDialog({
         <div className={styles.actions}>
           <button
             className={styles.cancelBtn}
+            // For destructive actions, default focus to cancel so an accidental
+            // Enter doesn't trigger the destructive confirm.
+            autoFocus={variant === 'danger'}
             onClick={(e) => { e.stopPropagation(); onCancel(); }}
           >{resolvedCancelLabel}</button>
           <button
             className={variant === 'danger' ? styles.confirmDanger : styles.confirmWarning}
+            autoFocus={variant !== 'danger'}
             onClick={(e) => { e.stopPropagation(); onConfirm(); }}
           >
             {resolvedConfirmLabel}

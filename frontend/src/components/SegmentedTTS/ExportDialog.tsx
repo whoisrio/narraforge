@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import type { Segment } from '../../types';
 import { useTranslation } from '../../i18n';
+import { useConfirm } from '../ui/useConfirm';
 import { useStorageMode } from '../../hooks/useStorageMode';
 import { segParams } from '../../services/segmentShims';
 import { segmentedProjectApi, subtitleLlmApi } from '../../services/api';
@@ -44,6 +45,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { t } = useTranslation();
+  const confirm = useConfirm();
 
   const toggleOpt = useCallback((opt: ExportOption) => {
     setOptions(prev => prev.includes(opt) ? prev.filter(x => x !== opt) : [...prev, opt]);
@@ -80,7 +82,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
             failed: String(segsWithTs.length - ready.length), 
             total: String(segsWithTs.length) 
           });
-          if (!confirm(confirmMsg)) {
+          if (!(await confirm({ title: t('segment.exportDialog.title'), message: confirmMsg, variant: 'warning' }))) {
             setExporting(false); return;
           }
         }

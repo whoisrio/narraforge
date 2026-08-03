@@ -4,6 +4,8 @@ import type { Chapter } from '../../types';
 import { segmentedProjectApi, type ChapterSyncStatus } from '../../services/api';
 import { ChapterSyncBadges } from '../SegmentedTTS/ChapterSyncBadges';
 import { ChapterSyncModal } from '../SegmentedTTS/ChapterSyncModal';
+import { useToast } from '../ui/useToast';
+import { useConfirm } from '../ui/useConfirm';
 import styles from './ProjectShell.module.css';
 
 
@@ -76,6 +78,8 @@ export function ProjectShell({
   const [syncModal, setSyncModal] = useState<{ chapterId: string; status: ChapterSyncStatus } | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const { t } = useTranslation();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const chapterIds = (chapters ?? []).map((c) => c.id).join(',');
   const isScratchpad = projectId === '__scratchpad__';
@@ -121,7 +125,13 @@ export function ProjectShell({
 
   const handleResplit = useCallback(async (chapterId: string) => {
     if (!projectId) return;
-    if (!window.confirm(t('sync.resplitDesc'))) return;
+    const ok = await confirm({
+      title: t('sync.modalTitle'),
+      message: t('sync.resplitDesc'),
+      variant: 'danger',
+      confirmLabel: t('common.confirm'),
+    });
+    if (!ok) return;
     setSyncBusy(true);
     try {
       await segmentedProjectApi.resplitFromScript(projectId, chapterId);
@@ -129,11 +139,11 @@ export function ProjectShell({
       await refetchSyncStatus(chapterId);
       onProjectChanged?.();
     } catch {
-      window.alert(t('sync.syncFailed'));
+      toast.error(t('sync.syncFailed'));
     } finally {
       setSyncBusy(false);
     }
-  }, [projectId, t, refetchSyncStatus, onProjectChanged]);
+  }, [projectId, t, confirm, toast, refetchSyncStatus, onProjectChanged]);
 
   const handleRewrite = useCallback(async (chapterId: string) => {
     if (!projectId) return;
@@ -144,11 +154,11 @@ export function ProjectShell({
       await refetchSyncStatus(chapterId);
       onProjectChanged?.();
     } catch {
-      window.alert(t('sync.syncFailed'));
+      toast.error(t('sync.syncFailed'));
     } finally {
       setSyncBusy(false);
     }
-  }, [projectId, refetchSyncStatus, onProjectChanged]);
+  }, [projectId, toast, refetchSyncStatus, onProjectChanged]);
 
   const startRename = (chapter: Chapter) => {
     setEditingChapterId(chapter.id);

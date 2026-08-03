@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { voiceApi } from '../../services/api';
 import { useTranslation } from '../../i18n';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
+import { useToast } from '../ui/useToast';
 import type { VoiceProfile } from '../../types';
 import { voicePreviewAudioUrl } from '../../types';
 import { Button, Modal, Input, Select, Loading, EmptyState, Card, Alert } from '../ui';
@@ -23,6 +24,7 @@ function getErrorDetail(error: unknown, fallback: string) {
 
 export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -161,7 +163,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       triggerRefresh();
     } catch (err) {
       console.error('Register failed:', err);
-      alert(t('voiceList.registrationFailed'));
+      toast.error(t('voiceList.registrationFailed'));
     } finally {
       setRegisteringId(null);
     }

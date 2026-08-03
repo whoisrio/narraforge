@@ -218,9 +218,11 @@ test.describe('章节分层同步 Phase B', () => {
     await expect(modal.getByRole('button', { name: '以改写稿重新拆分' })).toBeVisible();
     await expect(modal.getByRole('button', { name: '以分段回写改写稿' })).toHaveCount(0);
 
-    // resplit requires a window.confirm; accept it
-    page.on('dialog', (d) => void d.accept());
+    // resplit requires confirmation (ConfirmDialog, replaces window.confirm)
     await modal.getByRole('button', { name: '以改写稿重新拆分' }).click();
+    const confirmDialog = page.getByRole('alertdialog').filter({ hasText: '丢弃现有分段' });
+    await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
+    await confirmDialog.getByRole('button', { name: '确认' }).click();
 
     // ── 3. badge + modal gone; layers clean; segments regenerated from new L2 ──
     await expect(modal).toBeHidden();

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { Role, RoleSnapshot, EngineParams } from '../../types';
 import { roleApi } from '../../services/api';
 import { useTranslation } from '../../i18n';
+import { useConfirm } from '../ui/useConfirm';
 import styles from './RoleLibraryPanel.module.css';
 
 interface RoleLibraryPanelProps {
@@ -44,6 +45,7 @@ function roleToDraft(role: Role): RoleSnapshot {
 
 export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: RoleLibraryPanelProps) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [roles, setRoles] = useState<Role[]>([]);
   const [draft, setDraft] = useState<RoleSnapshot>(() => createEmptyRole(projectId));
   const [error, setError] = useState<string | null>(null);
@@ -99,9 +101,12 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
   const removeRole = async (roleId: string) => {
     setError(null);
     const target = roles.find((r) => r.id === roleId);
-    if (!window.confirm(
-      t('segment.roleLibrary.deleteConfirm', { name: target?.name ?? roleId }),
-    )) return;
+    if (!(await confirm({
+      title: t('segment.roleLibrary.delete'),
+      message: t('segment.roleLibrary.deleteConfirm', { name: target?.name ?? roleId }),
+      variant: 'danger',
+      confirmLabel: t('common.confirm'),
+    }))) return;
     try {
       await roleApi.deleteRole(roleId);
       const next = roles.filter((role) => role.id !== roleId);

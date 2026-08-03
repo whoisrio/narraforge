@@ -1,6 +1,8 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectShell } from './ProjectShell';
+import { ToastProvider } from '../ui/Toast';
+import { ConfirmProvider } from '../ui/Confirm';
 
 vi.mock('../../services/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../services/api')>();
@@ -196,37 +198,41 @@ describe('ProjectShell', () => {
     expect(screen.queryByRole('button', { name: /下移章节/ })).not.toBeInTheDocument();
   });
 
-  it('alerts a failure message (not "syncing") when resplit-from-script fails', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('shows a failure toast (not "syncing") when resplit-from-script fails', async () => {
     render(
-      <ProjectShell
-        projectId="p1"
-        projectName="草稿项目"
-        activeSection="studio"
-        locale="zh-CN"
-        chapterName="第一章"
-        chapters={[
-          { id: 'ch-1', name: '第一章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
-        ]}
-        activeChapterId="ch-1"
-        onSelectChapter={vi.fn()}
-        onRenameChapter={vi.fn()}
-        onDeleteChapter={vi.fn()}
-        onSectionChange={vi.fn()}
-      >
-        <div>Studio content</div>
-      </ProjectShell>,
+      <ToastProvider>
+        <ConfirmProvider>
+          <ProjectShell
+            projectId="p1"
+            projectName="草稿项目"
+            activeSection="studio"
+            locale="zh-CN"
+            chapterName="第一章"
+            chapters={[
+              { id: 'ch-1', name: '第一章', segments: [], voice: { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' }, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: '2026-01-01', updated_at: '2026-01-01' },
+            ]}
+            activeChapterId="ch-1"
+            onSelectChapter={vi.fn()}
+            onRenameChapter={vi.fn()}
+            onDeleteChapter={vi.fn()}
+            onSectionChange={vi.fn()}
+          >
+            <div>Studio content</div>
+          </ProjectShell>
+        </ConfirmProvider>
+      </ToastProvider>,
     );
 
     // 等待 sync badge 出现并打开同步弹窗
     const badge = await screen.findByLabelText('该章节文本已改动，与上下游不一致');
     fireEvent.click(badge);
     fireEvent.click(await screen.findByRole('button', { name: '以改写稿重新拆分' }));
+    // Resplit is destructive -> ConfirmDialog; confirm to proceed.
+    fireEvent.click(await screen.findByRole('button', { name: '确认' }));
 
-    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
-    const message = alertSpy.mock.calls[0][0];
-    expect(message).not.toBe('同步中…');
-    expect(message).toBe('同步失败，请稍后重试');
+    // Failure now surfaces as an aria-live toast (role=alert), not window.alert.
+    const toast = await screen.findByRole('alert');
+    expect(toast).toHaveTextContent('同步失败，请稍后重试');
+    expect(toast).not.toHaveTextContent('同步中…');
   });
 });

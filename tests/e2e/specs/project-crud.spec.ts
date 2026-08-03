@@ -175,20 +175,18 @@ test.describe('项目增删改查', () => {
     // asset dir is the name slug; resolve BEFORE deletion (manifest is gone after)
     const targetDirName = projectDirNameForId(targetId);
 
-    // Set up dialog handler BEFORE triggering the delete action
-    page.on('dialog', async (dialog) => {
-      expect(dialog.message()).toContain('确定删除项目');
-      await dialog.accept();
-    });
-
     // Open the menu for the new project and click delete
     const projectCard = page.locator('article[aria-label*="项目 E2E-待删除项目"]').first();
     await expect(projectCard).toBeVisible({ timeout: 5_000 });
     await projectCard.locator('[aria-haspopup="menu"]').click();
     await page.waitForTimeout(500); // wait for menu animation
 
-    // Click the delete menu item
+    // Click the delete menu item -> opens a ConfirmDialog (replaces window.confirm)
     await page.getByRole('menuitem', { name: /删除/ }).click();
+    const confirmDialog = page.getByRole('alertdialog');
+    await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
+    await expect(confirmDialog).toContainText('确定删除项目');
+    await confirmDialog.getByRole('button', { name: '删除' }).click();
 
     // ── Step 2: POST-COMMIT — project no longer exists, count -1 ──
 

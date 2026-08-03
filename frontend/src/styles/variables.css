@@ -114,6 +114,13 @@
   --z-modal: 500;
   --z-popover: 600;
   --z-tooltip: 700;
+  --z-toast: 800;
+  /* Toasts sit above ui/Modal (500) so transient notifications stay visible
+     even while a modal is open; toasts are non-blocking (pointer-events: none
+     on the region) so they never intercept modal interaction. NOTE: some
+     hand-rolled overlays still use z-index:1000/9999 (F-P1-5 will migrate
+     them onto this scale); ConfirmDialog keeps z-index:9999 until then so it
+     stays above those overlays. */
 
   /* ---- Component Tokens ---- */
   --header-height: 64px;

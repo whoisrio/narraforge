@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from '../../i18n';
+import { useToast } from '../ui/useToast';
 
 interface AudioUploaderProps {
   /** 文件选择后回调，传递选中的 File 对象（不自动上传） */
@@ -8,11 +9,12 @@ interface AudioUploaderProps {
 
 export function AudioUploader({ onFileSelected }: AudioUploaderProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [dragOver, setDragOver] = useState(false);
 
   const handleFile = (file: File) => {
     if (!file.name.match(/\.(mp3|wav|webm)$/i)) {
-      alert(t('audioUploader.invalidFormat'));
+      toast.error(t('audioUploader.invalidFormat'));
       return;
     }
     onFileSelected?.(file);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Segment, EngineParams } from '../../types';
 import { useTranslation } from '../../i18n';
+import { useConfirm } from '../ui/useConfirm';
 import { segEngine, segEffectiveParams } from '../../services/segmentShims';
 import styles from './SegmentEditDrawer.module.css';
 
@@ -20,6 +21,7 @@ interface SegmentEditDrawerContentProps extends Omit<SegmentEditDrawerProps, 'se
 
 function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML, onUpdateParams, onRegenerate, onAnnotateSSML }: SegmentEditDrawerContentProps) {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [localText, setLocalText] = useState(segment.text);
   const [localSSML, setLocalSSML] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -31,13 +33,17 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
     textareaRef.current?.focus();
   }, []);
 
-  const handleClose = useCallback(() => {
+  const handleClose = useCallback(async () => {
     if (dirty) {
-      const ok = confirm(t('segment.editDrawer.confirmDiscard'));
+      const ok = await confirm({
+        title: t('segment.editDrawer.discardTitle'),
+        message: t('segment.editDrawer.confirmDiscard'),
+        variant: 'warning',
+      });
       if (!ok) return;
     }
     onClose();
-  }, [dirty, onClose, t]);
+  }, [dirty, onClose, t, confirm]);
 
   return (
     <div className={styles.overlay} onClick={handleClose}>

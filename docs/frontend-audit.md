@@ -176,9 +176,9 @@ Legend: ⬜ pending · 🔄 in progress · ✅ done (date + verifying test)
 | F-P1-1 | U6 double-submit protection | `ProjectHub` create-project busy guard (creatingRef, resets on dialog open); `TTSSynthesis` batch-synthesize `disabled={generating}` | ✅ 2026-07-28 - e2e project-crud + studio flows green |
 | F-P1-2 | U3 `ui/Modal` no Esc / focus trap / focus return | Esc close, Tab focus trap, focus move-in on open + return on close, `role=dialog` `aria-modal` | ✅ 2026-07-28 - `ui/Modal.test.tsx` (4 tests) |
 | F-P1-3 | `ConfirmDialog` not exported from `ui/index` | Re-export `ConfirmDialog` + `ConfirmDialogProps` | ✅ 2026-07-28 - `tsc -b` clean |
+| F-P1-4 | U1/U2 unified `Toast` + `Confirm` channel; replace native `alert`/`confirm` | `ui/Toast` (`ToastProvider`+`useToast`, 3-file split: `toastContext`/`useToast`/`Toast`) + `ui/Confirm` (`ConfirmProvider`+`useConfirm`, same split); providers mounted at app root; 16 `alert()` -> `toast.error()`; 6 `confirm()` -> `await useConfirm()`; removed 2 hand-rolled `setTimeout` toasts (TTSSynthesis/ModelConfig) fixing the timer-leak bug; `--z-toast` token (replaces `z-index:1000/9999`); migrated 2 e2e specs off `page.on('dialog')` to clicking `role="alertdialog"` | ✅ 2026-08-03 - `ui/Toast.test.tsx` (5) + `ui/Confirm.test.tsx` (4); updated `App.test`/`ProjectShell.test`/`RoleLibraryPanel.deleteConfirm.test`; e2e project-crud + layer-sync green; `vitest run` 356 passed, e2e 45 passed |
 
 **Deferred (large / e2e-breaking, separate PRs):**
-- F-P1-4 shared `Toast` (aria-live + timer cleanup) + replace the 11 native `alert/confirm` call sites — blocked by 2 e2e specs that use `page.on('dialog')` (project-crud, layer-sync); needs coordinated e2e migration.
-- F-P1-5 converge the 14 hand-rolled overlays onto `ui/Modal` + route z-index through tokens — large mechanical change.
+- F-P1-5 converge the 14 hand-rolled overlays onto `ui/Modal` + route z-index through tokens - large mechanical change.
 
-After P0/P1, frontend `vitest run` is **336 passed** and the e2e suite is **43 passed** (2026-07-28).
+After P0/P1 (incl. F-P1-4), frontend `vitest run` is **356 passed** and the e2e suite is **45 passed** (2026-08-03).

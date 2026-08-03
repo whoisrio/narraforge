@@ -404,6 +404,7 @@ export const enUS: Messages = {
     edit: 'Edit',
     save: 'Save',
     close: 'Close',
+    dismissNotification: 'Dismiss notification',
     generationFailed: 'Generation Failed',
     draftProject: 'Draft Project',
     narration: 'Narration',
@@ -855,6 +856,7 @@ export const enUS: Messages = {
       regenerate: '↻ Regenerate',
       saveClose: '✓ Save & Close',
       confirmDiscard: 'Unsaved changes will be lost. Confirm discard?',
+      discardTitle: 'Discard Changes',
     },
     chatSegmentView: {
       description: 'Narrations and dialogues arranged in production order, preserving generation, playback, and local prosody marks.',
