@@ -20,6 +20,7 @@ from pathlib import Path
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
 from app.models.tts_result import TTSResultRecord
 from app.services.mimo_tts_service import get_mimo_tts_service
@@ -196,7 +197,7 @@ async def list_mimo_voices():
     return {"voices": MIMO_PRESET_VOICES}
 
 
-@router.post("/preset")
+@router.post("/preset", response_model=TTSResultOut)
 async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(get_db)):
     """使用预置音色进行语音合成"""
     try:
@@ -226,7 +227,7 @@ async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(ge
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
 
-@router.post("/voicedesign")
+@router.post("/voicedesign", response_model=TTSResultOut)
 async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session = Depends(get_db)):
     """使用文本描述设计音色进行语音合成"""
     try:
@@ -258,7 +259,7 @@ async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session =
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
 
-@router.post("/voiceclone")
+@router.post("/voiceclone", response_model=TTSResultOut)
 async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = Depends(get_db)):
     """使用已上传的音频文件进行音色复刻合成"""
     from app.models.voice_profile import VoiceProfile
@@ -337,7 +338,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
 
-@router.post("/voiceclone-direct")
+@router.post("/voiceclone-direct", response_model=TTSResultOut)
 async def synthesize_voice_clone_direct(
     request: MiMoVoiceCloneDirectRequest,
     db: Session = Depends(get_db),
