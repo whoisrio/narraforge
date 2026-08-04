@@ -159,3 +159,34 @@ async def test_empty_structure_skips(monkeypatch):
     assert backend.calls == []
     assert result["current_stage"] == "scaffold_remotion"
     assert result["error"] is None
+
+
+# ---------------------------------------------------------------------------
+# Recorded segments (origin='recorded') are skipped, not treated as failures
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_recorded_segments_skipped_without_error(monkeypatch):
+    emitted = []
+    monkeypatch.setattr(
+        "app.nodes.knowledge_video.synthesis.get_stream_writer",
+        lambda: (lambda p: emitted.append(p)),
+    )
+
+    class _WithRecorded(_FakeBackend):
+        async def get_recorded_segment_ids(self, pid):
+            return {"s1"}
+
+    backend = _WithRecorded()
+    state = {"project_id": "p1", "structured_segments": STRUCTURED}
+    result = await kv_synthesis_node(state, _FakeRuntime(backend))
+
+    # only the non-recorded segment is synthesized
+    assert [c["sid"] for c in backend.calls] == ["s2"]
+    assert result["error"] is None
+    assert result["current_stage"] == "scaffold_remotion"
+    assert len(result["synthesis_results"]) == 1
+    skip_events = [e for e in emitted if e.get("type") == "segment_skip"]
+    assert len(skip_events) == 1
+    assert "s1" in skip_events[0]["message"]

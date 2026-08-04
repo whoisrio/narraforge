@@ -581,11 +581,30 @@ export const segmentedProjectApi = {
       text?: string;
       ssml?: string;
       keep_previous?: boolean;
+      /** true 时强制重新合成已录入（origin === 'recorded'）的片段；默认跳过 */
+      force?: boolean;
     },
   ): Promise<import('../types').SegmentedProject> => {
     const { data } = await api.post<import('../types').SegmentedProject>(
       `/segmented-projects/${projectId}/chapters/${chapterId}/segments/${segmentId}/synthesize`,
       body,
+    );
+    return data;
+  },
+  /** 上传用户自录入的片段音频（录音或本地文件），替换该片段当前音频 */
+  uploadSegmentAudio: async (
+    projectId: string,
+    chapterId: string,
+    segmentId: string,
+    file: File | Blob,
+    durationSec?: number,
+  ): Promise<import('../types').SegmentedProject> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (durationSec != null) formData.append('duration_sec', String(durationSec));
+    const { data } = await api.post<import('../types').SegmentedProject>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/segments/${segmentId}/audio`,
+      formData,
     );
     return data;
   },

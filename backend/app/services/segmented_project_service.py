@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shutil
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -612,10 +613,16 @@ def update_segment_after_synth(
     audio_format: str,
     duration_sec: float | None,
     generated_params: dict[str, Any],
+    current_origin: str = "tts",
+    previous_origin: str | None = None,
 ) -> None:
     audio_data = {
         "format": audio_format,
-        "current": {"path": current_audio_path, "format": audio_format},
+        "current": {
+            "path": current_audio_path,
+            "format": audio_format,
+            "origin": current_origin,
+        },
     }
     if duration_sec is not None:
         audio_data["current"]["duration_sec"] = duration_sec
@@ -623,6 +630,8 @@ def update_segment_after_synth(
         prev_entry: dict[str, Any] = {"path": previous_audio_path}
         if previous_duration_sec is not None:
             prev_entry["duration_sec"] = previous_duration_sec
+        if previous_origin is not None:
+            prev_entry["origin"] = previous_origin
         audio_data["previous"] = prev_entry
     seg.audio = audio_data
     seg.generated_params = generated_params
@@ -731,9 +740,24 @@ def synthesize_segment(
     text_override: str | None = None,
     ssml_override: str | None = None,
     keep_previous: bool = True,
+    force: bool = False,
 ) -> SegmentedProjectSegment:
     seg = svc_get_segment(db, project_id, chapter_id, segment_id)
     chapter = seg.chapter
+
+    # Segments with user-recorded audio are locked by default: batch/agent
+    # synthesis must not silently overwrite a human recording. Callers that
+    # really mean to regenerate (e.g. explicit user action after unlock) pass
+    # force=True; the recording is still demoted to `previous` for undo.
+    existing_audio_check = seg.audio or {}
+    current_check = (
+        existing_audio_check.get("current", {})
+        if isinstance(existing_audio_check, dict) else {}
+    )
+    if not force and current_check.get("origin") == "recorded":
+        logger.info(
+            "[synthesize_segment] segment %s has recorded audio; skipping", seg.id)
+        return seg
 
     # Get role voice parameters if role_id is set
     role_id = getattr(seg, "role_id", None)
@@ -788,6 +812,7 @@ def synthesize_segment(
     prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
     prev_rel: str | None = prev_current.get("path")
     prev_duration: float | None = prev_current.get("duration_sec")
+    prev_origin: str | None = prev_current.get("origin")
     adjust_applied = False
 
     if is_ffmpeg_available():
@@ -853,6 +878,9 @@ def synthesize_segment(
                     assets.settings.segmented_dir,
                 ).as_posix()
                 prev_duration = duration_sec
+                # The `.prev.mp3` stash is the fresh TTS original (pre-adjust),
+                # not whatever audio the segment had before this synthesis.
+                prev_origin = "tts"
                 try:
                     duration_sec = probe_audio_duration(target_mp3)
                 except Exception as e:  # noqa: BLE001
@@ -880,6 +908,7 @@ def synthesize_segment(
         except FileNotFoundError:
             pass
         prev_rel = None
+        prev_origin = None
 
     update_segment_after_synth(
         db, seg,
@@ -889,8 +918,109 @@ def synthesize_segment(
         audio_format=audio_format,
         duration_sec=duration_sec,
         generated_params=effective,
+        current_origin="tts",
+        previous_origin=prev_origin,
     )
     return seg
+
+
+# ----- user-recorded segment audio -----
+
+RECORDED_AUDIO_EXTS = {"mp3", "wav", "webm", "ogg", "m4a"}
+
+
+def save_recorded_segment_audio(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    segment_id: str,
+    *,
+    audio_bytes: bytes,
+    filename: str,
+    duration_sec: float | None = None,
+) -> SegmentedProjectSegment:
+    """Store a user-recorded/uploaded audio file as the segment's current audio.
+
+    The recording is marked ``origin: 'recorded'`` so batch/agent synthesis
+    skips it (locked). Any existing current audio is demoted to ``previous``
+    (with its origin preserved) so undo-regenerate keeps working; files that
+    stop being referenced are deleted from disk.
+    """
+    seg = svc_get_segment(db, project_id, chapter_id, segment_id)
+    chapter = seg.chapter
+
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
+    if ext not in RECORDED_AUDIO_EXTS:
+        # Keep the ValueError a clean snake_case machine code (A8 error
+        # contract derives `code` from it); log the rejected extension.
+        logger.warning(
+            "[save_recorded_segment_audio] rejected extension %r for segment %s",
+            ext or "unknown", segment_id)
+        raise ValueError("unsupported_audio_format")
+    if not audio_bytes:
+        raise ValueError("empty_audio")
+
+    chapter_title = chapter.name or ""
+    project_name = chapter.project.name
+    assets.ensure_chapter_layout(
+        project_id, chapter_id,
+        chapter_title=chapter_title, project_name=project_name,
+    )
+
+    existing_audio = seg.audio or {}
+    prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
+    prev_rel: str | None = prev_current.get("path")
+    prev_duration: float | None = prev_current.get("duration_sec")
+    prev_origin: str | None = prev_current.get("origin")
+
+    # Recordings always get a unique filename so the demoted `previous` audio
+    # (path stored in DB) keeps pointing at the old file and undo stays real.
+    out_ext = "mp3" if (ext != "mp3" and is_ffmpeg_available()) else ext
+    unique_name = f"{seg.id}.rec-{uuid.uuid4().hex[:8]}.{out_ext}"
+    target = assets.chapter_dir(
+        project_id, chapter_id, project_name=project_name,
+    ) / "segments" / unique_name
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if out_ext == "mp3" and ext != "mp3":
+        # ffmpeg probes input by content, so webm/ogg/m4a/wav all transcode fine
+        transcode_to_mp3(audio_bytes, target)
+        audio_format = "mp3"
+    else:
+        target.write_bytes(audio_bytes)
+        audio_format = out_ext
+    new_rel = target.relative_to(assets.settings.segmented_dir).as_posix()
+
+    probed: float | None = None
+    if is_ffmpeg_available():
+        try:
+            probed = probe_audio_duration(target)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("probe_audio_duration failed for %s: %s", new_rel, e)
+    if probed is None and audio_format == "wav":
+        probed = _duration_from_bytes(audio_bytes, "wav")
+    final_duration = probed if probed is not None else duration_sec
+
+    # Drop files the new audio state no longer references (e.g. a previous
+    # recording two generations back), then persist.
+    new_audio: dict[str, Any] = {"current": {"path": new_rel}}
+    if prev_rel:
+        new_audio["previous"] = {"path": prev_rel}
+    _delete_dropped_audio_files(seg, new_audio)
+
+    update_segment_after_synth(
+        db, seg,
+        current_audio_path=new_rel,
+        previous_audio_path=prev_rel,
+        previous_duration_sec=prev_duration,
+        audio_format=audio_format,
+        duration_sec=final_duration,
+        generated_params=seg.generated_params or {},
+        current_origin="recorded",
+        previous_origin=prev_origin,
+    )
+    return seg
+
 
 def export_chapter_audio_mp3(
     db: Session,

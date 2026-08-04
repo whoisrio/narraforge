@@ -44,6 +44,10 @@ interface SegmentRowProps {
   onPlay: (id: string) => void;
   onTrimSilence?: (id: string) => void;
   onUndo: (id: string) => void;
+  /** 打开录入面板（录音/上传本地音频） */
+  onRecord?: (id: string) => void;
+  /** 解锁已录入音频（清除 origin 标记，允许重新合成） */
+  onUnlockAudio?: (id: string) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
   onToggleIndependentVoice?: (id: string) => void;
@@ -89,6 +93,7 @@ export function SegmentRow({
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
   layout, timeStart, timeEnd, roles, roleSnapshot, chapterVoice,
   onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
+  onRecord, onUnlockAudio,
   onMerge, onMove, isLast,
 }: SegmentRowProps) {
   const { t } = useTranslation();
@@ -120,6 +125,8 @@ export function SegmentRow({
   const isReady = segment.status === 'ready';
   const isFailed = segment.status === 'failed';
   const isIdle = segment.status === 'idle';
+  // 用户自录入音频（origin === 'recorded'）的片段处于锁定状态，跳过 TTS 合成
+  const isAudioRecorded = segment.audio.current?.origin === 'recorded';
   // SSML is stored in generated_params (or custom voice.params for un-generated segments)
   const hasSSML: boolean = !!(
     (segment.generated_params as Record<string, unknown>)?.ssml
@@ -446,6 +453,10 @@ export function SegmentRow({
         {isReady && isStale && (
           <span className={styles.compactStale} title={t('segment.segmentRow.voiceChanged')}>⚠</span>
         )}
+        {isAudioRecorded && (
+          <button className={styles.compactRecorded} title={t('segment.segmentRecord.recordedBadgeTooltip')}
+            onClick={(e) => { e.stopPropagation(); onUnlockAudio?.(segment.id); }}>🎙</button>
+        )}
         {/* Only show toggle for non-role segments (narration follows global, can be locked/unlocked) */}
         {segment.voice.source !== 'role' && (
           <button
@@ -478,6 +489,11 @@ export function SegmentRow({
             onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
             {isPlaying && !isPaused ? '⏸' : '▶'}
           </button>
+        )}
+        {onRecord && (
+          <button className={styles.compactActBtn} title={t('segment.segmentRecord.recordTooltip')} aria-label={t('segment.segmentRecord.record')}
+            disabled={isGenerating}
+            onClick={(e) => { e.stopPropagation(); onRecord(segment.id); }}>🎙</button>
         )}
         <button className={styles.compactDelBtn} title={t('common.delete')} disabled={isGenerating}
           onClick={(e) => { e.stopPropagation(); onDelete(segment.id); }}>
@@ -559,6 +575,15 @@ export function SegmentRow({
             {isFailed && <span className={styles.failMark}>✕ {segment.error || ''}</span>}
             {isIdle && <span className={styles.idleText}>{t('segment.segmentRow.idle')}</span>}
             {hasSSML && <span className={styles.ssmlMark}>SSML</span>}
+            {isAudioRecorded && (
+              <button
+                className={styles.recordedBadge}
+                title={t('segment.segmentRecord.recordedBadgeTooltip')}
+                onClick={(e) => { e.stopPropagation(); onUnlockAudio?.(segment.id); }}
+              >
+                {t('segment.segmentRecord.recordedBadge')}
+              </button>
+            )}
           </div>
           <div className={styles.actions}>
             {/* Generate button for idle/failed */}
@@ -580,6 +605,11 @@ export function SegmentRow({
             {isReady && (
               <button className={styles.actBtn} title={t('segment.segmentRow.regenerate')}
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>↻</button>
+            )}
+            {onRecord && (
+              <button className={styles.actBtn} title={t('segment.segmentRecord.recordTooltip')} aria-label={t('segment.segmentRecord.record')}
+                disabled={isGenerating}
+                onClick={(e) => { e.stopPropagation(); onRecord(segment.id); }}>🎙</button>
             )}
             {isReady && onTrimSilence && (
               <button className={styles.actBtn} title={t('segment.segmentRow.trim')}

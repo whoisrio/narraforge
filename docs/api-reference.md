@@ -889,7 +889,8 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | PUT | `/api/segmented-projects/{id}` | 全量替换（reconcile） |
 | DELETE | `/api/segmented-projects/{id}` | 删除项目 + 资产目录 |
 | POST | `/api/segmented-projects/{id}/chapters:batch` | 批量重建章节+分片（agent split_segment） |
-| POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` | 生成分片音频 |
+| POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` | 生成分片音频（`force` 可强制覆盖已录入音频） |
+| POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/audio` | 上传用户自行录入的分片音频（multipart） |
 | GET | `/api/segmented-projects/{id}/audio/{cid}/{sid}` | 读取分片 mp3 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/split` | 文本分段 |
@@ -1058,11 +1059,34 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "params": { "speed": 1.0, "volume": 80 },
   "text": null,
   "ssml": null,
-  "keep_previous": true
+  "keep_previous": true,
+  "force": false
 }
 ```
 
+- `force`：默认 `false`。
+  当分片 `audio.current.origin === 'recorded'`（用户自行录入的音频，处于锁定状态）时，未带 `force` 的请求会被跳过（返回 200 且音频不变）；`force: true` 才重新合成，录入音频降级为 `audio.previous` 供撤销。
+
 **Response:** 完整 `ProjectDetail` 对象。
+
+### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/audio`
+
+用户自行录入/上传分片音频（应对个别分片 TTS 效果不佳）。
+
+**Request:** `multipart/form-data`
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `file` | File | 是 | 音频文件，支持 mp3/wav/webm/ogg/m4a；非 mp3 在 ffmpeg 可用时转码为 mp3 |
+| `duration_sec` | float | 否 | 客户端解码得到的时长；缺省由后端探测 |
+
+**行为：**
+- 写入项目资产目录 `segments/{segment-id}.rec-{8位随机}.mp3`（唯一文件名，保证 `previous` 撤销有效）。
+- 设为 `audio.current` 并标记 `origin: 'recorded'`（锁定，agent/批量合成自动跳过）。
+- 原 `current` 降级为 `previous`（保留其 `origin`）；不再被引用的旧文件从磁盘清理。
+
+**Response:** 完整 `ProjectDetail` 对象。
+**错误:** `404 segment_not_found`；`422 unsupported_audio_format / empty_audio`。
 
 ### GET `/api/segmented-projects/{id}/chapters/{cid}/sync-status`
 

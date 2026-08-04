@@ -175,6 +175,69 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments[0].audio.previous?.id).toBe('c');
   });
 
+  it('UNDO_REGENERATE swaps origin along with current/previous audio', () => {
+    // force 重合成后：current 是新 TTS（origin 'tts'），previous 是被降级的录音（origin 'recorded'）
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3',
+      current: { id: 'tts_new', origin: 'tts' }, previous: { id: 'rec_old', origin: 'recorded' } },
+      segment_kind: 'narration', status: 'ready', created_at: '', updated_at: '' };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, { type: 'UNDO_REGENERATE', id: 's1' });
+    const seg = ac(next.project).segments[0];
+    expect(seg.audio.current).toEqual({ id: 'rec_old', origin: 'recorded' });
+    expect(seg.audio.previous).toEqual({ id: 'tts_new', origin: 'tts' });
+  });
+
+  it('RECORD_SUCCESS sets recorded origin and demotes existing audio to previous', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3',
+      current: { id: 'tts_1', origin: 'tts', duration_sec: 2 } },
+      segment_kind: 'narration', status: 'ready', created_at: '', updated_at: '' };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
+      type: 'RECORD_SUCCESS', id: 's1', audio_id: 'rec_1', duration_sec: 1.5, audio_format: 'webm',
+    });
+    const seg = ac(next.project).segments[0];
+    expect(seg.status).toBe('ready');
+    expect(seg.audio.current).toEqual({ id: 'rec_1', origin: 'recorded', duration_sec: 1.5 });
+    expect(seg.audio.previous).toEqual({ id: 'tts_1', origin: 'tts', duration_sec: 2 });
+    expect(seg.audio.format).toBe('webm');
+    expect(seg.audio.duration_sec).toBe(1.5);
+  });
+
+  it('RECORD_SUCCESS supports backend-mode audio path ref', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' },
+      segment_kind: 'narration', status: 'idle', created_at: '', updated_at: '' };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
+      type: 'RECORD_SUCCESS', id: 's1', audio_path: 'projects/p1/ch1/s1.webm', duration_sec: 3,
+    });
+    const seg = ac(next.project).segments[0];
+    expect(seg.audio.current).toEqual({ path: 'projects/p1/ch1/s1.webm', origin: 'recorded', duration_sec: 3 });
+    expect(seg.audio.previous).toBeUndefined();
+    expect(seg.status).toBe('ready');
+  });
+
+  it('UNLOCK_SEGMENT_AUDIO clears origin marker but keeps the audio ref', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'webm',
+      current: { id: 'rec_1', origin: 'recorded', duration_sec: 1.5 } },
+      segment_kind: 'narration', status: 'ready', created_at: '', updated_at: '' };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, { type: 'UNLOCK_SEGMENT_AUDIO', id: 's1' });
+    const seg = ac(next.project).segments[0];
+    expect(seg.audio.current?.origin).toBeUndefined();
+    expect(seg.audio.current?.id).toBe('rec_1');
+    expect(seg.audio.current?.duration_sec).toBe(1.5);
+  });
+
+  it('GENERATE_SUCCESS applies origin payload and keeps demoted recording origin on previous', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'webm',
+      current: { path: 'old.webm', origin: 'recorded' } },
+      segment_kind: 'narration', status: 'pending', created_at: '', updated_at: '' };
+    const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, {
+      type: 'GENERATE_SUCCESS', id: 's1',
+      current_audio_path: 'new.mp3', previous_audio_path: 'old.webm', duration_sec: 2, origin: 'tts',
+    });
+    const seg = ac(next.project).segments[0];
+    expect(seg.audio.current).toEqual({ path: 'new.mp3', origin: 'tts', duration_sec: 2 });
+    // previous_audio_path 覆盖分支必须保留被降级录音的 origin
+    expect(seg.audio.previous).toEqual({ path: 'old.webm', origin: 'recorded' });
+  });
+
   it('UPDATE_TEXT changes text', () => {
     const s: Segment = { id: 's1', text: 'old', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
     const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, { type: 'UPDATE_TEXT', id: 's1', text: 'new' });

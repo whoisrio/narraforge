@@ -567,3 +567,32 @@
 .hIdx { color: var(--color-text-muted); font-size: 10px; font-weight: 600; }
 .hDur { font-weight: 600; color: var(--color-text-primary); font-size: 12px; }
 .hTxt { color: var(--color-text-muted); overflow: hidden; white-space: nowrap; font-size: 10px; }
+
+/* Recorded audio badge (segment locked to user-recorded audio) */
+.recordedBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-success);
+  background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-success) 30%, var(--color-border));
+  border-radius: var(--radius-full);
+  padding: 1px 7px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.recordedBadge:hover {
+  background: color-mix(in srgb, var(--color-success) 20%, var(--color-surface));
+}
+
+.compactRecorded {
+  font-size: 12px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+}

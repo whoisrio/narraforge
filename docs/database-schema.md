@@ -238,12 +238,16 @@ Individual text segments within a chapter. Each segment holds text, role, voice 
 
 ```json
 {
-  "current": {"id": "idx_a", "path": "{project-slug}/chapters/{chapter-id}/segments/{segment-id}.mp3"},
+  "current": {"id": "idx_a", "path": "{project-slug}/chapters/{chapter-id}/segments/{segment-id}.mp3", "origin": "tts"},
   "previous": {"id": "idx_old"},
   "format": "mp3",
   "duration_sec": 2.3
 }
 ```
+
+`current` / `previous` 条目可带可选字段 `origin`：`"tts"`（引擎合成）或 `"recorded"`（用户自行录入/上传）。
+`origin === 'recorded'` 表示该分片音频处于锁定状态：批量/agent 合成自动跳过，手动重新生成需先解锁（前端清除标记）并以 `force: true` 调用合成端点。
+录入音频的文件名为 `{segment-id}.rec-{8位随机}.{ext}`，保证 `previous` 撤销指向真实旧文件。
 
 `path` 是相对于资产根（默认 `backend/data/projects/`，环境变量 `SEGMENTED_DIR` 可覆盖）的相对路径，也可能是绝对路径（历史数据）。读取端一律以 DB 存储路径为准；新写入的文件遵循统一布局（设计见 `docs/superpowers/specs/2026-07-25-unified-data-root-asset-naming-design.md`）。
 
@@ -569,6 +573,7 @@ Records what params were actually used for the last synthesis. Used for stalenes
 - `format`: `"mp3"` | `"wav"`
 - `current.id` / `current.path`: mutually exclusive based on storage mode
 - `previous`: saved for undo (swaps with current)
+- `origin` (optional, on `current`/`previous`): `"tts"` | `"recorded"` — `"recorded"` 为用户自行录入的音频，处于锁定状态（批量/agent 合成跳过，重新生成需解锁 + `force`）
 
 ---
 

@@ -147,6 +147,8 @@ async def _save_and_respond(
                     "engine": "mimo_tts", "voice_id": voice_label,
                     "instruction": instruction,
                 },
+                current_origin="tts",
+                previous_origin=prev_current.get("origin"),
             )
             db.commit()
             try:

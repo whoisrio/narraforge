@@ -26,6 +26,8 @@ import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Se
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/useToast';
+import { useConfirm } from '../components/ui/useConfirm';
+import { SegmentRecordPanel } from '../components/SegmentedTTS/SegmentRecordPanel';
 
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
@@ -122,9 +124,13 @@ export function TTSSynthesis({
   const [exportOpen, setExportOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [adjustBusy, setAdjustBusy] = useState(false);
+  // 录入片段音频（录音/上传）面板状态
+  const [recordSegmentId, setRecordSegmentId] = useState<string | null>(null);
+  const [recordBusy, setRecordBusy] = useState(false);
   const [srtDurationMode, setSrtDurationMode] = useState<'chapter' | 'global'>('chapter');
   const [generating, setGenerating] = useState(false);
   const toast = useToast();
+  const confirm = useConfirm();
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [roles, setRoles] = useState<Role[]>([]);
   const [, setPreviewingRoleId] = useState<string | null>(null);
@@ -185,6 +191,8 @@ export function TTSSynthesis({
   const playAllAbortRef = useRef(false);
   // Ref to always have the latest handleRegenerate (avoids stale closure in confirm dialog)
   const handleRegenerateRef = useRef<(id: string) => Promise<void>>(() => Promise.resolve());
+  // 已解锁的录入片段：下次重新合成需带 force: true（后端可能仍认为其已录入）
+  const unlockedRecordedRef = useRef<Set<string>>(new Set());
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -838,7 +846,7 @@ export function TTSSynthesis({
     }
   }, [showToast]);
 
-  const handleRegenerate = useCallback(async (id: string) => {
+  const handleRegenerate = useCallback(async (id: string, opts?: { force?: boolean }) => {
     const seg = activeChapter.segments.find(s => s.id === id);
     if (!seg) return;
     const segIdx = activeChapter.segments.findIndex(s => s.id === id);
@@ -999,6 +1007,7 @@ export function TTSSynthesis({
             text: textToSend,
             ssml: undefined,
             keep_previous: true,
+            ...(opts?.force ? { force: true } : {}),
           },
         );
         // Extract the regenerated segment from the backend response
@@ -1020,7 +1029,9 @@ export function TTSSynthesis({
             audio_format: updatedSeg?.audio.format ?? 'mp3',
             duration_sec: updatedSeg?.audio.current?.duration_sec ?? updatedSeg?.audio.duration_sec,
           generated_params: updatedSeg?.generated_params,
+          origin: updatedSeg?.audio.current?.origin ?? 'tts',
         });
+        unlockedRecordedRef.current.delete(id);
         return;
       }
 
@@ -1076,7 +1087,8 @@ export function TTSSynthesis({
       const audioId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
-      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams });
+      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams, origin: 'tts' });
+      unlockedRecordedRef.current.delete(id);
     } catch (error: unknown) {
       dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error) });
     }
@@ -1086,11 +1098,77 @@ export function TTSSynthesis({
   // Keep ref in sync
   handleRegenerateRef.current = handleRegenerate;
 
+  // 录入音频锁定保护：已录入（recorded）的片段点击重新合成时提示先解锁；
+  // 解锁后的首次重新合成带 force: true（后端可能仍标记为 recorded）
+  const handleRegenerateClick = useCallback((id: string) => {
+    const seg = activeChapter.segments.find(s => s.id === id);
+    if (seg?.audio.current?.origin === 'recorded') {
+      showToast(t('segment.segmentRecord.regenerateBlocked'), 'error');
+      return;
+    }
+    void handleRegenerate(id, { force: unlockedRecordedRef.current.has(id) });
+  }, [activeChapter.segments, handleRegenerate, showToast, t]);
+
+  const handleUnlockSegmentAudio = useCallback(async (id: string) => {
+    const ok = await confirm({
+      title: t('segment.segmentRecord.unlockConfirmTitle'),
+      message: t('segment.segmentRecord.unlockConfirmMessage'),
+      variant: 'warning',
+    });
+    if (!ok) return;
+    unlockedRecordedRef.current.add(id);
+    dispatch({ type: 'UNLOCK_SEGMENT_AUDIO', id });
+  }, [confirm, dispatch, t]);
+
+  // 录入面板确认：前端模式存 IndexedDB，后端模式上传到项目资产目录
+  const handleRecordConfirm = useCallback(async (audio: File | Blob, durationSec?: number) => {
+    const segId = recordSegmentId;
+    const seg = activeChapter.segments.find(s => s.id === segId);
+    if (!seg || !segId) return;
+    setRecordBusy(true);
+    try {
+      if (storageMode === 'backend' && project?.id) {
+        const updated = await segmentedProjectApi.uploadSegmentAudio(project.id, activeChapter.id, segId, audio, durationSec);
+        // 与合成流程一致：从返回的 ProjectDetail 中外科手术式同步该片段
+        const updatedSeg = updated.chapters
+          ?.flatMap((c: Chapter) => c.segments ?? [])
+          ?.find((s: Segment) => s.id === segId);
+        // 片段音频切换到后端路径后，清理遗留的 IndexedDB 音频
+        if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
+        if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
+        dispatch({
+          type: 'RECORD_SUCCESS',
+          id: segId,
+          audio_path: updatedSeg?.audio.current?.path,
+          duration_sec: updatedSeg?.audio.current?.duration_sec ?? durationSec,
+          audio_format: updatedSeg?.audio.format,
+        });
+      } else {
+        const MIME_TO_FMT: Record<string, string> = {
+          'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav',
+          'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a',
+        };
+        const fmt = MIME_TO_FMT[audio.type] || audio.type.split('/')[1] || 'webm';
+        const audioId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+        await saveTTSResult({ id: audioId, text: seg.text, voice_id: '', voice_name: '', audioBlob: audio, audio_format: fmt, speed: 1, volume: 80, pitch: 1, instruction: '', language: 'Chinese', created_at: new Date().toISOString(), source: 'segmented_record' });
+        dispatch({ type: 'RECORD_SUCCESS', id: segId, audio_id: audioId, duration_sec: durationSec, audio_format: fmt });
+      }
+      unlockedRecordedRef.current.delete(segId);
+      setRecordSegmentId(null);
+    } catch (error) {
+      showToast(getErrorMessage(error, t('segment.segmentRecord.saveFailed')), 'error');
+    } finally {
+      setRecordBusy(false);
+    }
+  }, [recordSegmentId, activeChapter, storageMode, project?.id, dispatch, showToast, t]);
+
   const handleRegenerateAll = useCallback(async () => {
     if (generating) return;
 
     // Segments to regenerate: idle, failed, OR ready but NOT voice-locked
     const toRegenerate = activeChapter.segments.filter(s => {
+      // 已录入音频的片段处于锁定状态，批量合成一律跳过（与后端 force=false 行为一致）
+      if (s.audio.current?.origin === 'recorded') return false;
       if (s.status === 'idle' || s.status === 'failed') return true;
       if (s.status === 'ready') {
         const hasVoiceLock = s.voice.source === 'custom';
@@ -1403,9 +1481,10 @@ export function TTSSynthesis({
       // Save trimmed audio, delete old
       const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
       const eff = segEffectiveParams(seg);
-      await saveTTSResult({ id: newId, text: seg.text, voice_id: (eff.voice_id as string) || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: (eff.speed as number) ?? 1, volume: (eff.volume as number) ?? 80, pitch: (eff.pitch as number) ?? 1, instruction: (eff.instruction as string) || '', language: (eff.language as string) || 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
+      const currentOrigin = seg.audio.current?.origin;
+      await saveTTSResult({ id: newId, text: seg.text, voice_id: (eff.voice_id as string) || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: (eff.speed as number) ?? 1, volume: (eff.volume as number) ?? 80, pitch: (eff.pitch as number) ?? 1, instruction: (eff.instruction as string) || '', language: (eff.language as string) || 'Chinese', created_at: new Date().toISOString(), source: currentOrigin === 'recorded' ? 'segmented_record' : 'segmented_tts' });
       try { await deleteTTSResult(seg.current_audio_id!); } catch { /* ignore */ }
-      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration });
+      dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, origin: currentOrigin });
       showToast(t('tts.trimmedSilence', { ms: trimmedMs }));
     } catch (e) { console.error('Trim failed:', e); showToast(t('tts.trimFailed'), 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
@@ -1665,7 +1744,9 @@ export function TTSSynthesis({
                   const currentSelected = activeChapter.selected_segment_id;
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
                 }}
-                onRegenerate={handleRegenerate}
+                onRegenerate={handleRegenerateClick}
+                onRecord={(id) => setRecordSegmentId(id)}
+                onUnlockAudio={handleUnlockSegmentAudio}
                 onPlay={handlePlaySegment}
                 onTrimSilence={handleTrimSilence}
                 onUndo={(id) => dispatch({ type: 'UNDO_REGENERATE', id })}
@@ -1718,6 +1799,19 @@ export function TTSSynthesis({
                   onClose={() => setExportOpen(false)}
                 />
               )}
+              {recordSegmentId && (() => {
+                const recordSeg = activeChapter.segments.find(s => s.id === recordSegmentId);
+                if (!recordSeg) return null;
+                return (
+                  <SegmentRecordPanel
+                    segmentText={recordSeg.text}
+                    hasExistingAudio={!!(recordSeg.audio.current?.id || recordSeg.audio.current?.path)}
+                    busy={recordBusy}
+                    onConfirm={handleRecordConfirm}
+                    onClose={() => setRecordSegmentId(null)}
+                  />
+                );
+              })()}
             </div>
           </div>
         </div>

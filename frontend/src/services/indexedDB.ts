@@ -87,9 +87,9 @@ export async function saveTTSResult(record: TTSLocalRecord): Promise<void> {
 export async function getTTSHistory(): Promise<TTSLocalRecord[]> {
   const db = await openDB();
   const results = await storeGetAll<TTSLocalRecord>(db, TTS_STORE);
-  // 过滤掉来自分段编辑器的碎片音频，保持 TTSSynthesis 历史干净
+  // 过滤掉来自分段编辑器的碎片音频（含用户录入），保持 TTSSynthesis 历史干净
   return results
-    .filter((r) => r.source !== 'segmented_tts')
+    .filter((r) => r.source !== 'segmented_tts' && r.source !== 'segmented_record')
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
