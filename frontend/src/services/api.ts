@@ -42,7 +42,7 @@ export const voiceApi = {
 
   createClone: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone', {
-      voice_id: voiceId,
+      profile_id: voiceId,
       name,
       avatar,
       project_id: projectId,
@@ -54,7 +54,7 @@ export const voiceApi = {
   /** MiMo 声音复刻 - 仅标记为 MiMo 复刻，无需云端注册 */
   createCloneMiMo: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone-mimo', {
-      voice_id: voiceId,
+      profile_id: voiceId,
       name,
       avatar,
       project_id: projectId,
@@ -66,7 +66,7 @@ export const voiceApi = {
   /** VoxCPM 声音复刻 - 仅标记为 VoxCPM 复刻，本地 GPU 推理无需云端注册 */
   createCloneVoxCPM: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
     const { data } = await api.post<VoiceProfile>('/clone/create-clone-voxcpm', {
-      voice_id: voiceId,
+      profile_id: voiceId,
       name,
       avatar,
       project_id: projectId,

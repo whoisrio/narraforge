@@ -200,7 +200,7 @@ class TestCloneAPI:
 
         public_url = "https://cdn.example.com/clone.wav"
         request_data = {
-            "voice_id": voice_id,
+            "profile_id": voice_id,
             "name": "Cloned Voice Name",
             "role": "custom",
             "engine_params": {"speed": 1, "language": "Chinese", "volume": 80}
@@ -235,7 +235,7 @@ class TestCloneAPI:
 
     def test_create_clone_voice_not_found(self, client: TestClient):
         request_data = {
-            "voice_id": "nonexistent_voice",
+            "profile_id": "nonexistent_voice",
             "name": "Test Voice"
         }
 
@@ -259,7 +259,7 @@ class TestCloneAPI:
         db_session.commit()
 
         request_data = {
-            "voice_id": voice_id,
+            "profile_id": voice_id,
             "name": "Test Voice"
         }
 
@@ -290,7 +290,7 @@ class TestCloneAPI:
         db_session.commit()
 
         params = {"mimo_mode": "voiceclone", "mimo_instruction": "温柔"}
-        response = client.post("/api/clone/create-clone-mimo", json={"voice_id": voice_id, "engine_params": params})
+        response = client.post("/api/clone/create-clone-mimo", json={"profile_id": voice_id, "engine_params": params})
         assert response.status_code == 200
         data = response.json()
 
@@ -327,7 +327,7 @@ class TestCloneAPI:
         db_session.commit()
 
         params = {"voxcpm_mode": "clone", "cfg_value": 3, "inference_timesteps": 15, "voxcpm_style_control": "happy"}
-        response = client.post("/api/clone/create-clone-voxcpm", json={"voice_id": voice_id, "engine_params": params})
+        response = client.post("/api/clone/create-clone-voxcpm", json={"profile_id": voice_id, "engine_params": params})
         assert response.status_code == 200
         data = response.json()
 
@@ -368,7 +368,7 @@ class TestCloneAPI:
         db_session.commit()
 
         params = {"voxcpm_mode": "ultimate", "cfg_value": 2, "inference_timesteps": 10}
-        response = client.post("/api/clone/create-clone-voxcpm", json={"voice_id": voice_id, "engine_params": params})
+        response = client.post("/api/clone/create-clone-voxcpm", json={"profile_id": voice_id, "engine_params": params})
         assert response.status_code == 200
         data = response.json()
 
@@ -397,7 +397,7 @@ class TestCloneAPI:
         db_session.add(voice)
         db_session.commit()
 
-        response = client.post("/api/clone/create-clone-voxcpm", json={"voice_id": voice_id})
+        response = client.post("/api/clone/create-clone-voxcpm", json={"profile_id": voice_id})
         assert response.status_code == 200
 
         db_session.expire_all()

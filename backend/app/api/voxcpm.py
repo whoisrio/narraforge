@@ -65,7 +65,7 @@ class VoxCPMDesignRequest(BaseModel):
 class VoxCPMCloneRequest(BaseModel):
     """Controllable Clone 请求"""
     text: str = Field(..., min_length=1, description="待合成的文本")
-    voice_id: str = Field(..., description="本地数据库中已上传的声音ID")
+    profile_id: str = Field(..., description="本地数据库中已上传的声音ID")
     style_control: str = Field(default="", description="风格控制描述（如：语速稍快，欢快语气）")
     cfg_value: float = Field(default=2.0, ge=1.0, le=5.0)
     inference_timesteps: int = Field(default=10, ge=1, le=50)
@@ -75,7 +75,7 @@ class VoxCPMCloneRequest(BaseModel):
 class VoxCPMUltimateCloneRequest(BaseModel):
     """Ultimate Clone 请求 — 最高保真克隆"""
     text: str = Field(..., min_length=1, description="待合成的文本")
-    voice_id: str = Field(..., description="本地数据库中已上传的声音ID")
+    profile_id: str = Field(..., description="本地数据库中已上传的声音ID")
     prompt_text: Optional[str] = Field(None, description="参考音频的完整转录文本（可选，未提供时自动从 VoiceProfile 读取）")
     style_control: str = Field(default="", description="风格控制描述（如：语速稍快，欢快语气）")
     cfg_value: float = Field(default=2.0, ge=1.0, le=5.0)
@@ -396,7 +396,7 @@ async def voice_design(request: VoxCPMDesignRequest, db: Session = Depends(get_d
 @router.post("/clone", response_model=TTSResultOut)
 async def clone(request: VoxCPMCloneRequest, db: Session = Depends(get_db)):
     """Controllable Clone — 参考音频克隆 + 可选风格控制"""
-    logger.info(f"VoxCPM clone request: voice_id={request.voice_id}, text={request.text[:50]}")
+    logger.info(f"VoxCPM clone request: profile_id={request.profile_id}, text={request.text[:50]}")
     service = await get_voxcpm_service()
     if not service.loaded:
         logger.info("VoxCPM 模型未加载，自动加载中...")
@@ -405,8 +405,8 @@ async def clone(request: VoxCPMCloneRequest, db: Session = Depends(get_db)):
             raise HTTPException(status_code=500, detail=f"模型加载失败: {load_result.get('error')}")
 
     # 查找参考音频
-    audio_path = _resolve_voice_audio_path(request.voice_id, db, prefer="source")
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    audio_path = _resolve_voice_audio_path(request.profile_id, db, prefer="source")
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
 
     try:
         wav_bytes = await service.synthesize(
@@ -420,7 +420,7 @@ async def clone(request: VoxCPMCloneRequest, db: Session = Depends(get_db)):
         return await _save_and_respond(
             wav_bytes=wav_bytes,
             text=request.text,
-            voice_id=request.voice_id,
+            voice_id=request.profile_id,
             voice_name=voice.name if voice else "",
             format=request.format,
             db=db,
@@ -450,16 +450,16 @@ async def ultimate_clone(
             raise HTTPException(status_code=500, detail=f"模型加载失败: {load_result.get('error')}")
 
     # 查找参考音频和对应的 prompt text
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     vp = (voice.voice_params or {}) if voice else {}
     voxcpm_vp = dict(vp.get("voxcpm", {}) or {})
     voxcpm_params = dict(voxcpm_vp.get("params", {}) or {})
 
     has_audition = bool(voxcpm_params.get("audition_text"))
     if has_audition:
-        audio_path = _resolve_voice_audio_path(request.voice_id, db, prefer="preview")
+        audio_path = _resolve_voice_audio_path(request.profile_id, db, prefer="preview")
     else:
-        audio_path = _resolve_voice_audio_path(request.voice_id, db, prefer="source")
+        audio_path = _resolve_voice_audio_path(request.profile_id, db, prefer="source")
 
     # prompt_text 优先使用请求中提供的，否则根据声音类型从 VoiceProfile 读取
     prompt_text = request.prompt_text
@@ -490,7 +490,7 @@ async def ultimate_clone(
         return await _save_and_respond(
             wav_bytes=wav_bytes,
             text=request.text,
-            voice_id=request.voice_id,
+            voice_id=request.profile_id,
             voice_name=voice.name if voice else "",
             format=request.format,
             db=db,
