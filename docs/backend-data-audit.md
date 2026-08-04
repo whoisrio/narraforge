@@ -112,7 +112,7 @@ Ordered by priority; each phase is independently shippable.
 ### P2 — Cleanup and consistency
 
 9. Drop zombie table `narration_documents` and the 5 zombie columns (D5); add indexes on `chapters.project_id` / `segments.chapter_id` and a `(chapter_id, position)` unique constraint (D6).
-10. Unify error contract to `{code, message}` (A8); disambiguate `voice_id` naming (A9); unify list envelopes and add pagination to history endpoints (A11).
+10. Unify error contract to `{code, message}` (A8) ✅; disambiguate `voice_id` naming (A9) ✅ 2026-08-04; unify list envelopes and add pagination to history endpoints (A11).
 11. Agent client: parse responses with `model_validate` (A12); unify binary upload convention — multipart for large files, size-checked base64 only for small previews (A13).
 
 ### P3 — Migrations and docs
@@ -154,6 +154,7 @@ Legend: ⬜ pending · 🔄 in progress · ✅ done (date + verifying test)
 | D6 | Missing indexes + no unique constraint on (parent_id, position) | `UniqueConstraint(project_id, position)` on chapters + `UniqueConstraint(chapter_id, position)` on segments; FK indexes on `chapters.project_id` + `segments.chapter_id`; P9007 migration deduplicates existing duplicate positions before creating the unique indexes; `save_project` uses two-phase position update (sentinel values then final) to support swap reorders under the constraint | ✅ 2026-08-03 - `test_segmented_projects_service.py` (2 constraint tests) + `test_migration_idempotency.py` (2 P9007 tests); backend 516✓ |
 | D5a | Zombie table `narration_documents` (0 code refs, 0 rows, FK to nonexistent `segmented_projects_old`) | P9008 `DROP TABLE narration_documents` | ✅ 2026-08-03 - `test_migration_idempotency.py` (2 P9008 tests); backend 517✓ |
 | D5b | Zombie columns in `voice_profiles` (`engine`, `engine_params`, `source_audio_path`, `cloned_preview_path`) + `segmented_projects.default_narrator_snapshot` | Already removed by P9004 (`_migrate_voice_profile`) + P9006 (`_repair_lost_constraints`) migrations (covered by B-P1-2 + B-P1-3); verified against dev+e2e DBs 2026-08-04 | ✅ already done by B-P1-2/B-P1-3 (2026-07-28) |
+| A9 | `voice_id` overloaded: Qwen cloud id in `TTSRequest`, local `VoiceProfile.id` in clone/mimo/voxcpm, edge voice name in `TTSResultRecord` | Renamed `voice_id` → `profile_id` in `RegisterRequest`, `MiMoVoiceCloneRequest`, `VoxCPMCloneRequest`, `VoxCPMUltimateCloneRequest` (4 schemas) + all `request.voice_id` → `request.profile_id` in backend clone/mimo/voxcpm endpoints; frontend `api.ts` clone calls send `profile_id`; `TTSRequest.voice_id` (CosyVoice cloud ID), `TTSResultRecord.voice_id` (context-dependent), `EngineParams.voice_id` (generic) left unchanged. URL path `/{voice_id}` unchanged (REST convention). | ✅ 2026-08-04 - integration `test_clone_api.py` (27); backend 536✓, frontend 364✓, e2e 46✓ |
 
 **Deferred (large / risky, separate PRs):**
 - B-P1-8 `response_model` on the remaining untyped endpoints (config/model_config/speech_to_text/text_split/sources/clone non-voice + list-envelope unification A11 + qwen/preview-audio/update-description) - large mechanical change; clone voice (B-P1-8a) + TTS engines (B-P1-8b) done. Remaining needs config/STT/etc. schemas created first.

@@ -97,7 +97,7 @@ def convert_audio_to_mp3(input_path: str, output_path: str) -> bool:
 # ============ Request Models ============
 
 class RegisterRequest(BaseModel):
-    voice_id: str
+    profile_id: str
     name: str | None = None
     role: str = "custom"
     avatar: str | None = None
@@ -304,7 +304,7 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
 @router.post("/create-clone", response_model=VoiceProfileOut)
 async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
     """注册克隆声音 - 调用千问 API"""
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
@@ -382,7 +382,7 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
     没有持久化 voice_id。此接口只是将上传的音频标记为「MiMo 复刻」，
     后续在 TTS 合成时自动读取音频文件转 base64 发给 MiMo API。
     """
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
@@ -430,7 +430,7 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
     不需要注册到云端。此接口只是将上传的音频标记为「VoxCPM 复刻」，
     后续在 TTS 合成时自动读取音频文件路径传给 VoxCPM 模型。
     """
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 

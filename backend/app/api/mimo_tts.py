@@ -62,7 +62,7 @@ class MiMoVoiceDesignRequest(BaseModel):
 class MiMoVoiceCloneRequest(BaseModel):
     """音频克隆合成请求 - 使用已上传的音频文件ID"""
     text: str = Field(..., min_length=1, description="待合成的文本")
-    voice_id: str = Field(..., description="本地数据库中已上传的声音ID")
+    profile_id: str = Field(..., description="本地数据库中已上传的声音ID")
     instruction: str = Field(default="", description="风格指令")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
     context: list[dict] | None = None  # [{role: "user", content: "..."}] 上下文对话
@@ -267,7 +267,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
     from app.models.voice_profile import VoiceProfile
 
     # 查找本地声音记录
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.voice_id).first()
+    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="声音记录不存在")
 
