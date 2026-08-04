@@ -6,8 +6,10 @@ import { useStorageMode } from './useStorageMode';
 
 function getErrorDetail(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as { response?: { data?: { detail?: string } } }).response;
-    return response?.data?.detail || fallback;
+    const response = (error as { response?: { data?: { detail?: unknown } } }).response;
+    const detail = response?.data?.detail;
+    if (typeof detail === 'string') return detail;
+    if (typeof detail === 'object' && detail !== null && 'message' in detail) return (detail as { message: string }).message;
   }
   return fallback;
 }

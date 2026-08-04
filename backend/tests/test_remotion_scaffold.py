@@ -146,7 +146,7 @@ def test_scaffold_endpoint_422_without_target(client, monkeypatch):
     )
     resp = client.post("/api/segmented-projects/p1/scaffold-remotion", json={})
     assert resp.status_code == 422
-    assert resp.json()["detail"] == "animation_root_not_configured"
+    assert resp.json()["detail"]["code"] == "animation_root_not_configured"
 
 
 # ---------------------------------------------------------------------------

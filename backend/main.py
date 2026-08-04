@@ -1,11 +1,14 @@
 import logging
 import logging.handlers
 import os
+import re
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import init_db
@@ -110,6 +113,64 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy", "app_env": settings.app_env}
+
+
+# ---- Structured error responses (audit A8) ----
+_MACHINE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+def _is_machine_code(s: str) -> bool:
+    """Check if a string is a clean snake_case machine code."""
+    return bool(_MACHINE_CODE_RE.match(s))
+
+
+@app.exception_handler(HTTPException)
+async def structured_http_exception(request: Request, exc: HTTPException):
+    """Wrap all HTTPException responses in a consistent {detail: {code, message}} format.
+
+    - Machine codes (snake_case, e.g. 'project_not_found') → used as both
+      `code` and `message`.
+    - Sentences / raw exception strings → generic status-derived `code`,
+      original string as `message`.
+    - Already-structured dicts with a 'code' key → passed through.
+
+    The `detail` envelope matches FastAPI's convention so existing frontend
+    code reading `response.data.detail` continues to work. The inner object
+    now always has `code` + `message` for structured error handling.
+    """
+    detail = exc.detail
+    if isinstance(detail, dict) and "code" in detail:
+        inner = detail
+    elif isinstance(detail, str):
+        code = detail if _is_machine_code(detail) else f"http_{exc.status_code}"
+        inner = {"code": code, "message": detail}
+    else:
+        inner = {"code": f"http_{exc.status_code}", "message": str(detail)}
+    headers = getattr(exc, "headers", None)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": inner},
+        headers=headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def structured_validation_exception(request: Request, exc: RequestValidationError):
+    """Wrap Pydantic 422 validation errors in the same {detail: {code, message}} envelope.
+
+    Without this, business 422s return {detail: {code, message}} while Pydantic
+    validation 422s return {detail: [{loc, msg, type}, ...]} — an inconsistent
+    contract. The handler extracts the first error for a concise message and
+    preserves the full list in `errors` for debugging.
+    """
+    errors = exc.errors()
+    first = errors[0] if errors else {}
+    loc = ".".join(str(l) for l in first.get("loc", []))
+    msg = first.get("msg", "validation error")
+    message = f"{loc}: {msg}" if loc else msg
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"code": "validation_error", "message": message, "errors": errors}},
+    )
 
 
 # Import and include routers
