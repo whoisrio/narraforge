@@ -37,6 +37,8 @@ interface SegmentListProps {
   onPlay: (id: string) => void;
   onTrimSilence?: (id: string) => void;
   onUndo: (id: string) => void;
+  onRecord?: (id: string) => void;
+  onUnlockAudio?: (id: string) => void;
   onConfirmCustom?: (id: string, localParams: Record<string, unknown>) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
@@ -99,6 +101,7 @@ export function SegmentList(props: SegmentListProps) {
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
+    onRecord: props.onRecord, onUnlockAudio: props.onUnlockAudio,
     onAnnotateSSML: props.onAnnotateSSML, onDuplicate: props.onDuplicate,
     onToggleIndependentVoice: props.onToggleIndependentVoice,
     onMerge: props.onMerge,

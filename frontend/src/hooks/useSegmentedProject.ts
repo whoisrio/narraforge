@@ -196,9 +196,11 @@ export type Action =
   | { type: 'REORDER'; fromIndex: number; toIndex: number }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
-  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').EngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown> }
+  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').EngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown>; origin?: 'tts' | 'recorded' }
   | { type: 'GENERATE_FAIL'; id: string; error: string }
   | { type: 'UNDO_REGENERATE'; id: string }
+  | { type: 'RECORD_SUCCESS'; id: string; audio_id?: string; audio_path?: string; duration_sec?: number; audio_format?: string }
+  | { type: 'UNLOCK_SEGMENT_AUDIO'; id: string }
   | { type: 'CLEAR_SEGMENT_AUDIO'; id: string }
   | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string }
   | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down' }
@@ -483,18 +485,26 @@ export function segmentedReducer(state: State, action: Action): State {
           // Frontend mode: audio stored in IndexedDB via audio_id
           if (action.audio_id) {
             seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
-            seg.audio.current = { id: action.audio_id };
+            seg.audio.current = {
+              id: action.audio_id,
+              ...(action.origin ? { origin: action.origin } : {}),
+            };
           }
           // Backend mode: audio stored on filesystem via audio_path
           if (action.current_audio_path !== undefined) {
             seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
             seg.audio.current = {
               path: action.current_audio_path,
+              ...(action.origin ? { origin: action.origin } : {}),
               ...(action.duration_sec != null ? { duration_sec: action.duration_sec } : {}),
             };
           }
           if (action.previous_audio_path !== undefined) {
-            seg.audio.previous = { path: action.previous_audio_path };
+            // previous 即旧的 current（force 重合成时被降级的录音），origin 随之一并保留
+            seg.audio.previous = {
+              path: action.previous_audio_path,
+              ...(seg.audio.previous?.origin ? { origin: seg.audio.previous.origin } : {}),
+            };
           }
           if (action.audio_format) seg.audio.format = action.audio_format;
           seg.audio.duration_sec = action.duration_sec ?? seg.audio.duration_sec;
@@ -536,6 +546,40 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.audio.previous = tmp;
         }
         seg.updated_at = new Date().toISOString();
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
+    }
+    case 'RECORD_SUCCESS': {
+      // 用户自录入音频（录音/上传）落库成功 —— 与 GENERATE_SUCCESS 同构，
+      // 但 audio.current.origin 标记为 'recorded'（锁定该片段，跳过 TTS）
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg) {
+          const entry: NonNullable<Segment['audio']['current']> = { origin: 'recorded' };
+          if (action.audio_id) entry.id = action.audio_id;
+          if (action.audio_path) entry.path = action.audio_path;
+          if (action.duration_sec != null) entry.duration_sec = action.duration_sec;
+          seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+          seg.audio.current = entry;
+          if (action.audio_format) seg.audio.format = action.audio_format;
+          seg.audio.duration_sec = action.duration_sec ?? seg.audio.duration_sec;
+          seg.status = 'ready';
+          seg.error = undefined;
+          seg.updated_at = new Date().toISOString();
+        }
+        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      })};
+    }
+    case 'UNLOCK_SEGMENT_AUDIO': {
+      // 解锁 = 清除 audio.current 的 origin 标记，之后可重新合成（force）
+      return { project: updateActive(p, ch => {
+        const s = cloneSegments(ch.segments);
+        const seg = s.find(x => x.id === action.id);
+        if (seg?.audio.current?.origin) {
+          seg.audio.current = { ...seg.audio.current, origin: undefined };
+          seg.updated_at = new Date().toISOString();
+        }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
     }

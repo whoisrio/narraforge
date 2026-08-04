@@ -263,7 +263,10 @@ def narration_git_snapshot_endpoint(db: Session = Depends(get_db)):
     from app.services.narration_versioning.job import snapshot_all
 
     remote = get_narration_git_remote(db)
-    result = snapshot_all(remote_url=remote)
+    # Pass the request-scoped session: tests override get_db to an isolated
+    # in-memory DB, and opening a fresh SessionLocal() here would bypass that
+    # isolation and read the real dev database instead.
+    result = snapshot_all(remote_url=remote, session=db)
     return {
         "commit_sha": result.commit_sha,
         "projects": result.projects_snapshotted,

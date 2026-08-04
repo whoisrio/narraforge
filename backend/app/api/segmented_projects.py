@@ -10,7 +10,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -116,6 +116,46 @@ def synthesize_segment(
             text_override=body.text,
             ssml_override=body.ssml,
             keep_previous=body.keep_previous,
+            force=body.force,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="segment_not_found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    detail = svc.get_project_detail(db, project_id)
+    assert detail is not None
+    return detail
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/audio",
+    response_model=ProjectDetail,
+)
+async def upload_segment_audio(
+    project_id: str,
+    chapter_id: str,
+    segment_id: str,
+    file: UploadFile = File(...),
+    duration_sec: float | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    """Upload a user-recorded audio file for a segment (self-recording).
+
+    The audio becomes the segment's `current` audio with `origin: 'recorded'`
+    (locked against batch/agent synthesis); any existing audio is demoted to
+    `previous` for undo.
+    """
+    _reject_scratchpad(project_id)
+    content = await file.read()
+    try:
+        svc.save_recorded_segment_audio(
+            db,
+            project_id,
+            chapter_id,
+            segment_id,
+            audio_bytes=content,
+            filename=file.filename or "",
+            duration_sec=duration_sec,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="segment_not_found")

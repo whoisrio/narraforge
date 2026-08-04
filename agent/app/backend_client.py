@@ -46,6 +46,25 @@ class BackendClient:
         r.raise_for_status()
         return r.json()
 
+    async def get_recorded_segment_ids(self, project_id: str) -> set[str]:
+        """Ids of segments whose current audio is user-recorded (locked).
+
+        Recorded segments must be skipped by batch synthesis; the backend
+        service guards too, but skipping here avoids pointless calls and
+        misleading progress events.
+        """
+        detail = await self.get_project(project_id)
+        ids: set[str] = set()
+        for ch in detail.get("chapters", []):
+            for seg in ch.get("segments", []):
+                audio = seg.get("audio") or {}
+                current = audio.get("current") if isinstance(audio, dict) else None
+                if isinstance(current, dict) and current.get("origin") == "recorded":
+                    sid = seg.get("id")
+                    if sid:
+                        ids.add(sid)
+        return ids
+
     async def batch_create_structure(
         self,
         project_id: str,

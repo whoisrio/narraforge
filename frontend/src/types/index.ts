@@ -114,9 +114,17 @@ export type VoiceSource =
 
 // ── Audio container ──
 
+export interface SegmentAudioEntry {
+  id?: string;
+  path?: string;
+  duration_sec?: number;
+  /** 'recorded' 表示用户自录入音频（录音/上传），该片段被锁定、跳过 TTS 合成 */
+  origin?: 'tts' | 'recorded';
+}
+
 export interface SegmentAudio {
-  current?: { id?: string; path?: string; duration_sec?: number };
-  previous?: { id?: string; path?: string; duration_sec?: number };
+  current?: SegmentAudioEntry;
+  previous?: SegmentAudioEntry;
   format: string;
   duration_sec?: number;
 }
@@ -261,7 +269,7 @@ export interface TTSLocalRecord {
   instruction: string;
   language: string;
   created_at: string;
-  source?: string;  // 'segmented_tts' 表示来自分段编辑器
+  source?: string;  // 'segmented_tts' 分段编辑器合成音频；'segmented_record' 分段编辑器用户录入音频
 }
 
 // 前端 IndexedDB 本地存储的 STT 记录

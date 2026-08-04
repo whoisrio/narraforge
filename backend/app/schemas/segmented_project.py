@@ -84,6 +84,7 @@ class SynthesizeSegmentRequest(BaseModel):
     text: str | None = None
     ssml: str | None = None
     keep_previous: bool = True
+    force: bool = False
 
 
 class ExportTextFileRequest(BaseModel):

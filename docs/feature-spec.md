@@ -228,6 +228,18 @@ Additional per-segment features:
 - Insert/delete/reorder segments (↑/↓ buttons per row; reorder renumbers `position` to match array order so the backend persists the new sequence)
 - Role assignment (narrator or cast)
 
+#### Self-Recorded Segment Audio (自行录入)
+
+Each segment row has a 🎙 record button for cases where TTS quality is poor on an individual segment.
+
+- Input modes: microphone recording (reuses the VoiceClone `AudioRecorder`) or local audio file upload (mp3/wav/webm/ogg/m4a), with in-panel preview before confirming.
+- If the segment already has audio, confirming shows an overwrite warning; the replaced audio is demoted to `audio.previous` so undo-regenerate can still restore it.
+- The recorded audio is stored through the same `audio.current` channel as TTS audio, so playback, chapter export, SRT timelines, and Remotion scaffolding work unchanged.
+  Frontend storage mode saves the blob to IndexedDB (`source: 'segmented_record'`, excluded from TTS history); backend storage mode uploads via `POST .../segments/{sid}/audio`, which transcodes to mp3 and stores under a unique `*.rec-*` filename.
+- Recorded segments are marked `audio.current.origin === 'recorded'` and shown with a 🔒「录入」badge.
+  They are locked: Generate All, workflow/agent batch synthesis, and plain regenerate all skip them.
+  Clicking the 🔒 badge unlocks (confirm dialog); the next regenerate sends `force: true` and demotes the recording to `previous` (undoable).
+
 #### Stale Detection
 
 Segments are compared against `Chapter.voice` (the applied/saved voice), NOT the live panel state. This means:

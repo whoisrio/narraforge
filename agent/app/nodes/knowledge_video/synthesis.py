@@ -93,6 +93,17 @@ async def kv_synthesis_node(state, runtime) -> dict:
     )
 
     backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
+
+    # Segments with user-recorded audio are locked: skip them so a workflow
+    # re-run never overwrites a human recording (the backend guards too).
+    recorded_ids: set[str] = set()
+    get_recorded = getattr(backend, "get_recorded_segment_ids", None)
+    if callable(get_recorded):
+        try:
+            recorded_ids = await get_recorded(project_id)
+        except Exception:
+            recorded_ids = set()  # fail-open: backend guard still protects
+
     results: list[dict] = []
     failures: list[str] = []
     done = 0
@@ -103,6 +114,16 @@ async def kv_synthesis_node(state, runtime) -> dict:
         for seg in ch.get("segments", []):
             sid = seg.get("_segment_id")
             if not sid:
+                continue
+            if sid in recorded_ids:
+                await emit(
+                    {
+                        "type": "segment_skip",
+                        "stage": "synthesis",
+                        "message": f"段落 {sid} 为人工录入音频，跳过合成",
+                    }
+                )
+                done += 1
                 continue
             try:
                 await backend.synthesize_segment(project_id, cid, sid, params=params)
