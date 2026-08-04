@@ -154,8 +154,8 @@ test.describe('批量合成与导出', () => {
     await expect(transportToggle).toBeVisible({ timeout: 5_000 });
     await transportToggle.click();
 
-    // Click "导出" button
-    await page.getByRole('button', { name: '导出' }).click();
+    // Click "导出" button (exact match avoids collision with "导出全部")
+    await page.getByRole('button', { name: '导出', exact: true }).click();
 
     // Verify export dialog opens
     await expect(page.getByText('导出选项')).toBeVisible({ timeout: 5_000 });

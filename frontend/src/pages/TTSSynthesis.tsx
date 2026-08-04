@@ -1489,6 +1489,32 @@ export function TTSSynthesis({
     } catch (e) { console.error('Trim failed:', e); showToast(t('tts.trimFailed'), 'error'); }
   }, [activeChapter.segments, dispatch, showToast]);
 
+  // 一键导出所有章节的 mp3 + srt 到项目导出目录（仅 backend 存储模式）
+  const handleExportAll = useCallback(async () => {
+    if (storageMode !== 'backend' || !project?.id || isScratchpadProject) return;
+    try {
+      const result = await segmentedProjectApi.exportAllChapters(project.id);
+      const dir = result.exported[0]
+        ? result.exported[0].audio_path.replace(/[/\\][^/\\]+$/, '')
+        : '';
+      showToast(t('studio.exportAllSuccess', { count: result.count, dir }));
+    } catch (error: unknown) {
+      // A8 错误契约：detail 为 {code, message, ...}
+      const resp = (error as { response?: { status?: number; data?: { detail?: unknown } } })?.response;
+      const detail = resp?.data?.detail;
+      const code = (typeof detail === 'object' && detail !== null && 'code' in detail)
+        ? (detail as { code: string }).code : undefined;
+      if (resp?.status === 409 && code === 'chapters_incomplete') {
+        const chapters = (detail as { chapters?: string[] }).chapters ?? [];
+        showToast(t('studio.exportAllIncomplete', { chapters: chapters.join('、') }), 'error');
+      } else if (resp?.status === 409 && code === 'export_directory_not_configured') {
+        showToast(t('studio.exportAllNoDir'), 'error');
+      } else {
+        showToast(getErrorMessage(error), 'error');
+      }
+    }
+  }, [storageMode, project?.id, isScratchpadProject, showToast, t]);
+
   const selectedVoice = voices.find(v => {
     const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
     return (voiceId || v.id) === selectedVoiceId;
@@ -1545,6 +1571,7 @@ export function TTSSynthesis({
           durationSec={activeChapterDuration}
           remotionPath={project.remotion_project_path}
           onExport={() => setExportOpen(true)}
+          onExportAll={storageMode === 'backend' && !isScratchpadProject ? () => { void handleExportAll(); } : undefined}
           onAdjustAudio={() => setAdjustOpen(true)}
           onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
           onSidebarCollapseChange={setRightPanelCollapsed}

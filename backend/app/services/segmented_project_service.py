@@ -1035,6 +1035,17 @@ def export_chapter_audio_mp3(
     if not is_ffmpeg_available():
         raise AudioEncoderError("ffmpeg is required to export mp3")
 
+    input_paths = _collect_chapter_audio_paths(db, chapter)
+    export_path = _chapter_audio_export_path(chapter, project_id, chapter_id, export_directory)
+    return concat_to_mp3(input_paths, export_path)
+
+
+def _collect_chapter_audio_paths(db: Session, chapter: SegmentedProjectChapter) -> list[Path]:
+    """Ordered absolute paths of the chapter's ready segment audio.
+
+    Segments whose DB-stored path has vanished from disk are flagged
+    ``audio.missing`` (and committed); ``no_ready_audio`` when nothing is left.
+    """
     input_paths: list[Path] = []
     base = assets.settings.segmented_dir.resolve()
     for seg in sorted(chapter.segments, key=lambda s: s.position):
@@ -1059,8 +1070,7 @@ def export_chapter_audio_mp3(
         raise ValueError("no_ready_audio")
 
     db.commit()
-    export_path = _chapter_audio_export_path(chapter, project_id, chapter_id, export_directory)
-    return concat_to_mp3(input_paths, export_path)
+    return input_paths
 
 
 def _safe_filename_part(value: str) -> str:
@@ -1119,6 +1129,112 @@ def copy_file_to_remotion_export_target(
     target = target_dir / f"{safe_name}{suffix}"
     shutil.copy2(source_path, target)
     return target
+
+
+# ----- one-click export: all chapters' audio + SRT -----
+
+
+class ChaptersIncompleteError(ValueError):
+    """Raised when any chapter has segments without ready audio.
+
+    Carries the offending chapter display names so the API layer can return
+    them to the user. Nothing is written when this is raised.
+    """
+
+    def __init__(self, chapters: list[str]):
+        super().__init__("chapters_incomplete")
+        self.chapters = chapters
+
+
+def resolve_export_target_dir(project: SegmentedProject) -> Path:
+    """Resolve the project's export target directory.
+
+    Priority:
+    1. Absolute (or ~) ``configs.export_directory`` — always wins, no remotion
+       project needed.
+    2. Relative export_directory (or the ``public/audio`` default) under
+       ``remotion_project_path`` — legacy behavior.
+    3. Otherwise ``ValueError("export_directory_not_configured")``.
+    """
+    configs = project.configs if isinstance(project.configs, dict) else {}
+    export_dir = str(configs.get("export_directory") or "").strip()
+    if export_dir:
+        p = Path(export_dir).expanduser()
+        if p.is_absolute():
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+    remotion_path = getattr(project, "remotion_project_path", None)
+    if remotion_path:
+        root = Path(remotion_path).expanduser()
+        root.mkdir(parents=True, exist_ok=True)
+        rel = (export_dir or "public/audio").strip("/")
+        target = root / rel
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+    raise ValueError("export_directory_not_configured")
+
+
+def _chapter_export_basename(chapter: SegmentedProjectChapter) -> str:
+    title = str(getattr(chapter, "design_title", None) or chapter.name or chapter.id)
+    return _safe_filename_part(title)
+
+
+def export_all_chapters(db: Session, project_id: str) -> dict[str, Any]:
+    """Export every chapter's concatenated mp3 + chapter-local SRT to the
+    project's export directory in one shot.
+
+    Pre-checks ALL chapters first: any segment without an existing
+    ``audio.current.path`` file aborts the whole export (nothing written).
+    """
+    from app.services.srt_service import build_srt
+
+    project = get_project_row(db, project_id)
+    if project is None:
+        raise LookupError("project_not_found")
+    if not is_ffmpeg_available():
+        raise AudioEncoderError("ffmpeg is required to export mp3")
+    target_dir = resolve_export_target_dir(project)
+
+    chapters = sorted(project.chapters, key=lambda c: c.position)
+    base = assets.settings.segmented_dir
+    incomplete: list[str] = []
+    for ch in chapters:
+        segments = sorted(ch.segments, key=lambda s: s.position)
+        if not segments:
+            incomplete.append(ch.name or ch.id)
+            continue
+        for seg in segments:
+            audio = seg.audio or {}
+            current = audio.get("current", {}) if isinstance(audio, dict) else {}
+            rel = current.get("path")
+            if not rel or not (base / rel).exists():
+                incomplete.append(ch.name or ch.id)
+                break
+    if incomplete:
+        raise ChaptersIncompleteError(incomplete)
+
+    exported: list[dict[str, Any]] = []
+    for ch in chapters:
+        input_paths = _collect_chapter_audio_paths(db, ch)
+        basename = _chapter_export_basename(ch)
+        audio_path = concat_to_mp3(input_paths, target_dir / f"{basename}.mp3")
+        srt_segments = []
+        for seg in sorted(ch.segments, key=lambda s: s.position):
+            audio = seg.audio or {}
+            current = audio.get("current", {}) if isinstance(audio, dict) else {}
+            srt_segments.append({
+                "text": seg.text,
+                "duration_sec": current.get("duration_sec"),
+            })
+        srt_path = target_dir / f"{basename}.srt"
+        srt_path.write_text(build_srt(srt_segments), encoding="utf-8")
+        exported.append({
+            "chapter_id": ch.id,
+            "title": ch.name or ch.id,
+            "audio_path": str(audio_path),
+            "srt_path": str(srt_path),
+        })
+    return {"exported": exported, "count": len(exported)}
 
 
 # Files below this size (bytes) are treated as "definitely not real speech".

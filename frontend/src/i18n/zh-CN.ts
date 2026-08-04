@@ -102,6 +102,10 @@ export const zhCN = {
     compactView: '紧凑',
     expandedView: '展开',
     exportLabel: '导出',
+    exportAll: '导出全部',
+    exportAllSuccess: '已导出 {count} 章到 {dir}',
+    exportAllIncomplete: '存在未合成完成的章节，已全部中止：{chapters}',
+    exportAllNoDir: '请先在项目设置中配置导出目录（未设置 Remotion 路径时需填绝对路径）',
     adjustAudio: '调整音频',
   },
   projectOverview: {
@@ -1005,7 +1009,7 @@ export const zhCN = {
     remotionPath: 'Remotion 项目路径',
     remotionPathPlaceholder: '如: /path/to/remotion/project',
     exportDir: '默认导出目录',
-    exportDirHint: '相对于 Remotion 项目路径的目录，导出时会自动创建',
+    exportDirHint: '相对于 Remotion 项目路径的目录，导出时会自动创建；未设置 Remotion 路径时可填绝对路径作为独立导出目录',
     exportDirPlaceholder: '如: out',
   },
   projectVoices: {

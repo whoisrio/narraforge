@@ -255,6 +255,7 @@ Segments are compared against `Chapter.voice` (the applied/saved voice), NOT the
 | Generate All | Synthesize all idle/failed segments (3 concurrent workers) |
 | Play All | Sequential playback of all ready segments |
 | Export | WAV/JSON/SRT/bilingual SRT export |
+| Export All (导出全部) | One-click export of **all chapters**' mp3 + chapter-local SRT to the project export directory (`configs.export_directory`; absolute path works without a Remotion path). Backend storage mode only. Pre-checks every chapter first: any segment missing audio aborts the whole export with a 409 listing the incomplete chapters. |
 
 ### 4.5 Library — Source & Narration Documents
 
