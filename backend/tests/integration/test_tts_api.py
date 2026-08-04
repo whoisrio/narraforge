@@ -59,7 +59,7 @@ class TestTTSAPI:
     def test_synthesize_speech_requires_voice_id(self, client: TestClient, mock_tts_service):
         response = client.post("/api/tts/synthesize", json={"text": "Test with defaults"})
         assert response.status_code == 400
-        assert "voice_id" in response.json()["message"]
+        assert "voice_id" in response.json()["detail"]["message"]
 
     def test_synthesize_speech_with_custom_voice(self, client: TestClient, mock_tts_service, tmp_path):
         mock_tts_service.synthesize_speech.return_value = _write_audio_file(tmp_path, "custom.wav")
@@ -99,8 +99,8 @@ class TestTTSAPI:
         })
         assert response.status_code == 500
         data = response.json()
-        assert "message" in data
-        assert "failed" in data["message"].lower()
+        assert "detail" in data
+        assert "failed" in data["detail"]["message"].lower()
 
     def test_synthesize_speech_empty_text(self, client: TestClient):
         response = client.post("/api/tts/synthesize", json={
@@ -135,8 +135,8 @@ class TestTTSAPI:
         response = client.get("/api/tts/audio/nonexistent_audio")
         assert response.status_code == 404
         data = response.json()
-        assert "message" in data
-        assert "not found" in data["message"].lower()
+        assert "detail" in data
+        assert "not found" in data["detail"]["message"].lower()
 
     def test_list_available_voices_empty(self, client: TestClient):
         response = client.get("/api/tts/voices")

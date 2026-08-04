@@ -22,7 +22,7 @@ def test_put_animation_root_sets_value_and_creates_dir(client, tmp_path):
 def test_put_animation_root_empty_rejected(client):
     resp = client.put("/api/config/animation-root", json={"value": "   "})
     assert resp.status_code == 422
-    assert resp.json()["code"] == "path_empty"
+    assert resp.json()["detail"]["code"] == "path_empty"
 
 
 def test_put_animation_root_uncreatable_rejected(client, tmp_path):
@@ -33,7 +33,7 @@ def test_put_animation_root_uncreatable_rejected(client, tmp_path):
         "/api/config/animation-root", json={"value": str(blocker / "sub")}
     )
     assert resp.status_code == 422
-    assert resp.json()["message"].startswith("cannot_create_directory")
+    assert resp.json()["detail"]["message"].startswith("cannot_create_directory")
 
 
 def test_test_animation_root_creatable_returns_ok_and_not_saved(client, tmp_path):

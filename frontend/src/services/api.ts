@@ -611,13 +611,22 @@ export const segmentedProjectApi = {
     try {
       resp = await api.get(`/segmented-projects/${projectId}/export`, { responseType: 'blob' });
     } catch (err: unknown) {
-      const e = err as { response?: { data?: Blob | { detail?: string } } };
+      const e = err as { response?: { data?: Blob | { detail?: unknown } } };
       const data = e?.response?.data;
       let detail = '';
       if (data instanceof Blob) {
-        try { detail = (JSON.parse(await data.text())).detail; } catch { /* ignore */ }
+        try {
+          const parsed = JSON.parse(await data.text());
+          const d = parsed.detail;
+          detail = typeof d === 'string' ? d
+            : (typeof d === 'object' && d !== null && 'message' in d) ? (d as { message: string }).message
+            : '';
+        } catch { /* ignore */ }
       } else if (data?.detail) {
-        detail = data.detail;
+        const d = data.detail;
+        detail = typeof d === 'string' ? d
+          : (typeof d === 'object' && d !== null && 'message' in d) ? (d as { message: string }).message
+          : '';
       }
       throw new Error(detail || 'export_failed');
     }

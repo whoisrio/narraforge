@@ -69,10 +69,10 @@ def test_role_create_rejects_duplicate_id(client):
     assert client.post("/api/roles", json=payload).status_code == 201
     duplicate = client.post("/api/roles", json=payload)
     assert duplicate.status_code == 409
-    assert duplicate.json()["code"] == "role_already_exists"
+    assert duplicate.json()["detail"]["code"] == "role_already_exists"
 
 
 def test_role_update_missing_returns_404(client):
     response = client.put("/api/roles/missing", json={"name": "missing"})
     assert response.status_code == 404
-    assert response.json()["code"] == "role_not_found"
+    assert response.json()["detail"]["code"] == "role_not_found"
