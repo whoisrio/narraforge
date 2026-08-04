@@ -152,7 +152,7 @@ def test_rerecord_replaces_and_cleans_orphaned_file(db_session, tmp_path, monkey
 
 def test_save_recorded_audio_rejects_bad_input(db_session, tmp_path, monkeypatch):
     _seed(db_session, tmp_path, monkeypatch)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="^unsupported_audio_format$"):
         svc.save_recorded_segment_audio(db_session, "p1", "c1", "s1",
                                         audio_bytes=b"x", filename="notes.txt")
     with pytest.raises(ValueError):

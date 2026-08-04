@@ -951,7 +951,12 @@ def save_recorded_segment_audio(
 
     ext = filename.rsplit(".", 1)[-1].lower() if "." in (filename or "") else ""
     if ext not in RECORDED_AUDIO_EXTS:
-        raise ValueError(f"unsupported_audio_format: {ext or 'unknown'}")
+        # Keep the ValueError a clean snake_case machine code (A8 error
+        # contract derives `code` from it); log the rejected extension.
+        logger.warning(
+            "[save_recorded_segment_audio] rejected extension %r for segment %s",
+            ext or "unknown", segment_id)
+        raise ValueError("unsupported_audio_format")
     if not audio_bytes:
         raise ValueError("empty_audio")
 
