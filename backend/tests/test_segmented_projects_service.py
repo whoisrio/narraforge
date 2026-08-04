@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
 
+import pytest
+
 from app.core.segmented_assets import project_dir, read_manifest
 from app.models.segmented_project import (
     SegmentedProject,
@@ -359,3 +361,64 @@ def test_project_rename_without_assets_is_noop(db_session, tmp_path, monkeypatch
     save_project(db_session, payload)
     db_session.commit()
     assert db_session.query(SegmentedProject).filter_by(id="p1").one().name == "另一个名字"
+
+
+# ── D6: Unique constraint on (parent_id, position) ──
+
+def test_save_project_rejects_duplicate_chapter_positions(db_session, tmp_path, monkeypatch):
+    """Two chapters at the same position must violate the unique constraint."""
+    from app.core import config
+    from sqlalchemy.exc import IntegrityError
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+
+    project = ProjectIn(
+        id="p-dup-ch", name="DupCh", schema_version=2, layout="vertical",
+        chapters=[
+            {
+                "id": "c-dup-1", "position": 0, "name": "A",
+                "voice": {"engine": "edge_tts"},
+                "split_config": {"delimiters": ["。"], "mode": "rule"},
+                "segments": [
+                    {"id": "s-dup-1a", "position": 0, "text": "a", "voice": {"source": "chapter"}},
+                ],
+            },
+            {
+                "id": "c-dup-2", "position": 0, "name": "B",
+                "voice": {"engine": "edge_tts"},
+                "split_config": {"delimiters": ["。"], "mode": "rule"},
+                "segments": [
+                    {"id": "s-dup-2a", "position": 0, "text": "b", "voice": {"source": "chapter"}},
+                ],
+            },
+        ],
+    )
+    # IntegrityError fires on flush (inside save_project), not on commit.
+    # SQLite omits constraint names from error messages; match on column names.
+    with pytest.raises(IntegrityError, match="project_id.*position"):
+        save_project(db_session, project)
+        db_session.commit()
+
+
+def test_save_project_rejects_duplicate_segment_positions(db_session, tmp_path, monkeypatch):
+    """Two segments in the same chapter at the same position must violate the unique constraint."""
+    from app.core import config
+    from sqlalchemy.exc import IntegrityError
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+
+    project = ProjectIn(
+        id="p-dup-seg", name="DupSeg", schema_version=2, layout="vertical",
+        chapters=[
+            {
+                "id": "c-dup-seg", "position": 0, "name": "Ch",
+                "voice": {"engine": "edge_tts"},
+                "split_config": {"delimiters": ["。"], "mode": "rule"},
+                "segments": [
+                    {"id": "s-dup-a", "position": 0, "text": "a", "voice": {"source": "chapter"}},
+                    {"id": "s-dup-b", "position": 0, "text": "b", "voice": {"source": "chapter"}},
+                ],
+            },
+        ],
+    )
+    with pytest.raises(IntegrityError, match="chapter_id.*position"):
+        save_project(db_session, project)
+        db_session.commit()

@@ -296,10 +296,11 @@ Tables `voice_profiles`, `tts_configs`, `tts_results`, `transcription_records`, 
 | `roles` | `id` | Primary Key |
 | `segmented_projects` | `id` | Primary Key |
 | `segmented_project_chapters` | `id` | Primary Key |
-| `segmented_project_chapters` | `project_id` | FK (auto-indexed) |
+| `segmented_project_chapters` | `project_id` | `ix_chapters_project_id` (D6) |
+| `segmented_project_chapters` | `(project_id, position)` | Unique: `uq_chapter_project_position` (D6) |
 | `segmented_project_segments` | `id` | Primary Key |
-| `segmented_project_segments` | `chapter_id` | FK (auto-indexed) |
-| `segmented_project_segments` | `project_id` | FK (auto-indexed) |
+| `segmented_project_segments` | `chapter_id` | `ix_segments_chapter_id` (D6) |
+| `segmented_project_segments` | `(chapter_id, position)` | Unique: `uq_segment_chapter_position` (D6) |
 | `source_documents` | `id` | Primary Key |
 | `source_documents` | `project_id` | Explicit index |
 

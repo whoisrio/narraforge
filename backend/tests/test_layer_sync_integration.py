@@ -16,7 +16,7 @@ def _seed(pid: str = "p1") -> ProjectIn:
             "narration_script": "第一句。第二句。",
             "segments": [
                 {"id": "s1", "position": 0, "text": "第一句。", "voice": {"source": "chapter"}},
-                {"id": "s2", "position": 0, "text": "第二句。", "voice": {"source": "chapter"}},
+                {"id": "s2", "position": 1, "text": "第二句。", "voice": {"source": "chapter"}},
             ],
         }],
     )
