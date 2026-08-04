@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from '../../i18n';
-import { ToastContext, type ToastItem, type ToastType } from './toastContext';
+import { ToastContext, type ToastApi, type ToastItem, type ToastType } from './toastContext';
 import styles from './Toast.module.css';
 
 const DEFAULT_DURATION_MS: Record<ToastType, number> = {
@@ -68,7 +68,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const api = { show, success, error, info, dismiss };
+  const api = useMemo<ToastApi>(() => ({ show, success, error, info, dismiss }), [show, success, error, info, dismiss]);
 
   return (
     <ToastContext.Provider value={api}>
