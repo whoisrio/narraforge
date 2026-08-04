@@ -36,6 +36,12 @@ interface SegmentRowProps {
   roleSnapshot?: RoleSnapshot;
   /** The chapter's saved/applied voice params — used for staleness instead of live panel state */
   chapterVoice?: EngineParams;
+  /** Multi-select mode: render a selection checkbox at the start of the row */
+  selectionMode?: boolean;
+  /** Multi-select checked state */
+  selected?: boolean;
+  /** Toggle multi-select state for this segment */
+  onToggleSelect?: (id: string) => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter?: (afterId: string) => void;
@@ -92,6 +98,7 @@ export function SegmentRow({
   segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine,
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
   layout, timeStart, timeEnd, roles, roleSnapshot, chapterVoice,
+  selectionMode, selected, onToggleSelect,
   onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
   onRecord, onUnlockAudio,
   onMerge, onMove, isLast,
@@ -407,6 +414,20 @@ export function SegmentRow({
     );
   }
 
+  const renderSelectionCheckbox = () => {
+    if (!selectionMode) return null;
+    return (
+      <input
+        type="checkbox"
+        className={styles.selectCheckbox}
+        checked={!!selected}
+        aria-label={t('studio.selectMode')}
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { e.stopPropagation(); onToggleSelect?.(segment.id); }}
+      />
+    );
+  };
+
   const renderText = (className?: string) => {
     if (charIdx < 0) return <span className={className || styles.txt}>{segment.text}</span>;
     return (
@@ -422,9 +443,10 @@ export function SegmentRow({
   if (compact) {
     return (
       <div
-        className={`${styles.compactCard} ${styles[`emo${emoCamel}`] || ''} ${isSelected ? styles.selected : ''} ${isPlaying ? styles.playing : ''}`}
+        className={`${styles.compactCard} ${styles[`emo${emoCamel}`] || ''} ${isSelected || selected ? styles.selected : ''} ${isPlaying ? styles.playing : ''}`}
         onClick={() => onSelect(segment.id)}
       >
+        {renderSelectionCheckbox()}
         <div className={styles.compactEmo} />
         <div className={styles.compactAvatarWrap}>
           <VoiceAvatar name={voiceDisplayName} avatar={resolvedRole?.avatar} size={28} gender={voiceGender} />
@@ -506,10 +528,11 @@ export function SegmentRow({
   // ---- Expanded mode ----
   return (
     <div
-      className={`${styles.card} ${styles[`emo${emoCamel}`] || ''} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected ? styles.selected : ''} ${isPlaying ? styles.playing : ''} ${isStale ? styles.stale : ''}`}
+      className={`${styles.card} ${styles[`emo${emoCamel}`] || ''} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected || selected ? styles.selected : ''} ${isPlaying ? styles.playing : ''} ${isStale ? styles.stale : ''}`}
       onClick={() => onSelect(segment.id)}
     >
       <div className={styles.avatarCol}>
+        {renderSelectionCheckbox()}
         <VoiceAvatar name={voiceDisplayName} avatar={resolvedRole?.avatar} size={48} gender={voiceGender}
           label={voiceDisplayName}
           sublabel={displayEngine} />

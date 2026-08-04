@@ -49,14 +49,17 @@ test.describe('批量合成与导出', () => {
     expect(chapterBefore).toBeTruthy();
     const expectedAudioAfter = chapterBefore!.segments.length;
 
-    // ── Step 2: Click "批量合成" ──
+    // ── Step 2: Click "批量合成", then choose "重新合成全部" from the menu ──
 
     await page.getByRole('button', { name: '批量合成' }).click();
+    const regenerateAllItem = page.getByRole('button', { name: /重新合成全部|Regenerate All/ });
+    await expect(regenerateAllItem).toBeVisible({ timeout: 15_000 });
+    await regenerateAllItem.click();
 
     // Confirmation dialog appears when segments already have audio — click confirm button.
     // The dialog's confirmLabel is t('tts.regenerate') = '重新生成' / 'Regenerate'.
-    const confirmBtn = page.getByRole('button', { name: /重新生成|Regenerate/ });
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    const confirmBtn = page.getByRole('alertdialog').getByRole('button', { name: /重新生成|Regenerate/ });
+    await expect(confirmBtn).toBeVisible({ timeout: 15_000 });
     await confirmBtn.click();
 
     // ── Step 3: Wait for synthesis to complete by polling backend ──
