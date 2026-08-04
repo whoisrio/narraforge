@@ -893,6 +893,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/audio` | 上传用户自行录入的分片音频（multipart） |
 | GET | `/api/segmented-projects/{id}/audio/{cid}/{sid}` | 读取分片 mp3 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |
+| POST | `/api/segmented-projects/{id}/export-all-chapters` | 一键导出全部章节 mp3+srt 到项目导出目录 |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/split` | 文本分段 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/sync-status` | 章节分层文本陈旧检测（L1/L2/L3 脏标记） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/adjust-audio` | 合成后音频调整（速度/音量，ffmpeg 批处理） |
@@ -946,7 +947,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | `default_narrator_snapshot` | object | `null` | 旁白角色音色配置快照 |
 | `configs` | object \| null | `null` | 项目级自由配置 JSON 桶（可变 keys，无需数据库迁移） |
 | `configs.description` | string | — | 项目描述（UI 展示） |
-| `configs.export_directory` | string | — | 导出目录（相对于 `remotion_project_path`），默认 `public/audio` |
+| `configs.export_directory` | string | — | 导出目录。绝对路径（含 `~`）时独立于 Remotion 直接使用；相对路径则相对于 `remotion_project_path`，默认 `public/audio` |
 | `configs.split_voice_mode` | string | — | 拆分默认模式：`narration` \| `dialogue` |
 | `chapters` | array | `[]` | 章节列表 |
 
@@ -1087,6 +1088,36 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 **Response:** 完整 `ProjectDetail` 对象。
 **错误:** `404 segment_not_found`；`422 unsupported_audio_format / empty_audio`。
+
+### POST `/api/segmented-projects/{id}/export-all-chapters`
+
+一键导出项目**所有章节**的合成音频与字幕到项目导出目录（仅 backend 存储模式）。
+每章产出 `{安全章节标题}.mp3` + `{安全章节标题}.srt`（章节内时间轴从 0 开始，风格 tag 已清洗）。
+
+**Request:** 无 body。
+
+**目录解析**（`resolve_export_target_dir`）：
+1. `configs.export_directory` 为绝对路径（或 `~`）→ 直接使用，无需 Remotion 路径。
+2. 相对路径 / 未设置且 `remotion_project_path` 已配置 → `{remotion_project_path}/{export_directory || 'public/audio'}`。
+3. 否则 → `409 export_directory_not_configured`。
+
+**预检**：任一章节存在缺音频（或音频文件丢失）的段落 → 整体中止，不写出任何文件。
+
+**Response 200:**
+```json
+{
+  "exported": [
+    {"chapter_id": "c1", "title": "第一章", "audio_path": "/abs/out/第一章.mp3", "srt_path": "/abs/out/第一章.srt"}
+  ],
+  "count": 1
+}
+```
+
+**错误:**
+- `404 project_not_found`
+- `409 export_directory_not_configured`（detail 为 `{code, message}`，A8 信封）
+- `409 chapters_incomplete`（detail 为 `{code, message, chapters: ["章节名", ...]}`）
+- `422` ffmpeg 不可用 / 拼接失败
 
 ### GET `/api/segmented-projects/{id}/chapters/{cid}/sync-status`
 

@@ -608,6 +608,13 @@ export const segmentedProjectApi = {
     );
     return data;
   },
+  /** 一键导出所有章节的 mp3 + srt 到项目导出目录（仅 backend 存储模式） */
+  exportAllChapters: async (
+    projectId: string,
+  ): Promise<{ exported: Array<{ chapter_id: string; title: string; audio_path: string; srt_path: string }>; count: number }> => {
+    const { data } = await api.post(`/segmented-projects/${projectId}/export-all-chapters`);
+    return data;
+  },
   getProject: async (id: string): Promise<import('../types').SegmentedProject> => {
     const { data } = await api.get<import('../types').SegmentedProject>(`/segmented-projects/${id}`);
     return data;

@@ -13,6 +13,7 @@ interface VoiceStudioLayoutProps {
   sidebarContent?: ReactNode;
   onSidebarCollapseChange?: (collapsed: boolean) => void;
   onExport: () => void;
+  onExportAll?: () => void;
   onAdjustAudio?: () => void;
   onPlayAll: () => void;
 }
@@ -36,6 +37,7 @@ export function VoiceStudioLayout({
   sidebarContent,
   onSidebarCollapseChange,
   onExport,
+  onExportAll,
   onAdjustAudio,
   onPlayAll,
 }: VoiceStudioLayoutProps) {
@@ -116,6 +118,9 @@ export function VoiceStudioLayout({
           <button type="button" className={styles.ghostButton ?? styles.primaryButton} onClick={onAdjustAudio}>{t('studio.adjustAudio')}</button>
         )}
           <button type="button" className={styles.primaryButton} onClick={onExport}>{t('studio.exportLabel')}</button>
+          {onExportAll && (
+          <button type="button" className={styles.ghostButton ?? styles.primaryButton} onClick={onExportAll}>{t('studio.exportAll')}</button>
+        )}
         </div>
         )}
       </footer>

@@ -54,6 +54,36 @@ describe('VoiceStudioLayout', () => {
     expect(onExport).toHaveBeenCalled();
   });
 
+  it('renders 导出全部 only when onExportAll is provided and wires it', () => {
+    const onExportAll = vi.fn();
+    const onExport = vi.fn();
+    render(
+      <VoiceStudioLayout
+        segmentCount={1}
+        generatedCount={1}
+        durationSec={10}
+        remotionPath={null}
+        onExport={onExport}
+        onExportAll={onExportAll}
+        onPlayAll={vi.fn()}
+        onSidebarCollapseChange={vi.fn()}
+        sidebarContent={<section>side</section>}
+      >
+        <div>content</div>
+      </VoiceStudioLayout>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
+
+    fireEvent.click(screen.getByRole('button', { name: '导出全部' }));
+    expect(onExportAll).toHaveBeenCalled();
+  });
+
+  it('hides 导出全部 when onExportAll is absent', () => {
+    renderStudio();
+    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
+    expect(screen.queryByRole('button', { name: '导出全部' })).not.toBeInTheDocument();
+  });
+
   it('collapses and expands the studio right panel while notifying parent state', () => {
     const { onSidebarCollapseChange } = renderStudio();
 

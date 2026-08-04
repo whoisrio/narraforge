@@ -104,6 +104,10 @@ export const enUS: Messages = {
     compactView: 'Compact',
     expandedView: 'Expanded',
     exportLabel: 'Export',
+    exportAll: 'Export All',
+    exportAllSuccess: 'Exported {count} chapters to {dir}',
+    exportAllIncomplete: 'Some chapters are not fully synthesized; export aborted: {chapters}',
+    exportAllNoDir: 'Configure an export directory in project settings first (absolute path required when no Remotion path is set)',
     adjustAudio: 'Adjust Audio',
   },
   projectOverview: {
@@ -1007,7 +1011,7 @@ export const enUS: Messages = {
     remotionPath: 'Remotion Project Path',
     remotionPathPlaceholder: 'e.g.: /path/to/remotion/project',
     exportDir: 'Default Export Directory',
-    exportDirHint: 'Directory relative to Remotion project path, created automatically on export',
+    exportDirHint: 'Directory relative to the Remotion project path, created automatically on export; without a Remotion path, use an absolute path as a standalone export directory',
     exportDirPlaceholder: 'e.g.: out',
   },
   projectVoices: {

@@ -313,6 +313,36 @@ def export_chapter_audio(
     return FileResponse(audio_path, media_type="audio/mpeg", filename=filename)
 
 
+@router.post("/segmented-projects/{project_id}/export-all-chapters")
+def export_all_chapters_endpoint(
+    project_id: str,
+    db: Session = Depends(get_db),
+):
+    """One-click export: every chapter's mp3 + chapter-local SRT to the
+    project's export directory. Aborts (nothing written) when any chapter is
+    missing segment audio."""
+    _reject_scratchpad(project_id)
+    try:
+        return svc.export_all_chapters(db, project_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    except svc.ChaptersIncompleteError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "chapters_incomplete",
+                "message": "存在未合成完成的章节，已全部中止",
+                "chapters": e.chapters,
+            },
+        )
+    except AudioEncoderError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except ValueError as e:
+        detail = str(e) or "export_failed"
+        status = 409 if detail == "export_directory_not_configured" else 422
+        raise HTTPException(status_code=status, detail=detail)
+
+
 @router.post(
     "/segmented-projects/{project_id}/export-text-file-to-remotion"
 )
