@@ -12,6 +12,7 @@
  * @feature docs/feature-spec.md §4.7 Narrator Mode Voice Selection
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import {
   goToRolePage,
   collectErrors,
@@ -20,7 +21,7 @@ import {
   setLocaleToZhCN,
 } from '../helpers';
 
-const BASE_URL = 'http://127.0.0.1:8012';
+const BASE_URL = E2E_BACKEND_URL;
 
 /** Delete roles by name via backend API. */
 async function deleteRolesByName(name: string): Promise<void> {

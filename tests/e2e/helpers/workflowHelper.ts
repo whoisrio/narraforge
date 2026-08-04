@@ -4,9 +4,10 @@
  * Provides polling, cleanup, and API-level read helpers for workflow tests.
  */
 import type { Page } from '@playwright/test';
+import { E2E_BACKEND_URL } from './ports';
 import { expect } from '@playwright/test';
 
-const BASE_URL = 'http://127.0.0.1:8012';
+const BASE_URL = E2E_BACKEND_URL;
 
 /** WorkflowRun shape returned by the backend API. */
 export interface WorkflowRunApi {

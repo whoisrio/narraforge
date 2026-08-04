@@ -19,6 +19,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import {
   collectErrors,
   goToLibrary,
@@ -30,7 +31,7 @@ import {
 import { readDbProject, validateDbProjectRow } from '../helpers/dbReader';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 
 test.describe('知识视频工作流', () => {
   test.beforeEach(async ({ page }) => {

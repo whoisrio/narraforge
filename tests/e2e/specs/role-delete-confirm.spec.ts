@@ -8,9 +8,10 @@
  * @feature frontend/src/pages/TTSSynthesis.tsx (handleDeleteRole confirm)
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 const PROJECT_ID = 'e2e-role-delete-project';
 const PROJECT_NAME = 'E2E-角色删除项目';
 const ROLE_NAME = 'E2E-删除确认角色';

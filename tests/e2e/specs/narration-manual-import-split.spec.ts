@@ -10,10 +10,11 @@
  * @feature frontend NarrationDocView + backend narration_script 持久化
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 import { readDbProject } from '../helpers/dbReader';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 
 const NARRATION = [
   '# 夜行记',

@@ -7,6 +7,7 @@
  * @feature G3: voice clone E2E
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import path from 'node:path';
 import {
   collectErrors,
@@ -14,7 +15,7 @@ import {
   setLocaleToZhCN,
 } from '../helpers';
 
-const BASE_URL = 'http://127.0.0.1:8012';
+const BASE_URL = E2E_BACKEND_URL;
 const SAMPLE_AUDIO = path.resolve(__dirname, '..', 'fixtures', 'sample-audio', 'temp_audio.mp3');
 const CLONE_NAME = `e2e-mimo-${Date.now()}`;
 

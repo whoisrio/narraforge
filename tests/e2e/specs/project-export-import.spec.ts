@@ -8,13 +8,14 @@
  * @feature docs/superpowers/specs/2026-07-25-project-export-import-design.md
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { collectErrors, setLocaleToZhCN, enterWorkspace, readBackendProjects } from '../helpers';
 import { readDbProjects } from '../helpers/dbReader';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 const SOURCE_PROJECT_ID = 'test-e2e-project';
 
 test.describe('项目导出 / 导入', () => {

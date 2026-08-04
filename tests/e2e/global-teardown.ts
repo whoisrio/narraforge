@@ -10,9 +10,10 @@
  * - Orphaned audio files
  */
 import type { FullConfig } from '@playwright/test';
+import { E2E_BACKEND_URL } from './helpers/ports';
 import { chromium } from '@playwright/test';
 
-const BASE_URL = 'http://127.0.0.1:8012';
+const BASE_URL = E2E_BACKEND_URL;
 
 /** Roles that should survive teardown (seeded by global-setup). */
 const KEEP_ROLES = new Set(['小明', '小红']);

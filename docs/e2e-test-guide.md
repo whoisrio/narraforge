@@ -2,10 +2,27 @@
 
 ## Running E2E Tests
 
-Playwright auto-starts both backend (port **8012**) and frontend (port **5174**) via `webServer` in `playwright.config.ts`.
+Playwright auto-starts backend (port **8012**), frontend (port **5174**), and agent (port **2024**) via `webServer` in `playwright.config.ts`.
 These dedicated ports let the e2e stack coexist with a running dev environment (backend 8002 / frontend 5173) — no more dual-bind cross-traffic.
 The teardown also refuses to delete anything unless the backend reports `app_env=e2e`.
 No need to manually start services.
+
+### Parallel worktrees: per-stack port overrides
+
+All three ports are configurable via environment variables (defaults shown).
+Each worktree that needs to run e2e **concurrently** with another stack must pick its own trio:
+
+```bash
+# worktree A (defaults)
+npm run e2e
+
+# worktree B (custom ports — backend / frontend / agent)
+E2E_BACKEND_PORT=8022 E2E_FRONTEND_PORT=5184 E2E_AGENT_PORT=2124 npm run e2e
+```
+
+`playwright.config.ts`, global setup/teardown, helpers, and all specs read these from `tests/e2e/helpers/ports.ts` (`E2E_BACKEND_URL` etc.); the frontend webServer also receives `VITE_BACKEND_URL`/`VITE_AGENT_URL` so the browser talks to the right stack.
+Each worktree has its own SQLite e2e DB (`backend/voice_clone_e2e.db` is per-worktree), so data never crosses stacks.
+Note: two e2e runs in the **same** worktree still share one stack — `webServer.reuseExistingServer` means the second run attaches to the first run's servers; run them serially.
 
 ```bash
 npm run e2e          # Full suite (47 tests, --workers=1, HTML report)

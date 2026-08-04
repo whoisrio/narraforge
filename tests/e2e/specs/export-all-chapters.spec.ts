@@ -10,11 +10,12 @@
  * @feature docs/superpowers/specs/2026-08-04-export-all-chapters-design.md
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 const PROJECT_ID = 'e2e-export-all';
 const PROJECT_NAME = '导出全部测试';
 const FIXTURE_AUDIO = path.resolve(__dirname, '../fixtures/sample-audio/temp_audio.mp3');
