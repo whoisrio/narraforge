@@ -1,11 +1,13 @@
 import logging
 import logging.handlers
 import os
+import re
 import sys
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.core.database import init_db
@@ -110,6 +112,35 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy", "app_env": settings.app_env}
+
+
+# ---- Structured error responses (audit A8) ----
+_MACHINE_CODE_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+
+def _is_machine_code(s: str) -> bool:
+    """Check if a string is a clean snake_case machine code."""
+    return bool(_MACHINE_CODE_RE.match(s))
+
+
+@app.exception_handler(HTTPException)
+async def structured_http_exception(request: Request, exc: HTTPException):
+    """Wrap all HTTPException responses in a consistent {code, message} format.
+
+    - Machine codes (snake_case, e.g. 'project_not_found') → used as both
+      `code` and `message`.
+    - Sentences / raw exception strings → generic status-derived `code`,
+      original string as `message`.
+    - Already-structured dicts with a 'code' key → passed through.
+    """
+    detail = exc.detail
+    if isinstance(detail, dict) and "code" in detail:
+        content = detail
+    elif isinstance(detail, str):
+        code = detail if _is_machine_code(detail) else f"http_{exc.status_code}"
+        content = {"code": code, "message": detail}
+    else:
+        content = {"code": f"http_{exc.status_code}", "message": str(detail)}
+    return JSONResponse(status_code=exc.status_code, content=content)
 
 
 # Import and include routers

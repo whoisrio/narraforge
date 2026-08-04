@@ -84,6 +84,8 @@ export function TextInputPanel({
     if (typeof error === 'object' && error !== null) {
       const response = (error as { response?: { data?: { detail?: unknown } } }).response;
       if (typeof response?.data?.detail === 'string') return response.data.detail;
+      const d = response?.data?.detail;
+      if (typeof d === 'object' && d !== null && 'message' in d) return (d as { message: string }).message;
     }
     return fallback;
   };

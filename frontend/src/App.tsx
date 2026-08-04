@@ -177,8 +177,12 @@ function AppContent() {
       await segmentedProjectApi.importProject(file);
       await refreshProjects();
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { detail?: string } } };
-      const detail = e?.response?.data?.detail;
+      const e = err as { response?: { data?: { detail?: unknown } } };
+      const rawDetail = e?.response?.data?.detail;
+      const detail = typeof rawDetail === 'string' ? rawDetail
+        : (typeof rawDetail === 'object' && rawDetail !== null && 'message' in rawDetail)
+          ? (rawDetail as { message: string }).message
+          : undefined;
       toast.error(detail ? `${t('projectHub.import.failed')}: ${detail}` : t('projectHub.import.failed'));
     }
   };

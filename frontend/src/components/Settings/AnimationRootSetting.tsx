@@ -9,8 +9,11 @@ interface Status {
 }
 
 function extractDetail(err: unknown): string {
-  const resp = (err as { response?: { data?: { detail?: string } } })?.response;
-  return resp?.data?.detail ?? String(err);
+  const resp = (err as { response?: { data?: { detail?: unknown } } })?.response;
+  const detail = resp?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (typeof detail === 'object' && detail !== null && 'message' in detail) return (detail as { message: string }).message;
+  return String(err);
 }
 
 export function AnimationRootSetting() {

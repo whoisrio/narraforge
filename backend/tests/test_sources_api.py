@@ -58,7 +58,7 @@ def test_create_paste_empty_text_rejected(client):
         json={"source_type": "paste", "title": "x", "pasted_text": "   "},
     )
     assert r.status_code == 400
-    assert "pasted_text_required" in r.json()["detail"]
+    assert r.json()["code"] == "pasted_text_required"
 
 
 def test_create_paste_wrong_source_type(client):
@@ -138,7 +138,7 @@ def test_upload_audio_unsupported_format(client, tmp_path, monkeypatch):
         data={"title": "x"},
     )
     assert r.status_code == 400
-    assert "unsupported_audio_format" in r.json()["detail"]
+    assert r.json()["message"].startswith("unsupported_audio_format")
 
 
 def test_upload_audio_empty_file(client, tmp_path, monkeypatch):
@@ -151,7 +151,7 @@ def test_upload_audio_empty_file(client, tmp_path, monkeypatch):
         data={"title": "x"},
     )
     assert r.status_code == 400
-    assert "empty_file" in r.json()["detail"]
+    assert r.json()["code"] == "empty_file"
 
 
 def test_delete_source(client, tmp_path, monkeypatch):
@@ -229,7 +229,7 @@ def test_get_source_audio_on_paste_source(client):
     src_id = r.json()["id"]
     r = client.get(f"/api/projects/p-srcs-13/sources/{src_id}/audio")
     assert r.status_code == 400
-    assert "source_is_not_audio" in r.json()["detail"]
+    assert r.json()["code"] == "source_is_not_audio"
 
 
 def test_source_cascade_delete_with_project(client, tmp_path, monkeypatch):
