@@ -99,7 +99,6 @@ export const enUS: Messages = {
     deselectAll: 'Deselect All',
     deleteSelected: 'Delete Selected ({count})',
     voiceMode: 'Voice Mode',
-    voicePlaceholder: 'Select Voice',
     narration: 'Narration',
     dialogue: 'Dialogue',
     narrationVoice: 'Narration Voice',

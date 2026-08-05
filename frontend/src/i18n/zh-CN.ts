@@ -97,7 +97,6 @@ export const zhCN = {
     deselectAll: '取消全选',
     deleteSelected: '删除选中 ({count})',
     voiceMode: '配音模式',
-    voicePlaceholder: '请选择声音',
     narration: '旁白',
     dialogue: '对话',
     narrationVoice: '旁白音色',
