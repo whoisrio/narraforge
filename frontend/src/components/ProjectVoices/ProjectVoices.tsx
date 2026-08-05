@@ -9,7 +9,7 @@ import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import { AudioRecorder, AudioUploader, AudioPreview, UrlInput } from '../VoiceClone';
-import { useTranslation, t } from '../../i18n';
+import { useTranslation } from '../../i18n';
 import styles from './ProjectVoices.module.css';
 
 /* ------------------------------------------------------------------ */
@@ -89,7 +89,7 @@ function roleVoiceDisplayName(role: Role): string {
   return '';
 }
 
-function createRoleDraft(): RoleSnapshot {
+function createRoleDraft(t: (key: string) => string): RoleSnapshot {
   const voice = { engine: 'edge_tts' as const, voice: DEFAULT_EDGE_CAST_VOICE, rate: '+0%', volume: '+0%' } as EdgeTTSParams;
   return {
     id: `role-cast-${Date.now()}`,
@@ -232,6 +232,7 @@ function VoiceRoleEditor({
       const result = await fetchVoiceRolePreview(
         normalizeDraftForSave(draft),
         t('projectVoices.auditionSampleText'),
+        t,
       );
       if (result.audio_base64) {
         setDesignAudioBase64(result.audio_base64);
@@ -594,7 +595,7 @@ function VoiceRoleEditor({
     setClonePreviewError('');
     try {
       const normalized = normalizeDraftForSave(draft);
-      const result = await synthesizeVoiceRolePreview(normalized, SAMPLE_TEXT);
+      const result = await synthesizeVoiceRolePreview(normalized, SAMPLE_TEXT, t);
       const { base64, format } = await resolveAudioBase64(result);
 
       // Play
@@ -659,7 +660,7 @@ function VoiceRoleEditor({
             if (voiceCategory === 'preset') {
               try {
                 const normalized = normalizeDraftForSave(draft);
-                const result = await fetchVoiceRolePreview(normalized, SAMPLE_TEXT);
+                const result = await fetchVoiceRolePreview(normalized, SAMPLE_TEXT, t);
                 const { base64 } = await resolveAudioBase64(result);
                 const isEdgeTtsPreset = draft.voice?.engine === 'edge_tts';
                 const profile = await voiceApi.createFromDesign({
@@ -1395,7 +1396,7 @@ export function ProjectVoices({
               if (onCreateRole) {
                 onCreateRole();
               } else {
-                setEditingRole(createRoleDraft());
+                setEditingRole(createRoleDraft(t));
               }
             }}
           >

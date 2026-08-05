@@ -1,3 +1,4 @@
+import { useTranslation } from '../../i18n';
 import styles from './DrawerIndicator.module.css';
 
 interface Props {
@@ -7,8 +8,9 @@ interface Props {
 }
 
 export function DrawerIndicator({ status, stage, onExpand }: Props) {
+  const { t } = useTranslation();
   const icon = status === 'interrupted' ? 'notifications_active' : 'progress_activity';
-  const label = status === 'interrupted' ? '等待审批' : '工作流运行中';
+  const label = status === 'interrupted' ? t('workflow.drawerIndicator.awaitingReview') : t('workflow.drawerIndicator.running');
   return (
     <button className={styles.chip} data-status={status} onClick={onExpand}>
       <span className={`material-symbols-outlined ${status === 'running' ? styles.spin : styles.pulse}`}>

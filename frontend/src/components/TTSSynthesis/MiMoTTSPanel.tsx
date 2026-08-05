@@ -9,7 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { mimoTtsApi, voiceApi } from '../../services/api';
 import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { MiMoPresetVoice, VoiceProfile as CloneVoice } from '../../types';
-import { useTranslation, t } from '../../i18n';
+import { useTranslation } from '../../i18n';
 import styles from './MiMoTTSPanel.module.css';
 
 /** MiMo TTS 子模式 */
@@ -38,11 +38,6 @@ interface MiMoTTSPanelProps {
   projectId?: string;
 }
 
-const MODE_TABS: { value: MiMoMode; label: string }[] = [
-  { value: 'preset', label: t('mimoTts.presetVoice') },
-  { value: 'voiceclone', label: t('mimoTts.voiceClone') },
-];
-
 export function MiMoTTSPanel({
   mode,
   onModeChange,
@@ -56,6 +51,12 @@ export function MiMoTTSPanel({
   projectId,
 }: MiMoTTSPanelProps) {
   const { t } = useTranslation();
+
+  const modeTabs: { value: MiMoMode; label: string }[] = [
+    { value: 'preset', label: t('mimoTts.presetVoice') },
+    { value: 'voiceclone', label: t('mimoTts.voiceClone') },
+  ];
+
   const [presetVoices, setPresetVoices] = useState<MiMoPresetVoice[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
   const [voicesError, setVoicesError] = useState('');
@@ -115,7 +116,7 @@ export function MiMoTTSPanel({
     <div className={styles.container}>
       {/* 模式切换标签 */}
       <div className={styles.modeTabs}>
-        {MODE_TABS.map(tab => (
+        {modeTabs.map(tab => (
           <button
             key={tab.value}
             className={`${styles.modeTab} ${mode === tab.value ? styles.active : ''}`}

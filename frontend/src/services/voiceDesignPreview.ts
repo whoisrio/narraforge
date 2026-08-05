@@ -1,6 +1,6 @@
 import type { TTSResult } from '../types';
 import { mimoTtsApi, ttsApi, voxcpmApi } from './api';
-import { t } from '../i18n';
+import { createTranslator } from '../i18n';
 
 export type VoiceDesignEngine = 'qwen' | 'mimo' | 'voxcpm';
 
@@ -24,9 +24,13 @@ function voxcpmStepsFromStability(stability: number): number {
   return Math.round(8 + clamp(stability, 0, 100) / 12.5);
 }
 
-export async function synthesizeVoiceDesignPreview(request: VoiceDesignPreviewRequest): Promise<TTSResult> {
+export async function synthesizeVoiceDesignPreview(
+  request: VoiceDesignPreviewRequest,
+  translate?: (key: string) => string,
+): Promise<TTSResult> {
+  const _t = translate ?? createTranslator('zh-CN');
   const description = request.voiceDescription.trim();
-  const sampleText = request.sampleText.trim() || t('voiceDesignPreview.defaultSampleText');
+  const sampleText = request.sampleText.trim() || _t('voiceDesignPreview.defaultSampleText');
 
   if (request.engine === 'mimo') {
     return mimoTtsApi.synthesizeVoiceDesign({
@@ -62,8 +66,11 @@ export async function synthesizeVoiceDesignPreview(request: VoiceDesignPreviewRe
   });
 }
 
-export async function playVoiceDesignPreview(request: VoiceDesignPreviewRequest): Promise<TTSResult> {
-  const result = await synthesizeVoiceDesignPreview(request);
+export async function playVoiceDesignPreview(
+  request: VoiceDesignPreviewRequest,
+  translate?: (key: string) => string,
+): Promise<TTSResult> {
+  const result = await synthesizeVoiceDesignPreview(request, translate);
   if (!result.audio_base64 && !result.audio_url) {
     throw new Error('No design preview audio returned');
   }

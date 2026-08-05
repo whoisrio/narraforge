@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from '../../i18n';
 import type { SelectEngineInterrupt } from '../../services/langgraph/types';
 import { describeEngineCapability } from '../../services/styleTags';
 import styles from './EngineSelectPanel.module.css';
@@ -20,6 +21,7 @@ const ENGINE_LABELS: Record<string, string> = {
  * 自动提交默认引擎；用户手动选择后停止倒计时，确认按钮提交所选。
  */
 export function EngineSelectPanel({ interrupt, onRespond }: Props) {
+  const { t } = useTranslation();
   const { available_engines, default_engine, timeout_s } = interrupt;
   const [selected, setSelected] = useState(default_engine);
   const [remaining, setRemaining] = useState(timeout_s);
@@ -63,7 +65,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
     <div className={styles.panel}>
       <div className={styles.titleRow}>
         <span className="material-symbols-outlined">graphic_eq</span>
-        <strong>选择 TTS 引擎</strong>
+        <strong>{t('workflow.engineSelect.title')}</strong>
       </div>
 
       <div className={styles.countdownTrack}>
@@ -71,8 +73,8 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
       </div>
       <div className={styles.countdownText}>
         {locked
-          ? '已手动选择，倒计时停止'
-          : `${remaining}s 后自动使用默认引擎 ${ENGINE_LABELS[default_engine] ?? default_engine}`}
+          ? t('workflow.engineSelect.manualSelected')
+          : t('workflow.engineSelect.autoDefault', { seconds: remaining, engine: ENGINE_LABELS[default_engine] ?? default_engine })}
       </div>
 
       <div className={styles.engineList}>
@@ -85,7 +87,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
           >
             <span className={styles.engineName}>
               {ENGINE_LABELS[engine] ?? engine}
-              {engine === default_engine && <span className={styles.defaultBadge}>默认</span>}
+              {engine === default_engine && <span className={styles.defaultBadge}>{t('workflow.engineSelect.defaultBadge')}</span>}
             </span>
             <span className={styles.engineCap}>{describeEngineCapability(engine)}</span>
           </button>
@@ -94,7 +96,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
 
       <div className={styles.actions}>
         <button type="button" className={styles.confirmBtn} onClick={handleConfirm}>
-          确认（{ENGINE_LABELS[selected] ?? selected}）
+          {t('workflow.engineSelect.confirm', { engine: ENGINE_LABELS[selected] ?? selected })}
         </button>
       </div>
     </div>

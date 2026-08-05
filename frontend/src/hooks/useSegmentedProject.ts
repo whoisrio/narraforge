@@ -1,5 +1,5 @@
 import type { SegmentedProject, Chapter, Segment, EngineParams, SegmentKind, EmotionType, VoiceSource, RoleSnapshot, ProsodyMark } from '../types';
-import { t } from '../i18n';
+import { createTranslator } from '../i18n';
 
 let _idCounter = 0;
 function uid(): string {
@@ -21,13 +21,14 @@ function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
   };
 }
 
-export function createInitialProject(): SegmentedProject {
+export function createInitialProject(translate?: (key: string) => string): SegmentedProject {
+  const _t = translate ?? createTranslator('zh-CN');
   const now = new Date().toISOString();
-  const ch = makeChapter(t('segmentedProject.defaultChapterName'));
+  const ch = makeChapter(_t('segmentedProject.defaultChapterName'));
   return {
     schema_version: 2,
     id: uid(),
-    name: t('segmentedProject.newProject'),
+    name: _t('segmentedProject.newProject'),
     chapters: [ch],
     active_chapter_id: ch.id,
     layout: 'vertical',
@@ -80,7 +81,8 @@ function enrichSegment(raw: RawSegment): Segment {
   return base;
 }
 
-export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
+export function migrateV1(raw: RawSegmentedProject, translate?: (key: string) => string): SegmentedProject {
+  const _t = translate ?? createTranslator('zh-CN');
   if (raw.schema_version === 2 && raw.chapters) {
     // Enrich segments with frontend-only fields that the backend doesn't return
     const chapters: Chapter[] = raw.chapters.map((ch) => {
@@ -105,7 +107,7 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
   const now = new Date().toISOString();
   const ch: Chapter = {
     id: uid(),
-    name: t('segmentedProject.defaultChapterName'),
+    name: _t('segmentedProject.defaultChapterName'),
     voice: r.voice || { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' },
     original_text: r.original_text,
     segments: r.segments || [],
@@ -117,7 +119,7 @@ export function migrateV1(raw: RawSegmentedProject): SegmentedProject {
   return {
     schema_version: 2,
     id: r.id ?? uid(),
-    name: r.name || t('segmentedProject.unnamedProject'),
+    name: r.name || _t('segmentedProject.unnamedProject'),
     chapters: [ch],
     active_chapter_id: ch.id,
     layout: r.layout || 'vertical',
@@ -244,10 +246,12 @@ export function segmentedReducer(state: State, action: Action): State {
 
   switch (action.type) {
     case 'LOAD_PROJECT': {
-      const migrated = migrateV1(action.project);
+      const savedLocale = typeof window !== 'undefined' ? localStorage.getItem('narraforge-locale') : null;
+      const _t = createTranslator(savedLocale === 'en-US' ? 'en-US' : 'zh-CN');
+      const migrated = migrateV1(action.project, _t);
       if (migrated.chapters.length === 0) {
         // Project has no chapters — add a default one
-        const ch = makeChapter(t('segmentedProject.defaultChapterName'));
+        const ch = makeChapter(_t('segmentedProject.defaultChapterName'));
         migrated.chapters = [ch];
         migrated.active_chapter_id = ch.id;
       }

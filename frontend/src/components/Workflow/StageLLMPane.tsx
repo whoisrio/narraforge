@@ -1,12 +1,7 @@
 import ReactMarkdown from 'react-markdown';
+import { useTranslation } from '../../i18n';
 import type { LLMPhase } from '../../services/langgraph/llmStreams';
 import styles from './StageLLMPane.module.css';
-
-const PHASE_LABEL: Record<LLMPhase, string> = {
-  idle: '待调用',
-  streaming: '生成中',
-  done: '已完成',
-};
 
 interface Props {
   phase: LLMPhase;
@@ -17,16 +12,22 @@ interface Props {
 }
 
 export function StageLLMPane({ phase, text, reasoning }: Props) {
+  const { t } = useTranslation();
+  const phaseLabel: Record<LLMPhase, string> = {
+    idle: t('workflow.stageLLMPane.idle'),
+    streaming: t('workflow.stageLLMPane.streaming'),
+    done: t('workflow.stageLLMPane.done'),
+  };
   if (phase === 'idle' && !text && !reasoning) return null;
 
   return (
-    <section className={styles.pane} data-phase={phase} aria-label="LLM 输出">
+    <section className={styles.pane} data-phase={phase} aria-label={t('workflow.stageLLMPane.title')}>
       <div className={styles.head}>
         <span className={`material-symbols-outlined ${styles.headIcon}`}>neurology</span>
-        <span className={styles.headTitle}>LLM 输出</span>
+        <span className={styles.headTitle}>{t('workflow.stageLLMPane.title')}</span>
         <span className={styles.phase} data-phase={phase}>
           {phase === 'streaming' && <span className={styles.pulseDot} />}
-          {PHASE_LABEL[phase]}
+          {phaseLabel[phase]}
         </span>
       </div>
 
@@ -34,7 +35,7 @@ export function StageLLMPane({ phase, text, reasoning }: Props) {
         <details className={styles.thinking} open={phase === 'streaming'}>
           <summary className={styles.thinkingSummary}>
             <span className={`material-symbols-outlined ${styles.thinkingIcon}`}>psychology</span>
-            思考过程
+            {t('workflow.stageLLMPane.thinking')}
             {phase === 'streaming' && <span className={styles.caret}>▍</span>}
           </summary>
           <div className={styles.thinkingBody}>{reasoning}</div>
@@ -42,7 +43,7 @@ export function StageLLMPane({ phase, text, reasoning }: Props) {
       ) : (
         phase === 'streaming' && !text && (
           <div className={styles.stream}>
-            <span className={styles.placeholder}>模型思考中…</span>
+            <span className={styles.placeholder}>{t('workflow.stageLLMPane.thinkingPlaceholder')}</span>
             <span className={styles.caret}>▍</span>
           </div>
         )
