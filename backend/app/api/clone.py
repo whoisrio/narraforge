@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 
 from app.api._voice_helpers import voice_to_dict
+from app.schemas.common import ItemsOut
 from app.schemas.voice_profile import VoiceProfileOut
 import logging
 
@@ -602,7 +603,7 @@ async def save_preview_audio(voice_id: str, request: PreviewAudioRequest, db: Se
 
 
 
-@router.get("/list", response_model=list[VoiceProfileOut])
+@router.get("/list", response_model=ItemsOut[VoiceProfileOut])
 def list_voices(project_id: str | None = None, db: Session = Depends(get_db)):
     """获取声音列表。无 project_id 时返回全局声音；有 project_id 时返回全局 + 该项目的声音。"""
     from sqlalchemy import or_
@@ -612,7 +613,7 @@ def list_voices(project_id: str | None = None, db: Session = Depends(get_db)):
     else:
         query = query.filter(VoiceProfile.project_id == None)
     voices = query.order_by(VoiceProfile.created_at.desc()).all()
-    return [voice_to_dict(v) for v in voices]
+    return {"items": [voice_to_dict(v) for v in voices]}
 
 
 @router.get("/list-from-qwen")
@@ -620,7 +621,7 @@ async def list_voices_from_qwen(db: Session = Depends(get_db)):
     """从千问 API 获取已克隆的声音列表"""
     tts_service = await get_tts_service(db)
     voices = await tts_service.list_cloned_voices()
-    return {"voices": voices}
+    return {"items": voices}
 
 
 @router.post("/sync-from-qwen")

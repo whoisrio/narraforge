@@ -45,7 +45,7 @@ class ConfigUpdate(BaseModel):
 def list_configs(db: Session = Depends(get_db)):
     """获取模型配置列表"""
     configs = db.query(TTSConfig).all()
-    return [
+    items = [
         {
             "id": c.id,
             "name": c.name,
@@ -59,6 +59,7 @@ def list_configs(db: Session = Depends(get_db)):
         }
         for c in configs
     ]
+    return {"items": items}
 
 
 @router.post("/models")

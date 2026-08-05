@@ -10,4 +10,4 @@ def test_list_from_qwen_returns_voices(client, monkeypatch):
     monkeypatch.setattr("app.api.clone.get_tts_service", AsyncMock(return_value=FakeService()))
     resp = client.get("/api/clone/list-from-qwen")
     assert resp.status_code == 200
-    assert resp.json()["voices"][0]["voice_id"] == "qv1"
+    assert resp.json()["items"][0]["voice_id"] == "qv1"

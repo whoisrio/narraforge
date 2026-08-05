@@ -19,6 +19,7 @@ from app.core.audio_encoder import AudioEncoderError
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.segmented_assets import project_dir
+from app.schemas.common import ItemsOut
 from app.schemas.segmented_project import (
     AnimationSpecItem,
     ApplyAnimationSpecRequest,
@@ -52,10 +53,10 @@ def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_projec
 
 # ----- project CRUD -----
 
-@router.get("/segmented-projects", response_model=list[ProjectSummary])
+@router.get("/segmented-projects", response_model=ItemsOut[ProjectSummary])
 def list_projects(db: Session = Depends(get_db)):
     projects = svc.list_projects(db)
-    return [p for p in projects if p.id != SCRATCHPAD_PROJECT_ID]
+    return {"items": [p for p in projects if p.id != SCRATCHPAD_PROJECT_ID]}
 
 
 @router.post("/segmented-projects", response_model=ProjectDetail, status_code=201)

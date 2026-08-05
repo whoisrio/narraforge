@@ -69,7 +69,8 @@ def test_list_voices_returns_full_voice_profile_shape(client: TestClient, db_ses
     db_session.commit()
     response = client.get("/api/clone/list")
     assert response.status_code == 200
-    items = response.json()
+    resp = response.json()
+    items = resp["items"]
     assert any(v["id"] == "v-list" for v in items)
     matched = next(v for v in items if v["id"] == "v-list")
     assert VOICE_PROFILE_FIELDS.issubset(matched.keys())

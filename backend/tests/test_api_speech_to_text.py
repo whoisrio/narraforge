@@ -35,7 +35,7 @@ def test_download_not_found(client):
 def test_history_empty_initially(client, mock_voice_to_srt):
     response = client.get("/api/speech-to-text/history")
     assert response.status_code == 200
-    assert response.json() == {"results": []}
+    assert response.json() == {"items": []}
 
 
 def test_frontend_storage_does_not_create_history_record(client, mock_voice_to_srt, sample_audio_file):
@@ -49,7 +49,7 @@ def test_frontend_storage_does_not_create_history_record(client, mock_voice_to_s
 
     response = client.get("/api/speech-to-text/history")
     assert response.status_code == 200
-    assert response.json()["results"] == []
+    assert response.json()["items"] == []
 
 
 def test_backend_storage_creates_history_record(client, db_session, mock_voice_to_srt, sample_audio_file):
@@ -67,7 +67,7 @@ def test_backend_storage_creates_history_record(client, db_session, mock_voice_t
 
     response = client.get("/api/speech-to-text/history")
     assert response.status_code == 200
-    results = response.json()["results"]
+    results = response.json()["items"]
     assert len(results) == 1
     record = results[0]
     assert record["original_filename"] == "test.wav"
@@ -88,13 +88,13 @@ def test_delete_history_record(client, db_session, mock_voice_to_srt, sample_aud
     assert response.status_code == 200
 
     response = client.get("/api/speech-to-text/history")
-    record_id = response.json()["results"][0]["id"]
+    record_id = response.json()["items"][0]["id"]
 
     response = client.delete(f"/api/speech-to-text/history/{record_id}")
     assert response.status_code == 200
 
     response = client.get("/api/speech-to-text/history")
-    assert response.json()["results"] == []
+    assert response.json()["items"] == []
 
 
 def test_delete_nonexistent_record(client, mock_voice_to_srt):
@@ -117,5 +117,5 @@ def test_history_limit_enforced(client, db_session, mock_voice_to_srt, sample_au
 
     response = client.get("/api/speech-to-text/history")
     assert response.status_code == 200
-    results = response.json()["results"]
+    results = response.json()["items"]
     assert len(results) == 10

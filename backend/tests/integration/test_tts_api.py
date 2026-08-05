@@ -141,7 +141,7 @@ class TestTTSAPI:
     def test_list_available_voices_empty(self, client: TestClient):
         response = client.get("/api/tts/voices")
         assert response.status_code == 200
-        assert response.json() == {"voices": []}
+        assert response.json() == {"items": []}
 
     def test_list_available_voices_with_cloned_qwen_voice(self, client: TestClient, db_session):
         voice = VoiceProfile(
@@ -155,7 +155,7 @@ class TestTTSAPI:
 
         response = client.get("/api/tts/voices")
         assert response.status_code == 200
-        voices = response.json()["voices"]
+        voices = response.json()["items"]
         assert len(voices) == 1
         assert voices[0]["id"] == "voice-row-1"
         assert voices[0]["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cosyvoice-v3-narrator"
@@ -220,7 +220,7 @@ class TestTTSResultContract:
         assert data["text"] == "contract check"
         assert isinstance(data["params"], dict)
 
-    def test_history_response_has_results_wrapper(self, client: TestClient, db_session):
+    def test_history_response_has_items_envelope(self, client: TestClient, db_session):
         from app.models.tts_result import TTSResultRecord
         db_session.add(TTSResultRecord(
             id="h1", text="hi", voice_id="v1", voice_name="n", audio_path="p",
@@ -231,8 +231,8 @@ class TestTTSResultContract:
         response = client.get("/api/tts/history")
         assert response.status_code == 200
         data = response.json()
-        assert "results" in data
-        item = next(i for i in data["results"] if i["id"] == "h1")
+        assert "items" in data
+        item = next(i for i in data["items"] if i["id"] == "h1")
         for f in ("id", "text", "voice_id", "voice_name", "audio_url",
                   "audio_format", "speed", "volume", "pitch", "created_at"):
             assert f in item

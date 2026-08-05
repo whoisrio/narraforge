@@ -68,7 +68,8 @@ test.describe('角色删除二次确认', () => {
       await expect(page.getByText(ROLE_NAME)).toBeHidden({ timeout: 10_000 });
 
       const rolesResp = await page.request.get(`${BACKEND}/api/roles`, { params: { project_id: PROJECT_ID } });
-      const roles = await rolesResp.json();
+      const rolesData = await rolesResp.json();
+      const roles = rolesData.items;
       expect(roles.some((r: { id: string }) => r.id === 'e2e-role-delete-confirm')).toBe(true);
     } finally {
       await page.request.delete(`${BACKEND}/api/roles/e2e-role-delete-confirm`);

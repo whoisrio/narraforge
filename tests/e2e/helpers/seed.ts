@@ -14,7 +14,8 @@ const ROOT = path.resolve(__dirname, '..', '..', '..');
 async function deleteRolesByName(page: Page, name: string): Promise<void> {
   const resp = await page.request.get(`${BASE_URL}/api/roles`);
   if (!resp.ok()) return;
-  const roles: Array<{ id: string; name: string }> = await resp.json();
+  const data = await resp.json();
+  const roles: Array<{ id: string; name: string }> = data.items ?? data;
   for (const role of roles) {
     if (role.name === name) {
       await page.request.delete(`${BASE_URL}/api/roles/${role.id}`).catch(() => {});

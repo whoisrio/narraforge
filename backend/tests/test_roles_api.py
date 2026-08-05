@@ -38,7 +38,7 @@ def test_roles_crud_round_trip(client):
 
     listed = client.get("/api/roles")
     assert listed.status_code == 200
-    assert [role["id"] for role in listed.json()] == ["role-linxia"]
+    assert [role["id"] for role in listed.json()["items"]] == ["role-linxia"]
 
     updated = client.put(
         "/api/roles/role-linxia",
@@ -61,7 +61,7 @@ def test_roles_crud_round_trip(client):
 
     deleted = client.delete("/api/roles/role-linxia")
     assert deleted.status_code == 204
-    assert client.get("/api/roles").json() == []
+    assert client.get("/api/roles").json()["items"] == []
 
 
 def test_role_create_rejects_duplicate_id(client):
