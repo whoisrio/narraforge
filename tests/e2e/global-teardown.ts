@@ -42,7 +42,8 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
     // ── 1. Delete non-seeded roles ──
     const rolesResp = await page.request.get(`${BASE_URL}/api/roles`);
     if (rolesResp.ok()) {
-      const roles: Array<{ id: string; name: string }> = await rolesResp.json();
+      const rolesData = await rolesResp.json();
+      const roles: Array<{ id: string; name: string }> = rolesData.items ?? rolesData;
       let deletedRoles = 0;
       for (const role of roles) {
         if (!KEEP_ROLES.has(role.name)) {
@@ -58,7 +59,8 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
     // ── 2. Delete all voice profiles ──
     const voicesResp = await page.request.get(`${BASE_URL}/api/clone`);
     if (voicesResp.ok()) {
-      const voices: Array<{ id: string; name: string }> = await voicesResp.json();
+      const voicesData = await voicesResp.json();
+      const voices: Array<{ id: string; name: string }> = voicesData.items ?? voicesData;
       let deletedVoices = 0;
       for (const voice of voices) {
         await page.request.delete(`${BASE_URL}/api/clone/${voice.id}`).catch(() => {});
@@ -72,7 +74,8 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
     // ── 3. Delete non-seeded projects ──
     const projectsResp = await page.request.get(`${BASE_URL}/api/segmented-projects`);
     if (projectsResp.ok()) {
-      const projects: Array<{ id: string; name: string }> = await projectsResp.json();
+      const projectsData = await projectsResp.json();
+      const projects: Array<{ id: string; name: string }> = projectsData.items ?? projectsData;
       let deletedProjects = 0;
       for (const project of projects) {
         if (!KEEP_PROJECTS.has(project.id)) {

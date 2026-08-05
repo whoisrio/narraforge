@@ -18,8 +18,8 @@ interface ListResponse {
 
 export const backendStorage: SegmentedProjectStorage = {
   async listProjects() {
-    const { data } = await api.get<ListResponse[]>('/segmented-projects');
-    return data.map((p) => ({
+    const { data } = await api.get<{ items: ListResponse[] }>('/segmented-projects');
+    return data.items.map((p) => ({
       schema_version: 2,
       id: p.id, name: p.name,
       layout: (p.layout === 'horizontal' ? 'horizontal' : 'vertical') as 'vertical' | 'horizontal',

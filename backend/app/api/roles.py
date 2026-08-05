@@ -6,18 +6,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.schemas.common import ItemsOut
 from app.schemas.role import RoleIn, RoleOut, RoleUpdate
 from app.services import role_service as svc
 
 router = APIRouter()
 
 
-@router.get("/roles", response_model=list[RoleOut])
+@router.get("/roles", response_model=ItemsOut[RoleOut])
 def list_roles(
     project_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-) -> list[RoleOut]:
-    return svc.list_roles(db, project_id=project_id)
+):
+    items = svc.list_roles(db, project_id=project_id)
+    return {"items": items}
 
 
 @router.post("/roles", response_model=RoleOut, status_code=201)

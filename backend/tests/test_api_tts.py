@@ -6,7 +6,7 @@ def test_list_default_voices(client):
     response = client.get("/api/tts/voices")
     assert response.status_code == 200
     data = response.json()
-    assert data == {"voices": []}
+    assert data == {"items": []}
 
 
 def test_list_cloned_qwen_voices(client, db_session):
@@ -21,7 +21,7 @@ def test_list_cloned_qwen_voices(client, db_session):
 
     response = client.get("/api/tts/voices")
     assert response.status_code == 200
-    voices = response.json()["voices"]
+    voices = response.json()["items"]
     assert len(voices) == 1
     assert voices[0]["id"] == "v1"
     assert voices[0]["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cosyvoice-v3-narrator"
@@ -31,9 +31,9 @@ def test_list_edge_voices(client, mock_edge_tts_service):
     response = client.get("/api/tts/edge-voices")
     assert response.status_code == 200
     data = response.json()
-    assert "voices" in data
-    assert len(data["voices"]) == 2
-    assert data["voices"][0]["short_name"] == "zh-CN-XiaoxiaoNeural"
+    assert "items" in data
+    assert len(data["items"]) == 2
+    assert data["items"][0]["short_name"] == "zh-CN-XiaoxiaoNeural"
 
 
 def test_list_edge_voices_with_filter(client, mock_edge_tts_service):
@@ -46,8 +46,8 @@ def test_list_edge_languages(client, mock_edge_tts_service):
     response = client.get("/api/tts/edge-languages")
     assert response.status_code == 200
     data = response.json()
-    assert "languages" in data
-    assert "Chinese" in data["languages"]
+    assert "items" in data
+    assert "Chinese" in data["items"]
 
 
 def test_synthesize_with_edge_tts(client, mock_edge_tts_service, db_session):

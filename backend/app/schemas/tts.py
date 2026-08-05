@@ -57,9 +57,3 @@ class TTSResultRecordOut(BaseModel):
         if isinstance(v, datetime):
             return v.isoformat()
         return str(v)
-
-
-class TTSHistoryOut(BaseModel):
-    results: list[TTSResultRecordOut]
-
-    model_config = {"from_attributes": True}

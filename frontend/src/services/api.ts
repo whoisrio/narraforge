@@ -28,10 +28,10 @@ export const voiceApi = {
   },
 
   list: async (projectId?: string): Promise<VoiceProfile[]> => {
-    const { data } = await api.get<VoiceProfile[]>('/clone/list', {
+    const { data } = await api.get<{ items: VoiceProfile[] }>('/clone/list', {
       params: projectId ? { project_id: projectId } : undefined,
     });
-    return data;
+    return data.items;
   },
 
   // 只获取已克隆的声音（从 Qwen 同步的）
@@ -131,8 +131,8 @@ export const ttsApi = {
     if (params?.voice_id) searchParams.set('voice_id', params.voice_id);
     if (params?.project_id) searchParams.set('project_id', params.project_id);
     const qs = searchParams.toString();
-    const { data } = await api.get<{ voices: VoiceProfile[] }>(`/tts/voices${qs ? '?' + qs : ''}`);
-    return data.voices;
+    const { data } = await api.get<{ items: VoiceProfile[] }>(`/tts/voices${qs ? '?' + qs : ''}`);
+    return data.items;
   },
 
   synthesize: async (request: TTSRequest): Promise<TTSResult> => {
@@ -149,8 +149,8 @@ export const ttsApi = {
   },
 
   getHistory: async (): Promise<TTSResultRecord[]> => {
-    const { data } = await api.get<{ results: TTSResultRecord[] }>('/tts/history');
-    return data.results;
+    const { data } = await api.get<{ items: TTSResultRecord[] }>('/tts/history');
+    return data.items;
   },
 
   deleteResult: async (id: string): Promise<void> => {
@@ -162,13 +162,13 @@ export const ttsApi = {
     if (language) params.set('language', language);
     if (gender) params.set('gender', gender);
     const qs = params.toString() ? `?${params.toString()}` : '';
-    const { data } = await api.get<{ voices: EdgeVoice[] }>(`/tts/edge-voices${qs}`);
-    return data.voices;
+    const { data } = await api.get<{ items: EdgeVoice[] }>(`/tts/edge-voices${qs}`);
+    return data.items;
   },
 
   getEdgeLanguages: async (): Promise<string[]> => {
-    const { data } = await api.get<{ languages: string[] }>('/tts/edge-languages');
-    return data.languages;
+    const { data } = await api.get<{ items: string[] }>('/tts/edge-languages');
+    return data.items;
   },
 };
 
@@ -176,8 +176,8 @@ export const ttsApi = {
 export const mimoTtsApi = {
   /** 获取 MiMo 预置音色列表 */
   getPresetVoices: async (): Promise<MiMoPresetVoice[]> => {
-    const { data } = await api.get<{ voices: MiMoPresetVoice[] }>('/mimo-tts/voices');
-    return data.voices;
+    const { data } = await api.get<{ items: MiMoPresetVoice[] }>('/mimo-tts/voices');
+    return data.items;
   },
 
   /** 使用预置音色合成语音 */
@@ -241,8 +241,8 @@ export const mimoTtsApi = {
 // Config API
 export const configApi = {
   listModels: async (): Promise<TTSConfig[]> => {
-    const { data } = await api.get<TTSConfig[]>('/config/models');
-    return data;
+    const { data } = await api.get<{ items: TTSConfig[] }>('/config/models');
+    return data.items;
   },
 
   createModel: async (config: Omit<TTSConfig, 'id' | 'is_default' | 'created_at'>): Promise<TTSConfig> => {
@@ -346,8 +346,8 @@ export const speechToTextApi = {
   },
 
   getHistory: async (): Promise<TranscriptionRecord[]> => {
-    const { data } = await api.get<{ results: TranscriptionRecord[] }>('/speech-to-text/history');
-    return data.results;
+    const { data } = await api.get<{ items: TranscriptionRecord[] }>('/speech-to-text/history');
+    return data.items;
   },
 
   deleteRecord: async (id: string): Promise<void> => {
@@ -725,10 +725,10 @@ export interface ChapterSyncStatus {
 
 export const roleApi = {
   listRoles: async (projectId?: string): Promise<import('../types').Role[]> => {
-    const { data } = await api.get<import('../types').Role[]>('/roles', {
+    const { data } = await api.get<{ items: import('../types').Role[] }>('/roles', {
       params: projectId ? { project_id: projectId } : undefined,
     });
-    return data;
+    return data.items;
   },
   createRole: async (role: import('../types').RoleSnapshot): Promise<import('../types').Role> => {
     const { data } = await api.post<import('../types').Role>('/roles', role);

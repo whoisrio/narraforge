@@ -196,7 +196,7 @@ async def _save_and_respond(
 async def list_mimo_voices():
     """获取 MiMo TTS 预置音色列表"""
     from app.services.mimo_tts_service import MIMO_PRESET_VOICES
-    return {"voices": MIMO_PRESET_VOICES}
+    return {"items": MIMO_PRESET_VOICES}
 
 
 @router.post("/preset", response_model=TTSResultOut)

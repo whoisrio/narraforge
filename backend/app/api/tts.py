@@ -13,7 +13,8 @@ import aiofiles
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.schemas.tts import TTSResultOut, TTSHistoryOut
+from app.schemas.common import ItemsOut
+from app.schemas.tts import TTSResultOut, TTSResultRecordOut
 from app.core.system_config_service import is_frontend_storage
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_result import TTSResultRecord
@@ -326,7 +327,7 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=500, detail=f"Edge-TTS synthesis failed: {str(e)}")
 
 
-@router.get("/history", response_model=TTSHistoryOut)
+@router.get("/history", response_model=ItemsOut[TTSResultRecordOut])
 def get_synthesis_history(db: Session = Depends(get_db)):
     """获取合成历史列表"""
     records = (
@@ -334,7 +335,7 @@ def get_synthesis_history(db: Session = Depends(get_db)):
         .order_by(TTSResultRecord.created_at.desc())
         .all()
     )
-    return {"results": [_result_to_dict(r) for r in records]}
+    return {"items": [_result_to_dict(r) for r in records]}
 
 
 @router.delete("/history/{result_id}")
@@ -434,7 +435,7 @@ async def list_available_voices(
         voice = db.query(VoiceProfile).filter_by(id=voice_id).first()
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
-        return {"voices": [voice_to_dict(voice)]}
+        return {"items": [voice_to_dict(voice)]}
 
     if project_id:
         voices = [v for v in voices
@@ -442,7 +443,7 @@ async def list_available_voices(
     else:
         voices = [v for v in voices if v.project_id is None]
 
-    return {"voices": [voice_to_dict(v) for v in voices]}
+    return {"items": [voice_to_dict(v) for v in voices]}
 
 
 @router.get("/edge-voices")
@@ -452,7 +453,7 @@ async def list_edge_voices(language: Optional[str] = None, gender: Optional[str]
         from app.services.edge_tts_service import get_edge_tts_service
         edge_service = get_edge_tts_service()
         voices = await edge_service.list_voices(language=language, gender=gender)
-        return {"voices": voices}
+        return {"items": voices}
     except Exception as e:
         logger.error(f"Failed to list edge-tts voices: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to list edge-tts voices: {str(e)}")
@@ -465,7 +466,7 @@ async def list_edge_languages():
         from app.services.edge_tts_service import get_edge_tts_service
         edge_service = get_edge_tts_service()
         languages = await edge_service.get_available_languages()
-        return {"languages": languages}
+        return {"items": languages}
     except Exception as e:
         logger.error(f"Failed to list edge-tts languages: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to list edge-tts languages: {str(e)}")

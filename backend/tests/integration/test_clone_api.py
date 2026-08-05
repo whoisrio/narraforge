@@ -57,8 +57,8 @@ class TestCloneAPI:
         response = client.get("/api/clone/list")
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) == 0
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) == 0
 
     def test_list_voices_with_data(self, client: TestClient, db_session):
         from app.models.voice_profile import VoiceProfile
@@ -87,11 +87,11 @@ class TestCloneAPI:
         assert response.status_code == 200
         data = response.json()
 
-        assert isinstance(data, list)
-        assert len(data) == 2
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) == 2
 
-        voice1_data = next(v for v in data if v["name"] == "Voice 1")
-        voice2_data = next(v for v in data if v["name"] == "Voice 2")
+        voice1_data = next(v for v in data["items"] if v["name"] == "Voice 1")
+        voice2_data = next(v for v in data["items"] if v["name"] == "Voice 2")
 
         assert voice1_data["voice"]["voice_type"] == "upload"
         assert voice1_data["voice"]["model"] == ""

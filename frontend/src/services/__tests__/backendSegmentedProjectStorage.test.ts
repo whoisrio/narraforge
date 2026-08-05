@@ -20,11 +20,11 @@ beforeEach(() => { Object.values(fakeApi).forEach((f) => (f as Mock).mockReset()
 
 describe('backendStorage', () => {
   it('listProjects calls GET /segmented-projects and maps summary stats for project cards', async () => {
-    fakeApi.get.mockResolvedValueOnce({ data: [{
+    fakeApi.get.mockResolvedValueOnce({ data: { items: [{
       id: 'p1', name: 'n', schema_version: 2, layout: 'vertical', active_chapter_id: null,
       created_at: 't', updated_at: 't',
       summary_stats: { chapter_count: 2, segment_count: 5, generated_count: 3, duration_sec: 42 },
-    }] });
+    }] } });
     const list = await backendStorage.listProjects();
     expect(list).toHaveLength(1);
     expect(list[0].id).toBe('p1');

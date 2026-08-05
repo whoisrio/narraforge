@@ -201,7 +201,7 @@ def get_history(db: Session = Depends(get_db)):
         .order_by(TranscriptionRecord.created_at.desc())
         .all()
     )
-    return {"results": [_record_to_dict(r) for r in records]}
+    return {"items": [_record_to_dict(r) for r in records]}
 
 
 @router.delete("/history/{record_id}")

@@ -39,7 +39,7 @@ def test_crud_round_trip(client, tmp_path, monkeypatch):
 
     r = client.get("/api/segmented-projects")
     assert r.status_code == 200
-    assert {p["id"] for p in r.json()} == {"p1"}
+    assert {p["id"] for p in r.json()["items"]} == {"p1"}
 
     r = client.get("/api/segmented-projects/p1")
     assert r.status_code == 200
@@ -75,7 +75,7 @@ def test_list_projects_includes_card_summary_stats(client, tmp_path, monkeypatch
 
     r = client.get("/api/segmented-projects")
     assert r.status_code == 200
-    summary = r.json()[0]
+    summary = r.json()["items"][0]
     assert summary["summary_stats"] == {
         "chapter_count": 2,
         "segment_count": 3,
@@ -123,7 +123,7 @@ def test_migrate_endpoint_creates_projects(client, tmp_path, monkeypatch):
     assert r.status_code == 200
     assert r.json()["results"][0]["status"] == "ok"
     r = client.get("/api/segmented-projects")
-    assert {p["id"] for p in r.json()} == {"p-mig"}
+    assert {p["id"] for p in r.json()["items"]} == {"p-mig"}
 
 
 def test_project_round_trips_role_fields(client, tmp_path, monkeypatch):
