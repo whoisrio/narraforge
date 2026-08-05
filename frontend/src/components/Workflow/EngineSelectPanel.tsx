@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from '../../i18n';
 import type { SelectEngineInterrupt } from '../../services/langgraph/types';
 import { describeEngineCapability } from '../../services/styleTags';
 import styles from './EngineSelectPanel.module.css';
@@ -20,6 +21,7 @@ const ENGINE_LABELS: Record<string, string> = {
  * 自动提交默认引擎；用户手动选择后停止倒计时，确认按钮提交所选。
  */
 export function EngineSelectPanel({ interrupt, onRespond }: Props) {
+  const { t } = useTranslation();
   const { available_engines, default_engine, timeout_s } = interrupt;
   const [selected, setSelected] = useState(default_engine);
   const [remaining, setRemaining] = useState(timeout_s);
@@ -71,7 +73,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
       </div>
       <div className={styles.countdownText}>
         {locked
-          ? '已手动选择，倒计时停止'
+          ? t('workflow.engineSelect.manualSelected')
           : `${remaining}s 后自动使用默认引擎 ${ENGINE_LABELS[default_engine] ?? default_engine}`}
       </div>
 

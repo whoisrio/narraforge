@@ -1,12 +1,7 @@
 import ReactMarkdown from 'react-markdown';
+import { useTranslation } from '../../i18n';
 import type { LLMPhase } from '../../services/langgraph/llmStreams';
 import styles from './StageLLMPane.module.css';
-
-const PHASE_LABEL: Record<LLMPhase, string> = {
-  idle: '待调用',
-  streaming: '生成中',
-  done: '已完成',
-};
 
 interface Props {
   phase: LLMPhase;
@@ -17,6 +12,12 @@ interface Props {
 }
 
 export function StageLLMPane({ phase, text, reasoning }: Props) {
+  const { t } = useTranslation();
+  const phaseLabel: Record<LLMPhase, string> = {
+    idle: t('workflow.stageLLMPane.idle'),
+    streaming: t('workflow.stageLLMPane.streaming'),
+    done: t('workflow.stageLLMPane.done'),
+  };
   if (phase === 'idle' && !text && !reasoning) return null;
 
   return (
@@ -26,7 +27,7 @@ export function StageLLMPane({ phase, text, reasoning }: Props) {
         <span className={styles.headTitle}>LLM 输出</span>
         <span className={styles.phase} data-phase={phase}>
           {phase === 'streaming' && <span className={styles.pulseDot} />}
-          {PHASE_LABEL[phase]}
+          {phaseLabel[phase]}
         </span>
       </div>
 

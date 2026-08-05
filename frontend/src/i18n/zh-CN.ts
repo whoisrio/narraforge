@@ -1526,6 +1526,41 @@ export const zhCN = {
       startNewRun: '全新运行',
       exportAudio: '导出音频',
     },
+    drawer: {
+      rerunNode: '重跑节点',
+      reviewPassed: '审查通过',
+      reviewApproved: '人工已确认',
+      reviewRejected: '人工要求重写',
+      inputOutput: '输入 {input} · 输出 {output}',
+      thinkingTokens: '（含思考 {count}）',
+      totalTokens: '合计 {count} tokens',
+    },
+    stageCard: {
+      streaming: '生成中',
+      done: 'LLM 完成',
+      inputOutput: '输入 {input} · 输出 {output}',
+      thinkingTokens: '（含思考 {count}）',
+      totalTokens: '· 合计 {count} tokens',
+    },
+    stageLLMPane: {
+      idle: '待调用',
+      streaming: '生成中',
+      done: '已完成',
+    },
+    drawerIndicator: {
+      awaitingReview: '等待审批',
+      running: '工作流运行中',
+    },
+    engineSelect: {
+      manualSelected: '已手动选择，倒计时停止',
+    },
+    confirmPanel: {
+      title: '项目已有内容',
+      description: '当前项目已有 {chapters} 个章节 / {segments} 个段落',
+      synthesized: '，其中 {count} 段已合成音频',
+      warning: '。继续将删除并重建这些内容。',
+      confirmRebuild: '确认重建',
+    },
   },
 };
 

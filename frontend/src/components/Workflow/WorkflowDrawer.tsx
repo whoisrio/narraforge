@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from '../../i18n';
 import { useToast } from '../ui/useToast';
 import { useConfirm } from '../ui/useConfirm';
 import { useStream } from '@langchain/langgraph-sdk/react';
@@ -42,7 +43,7 @@ const DEFAULT_NODES: GraphNode[] = [
   { id: 'synthesis', name: 'synthesis' },
 ];
 
-function summaryFor(nodeId: string, values: Partial<WorkflowState>): string | undefined {
+function summaryFor(nodeId: string, values: Partial<WorkflowState>, t: (key: string, vars?: Record<string, string | number>) => string): string | undefined {
   switch (nodeId) {
     case 'gen_script':
     case 'gen_narration':
@@ -52,11 +53,11 @@ function summaryFor(nodeId: string, values: Partial<WorkflowState>): string | un
       if (values.review_feedback) return `评分 ${values.review_feedback.overall_score}/5`;
       return undefined;
     case 'quality_review':
-      if (values.review_result) return values.review_result.passed ? '审查通过' : `审查发现 ${values.review_result.issues.length} 个问题`;
+      if (values.review_result) return values.review_result.passed ? t('workflow.drawer.reviewPassed') : `审查发现 ${values.review_result.issues.length} 个问题`;
       return undefined;
     case 'review_decision':
-      if (values.review_status === 'approved') return '人工已确认';
-      if (values.review_status === 'rejected') return '人工要求重写';
+      if (values.review_status === 'approved') return t('workflow.drawer.reviewApproved');
+      if (values.review_status === 'rejected') return t('workflow.drawer.reviewRejected');
       return undefined;
     case 'split_segment':
     case 'split_chapters':
@@ -76,6 +77,7 @@ function summaryFor(nodeId: string, values: Partial<WorkflowState>): string | un
 }
 
 export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration', onClose, onCollapse }: Props) {
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState<GraphNode[]>(DEFAULT_NODES);
   const [milestones, setMilestones] = useState<Record<string, MilestoneEvent[]>>({});
   const [fullscreen, setFullscreen] = useState<string | null>(null);
@@ -197,7 +199,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
   // 指定节点重跑（fork）：确认后从该节点首次完成的 checkpoint 恢复执行。
   const handleFork = async (nodeId: string) => {
     const ok = await confirm({
-      title: '重跑节点',
+      title: t('workflow.drawer.rerunNode'),
       message: `从「${nodeId}」节点重跑？该节点及之后的进度将被覆盖。`,
       variant: 'warning',
     });
@@ -243,9 +245,9 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
           {workflowUsage && (
             <span
               className={styles.globalTokens}
-              title={`输入 ${workflowUsage.input_tokens.toLocaleString('en-US')} · 输出 ${workflowUsage.output_tokens.toLocaleString('en-US')}` +
+              title={t('workflow.drawer.inputOutput', { input: workflowUsage.input_tokens.toLocaleString('en-US'), output: workflowUsage.output_tokens.toLocaleString('en-US') }) +
                 (workflowUsage.reasoning_tokens
-                  ? `（含思考 ${workflowUsage.reasoning_tokens.toLocaleString('en-US')}）`
+                  ? t('workflow.drawer.thinkingTokens', { count: workflowUsage.reasoning_tokens.toLocaleString('en-US') })
                   : '')}
             >
               <span className={`material-symbols-outlined ${styles.globalTokensIcon}`}>toll</span>
@@ -305,7 +307,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
               nodeId={n.id}
               title={n.name}
               status={status}
-              summary={summaryFor(n.id, values)}
+              summary={summaryFor(n.id, values, t)}
               llmPhase={llm?.phase}
               tokenUsage={llm?.usage ?? llm?.liveUsage}
               defaultOpen={status === 'running'}

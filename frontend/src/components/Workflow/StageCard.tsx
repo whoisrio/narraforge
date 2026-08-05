@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslation } from '../../i18n';
 import type { LLMPhase } from '../../services/langgraph/llmStreams';
 import type { TokenUsage } from '../../services/langgraph/types';
 import styles from './StageCard.module.css';
@@ -7,11 +8,6 @@ const STATUS_ICON: Record<string, string> = {
   completed: 'check_circle',
   running: 'progress_activity',
   pending: 'circle',
-};
-
-const LLM_PILL_LABEL: Partial<Record<LLMPhase, string>> = {
-  streaming: '生成中',
-  done: 'LLM 完成',
 };
 
 interface Props {
@@ -42,6 +38,11 @@ export function StageCard({
   onFork,
   children,
 }: Props) {
+  const { t } = useTranslation();
+  const llmPillLabel: Partial<Record<LLMPhase, string>> = {
+    streaming: t('workflow.stageCard.streaming'),
+    done: t('workflow.stageCard.done'),
+  };
   const [open, setOpen] = useState(defaultOpen || status === 'running');
   // 阶段开始运行时自动展开，保证 LLM 实时流可见；render 期间调整 state 是
   // React 官方认可的 derive-from-props 模式（避免 effect 级联渲染）。
@@ -51,13 +52,13 @@ export function StageCard({
     if (status === 'running') setOpen(true);
   }
 
-  const llmLabel = llmPhase ? LLM_PILL_LABEL[llmPhase] : undefined;
+  const llmLabel = llmPhase ? llmPillLabel[llmPhase] : undefined;
   const tokenTitle = tokenUsage
-    ? `输入 ${tokenUsage.input_tokens.toLocaleString('en-US')} · 输出 ${tokenUsage.output_tokens.toLocaleString('en-US')}` +
+    ? t('workflow.stageCard.inputOutput', { input: tokenUsage.input_tokens.toLocaleString('en-US'), output: tokenUsage.output_tokens.toLocaleString('en-US') }) +
       (tokenUsage.reasoning_tokens
-        ? `（含思考 ${tokenUsage.reasoning_tokens.toLocaleString('en-US')}）`
+        ? t('workflow.stageCard.thinkingTokens', { count: tokenUsage.reasoning_tokens.toLocaleString('en-US') })
         : '') +
-      ` · 合计 ${(tokenUsage.total_tokens ?? tokenUsage.input_tokens + tokenUsage.output_tokens).toLocaleString('en-US')} tokens`
+      t('workflow.stageCard.totalTokens', { count: (tokenUsage.total_tokens ?? tokenUsage.input_tokens + tokenUsage.output_tokens).toLocaleString('en-US') })
     : undefined;
 
   return (

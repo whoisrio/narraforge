@@ -1528,5 +1528,40 @@ export const enUS: Messages = {
       startNewRun: 'New Run',
       exportAudio: 'Export Audio',
     },
+    drawer: {
+      rerunNode: 'Rerun Node',
+      reviewPassed: 'Review Passed',
+      reviewApproved: 'Manually Approved',
+      reviewRejected: 'Manually Rejected',
+      inputOutput: 'Input {input} · Output {output}',
+      thinkingTokens: '(incl. thinking {count})',
+      totalTokens: 'Total {count} tokens',
+    },
+    stageCard: {
+      streaming: 'Generating',
+      done: 'LLM Done',
+      inputOutput: 'Input {input} · Output {output}',
+      thinkingTokens: '(incl. thinking {count})',
+      totalTokens: '· Total {count} tokens',
+    },
+    stageLLMPane: {
+      idle: 'Idle',
+      streaming: 'Generating',
+      done: 'Done',
+    },
+    drawerIndicator: {
+      awaitingReview: 'Awaiting Review',
+      running: 'Workflow Running',
+    },
+    engineSelect: {
+      manualSelected: 'Manually selected, countdown stopped',
+    },
+    confirmPanel: {
+      title: 'Project Already Has Content',
+      description: 'This project already has {chapters} chapters / {segments} segments',
+      synthesized: ', {count} of which have synthesized audio',
+      warning: '. Continuing will delete and rebuild this content.',
+      confirmRebuild: 'Confirm Rebuild',
+    },
   },
 };
