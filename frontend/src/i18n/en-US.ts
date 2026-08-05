@@ -634,7 +634,6 @@ export const enUS: Messages = {
     modelMedium: 'Medium',
     modelLargeV3: 'Large-v3 (Most Accurate)',
     modelParaformer: 'Paraformer-ZH (Chinese)',
-    modelParaformerStreaming: 'Paraformer-ZH Streaming',
     processing: 'Recognizing speech, please wait...',
     emptyTitle: 'No Transcript Yet',
     emptyHint: 'Upload an audio file and start recognition. Subtitles will appear here.',

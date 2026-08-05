@@ -632,7 +632,6 @@ export const zhCN = {
     modelMedium: 'Medium',
     modelLargeV3: 'Large-v3（最准）',
     modelParaformer: 'Paraformer-ZH（中文）',
-    modelParaformerStreaming: 'Paraformer-ZH Streaming',
     processing: '正在识别语音，请耐心等待...',
     emptyTitle: '还没有 Transcript',
     emptyHint: '上传音频文件并启动识别，字幕会显示在这里。',
