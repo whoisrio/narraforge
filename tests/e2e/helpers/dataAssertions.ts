@@ -52,7 +52,7 @@ export async function readBackendProjects(page: Page): Promise<SegmentedProject[
     const resp = await fetch('/api/segmented-projects');
     if (!resp.ok) return [];
     const data = await resp.json();
-    const list = data.items ?? data;
+    const list = data.items;
     // The list endpoint returns summary data; fetch full detail for each
     const projects: SegmentedProject[] = [];
     for (const item of list) {

@@ -169,35 +169,37 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 
 **Response:**
 ```json
-[
-  {
-    "id": "uuid",
-    "name": "我的声音",
-    "description": "温柔女声",
-    "avatar": null,
-    "project_id": null,
-    "voice": {
-      "model": "cosyvoice",
-      "voice_type": "clone"
-    },
-    "voice_params": {
-      "cosyvoice": {
-        "source_audio_path": "output/clone_voices/audio.mp3",
-        "params": {
-          "voice_id": "xxx",
-          "voice_description": "..."
+{
+  "items": [
+    {
+      "id": "uuid",
+      "name": "我的声音",
+      "description": "温柔女声",
+      "avatar": null,
+      "project_id": null,
+      "voice": {
+        "model": "cosyvoice",
+        "voice_type": "clone"
+      },
+      "voice_params": {
+        "cosyvoice": {
+          "source_audio_path": "output/clone_voices/audio.mp3",
+          "params": {
+            "voice_id": "xxx",
+            "voice_description": "..."
+          }
         }
-      }
-    },
-    "preview": {
-      "audition_text": "...",
-      "preview_audio_path": "output/clone_voices/preview.mp3"
-    },
-    "has_preview": true,
-    "has_source": true,
-    "created_at": "2024-01-01T00:00:00"
-  }
-]
+      },
+      "preview": {
+        "audition_text": "...",
+        "preview_audio_path": "output/clone_voices/preview.mp3"
+      },
+      "has_preview": true,
+      "has_source": true,
+      "created_at": "2024-01-01T00:00:00"
+    }
+  ]
+}
 ```
 
 ### GET `/api/clone/{voice_id}`
@@ -309,7 +311,7 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 **Response:**
 ```json
 {
-  "voices": [
+  "items": [
     {
       "id": "uuid",
       "name": "我的声音",
@@ -341,7 +343,7 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 **Response:**
 ```json
 {
-  "voices": [
+  "items": [
     {
       "name": "Microsoft Server Speech Text to Speech Voice (zh-CN, XiaoxiaoNeural)",
       "short_name": "zh-CN-XiaoxiaoNeural",

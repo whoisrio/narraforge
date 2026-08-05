@@ -27,7 +27,7 @@ async function deleteRolesByPrefix(prefix: string): Promise<void> {
   const resp = await fetch(`${BASE_URL}/api/roles`);
   if (!resp.ok) return;
   const rolesData = await resp.json();
-  const roles: Array<{ id: string; name: string }> = rolesData.items ?? rolesData;
+  const roles: Array<{ id: string; name: string }> = rolesData.items;
   for (const role of roles) {
     if (role.name.startsWith(prefix)) {
       await fetch(`${BASE_URL}/api/roles/${role.id}`, { method: 'DELETE' }).catch(() => {});

@@ -220,7 +220,7 @@ class TestTTSResultContract:
         assert data["text"] == "contract check"
         assert isinstance(data["params"], dict)
 
-    def test_history_response_has_results_wrapper(self, client: TestClient, db_session):
+    def test_history_response_has_items_envelope(self, client: TestClient, db_session):
         from app.models.tts_result import TTSResultRecord
         db_session.add(TTSResultRecord(
             id="h1", text="hi", voice_id="v1", voice_name="n", audio_path="p",

@@ -27,7 +27,7 @@ async function deleteRolesByName(name: string): Promise<void> {
   const resp = await fetch(`${BASE_URL}/api/roles`);
   if (!resp.ok) return;
   const rolesData = await resp.json();
-  const roles: Array<{ id: string; name: string }> = rolesData.items ?? rolesData;
+  const roles: Array<{ id: string; name: string }> = rolesData.items;
   for (const role of roles) {
     if (role.name === name) {
       await fetch(`${BASE_URL}/api/roles/${role.id}`, { method: 'DELETE' }).catch(() => {});
@@ -40,7 +40,7 @@ async function deleteVoiceProfilesByName(name: string): Promise<void> {
   const resp = await fetch(`${BASE_URL}/api/clone`);
   if (!resp.ok) return;
   const voicesData = await resp.json();
-  const voices: Array<{ id: string; name: string }> = voicesData.items ?? voicesData;
+  const voices: Array<{ id: string; name: string }> = voicesData.items;
   for (const voice of voices) {
     if (voice.name === name) {
       await fetch(`${BASE_URL}/api/clone/${voice.id}`, { method: 'DELETE' }).catch(() => {});
@@ -114,7 +114,7 @@ test.describe('MiMo 预置音色角色创建', () => {
     const savedRole = await page.evaluate(async (name: string) => {
       const resp = await fetch('/api/roles?project_id=test-e2e-project');
       const rolesData = await resp.json();
-      const roles = rolesData.items ?? rolesData;
+      const roles = rolesData.items;
       return roles.find((r: { name: string }) => r.name === name);
     }, 'E2E-预置测试');
 

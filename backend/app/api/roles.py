@@ -17,7 +17,7 @@ router = APIRouter()
 def list_roles(
     project_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-):
+) -> dict:
     items = svc.list_roles(db, project_id=project_id)
     return {"items": items}
 
