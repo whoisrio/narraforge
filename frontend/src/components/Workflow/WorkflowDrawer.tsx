@@ -47,13 +47,13 @@ function summaryFor(nodeId: string, values: Partial<WorkflowState>, t: (key: str
   switch (nodeId) {
     case 'gen_script':
     case 'gen_narration':
-      if (values.narration_script) return `${values.script_chapters?.length ?? 0} 章 · ${values.narration_script.length} 字`;
+      if (values.narration_script) return t('workflow.drawer.scriptSummary', { chapters: values.script_chapters?.length ?? 0, chars: values.narration_script.length });
       return undefined;
     case 'script_review':
-      if (values.review_feedback) return `评分 ${values.review_feedback.overall_score}/5`;
+      if (values.review_feedback) return t('workflow.drawer.reviewScore', { score: values.review_feedback.overall_score });
       return undefined;
     case 'quality_review':
-      if (values.review_result) return values.review_result.passed ? t('workflow.drawer.reviewPassed') : `审查发现 ${values.review_result.issues.length} 个问题`;
+      if (values.review_result) return values.review_result.passed ? t('workflow.drawer.reviewPassed') : t('workflow.drawer.reviewIssues', { count: values.review_result.issues.length });
       return undefined;
     case 'review_decision':
       if (values.review_status === 'approved') return t('workflow.drawer.reviewApproved');
@@ -63,11 +63,11 @@ function summaryFor(nodeId: string, values: Partial<WorkflowState>, t: (key: str
     case 'split_chapters':
       if (values.structured_segments) {
         const total = values.structured_segments.reduce((s: number, c) => s + c.segments.length, 0);
-        return `${values.structured_segments.length} 章 · ${total} 段`;
+        return t('workflow.drawer.chaptersSummary', { chapters: values.structured_segments.length, segments: total });
       }
       return undefined;
     case 'synthesis':
-      if (values.synthesis_results) return `${values.synthesis_results.length} 段`;
+      if (values.synthesis_results) return t('workflow.drawer.segmentsCount', { count: values.synthesis_results.length });
       return undefined;
     case 'scaffold_remotion':
       if (values.remotion_project_dir) return values.remotion_project_dir;
@@ -200,7 +200,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
   const handleFork = async (nodeId: string) => {
     const ok = await confirm({
       title: t('workflow.drawer.rerunNode'),
-      message: `从「${nodeId}」节点重跑？该节点及之后的进度将被覆盖。`,
+      message: t('workflow.drawer.rerunMessage', { node: nodeId }),
       variant: 'warning',
     });
     if (!ok) return;
@@ -208,7 +208,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
       const history = await agentClient.threads.getHistory(threadId, { limit: 100 });
       const checkpointId = pickForkCheckpoint(history as unknown as HistoryCheckpoint[], nodeId);
       if (!checkpointId) {
-        toast.error(`无法从「${nodeId}」重跑：未找到该节点执行前的历史检查点。`);
+        toast.error(t('workflow.drawer.rerunNoCheckpoint', { node: nodeId }));
         return;
       }
       // SDK SubmitOptions 用 checkpoint（非 checkpointId）；checkpoint_ns 空串为默认命名空间。
@@ -218,7 +218,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
       });
     } catch {
       // 历史查询失败不能静默：用户点了重跑却毫无反应是最差的反馈
-      toast.error(`从「${nodeId}」重跑失败：无法获取历史检查点，请稍后重试。`);
+      toast.error(t('workflow.drawer.rerunFailed', { node: nodeId }));
     }
   };
 
@@ -227,27 +227,27 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
       <div className={styles.header}>
         <div className={styles.titleRow}>
           <span className={`material-symbols-outlined ${styles.icon}`}>account_tree</span>
-          <strong>旁白工作流</strong>
+          <strong>{t('workflow.drawer.title')}</strong>
           {stream.isLoading ? (
             <span className={styles.badge}>
               <span className={styles.badgeDot} />
-              运行中
+              {t('workflow.drawer.badgeRunning')}
             </span>
           ) : activeInterrupt ? (
-            <span className={styles.badgeIdle}>待审批</span>
+            <span className={styles.badgeIdle}>{t('workflow.drawer.badgeAwaiting')}</span>
           ) : values.error ? (
-            <span className={styles.badgeIdle}>已失败</span>
+            <span className={styles.badgeIdle}>{t('workflow.drawer.badgeFailed')}</span>
           ) : allDone ? (
-            <span className={styles.badgeIdle}>完成</span>
+            <span className={styles.badgeIdle}>{t('workflow.drawer.badgeDone')}</span>
           ) : hasValues ? (
-            <span className={styles.badgeIdle}>未完成</span>
+            <span className={styles.badgeIdle}>{t('workflow.drawer.badgeIncomplete')}</span>
           ) : null}
           {workflowUsage && (
             <span
               className={styles.globalTokens}
-              title={t('workflow.drawer.inputOutput', { input: workflowUsage.input_tokens.toLocaleString('en-US'), output: workflowUsage.output_tokens.toLocaleString('en-US') }) +
+              title={t('workflow.tokens.inputOutput', { input: workflowUsage.input_tokens.toLocaleString('en-US'), output: workflowUsage.output_tokens.toLocaleString('en-US') }) +
                 (workflowUsage.reasoning_tokens
-                  ? t('workflow.drawer.thinkingTokens', { count: workflowUsage.reasoning_tokens.toLocaleString('en-US') })
+                  ? t('workflow.tokens.thinking', { count: workflowUsage.reasoning_tokens.toLocaleString('en-US') })
                   : '')}
             >
               <span className={`material-symbols-outlined ${styles.globalTokensIcon}`}>toll</span>
@@ -258,10 +258,10 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
           )}
         </div>
         <div className={styles.headerActions}>
-          <button onClick={onCollapse} className={styles.iconBtn} aria-label="收起">
+          <button onClick={onCollapse} className={styles.iconBtn} aria-label={t('workflow.drawer.collapse')}>
             <span className="material-symbols-outlined">unfold_less</span>
           </button>
-          <button onClick={onClose} className={styles.iconBtn} aria-label="关闭">
+          <button onClick={onClose} className={styles.iconBtn} aria-label={t('workflow.drawer.close')}>
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -332,7 +332,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
                   <div>
                     {values.structured_segments.map((ch, i) => (
                       <div key={i} className={styles.chapterSummary}>
-                        <strong>{ch.chapter_title}</strong> · {ch.segments.length} 段
+                        <strong>{ch.chapter_title}</strong> · {t('workflow.drawer.segmentsCount', { count: ch.segments.length })}
                       </div>
                     ))}
                   </div>
@@ -344,7 +344,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
                       .slice(-1)
                       .map((e, i) => (
                         <div key={i}>
-                          进度: {String(e.data.completed)}/{String(e.data.total)}
+                          {t('workflow.drawer.progress', { completed: String(e.data.completed), total: String(e.data.total) })}
                         </div>
                       ))}
                   </div>
@@ -357,7 +357,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
 
       {fullscreen && (
         <StageDetailModal
-          title={`${fullscreen} · 完整内容`}
+          title={t('workflow.drawer.fullscreenSuffix', { stage: fullscreen })}
           onClose={() => setFullscreen(null)}
         >
           <div className={styles.fullscreenContent}>

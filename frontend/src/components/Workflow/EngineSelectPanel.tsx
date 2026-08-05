@@ -65,7 +65,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
     <div className={styles.panel}>
       <div className={styles.titleRow}>
         <span className="material-symbols-outlined">graphic_eq</span>
-        <strong>选择 TTS 引擎</strong>
+        <strong>{t('workflow.engineSelect.title')}</strong>
       </div>
 
       <div className={styles.countdownTrack}>
@@ -74,7 +74,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
       <div className={styles.countdownText}>
         {locked
           ? t('workflow.engineSelect.manualSelected')
-          : `${remaining}s 后自动使用默认引擎 ${ENGINE_LABELS[default_engine] ?? default_engine}`}
+          : t('workflow.engineSelect.autoDefault', { seconds: remaining, engine: ENGINE_LABELS[default_engine] ?? default_engine })}
       </div>
 
       <div className={styles.engineList}>
@@ -87,7 +87,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
           >
             <span className={styles.engineName}>
               {ENGINE_LABELS[engine] ?? engine}
-              {engine === default_engine && <span className={styles.defaultBadge}>默认</span>}
+              {engine === default_engine && <span className={styles.defaultBadge}>{t('workflow.engineSelect.defaultBadge')}</span>}
             </span>
             <span className={styles.engineCap}>{describeEngineCapability(engine)}</span>
           </button>
@@ -96,7 +96,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
 
       <div className={styles.actions}>
         <button type="button" className={styles.confirmBtn} onClick={handleConfirm}>
-          确认（{ENGINE_LABELS[selected] ?? selected}）
+          {t('workflow.engineSelect.confirm', { engine: ENGINE_LABELS[selected] ?? selected })}
         </button>
       </div>
     </div>

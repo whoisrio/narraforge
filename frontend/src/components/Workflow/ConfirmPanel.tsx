@@ -17,9 +17,9 @@ export function ConfirmPanel({ interrupt, onRespond }: Props) {
         <strong>{t('workflow.confirmPanel.title')}</strong>
       </div>
       <p className={styles.message}>
-        {t('workflow.confirmPanel.description', { chapters: stats.chapters, segments: stats.segments })}
-        {stats.synthesized_segments > 0 && t('workflow.confirmPanel.synthesized', { count: stats.synthesized_segments })}
-        {t('workflow.confirmPanel.warning')}
+        {stats.synthesized_segments > 0
+          ? t('workflow.confirmPanel.descriptionWithSynthesized', { chapters: stats.chapters, segments: stats.segments, count: stats.synthesized_segments })
+          : t('workflow.confirmPanel.description', { chapters: stats.chapters, segments: stats.segments })}
       </p>
       <div className={styles.actions}>
         <button

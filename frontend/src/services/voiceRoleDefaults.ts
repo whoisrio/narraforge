@@ -1,6 +1,5 @@
 import type { RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, VoxCPMParams } from '../types';
 
-
 export type VoiceRoleKind = 'Narrator' | 'Cast';
 
 export const DEFAULT_EDGE_NARRATOR_VOICE = 'zh-CN-YunxiNeural';
@@ -77,5 +76,4 @@ export function createVoiceRoleDraft({
     favorite_styles: [],
   };
 }
-
 

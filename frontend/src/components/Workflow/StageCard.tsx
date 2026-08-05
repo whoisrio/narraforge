@@ -54,11 +54,11 @@ export function StageCard({
 
   const llmLabel = llmPhase ? llmPillLabel[llmPhase] : undefined;
   const tokenTitle = tokenUsage
-    ? t('workflow.stageCard.inputOutput', { input: tokenUsage.input_tokens.toLocaleString('en-US'), output: tokenUsage.output_tokens.toLocaleString('en-US') }) +
+    ? t('workflow.tokens.inputOutput', { input: tokenUsage.input_tokens.toLocaleString('en-US'), output: tokenUsage.output_tokens.toLocaleString('en-US') }) +
       (tokenUsage.reasoning_tokens
-        ? t('workflow.stageCard.thinkingTokens', { count: tokenUsage.reasoning_tokens.toLocaleString('en-US') })
+        ? t('workflow.tokens.thinking', { count: tokenUsage.reasoning_tokens.toLocaleString('en-US') })
         : '') +
-      t('workflow.stageCard.totalTokens', { count: (tokenUsage.total_tokens ?? tokenUsage.input_tokens + tokenUsage.output_tokens).toLocaleString('en-US') })
+      ` · ${t('workflow.tokens.total', { count: (tokenUsage.total_tokens ?? tokenUsage.input_tokens + tokenUsage.output_tokens).toLocaleString('en-US') })}`
     : undefined;
 
   return (
@@ -96,8 +96,8 @@ export function StageCard({
             <button
               className={styles.forkBtn}
               onClick={onFork}
-              aria-label="从此重跑"
-              title="从此重跑"
+              aria-label={t('workflow.stageCard.rerunHere')}
+              title={t('workflow.stageCard.rerunHere')}
             >
               <span className="material-symbols-outlined">replay</span>
             </button>
@@ -106,8 +106,8 @@ export function StageCard({
             <button
               className={styles.fullscreenBtn}
               onClick={onFullscreen}
-              aria-label="全屏查看"
-              title="全屏查看"
+              aria-label={t('workflow.stageCard.fullscreen')}
+              title={t('workflow.stageCard.fullscreen')}
             >
               <span className="material-symbols-outlined">fullscreen</span>
             </button>
