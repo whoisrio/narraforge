@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { EmotionType, Segment, SegmentKind } from '../../types';
-import { useTranslation, t } from '../../i18n';
+import { useTranslation } from '../../i18n';
 import styles from './NarrationBlock.module.css';
 
 interface NarrationBlockProps {

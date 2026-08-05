@@ -9,7 +9,7 @@ import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import { AudioRecorder, AudioUploader, AudioPreview, UrlInput } from '../VoiceClone';
-import { useTranslation, t } from '../../i18n';
+import { useTranslation } from '../../i18n';
 import styles from './ProjectVoices.module.css';
 
 /* ------------------------------------------------------------------ */
@@ -89,7 +89,7 @@ function roleVoiceDisplayName(role: Role): string {
   return '';
 }
 
-function createRoleDraft(): RoleSnapshot {
+function createRoleDraft(t: (key: string) => string): RoleSnapshot {
   const voice = { engine: 'edge_tts' as const, voice: DEFAULT_EDGE_CAST_VOICE, rate: '+0%', volume: '+0%' } as EdgeTTSParams;
   return {
     id: `role-cast-${Date.now()}`,
@@ -1395,7 +1395,7 @@ export function ProjectVoices({
               if (onCreateRole) {
                 onCreateRole();
               } else {
-                setEditingRole(createRoleDraft());
+                setEditingRole(createRoleDraft(t));
               }
             }}
           >

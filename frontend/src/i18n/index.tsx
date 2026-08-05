@@ -79,10 +79,10 @@ const TranslationContext = createContext<TranslationContextValue | null>(null);
 
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === 'undefined') return 'en-US';
+    if (typeof window === 'undefined') return 'zh-CN';
     const saved = localStorage.getItem('narraforge-locale');
     if (saved && isSupportedLocale(saved)) return saved;
-    return 'en-US';
+    return 'zh-CN';
   });
 
   const t = useMemo(() => createTranslator(locale), [locale]);

@@ -1,12 +1,17 @@
 import type { RoleSnapshot, TTSResult } from '../types';
 import { mimoTtsApi, ttsApi, voxcpmApi } from './api';
-import { t } from '../i18n';
+import { createTranslator } from '../i18n';
 
 function previewFormat(role: RoleSnapshot): 'mp3' | 'wav' {
   return role.default_engine === 'voxcpm' ? 'wav' : 'mp3';
 }
 
-export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText: string): Promise<TTSResult> {
+export async function synthesizeVoiceRolePreview(
+  role: RoleSnapshot,
+  sampleText: string,
+  translate?: (key: string) => string,
+): Promise<TTSResult> {
+  const _t = translate ?? createTranslator('zh-CN');
   const engine = role.default_engine ?? 'edge_tts';
   // default_engine_params 是 EngineParams 判别联合（无索引签名），浅拷贝为 Record 以便按 key 读取
   const params: Record<string, unknown> = { ...(role.default_engine_params ?? {}) };
@@ -59,7 +64,7 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
     }
     return mimoTtsApi.synthesizePreset({
       text: sampleText,
-      voice: (params.voice_id as string) || role.default_voice || t('voiceRolePreview.defaultMiMoVoice'),
+      voice: (params.voice_id as string) || role.default_voice || _t('voiceRolePreview.defaultMiMoVoice'),
       instruction: (params.instruction as string),
       format,
     });
@@ -106,8 +111,12 @@ export async function synthesizeVoiceRolePreview(role: RoleSnapshot, sampleText:
   });
 }
 
-export async function playVoiceRolePreview(role: RoleSnapshot, sampleText: string): Promise<TTSResult> {
-  const result = await synthesizeVoiceRolePreview(role, sampleText);
+export async function playVoiceRolePreview(
+  role: RoleSnapshot,
+  sampleText: string,
+  translate?: (key: string) => string,
+): Promise<TTSResult> {
+  const result = await synthesizeVoiceRolePreview(role, sampleText, translate);
   if (!result.audio_base64 && !result.audio_url) {
     throw new Error('No preview audio returned');
   }
@@ -123,6 +132,7 @@ export async function playVoiceRolePreview(role: RoleSnapshot, sampleText: strin
 export async function fetchVoiceRolePreview(
   role: RoleSnapshot,
   sampleText: string,
+  translate?: (key: string) => string,
 ): Promise<TTSResult> {
-  return synthesizeVoiceRolePreview(role, sampleText);
+  return synthesizeVoiceRolePreview(role, sampleText, translate);
 }
