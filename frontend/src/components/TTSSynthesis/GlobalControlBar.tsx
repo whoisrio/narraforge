@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from '../../i18n';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { StyleInstructionPicker } from './StyleInstructionPicker';
 import type { VoiceProfile } from '../../types';
@@ -66,6 +67,8 @@ export function GlobalControlBar({
     setShowVoiceDropdown(false);
   }, [onVoiceSelect]);
 
+  const { t } = useTranslation();
+
   return (
     <div className={styles.panel}>
       {/* Voice Selector */}
@@ -74,7 +77,7 @@ export function GlobalControlBar({
         <button className={styles.voiceSelect} onClick={() => setShowVoiceDropdown(!showVoiceDropdown)}>
           <VoiceAvatar name={selectedVoice?.name || '?'} size={24} />
           <span className={styles.voiceName}>
-            {selectedVoice?.name || '请选择声音'}
+            {selectedVoice?.name || t('studio.voicePlaceholder')}
           </span>
           <span className={styles.arrow}>▾</span>
         </button>
@@ -196,7 +199,7 @@ export function GlobalControlBar({
                   className={`${styles.toggleChip} ${enableSsml ? styles.toggleChipOn : ''}`}
                   onClick={onSsmlToggle}
                 >
-                  SSML {enableSsml ? '开' : '关'}
+                  SSML {enableSsml ? t('common.on') : t('common.off')}
                 </button>
               )}
               {onMarkdownFilterToggle && (
@@ -204,7 +207,7 @@ export function GlobalControlBar({
                   className={`${styles.toggleChip} ${enableMarkdownFilter ? styles.toggleChipOn : ''}`}
                   onClick={onMarkdownFilterToggle}
                 >
-                  MD过滤 {enableMarkdownFilter ? '开' : '关'}
+                  MD过滤 {enableMarkdownFilter ? t('common.on') : t('common.off')}
                 </button>
               )}
             </div>
