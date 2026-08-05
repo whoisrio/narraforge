@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
 
     # FunASR 本地语音识别
-    funasr_model: str = "paraformer-zh"  # paraformer-zh / paraformer-zh-streaming
+    funasr_model: str = "paraformer-zh"  # 仅离线模型；流式模型不支持字幕转写
     funasr_device: str = ""  # 留空自动检测 (cuda > mps > cpu)
 
     # LLM 字幕校准/翻译（默认复用 MiMo 配置）

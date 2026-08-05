@@ -250,6 +250,9 @@ class VoiceToSrt:
             _logger.info(f'模型 {model_size} 未缓存，开始从 {repo_id} 下载...')
 
         # snapshot_download 自带 tqdm 进度条（显示在控制台），同时缓存命中时立即返回
+        # 注意：vocabulary.json/.txt 必须下载 —— ctranslate2 加载模型目录时强制
+        # 要求 vocabulary 文件，缺失报 "Cannot load the vocabulary from the
+        # model directory"（tokenizer.json 不能替代）。
         local_path = snapshot_download(
             repo_id,
             allow_patterns=[
@@ -257,6 +260,8 @@ class VoiceToSrt:
                 'tokenizer.json',
                 'model.bin',
                 'preprocessor_config.json',
+                'vocabulary.json',
+                'vocabulary.txt',
             ],
         )
 

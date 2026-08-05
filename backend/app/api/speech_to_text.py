@@ -21,7 +21,7 @@ router = APIRouter()
 
 ALLOWED_EXTENSIONS = {"wav", "mp3"}
 WHISPER_MODEL_SIZES = {"tiny", "base", "small", "medium", "large-v3"}
-FUNASR_MODELS = {"paraformer-zh", "paraformer-zh-streaming"}
+FUNASR_MODELS = {"paraformer-zh"}
 HISTORY_LIMIT = 10
 
 

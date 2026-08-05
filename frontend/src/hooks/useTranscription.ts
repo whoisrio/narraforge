@@ -53,7 +53,6 @@ const WHISPER_MODEL_OPTIONS = [
 
 const FUNASR_MODEL_OPTIONS = [
   { value: 'paraformer-zh', labelKey: 'transcription.modelParaformer' },
-  { value: 'paraformer-zh-streaming', labelKey: 'transcription.modelParaformerStreaming' },
 ];
 
 export { ENGINE_OPTIONS, WHISPER_MODEL_OPTIONS, FUNASR_MODEL_OPTIONS };
