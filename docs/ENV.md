@@ -47,7 +47,7 @@ FunASR runs locally and does not require an API key. Models are downloaded from 
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
-| `FUNASR_MODEL` | No | FunASR model name. Options: `paraformer-zh`, `paraformer-zh-streaming` | `paraformer-zh` |
+| `FUNASR_MODEL` | No | FunASR model name. Options: `paraformer-zh`（流式模型不支持离线字幕转写，已移除） | `paraformer-zh` |
 | `FUNASR_DEVICE` | No | Compute device. Leave empty for auto-detection (`cuda` > `mps` > `cpu`) | *(empty -- auto)* |
 
 ## VoxCPM (Local GPU Voice Cloning)

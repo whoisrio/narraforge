@@ -39,15 +39,12 @@ class FunASRService:
     # 推理锁：PyTorch 模型非线程安全，同一时间只允许一个推理
     _inference_lock = threading.Lock()
 
-    # FunASR 支持的模型组合
+    # FunASR 支持的模型组合。
+    # 注意：不提供 paraformer-zh-streaming —— 流式模型在离线 generate 下
+    # 不产生有效时间戳且文本错乱，不适合字幕转写场景。
     MODEL_PRESETS = {
         'paraformer-zh': {
             'model': 'paraformer-zh',
-            'vad_model': 'fsmn-vad',
-            'punc_model': 'ct-punc',
-        },
-        'paraformer-zh-streaming': {
-            'model': 'paraformer-zh-streaming',
             'vad_model': 'fsmn-vad',
             'punc_model': 'ct-punc',
         },
@@ -57,11 +54,6 @@ class FunASRService:
     MODEL_PRESETS_NO_VAD = {
         'paraformer-zh': {
             'model': 'paraformer-zh',
-            'vad_model': None,
-            'punc_model': 'ct-punc',
-        },
-        'paraformer-zh-streaming': {
-            'model': 'paraformer-zh-streaming',
             'vad_model': None,
             'punc_model': 'ct-punc',
         },
@@ -125,7 +117,7 @@ class FunASRService:
         Args:
             input_file: 音频文件路径
             file_id: 唯一标识
-            model_name: FunASR 模型名（paraformer-zh / paraformer-zh-streaming）
+            model_name: FunASR 模型名（当前仅支持离线模型 paraformer-zh）
             output_filename: 自定义输出文件名
             output_path: 自定义输出目录
             device: 推理设备（默认自动检测）

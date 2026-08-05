@@ -319,7 +319,7 @@ Two-column layout:
 | Engine | Model Options | Strengths |
 |--------|--------------|-----------|
 | **Whisper (Faster-Whisper)** | tiny, base, small, medium, large-v3 | 100+ languages, CUDA GPU acceleration |
-| **FunASR (Paraformer-ZH)** | paraformer-zh, paraformer-zh-streaming | Chinese-optimized, 3x faster CPU, built-in VAD + punctuation |
+| **FunASR (Paraformer-ZH)** | paraformer-zh | Chinese-optimized, 3x faster CPU, built-in VAD + punctuation |
 
 ### 5.3 Transcription Parameters
 
