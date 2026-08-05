@@ -7,10 +7,11 @@
  * @feature backend/app/api/segmented_projects.py (adjust-audio)
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import { collectErrors, setLocaleToZhCN, goToStudio } from '../helpers';
 import { readDbProject } from '../helpers/dbReader';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 const PROJECT_ID = 'test-e2e-project';
 const CHAPTER_ID = 'test-chapter-1';
 

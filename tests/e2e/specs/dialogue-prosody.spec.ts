@@ -6,6 +6,7 @@
  * @feature docs/feature-spec.md §4.4 Emotion System — emotion types per segment
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import {
   goToRolePage,
   goToStudio,
@@ -17,7 +18,7 @@ import {
 } from '../helpers';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
 
-const BASE_URL = 'http://127.0.0.1:8012';
+const BASE_URL = E2E_BACKEND_URL;
 
 // Track the role name created by this test for cleanup
 let createdRoleName = '';

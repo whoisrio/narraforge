@@ -3,10 +3,11 @@
  * Creates the "test" project with chapters and roles that E2E tests depend on.
  */
 import type { Page } from '@playwright/test';
+import { E2E_BACKEND_URL } from './ports';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-const BASE_URL = 'http://127.0.0.1:8012';
+const BASE_URL = E2E_BACKEND_URL;
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 
 /** Delete all roles with the given name to avoid duplicates from prior runs. */

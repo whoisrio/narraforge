@@ -5,6 +5,7 @@ export { enterWorkspace, openTestProject, goToRolePage, goToStudio, goToVoiceDes
 export { collectErrors } from './errors';
 export { expectNoRawI18nKey, findRawI18nKeys } from './i18nGuard';
 export { setLocaleToZhCN } from './locale';
+export { E2E_BACKEND_PORT, E2E_FRONTEND_PORT, E2E_AGENT_PORT, E2E_BACKEND_URL, E2E_FRONTEND_URL, E2E_AGENT_URL } from './ports';
 export { seedTestProject } from './seed';
 export { readAgentThread, validateThreadState, verifyAgentStateWithScreenshot } from './langgraphAssertions';
 export {

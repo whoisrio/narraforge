@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 import path from 'node:path'
+import { E2E_AGENT_PORT, E2E_AGENT_URL, E2E_BACKEND_PORT, E2E_BACKEND_URL, E2E_FRONTEND_PORT, E2E_FRONTEND_URL } from './tests/e2e/helpers/ports'
 
 // Ensure e2e tests connect to the isolated test database.
 // e2e-run.cjs sets DATABASE_URL but shell:true on Windows may strip it
@@ -29,7 +30,7 @@ export default defineConfig({
     ['html', { outputFolder: path.join('playwright-report', runDir) }],
   ],
   use: {
-    baseURL: 'http://127.0.0.1:5174',
+    baseURL: E2E_FRONTEND_URL,
     trace: 'on-first-retry',
     screenshot: 'on',
     video: 'on',
@@ -37,10 +38,10 @@ export default defineConfig({
   webServer: [
     {
       name: 'backend',
-      command: 'uv run python -m uvicorn main:app --host 127.0.0.1 --port 8012',
+      command: `uv run python -m uvicorn main:app --host 127.0.0.1 --port ${E2E_BACKEND_PORT}`,
       cwd: 'backend',
       env: { ENV_FILE: process.env.E2E_ENV_FILE || '.env.e2e' },
-      url: 'http://127.0.0.1:8012/health',
+      url: `${E2E_BACKEND_URL}/health`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
@@ -48,10 +49,13 @@ export default defineConfig({
     },
     {
       name: 'frontend',
-      command: 'npm run dev -- --host 127.0.0.1 --port 5174',
+      command: `npm run dev -- --host 127.0.0.1 --port ${E2E_FRONTEND_PORT}`,
       cwd: 'frontend',
-      url: 'http://127.0.0.1:5174',
-      env: { VITE_BACKEND_URL: 'http://127.0.0.1:8012' },
+      url: E2E_FRONTEND_URL,
+      env: {
+        VITE_BACKEND_URL: E2E_BACKEND_URL,
+        VITE_AGENT_URL: E2E_AGENT_URL,
+      },
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',
@@ -59,13 +63,13 @@ export default defineConfig({
     },
     {
       name: 'agent',
-      command: 'uv run langgraph dev --port 2024 --no-browser',
+      command: `uv run langgraph dev --port ${E2E_AGENT_PORT} --no-browser`,
       cwd: 'agent',
       env: {
-        BACKEND_API_URL: 'http://127.0.0.1:8012',
+        BACKEND_API_URL: E2E_BACKEND_URL,
         LANGSMITH_API_KEY: '',
       },
-      url: 'http://127.0.0.1:2024/assistants/narration/graph',
+      url: `${E2E_AGENT_URL}/assistants/narration/graph`,
       timeout: 120_000,
       reuseExistingServer: !process.env.CI,
       stdout: 'pipe',

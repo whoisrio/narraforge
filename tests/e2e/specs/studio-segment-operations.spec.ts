@@ -9,6 +9,7 @@
  * @feature docs/feature-spec.md §4.4 Per-Segment features (delete, merge)
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
@@ -429,7 +430,7 @@ test.describe('段落操作', () => {
     // ── Step 0: give the first segment a REAL audio file + DB audio.current ──
     // (fix: hasAudio used the deprecated current_audio_id, so the confirm dialog
     // and the audio cleanup never fired; and the kept segment's file was orphaned)
-    const BACKEND = 'http://127.0.0.1:8012';
+    const BACKEND = E2E_BACKEND_URL;
     const CHAPTER_ID = 'test-chapter-1';
     const relAudioPath = `test-e2e-project/chapters/${CHAPTER_ID}/segments/seg-audio-kept.mp3`;
     const absAudioPath = path.resolve(

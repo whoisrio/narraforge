@@ -13,10 +13,11 @@
  * @feature docs/superpowers/specs/2026-07-25-narration-layer-sync-phase-b-design.md
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import { collectErrors, setLocaleToZhCN, enterWorkspace, readBackendProject } from '../helpers';
 import { readDbProject } from '../helpers/dbReader';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 const PROJECT_ID = 'test-e2e-project';
 const CHAPTER_ID = 'test-chapter-1';
 

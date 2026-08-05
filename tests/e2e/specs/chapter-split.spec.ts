@@ -9,10 +9,11 @@
  * @feature backend/app/api/text_split.py (markdown-detect / markdown-split)
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 import { readDbProject } from '../helpers/dbReader';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 const PROJECT_ID = 'e2e-chapter-split';
 const PROJECT_NAME = '章节拆分测试';
 

@@ -7,12 +7,13 @@
  * @feature docs/superpowers/specs/2026-07-25-remotion-root-global-setting-design.md
  */
 import { expect, test } from '@playwright/test';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 import { readDbSystemConfig } from '../helpers/dbReader';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 
 /** Scope to the AnimationRootSetting <section> on the /settings page. */
 function animRootSection(page: import('@playwright/test').Page) {
