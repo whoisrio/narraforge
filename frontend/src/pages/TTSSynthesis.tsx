@@ -6,6 +6,7 @@ import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSP
 import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMPanel';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
+import { BatchSynthesizeMenu, type BatchSynthesizeMode } from '../components/SegmentedTTS/BatchSynthesizeMenu';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
@@ -136,6 +137,9 @@ export function TTSSynthesis({
   const [, setPreviewingRoleId] = useState<string | null>(null);
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
+  // Multi-select mode for batch operations (batch delete)
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
   const [splitVoiceMode, setSplitVoiceMode] = useState<SplitVoiceMode>(() => project.configs?.split_voice_mode ?? 'narration');
   useEffect(() => {
     setSplitVoiceMode(project.configs?.split_voice_mode ?? 'narration');
@@ -168,6 +172,10 @@ export function TTSSynthesis({
 
   // Derived: active chapter
   const activeChapter = useMemo(() => getActiveChapter(project)!, [project]);
+  // Clear multi-selection when the active chapter changes
+  useEffect(() => {
+    setSelectedSegmentIds(new Set());
+  }, [activeChapter.id]);
   // Stable array refs for panel engine filters (avoid re-fetching voice list on every render)
   const excludeQwen = useMemo(() => ['qwen'], []);
   const allowVoxcpm = useMemo(() => ['voxcpm'], []);
@@ -744,6 +752,58 @@ export function TTSSynthesis({
     });
   }, [activeChapter.segments, dispatch]);
 
+  const handleToggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => {
+      if (prev) setSelectedSegmentIds(new Set()); // clear selection when exiting selection mode
+      return !prev;
+    });
+  }, []);
+
+  const handleToggleSelect = useCallback((id: string) => {
+    setSelectedSegmentIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleSelectAll = useCallback(() => {
+    setSelectedSegmentIds(prev => (
+      prev.size === activeChapter.segments.length
+        ? new Set()
+        : new Set(activeChapter.segments.map(s => s.id))
+    ));
+  }, [activeChapter.segments]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (generating || selectedSegmentIds.size === 0) return;
+    const segs = activeChapter.segments.filter(s => selectedSegmentIds.has(s.id));
+    if (segs.length === 0) return;
+    const ids = segs.map(s => s.id);
+    const withAudioCount = segs.filter(s =>
+      s.audio.current?.id || s.audio.current?.path
+      || s.audio.previous?.id || s.audio.previous?.path,
+    ).length;
+    const lines = [t('tts.deleteSelectedConfirmMessage', { count: segs.length })];
+    if (withAudioCount > 0) {
+      lines.push(t('tts.deleteSelectedAudioWarning', { count: withAudioCount }));
+    }
+    setConfirmDialog({
+      open: true, title: t('tts.deleteSelectedConfirmTitle'),
+      message: lines.join('\n'),
+      variant: 'danger', confirmLabel: t('common.delete'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        for (const seg of segs) {
+          if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
+          if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
+        }
+        dispatch({ type: 'DELETE_SEGMENTS', ids });
+        setSelectedSegmentIds(new Set());
+      },
+    });
+  }, [generating, selectedSegmentIds, activeChapter.segments, dispatch, t]);
+
   /** Re-split: clean up existing segment audio before applying new split */
   const doApplySplit = useCallback((items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[], originalText: string) => {
     const oldAudioIds = activeChapter.segments
@@ -1162,19 +1222,19 @@ export function TTSSynthesis({
     }
   }, [recordSegmentId, activeChapter, storageMode, project?.id, dispatch, showToast, t]);
 
-  const handleRegenerateAll = useCallback(async () => {
+  const handleRegenerateAll = useCallback(async (mode: BatchSynthesizeMode = 'all') => {
     if (generating) return;
 
-    // Segments to regenerate: idle, failed, OR ready but NOT voice-locked
+    // Segments to regenerate: idle, failed, OR (mode 'all' only) ready but NOT voice-locked
     const toRegenerate = activeChapter.segments.filter(s => {
       // 已录入音频的片段处于锁定状态，批量合成一律跳过（与后端 force=false 行为一致）
       if (s.audio.current?.origin === 'recorded') return false;
       if (s.status === 'idle' || s.status === 'failed') return true;
-      if (s.status === 'ready') {
+      if (mode === 'all' && s.status === 'ready') {
         const hasVoiceLock = s.voice.source === 'custom';
         return !hasVoiceLock; // regenerate ready segments that follow global voice
       }
-      return false; // skip 'pending'/'queued'
+      return false; // skip 'pending'/'queued' (and 'ready' in 'unsynthesized' mode)
     });
 
     if (toRegenerate.length === 0) {
@@ -1189,19 +1249,20 @@ export function TTSSynthesis({
     const lines = [
       t('tts.willRegenerateN', { count: toRegenerate.length }),
     ];
-    if (existingAudio.length > 0) {
+    // 'unsynthesized' only targets idle/failed segments — there is no existing audio to delete
+    if (mode === 'all' && existingAudio.length > 0) {
       lines.push(t('tts.nExistingAudioWillBeDeleted', { count: existingAudio.length }));
     }
-    if (lockedCount > 0) {
+    if (mode === 'all' && lockedCount > 0) {
       lines.push(t('tts.nLockedSegmentsUnchanged', { count: lockedCount }));
     }
 
     setConfirmDialog({
       open: true,
-      title: t('tts.regenerateAll'),
+      title: t(mode === 'all' ? 'tts.regenerateAll' : 'tts.synthesizeUnsynthesized'),
       message: lines.join('\n'),
       variant: 'warning',
-      confirmLabel: t('tts.regenerate'),
+      confirmLabel: t(mode === 'all' ? 'tts.regenerate' : 'segment.segmentRow.generate'),
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, open: false }));
         await doRegenerateAll(toRegenerate);
@@ -1712,10 +1773,27 @@ export function TTSSynthesis({
 
             <div className={styles.sourceProductionBar} aria-label="Source Text production controls">
               <div className={styles.productionActions}>
-                <button type="button" className={styles.productionBtn} onClick={handleRegenerateAll} disabled={generating}>⚡ {t('studio.batchSynthesize')}</button>
+                <BatchSynthesizeMenu disabled={generating} onSelect={(mode) => void handleRegenerateAll(mode)} />
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
                   {playAllActive ? t('tts.stop') : `▶ ${t('studio.playAll')}`}
                 </button>
+                {selectionMode && (
+                  <>
+                    <button type="button" className={styles.productionBtnSecondary} onClick={handleToggleSelectAll}>
+                      {activeChapter.segments.length > 0 && selectedSegmentIds.size === activeChapter.segments.length
+                        ? t('studio.deselectAll')
+                        : t('studio.selectAll')}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.productionBtnDanger}
+                      onClick={handleDeleteSelected}
+                      disabled={selectedSegmentIds.size === 0 || generating}
+                    >
+                      {t('studio.deleteSelected', { count: selectedSegmentIds.size })}
+                    </button>
+                  </>
+                )}
                 {isScratchpadProject && <span className={styles.scratchpadBadge}>{t('projectHub.tempProject')}</span>}
                 <span className={styles.segmentedStats}>
                   {activeChapter.segments.length} {t('projectOverview.segments')} · {activeChapter.segments.reduce((a, s) => a + (s.audio.duration_sec ?? 0), 0).toFixed(1)}s
@@ -1726,6 +1804,13 @@ export function TTSSynthesis({
                 )}
               </div>
               <div className={styles.productionRight}>
+                <button
+                  type="button"
+                  className={`${styles.toolbarPill} ${selectionMode ? styles.toolbarPillActive : ''}`}
+                  onClick={handleToggleSelectionMode}
+                >
+                  {selectionMode ? t('studio.exitSelectMode') : t('studio.selectMode')}
+                </button>
                 <div className={styles.toolbarGroup} aria-label={t('tts.segmentTimeDisplay')}>
                   <button className={`${styles.toolbarPill} ${srtDurationMode === 'chapter' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('chapter')}>{t('studio.chapterTime')}</button>
                   <button className={`${styles.toolbarPill} ${srtDurationMode === 'global' ? styles.toolbarPillActive : ''}`} onClick={() => setSrtDurationMode('global')}>{t('studio.globalTime')}</button>
@@ -1759,6 +1844,9 @@ export function TTSSynthesis({
                 globalMimoCloneVoiceId={mimoCloneVoiceId}
                 chapterStartOffset={effectiveTimeOffset}
                 chapterVoice={activeChapter.voice}
+                selectionMode={selectionMode}
+                selectedIds={selectedSegmentIds}
+                onToggleSelect={handleToggleSelect}
                 onSelect={(id) => {
                   const currentSelected = activeChapter.selected_segment_id;
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });

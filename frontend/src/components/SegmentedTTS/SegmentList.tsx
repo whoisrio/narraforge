@@ -27,6 +27,12 @@ interface SegmentListProps {
   chapterStartOffset?: number;
   /** The chapter's saved/applied voice — used for staleness instead of live panel state */
   chapterVoice?: EngineParams;
+  /** Multi-select mode: rows render a selection checkbox */
+  selectionMode?: boolean;
+  /** Currently selected segment ids (multi-select mode) */
+  selectedIds?: Set<string>;
+  /** Toggle a segment's multi-select state */
+  onToggleSelect?: (id: string) => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -98,6 +104,8 @@ export function SegmentList(props: SegmentListProps) {
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,
     roles: allRoles, roleSnapshot: seg.role_snapshot ?? undefined,
     chapterVoice: props.chapterVoice,
+    selectionMode: props.selectionMode, selected: props.selectedIds?.has(seg.id) ?? false,
+    onToggleSelect: props.onToggleSelect,
     onSelect: props.onSelect, onDelete: props.onDelete,
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,

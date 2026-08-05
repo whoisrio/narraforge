@@ -252,10 +252,11 @@ Segments are compared against `Chapter.voice` (the applied/saved voice), NOT the
 
 | Action | Description |
 |--------|-------------|
-| Generate All | Synthesize all idle/failed segments (3 concurrent workers) |
+| Generate All (menu) | The 批量合成 button opens a menu: 「仅合成未合成」 synthesizes only idle/failed segments (existing audio untouched); 「重新合成全部」 regenerates idle/failed + ready-but-not-voice-locked segments (previous behavior). Recorded (`origin === 'recorded'`) segments are always skipped. |
 | Play All | Sequential playback of all ready segments |
 | Export | WAV/JSON/SRT/bilingual SRT export |
 | Export All (导出全部) | One-click export of **all chapters**' mp3 + chapter-local SRT to the project export directory (`configs.export_directory`; absolute path works without a Remotion path). Backend storage mode only. Pre-checks every chapter first: any segment missing audio aborts the whole export with a 409 listing the incomplete chapters. |
+| Batch delete (批量删除) | 「选择」toggle in the toolbar enters selection mode: every row (compact + expanded) gets a leading checkbox, with 全选/取消全选 and a danger 「删除选中 (N)」 button. Confirm dialog warns how many selected segments have audio; deletion removes IndexedDB blobs (frontend mode) / relies on save_project reconcile (backend mode) and dispatches one `DELETE_SEGMENTS` action. |
 
 ### 4.5 Library — Source & Narration Documents
 

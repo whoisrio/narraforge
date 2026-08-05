@@ -184,6 +184,7 @@ export type Action =
   | { type: 'APPEND_SEGMENT'; text?: string; voice_ref?: import('../types').VoiceRef }
   | { type: 'INSERT_SEGMENT'; afterId: string; text?: string; voice_ref?: import('../types').VoiceRef }
   | { type: 'DELETE_SEGMENT'; id: string }
+  | { type: 'DELETE_SEGMENTS'; ids: string[] }
   | { type: 'UPDATE_TEXT'; id: string; text: string }
   | { type: 'UPDATE_SSML'; id: string; ssml: string; by_llm?: boolean }
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
@@ -358,6 +359,13 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = ch.segments.filter(x => x.id !== action.id);
         return { ...ch, segments: s, selected_segment_id: ch.selected_segment_id === action.id ? undefined : ch.selected_segment_id, updated_at: new Date().toISOString() };
+      })};
+    }
+    case 'DELETE_SEGMENTS': {
+      return { project: updateActive(p, ch => {
+        const ids = new Set(action.ids);
+        const s = ch.segments.filter(x => !ids.has(x.id));
+        return { ...ch, segments: s, selected_segment_id: ch.selected_segment_id && ids.has(ch.selected_segment_id) ? undefined : ch.selected_segment_id, updated_at: new Date().toISOString() };
       })};
     }
     case 'UPDATE_TEXT': {

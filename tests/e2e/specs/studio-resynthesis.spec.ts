@@ -33,15 +33,18 @@ test.describe('重新合成', () => {
     await goToStudio(page);
     await page.waitForTimeout(2_000);
 
-    // ── Click "⚡ 批量合成" button ──
-    const batchBtn = page.locator('button').filter({ hasText: /批量合成|Batch Synthesize/ }).first();
+    // ── Click "⚡ 批量合成" button, then choose "重新合成全部" from the menu ──
+    const batchBtn = page.getByRole('button', { name: /批量合成|Batch Synthesize/ });
     await expect(batchBtn).toBeVisible({ timeout: 10_000 });
     await batchBtn.click();
+    const regenerateAllItem = page.getByRole('button', { name: /重新合成全部|Regenerate All/ });
+    await expect(regenerateAllItem).toBeVisible({ timeout: 15_000 });
+    await regenerateAllItem.click();
 
     // ── Verify confirm dialog appears with correct text ──
     // Look for any dialog/overlay containing "重新生成" (the confirm button label)
-    const confirmBtn = page.locator('button').filter({ hasText: /重新生成|Regenerate/ }).first();
-    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    const confirmBtn = page.getByRole('alertdialog').locator('button').filter({ hasText: /重新生成|Regenerate/ }).first();
+    await expect(confirmBtn).toBeVisible({ timeout: 15_000 });
 
     // 🔑 Core assertion: no raw i18n key anywhere on the page (dialog included)
     await expectNoRawI18nKey(page);

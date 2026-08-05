@@ -92,6 +92,22 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).selected_segment_id).toBeUndefined();
   });
 
+  it('DELETE_SEGMENTS removes multiple segments and deselects if it was selected', () => {
+    const mk = (id: string): Segment => ({ id, text: id, voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' });
+    const p = makeProject({}, { segments: [mk('a'), mk('b'), mk('c'), mk('d')], selected_segment_id: 'c' });
+    const next = segmentedReducer({ project: p }, { type: 'DELETE_SEGMENTS', ids: ['b', 'c'] });
+    expect(ac(next.project).segments.map(s => s.id)).toEqual(['a', 'd']);
+    expect(ac(next.project).selected_segment_id).toBeUndefined();
+  });
+
+  it('DELETE_SEGMENTS keeps selection when the selected segment is not deleted', () => {
+    const mk = (id: string): Segment => ({ id, text: id, voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' });
+    const p = makeProject({}, { segments: [mk('a'), mk('b')], selected_segment_id: 'a' });
+    const next = segmentedReducer({ project: p }, { type: 'DELETE_SEGMENTS', ids: ['b'] });
+    expect(ac(next.project).segments.map(s => s.id)).toEqual(['a']);
+    expect(ac(next.project).selected_segment_id).toBe('a');
+  });
+
   it('REORDER moves segment from fromIndex to toIndex', () => {
     const segments: Segment[] = [
       { id: 'a', text: 'a', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' },

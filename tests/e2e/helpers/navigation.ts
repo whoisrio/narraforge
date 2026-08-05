@@ -10,10 +10,12 @@ export async function enterWorkspace(page: Page): Promise<void> {
   // The landing page has two "进入工作台" buttons (hero + bottom CTA).
   // Use .first() to avoid strict mode violation when multiple elements match.
   const cta = page.getByRole('button', { name: /进入工作台/ }).first();
-  await expect(cta).toBeVisible({ timeout: 10_000 });
+  await expect(cta).toBeVisible({ timeout: 30_000 });
   await cta.click();
-  // Wait for workspace to load — the sidebar or project hub should appear
-  await expect(page.getByRole('button', { name: /音色设计|项目|字幕识别/ }).first()).toBeVisible({ timeout: 15_000 });
+  // Wait for workspace to load — the sidebar or project hub should appear.
+  // Generous timeout: a cold vite dev server (first test of a run) needs to
+  // compile the whole app on first request, which can exceed 15s.
+  await expect(page.getByRole('button', { name: /音色设计|项目|字幕识别/ }).first()).toBeVisible({ timeout: 45_000 });
 }
 
 /** Navigate from / to the test project's overview page. */

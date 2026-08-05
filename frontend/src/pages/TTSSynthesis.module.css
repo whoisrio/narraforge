@@ -197,6 +197,32 @@
   color: var(--color-primary);
 }
 
+.productionBtnDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-danger);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+}
+
+.productionBtnDanger:hover:not(:disabled) {
+  border-color: var(--color-danger);
+  background: var(--color-danger-light);
+}
+
+.productionBtnDanger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .productionRight {
   display: flex;
   align-items: center;
