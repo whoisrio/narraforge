@@ -109,7 +109,7 @@ function AppContent() {
 
   const handleCreateProject = async (name?: string, logo?: string | null) => {
     try {
-      const project = createInitialProject();
+      const project = createInitialProject(t);
       project.name = name || `${t('project.createDefault')} ${projects.length + 1}`;
       if (logo) project.logo = logo;
       await projectStorage.saveProject(project, { mode: 'immediate' });

@@ -232,6 +232,7 @@ function VoiceRoleEditor({
       const result = await fetchVoiceRolePreview(
         normalizeDraftForSave(draft),
         t('projectVoices.auditionSampleText'),
+        t,
       );
       if (result.audio_base64) {
         setDesignAudioBase64(result.audio_base64);
@@ -594,7 +595,7 @@ function VoiceRoleEditor({
     setClonePreviewError('');
     try {
       const normalized = normalizeDraftForSave(draft);
-      const result = await synthesizeVoiceRolePreview(normalized, SAMPLE_TEXT);
+      const result = await synthesizeVoiceRolePreview(normalized, SAMPLE_TEXT, t);
       const { base64, format } = await resolveAudioBase64(result);
 
       // Play
@@ -659,7 +660,7 @@ function VoiceRoleEditor({
             if (voiceCategory === 'preset') {
               try {
                 const normalized = normalizeDraftForSave(draft);
-                const result = await fetchVoiceRolePreview(normalized, SAMPLE_TEXT);
+                const result = await fetchVoiceRolePreview(normalized, SAMPLE_TEXT, t);
                 const { base64 } = await resolveAudioBase64(result);
                 const isEdgeTtsPreset = draft.voice?.engine === 'edge_tts';
                 const profile = await voiceApi.createFromDesign({

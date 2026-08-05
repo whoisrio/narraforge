@@ -194,7 +194,7 @@ export function VoiceClone() {
         sampleText: designSampleText || t('voiceDesign.defaultSampleText'),
         intensity: designIntensity,
         stability: designStability,
-      });
+      }, t);
       setDesignPreview(preview);
       setDesignPhase('previewed');
       setDesignStatus(`${t('voiceDesign.previewGenerated')} · ${preview.audio_format || (designEngine === 'voxcpm' ? 'wav' : 'mp3')}`);

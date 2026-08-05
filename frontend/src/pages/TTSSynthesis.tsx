@@ -274,7 +274,7 @@ export function TTSSynthesis({
         if (storageMode === 'frontend') {
           full = scratchpad!;
         } else {
-          full = createInitialProject();
+          full = createInitialProject(t);
           full.name = t('common.draftProject');
         }
       }
@@ -286,7 +286,7 @@ export function TTSSynthesis({
       if (isRealConflict) {
         console.log(`[TTSSynthesis] conflict detected for ${full.id}`);
         if (full.id === SCRATCHPAD_PROJECT_ID) {
-          const migratedDraft = migrateV1(localDraft.draft);
+          const migratedDraft = migrateV1(localDraft.draft, t);
           setProject(migratedDraft);
           dispatch({ type: 'LOAD_PROJECT', project: migratedDraft });
           const ch = getActiveChapter(migratedDraft);
@@ -296,7 +296,7 @@ export function TTSSynthesis({
         setConflictPrompt({ backend: full, draft: localDraft });
         return;
       }
-      const migrated = migrateV1(full);
+      const migrated = migrateV1(full, t);
       console.log(`[TTSSynthesis] setting project: ${migrated.name} (id=${migrated.id}, chapters=${migrated.chapters?.length})`);
       initialLoadDoneRef.current = false; // 暂停自动保存，防止初始加载触发 markDirty
       setProject(migrated);
@@ -534,7 +534,7 @@ export function TTSSynthesis({
   const loadProjectById = useCallback(async (projectId: string) => {
     const p = await projectStorage.getProject(projectId);
     if (!p) return;
-    const migrated = migrateV1(p);
+    const migrated = migrateV1(p, t);
     initialLoadDoneRef.current = false;
     dispatch({ type: 'LOAD_PROJECT', project: migrated });
     setProject(migrated);
@@ -554,7 +554,7 @@ export function TTSSynthesis({
     if (!project?.id) return;
     const p = await projectStorage.getProject(project.id);
     if (!p) return;
-    const migrated = migrateV1(p);
+    const migrated = migrateV1(p, t);
     // SELECT_CHAPTER intentionally doesn't bump updated_at (autosave skips it),
     // so the backend's active_chapter_id may be stale — the in-memory selection
     // is authoritative for a reload triggered by a local action.
@@ -592,7 +592,7 @@ export function TTSSynthesis({
     }
   }, [project?.id, activeChapter?.id, reloadProjectData, showToast, t]);
 
-  const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {    const np = createInitialProject();
+  const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {    const np = createInitialProject(t);
     np.name = name || t('tts.newProjectName', { n: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
     if (logo) np.logo = logo;
     await projectStorage.saveProject(np, { mode: 'immediate' });
@@ -624,7 +624,7 @@ export function TTSSynthesis({
           await loadProjectById(nextProject.id);
         } else {
           // 只有前端模式才需要创建 scratchpad，后端模式创建临时项目不保存
-          const fallback = createInitialProject();
+          const fallback = createInitialProject(t);
           if (storageMode === 'frontend') {
             fallback.id = SCRATCHPAD_PROJECT_ID;
             fallback.name = t('common.draftProject');
@@ -897,7 +897,7 @@ export function TTSSynthesis({
   const handlePreviewRole = useCallback(async (role: RoleSnapshot, sampleText: string) => {
     setPreviewingRoleId(role.id);
     try {
-      await playVoiceRolePreview(role, sampleText);
+      await playVoiceRolePreview(role, sampleText, t);
     } catch (error) {
       console.error('Preview role failed:', error);
       showToast(t('tts.previewFailedCheckService'), 'error');

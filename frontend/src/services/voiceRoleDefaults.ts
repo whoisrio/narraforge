@@ -1,6 +1,5 @@
 import type { RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, VoxCPMParams } from '../types';
-import type { TranslationKey } from '../i18n';
-import { createTranslator } from '../i18n';
+
 
 export type VoiceRoleKind = 'Narrator' | 'Cast';
 
@@ -79,11 +78,4 @@ export function createVoiceRoleDraft({
   };
 }
 
-export function roleVoiceLabelFromParams(
-  params: EngineParams,
-  fallback?: string | null,
-  translate?: (key: TranslationKey) => string,
-): string {
-  const _t = translate ?? createTranslator('zh-CN');
-  return defaultVoiceFromParams(params) || fallback || _t('voiceRoleDefaults.noVoiceSet');
-}
+
