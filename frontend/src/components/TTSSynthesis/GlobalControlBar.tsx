@@ -199,7 +199,7 @@ export function GlobalControlBar({
                   className={`${styles.toggleChip} ${enableSsml ? styles.toggleChipOn : ''}`}
                   onClick={onSsmlToggle}
                 >
-                  SSML {enableSsml ? t('common.on') : t('common.off')}
+                  {t('studio.ssmlToggle')} {enableSsml ? t('common.on') : t('common.off')}
                 </button>
               )}
               {onMarkdownFilterToggle && (
@@ -207,7 +207,7 @@ export function GlobalControlBar({
                   className={`${styles.toggleChip} ${enableMarkdownFilter ? styles.toggleChipOn : ''}`}
                   onClick={onMarkdownFilterToggle}
                 >
-                  MD过滤 {enableMarkdownFilter ? t('common.on') : t('common.off')}
+                  {t('studio.markdownFilter')} {enableMarkdownFilter ? t('common.on') : t('common.off')}
                 </button>
               )}
             </div>
