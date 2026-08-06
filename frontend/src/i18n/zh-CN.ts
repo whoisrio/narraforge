@@ -1476,6 +1476,9 @@ export const zhCN = {
         fail: '必须修改',
       },
       criticalIssueWarning: '⚠️ 内容忠实度存在严重问题，请务必修正后再通过',
+      confirmReject: '确认拒绝',
+      rejectFeedbackLabel: '拒绝反馈（必填）',
+      charCount: '{count} 字',
     },
     detail: {
       title: '工作流详情',

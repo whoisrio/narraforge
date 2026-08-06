@@ -1478,6 +1478,9 @@ export const enUS: Messages = {
         fail: 'Must Fix',
       },
       criticalIssueWarning: '⚠️ Content Fidelity has critical issues. Please fix before approving.',
+      confirmReject: 'Confirm Reject',
+      rejectFeedbackLabel: 'Rejection Feedback (Required)',
+      charCount: '{count} chars',
     },
     detail: {
       title: 'Workflow Detail',

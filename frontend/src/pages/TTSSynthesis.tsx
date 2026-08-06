@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { t as staticT, useTranslation } from '../i18n';
+import { createTranslator, useTranslation } from '../i18n';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
 import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSPanel';
@@ -53,17 +53,18 @@ function endsWithSentencePeriod(text: string): boolean {
   return /[。．.](?:[”"』」》）)]*)\s*$/.test(text.trim());
 }
 
-function getErrorMessage(error: unknown, fallback = staticT('common.generationFailed')): string {
+function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : String(error || fallback);
 }
 
 function createScratchpadProject(): SegmentedProject {
+  const _t = createTranslator('zh-CN');
   const project = createInitialProject();
   const now = new Date().toISOString();
   return {
     ...project,
     id: SCRATCHPAD_PROJECT_ID,
-    name: staticT('common.draftProject'),
+    name: _t('common.draftProject'),
     created_at: project.created_at || now,
     updated_at: project.updated_at || now,
   };
@@ -1150,7 +1151,7 @@ export function TTSSynthesis({
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams, origin: 'tts' });
       unlockedRecordedRef.current.delete(id);
     } catch (error: unknown) {
-      dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error) });
+      dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error, t('common.generationFailed')) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeChapter.segments, dispatch, buildCurrentParams, showToast, roles]);
@@ -1571,7 +1572,7 @@ export function TTSSynthesis({
       } else if (resp?.status === 409 && code === 'export_directory_not_configured') {
         showToast(t('studio.exportAllNoDir'), 'error');
       } else {
-        showToast(getErrorMessage(error), 'error');
+        showToast(getErrorMessage(error, t('common.generationFailed')), 'error');
       }
     }
   }, [storageMode, project?.id, isScratchpadProject, showToast, t]);
