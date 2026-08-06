@@ -89,7 +89,7 @@ export function UrlInput({ onUrlConfirmed, onBack, projectId }: UrlInputProps) {
           onClick={handleConfirm}
           disabled={isLoading || !url.trim()}
         >
-          {isLoading ? t('urlInput.validating') : t('urlInput.confirm')}
+          {isLoading ? t('urlInput.validating') : t('common.confirm')}
         </button>
         <button
           className={styles.confirmButton}

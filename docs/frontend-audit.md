@@ -40,9 +40,9 @@ The problems are all in how components consume (or bypass) the infrastructure.
 
 | # | Finding | Evidence |
 |---|---------|----------|
-| I5 | **225 pack keys have no source reference** (`workflow` group alone holds 84). Copy was written ahead of wiring; the two sides drift in both directions. | `zh-CN.ts` `workflow`/`segmentEdit`/`segment`/`subtitles` groups |
-| I6 | **120 groups of synonymous duplicate keys**: `取消` ×11, `删除` ×7, `加载中...` ×5. No `common.*` convergence convention. | `zh-CN.ts` passim |
-| I7 | **25 hardcoded Chinese `placeholder`/`title`/`aria-label` attributes** — accessibility copy stays Chinese in the English UI. | e.g. `WorkflowDrawer.tsx:249,252`, `SynthesisHistory.tsx:118-182` |
+| I5 | **225 pack keys have no source reference** (`workflow` group alone holds 84). Copy was written ahead of wiring; the two sides drift in both directions. | `zh-CN.ts` `workflow`/`segmentEdit`/`segment`/`subtitles` groups | ⏭️ 2026-08-06 — Deferred: 2130 keys appear unreferenced by static regex, but most are used through dynamic patterns (labelKey arrays, computed key construction). Requires AST-level analysis for safe removal. |
+| I6 | **120 groups of synonymous duplicate keys**: `取消` ×11, `删除` ×7, `加载中...` ×5. No `common.*` convergence convention. | `zh-CN.ts` passim | ✅ 2026-08-06 — 7 groups consolidated (34 keys removed): 取消→common.cancel (9), 删除→common.delete (6), 加载中...→common.loading (4), 保存→common.save (3), 编辑→common.edit (3), 关闭→common.close (3), 确认→common.confirm (3). All source refs + 4 test files updated. Frontend 375✓. |
+| I7 | **25 hardcoded Chinese `placeholder`/`title`/`aria-label` attributes** — accessibility copy stays Chinese in the English UI. | e.g. `WorkflowDrawer.tsx:249,252`, `SynthesisHistory.tsx:118-182` | ✅ 2026-08-06 — 12 hardcoded attrs fixed across 9 files: ProjectLibrary (aria-label + placeholder), SourceDocumentView (placeholder), ReviewPanel (2 placeholders), GlobalControlBar (placeholder), ParameterControls (placeholder), SSMLToolbar (title), MiMoTTSPanel (2 placeholders), TTSSynthesis (title), LanguageSwitcher (title). Added ariaLabels/placeholders/languageSwitcher i18n key groups. Frontend 375✓. |
 
 ### 2.3 Low
 

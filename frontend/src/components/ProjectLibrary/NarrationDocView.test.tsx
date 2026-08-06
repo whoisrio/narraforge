@@ -61,7 +61,7 @@ describe('NarrationDocView', () => {
   it('form B: edit toggle reveals textarea bound to narration_script', () => {
     const onUpdateNarrationScript = vi.fn();
     render(<NarrationDocView {...baseProps} narrationScript="原始旁白" onUpdateNarrationScript={onUpdateNarrationScript} />);
-    fireEvent.click(screen.getByRole('button', { name: 'projectLibrary.edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'common.edit' }));
     expect(screen.getByRole('textbox')).toHaveValue('原始旁白');
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '改后的旁白' } });
     expect(onUpdateNarrationScript).toHaveBeenCalledWith('改后的旁白');

@@ -43,7 +43,7 @@ describe('AnimationRootSetting', () => {
 
     const input = screen.getByLabelText('settings.animationRoot.label') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '/new/root' } });
-    fireEvent.click(screen.getByText('settings.animationRoot.save'));
+    fireEvent.click(screen.getByText('common.save'));
 
     await waitFor(() => expect(setAnimationRoot).toHaveBeenCalledWith('/new/root'));
     await waitFor(() => expect(screen.getByText('settings.animationRoot.saveSuccess')).toBeInTheDocument());
@@ -59,7 +59,7 @@ describe('AnimationRootSetting', () => {
 
     const input = screen.getByLabelText('settings.animationRoot.label') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '/bad/path' } });
-    fireEvent.click(screen.getByText('settings.animationRoot.save'));
+    fireEvent.click(screen.getByText('common.save'));
 
     await waitFor(() => expect(setAnimationRoot).toHaveBeenCalledWith('/bad/path'));
     await waitFor(() => expect(screen.getByText(/cannot_create_directory: boom/)).toBeInTheDocument());

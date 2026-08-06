@@ -194,7 +194,7 @@ export function StyleInstructionPicker({
           <button type="button" className={styles.actionBtn} disabled={!trimmedValue || !draftName.trim()} onClick={handleSaveNew}>{t('stylePresets.add')}</button>
           <button type="button" className={styles.actionBtn} disabled={!selectedPreset || !trimmedValue} onClick={handleUpdate}>{t('stylePresets.updateContent')}</button>
           <button type="button" className={styles.actionBtn} disabled={!selectedPreset || !draftName.trim()} onClick={handleRename}>{t('stylePresets.rename')}</button>
-          <button type="button" className={styles.deleteBtn} disabled={!selectedPreset} onClick={handleDelete}>{t('stylePresets.delete')}</button>
+          <button type="button" className={styles.deleteBtn} disabled={!selectedPreset} onClick={handleDelete}>{t('common.delete')}</button>
         </div>
       )}
     </div>

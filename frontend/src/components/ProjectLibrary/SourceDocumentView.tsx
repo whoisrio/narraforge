@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from '../../i18n';
 import Markdown from 'react-markdown';
 import styles from './SourceDocumentView.module.css';
 
@@ -14,6 +15,7 @@ interface SourceDocumentViewProps {
 export function SourceDocumentView({
   content, onChange, viewMode,
 }: SourceDocumentViewProps) {
+  const { t } = useTranslation();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function SourceDocumentView({
           className={styles.editor}
           defaultValue={content}
           onChange={handleChange}
-          placeholder="输入源文档内容（支持 Markdown）..."
+          placeholder={t("placeholders.sourceDocContent")}
           spellCheck={false}
         />
       ) : (

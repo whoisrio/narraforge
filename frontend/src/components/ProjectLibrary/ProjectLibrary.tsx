@@ -231,7 +231,7 @@ export function ProjectLibrary({
         ) : (
           <textarea
             className={styles.manuscriptEditor}
-            aria-label="章节全文"
+            aria-label={t("ariaLabels.chapterFullText")}
             value={text}
             onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
             placeholder={t('projectLibrary.descPlaceholder')}
@@ -259,7 +259,7 @@ export function ProjectLibrary({
             className={styles.ghostButton}
             onClick={() => setShowPreview(!showPreview)}
           >
-            {showPreview ? t('projectLibrary.edit') : t('projectLibrary.preview')}
+            {showPreview ? t('common.edit') : t('projectLibrary.preview')}
           </button>
           <button
             type="button"
@@ -347,7 +347,7 @@ export function ProjectLibrary({
           />
           <div className={styles.createChapterActions}>
             <button type="button" onClick={createChapter}>{t('projectLibrary.createChapter')}</button>
-            <button type="button" onClick={() => { setCreatingChapter(false); setNewChapterName(''); }}>{t('projectLibrary.cancel')}</button>
+            <button type="button" onClick={() => { setCreatingChapter(false); setNewChapterName(''); }}>{t('common.cancel')}</button>
           </div>
         </div>
       )}
@@ -389,8 +389,8 @@ export function ProjectLibrary({
                         autoFocus
                       />
                       <div className={styles.chapterRenameActions}>
-                        <button type="button" onClick={() => saveChapterName(chapter)}>{t('projectLibrary.save')}</button>
-                        <button type="button" onClick={() => { setEditingChapterId(null); setChapterNameDraft(''); }}>{t('projectLibrary.cancel')}</button>
+                        <button type="button" onClick={() => saveChapterName(chapter)}>{t('common.save')}</button>
+                        <button type="button" onClick={() => { setEditingChapterId(null); setChapterNameDraft(''); }}>{t('common.cancel')}</button>
                       </div>
                     </div>
                   ) : (
@@ -435,7 +435,7 @@ export function ProjectLibrary({
               className={styles.sourceTitleInput}
               value={projectName ?? ''}
               onChange={(e) => onRenameProject?.(e.target.value)}
-              placeholder="源文档标题"
+              placeholder={t("placeholders.sourceDocTitle")}
             />
           ) : (
             <h2>文本库</h2>
@@ -472,7 +472,7 @@ export function ProjectLibrary({
                 className={styles.ghostButton}
                 onClick={() => setSourceViewMode(sourceViewMode === 'edit' ? 'view' : 'edit')}
               >
-                {sourceViewMode === 'edit' ? t('projectLibrary.view') : t('projectLibrary.edit')}
+                {sourceViewMode === 'edit' ? t('projectLibrary.view') : t('common.edit')}
               </button>
               <button type="button" className={styles.ghostButton} onClick={() => setComparing(true)}>{t('projectLibrary.compare') || '对比'}</button>
               <button type="button" className={styles.ghostButton} onClick={() => setActiveTab('narration')}>← {t('projectLibrary.backToLibrary')}</button>

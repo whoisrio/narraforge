@@ -94,7 +94,7 @@ export function AnimationRootSetting() {
             onClick={handleSave}
             disabled={busy !== null}
           >
-            {busy === 'save' ? t('settings.animationRoot.saving') : t('settings.animationRoot.save')}
+            {busy === 'save' ? t('settings.animationRoot.saving') : t('common.save')}
           </button>
           <button
             type="button"

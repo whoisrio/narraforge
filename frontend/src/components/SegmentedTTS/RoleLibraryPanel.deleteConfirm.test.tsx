@@ -36,7 +36,7 @@ function renderPanel() {
 describe('RoleLibraryPanel delete confirm', () => {
   it('does NOT delete when confirm is cancelled', async () => {
     renderPanel();
-    const del = await screen.findByText('segment.roleLibrary.delete');
+    const del = await screen.findByText('common.delete');
     fireEvent.click(del);
     // ConfirmDialog appears; cancel it.
     fireEvent.click(await screen.findByRole('button', { name: 'common.cancel' }));
@@ -46,7 +46,7 @@ describe('RoleLibraryPanel delete confirm', () => {
   it('deletes after confirm and passes role name in the message', async () => {
     deleteRole.mockResolvedValue(undefined);
     renderPanel();
-    const del = await screen.findByText('segment.roleLibrary.delete');
+    const del = await screen.findByText('common.delete');
     fireEvent.click(del);
     // The confirm dialog message includes the role name.
     const dialog = await screen.findByRole('alertdialog');

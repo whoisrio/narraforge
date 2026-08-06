@@ -167,8 +167,6 @@ export const zhCN = {
     previousChapter: '上一章',
     nextChapter: '下一章',
     createChapter: '创建章节',
-    cancel: '取消',
-    save: '保存',
     deleteChapter: '删除章节',
     backToLibrary: '返回文本库',
     sourceDoc: '源文档',
@@ -181,7 +179,6 @@ export const zhCN = {
       fallbackPreviewLabel: '当前章节合并预览',
       editorPlaceholder: '在此粘贴或编写完整旁白文档…',
     },
-    edit: '编辑',
     preview: '预览',
     view: '查看',
     compare: '对比',
@@ -237,7 +234,6 @@ export const zhCN = {
       description: 'knowledge_video 工作流自动创建 Remotion 工程的根目录（服务器本机路径）。',
       label: '根目录路径',
       placeholder: '/Users/you/animation-projects',
-      save: '保存',
       saving: '保存中…',
       test: '测试路径',
       testing: '测试中…',
@@ -251,7 +247,6 @@ export const zhCN = {
       description: '项目旁白文本每日自动快照到本地 git 仓库；配置远端后可推送。无远端则只本地提交。',
       label: '远端仓库地址',
       placeholder: 'git@github.com:you/narraforge-narration.git',
-      save: '保存',
       saving: '保存中…',
       saveSuccess: '已保存',
       saveFailed: '保存失败',
@@ -309,7 +304,6 @@ export const zhCN = {
     rename: {
       label: '项目名称',
       save: '保存项目名称',
-      cancel: '取消',
     },
     emptyState: {
       title: '还没有项目',
@@ -319,7 +313,6 @@ export const zhCN = {
       title: '新建项目',
       nameLabel: '项目名称',
       namePlaceholder: '输入项目名称...',
-      cancel: '取消',
       create: '创建项目',
     },
     tempProject: '临时',
@@ -327,7 +320,6 @@ export const zhCN = {
   modelConfig: {
     title: '模型配置',
     description: '管理 AI 服务商的连接凭据，界面设置优先于环境变量默认值',
-    loading: '加载中...',
     loadFailed: '加载配置失败',
     configLoaded: '配置已保存',
     saveFailed: '保存失败',
@@ -358,7 +350,6 @@ export const zhCN = {
     },
     actions: {
       load: '加载模型',
-      loading: '加载中...',
       unload: '释放显存',
       loadFailed: '加载失败',
       unloadFailed: '释放失败',
@@ -367,7 +358,6 @@ export const zhCN = {
     loadTime: '加载耗时 {seconds}s',
     referenceAudio: '参考音频',
     selectVoice: '-- 选择已上传的声音 --',
-    loadingVoices: '加载中...',
     voicesLoaded: '已加载 {count} 个声音',
     currentVoice: '当前: {name}',
     noVoiceSelected: '未选择',
@@ -668,12 +658,10 @@ export const zhCN = {
     add: '新增',
     updateContent: '更新内容',
     rename: '改名',
-    delete: '删除',
     label: '风格指令',
     placeholder: '直接输入风格指令，或从预设中选择...',
   },
   segmentEdit: {
-    editSegment: '编辑',
     roleAssigned: '已分配角色',
     splitAtCursor: '在光标处拆分',
     smartAnnotate: '智能标注',
@@ -725,12 +713,10 @@ export const zhCN = {
     exportDialog: {
       title: '导出选项',
       name: '名称',
-      cancel: '取消',
       confirmSkip: '{failed}/{total} 段未生成，将跳过。继续？',
     },
     roleLibrary: {
       title: '全局角色库',
-      close: '关闭',
       name: '角色名',
       avatar: '头像',
       description: '描述',
@@ -744,7 +730,6 @@ export const zhCN = {
       saveFailed: '角色保存失败',
       deleteFailed: '角色删除失败',
       deleteConfirm: '删除角色「{name}」及其音色配置？该角色将从所有项目移除；已合成的分段音频会保留，但分段将失去角色引用。',
-      delete: '删除',
     },
     migration: {
       title: '迁移本地项目到后端',
@@ -775,7 +760,6 @@ export const zhCN = {
       intensity: '强度',
       advancedInstruction: '高级指令',
       save: '保存标注',
-      cancel: '取消',
       placeholder: '例如：压低声音，带一点犹豫',
     },
     textInput: {
@@ -791,7 +775,6 @@ export const zhCN = {
     },
     segmentRow: {
       voiceChanged: '音色已变更，建议重新生成',
-      delete: '删除',
       editing: '编辑中',
       unlockTooltip: '点击取消独立音色，跟随全局',
       locked: '🔒 独立音色',
@@ -800,7 +783,6 @@ export const zhCN = {
       roleLocked: '🔒 跟随角色音色，不可更改',
       global: '🔗 跟随全局',
       idle: '待生成',
-      edit: '编辑',
       regenerate: '重新生成',
       trim: '裁剪静音',
       voiceNotSelected: '未选择',
@@ -904,8 +886,6 @@ export const zhCN = {
     },
   },
   confirmDialog: {
-    confirm: '确认',
-    cancel: '取消',
   },
   sourceLibrary: {
     scratchpad: '草稿台',
@@ -970,7 +950,6 @@ export const zhCN = {
     engineMiMo: 'MiMo (推荐)',
     engineRule: '纯规则',
     generationNote: '⏱ 生成可能需要 10-30 秒 · 新版本会成为项目活跃版本 · 旧版本保留可对比',
-    cancel: '取消',
     generateNewVersion: '🧠 生成新版本',
   },
   narrationFullView: {
@@ -990,7 +969,6 @@ export const zhCN = {
     rolesCount: '🎭 {count} 个角色',
     occurrences: '出现 {count} 次',
     noRolesDetected: '未检测到角色 · 可能文本量太小或格式不标准',
-    cancel: '取消',
     confirmAndApply: '确认并应用',
   },
   sourceUploadZone: {
@@ -1231,7 +1209,6 @@ export const zhCN = {
     promptTextPlaceholder: '输入参考音频中说话人说的完整文字（用于 VoxCPM Ultimate Clone 高保真克隆）',
     promptTextHint: '填写后声音保存时会一并存储，后续合成自动使用',
     cloneWith: '使用 {engine} 复刻',
-    cancel: '取消',
   },
   urlInput: {
     emptyUrl: '请输入音频文件地址',
@@ -1241,7 +1218,6 @@ export const zhCN = {
     placeholder: '请输入音频文件的公网地址，如 https://example.com/audio.wav',
     hint: '支持 MP3、WAV、OGG 等音频格式。请确保链接可直接访问（无需登录）。',
     validating: '校验并下载中...',
-    confirm: '确认',
     back: '返回',
   },
   voiceList: {
@@ -1262,9 +1238,7 @@ export const zhCN = {
     miMoInstantClone: 'MiMo 即时复刻',
     notClonedYet: '尚未克隆',
     clone: '克隆',
-    delete: '删除',
     cloneVoice: '克隆声音',
-    close: '关闭',
     cloning: '克隆中...',
     cloneDescription: '提交 1 段音频给 Qwen 进行声音克隆。这将创建一个持久的声音 ID。',
     voiceName: '声音名称',
@@ -1342,7 +1316,6 @@ export const zhCN = {
     empty: '暂无识别历史',
     title: '识别历史',
     confirmDelete: '确定删除这条识别记录？',
-    delete: '删除',
   },
   audioDropzone: {
     dropTitle: '拖放音频到此处',
@@ -1362,7 +1335,6 @@ export const zhCN = {
     confirmDelete: '确定删除此模型配置？',
     title: '🤖 模型配置',
     loading: '加载模型中...',
-    cancel: '取消',
     addModel: '+ 添加模型',
     modelName: '模型名称',
     modelNamePlaceholder: '输入模型名称',
@@ -1373,7 +1345,6 @@ export const zhCN = {
     create: '创建',
     noModels: '暂无模型配置',
     noModelsDesc: '添加模型配置以开始使用。',
-    delete: '删除',
   },
   ttsControls: {
     synthesisFailed: '合成失败',
@@ -1410,10 +1381,7 @@ export const zhCN = {
     common: {
       title: '工作流',
       newRun: '新建运行',
-      cancel: '取消',
-      confirm: '确认',
       back: '返回',
-      loading: '加载中...',
       notFound: '未找到工作流',
     },
     stage: {
@@ -1527,6 +1495,7 @@ export const zhCN = {
       startNewRun: '全新运行',
       exportAudio: '导出音频',
     },
+
     drawer: {
       title: '旁白工作流',
       rerunNode: '重跑节点',
@@ -1548,7 +1517,6 @@ export const zhCN = {
       badgeDone: '完成',
       badgeIncomplete: '未完成',
       collapse: '收起',
-      close: '关闭',
       fullscreenSuffix: '{stage} · 完整内容',
     },
     tokens: {
@@ -1588,10 +1556,26 @@ export const zhCN = {
       confirmRebuild: '确认重建',
     },
   },
+  ariaLabels: {
+    chapterFullText: '章节全文',
+    ssmlDeleteHint: '删除光标处/选区外层的 SSML 标签',
+    styleTagHint: '开启后合成前自动移除文本中的风格 tag',
+  },
+  placeholders: {
+    sourceDocTitle: '源文档标题',
+    sourceDocContent: '输入源文档内容（支持 Markdown）...',
+    presetOrInput: '选择预设，或直接输入...',
+    presetOrInputStyle: '选择预设，或直接输入新的风格指令...',
+    cloneInstruction: '输入复刻指令...',
+  },
+  languageSwitcher: {
+    tooltip: 'Switch language / 切换语言',
+  },
 };
 
 type WidenStrings<T> = {
   [K in keyof T]: T[K] extends string ? string : WidenStrings<T[K]>;
+
 };
 
 export type Messages = WidenStrings<typeof zhCN>;

@@ -69,7 +69,7 @@ export function NarrationDocView({
               className={styles.ghostBtn}
               onClick={() => setViewMode(viewMode === 'view' ? 'edit' : 'view')}
             >
-              {viewMode === 'view' ? t('projectLibrary.edit') : t('projectLibrary.view')}
+              {viewMode === 'view' ? t('common.edit') : t('projectLibrary.view')}
             </button>
           )}
         </div>

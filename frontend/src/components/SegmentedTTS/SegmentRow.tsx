@@ -623,7 +623,7 @@ export function SegmentRow({
                 {isPlaying && !isPaused ? '⏸' : '▶'}
               </button>
             )}
-            <button className={styles.actBtn} title={t('segment.segmentRow.edit')}
+            <button className={styles.actBtn} title={t('common.edit')}
               onClick={(e) => { e.stopPropagation(); onEdit(segment.id); }}>✎</button>
             {isReady && (
               <button className={styles.actBtn} title={t('segment.segmentRow.regenerate')}

@@ -185,7 +185,7 @@ export function SegmentEditPanel({
                 {t(EMOTION_LABELS[emotion])}
               </span>
             )}
-            {t('segmentEdit.editSegment')} #{segment.id.slice(-3)}
+            {t('common.edit')} #{segment.id.slice(-3)}
           </div>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
         </div>

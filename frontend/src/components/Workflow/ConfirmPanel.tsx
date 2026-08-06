@@ -34,7 +34,7 @@ export function ConfirmPanel({ interrupt, onRespond }: Props) {
           className={styles.cancelBtn}
           onClick={() => onRespond({ action: 'cancel' })}
         >
-          {t('workflow.common.cancel')}
+          {t('common.cancel')}
         </button>
       </div>
     </div>

@@ -188,7 +188,7 @@ export function GlobalControlBar({
               value={instruction || ''}
               onChange={onInstructionChange}
               label="风格指令"
-              placeholder="选择预设，或直接输入..."
+              placeholder={t("placeholders.presetOrInput")}
               dense
             />
           )}

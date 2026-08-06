@@ -1715,7 +1715,7 @@ export function TTSSynthesis({
                         projectId={project.id}
                       />
                     )}
-                    <label className={styles.sidebarMuteTags} title="开启后合成前自动移除文本中的风格 tag">
+                    <label className={styles.sidebarMuteTags} title={t("ariaLabels.styleTagHint")}>
                       <input
                         type="checkbox"
                         checked={muteTags}

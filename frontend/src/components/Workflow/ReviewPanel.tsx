@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ReviewResult } from '../../services/langgraph/types';
+import { useTranslation } from '../../i18n';
 import styles from './ReviewPanel.module.css';
 
 interface InterruptPayload {
@@ -26,6 +27,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export function ReviewPanel({ interrupt, onRespond }: Props) {
+  const { t } = useTranslation();
   const { script, review } = interrupt;
   const [editedScript, setEditedScript] = useState(script);
   const [comment, setComment] = useState('');
@@ -114,7 +116,7 @@ export function ReviewPanel({ interrupt, onRespond }: Props) {
           className={styles.noteEditor}
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="导演备注..."
+          placeholder={t('workflow.review.directorNotePlaceholder')}
         />
       </div>
 
@@ -125,7 +127,7 @@ export function ReviewPanel({ interrupt, onRespond }: Props) {
             className={styles.noteEditor}
             value={feedback}
             onChange={(e) => setFeedback(e.target.value)}
-            placeholder="描述需要改进的地方..."
+            placeholder={t('workflow.review.rejectFeedbackPlaceholder')}
           />
         </div>
       )}

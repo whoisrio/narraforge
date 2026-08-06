@@ -86,7 +86,7 @@ export function NarrationGitSetting() {
         </label>
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} onClick={handleSave} disabled={busy !== null}>
-            {busy === 'save' ? t('settings.narrationGit.saving') : t('settings.narrationGit.save')}
+            {busy === 'save' ? t('settings.narrationGit.saving') : t('common.save')}
           </button>
           <button type="button" className={styles.primary} onClick={handleSnapshot} disabled={busy !== null}>
             {busy === 'snapshot' ? t('settings.narrationGit.snapshotting') : t('settings.narrationGit.snapshot')}

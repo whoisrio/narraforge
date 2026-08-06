@@ -191,7 +191,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
           onClick={handleCancel}
           disabled={isCloning}
         >
-          {t('audioPreview.cancel')}
+          {t('common.cancel')}
         </button>
       </div>
     </div>

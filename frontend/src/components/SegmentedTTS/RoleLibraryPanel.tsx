@@ -102,7 +102,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
     setError(null);
     const target = roles.find((r) => r.id === roleId);
     if (!(await confirm({
-      title: t('segment.roleLibrary.delete'),
+      title: t('common.delete'),
       message: t('segment.roleLibrary.deleteConfirm', { name: target?.name ?? roleId }),
       variant: 'danger',
       confirmLabel: t('common.confirm'),
@@ -130,7 +130,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
       <div className={styles.panel}>
         <header className={styles.header}>
           <h2>{t('segment.roleLibrary.title')}</h2>
-          <button type="button" onClick={onClose}>{t('segment.roleLibrary.close')}</button>
+          <button type="button" onClick={onClose}>{t('common.close')}</button>
         </header>
 
         {error && <div className={styles.error}>{error}</div>}
@@ -177,7 +177,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
               </div>
               <div className={styles.actions}>
                 <button type="button" onClick={() => setDraft(roleToDraft(role))}>{t('common.edit')}</button>
-                <button type="button" onClick={() => void removeRole(role.id)}>{t('segment.roleLibrary.delete')}</button>
+                <button type="button" onClick={() => void removeRole(role.id)}>{t('common.delete')}</button>
               </div>
             </article>
           ))}

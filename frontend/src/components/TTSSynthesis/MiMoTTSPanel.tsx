@@ -158,7 +158,7 @@ export function MiMoTTSPanel({
               value={instruction}
               onChange={onInstructionChange}
               label={t('voxcpm.styleInstruction')}
-              placeholder="选择预设，或直接输入新的风格指令..."
+              placeholder={t("placeholders.presetOrInputStyle")}
             />
           </div>
         </div>
@@ -198,7 +198,7 @@ export function MiMoTTSPanel({
               value={instruction}
               onChange={onInstructionChange}
               label={t('voxcpm.styleInstruction')}
-              placeholder="选择预设，或直接输入新的风格指令..."
+              placeholder={t("placeholders.presetOrInputStyle")}
             />
           </div>
         </div>

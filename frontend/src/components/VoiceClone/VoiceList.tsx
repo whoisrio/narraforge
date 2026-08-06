@@ -423,7 +423,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                     size="sm"
                     onClick={() => handleDeleteClick(voice.id)}
                   >
-                    {t('voiceList.delete')}
+                    {t('common.delete')}
                   </Button>
                 </div>
               </div>
@@ -439,7 +439,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
         footer={
           <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
             <Button variant="ghost" onClick={handleCloseModal}>
-              {registerResult ? t('voiceList.close') : t('common.cancel')}
+              {registerResult ? t('common.close') : t('common.cancel')}
             </Button>
             {!registerResult && (
               <Button
