@@ -89,6 +89,8 @@ export const zhCN = {
     listView: '列表视图',
     dialogueView: '对话视图',
     batchSynthesize: '批量合成',
+    ssmlToggle: 'SSML',
+    markdownFilter: 'MD过滤',
     batchSynthesizeUnsynthesized: '仅合成未合成',
     batchSynthesizeRegenerateAll: '重新合成全部',
     selectMode: '选择',
@@ -1442,6 +1444,9 @@ export const zhCN = {
         fail: '必须修改',
       },
       criticalIssueWarning: '⚠️ 内容忠实度存在严重问题，请务必修正后再通过',
+      confirmReject: '确认拒绝',
+      rejectFeedbackLabel: '拒绝反馈（必填）',
+      charCount: '{count} 字',
     },
     detail: {
       title: '工作流详情',

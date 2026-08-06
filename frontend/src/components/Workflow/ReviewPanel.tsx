@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from '../../i18n';
 import type { ReviewResult } from '../../services/langgraph/types';
 import { useTranslation } from '../../i18n';
 import styles from './ReviewPanel.module.css';
@@ -64,7 +65,7 @@ export function ReviewPanel({ interrupt, onRespond }: Props) {
       {review.has_critical_issue && (
         <div className={styles.critical}>
           <span className="material-symbols-outlined">error</span>
-          内容忠实度存在严重问题，务必修正后再通过
+          {t('workflow.review.criticalIssueWarning')}
         </div>
       )}
 
@@ -100,8 +101,8 @@ export function ReviewPanel({ interrupt, onRespond }: Props) {
 
       <div className={styles.section}>
         <div className={styles.sectionLabel}>
-          旁白脚本（可编辑）
-          <span className={styles.stats}>{editedScript.length} 字</span>
+          {t('workflow.review.scriptEditor')}
+          <span className={styles.stats}>{t('workflow.review.charCount', { count: editedScript.length })}</span>
         </div>
         <textarea
           className={styles.scriptEditor}
@@ -111,7 +112,7 @@ export function ReviewPanel({ interrupt, onRespond }: Props) {
       </div>
 
       <div className={styles.section}>
-        <div className={styles.sectionLabel}>导演备注（可选）</div>
+        <div className={styles.sectionLabel}>{t('workflow.review.directorNote')}</div>
         <textarea
           className={styles.noteEditor}
           value={comment}
@@ -122,7 +123,7 @@ export function ReviewPanel({ interrupt, onRespond }: Props) {
 
       {rejecting && (
         <div className={styles.section}>
-          <div className={styles.sectionLabel}>拒绝反馈（必填）</div>
+          <div className={styles.sectionLabel}>{t('workflow.review.rejectFeedbackLabel')}</div>
           <textarea
             className={styles.noteEditor}
             value={feedback}
@@ -136,19 +137,19 @@ export function ReviewPanel({ interrupt, onRespond }: Props) {
         {rejecting ? (
           <>
             <button className={styles.rejectBtn} onClick={doReject} disabled={!feedback.trim()}>
-              <span className="material-symbols-outlined">close</span>确认拒绝
+              <span className="material-symbols-outlined">close</span>{t('workflow.review.confirmReject')}
             </button>
             <button className={styles.ghostBtn} onClick={() => setRejecting(false)}>
-              取消
+              {t('common.cancel')}
             </button>
           </>
         ) : (
           <>
             <button className={styles.rejectBtn} onClick={() => setRejecting(true)}>
-              <span className="material-symbols-outlined">close</span>拒绝并反馈
+              <span className="material-symbols-outlined">close</span>{t('workflow.review.reject')}
             </button>
             <button className={styles.primaryBtn} onClick={approve}>
-              <span className="material-symbols-outlined">check</span>批准
+              <span className="material-symbols-outlined">check</span>{t('workflow.review.approve')}
             </button>
           </>
         )}
