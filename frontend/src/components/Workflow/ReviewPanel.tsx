@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from '../../i18n';
 import type { ReviewResult } from '../../services/langgraph/types';
+import { useTranslation } from '../../i18n';
 import styles from './ReviewPanel.module.css';
 
 interface InterruptPayload {

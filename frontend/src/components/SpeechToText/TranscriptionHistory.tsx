@@ -51,7 +51,7 @@ export function TranscriptionHistory({ records, onDelete }: TranscriptionHistory
                   if (confirm(t('transcriptionHistory.confirmDelete'))) onDelete(record.id);
                 }}
               >
-                {t('transcriptionHistory.delete')}
+                {t('common.delete')}
               </button>
             </div>
           </div>

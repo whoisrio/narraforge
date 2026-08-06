@@ -496,7 +496,7 @@ export function SSMLToolbar({ text, onTextChange, textareaRef, enabled }: SSMLTo
           <button
             className={`${styles.tagButton} ${styles.dangerButton}`}
             onClick={unwrapTag}
-            title="删除光标处/选区外层的 SSML 标签"
+            title={t("ariaLabels.ssmlDeleteHint")}
           >
             {t('ssml.deleteTag')}
           </button>

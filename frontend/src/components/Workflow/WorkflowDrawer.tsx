@@ -261,7 +261,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
           <button onClick={onCollapse} className={styles.iconBtn} aria-label={t('workflow.drawer.collapse')}>
             <span className="material-symbols-outlined">unfold_less</span>
           </button>
-          <button onClick={onClose} className={styles.iconBtn} aria-label={t('workflow.drawer.close')}>
+          <button onClick={onClose} className={styles.iconBtn} aria-label={t('common.close')}>
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>

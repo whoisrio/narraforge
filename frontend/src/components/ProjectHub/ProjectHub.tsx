@@ -197,7 +197,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
                 {isEditing ? (
                   <div className={styles.renameActions}>
                     <button type="button" onClick={() => saveRename(project)}>{t('projectHub.rename.save')}</button>
-                    <button type="button" onClick={() => { setEditingProjectId(null); setRenameDraft(''); }}>{t('projectHub.rename.cancel')}</button>
+                    <button type="button" onClick={() => { setEditingProjectId(null); setRenameDraft(''); }}>{t('common.cancel')}</button>
                   </div>
                 ) : null}
                 <div className={styles.cardStats}>
@@ -288,7 +288,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
               </label>
             </div>
             <div className={styles.dialogActions}>
-              <button type="button" className={styles.dialogCancelBtn} onClick={() => setShowCreateDialog(false)}>{t('projectHub.dialog.cancel')}</button>
+              <button type="button" className={styles.dialogCancelBtn} onClick={() => setShowCreateDialog(false)}>{t('common.cancel')}</button>
               <button type="button" className={styles.dialogCreateBtn} onClick={handleCreate}>{t('projectHub.dialog.create')}</button>
             </div>
           </div>

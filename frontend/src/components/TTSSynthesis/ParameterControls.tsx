@@ -193,7 +193,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
               value={currentInstruction}
               maxLength={50}
               onChange={(e) => handleInstructionChange(e.target.value)}
-              placeholder="输入复刻指令..."
+              placeholder={t("placeholders.cloneInstruction")}
             />
             <span className={styles.charCount}>{currentInstruction.length}/50</span>
 

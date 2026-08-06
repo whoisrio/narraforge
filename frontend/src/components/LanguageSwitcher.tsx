@@ -8,7 +8,7 @@ const localeFlags: Record<Locale, string> = {
 };
 
 export function LanguageSwitcher() {
-  const { locale, setLocale } = useTranslation();
+  const { locale, setLocale, t } = useTranslation();
   
   return (
     <div className={styles.wrapper}>
@@ -16,7 +16,7 @@ export function LanguageSwitcher() {
         className={styles.select}
         value={locale}
         onChange={(e) => setLocale(e.target.value as Locale)}
-        title="Switch language / 切换语言"
+        title={t('languageSwitcher.tooltip')}
       >
         {(['zh-CN', 'en-US'] as Locale[]).map((loc) => (
           <option key={loc} value={loc}>

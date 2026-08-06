@@ -79,7 +79,7 @@ export function ProsodyMarkEditor({ selection, onSave, onCancel }: ProsodyMarkEd
       </label>
       <div className={styles.actions}>
         <button type="button" onClick={save}>{t('segment.prosody.save')}</button>
-        <button type="button" onClick={onCancel}>{t('segment.prosody.cancel')}</button>
+        <button type="button" onClick={onCancel}>{t('common.cancel')}</button>
       </div>
     </div>
   );

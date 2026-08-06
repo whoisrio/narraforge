@@ -171,8 +171,6 @@ export const enUS: Messages = {
     previousChapter: 'Previous Chapter',
     nextChapter: 'Next Chapter',
     createChapter: 'Create Chapter',
-    cancel: 'Cancel',
-    save: 'Save',
     deleteChapter: 'Delete Chapter',
     backToLibrary: 'Back to Library',
     sourceDoc: 'Source',
@@ -185,7 +183,6 @@ export const enUS: Messages = {
       fallbackPreviewLabel: 'Joined chapter preview',
       editorPlaceholder: 'Paste or write the full narration document here…',
     },
-    edit: 'Edit',
     preview: 'Preview',
     view: 'View',
     compare: 'Compare',
@@ -241,7 +238,6 @@ export const enUS: Messages = {
       description: 'Root directory where the knowledge_video workflow auto-creates Remotion projects (server-local path).',
       label: 'Root path',
       placeholder: '/Users/you/animation-projects',
-      save: 'Save',
       saving: 'Saving…',
       test: 'Test path',
       testing: 'Testing…',
@@ -255,7 +251,6 @@ export const enUS: Messages = {
       description: 'Narration text is snapshotted to a local git repo daily; configure a remote to push. Without a remote, only local commits are made.',
       label: 'Remote repository URL',
       placeholder: 'git@github.com:you/narraforge-narration.git',
-      save: 'Save',
       saving: 'Saving…',
       saveSuccess: 'Saved',
       saveFailed: 'Save failed',
@@ -313,7 +308,6 @@ export const enUS: Messages = {
     rename: {
       label: 'Project Name',
       save: 'Save Project Name',
-      cancel: 'Cancel',
     },
     emptyState: {
       title: 'No Projects Yet',
@@ -323,7 +317,6 @@ export const enUS: Messages = {
       title: 'New Project',
       nameLabel: 'Project Name',
       namePlaceholder: 'Enter project name...',
-      cancel: 'Cancel',
       create: 'Create Project',
     },
     tempProject: 'Temp',
@@ -331,7 +324,6 @@ export const enUS: Messages = {
   modelConfig: {
     title: 'Model Configuration',
     description: 'Manage AI service provider credentials. Interface settings take priority over environment variable defaults.',
-    loading: 'Loading...',
     loadFailed: 'Failed to load configuration',
     configLoaded: 'Configuration saved',
     saveFailed: 'Save failed',
@@ -362,7 +354,6 @@ export const enUS: Messages = {
     },
     actions: {
       load: 'Load Model',
-      loading: 'Loading...',
       unload: 'Release VRAM',
       loadFailed: 'Load failed',
       unloadFailed: 'Release failed',
@@ -371,7 +362,6 @@ export const enUS: Messages = {
     loadTime: 'Load time: {seconds}s',
     referenceAudio: 'Reference Audio',
     selectVoice: '-- Select uploaded voice --',
-    loadingVoices: 'Loading...',
     voicesLoaded: 'Loaded {count} voices',
     currentVoice: 'Current: {name}',
     noVoiceSelected: 'Not selected',
@@ -672,12 +662,10 @@ export const enUS: Messages = {
     add: 'Add',
     updateContent: 'Update Content',
     rename: 'Rename',
-    delete: 'Delete',
     label: 'Style Instruction',
     placeholder: 'Enter style instruction directly, or select from presets...',
   },
   segmentEdit: {
-    editSegment: 'Edit',
     roleAssigned: 'Role assigned',
     splitAtCursor: 'Split at Cursor',
     smartAnnotate: 'Smart Annotate',
@@ -729,12 +717,10 @@ export const enUS: Messages = {
     exportDialog: {
       title: 'Export Options',
       name: 'Name',
-      cancel: 'Cancel',
       confirmSkip: '{failed}/{total} segments not generated, will skip. Continue?',
     },
     roleLibrary: {
       title: 'Global Role Library',
-      close: 'Close',
       name: 'Role Name',
       avatar: 'Avatar',
       description: 'Description',
@@ -748,7 +734,6 @@ export const enUS: Messages = {
       saveFailed: 'Failed to save role',
       deleteFailed: 'Failed to delete role',
       deleteConfirm: 'Delete role "{name}" and its voice? It will be removed from all projects. Synthesized segment audio is kept, but segments lose the role reference.',
-      delete: 'Delete',
     },
     migration: {
       title: 'Migrate Local Projects to Backend',
@@ -779,7 +764,6 @@ export const enUS: Messages = {
       intensity: 'Intensity',
       advancedInstruction: 'Advanced Instruction',
       save: 'Save Markup',
-      cancel: 'Cancel',
       placeholder: 'e.g.: Lower voice, with a hint of hesitation',
     },
     textInput: {
@@ -795,7 +779,6 @@ export const enUS: Messages = {
     },
     segmentRow: {
       voiceChanged: 'Voice changed, regeneration recommended',
-      delete: 'Delete',
       editing: 'Editing',
       unlockTooltip: 'Click to unlock independent voice, follow global',
       locked: '🔒 Independent Voice',
@@ -804,7 +787,6 @@ export const enUS: Messages = {
       roleLocked: '🔒 Locked to role voice',
       global: '🔗 Follow Global',
       idle: 'Pending',
-      edit: 'Edit',
       regenerate: 'Regenerate',
       trim: 'Trim Silence',
       voiceNotSelected: 'Not selected',
@@ -908,8 +890,6 @@ export const enUS: Messages = {
     },
   },
   confirmDialog: {
-    confirm: 'Confirm',
-    cancel: 'Cancel',
   },
   sourceLibrary: {
     scratchpad: 'Scratchpad',
@@ -974,7 +954,6 @@ export const enUS: Messages = {
     engineMiMo: 'MiMo (Recommended)',
     engineRule: 'Rule-based',
     generationNote: '⏱ Generation may take 10-30 seconds · New version becomes the active version · Previous versions are preserved for comparison',
-    cancel: 'Cancel',
     generateNewVersion: '🧠 Generate New Version',
   },
   narrationFullView: {
@@ -994,7 +973,6 @@ export const enUS: Messages = {
     rolesCount: '🎭 {count} roles',
     occurrences: 'Appears {count} times',
     noRolesDetected: 'No roles detected · Text may be too short or format is non-standard',
-    cancel: 'Cancel',
     confirmAndApply: 'Confirm & Apply',
   },
   sourceUploadZone: {
@@ -1235,7 +1213,6 @@ export const enUS: Messages = {
     promptTextPlaceholder: 'Enter the full text spoken in the reference audio (for VoxCPM Ultimate Clone high-fidelity cloning)',
     promptTextHint: 'Once filled, it will be stored with the voice and automatically used in future synthesis',
     cloneWith: 'Clone with {engine}',
-    cancel: 'Cancel',
   },
   urlInput: {
     emptyUrl: 'Please enter an audio file URL',
@@ -1245,7 +1222,6 @@ export const enUS: Messages = {
     placeholder: 'Enter a public audio file URL, e.g.: https://example.com/audio.wav',
     hint: 'Supports MP3, WAV, OGG and other audio formats. Ensure the link is directly accessible (no login required).',
     validating: 'Validating and downloading...',
-    confirm: 'Confirm',
     back: 'Back',
   },
   voiceList: {
@@ -1266,9 +1242,7 @@ export const enUS: Messages = {
     miMoInstantClone: 'MiMo Instant Clone',
     notClonedYet: 'Not cloned yet',
     clone: 'Clone',
-    delete: 'Delete',
     cloneVoice: 'Clone Voice',
-    close: 'Close',
     cloning: 'Cloning...',
     cloneDescription: 'Submit 1 audio file to Qwen for voice cloning. This will create a persistent voice ID.',
     voiceName: 'Voice Name',
@@ -1346,7 +1320,6 @@ export const enUS: Messages = {
     empty: 'No transcription history',
     title: 'Transcription History',
     confirmDelete: 'Delete this transcription record?',
-    delete: 'Delete',
   },
   audioDropzone: {
     dropTitle: 'Drop audio here',
@@ -1366,7 +1339,6 @@ export const enUS: Messages = {
     confirmDelete: 'Delete this model configuration?',
     title: '🤖 Model Configuration',
     loading: 'Loading models...',
-    cancel: 'Cancel',
     addModel: '+ Add Model',
     modelName: 'Model Name',
     modelNamePlaceholder: 'Enter model name',
@@ -1377,7 +1349,6 @@ export const enUS: Messages = {
     create: 'Create',
     noModels: 'No model configurations',
     noModelsDesc: 'Add a model configuration to get started.',
-    delete: 'Delete',
   },
   ttsControls: {
     synthesisFailed: 'Synthesis failed',
@@ -1414,10 +1385,7 @@ export const enUS: Messages = {
     common: {
       title: 'Workflow',
       newRun: 'New Run',
-      cancel: 'Cancel',
-      confirm: 'Confirm',
       back: 'Back',
-      loading: 'Loading...',
       notFound: 'Workflow not found',
     },
     stage: {
@@ -1534,6 +1502,7 @@ export const enUS: Messages = {
       startNewRun: 'New Run',
       exportAudio: 'Export Audio',
     },
+
     drawer: {
       title: 'Narration Workflow',
       rerunNode: 'Rerun Node',
@@ -1555,7 +1524,6 @@ export const enUS: Messages = {
       badgeDone: 'Done',
       badgeIncomplete: 'Incomplete',
       collapse: 'Collapse',
-      close: 'Close',
       fullscreenSuffix: '{stage} · Full Content',
     },
     tokens: {
@@ -1594,5 +1562,20 @@ export const enUS: Messages = {
       descriptionWithSynthesized: 'This project already has {chapters} chapters / {segments} segments, {count} of which have synthesized audio. Continuing will delete and rebuild this content.',
       confirmRebuild: 'Confirm Rebuild',
     },
+  },
+  ariaLabels: {
+    chapterFullText: 'Chapter full text',
+    ssmlDeleteHint: 'Delete outer SSML tag at cursor/selection',
+    styleTagHint: 'Auto-remove style tags before synthesis',
+  },
+  placeholders: {
+    sourceDocTitle: 'Source document title',
+    sourceDocContent: 'Enter source document content (Markdown supported)...',
+    presetOrInput: 'Select preset or type directly...',
+    presetOrInputStyle: 'Select preset or type new style instruction...',
+    cloneInstruction: 'Enter clone instruction...',
+  },
+  languageSwitcher: {
+    tooltip: 'Switch language / 切换语言',
   },
 };

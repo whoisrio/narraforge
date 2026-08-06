@@ -126,7 +126,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
           size="sm"
           onClick={() => setShowForm(!showForm)}
         >
-          {showForm ? t('modelSelector.cancel') : t('modelSelector.addModel')}
+          {showForm ? t('common.cancel') : t('modelSelector.addModel')}
         </Button>
       </div>
 
@@ -193,7 +193,7 @@ export function ModelSelector({ onSelect }: ModelSelectorProps) {
                   size="sm"
                   onClick={(e) => { e.stopPropagation(); handleDelete(config.id); }}
                 >
-                  {t('modelSelector.delete')}
+                  {t('common.delete')}
                 </Button>
               )}
             </div>

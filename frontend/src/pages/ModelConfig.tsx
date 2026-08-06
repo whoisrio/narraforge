@@ -152,7 +152,7 @@ export function ModelConfig() {
   }, [configs]);
 
   if (loading) {
-    return <div className={styles.loading}>{t('modelConfig.loading')}</div>;
+    return <div className={styles.loading}>{t('common.loading')}</div>;
   }
 
   if (!configs) {

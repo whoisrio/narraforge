@@ -195,7 +195,7 @@ export function VoxCPMPanel({
             </button>
           ) : (
             <button className={styles.loadBtn} onClick={handleLoad} disabled={isModelLoading}>
-              {isModelLoading ? t('voxcpm.actions.loading') : t('voxcpm.actions.load')}
+              {isModelLoading ? t('common.loading') : t('voxcpm.actions.load')}
             </button>
           )}
         </div>
@@ -239,7 +239,7 @@ export function VoxCPMPanel({
                   </option>
                 ))}
               </select>
-              {voicesLoading && <span className={styles.hint}>{t('voxcpm.loadingVoices')}</span>}
+              {voicesLoading && <span className={styles.hint}>{t('common.loading')}</span>}
               <span className={styles.hint}>
                 {t('voxcpm.voicesLoaded', { count: String(voices.length) })}
                 {' | '}
@@ -278,7 +278,7 @@ export function VoxCPMPanel({
                   </option>
                 ))}
               </select>
-              {voicesLoading && <span className={styles.hint}>{t('voxcpm.loadingVoices')}</span>}
+              {voicesLoading && <span className={styles.hint}>{t('common.loading')}</span>}
               {promptText && (
                 <div className={styles.promptReadOnly}>
                   <span className={styles.promptReadOnlyLabel}>{t('voxcpm.promptText')}</span>

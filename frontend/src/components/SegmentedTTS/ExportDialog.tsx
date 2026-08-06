@@ -195,7 +195,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
         )}
         {error && <div className={styles.error}>{error}</div>}
         <div className={styles.buttons}>
-          <button className={styles.cancelBtn} onClick={onClose}>{t('segment.exportDialog.cancel')}</button>
+          <button className={styles.cancelBtn} onClick={onClose}>{t('common.cancel')}</button>
           <button className={styles.exportBtn} onClick={doExport} disabled={exporting}>
             {exporting ? t('export.exporting') : t('export.startExport')}
           </button>

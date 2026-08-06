@@ -43,7 +43,7 @@ describe('NarrationGitSetting', () => {
     await waitFor(() => expect(getGitRemote).toHaveBeenCalled());
 
     fireEvent.change(screen.getByLabelText('settings.narrationGit.label'), { target: { value: 'git@host:r.git' } });
-    fireEvent.click(screen.getByText('settings.narrationGit.save'));
+    fireEvent.click(screen.getByText('common.save'));
 
     await waitFor(() => expect(setGitRemote).toHaveBeenCalledWith('git@host:r.git'));
     await waitFor(() => expect(screen.getByText('settings.narrationGit.saveSuccess')).toBeInTheDocument());
