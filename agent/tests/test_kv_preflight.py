@@ -3,7 +3,6 @@ import pytest
 
 from app.nodes.knowledge_video.preflight import preflight_check_node
 from app.schemas import ProjectResponse
-from app.schemas import ProjectResponse
 
 
 class _FakeBackend:
