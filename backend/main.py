@@ -163,6 +163,16 @@ async def structured_validation_exception(request: Request, exc: RequestValidati
     preserves the full list in `errors` for debugging.
     """
     errors = exc.errors()
+    # Make errors JSON-serializable (ctx may contain raw exception objects)
+    def _clean(obj):
+        if isinstance(obj, dict):
+            return {k: _clean(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_clean(x) for x in obj]
+        if isinstance(obj, BaseException):
+            return str(obj)
+        return obj
+    errors = _clean(errors)
     first = errors[0] if errors else {}
     loc = ".".join(str(l) for l in first.get("loc", []))
     msg = first.get("msg", "validation error")

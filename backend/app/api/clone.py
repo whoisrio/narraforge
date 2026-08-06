@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import copy
 import uuid
 import aiofiles
@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 
 from app.api._voice_helpers import voice_to_dict
-from app.schemas.common import ItemsOut
+from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.voice_profile import VoiceProfileOut
 import logging
 
@@ -120,6 +120,7 @@ class UpdateDescriptionRequest(BaseModel):
 
 
 class DesignVoiceRequest(BaseModel):
+    _validate = field_validator("audio_base64", mode="before")(validate_base64_field)
     """从音色设计的预览音频创建 VoiceProfile"""
     audio_base64: str
     engine: str  # 'mimo' | 'voxcpm' | 'preset'
@@ -554,6 +555,7 @@ async def create_voice_from_design(request: DesignVoiceRequest, db: Session = De
 
 
 class PreviewAudioRequest(BaseModel):
+    _validate = field_validator("audio_base64", mode="before")(validate_base64_field)
     audio_base64: str
     audio_format: str = "wav"
 
