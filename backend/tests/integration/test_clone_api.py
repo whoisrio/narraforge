@@ -448,7 +448,7 @@ class TestCloneAPI:
             os.unlink(updated.preview["preview_audio_path"])
 
     def test_save_preview_audio_invalid_base64(self, client: TestClient, db_session):
-        """无效 base64 数据应返回 400"""
+        """无效 base64 数据应返回 422"""
         from app.models.voice_profile import VoiceProfile
         import uuid
 
@@ -461,7 +461,7 @@ class TestCloneAPI:
             f"/api/clone/{voice_id}/preview-audio",
             json={"audio_base64": "not-valid-base64!!!", "audio_format": "wav"},
         )
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_save_preview_audio_nonexistent_voice(self, client: TestClient):
         """不存在的声音 ID 应返回 404"""

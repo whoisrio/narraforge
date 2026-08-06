@@ -9,7 +9,7 @@ MiMo-V2.5-TTS API 路由
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 import uuid
 import os
@@ -20,6 +20,7 @@ from pathlib import Path
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
 from app.models.tts_result import TTSResultRecord
@@ -68,9 +69,10 @@ class MiMoVoiceCloneRequest(BaseModel):
     context: list[dict] | None = None  # [{role: "user", content: "..."}] 上下文对话
 
 class MiMoVoiceCloneDirectRequest(BaseModel):
+    _validate = field_validator("audio_base64", mode="before")(validate_base64_field)
     """音频克隆合成请求 - 直接上传 Base64 编码音频"""
     text: str = Field(..., min_length=1, description="待合成的文本")
-    audio_base64: str = Field(..., description="音频文件的 Base64 编码（不含前缀）")
+    audio_base64: str = Field(..., description="音频文件的 Base64 编码（不含前缀），最大 1MB")
     mime_type: str = Field(default="audio/mpeg", description="音频 MIME 类型: audio/mpeg 或 audio/wav")
     instruction: str = Field(default="", description="风格指令")
     format: str = Field(default="wav", description="输出格式: wav / mp3")

@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.common import ItemsOut, validate_base64_field
+
 
 class SegmentIn(BaseModel):
     id: str
@@ -116,6 +118,7 @@ class SplitResponse(BaseModel):
 
 
 class MigrateAudioItem(BaseModel):
+    _validate = field_validator("data_base64", mode="before")(validate_base64_field)
     project_id: str
     chapter_id: str
     segment_id: str
