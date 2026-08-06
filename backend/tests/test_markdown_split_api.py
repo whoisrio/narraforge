@@ -180,14 +180,48 @@ def test_markdown_split_custom_levels(client):
 
 
 def test_markdown_split_only_h3(client):
-    """levels=[3]: 只用 H3 当章节边界, H2 不切."""
+    """levels=[3]: 层级包含语义 — 比 H3 浅的 H2 也自动当章节边界."""
     r = client.post(
         "/api/text-split/markdown-split",
-        json={"text": SAMPLE_MD, "levels": [3]},
+        json={"text": SAMPLE_MD, "levels": [3], "min_chars": 0},
     )
     data = r.json()
-    # 整篇当 1 章 (只有一个 H3)
-    assert len(data["chapters"]) == 1
+    # H2 (4 个) + H3 (1 个) 全部成章节, 按文档顺序拍平
+    assert [(ch["level"], ch["title"]) for ch in data["chapters"]] == [
+        (2, "第 1 章 · 战略起源 (含引言)"),
+        (3, "MLA 多头潜在注意力"),
+        (2, "第 2 章 · 技术路线"),
+        (2, "短章"),
+        (2, "第 3 章 · 产业映射"),
+    ]
+
+
+def test_markdown_split_multi_levels(client):
+    """levels=[2, 3]: H2 和 H3 都当章节边界, 切片连续覆盖全文."""
+    r = client.post(
+        "/api/text-split/markdown-split",
+        json={"text": SAMPLE_MD, "levels": [2, 3], "min_chars": 0},
+    )
+    data = r.json()
+    chapters = data["chapters"]
+    assert [ch["level"] for ch in chapters] == [2, 3, 2, 2, 2]
+    # 切片首尾相接, 拼接后覆盖从第 1 章到文末的全部内容
+    for prev, nxt in zip(chapters, chapters[1:]):
+        assert prev["end_char"] == nxt["start_char"]
+    h3 = chapters[1]
+    assert SAMPLE_MD[h3["start_char"]:h3["end_char"]].startswith("### MLA")
+
+
+def test_markdown_split_shallower_level_unaffected(client):
+    """levels=[2]: 只切 H2, 更深的 H3 并入所属 H2 章节."""
+    r = client.post(
+        "/api/text-split/markdown-split",
+        json={"text": SAMPLE_MD, "levels": [2], "min_chars": 0},
+    )
+    data = r.json()
+    assert [ch["level"] for ch in data["chapters"]] == [2, 2, 2, 2]
+    ch1 = data["chapters"][0]
+    assert "MLA 多头潜在注意力" in SAMPLE_MD[ch1["start_char"]:ch1["end_char"]]
 
 
 def test_markdown_split_invalid_levels(client):

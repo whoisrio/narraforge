@@ -129,19 +129,23 @@ def _build_chapters(
     candidates: list[dict],
     min_chars: int,
     front_matter_mode: str,
-    default_level: int,
+    default_level: int | None,
 ) -> list[dict]:
     """从候选构建 flat 章节列表.
 
     规则:
-    1. 选 level=default_level 的候选作为边界
+    1. ``default_level`` 为 None 时, 所有候选都当边界 (多层级拍平, 候选本身按文档序);
+       否则只选 level=default_level 的候选作为边界
     2. 短于 min_chars 的章节合并到下一章
     3. front matter (首个标题前的内容) 按 mode 处理
     """
-    boundaries = [c for c in candidates if c["level"] == default_level]
-    if not boundaries:
-        # fallback: 用所有候选
-        boundaries = candidates
+    if default_level is None:
+        boundaries = list(candidates)
+    else:
+        boundaries = [c for c in candidates if c["level"] == default_level]
+        if not boundaries:
+            # fallback: 用所有候选
+            boundaries = candidates
     if not boundaries:
         # 无任何标题: 整篇当 1 章
         return [{
@@ -214,33 +218,28 @@ def markdown_split(
     min_chars: int = 80,
     front_matter_mode: str = "prepend_to_first",
 ) -> list[dict]:
-    """按用户指定的 levels 列表切分 (不只默认 H2).
+    """按用户指定的 levels 切分, 层级包含语义.
 
-    levels: 例如 [1, 2] 表示 H1 和 H2 都当章节边界. H1 仍作 doc_title (不当章节).
+    勾选最深层级 L 时, 所有 level <= L 的标题都当章节边界 (按文档顺序拍平) —
+    即「按下一级拆, 上一级自然也是章节」。H1 仍只作 doc_title, 不参与切分。
     """
     full = markdown_detect(text, min_chars=min_chars, front_matter_mode=front_matter_mode)
     if not full["candidates"]:
         return full["chapters"]
 
-    # H1 不参与切分 (只作 doc_title). markdown_detect 已过滤掉 H1.
-    # 但用户传 [1, 2] 时, 我们要保留 H2+ 当切分.
-    filtered: list[dict] = []
-    for c in full["candidates"]:
-        if c["level"] in levels and c["level"] != 1:  # H1 排除
-            filtered.append(c)
+    # H1 已在 markdown_detect 里被过滤 (只作 doc_title).
+    max_level = max(levels)
+    filtered = [c for c in full["candidates"] if c["level"] <= max_level]
 
     if not filtered:
-        # 所有候选都被排除 (例如只有 H1), 整篇当 1 章
+        # 所有候选都比所选层级深 (罕见), 整篇当 1 章
         return full["chapters"]
-
-    # 选最低 level 作主分割 (构建章节用)
-    primary_level = min(c["level"] for c in filtered)
 
     return _build_chapters(
         text, filtered,
         min_chars=min_chars,
         front_matter_mode=front_matter_mode,
-        default_level=primary_level,
+        default_level=None,  # 多层级拍平: 所有候选都是边界
     )
 
 

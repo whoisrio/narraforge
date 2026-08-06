@@ -208,7 +208,8 @@ def detect_markdown(req: MarkdownDetectRequest):
 def split_markdown(req: MarkdownSplitRequest):
     """按用户指定的 levels 切分. 返回 flat 章节列表 (不嵌套).
 
-    levels: 例如 [2] 只用 H2 切; [1, 2] H1+H2 都切 (H1 仍作 doc_title, 不作章节).
+    层级包含语义: 勾选最深层级 L 时, 所有 level <= L 的标题都当章节边界.
+    H1 仍只作 doc_title, 不作章节.
     """
     if not req.levels or any(l < 1 or l > 6 for l in req.levels):
         raise HTTPException(status_code=400, detail="levels 必须在 1-6 之间")

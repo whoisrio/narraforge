@@ -148,6 +148,7 @@ export const enUS: Messages = {
     title: 'Split chapters by heading',
     detecting: 'Detecting heading levels…',
     levels: 'Split at heading levels',
+    levelsHint: 'Selecting a deeper level also splits all shallower levels',
     preview: 'Preview split',
     previewMeta: '{count} chapters · {chars} chars',
     chars: 'chars',

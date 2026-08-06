@@ -146,6 +146,7 @@ export const zhCN = {
     title: '按标题拆分章节',
     detecting: '正在检测标题层级…',
     levels: '按哪些标题层级拆分',
+    levelsHint: '勾选较深层级时，较浅的层级会自动一起拆分',
     preview: '预览拆分',
     previewMeta: '共 {count} 章 · {chars} 字符',
     chars: '字',
