@@ -635,7 +635,10 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 ### POST `/api/text-split/markdown-split`
 
-按用户指定的 `levels` 切分（如 `[2]` 只按 H2，`[1, 2]` 按 H1+H2），短于 `min_chars` 的相邻章节自动合并。返回 flat 章节列表（`index/title/level/start_char/end_char/char_count/preview`）。前端按 `start_char/end_char` 从原文切片后调 `chapters:batch` 应用。
+按用户指定的 `levels` 切分，层级包含语义：勾选的最深层级为 L 时，所有 level ≤ L 的标题都作为章节边界（按文档顺序拍平，如勾 `[3]` 则 H2、H3 都成章节；H1 始终只作 `doc_title`）。
+短于 `min_chars` 的相邻章节自动合并。
+返回 flat 章节列表（`index/title/level/start_char/end_char/char_count/preview`）。
+前端按 `start_char/end_char` 从原文切片后调 `chapters:batch` 应用。
 
 **Request Body:**
 ```json

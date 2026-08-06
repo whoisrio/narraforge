@@ -146,6 +146,7 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
                     H{level} ({count})
                   </label>
                 ))}
+                <p className={styles.levelsHint}>{t('chapterSplit.levelsHint')}</p>
               </fieldset>
               <button
                 type="button"

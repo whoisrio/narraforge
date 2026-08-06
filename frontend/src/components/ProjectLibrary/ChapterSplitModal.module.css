@@ -73,6 +73,13 @@
   cursor: pointer;
 }
 
+.levelsHint {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+}
+
 .secondaryBtn,
 .primaryBtn,
 .ghostBtn {
