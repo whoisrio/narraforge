@@ -6,6 +6,7 @@ from app.nodes.select_tts_engine import (
     DEFAULT_ENGINE,
     make_select_tts_engine_node,
 )
+from app.schemas import ProjectResponse
 
 
 class _FakeRuntime:
@@ -19,6 +20,8 @@ class _FakeBackend:
         self._project = project
 
     async def get_project(self, pid):
+        if isinstance(self._project, dict):
+            return ProjectResponse.model_validate(self._project)
         return self._project
 
 

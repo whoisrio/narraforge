@@ -56,8 +56,8 @@ async def scaffold_remotion_node(state, runtime) -> dict:
         await emit({"type": "error", "stage": "scaffold_remotion", "message": msg})
         return {"error": msg, "current_stage": "scaffold_remotion"}
 
-    project_dir = result.get("project_dir", target_dir)
-    created = result.get("created", False)
+    project_dir = result.project_dir or target_dir
+    created = result.created
     await emit(
         {
             "type": "stage_complete",
