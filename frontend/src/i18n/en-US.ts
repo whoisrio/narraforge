@@ -91,6 +91,8 @@ export const enUS: Messages = {
     listView: 'List View',
     dialogueView: 'Dialogue View',
     batchSynthesize: 'Batch Synthesize',
+    ssmlToggle: 'SSML',
+    markdownFilter: 'MD Filter',
     batchSynthesizeUnsynthesized: 'Synthesize Unsynthesized',
     batchSynthesizeRegenerateAll: 'Regenerate All',
     selectMode: 'Select',

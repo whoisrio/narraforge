@@ -89,6 +89,8 @@ export const zhCN = {
     listView: '列表视图',
     dialogueView: '对话视图',
     batchSynthesize: '批量合成',
+    ssmlToggle: 'SSML',
+    markdownFilter: 'MD过滤',
     batchSynthesizeUnsynthesized: '仅合成未合成',
     batchSynthesizeRegenerateAll: '重新合成全部',
     selectMode: '选择',
