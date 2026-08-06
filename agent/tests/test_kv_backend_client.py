@@ -56,7 +56,7 @@ async def test_scaffold_remotion_posts_body():
     result = await client.scaffold_remotion("p1", target_dir="/tmp/x")
     assert seen["url"] == "/api/segmented-projects/p1/scaffold-remotion"
     assert seen["json"] == {"target_dir": "/tmp/x"}
-    assert result["created"] is True
+    assert result.created is True
 
 
 @pytest.mark.asyncio

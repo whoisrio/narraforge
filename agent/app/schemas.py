@@ -109,3 +109,30 @@ class SourceElement(BaseModel):
     ref: str
     chapter_index: int
     excerpt: str
+
+
+# ---------------------------------------------------------------------------
+# Backend response models (A12)
+# ---------------------------------------------------------------------------
+
+
+class ProjectResponse(BaseModel):
+    """Subset of backend's ProjectDetail that the agent actually uses."""
+
+    model_config = {"extra": "allow"}
+
+    id: str = ""
+    name: str = ""
+    source_document: str | None = None
+    narration_script: str | None = None
+    chapters: list[dict] = []
+    active_chapter_id: str | None = None
+
+
+class ScaffoldRemotionResponse(BaseModel):
+    """Response from POST .../scaffold-remotion."""
+
+    model_config = {"extra": "allow"}
+
+    project_dir: str | None = None
+    created: bool = False

@@ -12,7 +12,7 @@ async def test_get_project_calls_correct_url(httpx_mock):
     )
     c = BackendClient("http://test:8002")
     proj = await c.get_project("p1")
-    assert proj["id"] == "p1"
+    assert proj.id == "p1"
     await c.close()
 
 

@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from app.nodes.knowledge_video.scaffold_remotion import scaffold_remotion_node
+from app.schemas import ScaffoldRemotionResponse
 
 
 class _FakeBackend:
@@ -24,6 +25,8 @@ class _FakeBackend:
         )
         if self._exc:
             raise self._exc
+        if isinstance(self._result, dict):
+            return ScaffoldRemotionResponse.model_validate(self._result)
         return self._result
 
 
