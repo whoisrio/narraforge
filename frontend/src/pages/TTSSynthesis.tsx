@@ -1634,7 +1634,7 @@ export function TTSSynthesis({
           remotionPath={project.remotion_project_path}
           onExport={() => setExportOpen(true)}
           onExportAll={storageMode === 'backend' && !isScratchpadProject ? () => { void handleExportAll(); } : undefined}
-          onAdjustAudio={() => setAdjustOpen(true)}
+          onAdjustAudio={storageMode === 'backend' && !isScratchpadProject ? () => setAdjustOpen(true) : undefined}
           onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
           onSidebarCollapseChange={setRightPanelCollapsed}
           sidebarContent={

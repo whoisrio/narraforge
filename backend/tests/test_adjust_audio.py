@@ -11,7 +11,7 @@ import pytest
 
 from app.core import config
 from app.core.audio_encoder import (
-    is_ffmpeg_available, probe_audio_duration, transcode_to_mp3,
+    AudioEncoderError, is_ffmpeg_available, probe_audio_duration, transcode_to_mp3,
 )
 from app.core import segmented_assets as assets
 from app.models.segmented_project import SegmentedProjectChapter, SegmentedProjectSegment
@@ -215,8 +215,8 @@ def test_synthesize_applies_chapter_adjust(db_session, tmp_path, monkeypatch):
     assert cur_d is not None
     assert cur_d < prev["duration_sec"] * 0.6
     assert abs((cur.get("duration_sec") or 0) - cur_d) < 0.01
-    # 顶层 duration_sec 由前端 enrichSegment 从 current 同步，后端合成后此处不置位，
-    # 故不在此断言（bulk adjust_chapter_audio 才会显式写顶层）
+    # 顶层 duration_sec 由 update_segment_after_synth 与 current 同步维护（D7）
+    assert abs((audio.get("duration_sec") or 0) - cur_d) < 0.01
     # chapter record untouched (its existence is the signal)
     db_session.expire_all()
     ch = db_session.query(SegmentedProjectChapter).filter_by(id="c1").one()
@@ -277,3 +277,168 @@ def test_resynth_then_bulk_readjust_renders_from_original(db_session, tmp_path, 
     # (≈0.25s) at 1.5x it would be ≈0.17s. 0.33 >> 0.25 proves no cascade.
     assert new_cur_d > 0.28
     assert new_cur_d > after_synth_cur_d
+
+
+# ----- recorded-segment exemption (D1/D2) -----
+
+
+def test_adjust_skips_recorded_segments(client, db_session, tmp_path, monkeypatch):
+    """D1/D2: segments whose current audio is a user recording (origin=recorded)
+    are exempt from chapter audio adjust — never re-rendered, never overwritten,
+    and skipped on identity revert too."""
+    _seed_with_audio(db_session, tmp_path, monkeypatch)
+
+    # First adjust: both TTS segments rendered at 2x, record written.
+    r1 = client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 2.0})
+    assert r1.status_code == 200
+
+    # User records s1: recording becomes current, adjusted TTS demoted to previous.
+    svc.save_recorded_segment_audio(
+        db_session, "p1", "c1", "s1",
+        audio_bytes=_sine_wav_bytes(600), filename="take.wav",
+    )
+    db_session.expire_all()
+    seg1 = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    assert seg1.audio["current"]["origin"] == "recorded"
+    rec_path = seg1.audio["current"]["path"]
+    rec_bytes = (config.settings.segmented_dir / rec_path).read_bytes()
+    rec_duration = seg1.audio["current"]["duration_sec"]
+
+    # Second adjust must skip the recorded segment entirely.
+    r2 = client.post("/api/segmented-projects/p1/chapters/c1/adjust-audio", json={"tempo": 1.5})
+    assert r2.status_code == 200, r2.text
+    body = r2.json()
+    assert body["adjusted"] == 1
+    assert body["skipped_recorded"] == 1
+
+    db_session.expire_all()
+    seg1 = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    assert seg1.audio["current"]["path"] == rec_path
+    assert (config.settings.segmented_dir / rec_path).read_bytes() == rec_bytes
+    assert seg1.audio["current"]["duration_sec"] == rec_duration
+
+    # Identity revert also skips the recorded segment (recording survives).
+    r3 = client.post(
+        "/api/segmented-projects/p1/chapters/c1/adjust-audio",
+        json={"tempo": 1.0, "volume_db": 0},
+    )
+    assert r3.status_code == 200, r3.text
+    assert r3.json()["skipped_recorded"] == 1
+    db_session.expire_all()
+    seg1 = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    assert seg1.audio["current"]["path"] == rec_path
+    assert (config.settings.segmented_dir / rec_path).read_bytes() == rec_bytes
+    assert seg1.audio["current"]["duration_sec"] == rec_duration
+    # s2 was reverted and the chapter record cleared.
+    proj = client.get("/api/segmented-projects/p1").json()
+    assert proj["chapters"][0]["audio_adjust"] is None
+
+
+# ----- synthesis-path hard failures (D3) -----
+
+
+def test_synthesize_fails_when_chapter_adjust_fails(db_session, tmp_path, monkeypatch):
+    """D3: when applying chapter audio_adjust during synthesis fails, the whole
+    synthesis must fail loudly instead of silently keeping 1.0x audio."""
+    _seed_project_for_synth(db_session, tmp_path, monkeypatch)
+    _set_chapter_adjust(db_session, tempo=2.0)
+
+    fake_audio = _sine_wav_bytes(500)
+    with patch("app.services.segmented_project_service.synthesize_with_engine",
+               return_value=(fake_audio, "wav")), \
+         patch("app.services.segmented_project_service.adjust_audio_speed_volume",
+               side_effect=AudioEncoderError("ffmpeg adjust failed (code 1): boom")), \
+         pytest.raises(AudioEncoderError, match="adjust"):
+        svc.synthesize_segment(
+            db_session, "p1", "c1", "s1",
+            request_params={"engine": "edge_tts", "voice_id": "v1"},
+        )
+
+    # No half-completed state: segment keeps no audio, stash file cleaned up.
+    db_session.expire_all()
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    assert not (seg.audio or {}).get("current")
+    assert not list(tmp_path.rglob("*.prev.mp3"))
+
+
+# ----- probe failure handling (D5) -----
+
+
+def test_adjust_probe_failure_aborts_without_clobbering_duration(db_session, tmp_path, monkeypatch):
+    """D5 (adjust path): probe returning None must abort the adjust with an
+    error; durations must not be overwritten with None."""
+    _seed_with_audio(db_session, tmp_path, monkeypatch)
+
+    with patch("app.services.segmented_project_service.probe_audio_duration",
+               return_value=None), \
+         pytest.raises(AudioEncoderError, match="probe"):
+        svc.adjust_chapter_audio(db_session, "p1", "c1", tempo=2.0)
+
+    db_session.expire_all()
+    for sid in ("s1", "s2"):
+        seg = db_session.query(SegmentedProjectSegment).filter_by(id=sid).one()
+        assert abs(seg.audio["current"]["duration_sec"] - 0.4) < 0.01
+        assert not seg.audio.get("previous"), "first-adjust stash must not persist"
+    ch = db_session.query(SegmentedProjectChapter).filter_by(id="c1").one()
+    assert ch.audio_adjust is None
+
+
+def test_synthesize_probe_failure_after_adjust_falls_back_to_estimate(db_session, tmp_path, monkeypatch):
+    """D5 (synthesize path): when the post-adjust probe fails, duration falls
+    back to pre_adjust_duration / tempo instead of None."""
+    _seed_project_for_synth(db_session, tmp_path, monkeypatch)
+    _set_chapter_adjust(db_session, tempo=2.0)
+
+    real_probe = probe_audio_duration
+    calls = {"n": 0}
+
+    def flaky_probe(path):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return real_probe(path)  # pre-adjust probe succeeds
+        return None                  # post-adjust probe fails
+
+    fake_audio = _sine_wav_bytes(500)
+    with patch("app.services.segmented_project_service.synthesize_with_engine",
+               return_value=(fake_audio, "wav")), \
+         patch("app.services.segmented_project_service.probe_audio_duration",
+               side_effect=flaky_probe):
+        seg = svc.synthesize_segment(
+            db_session, "p1", "c1", "s1",
+            request_params={"engine": "edge_tts", "voice_id": "v1"},
+        )
+
+    audio = seg.audio
+    pre_d = audio["previous"]["duration_sec"]
+    assert pre_d is not None and pre_d > 0.3
+    assert audio["current"]["duration_sec"] is not None
+    assert abs(audio["current"]["duration_sec"] - pre_d / 2.0) < 1e-6
+
+
+# ----- save_project must not accept payload audio_adjust (D6) -----
+
+
+def test_save_project_ignores_payload_audio_adjust(db_session, tmp_path, monkeypatch):
+    """D6: audio_adjust is managed exclusively by the adjust-audio endpoint;
+    save_project ignores the payload value (which bypasses range validation)."""
+    _seed_project_for_synth(db_session, tmp_path, monkeypatch)
+    ch = db_session.query(SegmentedProjectChapter).filter_by(id="c1").one()
+    ch.audio_adjust = {"tempo": 2.0, "volume_db": 0.0, "applied_at": "2026-01-01T00:00:00", "segments": 1}
+    db_session.commit()
+
+    svc.save_project(db_session, ProjectIn(
+        id="p1", name="T", schema_version=2, layout="vertical",
+        chapters=[{
+            "id": "c1", "position": 0, "name": "第一章",
+            "voice": {"engine": "edge_tts", "voice_id": "v1"},
+            "split_config": {"delimiters": ["。"], "mode": "rule"},
+            "audio_adjust": {"tempo": 99.0, "volume_db": 99.0},
+            "segments": [
+                {"id": "s1", "position": 0, "text": "第一段。", "voice": {"source": "chapter"}},
+            ],
+        }],
+    ))
+
+    db_session.expire_all()
+    ch = db_session.query(SegmentedProjectChapter).filter_by(id="c1").one()
+    assert ch.audio_adjust["tempo"] == 2.0

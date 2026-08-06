@@ -20,6 +20,30 @@ export function buildSRTContent(segments: SrtSegment[]): string {
   }).join('\n');
 }
 
+/**
+ * 构建导出时间轴：只取 ready 段（与音频导出同一筛选条件），时间轴连续累计。
+ * 未 ready 段没有真实音频，若计入会产生零时长 cue，并使其后所有 cue 与音频错位。
+ */
+export function buildExportTimeline<T extends {
+  status: string;
+  audio: { current?: { id?: string; path?: string }; duration_sec?: number };
+}>(
+  segments: T[],
+  storageMode: 'frontend' | 'backend',
+  startOffsetSec = 0,
+): (T & { _startMs: number; _endMs: number })[] {
+  const ready = segments.filter(s => (
+    s.status === 'ready' && (storageMode === 'backend' ? s.audio.current?.path : s.audio.current?.id)
+  ));
+  let accumulated = startOffsetSec * 1000;
+  return ready.map(s => {
+    const start = accumulated;
+    const end = start + (s.audio.duration_sec ?? 0) * 1000;
+    accumulated = end;
+    return { ...s, _startMs: start, _endMs: end };
+  });
+}
+
 /** WAV 文件头写法和 PCM 16-bit 编码 */
 export function encodeWAV(samples: Float32Array, sampleRate: number): Blob {
   const buffer = new ArrayBuffer(44 + samples.length * 2);

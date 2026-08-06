@@ -626,6 +626,8 @@ def update_segment_after_synth(
     }
     if duration_sec is not None:
         audio_data["current"]["duration_sec"] = duration_sec
+        # 顶层 duration_sec 是时间轴/SRT 的读取源，与 current 保持一致（D7）
+        audio_data["duration_sec"] = duration_sec
     if previous_audio_path:
         prev_entry: dict[str, Any] = {"path": previous_audio_path}
         if previous_duration_sec is not None:

@@ -500,6 +500,7 @@ export function segmentedReducer(state: State, action: Action): State {
             seg.audio.current = {
               id: action.audio_id,
               ...(action.origin ? { origin: action.origin } : {}),
+              ...(action.duration_sec != null ? { duration_sec: action.duration_sec } : {}),
             };
           }
           // Backend mode: audio stored on filesystem via audio_path
@@ -557,6 +558,9 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.audio.current = seg.audio.previous;
           seg.audio.previous = tmp;
         }
+        // Keep top-level duration in sync with the restored current entry
+        // (enrichSegment treats audio.current.duration_sec as authoritative).
+        seg.audio.duration_sec = seg.audio.current?.duration_sec;
         seg.updated_at = new Date().toISOString();
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};

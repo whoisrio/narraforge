@@ -5,7 +5,7 @@ import { useConfirm } from '../ui/useConfirm';
 import { useStorageMode } from '../../hooks/useStorageMode';
 import { segParams } from '../../services/segmentShims';
 import { segmentedProjectApi, subtitleLlmApi } from '../../services/api';
-import { buildSRTContent, concatAudioBuffers, encodeWAV } from '../../services/audioConcat';
+import { buildSRTContent, buildExportTimeline, concatAudioBuffers, encodeWAV } from '../../services/audioConcat';
 import { stripStyleTags } from '../../services/styleTags';
 import { getTTSAudioBlob } from '../../services/indexedDB';
 import styles from './ExportDialog.module.css';
@@ -64,23 +64,17 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
         downloadBlob(new Blob([content], { type: mimeType }), filename);
       };
       const startOffset = srtUseGlobalTime ? globalStartOffset : 0;
-      let accumulated_ms = startOffset * 1000;
-      const segsWithTs = segments.map((s) => {
-        const start = accumulated_ms;
-        const end = start + (s.audio.duration_sec ?? 0) * 1000;
-        accumulated_ms = end;
-        return { ...s, _startMs: start, _endMs: end };
-      });
+      // 时间轴只取 ready 段，与音频导出对齐 —— 未 ready 段没有真实音频，
+      // 计入会产生零时长 cue 并使其后所有 cue 与音频错位
+      const segsWithTs = buildExportTimeline(segments, storageMode, startOffset);
 
       // Audio: backend storage exports MP3 from server; frontend storage keeps WAV concat.
       if (options.includes('audio')) {
-        const ready = segsWithTs.filter(s => (
-          s.status === 'ready' && (storageMode === 'backend' ? s.audio.current?.path : s.audio.current?.id)
-        ));
-        if (ready.length < segsWithTs.length) {
-          const confirmMsg = t('segment.exportDialog.confirmSkip', { 
-            failed: String(segsWithTs.length - ready.length), 
-            total: String(segsWithTs.length) 
+        const ready = segsWithTs;
+        if (ready.length < segments.length) {
+          const confirmMsg = t('segment.exportDialog.confirmSkip', {
+            failed: String(segments.length - ready.length),
+            total: String(segments.length)
           });
           if (!(await confirm({ title: t('segment.exportDialog.title'), message: confirmMsg, variant: 'warning' }))) {
             setExporting(false); return;
