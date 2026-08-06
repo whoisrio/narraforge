@@ -432,6 +432,8 @@ def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioReq
     """Post-synthesis audio adjustment (atempo / volume) for a chapter's ready segments.
 
     Previous audio is preserved as audio.previous; duration is re-probed.
+    Segments with user-recorded current audio (origin=recorded) are exempt —
+    never re-rendered or overwritten; the response reports `skipped_recorded`.
     """
     try:
         return svc.adjust_chapter_audio(
