@@ -106,7 +106,7 @@ export const enUS: Messages = {
     dialogue: 'Dialogue',
     narrationVoice: 'Narration Voice',
     applyVoice: 'Apply',
-    applyVoiceHelp: 'Apply current narration voice to all unlocked narration segments',
+    applyVoiceHelp: 'Apply current narration voice as the global setting for all chapters (affects new synthesis only)',
     voiceApplied: 'Narration voice applied',
     chapterTime: 'Chapter Time',
     globalTime: 'Global Time',

@@ -106,17 +106,15 @@ vi.mock('../../components/TTSSynthesis/VoxCPMPanel', () => ({
 }));
 
 vi.mock('../../components/VoiceStudio/VoiceStudioLayout', () => ({
-  VoiceStudioLayout: ({ children, sidebarContent, onExport, onPlayAll }: {
+  VoiceStudioLayout: ({ children, sidebarContent, onExport }: {
     children: React.ReactNode;
     sidebarContent?: React.ReactNode;
     onExport: () => void;
-    onPlayAll: () => void;
   }) => (
     <section data-testid="voice-studio-layout">
       <h2>Voice Studio</h2>
       <aside data-testid="voice-studio-sidebar">{sidebarContent}</aside>
       {children}
-      <button type="button" onClick={onPlayAll}>播放</button>
       <button type="button" onClick={onExport}>导出</button>
     </section>
   ),

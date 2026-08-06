@@ -50,9 +50,9 @@ test.describe('合成后音频调整', () => {
     const beforeDuration = beforeSeg.audio?.current?.duration_sec as number;
     expect(beforeDuration).toBeGreaterThan(0);
 
-    // ── 2. 工作室 → 展开播放栏 → 调整音频 → 提速 2x → 应用 ──
+    // ── 2. 工作室 → 展开工具栏 → 调整音频 → 提速 2x → 应用 ──
     await goToStudio(page);
-    await page.getByRole('button', { name: '展开播放栏' }).click();
+    await page.getByRole('button', { name: '展开工具栏' }).click();
     await page.getByRole('button', { name: '调整音频' }).click();
     const dialog = page.getByRole('dialog', { name: /调整音频/ });
     await expect(dialog).toBeVisible();
@@ -127,7 +127,7 @@ test.describe('合成后音频调整', () => {
     await page.getByRole('button', { name: /选择章节 第2章/ }).click();
     await expect(page.getByText('破庙的门半掩着').first()).toBeVisible({ timeout: 10_000 });
 
-    await page.getByRole('button', { name: '展开播放栏' }).click();
+    await page.getByRole('button', { name: '展开工具栏' }).click();
     await page.getByRole('button', { name: '调整音频' }).click();
     const dialog = page.getByRole('dialog', { name: /调整音频/ });
     await expect(dialog).toBeVisible();
@@ -323,7 +323,7 @@ test.describe('合成后音频调整', () => {
 
     // ── 3. UI 导出 SRT：4 个 cue 按 position 顺序连续累加，时长与各段一致 ──
     await goToStudio(page);
-    await page.getByRole('button', { name: '展开播放栏' }).click();
+    await page.getByRole('button', { name: '展开工具栏' }).click();
     await page.getByRole('button', { name: '导出', exact: true }).click();
     await expect(page.getByText('导出选项')).toBeVisible({ timeout: 5_000 });
     // 只留 SRT，避免触发音频导出的跳过确认

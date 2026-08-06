@@ -355,6 +355,19 @@ describe('segmentedReducer', () => {
     expect(next.project.chapters[1].split_config).toEqual(p.chapters[0].split_config);
   });
 
+  it('SET_ALL_CHAPTERS_PARAMS applies voice params to every chapter, not just the active one', () => {
+    const ch2 = makeChapter({ id: 'ch2', name: '第二章', voice: { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' } });
+    const p = makeProject({ chapters: [makeChapter(), ch2] });
+    const params = { engine: 'mimo_tts', mode: 'preset', voice_id: '冰糖' } as Chapter['voice'];
+    const next = segmentedReducer({ project: p }, { type: 'SET_ALL_CHAPTERS_PARAMS', params });
+    expect(next.project.chapters).toHaveLength(2);
+    for (const ch of next.project.chapters) {
+      expect(ch.voice).toEqual(params);
+    }
+    // active chapter 不变
+    expect(next.project.active_chapter_id).toBe(p.active_chapter_id);
+  });
+
   it('DELETE_CHAPTER removes chapter and switches active', () => {
     const ch1 = makeChapter({ id: 'ch1', name: '第一章' });
     const ch2 = makeChapter({ id: 'ch2', name: '第二章' });

@@ -4,7 +4,6 @@ import { VoiceStudioLayout } from './VoiceStudioLayout';
 
 function renderStudio() {
   const onExport = vi.fn();
-  const onPlayAll = vi.fn();
   const onSidebarCollapseChange = vi.fn();
   render(
     <VoiceStudioLayout
@@ -13,7 +12,6 @@ function renderStudio() {
       durationSec={96}
       remotionPath="/tmp/remotion"
       onExport={onExport}
-      onPlayAll={onPlayAll}
       onSidebarCollapseChange={onSidebarCollapseChange}
       sidebarContent={
         <>
@@ -25,7 +23,7 @@ function renderStudio() {
       <div data-testid="studio-segment-content">Segment content</div>
     </VoiceStudioLayout>,
   );
-  return { onExport, onPlayAll, onSidebarCollapseChange };
+  return { onExport, onSidebarCollapseChange };
 }
 
 describe('VoiceStudioLayout', () => {
@@ -35,22 +33,21 @@ describe('VoiceStudioLayout', () => {
     expect(screen.getByText('语音设置')).toBeInTheDocument();
     expect(screen.getByText('Available Roles')).toBeInTheDocument();
     // Transport bar is collapsed by default — expand it first
-    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
+    fireEvent.click(screen.getByRole('button', { name: '展开工具栏' }));
     expect(screen.getByText('Master Transport')).toBeInTheDocument();
     expect(screen.getByText('/tmp/remotion')).toBeInTheDocument();
     expect(screen.getByTestId('studio-segment-content')).toBeInTheDocument();
   });
 
-  it('wires play all and export actions', () => {
-    const { onExport, onPlayAll } = renderStudio();
+  it('wires export actions and has no playback controls', () => {
+    const { onExport } = renderStudio();
 
     // Transport bar is collapsed by default — expand it first
-    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
+    fireEvent.click(screen.getByRole('button', { name: '展开工具栏' }));
 
-    fireEvent.click(screen.getByRole('button', { name: '播放' }));
+    expect(screen.queryByRole('button', { name: '播放' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '导出' }));
 
-    expect(onPlayAll).toHaveBeenCalled();
     expect(onExport).toHaveBeenCalled();
   });
 
@@ -65,14 +62,13 @@ describe('VoiceStudioLayout', () => {
         remotionPath={null}
         onExport={onExport}
         onExportAll={onExportAll}
-        onPlayAll={vi.fn()}
         onSidebarCollapseChange={vi.fn()}
         sidebarContent={<section>side</section>}
       >
         <div>content</div>
       </VoiceStudioLayout>,
     );
-    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
+    fireEvent.click(screen.getByRole('button', { name: '展开工具栏' }));
 
     fireEvent.click(screen.getByRole('button', { name: '导出全部' }));
     expect(onExportAll).toHaveBeenCalled();
@@ -80,7 +76,7 @@ describe('VoiceStudioLayout', () => {
 
   it('hides 导出全部 when onExportAll is absent', () => {
     renderStudio();
-    fireEvent.click(screen.getByRole('button', { name: '展开播放栏' }));
+    fireEvent.click(screen.getByRole('button', { name: '展开工具栏' }));
     expect(screen.queryByRole('button', { name: '导出全部' })).not.toBeInTheDocument();
   });
 
