@@ -3,15 +3,17 @@
 Each test targets one site from docs/backend-data-audit.md D3:
 1. api/segmented_projects.py audio endpoint 409 branch (missing flag)
 2. services/segmented_project_service.py export_chapter_audio_mp3 (missing flag)
-3. api/tts.py synthesize segmented branch (audio current update on re-synthesis)
-4. api/clone.py sync-from-qwen (voice role update on existing record)
-5. api/clone.py PATCH description (nested prompt_text update)
+3. api/clone.py sync-from-qwen (voice role update on existing record)
+4. api/clone.py PATCH description (nested prompt_text update)
+
+(The former api/tts.py synthesize segmented-branch test was removed together
+with that dead branch — segmented synthesis goes through
+`/segmented-projects/.../synthesize` only.)
 """
 from unittest.mock import AsyncMock
 
 import pytest
 
-from app.core.system_config_service import set_storage_mode
 from app.models.segmented_project import SegmentedProjectSegment
 from app.models.voice_profile import VoiceProfile
 from app.services import segmented_project_service as svc
@@ -50,33 +52,6 @@ def test_export_chapter_audio_marks_missing(db_session, tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="no_ready_audio"):
         svc.export_chapter_audio_mp3(db_session, "p1", "c1")
     assert (_get_seg(db_session).audio or {}).get("missing") is True
-
-
-def test_tts_synthesize_segmented_replaces_stale_audio(client, db_session, tmp_path, monkeypatch):
-    _seed(db_session, tmp_path, monkeypatch)
-    set_storage_mode(db_session, "backend")
-    db_session.commit()
-    # Pre-existing audio with a stale current path: the update must replace it in DB.
-    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
-    seg.audio = {"format": "wav", "current": {"path": "stale/old.wav", "format": "wav"}}
-    db_session.commit()
-
-    class FakeService:
-        async def synthesize_speech(self, **kwargs):
-            p = tmp_path / "qwen_tmp.mp3"
-            p.write_bytes(b"fake-mp3")
-            return str(p)
-
-    monkeypatch.setattr("app.api.tts.get_tts_service", AsyncMock(return_value=FakeService()))
-    resp = client.post("/api/tts/synthesize", json={
-        "text": "hello", "engine": "cosyvoice", "voice_id": "qv1",
-        "segmented_project_id": "p1", "segmented_chapter_id": "c1",
-        "segmented_segment_id": "s1",
-    })
-    assert resp.status_code == 200
-    current = (_get_seg(db_session).audio or {}).get("current", {})
-    assert current.get("path", "").endswith("s1.mp3")
-    assert current.get("path") != "stale/old.wav"
 
 
 def test_sync_from_qwen_updates_role_on_existing_voice(client, db_session, monkeypatch):

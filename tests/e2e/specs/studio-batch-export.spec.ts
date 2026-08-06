@@ -7,6 +7,7 @@
  * @feature docs/feature-spec.md §4.4 Batch Operations (Generate All, Export)
  */
 import { expect, test } from '@playwright/test';
+import * as fs from 'node:fs';
 import {
   collectErrors,
   setLocaleToZhCN,
@@ -17,7 +18,11 @@ import {
   validateSegment,
   seedTestProject,
 } from '../helpers';
+import { E2E_BACKEND_URL } from '../helpers/ports';
+import { parseSrtCues } from '../helpers/srt';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
+
+const BACKEND = E2E_BACKEND_URL;
 
 test.describe('批量合成与导出', () => {
   // Re-seed before each test so batch synthesis always starts from clean data,
@@ -175,6 +180,60 @@ test.describe('批量合成与导出', () => {
     // Close dialog
     await page.getByRole('button', { name: '取消' }).click();
     await expect(page.getByText('导出选项')).not.toBeVisible({ timeout: 5_000 });
+
+    expect(errors).toEqual([]);
+  });
+
+  // @feature §4.4 Export — SRT 时间轴只含 ready 段，未合成段不产生零时长 cue
+  test('导出 SRT 跳过未合成段：cue 数 == ready 段数，时间轴从 0 连续', async ({ page }) => {
+    test.setTimeout(120_000);
+    const errors = collectErrors(page);
+    await setLocaleToZhCN(page);
+
+    // beforeEach 已 re-seed（音频重置为占位）；清掉第二章可能残留的变速记录
+    // （e2e 库跨 run 持久，无记录时该调用 422，忽略）
+    await page.request.post(
+      `${BACKEND}/api/segmented-projects/test-e2e-project/chapters/test-chapter-2/adjust-audio`,
+      { data: { tempo: 1.0, volume_db: 0 } },
+    ).catch(() => {});
+
+    // ── 只合成 seg-2-1，seg-2-2 保持未合成 ──
+    const synthResp = await page.request.post(
+      `${BACKEND}/api/segmented-projects/test-e2e-project/chapters/test-chapter-2/segments/seg-2-1/synthesize`,
+      { data: {} },
+    );
+    expect(synthResp.ok(), `synthesize failed: ${await synthResp.text()}`).toBeTruthy();
+
+    const projResp = await page.request.get(`${BACKEND}/api/segmented-projects/test-e2e-project`);
+    expect(projResp.ok()).toBeTruthy();
+    const ch2 = (await projResp.json()).chapters.find((c: { id: string }) => c.id === 'test-chapter-2')!;
+    const readyDur = ch2.segments.find((s) => s.id === 'seg-2-1')!.audio?.current?.duration_sec as number;
+    expect(readyDur).toBeGreaterThan(0);
+    expect(ch2.segments.find((s) => s.id === 'seg-2-2')!.audio?.current ?? null).toBeNull();
+
+    // ── UI：切到第二章 -> 导出 -> 只勾 SRT -> 开始导出（拿 download） ──
+    await goToStudio(page);
+    await page.getByRole('button', { name: /选择章节 第2章/ }).click();
+    await expect(page.getByText('破庙的门半掩着').first()).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: '展开播放栏' }).click();
+    await page.getByRole('button', { name: '导出', exact: true }).click();
+    await expect(page.getByText('导出选项')).toBeVisible({ timeout: 5_000 });
+    // 只留 SRT：取消默认勾选的 MP3 音频（避免触发"跳过未 ready 段"确认弹窗）
+    await page.getByRole('checkbox', { name: 'MP3 音频', exact: true }).click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: '开始导出' }).click(),
+    ]);
+    const srt = fs.readFileSync(await download.path(), 'utf-8');
+
+    // ── 断言：cue 数 == ready 段数（1），不含未合成段文本，时间轴从 0 连续 ──
+    const cues = parseSrtCues(srt);
+    expect(cues.length).toBe(1);
+    expect(cues[0].text).toContain('破庙的门半掩着');
+    expect(srt).not.toContain('他推开门');
+    expect(cues[0].startMs).toBe(0);
+    // cue 时长与 API 读到的 seg-2-1 current.duration_sec 一致（fmtSrtTime 取整到 ms）
+    expect(Math.abs((cues[0].endMs - cues[0].startMs) / 1000 - readyDur)).toBeLessThan(0.02);
 
     expect(errors).toEqual([]);
   });

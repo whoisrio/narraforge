@@ -126,37 +126,6 @@ def test_mimo_internal_uses_real_service(monkeypatch):
     assert audio_bytes == expected
 
 
-def test_mimo_save_and_respond_persists_segment_audio(db_session, tmp_path, monkeypatch):
-    """D2 regression: segmented _save_and_respond must persist via seg.audio,
-    not the dropped current_audio_path/audio_format columns."""
-    import asyncio
-    from app.core import config
-    from app.core.system_config_service import set_storage_mode
-    from app.api import mimo_tts as mimo_api
-
-    _seed(db_session, tmp_path, monkeypatch)
-    set_storage_mode(db_session, "backend")
-    db_session.commit()
-    monkeypatch.setattr(config.settings, "voices_previews_dir", tmp_path)
-
-    resp = asyncio.run(mimo_api._save_and_respond(
-        audio_bytes=_silent_wav_bytes(), audio_fmt="mp3", text="hello",
-        voice_label="冰糖", instruction="", db=db_session,
-        segmented_project_id="p1", segmented_chapter_id="c1",
-        segmented_segment_id="s1",
-    ))
-
-    db_session.expire_all()
-    seg_row = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
-    audio = seg_row.audio or {}
-    current = audio.get("current", {}) if isinstance(audio, dict) else {}
-    assert current.get("path"), "seg.audio.current.path must be persisted"
-    assert audio.get("format") == "mp3"
-    assert (tmp_path / current["path"]).exists()
-    assert seg_row.generated_params["engine"] == "mimo_tts"
-    assert resp["audio_url"].endswith("/c1/s1")
-
-
 def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkeypatch):
     """Role.voice from DB query is used when segment references a role."""
     from unittest.mock import patch

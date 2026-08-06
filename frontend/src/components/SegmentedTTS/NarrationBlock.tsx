@@ -18,7 +18,7 @@ function emotionClass(emotion?: EmotionType): string {
   return styles[`emo${value.charAt(0).toUpperCase()}${value.slice(1)}`] || styles.emoNeutral;
 }
 
-function renderMarkedText(segment: Segment): ReactNode {
+function renderMarkedText(segment: Segment, t: (key: string) => string): ReactNode {
   // prosody_marks removed in V3 — render plain text
   return segment.text || t('narrationBlock.emptyNarration');
 }
@@ -52,7 +52,7 @@ export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, o
           onTextSelection(segment.id, start, start + selected.length, selected);
         }}
       >
-        {renderMarkedText(segment)}
+        {renderMarkedText(segment, t)}
       </p>
     </article>
   );

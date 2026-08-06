@@ -426,9 +426,8 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         ch.original_text = ch_in.original_text
         setattr(ch, "narration_script", ch_in.narration_script)
         setattr(ch, "design_title", ch_in.design_title)
-        # audio_adjust 由 adjust-audio 端点维护；payload 未携带时保留原值
-        if ch_in.audio_adjust is not None:
-            setattr(ch, "audio_adjust", ch_in.audio_adjust)
+        # audio_adjust 只能由 adjust-audio 端点管理；payload 中的值一律忽略，
+        # 保留 DB 现值（payload 直写会绕过 tempo/volume_db 范围校验）
         if ch_in.created_at:
             ch.created_at = _parse_iso(ch_in.created_at)
         ch.updated_at = utcnow()
@@ -868,13 +867,15 @@ def synthesize_segment(
                     tempo=adj_tempo_v, volume_db=adj_vol_v,
                 )
             except AudioEncoderError as e:
-                logger.warning(
-                    "chapter adjust skipped for segment %s: %s", seg.id, e,
-                )
+                # 变速失败 = 本次合成失败：不留 1.0x 半成品冒充已变速，
+                # 清掉 stash 后抛错，由上层把 segment 标记为失败。
                 try:
                     prev_abs.unlink()
                 except FileNotFoundError:
                     pass
+                raise AudioEncoderError(
+                    f"chapter audio adjust failed for segment {seg.id}: {e}",
+                ) from e
             else:
                 prev_rel = prev_abs.relative_to(
                     assets.settings.segmented_dir,
@@ -883,12 +884,17 @@ def synthesize_segment(
                 # The `.prev.mp3` stash is the fresh TTS original (pre-adjust),
                 # not whatever audio the segment had before this synthesis.
                 prev_origin = "tts"
-                try:
-                    duration_sec = probe_audio_duration(target_mp3)
-                except Exception as e:  # noqa: BLE001
+                new_duration = probe_audio_duration(target_mp3)
+                if new_duration is None:
+                    # probe 失败不吞成 None（SRT 会按 0s 处理）：
+                    # 回退到「变速前时长 ÷ tempo」估算（音量调整不改变时长）。
+                    if duration_sec is not None:
+                        new_duration = duration_sec / adj_tempo_v
                     logger.warning(
-                        "probe after adjust failed for %s: %s", seg.id, e,
+                        "probe after adjust failed for %s; estimated duration %s",
+                        new_rel, new_duration,
                     )
+                duration_sec = new_duration
                 _delete_dropped_audio_files(
                     seg, {"current": {"path": new_rel}, "previous": {"path": prev_rel}},
                 )
@@ -1403,6 +1409,10 @@ def adjust_chapter_audio(
     audio (stashed in ``audio.previous`` on first adjust) — never cascades
     on top of already-processed audio. Applying identity (1.0x / 0dB) with
     a record present reverts to the original and clears the record.
+
+    Segments whose current audio is a user recording (``origin == "recorded"``)
+    are exempt: they are never re-rendered or overwritten, and identity revert
+    skips them too. The result reports them via ``skipped_recorded``.
     """
     if not 0.5 <= tempo <= 2.0:
         raise ValueError("tempo_out_of_range")
@@ -1422,71 +1432,89 @@ def adjust_chapter_audio(
 
     root = assets.settings.segmented_dir
     adjusted = 0
-    for seg in chapter.segments:
-        audio = seg.audio if isinstance(seg.audio, dict) else None
-        if not audio:
-            continue
-        cur = audio.get("current") or {}
-        prev = audio.get("previous") or {}
-        cur_rel = cur.get("path") if isinstance(cur, dict) else None
-        prev_rel = prev.get("path") if isinstance(prev, dict) else None
-        if not isinstance(cur_rel, str) or not cur_rel:
-            continue
+    skipped_recorded = 0
+    # SAVEPOINT：任何一段处理失败（如 probe 返回 None）都整体回滚本次
+    # adjust 的行改动，不落半完成状态（不能用 db.rollback()，那会连带
+    # 回滚调用方在同一外部事务里已提交的数据）。
+    with db.begin_nested():
+        for seg in chapter.segments:
+            audio = seg.audio if isinstance(seg.audio, dict) else None
+            if not audio:
+                continue
+            cur = audio.get("current") or {}
+            prev = audio.get("previous") or {}
+            cur_rel = cur.get("path") if isinstance(cur, dict) else None
+            prev_rel = prev.get("path") if isinstance(prev, dict) else None
+            if not isinstance(cur_rel, str) or not cur_rel:
+                continue
+            # 录音段豁免 chapter 变速：不渲染、不覆盖，恒等还原同样跳过，
+            # 否则旧 TTS 变速版会盖掉用户录音（数据丢失）。
+            if cur.get("origin") == "recorded":
+                skipped_recorded += 1
+                continue
 
-        def _abs(rel: str) -> Path:
-            p = Path(rel)
-            return p if p.is_absolute() else root / p
+            def _abs(rel: str) -> Path:
+                p = Path(rel)
+                return p if p.is_absolute() else root / p
 
-        # Base: original audio — the stashed previous once a record exists,
-        # otherwise the current file (first adjust).
-        base_rel = prev_rel if (record and isinstance(prev_rel, str) and prev_rel) else cur_rel
-        base_abs = _abs(base_rel)
-        cur_abs = _abs(cur_rel)
-        if not base_abs.exists():
-            continue
+            # Base: original audio — the stashed previous once a record exists,
+            # otherwise the current file (first adjust).
+            base_rel = prev_rel if (record and isinstance(prev_rel, str) and prev_rel) else cur_rel
+            base_abs = _abs(base_rel)
+            cur_abs = _abs(cur_rel)
+            if not base_abs.exists():
+                continue
 
-        fmt = cur.get("format") or cur_abs.suffix.lstrip(".") or "mp3"
-        updated = copy.deepcopy(audio)
+            fmt = cur.get("format") or cur_abs.suffix.lstrip(".") or "mp3"
+            updated = copy.deepcopy(audio)
 
-        if identity:
-            # Revert: current becomes a copy of the original.
-            shutil.copy2(base_abs, cur_abs)
-        else:
-            if not record:
-                # First adjust: stash the original as previous (overwrites any
-                # prior previous — adjust undo supersedes regen undo).
-                prev_abs = cur_abs.with_name(f"{seg.id}.prev.{fmt}")
-                shutil.copy2(cur_abs, prev_abs)
-                try:
-                    new_prev_rel = prev_abs.relative_to(root).as_posix()
-                except ValueError:
-                    new_prev_rel = str(prev_abs)
-                prev_entry: dict[str, Any] = {"path": new_prev_rel}
-                if cur.get("duration_sec") is not None:
-                    prev_entry["duration_sec"] = cur["duration_sec"]
-                updated["previous"] = prev_entry
-                base_abs = prev_abs
-            adjust_audio_speed_volume(base_abs, cur_abs, tempo=tempo, volume_db=volume_db)
+            if identity:
+                # Revert: current becomes a copy of the original.
+                shutil.copy2(base_abs, cur_abs)
+            else:
+                if not record:
+                    # First adjust: stash the original as previous (overwrites any
+                    # prior previous — adjust undo supersedes regen undo).
+                    prev_abs = cur_abs.with_name(f"{seg.id}.prev.{fmt}")
+                    shutil.copy2(cur_abs, prev_abs)
+                    try:
+                        new_prev_rel = prev_abs.relative_to(root).as_posix()
+                    except ValueError:
+                        new_prev_rel = str(prev_abs)
+                    prev_entry: dict[str, Any] = {"path": new_prev_rel}
+                    if cur.get("duration_sec") is not None:
+                        prev_entry["duration_sec"] = cur["duration_sec"]
+                    updated["previous"] = prev_entry
+                    base_abs = prev_abs
+                adjust_audio_speed_volume(base_abs, cur_abs, tempo=tempo, volume_db=volume_db)
 
-        new_duration = probe_audio_duration(cur_abs)
-        updated["current"]["duration_sec"] = new_duration
-        # 顶层 duration_sec 是时间轴/SRT/章节时长的读取源，必须同步
-        updated["duration_sec"] = new_duration
-        seg.audio = updated
-        seg.updated_at = utcnow()
-        adjusted += 1
+            new_duration = probe_audio_duration(cur_abs)
+            if new_duration is None:
+                # probe 失败不能吞成 None（SRT 会按 0s 处理）：抛错中止，
+                # SAVEPOINT 回滚本次 adjust 已改动的行。
+                raise AudioEncoderError(f"probe_failed: {cur_rel}")
+            updated["current"]["duration_sec"] = new_duration
+            # 顶层 duration_sec 是时间轴/SRT/章节时长的读取源，必须同步
+            updated["duration_sec"] = new_duration
+            seg.audio = updated
+            seg.updated_at = utcnow()
+            adjusted += 1
 
-    if adjusted > 0 or identity:
-        chapter.audio_adjust = None if identity else {
-            "tempo": tempo,
-            "volume_db": volume_db,
-            "applied_at": utcnow().isoformat(),
-            "segments": adjusted,
-        }
-    chapter.updated_at = utcnow()
-    chapter.project.updated_at = utcnow()
+        if adjusted > 0 or identity:
+            chapter.audio_adjust = None if identity else {
+                "tempo": tempo,
+                "volume_db": volume_db,
+                "applied_at": utcnow().isoformat(),
+                "segments": adjusted,
+            }
+        chapter.updated_at = utcnow()
+        chapter.project.updated_at = utcnow()
     db.commit()
-    return {"adjusted": adjusted, "project": get_project_detail(db, project_id)}
+    return {
+        "adjusted": adjusted,
+        "skipped_recorded": skipped_recorded,
+        "project": get_project_detail(db, project_id),
+    }
 
 
 def resplit_from_script(db: Session, project_id: str, chapter_id: str):

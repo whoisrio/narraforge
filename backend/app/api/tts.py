@@ -3,7 +3,6 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from typing import List, Optional
-import copy
 import uuid
 import os
 import base64
@@ -20,7 +19,6 @@ from app.models.voice_profile import VoiceProfile
 from app.models.tts_result import TTSResultRecord
 from app.api._voice_helpers import voice_to_dict
 from app.services.qwen_tts_service import get_tts_service, QwenTTSService
-from app.core.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -44,11 +42,6 @@ class TTSRequest(BaseModel):
     edge_voice: str = ""
     edge_rate: str = "+0%"
     edge_volume: str = "+0%"
-
-    # Segmented editor integration (optional)
-    segmented_project_id: str | None = None
-    segmented_chapter_id: str | None = None
-    segmented_segment_id: str | None = None
 
 
 class SegmentRequest(BaseModel):
@@ -158,60 +151,6 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                 }
             }
         else:
-            # Segmented editor: route to per-project asset directory
-            if (
-                request.segmented_project_id
-                and request.segmented_chapter_id
-                and request.segmented_segment_id
-            ):
-                from app.services import segmented_project_service as svc
-                from app.core import segmented_assets as assets
-                from datetime import datetime
-                seg = svc.get_segment_row(
-                    db, request.segmented_project_id,
-                    request.segmented_chapter_id, request.segmented_segment_id,
-                )
-                if seg is not None:
-                    target_mp3 = assets.segment_audio_path(
-                        request.segmented_project_id, request.segmented_chapter_id,
-                        chapter_title=seg.chapter.name or "",
-                        project_name=seg.chapter.project.name,
-                        segment_id=request.segmented_segment_id,
-                        position=seg.position or 0,
-                        fmt="mp3",
-                    )
-                    target_mp3.parent.mkdir(parents=True, exist_ok=True)
-                    with open(audio_path, "rb") as f:
-                        target_mp3.write_bytes(f.read())
-                    # Use segmented_dir as base for consistency with synth endpoint (Task 7 deviation)
-                    rel = target_mp3.relative_to(settings.segmented_dir).as_posix()
-                    audio = copy.deepcopy(seg.audio or {})
-                    audio["current"] = {"path": rel, "format": "mp3"}
-                    seg.audio = audio
-                    seg.generated_params = {
-                        "engine": request.engine, "voice_id": request.voice_id,
-                        "speed": request.speed, "volume": request.volume,
-                        "pitch": request.pitch, "instruction": request.instruction,
-                    }
-                    seg.generated_at = utcnow()
-                    seg.updated_at = utcnow()
-                    seg.chapter.updated_at = utcnow()
-                    seg.chapter.project.updated_at = utcnow()
-                    db.commit()
-                    try:
-                        os.remove(audio_path)
-                    except OSError:
-                        pass
-                    return {
-                        "audio_id": audio_id,
-                        "audio_url": f"/api/segmented-projects/{request.segmented_project_id}/audio/{request.segmented_chapter_id}/{request.segmented_segment_id}",
-                        "text": request.text,
-                        "params": {
-                            "voice_id": request.voice_id,
-                            "speed": request.speed, "volume": request.volume,
-                            "pitch": request.pitch, "instruction": request.instruction,
-                        },
-                    }
             # 后端存储模式：保持现状，持久化记录
             record = TTSResultRecord(
                 id=audio_id,

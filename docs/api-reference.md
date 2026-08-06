@@ -1138,6 +1138,10 @@ Layer-sync Phase A：返回章节三层文本（L1 原文 / L2 改写稿 / L3 �
 
 **绝对语义**：首次调整把原始音频存入 `audio.previous`；再次调整始终从原始音频渲染（不在成品上级联）；已应用参数记录在 `chapter.audio_adjust`（`{tempo, volume_db, applied_at, segments}`）。传恒等参数（1.0×/0dB）且有记录时视为**还原原始**并清除记录（无记录则 422 `no_adjustment`）。
 
+**录音段豁免**：`current.origin == "recorded"` 的用户录音段不参与变速——不渲染、不覆盖，恒等还原同样跳过（防止旧 TTS 变速版盖掉录音）。
+`chapter.audio_adjust` 由本端点独占管理：`PUT /segmented-projects/{id}` 的 payload 中即使携带 `audio_adjust` 也会被忽略。
+时长在渲染后重新 probe；probe 失败则整次调整中止报错（500 `probe_failed`，DB 经 SAVEPOINT 回滚，不落半完成状态）。
+
 **Request Body:**
 ```json
 { "tempo": 1.5, "volume_db": 3 }
@@ -1146,8 +1150,9 @@ Layer-sync Phase A：返回章节三层文本（L1 原文 / L2 改写稿 / L3 �
 
 **Response:**
 ```json
-{ "adjusted": 5, "project": { ... } }
+{ "adjusted": 5, "skipped_recorded": 1, "project": { ... } }
 ```
+`adjusted` 为实际渲染的段数；`skipped_recorded` 为被豁免跳过的录音段数。
 
 **错误:** 404 `chapter_not_found`；422 `tempo_out_of_range` / `volume_db_out_of_range` / `no_adjustment` / `ffmpeg_unavailable`。
 
