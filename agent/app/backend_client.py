@@ -10,13 +10,7 @@ from __future__ import annotations
 import httpx
 
 from app.config import get_backend_url
-from app.schemas import (
-    ChapterWithSegmentIds,
-    ProjectResponse,
-    ScaffoldRemotionResponse,
-    SegmentChapters,
-    SegmentWithId,
-)
+from app.schemas import ChapterWithSegmentIds, SegmentChapters, SegmentWithId
 
 
 class BackendClient:
@@ -45,12 +39,12 @@ class BackendClient:
             await self._client.aclose()
             self._client = None
 
-    async def get_project(self, project_id: str) -> ProjectResponse:
-        """GET /api/segmented-projects/{project_id} -> project detail."""
+    async def get_project(self, project_id: str) -> dict:
+        """GET /api/segmented-projects/{project_id} -> project detail dict."""
         c = await self._ensure()
         r = await c.get(f"/api/segmented-projects/{project_id}")
         r.raise_for_status()
-        return ProjectResponse.model_validate(r.json())
+        return r.json()
 
     async def get_recorded_segment_ids(self, project_id: str) -> set[str]:
         """Ids of segments whose current audio is user-recorded (locked).
@@ -136,7 +130,7 @@ class BackendClient:
         self,
         project_id: str,
         target_dir: str | None = None,
-    ) -> ScaffoldRemotionResponse:
+    ) -> dict:
         """POST /api/segmented-projects/{pid}/scaffold-remotion.
 
         Creates (or refreshes) the Remotion project at *target_dir* and
@@ -151,7 +145,7 @@ class BackendClient:
             json=body,
         )
         r.raise_for_status()
-        return ScaffoldRemotionResponse.model_validate(r.json())
+        return r.json()
 
     async def apply_animation_spec(
         self, project_id: str, items: list[dict], theme: str | None = None

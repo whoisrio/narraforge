@@ -10,8 +10,7 @@
  * - SSML 结构校验
  */
 import { useState, useCallback, useRef, useMemo } from 'react';
-import { useTranslation, createTranslator } from '../../i18n';
-const translate = createTranslator('zh-CN');
+import { useTranslation, t as translate } from '../../i18n';
 import styles from './SSMLToolbar.module.css';
 
 /* ─── SSML 标签定义 ─── */

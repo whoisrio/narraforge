@@ -59,7 +59,7 @@ async def gen_script_node(state, runtime) -> dict:
     backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
     try:
         project = await backend.get_project(project_id)
-        source_document = project.source_document or ""
+        source_document = project.get("source_document") or ""
     except Exception as exc:
         await emit(
             {"type": "error", "stage": "gen_script", "message": f"获取源文档失败: {exc}"}

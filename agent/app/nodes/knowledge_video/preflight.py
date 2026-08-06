@@ -23,7 +23,7 @@ async def preflight_check_node(state, runtime) -> dict:
         writer({"type": "error", "stage": "preflight_check", "message": f"获取项目失败: {exc}"})
         return {"error": f"获取项目失败: {exc}", "current_stage": "preflight_check"}
 
-    source_document = project.source_document or ""
+    source_document = project.get("source_document") or ""
     if not source_document.strip():
         writer({"type": "error", "stage": "preflight_check", "message": "项目没有源文档"})
         return {
@@ -31,7 +31,7 @@ async def preflight_check_node(state, runtime) -> dict:
             "current_stage": "preflight_check",
         }
 
-    chapters = project.chapters or []
+    chapters = project.get("chapters") or []
     total_segments = 0
     synthesized = 0
     for ch in chapters:

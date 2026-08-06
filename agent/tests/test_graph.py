@@ -7,7 +7,6 @@ from langgraph.types import Command
 from app.schemas import (
     ChapterStructure,
     ChapterWithSegmentIds,
-    ProjectResponse,
     ReviewDimension,
     ReviewResult,
     Segment,
@@ -69,7 +68,7 @@ def _bypass_langsmith_prompts(monkeypatch):
 
 class _FakeBackend:
     async def get_project(self, pid):
-        return ProjectResponse.model_validate({"id": pid, "source_document": "source doc text"})
+        return {"id": pid, "source_document": "source doc text"}
 
     async def batch_create_structure(self, pid, structure, narration_scripts=None, engine=None, full_script=None):
         return [ChapterWithSegmentIds(id="ch1", segments=[SegmentWithId(id="s1")])]

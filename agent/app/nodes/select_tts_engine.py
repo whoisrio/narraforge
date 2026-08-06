@@ -28,7 +28,7 @@ async def _default_engine(runtime: Any, project_id: str) -> str:
     try:
         backend = getattr(runtime, "backend", None) or backend_client.BackendClient()
         project = await backend.get_project(project_id)
-        chapters = project.chapters or []
+        chapters = project.get("chapters") or []
         if chapters:
             engine = (chapters[0].get("voice") or {}).get("engine")
             if engine in AVAILABLE_ENGINES:

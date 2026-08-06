@@ -2,7 +2,6 @@
 import pytest
 
 from app.nodes.gen_script import gen_script_node, parse_markdown_chapters
-from app.schemas import ProjectResponse
 
 
 def test_parse_markdown_chapters_splits_on_headings():
@@ -37,7 +36,7 @@ class _FakeBackend:
         self._source = source_document
 
     async def get_project(self, project_id):
-        return ProjectResponse.model_validate({"id": project_id, "source_document": self._source})
+        return {"id": project_id, "source_document": self._source}
 
 
 class _FakeRuntime:
