@@ -115,6 +115,7 @@ export const enUS: Messages = {
     expandedView: 'Expanded',
     exportLabel: 'Export',
     exportAll: 'Export All',
+    produceAll: 'Produce All',
     exportAllSuccess: 'Exported {count} chapters to {dir}',
     exportAllIncomplete: 'Some chapters are not fully synthesized; export aborted: {chapters}',
     exportAllNoDir: 'Configure an export directory in project settings first (absolute path required when no Remotion path is set)',

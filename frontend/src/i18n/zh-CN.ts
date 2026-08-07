@@ -113,6 +113,7 @@ export const zhCN = {
     expandedView: '展开',
     exportLabel: '导出',
     exportAll: '导出全部',
+    produceAll: '一键制作全本',
     exportAllSuccess: '已导出 {count} 章到 {dir}',
     exportAllIncomplete: '存在未合成完成的章节，已全部中止：{chapters}',
     exportAllNoDir: '请先在项目设置中配置导出目录（未设置 Remotion 路径时需填绝对路径）',

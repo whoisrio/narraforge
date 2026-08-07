@@ -334,6 +334,7 @@ def export_all_chapters_endpoint(
                 "code": "chapters_incomplete",
                 "message": "存在未合成完成的章节，已全部中止",
                 "chapters": e.chapters,
+                "missing_counts": e.missing_counts,
             },
         )
     except AudioEncoderError as e:
@@ -516,6 +517,11 @@ def split_chapter(
         original_text=proj.original_text,
         animation_theme=getattr(proj, "animation_theme", None),
         remotion_project_path=getattr(proj, "remotion_project_path", None),
+        configs=getattr(proj, "configs", None),
+        source_document=getattr(proj, "source_document", None),
+        narration_script=getattr(proj, "narration_script", None),
+        default_narrator_role_id=getattr(proj, "default_narrator_role_id", None),
+        logo=getattr(proj, "logo", None),
         chapters=[
             {
                 "id": c.id, "position": c.position, "name": c.name,

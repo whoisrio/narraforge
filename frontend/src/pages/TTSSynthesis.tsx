@@ -7,6 +7,7 @@ import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMP
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { BatchSynthesizeMenu, type BatchSynthesizeMode } from '../components/SegmentedTTS/BatchSynthesizeMenu';
+import { chaptersNeedingSplit, selectProduceAllSegments } from '../services/produceAll';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
@@ -908,9 +909,16 @@ export function TTSSynthesis({
   }, [showToast]);
 
   const handleRegenerate = useCallback(async (id: string, opts?: { force?: boolean }) => {
-    const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg) return;
-    const segIdx = activeChapter.segments.findIndex(s => s.id === id);
+    // Project-wide lookup so batch flows (一键制作全本) can synthesize segments
+    // in any chapter, not just the active one.
+    let seg: Segment | undefined;
+    let segChapter: Chapter | undefined;
+    for (const c of project.chapters) {
+      const found = c.segments.find(s => s.id === id);
+      if (found) { seg = found; segChapter = c; break; }
+    }
+    if (!seg || !segChapter) return;
+    const segIdx = segChapter.segments.findIndex(s => s.id === id);
     dispatch({ type: 'GENERATE_START', id });
     try {
       const hasVoiceLock = segHasOverride(seg);
@@ -1063,7 +1071,7 @@ export function TTSSynthesis({
         }
         const { segmentedProjectApi } = await import('../services/api');
         const updated = await segmentedProjectApi.synthesizeSegment(
-          project.id, activeChapter.id, seg.id, {
+          project.id, segChapter.id, seg.id, {
             params: requestParams,
             text: textToSend,
             ssml: undefined,
@@ -1154,7 +1162,7 @@ export function TTSSynthesis({
       dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error, t('common.generationFailed')) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChapter.segments, dispatch, buildCurrentParams, showToast, roles]);
+  }, [project.chapters, dispatch, buildCurrentParams, showToast, roles]);
 
   // Keep ref in sync
   handleRegenerateRef.current = handleRegenerate;
@@ -1300,6 +1308,57 @@ export function TTSSynthesis({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, showToast]);
+
+  const handleProduceAll = useCallback(async (mode: BatchSynthesizeMode) => {
+    if (generating) return;
+    setGenerating(true);
+    try {
+      // Phase 1: 补切--给无 segment 的章节按规则切分段落（复用 chapter 音色）。
+      const toSplit = chaptersNeedingSplit(project.chapters);
+      if (toSplit.length > 0) {
+        for (const { chapterId, text } of toSplit) {
+          try {
+            await segmentedProjectApi.splitChapter(project.id, chapterId, {
+              mode: 'rule', text, replace_strategy: 'replace_chapter_segments',
+            });
+          } catch (e) {
+            console.error(`[produceAll] split chapter ${chapterId} failed`, e);
+          }
+        }
+        await reloadProjectData();
+        // 等 React 重渲染刷新 handleRegenerateRef，使新段可被全项目查找。
+        await new Promise((r) => setTimeout(r, 0));
+      }
+
+      // 暂停自动保存：逐段合成会 dispatch 状态更新，若中途触发全量 PUT，
+      // 会用陈旧内存态覆盖刚合成段的音频（reconcile 还会删掉刚写的文件）。
+      // 此时还未开始合成，状态与后端一致，暂停安全；最后 reload 恢复。
+      initialLoadDoneRef.current = false;
+
+      // Phase 2: 拉最新项目态收集目标段。
+      const raw = await projectStorage.getProject(project.id);
+      if (!raw) { showToast(t('tts.projectLoadFailedRetry'), 'error'); return; }
+      const fresh = migrateV1(raw, t);
+      const targets = selectProduceAllSegments(fresh.chapters, mode);
+      if (targets.length === 0) {
+        showToast(t('tts.noSegmentsToRegenerate'));
+        return;
+      }
+
+      // Phase 3: 顺序合成，复用 handleRegenerate（重构后全项目可查段），沿用每段已有音色。
+      for (const segId of targets) {
+        await handleRegenerateRef.current(segId);
+      }
+      showToast(t('tts.allGenerationComplete'));
+    } catch (e) {
+      console.error('[produceAll] failed', e);
+      showToast(t('tts.partialGenerationFailed'), 'error');
+    } finally {
+      setGenerating(false);
+      // 恢复 autosave（reloadProjectData 内部置 ref=true）+ 拉回后端权威态。
+      await reloadProjectData();
+    }
+  }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t]);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
     const ids = idsArg ?? activeChapter.segments.filter(s => (segEffectiveParams(s).engine as string) === 'cosyvoice').map(s => s.id);
@@ -1568,7 +1627,12 @@ export function TTSSynthesis({
         ? (detail as { code: string }).code : undefined;
       if (resp?.status === 409 && code === 'chapters_incomplete') {
         const chapters = (detail as { chapters?: string[] }).chapters ?? [];
-        showToast(t('studio.exportAllIncomplete', { chapters: chapters.join('、') }), 'error');
+        const missingCounts = (detail as { missing_counts?: Record<string, number> }).missing_counts ?? {};
+        // 章节名后附缺失段数（后端 missing_counts），让用户知道每章还差几段。
+        const chaptersText = chapters
+          .map((c) => (missingCounts[c] ? `${c}(缺${missingCounts[c]}段)` : c))
+          .join('、');
+        showToast(t('studio.exportAllIncomplete', { chapters: chaptersText }), 'error');
       } else if (resp?.status === 409 && code === 'export_directory_not_configured') {
         showToast(t('studio.exportAllNoDir'), 'error');
       } else {
@@ -1634,6 +1698,8 @@ export function TTSSynthesis({
           remotionPath={project.remotion_project_path}
           onExport={() => setExportOpen(true)}
           onExportAll={storageMode === 'backend' && !isScratchpadProject ? () => { void handleExportAll(); } : undefined}
+          onProduceAll={storageMode === 'backend' && !isScratchpadProject ? (mode) => { void handleProduceAll(mode); } : undefined}
+          produceAllDisabled={generating}
           onAdjustAudio={storageMode === 'backend' && !isScratchpadProject ? () => setAdjustOpen(true) : undefined}
           onSidebarCollapseChange={setRightPanelCollapsed}
           sidebarContent={

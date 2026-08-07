@@ -169,6 +169,30 @@ def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
     return flat
 
 
+def _audio_with_file_exists(audio: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return a copy of ``audio`` with ``current.file_exists`` set.
+
+    ``file_exists`` reflects whether the referenced audio file is still on
+    disk, so the frontend can mark desynced segments (DB path set, file gone)
+    as not ready instead of trusting the stored path. The stored dict is
+    never mutated (avoids dirtying the ORM row on read).
+    """
+    if not isinstance(audio, dict):
+        return audio
+    out = dict(audio)
+    current = out.get("current")
+    if isinstance(current, dict):
+        current_out = dict(current)
+        rel = current_out.get("path")
+        current_out["file_exists"] = bool(
+            isinstance(rel, str)
+            and rel
+            and (assets.settings.segmented_dir / rel).exists()
+        )
+        out["current"] = current_out
+    return out
+
+
 def project_to_detail(p: SegmentedProject) -> ProjectDetail:
     chapters = []
     for ch in p.chapters:
@@ -181,7 +205,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 segment_kind=getattr(s, "segment_kind", None) or "narration",
                 voice=getattr(s, "voice", {}) or {"source": "chapter"},
                 generated_params=s.generated_params,
-                audio=getattr(s, "audio", None),
+                audio=_audio_with_file_exists(getattr(s, "audio", None)),
                 generated_at=_to_iso(s.generated_at),
                 animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
@@ -1149,9 +1173,12 @@ class ChaptersIncompleteError(ValueError):
     them to the user. Nothing is written when this is raised.
     """
 
-    def __init__(self, chapters: list[str]):
+    def __init__(self, chapters: list[str], missing_counts: dict[str, int] | None = None):
         super().__init__("chapters_incomplete")
         self.chapters = chapters
+        # per-chapter count of segments missing audio (name -> count), so the
+        # frontend can show "缺 N 段" instead of just a chapter name.
+        self.missing_counts = missing_counts or {}
 
 
 def resolve_export_target_dir(project: SegmentedProject) -> Path:
@@ -1206,20 +1233,23 @@ def export_all_chapters(db: Session, project_id: str) -> dict[str, Any]:
     chapters = sorted(project.chapters, key=lambda c: c.position)
     base = assets.settings.segmented_dir
     incomplete: list[str] = []
+    missing_counts: dict[str, int] = {}
     for ch in chapters:
+        name = ch.name or ch.id
         segments = sorted(ch.segments, key=lambda s: s.position)
-        if not segments:
-            incomplete.append(ch.name or ch.id)
-            continue
+        missing = 0
         for seg in segments:
             audio = seg.audio or {}
             current = audio.get("current", {}) if isinstance(audio, dict) else {}
             rel = current.get("path")
             if not rel or not (base / rel).exists():
-                incomplete.append(ch.name or ch.id)
-                break
+                missing += 1
+        # incomplete = any segment missing audio, OR a chapter with no segments
+        if missing > 0 or not segments:
+            incomplete.append(name)
+            missing_counts[name] = missing
     if incomplete:
-        raise ChaptersIncompleteError(incomplete)
+        raise ChaptersIncompleteError(incomplete, missing_counts)
 
     exported: list[dict[str, Any]] = []
     for ch in chapters:

@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useTranslation } from '../../i18n';
+import { BatchSynthesizeMenu, type BatchSynthesizeMode } from '../SegmentedTTS/BatchSynthesizeMenu';
 import styles from './VoiceStudioLayout.module.css';
 
 export type StudioViewMode = 'list' | 'dialogue';
@@ -14,6 +15,9 @@ interface VoiceStudioLayoutProps {
   onSidebarCollapseChange?: (collapsed: boolean) => void;
   onExport: () => void;
   onExportAll?: () => void;
+  onProduceAll?: (mode: BatchSynthesizeMode) => void;
+  /** 一键制作全本下拉的禁用态（通常等于全局 generating） */
+  produceAllDisabled?: boolean;
   onAdjustAudio?: () => void;
 }
 
@@ -37,6 +41,8 @@ export function VoiceStudioLayout({
   onSidebarCollapseChange,
   onExport,
   onExportAll,
+  onProduceAll,
+  produceAllDisabled,
   onAdjustAudio,
 }: VoiceStudioLayoutProps) {
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
@@ -105,6 +111,13 @@ export function VoiceStudioLayout({
         {!transportCollapsed && (
         <div className={styles.exportGroup}>
           <span className={styles.remotionPath}>{remotionPath || '未设置 Remotion 路径'}</span>
+          {onProduceAll && (
+            <BatchSynthesizeMenu
+              label={t('studio.produceAll')}
+              disabled={produceAllDisabled}
+              onSelect={onProduceAll}
+            />
+          )}
           {onAdjustAudio && (
           <button type="button" className={styles.ghostButton ?? styles.primaryButton} onClick={onAdjustAudio}>{t('studio.adjustAudio')}</button>
         )}
