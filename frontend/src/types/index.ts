@@ -120,6 +120,8 @@ export interface SegmentAudioEntry {
   duration_sec?: number;
   /** 'recorded' 表示用户自录入音频（录音/上传），该片段被锁定、跳过 TTS 合成 */
   origin?: 'tts' | 'recorded';
+  /** backend 模式下后端返回：该 path 指向的 mp3 是否真在磁盘。false=文件丢失(db/fs 脱节)。 */
+  file_exists?: boolean;
 }
 
 export interface SegmentAudio {

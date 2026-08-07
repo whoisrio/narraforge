@@ -998,6 +998,10 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 }
 ```
 
+> 注：分片音频为嵌套对象 `audio: {format, current: {path, duration_sec, origin, file_exists}, previous: {…}, duration_sec}`。
+> `audio.current.file_exists`（bool）由后端在 `get_project_detail` 序列化时按 `segmented_dir/rel` 实时 stat 计算，
+> 用于前端识别「DB 有 path 但 mp3 已丢失」的脱节段（避免 UI 假「ready」）。
+
 #### 角色 / 局部语气字段（P3）
 
 项目与分片对象新增以下可选字段，用于多角色对话与子句级语气控制：
@@ -1121,7 +1125,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 **错误:**
 - `404 project_not_found`
 - `409 export_directory_not_configured`（detail 为 `{code, message}`，A8 信封）
-- `409 chapters_incomplete`（detail 为 `{code, message, chapters: ["章节名", ...]}`）
+- `409 chapters_incomplete`（detail 为 `{code, message, chapters: ["章节名", ...], missing_counts: {"章节名": 缺音频分片数}}`；任一分片音频文件缺失即整体中止，不写任何文件）
 - `422` ffmpeg 不可用 / 拼接失败
 
 ### GET `/api/segmented-projects/{id}/chapters/{cid}/sync-status`

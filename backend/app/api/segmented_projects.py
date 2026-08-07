@@ -334,6 +334,7 @@ def export_all_chapters_endpoint(
                 "code": "chapters_incomplete",
                 "message": "存在未合成完成的章节，已全部中止",
                 "chapters": e.chapters,
+                "missing_counts": e.missing_counts,
             },
         )
     except AudioEncoderError as e:

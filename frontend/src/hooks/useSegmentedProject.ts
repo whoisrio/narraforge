@@ -54,7 +54,13 @@ function isEmotionType(value: unknown): value is EmotionType {
 function enrichSegment(raw: RawSegment): Segment {
   const now = new Date().toISOString();
   const rawAudio = raw.audio as Segment['audio'] | undefined;
-  const hasAudio = !!(rawAudio?.current || rawAudio?.previous);
+  // A segment is ready only when its *current* audio ref is valid. In backend
+  // mode the server sets current.file_exists=false when the mp3 is gone
+  // (db/fs desync) -> drop to idle so the UI matches export's current-file
+  // check. file_exists absent (frontend id-mode, or in-memory fresh synth)
+  // falls back to "ref present" to stay backward compatible.
+  const cur = rawAudio?.current;
+  const hasAudio = !!cur && cur.file_exists !== false && !!(cur.path || cur.id);
   const voice: VoiceSource = ((raw as Record<string, unknown>).voice as VoiceSource) ?? { source: 'chapter' } as VoiceSource;
   const audio: Segment['audio'] = rawAudio ?? { format: 'mp3' };
   // Always use audio.current.duration_sec as the authoritative source.

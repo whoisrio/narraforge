@@ -687,6 +687,23 @@ export const segmentedProjectApi = {
     );
     return data;
   },
+  /** 文本分段：按 rule/llm 把章节文本切成 segment（replace_chapter_segments 时落库） */
+  splitChapter: async (
+    projectId: string,
+    chapterId: string,
+    body: {
+      mode: 'rule' | 'llm';
+      text: string;
+      replace_strategy?: 'preview_only' | 'replace_chapter_segments';
+      delimiters?: string[];
+    },
+  ): Promise<{ items: { text: string }[]; project: import('../types').SegmentedProject | null }> => {
+    const { data } = await api.post(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/split`,
+      body,
+    );
+    return data;
+  },
   batchCreateChapters: async (
     projectId: string,
     chapters: { chapter_title: string; narration_script?: string; original_text?: string }[],

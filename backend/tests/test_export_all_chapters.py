@@ -231,3 +231,52 @@ def test_export_all_endpoint_404(client, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path / "assets")
     r = client.post("/api/segmented-projects/nope/export-all-chapters")
     assert r.status_code == 404
+
+
+# ----- missing_count per chapter (chapters_incomplete detail) -----
+
+
+def test_export_abort_carries_missing_count_per_chapter(db_session, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    _seed(db_session, tmp_path, monkeypatch, with_audio=False,
+          configs={"export_directory": str(out)})
+    # c1 fully synthesized; c2 (s3) missing -> 1 missing in 第二章 破庙
+    for sid in ("s1", "s2"):
+        svc.save_recorded_segment_audio(db_session, "p1", "c1", sid,
+                                        audio_bytes=_wav_bytes(), filename=f"{sid}.wav")
+
+    with pytest.raises(svc.ChaptersIncompleteError) as exc_info:
+        svc.export_all_chapters(db_session, "p1")
+
+    assert exc_info.value.chapters == ["第二章 破庙"]
+    assert exc_info.value.missing_counts == {"第二章 破庙": 1}
+
+
+def test_export_abort_counts_all_missing_in_chapter(db_session, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    _seed(db_session, tmp_path, monkeypatch, with_audio=False,
+          configs={"export_directory": str(out)})
+    # no audio anywhere: c1 has 2 missing (s1,s2), c2 has 1 missing (s3)
+    with pytest.raises(svc.ChaptersIncompleteError) as exc_info:
+        svc.export_all_chapters(db_session, "p1")
+
+    assert exc_info.value.missing_counts == {"第一章 夜路": 2, "第二章 破庙": 1}
+
+
+def test_export_all_endpoint_409_carries_missing_counts(client, tmp_path, monkeypatch):
+    out = tmp_path / "out"
+    _api_seed(client, tmp_path, monkeypatch, with_audio=False,
+              configs={"export_directory": str(out)})
+    # only c1/s1 gets audio; c2/s2 missing
+    r = client.post(
+        "/api/segmented-projects/p1/chapters/c1/segments/s1/audio",
+        files={"file": ("s1.wav", _wav_bytes(), "audio/wav")},
+    )
+    assert r.status_code == 200, r.text
+
+    r = client.post("/api/segmented-projects/p1/export-all-chapters")
+    assert r.status_code == 409
+    detail = r.json()["detail"]
+    assert detail["code"] == "chapters_incomplete"
+    assert detail["chapters"] == ["第二章"]
+    assert detail["missing_counts"] == {"第二章": 1}
