@@ -37,6 +37,8 @@ function start(label, cmd, args, opts) {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
     shell: true,
+    // POSIX: 让子进程成为进程组组长，关停时按组杀（shell 包装的 uvicorn reloader/worker 才能一起收掉）
+    detached: os.platform() !== 'win32',
     ...opts,
   });
 
@@ -64,23 +66,37 @@ function start(label, cmd, args, opts) {
 }
 
 // --- Signal handling ---
-function cleanup() {
-  console.log('\n[dev] Shutting down ...');
-  for (const c of children) {
-    if (c.exitCode === null) {
-      if (os.platform() === 'win32') {
-        spawn('taskkill', ['/PID', String(c.pid), '/T', '/F'], { stdio: 'ignore' });
-      } else {
-        c.kill('SIGTERM');
-      }
+function killChild(c, signal) {
+  if (c.exitCode !== null) return;
+  if (os.platform() === 'win32') {
+    spawn('taskkill', ['/PID', String(c.pid), '/T', '/F'], { stdio: 'ignore' });
+  } else {
+    // 按进程组杀（detached: true 使子进程成为组长），覆盖 shell 包装下的所有子孙进程
+    try {
+      process.kill(-c.pid, signal);
+    } catch {
+      try { c.kill(signal); } catch { /* already dead */ }
     }
   }
+}
+
+async function cleanup() {
+  console.log('\n[dev] Shutting down ...');
+  for (const c of children) killChild(c, 'SIGTERM');
+
+  // 等子进程真正退出；3 秒后仍存活的升级 SIGKILL，避免孤儿进程占住端口
+  const deadline = Date.now() + 3000;
+  const alive = () => children.filter(c => c.exitCode === null);
+  while (alive().length > 0 && Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 100));
+  }
+  for (const c of alive()) killChild(c, 'SIGKILL');
+
   process.exit(0);
 }
 
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
-process.on('exit', cleanup);
+process.on('SIGINT', () => { void cleanup(); });
+process.on('SIGTERM', () => { void cleanup(); });
 
 // --- Start services ---
 console.log('[dev] ========================================');
