@@ -27,10 +27,9 @@ Studio 的批量合成入口 `BatchSynthesizeMenu` 只作用于**当前章节**(
 3. 修复「假 ready」:让 segment 的 ready 状态反映文件真实存在性。
 4. 导出校验保持严格(它是对的),只改进报错信息。
 
-## 非目标(v2 再做)
+## 非目标
 
-- emotion / LLM 语义切段(本版只用规则切)。
-- 调用 agent `split_segment` 节点。
+- 调用 agent `split_segment` 节点；emotion / LLM 语义切段不在本场景范围（只用规则切）。
 - 把按钮挪到更合适的位置 / 新增引擎+音色设置面板。
 - frontend 存储模式(IndexedDB)下的音频存在性校验(本版只修 backend 模式,因为问题只在 backend 模式暴露)。
 - 全本流程里按章节选不同引擎。
@@ -163,3 +162,8 @@ Studio 的批量合成入口 `BatchSynthesizeMenu` 只作用于**当前章节**(
 - 前端:`VoiceStudioLayout.tsx`(新下拉 + prop)、`TTSSynthesis.tsx`(`handleProduceAll`、`handleRegenerate` 重构)、`useSegmentedProject.ts`(`enrichSegment`)、`services/api.ts`(`splitChapter`)。
 - i18n:新增「一键制作全本 / 增量 / 覆盖」等文案(zh-CN / en-US)。
 - 文档:更新 `docs/api-reference.md`(`/chapters/{cid}/split` 已有,补 `file_exists` 字段说明)、`docs/feature-spec.md`、`docs/frontend-audit.md`、`docs/backend-data-audit.md`、`backend/tests/TEST_MAP.md`。
+
+## 实现中发现的两个 bug（一并修复）
+
+1. **`/chapters/{cid}/split` 全量 reconcile 丢项目级字段**:端点重建 `ProjectIn` 时漏带 `configs`/`source_document`/`narration_script`/`default_narrator_role_id`/`logo`,导致补切后 `configs.export_directory` 等丢失（导出全部报 `export_directory_not_configured`）。已补齐这些字段。`tests/test_chapter_split_empty.py` 增 configs 保留断言。
+2. **produce-all 逐段合成与 autosave 竞态**:循环中 `handleRegenerate` dispatch 的状态更新会触发防抖全量 PUT,用陈旧内存态覆盖刚合成段的音频路径(reconcile 还会删掉刚写的文件)。`handleProduceAll` 在合成循环前 `initialLoadDoneRef.current=false` 暂停 autosave（此时未合成、态与后端一致,暂停安全）,循环后 `reloadProjectData` 恢复并拉回后端权威态。E2E `tests/e2e/specs/produce-all.spec.ts`（edge-tts）覆盖:补切 + 脱节段重合成 -> 导出全部成功。

@@ -32,6 +32,7 @@ def _seed(db_session, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path / "assets")
     project = ProjectIn(
         id="p1", name="T", schema_version=2,
+        configs={"export_directory": str(tmp_path / "out"), "split_voice_mode": "narration"},
         chapters=[
             {
                 "id": "c1", "position": 0, "name": "ch1", "engine": "edge_tts",
@@ -82,3 +83,6 @@ def test_split_empty_chapter_creates_segments_and_preserves_other_audio(
     # c1's recorded audio survived the full-project reconcile
     assert c1.segments[0].audio["current"]["path"] == c1_audio_path_before
     assert c1.segments[0].audio["current"].get("file_exists") is True
+
+    # project-level configs survived the reconcile (split must not drop export_directory etc.)
+    assert detail.configs == {"export_directory": str(tmp_path / "out"), "split_voice_mode": "narration"}

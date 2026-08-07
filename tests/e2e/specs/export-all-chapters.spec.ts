@@ -80,7 +80,7 @@ test.describe('一键导出所有章节', () => {
 
       // ── 阶段 1: 章节无音频 -> 409 整体中止，toast 列出章节 ──
       await exportAllBtn.click();
-      await expect(page.getByText('存在未合成完成的章节，已全部中止：起始章、收尾章'))
+      await expect(page.getByText(/存在未合成完成的章节，已全部中止：.*起始章.*收尾章/))
         .toBeVisible({ timeout: 10_000 });
       // 未写出任何文件
       expect(fs.existsSync(EXPORT_DIR) ? fs.readdirSync(EXPORT_DIR) : []).toEqual([]);

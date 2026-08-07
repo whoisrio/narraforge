@@ -1313,7 +1313,7 @@ export function TTSSynthesis({
     if (generating) return;
     setGenerating(true);
     try {
-      // Phase 1: 补切——给无 segment 的章节按规则切分段落（复用 chapter 音色）。
+      // Phase 1: 补切--给无 segment 的章节按规则切分段落（复用 chapter 音色）。
       const toSplit = chaptersNeedingSplit(project.chapters);
       if (toSplit.length > 0) {
         for (const { chapterId, text } of toSplit) {
@@ -1326,11 +1326,16 @@ export function TTSSynthesis({
           }
         }
         await reloadProjectData();
-        // 等 React 重渲染刷新 handleRegenerateRef，使新段可见后再合成。
+        // 等 React 重渲染刷新 handleRegenerateRef，使新段可被全项目查找。
         await new Promise((r) => setTimeout(r, 0));
       }
 
-      // Phase 2: 从最新项目态收集目标段（补切后的新段此时已入态）。
+      // 暂停自动保存：逐段合成会 dispatch 状态更新，若中途触发全量 PUT，
+      // 会用陈旧内存态覆盖刚合成段的音频（reconcile 还会删掉刚写的文件）。
+      // 此时还未开始合成，状态与后端一致，暂停安全；最后 reload 恢复。
+      initialLoadDoneRef.current = false;
+
+      // Phase 2: 拉最新项目态收集目标段。
       const raw = await projectStorage.getProject(project.id);
       if (!raw) { showToast(t('tts.projectLoadFailedRetry'), 'error'); return; }
       const fresh = migrateV1(raw, t);
@@ -1350,6 +1355,8 @@ export function TTSSynthesis({
       showToast(t('tts.partialGenerationFailed'), 'error');
     } finally {
       setGenerating(false);
+      // 恢复 autosave（reloadProjectData 内部置 ref=true）+ 拉回后端权威态。
+      await reloadProjectData();
     }
   }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t]);
 
@@ -1620,7 +1627,12 @@ export function TTSSynthesis({
         ? (detail as { code: string }).code : undefined;
       if (resp?.status === 409 && code === 'chapters_incomplete') {
         const chapters = (detail as { chapters?: string[] }).chapters ?? [];
-        showToast(t('studio.exportAllIncomplete', { chapters: chapters.join('、') }), 'error');
+        const missingCounts = (detail as { missing_counts?: Record<string, number> }).missing_counts ?? {};
+        // 章节名后附缺失段数（后端 missing_counts），让用户知道每章还差几段。
+        const chaptersText = chapters
+          .map((c) => (missingCounts[c] ? `${c}(缺${missingCounts[c]}段)` : c))
+          .join('、');
+        showToast(t('studio.exportAllIncomplete', { chapters: chaptersText }), 'error');
       } else if (resp?.status === 409 && code === 'export_directory_not_configured') {
         showToast(t('studio.exportAllNoDir'), 'error');
       } else {
