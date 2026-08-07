@@ -73,8 +73,8 @@ test.describe('一键导出所有章节', () => {
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
       await page.getByRole('button', { name: /◉ 工作室/ }).first().click();
-      // 播放栏默认收起，先展开才能看到导出按钮
-      await page.getByRole('button', { name: '展开播放栏' }).click();
+      // 工具栏默认收起，先展开才能看到导出按钮
+      await page.getByRole('button', { name: '展开工具栏' }).click();
       const exportAllBtn = page.getByRole('button', { name: '导出全部', exact: true });
       await expect(exportAllBtn).toBeVisible({ timeout: 15_000 });
 

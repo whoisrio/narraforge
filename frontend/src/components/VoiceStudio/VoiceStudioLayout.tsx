@@ -15,7 +15,6 @@ interface VoiceStudioLayoutProps {
   onExport: () => void;
   onExportAll?: () => void;
   onAdjustAudio?: () => void;
-  onPlayAll: () => void;
 }
 
 function formatDuration(seconds: number): string {
@@ -39,7 +38,6 @@ export function VoiceStudioLayout({
   onExport,
   onExportAll,
   onAdjustAudio,
-  onPlayAll,
 }: VoiceStudioLayoutProps) {
   const [sidePanelCollapsed, setSidePanelCollapsed] = useState(false);
   const [transportCollapsed, setTransportCollapsed] = useState(true);
@@ -92,18 +90,11 @@ export function VoiceStudioLayout({
           type="button"
           className={styles.transportToggle}
           onClick={() => setTransportCollapsed(!transportCollapsed)}
-          aria-label={transportCollapsed ? '展开播放栏' : '收起播放栏'}
+          aria-label={transportCollapsed ? '展开工具栏' : '收起工具栏'}
         >
           {transportCollapsed ? '▲' : '▼'}
-          {transportCollapsed && <span className={styles.transportToggleLabel}>播放栏</span>}
+          {transportCollapsed && <span className={styles.transportToggleLabel}>工具栏</span>}
         </button>
-        {!transportCollapsed && (
-        <div className={styles.transportControls}>
-          <button type="button" className={styles.roundButton}>‹</button>
-          <button type="button" className={styles.playButton} onClick={onPlayAll}>播放</button>
-          <button type="button" className={styles.roundButton}>›</button>
-        </div>
-        )}
         {!transportCollapsed && (
         <div className={styles.masterTimeline}>
           <span>Master Transport</span>

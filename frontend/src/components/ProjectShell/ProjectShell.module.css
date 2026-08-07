@@ -23,6 +23,7 @@
   flex-direction: column;
   gap: var(--spacing-lg);
   padding: 96px 12px 18px;
+  overflow-y: auto;
   border-right: 1px solid rgba(216, 194, 180, 0.42);
   background: rgba(249, 243, 235, 0.92);
   box-shadow: 10px 0 30px rgba(26, 24, 20, 0.04);
@@ -383,6 +384,10 @@
 
 .collapseButton {
   margin-top: auto;
+  /* 内容超高时 rail 可滚动，按钮吸附底部始终可见 */
+  position: sticky;
+  bottom: 0;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -390,7 +395,7 @@
   min-height: 38px;
   border-radius: var(--radius-full);
   border: 1px solid rgba(216, 194, 180, 0.5);
-  background: rgba(255, 255, 255, 0.48);
+  background: rgba(249, 243, 235, 0.95);
   color: var(--color-text-secondary);
   font-size: 13px;
   font-weight: 800;

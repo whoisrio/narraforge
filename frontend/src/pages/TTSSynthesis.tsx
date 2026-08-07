@@ -1635,7 +1635,6 @@ export function TTSSynthesis({
           onExport={() => setExportOpen(true)}
           onExportAll={storageMode === 'backend' && !isScratchpadProject ? () => { void handleExportAll(); } : undefined}
           onAdjustAudio={storageMode === 'backend' && !isScratchpadProject ? () => setAdjustOpen(true) : undefined}
-          onPlayAll={playAllActive ? handleStopAll : handlePlayAll}
           onSidebarCollapseChange={setRightPanelCollapsed}
           sidebarContent={
             <div className={styles.sidebarAccordion}>
@@ -1735,7 +1734,7 @@ export function TTSSynthesis({
                           confirmLabel: t('studio.applyVoice'),
                           onConfirm: () => {
                             setConfirmDialog(prev => ({ ...prev, open: false }));
-                            dispatch({ type: 'SET_DEFAULT_PARAMS', params });
+                            dispatch({ type: 'SET_ALL_CHAPTERS_PARAMS', params });
                             showToast(t('studio.voiceApplied'));
                           },
                         });

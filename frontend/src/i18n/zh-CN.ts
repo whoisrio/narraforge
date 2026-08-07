@@ -104,7 +104,7 @@ export const zhCN = {
     dialogue: '对话',
     narrationVoice: '旁白音色',
     applyVoice: '应用',
-    applyVoiceHelp: '将当前旁白音色应用到全部非锁定旁白分段',
+    applyVoiceHelp: '将当前旁白音色应用为所有章节的全局设置（仅影响新合成）',
     voiceApplied: '旁白全局设置已应用',
     chapterTime: '章节时间',
     globalTime: '全局时间',

@@ -177,6 +177,8 @@ export type Action =
   | { type: 'MOVE_CHAPTER'; id: string; direction: 'up' | 'down' }
   // Per-chapter settings
   | { type: 'SET_DEFAULT_PARAMS'; params: EngineParams }
+  // 应用全局音色设置到所有章节（面板“应用”按钮；SET_DEFAULT_PARAMS 仅作用当前章节，供重拆分等场景用）
+  | { type: 'SET_ALL_CHAPTERS_PARAMS'; params: EngineParams }
   | { type: 'SET_SPLIT_CONFIG'; config: Chapter['split_config'] }
   // meta 除 original_text/design_title 外还透传面板状态字段（engine/edge_voice/...），运行时会整体并入 chapter
   | { type: 'SET_CHAPTER_META'; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> & Record<string, unknown> }
@@ -312,6 +314,10 @@ export function segmentedReducer(state: State, action: Action): State {
     // ---- Per-chapter settings ----
     case 'SET_DEFAULT_PARAMS':
       return { project: updateActive(p, ch => ({ ...ch, voice: action.params, updated_at: new Date().toISOString() })) };
+    case 'SET_ALL_CHAPTERS_PARAMS': {
+      const now = new Date().toISOString();
+      return { project: { ...p, chapters: p.chapters.map(c => ({ ...c, voice: action.params, updated_at: now })), updated_at: now } };
+    }
     case 'SET_SPLIT_CONFIG':
       return { project: updateActive(p, ch => ({ ...ch, split_config: action.config, updated_at: new Date().toISOString() })) };
     case 'SET_CHAPTER_META':

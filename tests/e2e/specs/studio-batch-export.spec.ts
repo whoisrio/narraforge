@@ -88,8 +88,8 @@ test.describe('批量合成与导出', () => {
 
     // ── Step 4: POST-COMMIT — active chapter segments are 'ready' ──
 
-    // Verify segments show generated status (play buttons should be present)
-    const playButtons = page.locator('[class*="play"], [aria-label*="播放"]');
+    // Verify segments show generated status (per-segment play buttons should be present)
+    const playButtons = page.locator('[class*="PlayBtn"], [aria-label*="播放"]');
     const playCount = await playButtons.count();
     expect(playCount).toBeGreaterThanOrEqual(1);
 
@@ -158,7 +158,7 @@ test.describe('批量合成与导出', () => {
     await goToStudio(page);
 
     // VoiceStudioLayout collapses the transport bar by default; expand it to reveal "导出".
-    const transportToggle = page.getByRole('button', { name: /展开播放栏/ });
+    const transportToggle = page.getByRole('button', { name: /展开工具栏/ });
     await expect(transportToggle).toBeVisible({ timeout: 5_000 });
     await transportToggle.click();
 
@@ -215,7 +215,7 @@ test.describe('批量合成与导出', () => {
     await goToStudio(page);
     await page.getByRole('button', { name: /选择章节 第2章/ }).click();
     await expect(page.getByText('破庙的门半掩着').first()).toBeVisible({ timeout: 10_000 });
-    await page.getByRole('button', { name: '展开播放栏' }).click();
+    await page.getByRole('button', { name: '展开工具栏' }).click();
     await page.getByRole('button', { name: '导出', exact: true }).click();
     await expect(page.getByText('导出选项')).toBeVisible({ timeout: 5_000 });
     // 只留 SRT：取消默认勾选的 MP3 音频（避免触发"跳过未 ready 段"确认弹窗）
