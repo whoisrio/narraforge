@@ -7,7 +7,7 @@ import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMP
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { BatchSynthesizeMenu, type BatchSynthesizeMode } from '../components/SegmentedTTS/BatchSynthesizeMenu';
-import { chaptersNeedingSplit, selectProduceAllSegments } from '../services/produceAll';
+import { chaptersNeedingSplit, selectProduceAllSegments, type ProduceAllRun } from '../services/produceAll';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
@@ -132,6 +132,8 @@ export function TTSSynthesis({
   const [recordBusy, setRecordBusy] = useState(false);
   const [srtDurationMode, setSrtDurationMode] = useState<'chapter' | 'global'>('chapter');
   const [generating, setGenerating] = useState(false);
+  // “一键制作全本”实时进度；非 null 且 running 时在 ProjectShell contextBar 跨 section 可见。
+  const [produceAllRun, setProduceAllRun] = useState<ProduceAllRun | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
   const [playingId, setPlayingId] = useState<string | undefined>();
@@ -199,8 +201,13 @@ export function TTSSynthesis({
   const blobUrlRef = useRef<string | null>(null);
   // Ref to abort play-all sequence
   const playAllAbortRef = useRef(false);
+  // Ref to abort produce-all (一键制作全本) 段间停止
+  const produceAllAbortRef = useRef(false);
+  // Ref to read latest generating inside handleRegenerate (其 useCallback deps 刻意不含 generating)
+  const generatingRef = useRef(generating);
+  generatingRef.current = generating;
   // Ref to always have the latest handleRegenerate (avoids stale closure in confirm dialog)
-  const handleRegenerateRef = useRef<(id: string) => Promise<void>>(() => Promise.resolve());
+  const handleRegenerateRef = useRef<(id: string, opts?: { force?: boolean; internal?: boolean }) => Promise<void>>(() => Promise.resolve());
   // 已解锁的录入片段：下次重新合成需带 force: true（后端可能仍认为其已录入）
   const unlockedRecordedRef = useRef<Set<string>>(new Set());
 
@@ -369,8 +376,9 @@ export function TTSSynthesis({
     });
   }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
 
-  const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
+  const showToast = useCallback((message: string, type: 'error' | 'success' | 'info' = 'success') => {
     if (type === 'error') toast.error(message);
+    else if (type === 'info') toast.info(message);
     else toast.success(message);
   }, [toast]);
 
@@ -908,7 +916,12 @@ export function TTSSynthesis({
     }
   }, [showToast]);
 
-  const handleRegenerate = useCallback(async (id: string, opts?: { force?: boolean }) => {
+  const handleRegenerate = useCallback(async (id: string, opts?: { force?: boolean; internal?: boolean }) => {
+    // 全本/批量合成在跑时，禁止手动触发单段合成；循环内部调用传 internal=true 绕过。
+    if (generatingRef.current && !opts?.internal) {
+      showToast(t('tts.produceAllInProgress'), 'error');
+      return;
+    }
     // Project-wide lookup so batch flows (一键制作全本) can synthesize segments
     // in any chapter, not just the active one.
     let seg: Segment | undefined;
@@ -1297,7 +1310,7 @@ export function TTSSynthesis({
       // Step 3: Generate sequentially to avoid rate-limiting external TTS services
       let i = 0;
       while (i < toRegenerate.length) {
-        await handleRegenerateRef.current(toRegenerate[i++].id);
+        await handleRegenerateRef.current(toRegenerate[i++].id, { internal: true });
       }
       showToast(t('tts.allGenerationComplete'));
     } catch (e) {
@@ -1312,6 +1325,7 @@ export function TTSSynthesis({
   const handleProduceAll = useCallback(async (mode: BatchSynthesizeMode) => {
     if (generating) return;
     setGenerating(true);
+    produceAllAbortRef.current = false;
     try {
       // Phase 1: 补切--给无 segment 的章节按规则切分段落（复用 chapter 音色）。
       const toSplit = chaptersNeedingSplit(project.chapters);
@@ -1346,19 +1360,36 @@ export function TTSSynthesis({
       }
 
       // Phase 3: 顺序合成，复用 handleRegenerate（重构后全项目可查段），沿用每段已有音色。
+      // 段间停止：每次迭代前检查 abort flag，当前段跑完即停；停止后已合成段保留、未合成段保持 idle/failed。
+      setProduceAllRun({ running: true, mode, total: targets.length, done: 0, startedAt: Date.now() });
+      let doneCount = 0;
       for (const segId of targets) {
-        await handleRegenerateRef.current(segId);
+        if (produceAllAbortRef.current) break;
+        const chName = fresh.chapters.find(c => c.segments.some(s => s.id === segId))?.name;
+        setProduceAllRun(prev => prev ? { ...prev, currentSegmentId: segId, currentChapterName: chName } : prev);
+        await handleRegenerateRef.current(segId, { internal: true });
+        doneCount += 1;
+        setProduceAllRun(prev => prev ? { ...prev, done: doneCount } : prev);
       }
-      showToast(t('tts.allGenerationComplete'));
+      if (produceAllAbortRef.current) {
+        showToast(t('tts.produceAllStopped', { done: doneCount, total: targets.length }), 'info');
+      } else {
+        showToast(t('tts.allGenerationComplete'));
+      }
     } catch (e) {
       console.error('[produceAll] failed', e);
       showToast(t('tts.partialGenerationFailed'), 'error');
     } finally {
       setGenerating(false);
+      setProduceAllRun(null);
       // 恢复 autosave（reloadProjectData 内部置 ref=true）+ 拉回后端权威态。
       await reloadProjectData();
     }
   }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t]);
+
+  const handleStopProduceAll = useCallback(() => {
+    produceAllAbortRef.current = true;
+  }, []);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
     const ids = idsArg ?? activeChapter.segments.filter(s => (segEffectiveParams(s).engine as string) === 'cosyvoice').map(s => s.id);
@@ -1689,6 +1720,8 @@ export function TTSSynthesis({
           rightPanelCollapsed={projectSection === 'studio' ? rightPanelCollapsed : true}
           onSectionChange={setProjectSection}
           onBackToProjects={onBackToProjects}
+          produceAllRun={produceAllRun}
+          onStopProduceAll={handleStopProduceAll}
         >
         {projectSection === 'studio' ? (
         <VoiceStudioLayout

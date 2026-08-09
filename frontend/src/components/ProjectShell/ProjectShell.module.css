@@ -462,6 +462,58 @@
   font-weight: 650;
 }
 
+.produceAllProgress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--color-primary-bg, rgba(74, 108, 247, 0.08));
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.produceAllProgressBar {
+  width: 64px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-border, rgba(0, 0, 0, 0.12));
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.produceAllProgressFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--color-primary, #4a6cf7);
+  transition: width 0.3s ease;
+}
+
+.produceAllProgressText {
+  color: var(--color-text-muted);
+}
+
+.produceAllStopBtn {
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.15));
+  border-radius: 5px;
+  background: var(--color-surface, #fff);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.produceAllStopBtn:hover {
+  background: var(--color-danger-bg, rgba(220, 38, 38, 0.08));
+  color: var(--color-danger, #dc2626);
+  border-color: var(--color-danger, #dc2626);
+}
+
 .workspaceBody {
   min-width: 0;
   width: 100%;

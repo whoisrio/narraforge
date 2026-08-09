@@ -484,6 +484,8 @@ export interface Chapter {
   /** Order within the project (0-based, matches array index). Backend trusts this on save. */
   position?: number;
   original_text?: string;
+  /** L2 重写旁白稿（chapter 级，后端 SegmentedProjectChapter.narration_script）；优先于 original_text 作为切分/合成来源。 */
+  narration_script?: string | null;
   design_title?: string;
   /** Post-synthesis adjust params currently applied (null/undefined = 未调整) */
   audio_adjust?: AudioAdjustRecord | null;

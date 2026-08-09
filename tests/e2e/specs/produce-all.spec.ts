@@ -124,3 +124,146 @@ test.describe('一键制作全本', () => {
     }
   });
 });
+
+// ── produce-all 进度跨 section 可见 + 可停止 + 防重复触发 ──
+// 以下场景用纯 idle 段项目(无补切/脱节),聚焦进度可见性与停止交互。
+
+function idleSegments(prefix: string, count: number) {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `${prefix}-s${i}`,
+    position: i,
+    text: `这是第${i + 1}段旁白文本内容。`,
+    voice: { source: 'chapter' },
+    audio: { format: 'mp3' },
+  }));
+}
+
+function idleProjectPayload(id: string, name: string, segCount: number) {
+  return {
+    id,
+    name,
+    schema_version: 2,
+    layout: 'vertical' as const,
+    chapters: [
+      {
+        id: `${id}-ch1`,
+        position: 0,
+        name: '主章',
+        voice: { engine: 'edge_tts' as const, voice: 'zh-CN-YunxiNeural' },
+        split_config: { delimiters: ['。'], mode: 'rule' as const },
+        segments: idleSegments(id, segCount),
+      },
+    ],
+  };
+}
+
+/** 后端真实有音频的段数（path 且 file_exists !== false）。 */
+async function realAudioCountFor(page: import('@playwright/test').Page, pid: string): Promise<number> {
+  const p = await readBackendProject(page, pid);
+  if (!p) return 0;
+  return p.chapters
+    .flatMap((c) => c.segments)
+    .filter((s) => !!s.audio?.current?.path && s.audio.current.file_exists !== false)
+    .length;
+}
+
+async function setupIdleProject(page: import('@playwright/test').Page, pid: string, name: string, segCount: number) {
+  await page.request.delete(`${BACKEND}/api/segmented-projects/${pid}`);
+  const resp = await page.request.post(`${BACKEND}/api/segmented-projects`, { data: idleProjectPayload(pid, name, segCount) });
+  expect(resp.status()).toBe(201);
+  await setLocaleToZhCN(page);
+  await page.goto('/');
+  await enterWorkspace(page);
+  await page.getByRole('button', { name: new RegExp(`打开 ${name}`) }).first().click();
+  await page.getByRole('button', { name: /◉ 工作室/ }).first().click();
+  await page.getByRole('button', { name: '展开工具栏' }).click();
+}
+
+async function triggerProduceAllUnsynth(page: import('@playwright/test').Page) {
+  await page.getByRole('button', { name: /一键制作全本/ }).click();
+  const item = page.getByRole('button', { name: /仅合成未合成/ });
+  await expect(item).toBeVisible({ timeout: 10_000 });
+  await item.click();
+}
+
+test.describe('produce-all 进度可见与停止', () => {
+  test.setTimeout(180_000);
+
+  test('produce-all 运行时进度跨 section 可见', async ({ page }) => {
+    const errors = collectErrors(page);
+    const PID = 'e2e-produce-all-visible';
+    const PNAME = '进度可见测试';
+    try {
+      await setupIdleProject(page, PID, PNAME, 6);
+      await triggerProduceAllUnsynth(page);
+
+      // 立即切到「文本库」：contextBar 进度条应仍可见（跨 section 可见是核心目标）。
+      await page.getByRole('button', { name: /文本库/ }).first().click();
+      const progress = page.getByTestId('produce-all-progress');
+      await expect(progress).toBeVisible({ timeout: 15_000 });
+      expect(progress).toContainText(/合成中/);
+
+      // 切回「工作室」，轮询后端直到 6 段全部有真实音频。
+      await page.getByRole('button', { name: /◉ 工作室/ }).first().click();
+      await expect.poll(() => realAudioCountFor(page, PID), { timeout: 120_000, intervals: [2_000] }).toBe(6);
+
+      expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
+    } finally {
+      await page.request.delete(`${BACKEND}/api/segmented-projects/${PID}`);
+    }
+  });
+
+  test('produce-all 运行时可停止，已合成段保留、未合成段 idle', async ({ page }) => {
+    const errors = collectErrors(page);
+    const PID = 'e2e-produce-all-stop';
+    const PNAME = '停止测试';
+    const SEG_COUNT = 12;
+    try {
+      await setupIdleProject(page, PID, PNAME, SEG_COUNT);
+      await triggerProduceAllUnsynth(page);
+
+      // 等至少 1 段合成完成，确认 produce-all 确实在跑。
+      await expect.poll(() => realAudioCountFor(page, PID), { timeout: 120_000, intervals: [1_500] }).toBeGreaterThanOrEqual(1);
+
+      // 点 contextBar 的「停止」。
+      const stopBtn = page.getByTestId('produce-all-stop');
+      await expect(stopBtn).toBeVisible({ timeout: 5_000 });
+      await stopBtn.click();
+
+      // 断言停止 toast（含 done/total）。
+      await expect(page.getByText(/已停止/)).toBeVisible({ timeout: 10_000 });
+
+      // 停止后：部分段已合成(有真实音频 >=1)，部分段仍 idle(< total)。
+      // 用音频存在性判断（后端 segment 不持久化前端 status 字段，realAudioCount 更可靠）。
+      await page.waitForTimeout(2_000);
+      const synthesizedCount = await realAudioCountFor(page, PID);
+      expect(synthesizedCount).toBeGreaterThanOrEqual(1);
+      expect(synthesizedCount).toBeLessThan(SEG_COUNT);
+
+      expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
+    } finally {
+      await page.request.delete(`${BACKEND}/api/segmented-projects/${PID}`);
+    }
+  });
+
+  test('produce-all 运行时禁止重复触发一键全本', async ({ page }) => {
+    const errors = collectErrors(page);
+    const PID = 'e2e-produce-all-guard';
+    const PNAME = '防重复触发测试';
+    try {
+      await setupIdleProject(page, PID, PNAME, 6);
+      await triggerProduceAllUnsynth(page);
+
+      // produce-all 运行中，「一键制作全本」按钮应被禁用。
+      const produceAllBtn = page.getByRole('button', { name: /一键制作全本/ });
+      await expect(produceAllBtn).toBeDisabled({ timeout: 10_000 });
+
+      // 等完成，确认流程正常结束。
+      await expect.poll(() => realAudioCountFor(page, PID), { timeout: 120_000, intervals: [2_000] }).toBe(6);
+
+      expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
+    } finally {
+      await page.request.delete(`${BACKEND}/api/segmented-projects/${PID}`);
+    }
+  });
+});

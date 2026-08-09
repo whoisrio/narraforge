@@ -8,6 +8,18 @@ import type { Chapter } from '../types';
 
 export type ProduceAllMode = 'unsynthesized' | 'all';
 
+/** Live progress state for the "一键制作全本" (produce-all) run.
+ * Null when no run is active (idle, completed, or stopped). */
+export interface ProduceAllRun {
+  running: boolean;
+  mode: ProduceAllMode;
+  total: number;
+  done: number;
+  currentSegmentId?: string;
+  currentChapterName?: string;
+  startedAt: number;
+}
+
 export interface ChapterSplitTarget {
   chapterId: string;
   text: string;

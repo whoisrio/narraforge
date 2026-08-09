@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectShell } from './ProjectShell';
+import type { ProduceAllRun } from '../../services/produceAll';
 import { ToastProvider } from '../ui/Toast';
 import { ConfirmProvider } from '../ui/Confirm';
 
@@ -234,5 +235,66 @@ describe('ProjectShell', () => {
     const toast = await screen.findByRole('alert');
     expect(toast).toHaveTextContent('同步失败，请稍后重试');
     expect(toast).not.toHaveTextContent('同步中…');
+  });
+
+  it('renders produce-all progress with stop button when a run is active', () => {
+    const onStopProduceAll = vi.fn();
+    const run: ProduceAllRun = {
+      running: true,
+      mode: 'unsynthesized',
+      total: 120,
+      done: 12,
+      currentSegmentId: 'seg-13',
+      currentChapterName: '第二章',
+      startedAt: Date.now(),
+    };
+    render(
+      <ProjectShell
+        projectName="草稿项目"
+        activeSection="library"
+        locale="zh-CN"
+        chapterName="第一章"
+        segmentCount={12}
+        generatedCount={8}
+        durationSec={96}
+        produceAllRun={run}
+        onStopProduceAll={onStopProduceAll}
+        onSectionChange={vi.fn()}
+        onBackToProjects={vi.fn()}
+      >
+        <div>Library content</div>
+      </ProjectShell>,
+    );
+
+    const progress = screen.getByTestId('produce-all-progress');
+    expect(progress).toHaveTextContent('合成中 12/120');
+    expect(progress).toHaveTextContent('第二章');
+    const fill = screen.getByTestId('produce-all-progress-fill');
+    expect(fill).toHaveStyle({ width: '10%' });
+    const stopBtn = screen.getByRole('button', { name: '停止' });
+    expect(stopBtn).toBeInTheDocument();
+
+    fireEvent.click(stopBtn);
+    expect(onStopProduceAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render produce-all progress when no run is active', () => {
+    render(
+      <ProjectShell
+        projectName="草稿项目"
+        activeSection="studio"
+        locale="zh-CN"
+        chapterName="第一章"
+        segmentCount={12}
+        generatedCount={8}
+        durationSec={96}
+        onSectionChange={vi.fn()}
+        onBackToProjects={vi.fn()}
+      >
+        <div>Studio content</div>
+      </ProjectShell>,
+    );
+
+    expect(screen.queryByTestId('produce-all-progress')).not.toBeInTheDocument();
   });
 });
