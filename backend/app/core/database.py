@@ -58,7 +58,10 @@ def __getattr__(name):
 Base = declarative_base()
 
 
-def get_db():
+async def get_db():
+    # async generator：workers 运行时（Pyodide）不支持线程，sync generator
+    # 依赖会被 FastAPI 包进 anyio.to_thread 直接失败（can't start new thread）。
+    # local 行为不变（session 创建/关闭语义相同，仅迭代方式改为 async）。
     # workers 模式没有本地数据库：yield None，未迁移到仓储的端点一旦
     # 触碰 db 会立即失败（AttributeError），已迁移端点不受影响。
     if settings.deploy_target == "workers":

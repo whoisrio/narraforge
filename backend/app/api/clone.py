@@ -210,7 +210,7 @@ async def upload_voice(
                 converted = f.read()
 
             file_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.mp3"
-            stored_ref = store.put(settings.to_relative(file_path), converted)
+            stored_ref = await store.put(settings.to_relative(file_path), converted)
             file_extension = "mp3"
 
         except Exception as e:
@@ -227,7 +227,7 @@ async def upload_voice(
         # 直接保存其他格式
         file_extension = file_ext
         file_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.{file_extension}"
-        stored_ref = store.put(settings.to_relative(file_path), content)
+        stored_ref = await store.put(settings.to_relative(file_path), content)
 
     voice = repo.create({
         "id": file_id,
@@ -311,7 +311,7 @@ async def upload_voice_from_url(
             with open(temp_audio_path, "rb") as f:
                 final_bytes = f.read()
 
-        stored_ref = store.put(settings.to_relative(final_audio_path), final_bytes)
+        stored_ref = await store.put(settings.to_relative(final_audio_path), final_bytes)
 
     except Exception as e:
         raise HTTPException(
@@ -535,7 +535,7 @@ async def create_voice_from_design(
     audio_path = settings.voices_previews_dir / f"{safe_name}_{ts}.{audio_ext}"
 
     # 保存音频文件到资产存储
-    stored_ref = store.put(settings.to_relative(audio_path), audio_bytes)
+    stored_ref = await store.put(settings.to_relative(audio_path), audio_bytes)
 
     # 创建 VoiceProfile 记录
     if request.engine == "preset":
@@ -618,7 +618,7 @@ async def save_preview_audio(
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     preview_path = settings.voices_previews_dir / f"{safe_name}_{ts}.{audio_ext}"
 
-    stored_ref = store.put(settings.to_relative(preview_path), audio_bytes)
+    stored_ref = await store.put(settings.to_relative(preview_path), audio_bytes)
 
     preview_data = dict(voice["preview"] or {})
     preview_data["preview_audio_path"] = stored_ref

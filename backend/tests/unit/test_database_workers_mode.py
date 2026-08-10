@@ -67,10 +67,26 @@ class TestWorkersModeEngineDeferred:
         monkeypatch.setattr(settings, "deploy_target", "workers")
         from app.core.database import get_db
 
-        gen = get_db()
-        assert next(gen) is None
-        with pytest.raises(StopIteration):
-            next(gen)
+        agen = get_db()
+
+        async def _drain():
+            assert await agen.__anext__() is None
+            with pytest.raises(StopAsyncIteration):
+                await agen.__anext__()
+
+        import asyncio
+
+        asyncio.new_event_loop().run_until_complete(_drain())
+
+    def test_get_db_is_async_generator(self):
+        """workers 运行时（Pyodide）不支持线程：sync generator 依赖会被
+        FastAPI 包进 anyio.to_thread（can't start new thread，冒烟实测）。
+        get_db 必须是 async generator（enter/exit 直接在事件循环上跑）。"""
+        import inspect
+
+        from app.core.database import get_db
+
+        assert inspect.isasyncgenfunction(get_db)
 
 
 class TestLocalModeUnchanged:
@@ -101,7 +117,13 @@ class TestLocalModeUnchanged:
         monkeypatch.setattr(settings, "deploy_target", "local")
         from app.core.database import get_db
 
-        gen = get_db()
-        db = next(gen)
-        assert db is not None
-        gen.close()
+        agen = get_db()
+
+        async def _drain():
+            db = await agen.__anext__()
+            assert db is not None
+            await agen.aclose()
+
+        import asyncio
+
+        asyncio.new_event_loop().run_until_complete(_drain())

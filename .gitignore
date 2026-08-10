@@ -63,6 +63,7 @@ frontend/coverage
 .gstack/
 node_modules
 *.env
+backend/.dev.vars
 output
 backend/output
 backend/.env

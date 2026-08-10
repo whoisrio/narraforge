@@ -336,6 +336,71 @@ uv run python -m scripts.migrate_to_unified_storage --apply
 
 ---
 
+## Cloudflare Workers Deployment
+
+Workers 模式把瘦身后的 FastAPI 后端跑在 Cloudflare Workers Python（Pyodide）上。
+设计文档：`docs/superpowers/specs/2026-08-10-cloudflare-workers-deploy-design.md`。
+入口为 `backend/workers_entry.py`，配置为 `backend/wrangler.toml`（`main = "workers_entry.py"`，`compatibility_date = "2025-11-02"`，更早日期会报 `Method on_fetch does not exist`）。
+
+### Prerequisites
+
+```bash
+cd backend
+uv sync --extra workers   # 安装 workers-py（提供 pywrangler CLI）
+```
+
+### Local smoke (pywrangler dev)
+
+```bash
+cd backend
+cp .dev.vars.example .dev.vars   # 填入 SUPABASE_SERVICE_KEY / MIMO_API_KEY
+uv run --extra workers pywrangler dev --port 8787
+```
+
+`pywrangler dev` 会把 `[project.dependencies]` vendor 成 `python_modules`（Pyodide 平台解析）。
+因此 core dependencies 必须可在 Pyodide 解析：local-only 依赖（langgraph 链、apscheduler、本地 ML、在线 SDK）都放在 extras（`local-ml` / `local-services`），不进 `[project.dependencies]`。
+首次启动需下载 Pyodide 并 vendor，首个请求要初始化 Pyodide（冷启动 10s+）。
+
+**坑 1：本地 fat .venv 会被整体打包。**
+wrangler 的 Python 模块收集递归遍历项目根下的所有文件（不看 .gitignore），`backend/.venv`（含 torch/modelscope，1.5GB+）会被整体 attach 导致 wrangler 崩溃。
+CI（Workers Builds）上 `uv sync` 不带 extras，venv 是瘦的，无此问题。
+本地冒烟需在瘦身 staging 目录跑（拷出 `app/` + `main.py` + `workers_entry.py` + `wrangler.toml` + `pyproject.toml` + `uv.lock`，`uv sync --extra workers` 后启动）。
+
+**坑 2：Pyodide 不支持线程。**
+sync def 端点、sync 依赖函数、sync generator 依赖都会被 FastAPI 包进 `anyio.to_thread`，直接 `RuntimeError: can't start new thread`。
+workers 可达链路上的端点/依赖必须 async（`main.py` 的 `/` 与 `/health`、`get_db`、仓储依赖 `app/core/repositories/deps.py`、`get_asset_store` 已 async 化）。
+其余 workers 保留路由里的 sync 端点（约 50 个，grep `def ` handler）真实部署前需统一 async 化。
+
+**坑 3：workers 运行时 FS 只读。**
+`Settings` 在 `deploy_target=workers` 时跳过本地数据目录创建；`LOG_TO_FILE=false` 关闭文件日志。
+
+### Deploy
+
+```bash
+cd backend
+# 1. R2 资产桶（克隆样本/试听音频；wrangler.toml 的 bucket_name 占位符先改为实际桶名）
+uv run --extra workers pywrangler r2 bucket create narraforge-assets
+
+# 2. secrets（不进 wrangler.toml）
+uv run --extra workers pywrangler secret put SUPABASE_SERVICE_KEY
+uv run --extra workers pywrangler secret put MIMO_API_KEY
+
+# 3. [vars] 占位符：SUPABASE_URL、CORS_ORIGINS（Pages 域名，逗号分隔多个）
+
+# 4. 部署
+uv run --extra workers pywrangler deploy
+```
+
+### Post-deploy checklist
+
+- 关闭 workers.dev 子域路由（Dashboard → Workers → Settings → Domains & Routes），API 仅走受 Access 保护的自定义域名（防绕过，spec 3.6/5.2）。
+- Zero Trust 控制台建 Access 应用（self-hosted），覆盖 Pages 域名与 API 域名两个 hostname；登录方式邮箱 OTP。
+- Access 应用 CORS 设置放行 Pages 域名并允许 credentials；后端 `CORS_ORIGINS` 同步填 Pages 域名。
+- 后端中间件校验 `Cf-Access-Authenticated-User-Email` 头作为纵深防御（`ACCESS_ENFORCEMENT=true`，默认开）；缺头返回 401 `access_required`。
+- Supabase：执行 `backend/supabase/schema.sql` 迁移；`SUPABASE_SERVICE_KEY` 只放 Workers secrets。
+
+---
+
 ## Production Deployment
 
 1. Set `DEBUG=false` in `.env`

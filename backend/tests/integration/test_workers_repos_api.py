@@ -21,6 +21,8 @@ from tests.fixtures.postgrest_fake import make_fake_supabase_client
 @pytest.fixture
 def workers_client(monkeypatch):
     monkeypatch.setattr(settings, "deploy_target", "workers")
+    # 本文件测仓储接线，不测 Access 头校验（见 tests/unit/test_workers_access_cors.py）
+    monkeypatch.setattr(settings, "access_enforcement", False)
     client, store = make_fake_supabase_client()
     app = main_module.create_app("workers")
     app.dependency_overrides[deps.get_system_config_repo] = (

@@ -94,10 +94,20 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
 
     app = FastAPI(title=settings.app_name, debug=settings.debug)
 
-    # CORS
+    # Cloudflare Access 校验（spec 3.6，仅 workers 模式）：先于 CORS 注册，
+    # 使 CORS 成为更外层中间件——Access 拒绝的 401 也带 ACAO 头，
+    # 浏览器跨域能读到真实 401 而非 CORS 错误。
+    if not is_local and settings.access_enforcement:
+        from app.core.access_middleware import AccessEnforcementMiddleware
+
+        app.add_middleware(AccessEnforcementMiddleware)
+
+    # CORS：workers 用 settings.cors_origins（部署填 Pages 域名），local 恒 ["*"]。
+    # 注：allow_credentials=True 时规范禁止字面 "*" 配 credentials，Starlette
+    # 降级为反射请求 Origin——两种模式下 ACAO 均为具体 origin。
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["*"] if is_local else list(settings.cors_origins),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -127,12 +137,14 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
             from app.services.narration_versioning.scheduler import shutdown as _stop_versioning_scheduler
             _stop_versioning_scheduler()
 
+    # 注：必须 async——Pyodide 不支持线程，sync def 端点在 workers 运行时
+    # 会经 anyio.to_thread 失败（冒烟实测）。
     @app.get("/")
-    def root():
+    async def root():
         return {"message": "Voice Clone Studio API", "version": "1.0.0"}
 
     @app.get("/health")
-    def health():
+    async def health():
         return {"status": "healthy", "app_env": settings.app_env}
 
     @app.exception_handler(HTTPException)

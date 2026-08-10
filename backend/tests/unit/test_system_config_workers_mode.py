@@ -122,7 +122,8 @@ class TestModelConfigServiceWorkers:
 class TestRepoDeps:
     """依赖注入按 deploy_target 选择 Local/Supabase 实现。"""
 
-    def test_local_mode_returns_local_repos(self, db_session, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_local_mode_returns_local_repos(self, db_session, monkeypatch):
         monkeypatch.setattr(settings, "deploy_target", "local")
         from app.core.repositories import deps
         from app.core.repositories.roles import LocalRoleRepository
@@ -130,12 +131,13 @@ class TestRepoDeps:
         from app.core.repositories.system_configs import LocalSystemConfigRepository
         from app.core.repositories.voice_profiles import LocalVoiceProfileRepository
 
-        assert isinstance(deps.get_system_config_repo(db_session), LocalSystemConfigRepository)
-        assert isinstance(deps.get_role_repo(db_session), LocalRoleRepository)
-        assert isinstance(deps.get_voice_repo(db_session), LocalVoiceProfileRepository)
-        assert isinstance(deps.get_source_document_repo(db_session), LocalSourceDocumentRepository)
+        assert isinstance(await deps.get_system_config_repo(db_session), LocalSystemConfigRepository)
+        assert isinstance(await deps.get_role_repo(db_session), LocalRoleRepository)
+        assert isinstance(await deps.get_voice_repo(db_session), LocalVoiceProfileRepository)
+        assert isinstance(await deps.get_source_document_repo(db_session), LocalSourceDocumentRepository)
 
-    def test_workers_mode_returns_supabase_repos(self, workers):
+    @pytest.mark.asyncio
+    async def test_workers_mode_returns_supabase_repos(self, workers):
         from app.core.repositories import deps
         from app.core.repositories.roles import SupabaseRoleRepository
         from app.core.repositories.source_documents import SupabaseSourceDocumentRepository
@@ -150,7 +152,7 @@ class TestRepoDeps:
         workers.setattr(deps, "get_supabase_client", lambda: client)
 
         # db=None：workers 模式不得触碰 Session
-        assert isinstance(deps.get_system_config_repo(None), SupabaseSystemConfigRepository)
-        assert isinstance(deps.get_role_repo(None), SupabaseRoleRepository)
-        assert isinstance(deps.get_voice_repo(None), SupabaseVoiceProfileRepository)
-        assert isinstance(deps.get_source_document_repo(None), SupabaseSourceDocumentRepository)
+        assert isinstance(await deps.get_system_config_repo(None), SupabaseSystemConfigRepository)
+        assert isinstance(await deps.get_role_repo(None), SupabaseRoleRepository)
+        assert isinstance(await deps.get_voice_repo(None), SupabaseVoiceProfileRepository)
+        assert isinstance(await deps.get_source_document_repo(None), SupabaseSourceDocumentRepository)

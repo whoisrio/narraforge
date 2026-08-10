@@ -13,10 +13,12 @@ router = APIRouter()
 
 
 @router.get("/roles", response_model=ItemsOut[RoleOut])
-def list_roles(
+async def list_roles(
     project_id: Optional[str] = Query(None),
     repo: RoleRepository = Depends(get_role_repo),
 ) -> dict:
+    # async：Pyodide 不支持线程，sync def 端点在 workers 运行时经 anyio.to_thread 失败。
+    # TODO(step 6)：其余 sync 端点同问题，真实部署前需统一处理。
     return {"items": repo.list(project_id=project_id)}
 
 

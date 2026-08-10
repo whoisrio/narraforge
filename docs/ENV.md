@@ -11,6 +11,19 @@ The `.env` file supports `${ENV_VAR}` and `${ENV_VAR:-default}` syntax for refer
 | `APP_NAME` | No | Application display name | `NarraForge` |
 | `DEBUG` | No | Enable debug mode | `true` |
 
+## Deployment (Cloudflare Workers)
+
+These variables select the deploy target and control workers-only behavior.
+In Workers deployments they are set via `backend/wrangler.toml` `[vars]` (non-sensitive) and `wrangler secret put` / `.dev.vars` (secrets), not via `.env`.
+See `docs/RUNBOOK.md` → "Cloudflare Workers Deployment".
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `DEPLOY_TARGET` | No | `local` (full routes, SQLite, local models) or `workers` (Cloudflare Workers, online routes only) | `local` |
+| `ACCESS_ENFORCEMENT` | No | Workers mode only: require the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access (401 `access_required` otherwise). `/health` and OPTIONS preflight are exempt. Never enabled in local mode. | `true` |
+| `CORS_ORIGINS` | No | Workers mode only: comma-separated allowed CORS origins (set to the Pages domain at deploy time). Local mode always uses `*`. | `*` |
+| `LOG_TO_FILE` | No | Write logs to `logs/app.log`. Set `false` in Workers (no writable persistent FS). | `true` |
+
 ## Database
 
 | Variable | Required | Description | Default |
