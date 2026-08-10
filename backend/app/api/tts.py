@@ -18,11 +18,24 @@ from app.core.system_config_service import is_frontend_storage
 from app.models.voice_profile import VoiceProfile
 from app.models.tts_result import TTSResultRecord
 from app.api._voice_helpers import voice_to_dict
-from app.services.qwen_tts_service import get_tts_service, QwenTTSService
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# qwen/dashscope 专属端点（batch 合成），workers 模式不挂载（main.py 按 deploy_target 注册）
+local_router = APIRouter()
+
+
+async def get_tts_service(db=None):
+    """延迟 import qwen_tts_service：workers 构建不含 dashscope SDK（local-services extra）。
+
+    保留模块级同名属性是为了不破坏既有测试的 patch 点
+    （tests patch "app.api.tts.get_tts_service"）。
+    """
+    from app.services.qwen_tts_service import get_tts_service as _get_tts_service
+
+    return await _get_tts_service(db)
 
 
 class TTSRequest(BaseModel):
@@ -293,9 +306,9 @@ def delete_synthesis_result(result_id: str, db: Session = Depends(get_db)):
     return {"message": "Result deleted"}
 
 
-@router.post("/batch")
+@local_router.post("/batch")
 async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_db)):
-    """批量合成语音"""
+    """批量合成语音（仅 qwen/cosyvoice，workers 模式不挂载）"""
     results = []
 
     try:

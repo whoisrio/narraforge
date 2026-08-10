@@ -18,9 +18,32 @@ import logging
 from app.core.database import get_db
 from app.core.config import settings
 from app.models import VoiceProfile
-from app.services.qwen_tts_service import get_tts_service
-from app.services.qiniu_service import is_qiniu_configured, upload_to_qiniu
 from app.core.time_utils import utcnow
+
+
+async def get_tts_service(db=None):
+    """延迟 import qwen_tts_service：workers 构建不含 dashscope SDK（local-services extra）。
+
+    保留模块级同名属性是为了不破坏既有测试的 patch 点
+    （tests patch "app.api.clone.get_tts_service"）。
+    """
+    from app.services.qwen_tts_service import get_tts_service as _get_tts_service
+
+    return await _get_tts_service(db)
+
+
+def is_qiniu_configured(db=None) -> bool:
+    """延迟 import qiniu_service（保留 patch 点，见上）。"""
+    from app.services.qiniu_service import is_qiniu_configured as _impl
+
+    return _impl(db)
+
+
+def upload_to_qiniu(local_file_path: str, key: str, db=None) -> str:
+    """延迟 import qiniu_service（保留 patch 点，见上）。"""
+    from app.services.qiniu_service import upload_to_qiniu as _impl
+
+    return _impl(local_file_path, key, db=db)
 
 
 def _resolve(db_path: str | None) -> str | None:
@@ -45,6 +68,9 @@ def _guess_media_type(file_path: str) -> str:
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# qwen/dashscope/voxcpm 专属端点，workers 模式不挂载（main.py 按 deploy_target 注册）
+local_router = APIRouter()
 
 
 def convert_audio_to_mp3(input_path: str, output_path: str) -> bool:
@@ -303,9 +329,9 @@ async def upload_voice_from_url(request: UploadFromUrlRequest, db: Session = Dep
     return voice_to_dict(voice)
 
 
-@router.post("/create-clone", response_model=VoiceProfileOut)
+@local_router.post("/create-clone", response_model=VoiceProfileOut)
 async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
-    """注册克隆声音 - 调用千问 API"""
+    """注册克隆声音 - 调用千问 API（workers 模式不挂载）"""
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
@@ -423,7 +449,7 @@ async def create_clone_mimo(request: RegisterRequest, db: Session = Depends(get_
         raise HTTPException(status_code=500, detail=f"MiMo voice clone failed: {str(e)}")
 
 
-@router.post("/create-clone-voxcpm", response_model=VoiceProfileOut)
+@local_router.post("/create-clone-voxcpm", response_model=VoiceProfileOut)
 async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(get_db)):
     """
     VoxCPM 声音复刻 - 仅保存音频并标记为 VoxCPM 复刻，无需云端注册。
@@ -618,15 +644,15 @@ def list_voices(project_id: str | None = None, db: Session = Depends(get_db)):
     return {"items": [voice_to_dict(v) for v in voices]}
 
 
-@router.get("/list-from-qwen")
+@local_router.get("/list-from-qwen")
 async def list_voices_from_qwen(db: Session = Depends(get_db)):
-    """从千问 API 获取已克隆的声音列表"""
+    """从千问 API 获取已克隆的声音列表（workers 模式不挂载）"""
     tts_service = await get_tts_service(db)
     voices = await tts_service.list_cloned_voices()
     return {"items": voices}
 
 
-@router.post("/sync-from-qwen")
+@local_router.post("/sync-from-qwen")
 async def sync_voices_from_qwen(db: Session = Depends(get_db)):
     """从千问 API 同步已克隆的声音到本地数据库"""
     tts_service = await get_tts_service(db)

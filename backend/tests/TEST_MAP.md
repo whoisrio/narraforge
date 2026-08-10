@@ -8,14 +8,14 @@ Default automated backend suite:
 
 ```bash
 cd backend
-uv run --extra test pytest -q
+uv run --extra test --extra local-ml --extra local-services pytest -q
 ```
 
 Real external Qwen/DashScope checks are opt-in:
 
 ```bash
 cd backend
-RUN_EXTERNAL_QWEN_TESTS=1 uv run --extra test pytest tests/integration/test_external_url_clone.py -s -v
+RUN_EXTERNAL_QWEN_TESTS=1 uv run --extra test --extra local-ml --extra local-services pytest tests/integration/test_external_url_clone.py -s -v
 ```
 
 ## Test Database and Isolation
@@ -50,8 +50,9 @@ db_session.commit()
 | Qwen/CosyVoice clone registration | `app/api/clone.py`, `app/services/qwen_tts_service.py` | `tests/integration/test_clone_api.py`, `tests/unit/test_qwen_tts_service.py` | Automated tests mock Qwen. Real Qwen calls are external tests only. |
 | External audio URL behavior | GitHub/Qwen URL checks | `tests/integration/test_external_url_clone.py` | Marked `external`; requires `RUN_EXTERNAL_QWEN_TESTS=1` for real Qwen calls. |
 | Qwen/CosyVoice TTS API | `app/api/tts.py`, `app/services/qwen_tts_service.py`, `app/schemas/tts.py` (`TTSResultOut`) | `tests/integration/test_tts_api.py`, `tests/test_api_tts.py`, `tests/unit/test_qwen_tts_service.py` | Current contract: Qwen/CosyVoice synthesis returns an audio file path. B-P1-8b: `response_model=TTSResultOut` on `/synthesize`; `/history` -> `{items: [TTSResultOut]}`. |
-| Edge-TTS | `app/api/tts.py`, `app/services/edge_tts_service.py` | `tests/test_api_tts.py`, `tests/unit/test_edge_tts_service.py`, `tests/test_synthesize_speech_internal.py` | Current mock contract: Edge-TTS returns `(audio_bytes, "mp3")`. |
-| MiMo TTS | `app/api/mimo_tts.py`, MiMo service code, `app/schemas/tts.py` (`TTSResultOut`) | Covered indirectly through segmented/project integration where applicable | Add focused tests here when changing MiMo-specific behavior. B-P1-8b: `response_model=TTSResultOut` on /preset /voicedesign /voiceclone /voiceclone-direct. |
+| Edge-TTS | `app/api/tts.py`, `app/services/edge_tts_service.py`, `app/services/edge_tts_protocol.py`（纯协议：GEC/SSML/帧重组）, `app/services/edge_tts_ws_client.py`（workers 传输层） | `tests/test_api_tts.py`, `tests/unit/test_edge_tts_service.py`, `tests/unit/test_edge_tts_service_strategy.py`（deploy_target 策略分发 + workers 子进程 import 审计）, `tests/unit/test_edge_tts_protocol.py`, `tests/unit/test_edge_tts_ws_client.py`, `tests/test_synthesize_speech_internal.py` | Current mock contract: Edge-TTS returns `(audio_bytes, "mp3")`. workers 模式走内置 WS 客户端（无 edge-tts 包），list_voices 走 voices/list REST（MockTransport 注入）。 |
+| MiMo TTS | `app/api/mimo_tts.py`, `app/services/mimo_tts_service.py`（httpx 同步客户端，transport 可注入）, `app/schemas/tts.py` (`TTSResultOut`) | `tests/unit/test_mimo_tts_service.py`（MockTransport：请求形状/HTTP 错误/传输错误/无效 JSON/异步入口）, covered indirectly through segmented/project integration where applicable | `_call_api_sync` 已 httpx 化（原 urllib），行为不变。B-P1-8b: `response_model=TTSResultOut` on /preset /voicedesign /voiceclone /voiceclone-direct. |
+| 部署目标路由分流 | `main.py` (`create_app(deploy_target)`), `app/api/tts.py` / `app/api/clone.py` (`local_router` + lazy SDK import wrappers) | `tests/test_app_factory.py` | workers 模式不挂载 `/api/tts/batch`、`/api/clone/create-clone`、`/api/clone/create-clone-voxcpm`、`/api/clone/list-from-qwen`、`/api/clone/sync-from-qwen`；local_router 必须先于通用 router 注册（`/{voice_id}` 路径遮蔽陷阱）；子进程 sys.modules 审计 edge_tts/dashscope/qiniu 不泄漏。 |
 | VoxCPM TTS | `app/api/voxcpm.py`, VoxCPM service code | Covered by API-level behavior where applicable | Local model/hardware paths should stay out of default pytest unless fully mocked. |
 | Speech-to-text | `app/api/speech_to_text.py`, `app/services/voice_to_srt_service.py`, `app/services/funasr_service.py` | `tests/test_api_speech_to_text.py`, `tests/test_funasr_service.py`, `tests/test_stt_engines_fix.py` | Frontend storage returns content without history rows; backend storage persists history. `test_stt_engines_fix.py` locks two regressions: whisper `_download_model` allow_patterns 必须含 vocabulary.json/.txt（否则 ctranslate2 报 Cannot load the vocabulary，仅 5 月缓存的 large-v3 幸免）；FunASR 离线转写不提供 paraformer-zh-streaming（流式模型离线输出 00:00:00 全零时间戳+错乱文本）。 |
 | FunASR service | `app/services/funasr_service.py` | `tests/test_funasr_service.py` | Real/manual FunASR checks live under `tests/manual/`. |

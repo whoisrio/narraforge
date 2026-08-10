@@ -14,17 +14,6 @@ dependencies = [
     "python-multipart>=0.0.9",
     "aiofiles>=23.2.1",
     "httpx>=0.26.0",
-    "dashscope>=1.25.0",
-    "edge-tts>=7.0.0",
-    "faster-whisper>=1.2.1",
-    "qiniu>=7.17.0",
-    "funasr>=1.0.0",
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
-    # VoxCPM 本地 GPU TTS（需要 Python >=3.10, <3.13; PyTorch >=2.5.0; CUDA >=12.0）
-    "voxcpm",
-    "soundfile",
-    "modelscope",
     # Workflow dependencies
     "langgraph>=1.2.0",
     "langgraph-checkpoint-sqlite>=1.0.0",
@@ -46,6 +35,23 @@ torch = [
 ]
 
 [project.optional-dependencies]
+# 本地 ML 模型依赖（Pyodide 不兼容，workers 部署不安装）
+local-ml = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    # VoxCPM 本地 GPU TTS（需要 Python >=3.10, <3.13; PyTorch >=2.5.0; CUDA >=12.0）
+    "voxcpm",
+    "funasr>=1.0.0",
+    "faster-whisper>=1.2.1",
+    "modelscope",
+    "soundfile",
+]
+# 含原生扩展的在线服务 SDK（workers 模式用 httpx/内置 WS 客户端替代）
+local-services = [
+    "edge-tts>=7.0.0",
+    "dashscope>=1.25.0",
+    "qiniu>=7.17.0",
+]
 test = [
     "pytest>=7.4.4",
     "pytest-asyncio>=0.23.2",

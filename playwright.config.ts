@@ -38,7 +38,7 @@ export default defineConfig({
   webServer: [
     {
       name: 'backend',
-      command: `uv run python -m uvicorn main:app --host 127.0.0.1 --port ${E2E_BACKEND_PORT}`,
+      command: `uv run --extra local-ml --extra local-services python -m uvicorn main:app --host 127.0.0.1 --port ${E2E_BACKEND_PORT}`,
       cwd: 'backend',
       env: { ENV_FILE: process.env.E2E_ENV_FILE || '.env.e2e' },
       url: `${E2E_BACKEND_URL}/health`,

@@ -1,5 +1,11 @@
 """Edge-TTS 语音合成服务
 使用 Microsoft Edge 在线 TTS 服务，支持多种语言和音色
+
+部署策略（settings.deploy_target）：
+- local：使用 edge-tts 包（local-services extra，现有行为）。
+- workers（Cloudflare Workers / Pyodide）：使用内置手写 WS 客户端
+  （edge_tts_ws_client + edge_tts_protocol，spike 验证，无 aiohttp 依赖）。
+edge_tts 包在 workers 环境不存在，import 必须延迟到策略选择之后。
 """
 
 import asyncio
@@ -8,9 +14,12 @@ import time
 import logging
 from typing import Optional
 
-import edge_tts
-
 from app.core.config import settings
+
+# workers 环境没有 edge_tts 包（且 Pyodide 装不了 aiohttp），
+# 只在 local 部署目标下做模块级 import，保留既有测试的 patch 点。
+if settings.deploy_target != "workers":
+    import edge_tts
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +63,10 @@ class EdgeTTSService:
     _voices_cache_time: float = 0
     _cache_ttl: float = 3600  # 1 hour
 
+    def __init__(self, voices_transport=None):
+        # 可注入的 httpx transport（workers 模式音色列表；测试用 MockTransport）
+        self._voices_transport = voices_transport
+
     async def list_voices(
         self,
         language: Optional[str] = None,
@@ -83,7 +96,10 @@ class EdgeTTSService:
         if self._voices_cache is not None and (now - self._voices_cache_time) < self._cache_ttl:
             return self._voices_cache
 
-        raw_voices = await edge_tts.list_voices()
+        if settings.deploy_target == "workers":
+            raw_voices = await self._list_voices_workers()
+        else:
+            raw_voices = await edge_tts.list_voices()
 
         voices = []
         for v in raw_voices:
@@ -108,6 +124,23 @@ class EdgeTTSService:
         self._voices_cache = voices
         self._voices_cache_time = now
         return voices
+
+    async def _list_voices_workers(self) -> list[dict]:
+        """workers 模式音色列表：voices/list REST 端点（httpx，与 edge-tts 7.x 同一 URL/参数）。"""
+        import httpx
+
+        from app.services import edge_tts_protocol as proto
+
+        url = (
+            f"https://{proto.BASE_URL}/voices/list"
+            f"?trustedclienttoken={proto.TRUSTED_CLIENT_TOKEN}"
+            f"&Sec-MS-GEC={proto.generate_sec_ms_gec()}"
+            f"&Sec-MS-GEC-Version={proto.SEC_MS_GEC_VERSION}"
+        )
+        async with httpx.AsyncClient(transport=self._voices_transport, timeout=30) as client:
+            resp = await client.get(url, headers=proto.WSS_HEADERS)
+            resp.raise_for_status()
+            return resp.json()
 
     async def get_available_languages(self) -> list[str]:
         """获取所有可用语言列表"""
@@ -135,23 +168,29 @@ class EdgeTTSService:
         Returns:
             (audio_data, audio_format) 音频数据和格式
         """
-        import asyncio
-
         for attempt in range(max_retries):
             try:
-                communicate = edge_tts.Communicate(
-                    text=text,
-                    voice=voice,
-                    rate=rate,
-                    volume=volume,
-                    connect_timeout=10,
-                    receive_timeout=30,
-                )
+                if settings.deploy_target == "workers":
+                    # Cloudflare Workers：内置手写 WS 客户端（无 edge-tts 包）
+                    from app.services.edge_tts_ws_client import synthesize as ws_synthesize
 
-                audio_data = b""
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        audio_data += chunk["data"]
+                    audio_data = await ws_synthesize(
+                        text=text, voice=voice, rate=rate, volume=volume
+                    )
+                else:
+                    communicate = edge_tts.Communicate(
+                        text=text,
+                        voice=voice,
+                        rate=rate,
+                        volume=volume,
+                        connect_timeout=10,
+                        receive_timeout=30,
+                    )
+
+                    audio_data = b""
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            audio_data += chunk["data"]
 
                 if not audio_data:
                     raise RuntimeError("No audio received from edge-tts")

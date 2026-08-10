@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     app_name: str = "NarraForge"
     app_env: str = "production"   # production | e2e (set by .env.e2e overlay)
     debug: bool = True
+    # 部署目标：local（本地全量，含本地模型路由/SQLite/scheduler）| workers（Cloudflare Workers，纯在线路由）
+    deploy_target: str = "local"
 
     # Paths
     base_dir: Path = Path(__file__).parent.parent.parent

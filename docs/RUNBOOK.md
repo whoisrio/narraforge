@@ -13,7 +13,7 @@
 ```bash
 # Terminal 1 - Backend (port 8002)
 cd backend
-uv sync
+uv sync --extra local-ml --extra local-services
 uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload
 
 # Terminal 2 - Frontend
@@ -45,11 +45,11 @@ npm run dev
 
 2. **Missing dependencies**: Reinstall with uv
    ```bash
-   cd backend && uv sync
+   cd backend && uv sync --extra local-ml --extra local-services
    ```
    If PyPI is unstable (common in China), use the Tsinghua mirror:
    ```bash
-   uv sync --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+   uv sync --extra local-ml --extra local-services --index-url https://pypi.tuna.tsinghua.edu.cn/simple
    ```
 
 3. **Database locked**: Delete and recreate

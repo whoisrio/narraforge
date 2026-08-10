@@ -107,7 +107,8 @@ console.log('');
 // Backend (uvicorn)
 const BE_PORT = process.env.BE_PORT || '8002';
 start('backend', 'uv', [
-  'run', 'python', '-m', 'uvicorn', 'main:app',
+  'run', '--extra', 'local-ml', '--extra', 'local-services',
+  'python', '-m', 'uvicorn', 'main:app',
   '--host', '127.0.0.1',
   '--port', BE_PORT,
   '--reload',

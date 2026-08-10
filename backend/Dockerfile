@@ -19,7 +19,7 @@ ENV PATH="/app/.venv/bin:$PATH"
 COPY pyproject.toml uv.lock ./
 
 # Sync dependencies with the correct Python
-RUN uv sync --no-dev && rm -rf /root/.cache
+RUN uv sync --no-dev --extra local-ml --extra local-services && rm -rf /root/.cache
 
 COPY . .
 

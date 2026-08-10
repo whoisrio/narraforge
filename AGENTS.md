@@ -46,7 +46,7 @@ npm run lint     # Run ESLint
 
 ```bash
 cd backend
-uv sync                              # Install dependencies with uv, not pip
+uv sync --extra local-ml --extra local-services   # Install dependencies with uv, not pip
 uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload
 ```
 

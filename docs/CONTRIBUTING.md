@@ -14,7 +14,7 @@
 ```bash
 # Backend
 cd backend
-uv sync
+uv sync --extra local-ml --extra local-services
 
 # Frontend
 cd frontend
@@ -59,7 +59,7 @@ uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload
 
 ```bash
 # Backend tests
-cd backend && uv run --extra test pytest -q
+cd backend && uv run --extra test --extra local-ml --extra local-services pytest -q
 
 # Frontend tests
 cd frontend && npm test
