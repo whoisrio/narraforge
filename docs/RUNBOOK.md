@@ -358,7 +358,7 @@ uv run --extra workers pywrangler dev --port 8787
 ```
 
 `pywrangler dev` 会把 `[project.dependencies]` vendor 成 `python_modules`（Pyodide 平台解析）。
-因此 core dependencies 必须可在 Pyodide 解析：local-only 依赖（langgraph 链、apscheduler、本地 ML、在线 SDK）都放在 extras（`local-ml` / `local-services`），不进 `[project.dependencies]`。
+因此 core dependencies 必须可在 Pyodide 解析且是 workers 运行时真正需要的：local-only 依赖（langgraph 链、apscheduler、本地 ML、在线 SDK，以及步骤 5 移出的 uvicorn / sqlalchemy / pypinyin / pyyaml）都放在 extras（`local-ml` / `local-services`），不进 `[project.dependencies]`。
 首次启动需下载 Pyodide 并 vendor，首个请求要初始化 Pyodide（冷启动 10s+）。
 
 **坑 1：本地 fat .venv 会被整体打包。**
@@ -368,8 +368,14 @@ CI（Workers Builds）上 `uv sync` 不带 extras，venv 是瘦的，无此问�
 
 **坑 2：Pyodide 不支持线程。**
 sync def 端点、sync 依赖函数、sync generator 依赖都会被 FastAPI 包进 `anyio.to_thread`，直接 `RuntimeError: can't start new thread`。
-workers 可达链路上的端点/依赖必须 async（`main.py` 的 `/` 与 `/health`、`get_db`、仓储依赖 `app/core/repositories/deps.py`、`get_asset_store` 已 async 化）。
-其余 workers 保留路由里的 sync 端点（约 50 个，grep `def ` handler）真实部署前需统一 async 化。
+workers 可达链路上的端点/依赖必须 async——步骤 5 已全部 async 化，
+`tests/unit/test_workers_async_deps.py` 的静态扫描（遍历 `create_app("workers")` 路由表）锁死回归，新增 sync 端点会立刻红。
+
+**坑 4：core dependencies 决定 bundle 体积。**
+`[project.dependencies]` 会整体 vendor 进 bundle（官方限制：gzip 后 Free 3MB / Paid 10MB，未压缩 64MB）。
+workers 用不到的包必须放 extras：uvicorn / sqlalchemy / pypinyin / pyyaml 在 `local-services`；
+workers 模式下 sqlalchemy/app.models 的 import 全部有守卫或延迟（`tests/unit/test_workers_no_sqlalchemy_import.py` 锁死）。
+步骤 5 实测：`pywrangler deploy --dry-run` Total Upload 30.4MB / gzip 6.85MB（Paid 档内，Free 档 3MB 对 FastAPI 栈不可达——pydantic-core 一项就 4.4MB）。
 
 **坑 3：workers 运行时 FS 只读。**
 `Settings` 在 `deploy_target=workers` 时跳过本地数据目录创建；`LOG_TO_FILE=false` 关闭文件日志。

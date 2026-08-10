@@ -10,8 +10,6 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from pypinyin import lazy_pinyin
-
 _ALPHA_NUM = re.compile(r"[a-z0-9]+")
 _SEGMENT_ID_RE = re.compile(r"^s\d{3}$")
 _SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -20,6 +18,11 @@ MAX_SLUG_LEN = 40
 
 
 def _to_slug(text: str) -> str:
+    # pypinyin 函数内 import：workers bundle 不含 pypinyin（local-services
+    # extra），而本模块经 segmented_assets 处于 workers import 链上；
+    # workers 不跑 narration versioning，此函数不会被调用。
+    from pypinyin import lazy_pinyin
+
     if not text:
         return ""
     tokens: list[str] = []

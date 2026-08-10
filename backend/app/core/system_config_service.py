@@ -1,7 +1,18 @@
-from sqlalchemy.orm import Session
+from typing import Any
+
 from app.core.config import settings
 from app.core.supabase_client import get_supabase_client
-from app.models.system_config import SystemConfig
+
+# workers bundle 不含 sqlalchemy / app.models：本模块被 workers 链路的
+# config/tts/mimo_tts 路由顶层 import，必须可加载；SystemConfig/Session 只在
+# local 调用路径（db.query）运行时引用。
+try:
+    from sqlalchemy.orm import Session
+
+    from app.models.system_config import SystemConfig
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
+    SystemConfig = None  # type: ignore[assignment,misc]
 
 # 存储模式允许的值
 STORAGE_MODE_BACKEND = "backend"

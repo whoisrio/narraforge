@@ -6,13 +6,20 @@ SystemConfigRepository 只有两个原语：get / set（upsert）。
 """
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
-from sqlalchemy.orm import Session
-
-from app.core import system_config_service as svc
 from app.core.supabase_client import SupabaseClient
 from app.core.time_utils import utcnow
+
+# workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化，运行时名字
+# 查找不会在 workers 触发；守卫让模块本身可 import。
+try:
+    from sqlalchemy.orm import Session
+
+    from app.core import system_config_service as svc
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
+    svc = None  # type: ignore[assignment]
 
 TABLE = "system_configs"
 

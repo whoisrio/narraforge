@@ -72,21 +72,14 @@ def _parse_iso(value: str | None) -> datetime | None:
     return dt
 
 
-def _parse_animation_spec(raw: str | None) -> dict[str, Any] | None:
-    """P2 v3: 解析 segments.animation_spec_json 字符串为 dict. None / 解析失败 → None."""
-    if not raw:
-        return None
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return None
-
-
-def _dump_animation_spec(spec: dict[str, Any] | None) -> str | None:
-    """P2 v3: 序列化 dict 为 JSON 字符串. None → None."""
-    if spec is None:
-        return None
-    return json.dumps(spec, ensure_ascii=False)
+# P2 v3: animation_spec 编解码实现已迁至 app.services.animation_spec_codec
+# （纯函数、无 ORM 依赖，workers 的 Supabase 仓储也用）；此处 re-export
+# 保持 `from app.services.segmented_project_service import _dump_animation_spec`
+# 历史路径不变。
+from app.services.animation_spec_codec import (
+    _dump_animation_spec,
+    _parse_animation_spec,
+)
 
 
 def _duration_from_bytes(audio_bytes: bytes, fmt: str) -> float | None:

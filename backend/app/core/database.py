@@ -1,7 +1,16 @@
-from sqlalchemy import create_engine, event, inspect, text
-from sqlalchemy.orm import declarative_base, sessionmaker
-
 from app.core.config import settings
+
+# workers bundle 不 vendor sqlalchemy（~8.5MB，最大头；workers 持久化全走
+# Supabase/PostgREST）。顶层 import 守卫：无 sqlalchemy 时本模块仍可 import，
+# 只有真实触碰 ORM 的调用路径（local）才会用到这些名字。
+# local 行为零回退：sqlalchemy 存在时一切照旧。
+try:
+    from sqlalchemy import create_engine, event, inspect, text
+    from sqlalchemy.orm import declarative_base, sessionmaker
+    _HAS_SQLALCHEMY = True
+except ImportError:  # workers bundle
+    _HAS_SQLALCHEMY = False
+    create_engine = event = inspect = text = sessionmaker = None
 
 # Engine 延迟创建（步骤 3A）：
 # - workers 运行时（Cloudflare Pyodide）没有原生 socket，不得创建 SQLAlchemy
@@ -55,7 +64,13 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-Base = declarative_base()
+if _HAS_SQLALCHEMY:
+    Base = declarative_base()
+else:
+    # workers 占位：workers 模式不 import app.models，Base 无人使用；
+    # 定义空基类只为让 `from app.core.database import Base` 不炸。
+    class Base:  # type: ignore[no-redef]
+        pass
 
 
 async def get_db():

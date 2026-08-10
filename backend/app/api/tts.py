@@ -1,8 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, List, Optional
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 import uuid
 import os
 import base64
@@ -17,9 +22,15 @@ from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut
 from app.schemas.tts import TTSResultOut, TTSResultRecordOut
 from app.core.system_config_service import is_frontend_storage
-from app.models.voice_profile import VoiceProfile
-from app.models.tts_result import TTSResultRecord
 from app.api._voice_helpers import voice_to_dict
+
+# workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
+try:
+    from app.models.voice_profile import VoiceProfile
+    from app.models.tts_result import TTSResultRecord
+except ImportError:  # workers bundle
+    VoiceProfile = None  # type: ignore[assignment,misc]
+    TTSResultRecord = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -282,7 +293,7 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
 
 
 @router.get("/history", response_model=ItemsOut[TTSResultRecordOut])
-def get_synthesis_history(db: Session = Depends(get_db)):
+async def get_synthesis_history(db: Session = Depends(get_db)):
     """获取合成历史列表"""
     records = (
         db.query(TTSResultRecord)
@@ -293,7 +304,7 @@ def get_synthesis_history(db: Session = Depends(get_db)):
 
 
 @router.delete("/history/{result_id}")
-def delete_synthesis_result(result_id: str, db: Session = Depends(get_db)):
+async def delete_synthesis_result(result_id: str, db: Session = Depends(get_db)):
     """删除合成记录及音频文件"""
     record = db.query(TTSResultRecord).filter(TTSResultRecord.id == result_id).first()
     if not record:

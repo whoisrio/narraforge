@@ -1,6 +1,11 @@
 from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Any, List, Optional
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 from datetime import datetime
 from pydantic import BaseModel, field_validator
 import copy
@@ -20,8 +25,13 @@ import logging
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.models import VoiceProfile
 from app.core.time_utils import utcnow
+
+# workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
+try:
+    from app.models import VoiceProfile
+except ImportError:  # workers bundle
+    VoiceProfile = None  # type: ignore[assignment,misc]
 
 
 async def get_tts_service(db=None):
@@ -634,7 +644,7 @@ async def save_preview_audio(
 
 
 @router.get("/list", response_model=ItemsOut[VoiceProfileOut])
-def list_voices(project_id: str | None = None, repo: VoiceProfileRepository = Depends(get_voice_repo)):
+async def list_voices(project_id: str | None = None, repo: VoiceProfileRepository = Depends(get_voice_repo)):
     """获取声音列表。无 project_id 时返回全局声音；有 project_id 时返回全局 + 该项目的声音。"""
     return {"items": repo.list(project_id=project_id)}
 
@@ -727,7 +737,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
 
 
 @router.patch("/{voice_id}/description")
-def update_voice_description(
+async def update_voice_description(
     voice_id: str,
     request: UpdateDescriptionRequest,
     repo: VoiceProfileRepository = Depends(get_voice_repo),
@@ -802,7 +812,7 @@ async def get_voice_audio(voice_id: str, field: str = None, db: Session = Depend
 
 
 @router.get("/{voice_id}", response_model=VoiceProfileOut)
-def get_voice(voice_id: str, repo: VoiceProfileRepository = Depends(get_voice_repo)):
+async def get_voice(voice_id: str, repo: VoiceProfileRepository = Depends(get_voice_repo)):
     """获取单个声音详情"""
     voice = repo.get(voice_id)
     if not voice:

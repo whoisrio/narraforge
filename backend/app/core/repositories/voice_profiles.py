@@ -7,13 +7,20 @@ Local 与 Supabase 实现共用同一映射，保证两模式响应一致。
 from __future__ import annotations
 
 import copy
-from typing import Protocol, runtime_checkable
-
-from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient
-from app.models.voice_profile import VoiceProfile
+
+# workers bundle 不含 sqlalchemy / app.models：Local* 只在 local 模式实例化。
+try:
+    from sqlalchemy import or_
+    from sqlalchemy.orm import Session
+
+    from app.models.voice_profile import VoiceProfile
+except ImportError:  # workers bundle
+    or_ = None  # type: ignore[assignment]
+    Session = Any  # type: ignore[assignment,misc]
+    VoiceProfile = None  # type: ignore[assignment,misc]
 
 TABLE = "voice_profiles"
 

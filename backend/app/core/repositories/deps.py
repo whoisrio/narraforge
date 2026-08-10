@@ -9,24 +9,34 @@ FastAPI 包进 anyio.to_thread 直接失败（can't start new thread）。
 """
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import Depends
-from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.supabase_client import get_supabase_client
-from app.core.repositories.system_configs import (
-    LocalSystemConfigRepository,
-    SupabaseSystemConfigRepository,
-    SystemConfigRepository,
-)
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（FastAPI 注入不看它），
+# 缺失时退化为 Any；Local* 实现只在 local 模式实例化（_workers_mode 分支）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 
 
 def _workers_mode() -> bool:
     return settings.deploy_target == "workers"
 
 
-async def get_system_config_repo(db: Session = Depends(get_db)) -> SystemConfigRepository:
+async def get_system_config_repo(db: Session = Depends(get_db)):
+    # 函数内 import（与其他 repo 一致）：system_configs 模块顶层引用了
+    # sqlalchemy 相关名字（守卫过），延迟到首次调用再加载。
+    from app.core.repositories.system_configs import (
+        LocalSystemConfigRepository,
+        SupabaseSystemConfigRepository,
+    )
+
     if _workers_mode():
         return SupabaseSystemConfigRepository(get_supabase_client())
     return LocalSystemConfigRepository(db)

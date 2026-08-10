@@ -8,9 +8,14 @@ MiMo-V2.5-TTS API 路由
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional
+from typing import Any, Optional
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 import uuid
 import os
 import base64
@@ -25,8 +30,13 @@ from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
-from app.models.tts_result import TTSResultRecord
 from app.services.mimo_tts_service import get_mimo_tts_service
+
+# workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
+try:
+    from app.models.tts_result import TTSResultRecord
+except ImportError:  # workers bundle
+    TTSResultRecord = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 

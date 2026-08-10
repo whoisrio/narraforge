@@ -18,12 +18,13 @@ async def list_roles(
     repo: RoleRepository = Depends(get_role_repo),
 ) -> dict:
     # async：Pyodide 不支持线程，sync def 端点在 workers 运行时经 anyio.to_thread 失败。
-    # TODO(step 6)：其余 sync 端点同问题，真实部署前需统一处理。
+    # （步骤 5 已统一 async 化全部 workers 可达端点，静态扫描测试
+    #  tests/unit/test_workers_async_deps.py 锁死回归。）
     return {"items": repo.list(project_id=project_id)}
 
 
 @router.post("/roles", response_model=RoleOut, status_code=201)
-def create_role(payload: RoleIn, repo: RoleRepository = Depends(get_role_repo)) -> RoleOut:
+async def create_role(payload: RoleIn, repo: RoleRepository = Depends(get_role_repo)) -> RoleOut:
     try:
         return repo.create(payload)
     except ValueError as exc:
@@ -33,7 +34,7 @@ def create_role(payload: RoleIn, repo: RoleRepository = Depends(get_role_repo)) 
 
 
 @router.put("/roles/{role_id}", response_model=RoleOut)
-def update_role(
+async def update_role(
     role_id: str,
     payload: RoleUpdate,
     repo: RoleRepository = Depends(get_role_repo),
@@ -45,7 +46,7 @@ def update_role(
 
 
 @router.delete("/roles/{role_id}", status_code=204)
-def delete_role(role_id: str, repo: RoleRepository = Depends(get_role_repo)) -> None:
+async def delete_role(role_id: str, repo: RoleRepository = Depends(get_role_repo)) -> None:
     if not repo.delete(role_id):
         raise HTTPException(status_code=404, detail="role_not_found")
     return None

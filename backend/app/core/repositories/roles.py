@@ -7,14 +7,20 @@ Supabase 走 PostgREST —— 注意：segments 引用清理依赖 segmented 三
 """
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
-
-from sqlalchemy.orm import Session
+from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient, SupabaseError
 from app.core.time_utils import utcnow
 from app.schemas.role import RoleIn, RoleOut, RoleUpdate
-from app.services import role_service as svc
+
+# workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化。
+try:
+    from sqlalchemy.orm import Session
+
+    from app.services import role_service as svc
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
+    svc = None  # type: ignore[assignment]
 
 TABLE = "roles"
 

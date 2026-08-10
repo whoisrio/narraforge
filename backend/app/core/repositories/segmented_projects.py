@@ -26,8 +26,6 @@ import uuid
 from types import SimpleNamespace
 from typing import Any, Protocol, runtime_checkable
 
-from sqlalchemy.orm import Session
-
 from app.core.supabase_client import SupabaseClient
 from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
@@ -37,14 +35,22 @@ from app.schemas.segmented_project import (
     ProjectSummary,
     SegmentIn,
 )
-from app.services import segmented_project_service as svc
+
+# workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化。
+try:
+    from sqlalchemy.orm import Session
+
+    from app.services import segmented_project_service as svc
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
+    svc = None  # type: ignore[assignment]
 from app.services.layer_sync_service import (
     mark_consistent,
     mark_split,
     rewrite_script_from_segments as ls_rewrite_script_from_segments,
     sync_status as ls_sync_status,
 )
-from app.services.segmented_project_service import (
+from app.services.animation_spec_codec import (
     _dump_animation_spec,
     _parse_animation_spec,
 )

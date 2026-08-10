@@ -20,7 +20,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session
+from typing import Any
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 
 from app.core import segmented_assets as assets
 from app.core.audio_encoder import AudioEncoderError
@@ -47,8 +53,14 @@ from app.schemas.segmented_project import (
     SplitResponse,
     SynthesizeSegmentRequest,
 )
-from app.services import segmented_project_service as svc
 from app.core.time_utils import utcnow
+
+# workers bundle 不含 sqlalchemy，segmented_project_service 顶层依赖 ORM；
+# svc 只在 local_router 端点（workers 不挂载）运行时引用。
+try:
+    from app.services import segmented_project_service as svc
+except ImportError:  # workers bundle
+    svc = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -66,13 +78,13 @@ def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_projec
 # ----- project CRUD (metadata) -----
 
 @router.get("/segmented-projects", response_model=ItemsOut[ProjectSummary])
-def list_projects(repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def list_projects(repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     projects = repo.list_projects()
     return {"items": [p for p in projects if p.id != SCRATCHPAD_PROJECT_ID]}
 
 
 @router.post("/segmented-projects", response_model=ProjectDetail, status_code=201)
-def create_project(project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def create_project(project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project.id)
     if repo.project_exists(project.id):
         raise HTTPException(status_code=409, detail="project_already_exists")
@@ -80,7 +92,7 @@ def create_project(project: ProjectIn, repo: SegmentedProjectRepository = Depend
 
 
 @router.get("/segmented-projects/{project_id}", response_model=ProjectDetail)
-def get_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def get_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project_id)
     detail = repo.get_project(project_id)
     if detail is None:
@@ -89,7 +101,7 @@ def get_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_
 
 
 @router.put("/segmented-projects/{project_id}", response_model=ProjectDetail)
-def put_project(project_id: str, project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def put_project(project_id: str, project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project_id)
     if project.id != project_id:
         raise HTTPException(status_code=400, detail="id_mismatch")
@@ -97,7 +109,7 @@ def put_project(project_id: str, project: ProjectIn, repo: SegmentedProjectRepos
 
 
 @router.delete("/segmented-projects/{project_id}", status_code=204)
-def delete_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def delete_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project_id)
     ok = repo.delete_project(project_id)
     if not ok:
@@ -220,7 +232,7 @@ class BatchResponse(BaseModel):
     "/segmented-projects/{project_id}/chapters:batch",
     response_model=BatchResponse,
 )
-def batch_create_chapters(
+async def batch_create_chapters(
     project_id: str,
     body: BatchRequest,
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
@@ -247,7 +259,7 @@ def batch_create_chapters(
     "/segmented-projects/{project_id}/apply-animation-spec",
     response_model=ApplyAnimationSpecResult,
 )
-def apply_animation_spec_endpoint(
+async def apply_animation_spec_endpoint(
     project_id: str,
     body: ApplyAnimationSpecRequest,
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
@@ -429,7 +441,7 @@ def scaffold_remotion(
 # ----- split / layer-sync (metadata) -----
 
 @router.get("/segmented-projects/{project_id}/chapters/{chapter_id}/sync-status")
-def get_sync_status(
+async def get_sync_status(
     project_id: str,
     chapter_id: str,
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
@@ -467,7 +479,7 @@ def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioReq
 
 
 @router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/resplit-from-script")
-def resplit_from_script_endpoint(
+async def resplit_from_script_endpoint(
     project_id: str,
     chapter_id: str,
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
@@ -483,7 +495,7 @@ def resplit_from_script_endpoint(
 
 
 @router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/rewrite-script-from-segments")
-def rewrite_script_from_segments_endpoint(
+async def rewrite_script_from_segments_endpoint(
     project_id: str,
     chapter_id: str,
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
@@ -505,7 +517,7 @@ def rewrite_script_from_segments_endpoint(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/split",
     response_model=SplitResponse,
 )
-def split_chapter(
+async def split_chapter(
     project_id: str,
     chapter_id: str,
     body: SplitRequest,

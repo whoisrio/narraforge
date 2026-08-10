@@ -123,7 +123,7 @@ Key tables include VoiceProfile, TTSConfig, TTSResult, TranscriptionRecord, Syst
 ### Backend Tests
 
 ```bash
-cd backend && uv run --extra test pytest -q
+cd backend && uv sync --extra test --extra local-ml --extra local-services && uv run pytest -q
 ```
 
 See [`backend/tests/TEST_MAP.md`](backend/tests/TEST_MAP.md) for test structure, isolation rules, mock contracts, and feature-to-test mapping.

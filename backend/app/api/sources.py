@@ -21,7 +21,7 @@ router = APIRouter()
     "/projects/{project_id}/sources",
     response_model=list[SourceDocumentOut],
 )
-def list_sources(project_id: str, repo: SourceDocumentRepository = Depends(get_source_document_repo)):
+async def list_sources(project_id: str, repo: SourceDocumentRepository = Depends(get_source_document_repo)):
     """列出项目所有源."""
     return repo.list(project_id)
 
@@ -31,7 +31,7 @@ def list_sources(project_id: str, repo: SourceDocumentRepository = Depends(get_s
     response_model=SourceDocumentOut,
     status_code=201,
 )
-def create_paste_source(
+async def create_paste_source(
     project_id: str,
     body: SourceDocumentIn,
     repo: SourceDocumentRepository = Depends(get_source_document_repo),
@@ -93,7 +93,7 @@ async def upload_audio_source(
     "/projects/{project_id}/sources/{source_id}",
     status_code=204,
 )
-def delete_source(
+async def delete_source(
     project_id: str,
     source_id: str,
     repo: SourceDocumentRepository = Depends(get_source_document_repo),
@@ -106,7 +106,7 @@ def delete_source(
 
 
 @router.get("/projects/{project_id}/sources/{source_id}/audio")
-def get_source_audio(
+async def get_source_audio(
     project_id: str,
     source_id: str,
     repo: SourceDocumentRepository = Depends(get_source_document_repo),

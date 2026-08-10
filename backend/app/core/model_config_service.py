@@ -11,11 +11,15 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy.orm import Session
-
 from app.core.config import settings
 from app.core.crypto_service import encrypt_value, decrypt_value, is_encrypted
 from app.core.system_config_service import get_config, set_config
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解，缺失时退化为 Any。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 

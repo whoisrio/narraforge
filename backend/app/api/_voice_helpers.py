@@ -1,6 +1,13 @@
 from __future__ import annotations
 
-from app.models.voice_profile import VoiceProfile
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.voice_profile import VoiceProfile
+else:
+    # workers bundle 不含 app.models：本模块被 workers 链路顶层 import，
+    # 必须可加载；VoiceProfile 仅作类型注解（运行时 duck-typing）。
+    VoiceProfile = None
 
 
 def voice_to_dict(v: VoiceProfile) -> dict:
