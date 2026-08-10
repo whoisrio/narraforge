@@ -128,31 +128,32 @@ Access 应用的 CORS 设置放行 Pages 域名并允许 credentials；后端 CO
 - Git 集成：Workers Builds 连接同一仓库，root `backend/`，build command `uv sync && uv run pywrangler deploy`；若 Workers Builds 对 Python 支持有问题，退用 GitHub Actions + `wrangler-action`（ secrets 存 GitHub）。
 - 冷启动风险（spike 遗留）：真实部署后实测首请求延迟，必要时评估 Workers 的 Python 快照预热手段或接受。
 
-### 5.2a 后端（Render 免费档，当前方案）
+### 5.2a 后端（Koyeb 免费档，当前方案）
 
-workers 模式代码原样跑在 Render CPython：`DEPLOY_TARGET=workers`，
+workers 模式代码原样跑在 Koyeb CPython：`DEPLOY_TARGET=workers`，
 `uvicorn main:app`（main.py 底部 `app = create_app()` 读 settings，无需新入口）。
+选 Koyeb 的理由：免信用卡（Render 实测对该账户强制要卡，已放弃）、免费 nano
+实例不休眠、GitHub 直连构建。
 适配点（步骤 6A）：
 
 - **edge-tts 能力回退**：workers 模式按运行时能力选后端——真 Pyodide（`workers.fetch`
-  可用）走内置 WS 客户端；Render CPython 自动回退 edge-tts 包（`local-services`
+  可用）走内置 WS 客户端；Koyeb CPython 自动回退 edge-tts 包（`local-services`
   extra 提供）；两者皆无响亮报错。
 - **资产存储 auto 选择**：`ASSET_STORE_BACKEND=auto`——local→本地 FS；workers→
   有 R2 binding 用 R2（付费 Workers 备选），否则 Supabase Storage REST
   （`SupabaseStorageAssetStore`，bucket 由 `backend/supabase/schema.sql` 末尾创建，
-  默认 `voice-assets` 私有桶）。Render 免费档 FS 临时，克隆样本/试听音频必须走
+  默认 `voice-assets` 私有桶）。免费容器档 FS 临时，克隆样本/试听音频必须走
   Supabase Storage。
-- **render.yaml**（仓库根 Blueprint）：原生 python runtime + uv，build
-  `uv sync --extra local-services`（不含 local-ml 的 torch），start
-  `uv run uvicorn main:app --host 0.0.0.0 --port $PORT`，health `/health`。
-  不用 `backend/Dockerfile`（local 全量构建）。
-- 免费档 15 分钟休眠、冷启动数十秒；Cloudflare 侧 `api.<域名>` CNAME →
-  onrender.com 开橙云 + Access 应用覆盖 + SSL Full 模式（详见 RUNBOOK）。
+- **`backend/Dockerfile.cloud`**：瘦身镜像，`uv sync --no-dev --extra local-services`
+  （不含 local-ml 的 torch），shell-form CMD 展开 `$PORT`。
+  Koyeb 用 Dockerfile builder 指向它；不用 `backend/Dockerfile`（local 全量构建）。
+- Cloudflare 侧 `api.<域名>` CNAME → koyeb.app 开橙云 + Access 应用覆盖 +
+  SSL Full 模式（详见 RUNBOOK）。
 
 ### 5.3 Supabase
 - 免费档建项目，执行 Postgres schema 迁移 SQL（来自 3.5；`schema.sql` 末尾同时创建
-  `voice-assets` 私有 Storage bucket，供 Render 场景的二进制资产存储）。
-- 开启 PostgREST 与 Storage，service_role key 只放后端（Workers secrets / Render
+  `voice-assets` 私有 Storage bucket，供容器部署场景的二进制资产存储）。
+- 开启 PostgREST 与 Storage，service_role key 只放后端（Workers secrets / Koyeb
   环境变量），不进前端。
 
 ### 5.4 Cloudflare Access

@@ -407,7 +407,37 @@ uv run --extra workers pywrangler deploy
 
 ---
 
-## Render Deployment (free tier)
+## Koyeb Deployment (free tier, 推荐)
+
+Workers 模式代码（`DEPLOY_TARGET=workers` 的瘦身路由 + Supabase 持久化）跑在
+Koyeb 免费档。选择理由：**免信用卡注册**（Render 实测对部分账户强制要卡，已放弃），
+免费 nano 实例**不休眠**（无冷启动问题），GitHub 直连自动构建。
+
+### 部署步骤
+
+1. Koyeb Dashboard → Create Service → GitHub 连接仓库。
+2. Builder 选 **Dockerfile**，Dockerfile path 填 `backend/Dockerfile.cloud`，
+   build context 填 `backend/`。
+   **不要用 `backend/Dockerfile`**（local 全量构建含 torch，免费档装不下也不需要）。
+3. Instance 选 **Free (nano)**，区域任选（edge-tts/mimo 都要出墙访问，选美西/新加坡均可）。
+4. 环境变量照下表填写（与 Render 章节同一份清单）。
+5. 部署后访问 `https://<app>-<org>.koyeb.app/health` 应返回 200。
+   注意：`Dockerfile.cloud` 本机未构建验证过（开发机无 Docker daemon），
+   首次 Koyeb 构建即真实验证；若构建失败先看构建日志里 `uv sync` 步骤。
+
+### Cloudflare 侧（DNS + Access）
+
+与 Render 章节相同，仅把 CNAME 目标换成 `<app>-<org>.koyeb.app`，
+Koyeb 控制台加同名自定义域名（证书自动签发，卡住先灰云再开回）。
+`koyeb.app` 直连子域同样无法关闭，靠 `ACCESS_ENFORCEMENT=true` 兜底 401。
+
+---
+
+## Render Deployment (free tier, 备选 — 实测要信用卡)
+
+> 2026-08 实测：该账户在 Blueprint 和 New Web Service 流程均被强制要求填信用卡，
+> 免费路径不可用，已改用 Koyeb（见上一节）。本节保留作参考；render.yaml 仍在仓库根，
+> 账户若能过反滥用校验可一键 Blueprint。
 
 Workers 模式代码（`DEPLOY_TARGET=workers` 的瘦身路由 + Supabase 持久化）原样跑在
 Render 免费档（CPython 正常运行时，非 Pyodide）。背景：Workers bundle 实测 gzip
