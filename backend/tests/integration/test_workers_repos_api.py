@@ -11,6 +11,7 @@ import main as main_module
 from app.core.config import settings
 from app.core.repositories import deps
 from app.core.repositories.roles import SupabaseRoleRepository
+from app.core.repositories.segmented_projects import SupabaseSegmentedProjectRepository
 from app.core.repositories.source_documents import SupabaseSourceDocumentRepository
 from app.core.repositories.system_configs import SupabaseSystemConfigRepository
 from app.core.repositories.voice_profiles import SupabaseVoiceProfileRepository
@@ -29,6 +30,9 @@ def workers_client(monkeypatch):
     app.dependency_overrides[deps.get_voice_repo] = lambda: SupabaseVoiceProfileRepository(client)
     app.dependency_overrides[deps.get_source_document_repo] = (
         lambda: SupabaseSourceDocumentRepository(client)
+    )
+    app.dependency_overrides[deps.get_segmented_repo] = (
+        lambda: SupabaseSegmentedProjectRepository(client)
     )
     # service 层快速路径（storage_mode / model_config）也要走同一个 fake
     monkeypatch.setattr(
@@ -125,6 +129,12 @@ class TestRolesApi:
 class TestSourcesApi:
     def test_paste_source_round_trip(self, workers_client):
         client, store = workers_client
+        # 3B 起 create_paste 对齐 local：项目必须存在
+        created_project = client.post(
+            "/api/segmented-projects",
+            json={"id": "p1", "name": "项目一", "schema_version": 2, "chapters": []},
+        )
+        assert created_project.status_code == 201, created_project.text
         created = client.post(
             "/api/projects/p1/sources/paste",
             json={"source_type": "paste", "title": "第一章", "pasted_text": "这是正文。"},

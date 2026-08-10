@@ -1,9 +1,9 @@
-"""步骤 3A：Role 仓储（Protocol + Local + Supabase）。
+"""步骤 3A/3B：Role 仓储（Protocol + Local + Supabase）。
 
 方法签名从 role_service + roles.py 路由的实际调用提取：
 list / create / update / delete。Local 薄封装 role_service（含删除前引用清理）；
-Supabase 走 PostgREST，删除暂不复制 segments 引用清理（segmented 表 3B 才迁移，
-见报告）。
+Supabase 走 PostgREST，删除前清理 segments/project 三处引用（3B 补齐，
+对齐 local 的 _clean_role_references）。
 """
 import json
 
@@ -147,10 +147,46 @@ class TestSupabaseRoleRepository:
         assert repo.update("missing", RoleUpdate(name="x")) is None
 
     def test_delete_returns_true_when_row_deleted(self):
-        repo, requests = _supabase(lambda req: httpx.Response(200, json=[{"id": "role-linxia"}]))
+        """删除前先清理 segments/project 引用（3B 补齐），最后 DELETE 角色行。"""
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            if req.method == "DELETE":
+                return httpx.Response(200, json=[{"id": "role-linxia"}])
+            return httpx.Response(200, json=[])
+
+        repo, requests = _supabase(handler)
         assert repo.delete("role-linxia") is True
-        assert requests[0].method == "DELETE"
-        assert requests[0].url.params["id"] == "eq.role-linxia"
+        # 顺序：PATCH segments.role_id → PATCH projects.default_narrator_role_id
+        # → GET segments(voice 扫描) → DELETE roles
+        assert [r.method for r in requests] == ["PATCH", "PATCH", "GET", "DELETE"]
+        assert requests[0].url.path.endswith("segmented_project_segments")
+        assert requests[0].url.params["role_id"] == "eq.role-linxia"
+        assert requests[1].url.path.endswith("segmented_projects")
+        assert requests[1].url.params["default_narrator_role_id"] == "eq.role-linxia"
+        assert requests[3].url.params["id"] == "eq.role-linxia"
+
+    def test_delete_cleans_voice_json_references(self):
+        """voice JSON 里 {"source": "role", "role_id": ...} 无 FK 可管，必须重置回 chapter。"""
+        patched: list[tuple[str, dict]] = []
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            if req.method == "GET" and req.url.path.endswith("segmented_project_segments"):
+                return httpx.Response(200, json=[
+                    {"id": "seg-1", "voice": {"source": "role", "role_id": "role-linxia"}},
+                    {"id": "seg-2", "voice": {"source": "chapter"}},
+                    {"id": "seg-3", "voice": {"source": "role", "role_id": "other-role"}},
+                ])
+            if req.method == "PATCH" and req.url.path.endswith("segmented_project_segments") \
+                    and "role_id" not in req.url.params:
+                patched.append((req.url.params["id"], json.loads(req.content)))
+                return httpx.Response(200, json=[])
+            if req.method == "DELETE":
+                return httpx.Response(200, json=[{"id": "role-linxia"}])
+            return httpx.Response(200, json=[])
+
+        repo, _ = _supabase(handler)
+        assert repo.delete("role-linxia") is True
+        assert patched == [("eq.seg-1", {"voice": {"source": "chapter"}})]
 
     def test_delete_missing_returns_false(self):
         repo, _ = _supabase(lambda req: httpx.Response(200, json=[]))

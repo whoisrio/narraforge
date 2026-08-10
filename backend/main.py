@@ -216,6 +216,12 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     app.include_router(model_config.router, prefix="/api/model-config", tags=["model-config"])
     app.include_router(text_split.router, prefix="/api/text-split", tags=["text-split"])
     app.include_router(text_analysis.router, prefix="/api/text-analysis", tags=["text-analysis"])
+    if is_local:
+        # ffmpeg/本地 FS/TTS 引擎依赖端点（合成落盘、录音上传、导出、adjust-audio、
+        # migrate、项目 ZIP 导出/导入），workers 不挂载（404）。
+        # 先于通用 router 注册：/segmented-projects/migrate、/segmented-projects/import
+        # 等静态路径保持与拆分前一致的匹配语义。
+        app.include_router(segmented_projects.local_router, prefix="/api", tags=["segmented-projects"])
     app.include_router(segmented_projects.router, prefix="/api", tags=["segmented-projects"])
     if is_local:
         app.include_router(voxcpm.router, prefix="/api/voxcpm", tags=["voxcpm"])

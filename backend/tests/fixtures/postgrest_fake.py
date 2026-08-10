@@ -1,9 +1,9 @@
 """测试夹具：内存版 PostgREST，供 workers 模式集成测试使用。
 
 实现 PostgREST 语义的常用子集：
-- GET：eq / neq / is.null 过滤、or=(...) 组合、order=x.desc、select
+- GET：eq / neq / is.null / in.(...) 过滤、or=(...) 组合、order=x.desc、select
 - POST：普通插入；Prefer 含 resolution=merge-duplicates 时按主键 upsert
-- PATCH / DELETE：eq 过滤后更新/删除；均返回表示（return=representation）
+- PATCH / DELETE：过滤后更新/删除；均返回表示（return=representation）
 
 只覆盖仓储层用到的语义，不是完整 PostgREST。
 """
@@ -22,6 +22,9 @@ _PRIMARY_KEYS = {
     "system_configs": "key",
     "roles": "id",
     "source_documents": "id",
+    "segmented_projects": "id",
+    "segmented_project_chapters": "id",
+    "segmented_project_segments": "id",
 }
 
 
@@ -44,6 +47,11 @@ class FakePostgrestStore:
                 return False
             if op == "is" and value == "null" and cell is not None:
                 return False
+            if op == "in":
+                # 形如 in.(a,b,c)
+                candidates = [v.strip().strip('"') for v in value.strip("()").split(",")]
+                if str(cell) not in candidates:
+                    return False
         or_clause = params.get("or")
         if or_clause:
             # 形如 (project_id.is.null,project_id.eq.p1)

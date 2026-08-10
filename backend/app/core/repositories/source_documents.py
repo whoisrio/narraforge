@@ -4,11 +4,10 @@
 Local 薄封装 source_document_service（其内部已自行 commit + 写盘/探时长）。
 
 Supabase 实现说明：
-- paste 源全链路可用。
+- paste 源全链路可用；项目存在性校验（3B 补齐）直接查 segmented_projects 表，
+  与 local 的 _ensure_project_exists 对齐（缺项目 → LookupError → 路由 404）。
 - audio 源需要二进制资产存储（R2，步骤 4），本步 create_audio 抛
   NotImplementedError，由路由映射为 501。
-- 项目存在性校验（_ensure_project_exists）依赖 segmented_projects 表，
-  3B 迁移后由 Postgres FK / 项目仓储兜底，本步 Supabase 实现不做该校验。
 """
 from __future__ import annotations
 
@@ -88,7 +87,7 @@ class LocalSourceDocumentRepository:
 
 
 class SupabaseSourceDocumentRepository:
-    """PostgREST 实现。audio 源与项目存在性校验见模块 docstring。"""
+    """PostgREST 实现。audio 源见模块 docstring。"""
 
     def __init__(self, client: SupabaseClient):
         self._client = client
@@ -108,6 +107,11 @@ class SupabaseSourceDocumentRepository:
         return _row_to_out(row) if row else None
 
     def create_paste(self, project_id: str, title: str, pasted_text: str) -> SourceDocumentOut:
+        # 项目存在性校验（3B 补齐，对齐 local _ensure_project_exists → 路由 404）
+        if not self._client.select_one(
+            "segmented_projects", params={"id": f"eq.{project_id}", "select": "id"}
+        ):
+            raise LookupError(f"project_not_found: {project_id}")
         # 对齐 local：title 为空取正文前 30 字；file_size 为 UTF-8 字节数
         row = {
             "id": f"src_{uuid.uuid4().hex[:12]}",

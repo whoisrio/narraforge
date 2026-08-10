@@ -1,11 +1,12 @@
-"""步骤 3A：supabase/schema.sql 与 SQLAlchemy 模型定义的同步校验（防漂移）。
+"""步骤 3A/3B：supabase/schema.sql 与 SQLAlchemy 模型定义的同步校验（防漂移）。
 
 schema.sql 是 workers 模式 Supabase/Postgres 的 DDL，从模型定义手工导出；
 本测试锁定两边一致，模型改动时必须同步更新 schema.sql：
-- 4 张表的表名集合一致；
+- 7 张表的表名集合一致（3B 新增 segmented 三大表）；
 - 每张表的列名集合一致；
 - 主键一致；
-- 模型 nullable=False 的列在 DDL 中必须是 NOT NULL。
+- 模型 nullable=False 的列在 DDL 中必须是 NOT NULL；
+- 模型声明的 ForeignKey 在 DDL 中必须有对应 references（含 alter table 补的环状 FK）。
 """
 import re
 from pathlib import Path
@@ -13,6 +14,11 @@ from pathlib import Path
 import pytest
 
 from app.models.role import Role
+from app.models.segmented_project import (
+    SegmentedProject,
+    SegmentedProjectChapter,
+    SegmentedProjectSegment,
+)
 from app.models.source_document import SourceDocument
 from app.models.system_config import SystemConfig
 from app.models.voice_profile import VoiceProfile
@@ -24,6 +30,9 @@ MODELS = {
     "system_configs": SystemConfig,
     "roles": Role,
     "source_documents": SourceDocument,
+    "segmented_projects": SegmentedProject,
+    "segmented_project_chapters": SegmentedProjectChapter,
+    "segmented_project_segments": SegmentedProjectSegment,
 }
 
 # DDL 列定义里非列名的前导关键字（约束/表级定义）
@@ -81,7 +90,12 @@ class TestSchemaSync:
         # DDL 有意比模型更严的列：时间戳列在 Postgres 强制 NOT NULL + default now()
         # （模型侧靠 Python default 兜底、声明 nullable；数据实际从不为空）
         ddl_stricter = {("voice_profiles", "created_at"), ("system_configs", "updated_at"),
-                        ("roles", "created_at"), ("roles", "updated_at")}
+                        ("roles", "created_at"), ("roles", "updated_at"),
+                        ("segmented_projects", "created_at"), ("segmented_projects", "updated_at"),
+                        ("segmented_project_chapters", "created_at"),
+                        ("segmented_project_chapters", "updated_at"),
+                        ("segmented_project_segments", "created_at"),
+                        ("segmented_project_segments", "updated_at")}
         for col in model.__table__.columns:
             col_def = ddl[table][col.name].lower()
             if not col.nullable and not col.primary_key:
@@ -97,4 +111,16 @@ class TestSchemaSync:
             if isinstance(col.type, JSON):
                 assert "jsonb" in ddl[table][col.name].lower(), (
                     f"{table}.{col.name}: JSON 列在 Postgres 用 jsonb"
+                )
+
+    @pytest.mark.parametrize("table,model", list(MODELS.items()))
+    def test_foreign_keys_present(self, ddl, table, model):
+        """模型的每个 ForeignKey 必须在 DDL 全文中出现对应 references（含环状 FK 的 alter table）。"""
+        full_sql = SCHEMA_PATH.read_text(encoding="utf-8").lower()
+        for col in model.__table__.columns:
+            for fk in col.foreign_keys:
+                target = f"{fk.column.table.name}({fk.column.name})".lower()
+                pattern = rf"references\s+{re.escape(target)}"
+                assert re.search(pattern, full_sql), (
+                    f"{table}.{col.name}: schema.sql 缺少 references {target}"
                 )

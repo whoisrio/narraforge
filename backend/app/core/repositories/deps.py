@@ -57,3 +57,14 @@ def get_source_document_repo(db: Session = Depends(get_db)):
     if _workers_mode():
         return SupabaseSourceDocumentRepository(get_supabase_client())
     return LocalSourceDocumentRepository(db)
+
+
+def get_segmented_repo(db: Session = Depends(get_db)):
+    from app.core.repositories.segmented_projects import (
+        LocalSegmentedProjectRepository,
+        SupabaseSegmentedProjectRepository,
+    )
+
+    if _workers_mode():
+        return SupabaseSegmentedProjectRepository(get_supabase_client())
+    return LocalSegmentedProjectRepository(db)

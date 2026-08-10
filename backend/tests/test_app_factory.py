@@ -89,6 +89,46 @@ class TestWorkersApp:
         paths = _route_paths(app)
         assert any(p.startswith("/api/projects/") and "/sources" in p for p in paths)
 
+    # 步骤 3B：segmented 元数据端点 workers 必须保留；ffmpeg/本地 FS 端点不挂载
+    _SEGMENTED_METADATA_PATHS = [
+        "/api/segmented-projects",
+        "/api/segmented-projects/{project_id}",
+        "/api/segmented-projects/{project_id}/chapters:batch",
+        "/api/segmented-projects/{project_id}/apply-animation-spec",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/sync-status",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/split",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/resplit-from-script",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/rewrite-script-from-segments",
+    ]
+    _SEGMENTED_LOCAL_ONLY_PATHS = [
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/synthesize",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/audio",
+        "/api/segmented-projects/{project_id}/audio/{chapter_id}/{segment_id}",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/export-audio",
+        "/api/segmented-projects/{project_id}/export-all-chapters",
+        "/api/segmented-projects/{project_id}/export-text-file-to-remotion",
+        "/api/segmented-projects/{project_id}/scaffold-remotion",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/adjust-audio",
+        "/api/segmented-projects/migrate",
+        "/api/segmented-projects/{project_id}/export",
+        "/api/segmented-projects/import",
+    ]
+
+    @pytest.mark.parametrize("path", _SEGMENTED_METADATA_PATHS)
+    def test_keeps_segmented_metadata_endpoints(self, path: str):
+        app = main_module.create_app("workers")
+        assert path in _route_paths(app)
+
+    @pytest.mark.parametrize("path", _SEGMENTED_LOCAL_ONLY_PATHS)
+    def test_excludes_segmented_local_only_endpoints(self, path: str):
+        app = main_module.create_app("workers")
+        assert path not in _route_paths(app)
+
+    @pytest.mark.parametrize("path", _SEGMENTED_METADATA_PATHS + _SEGMENTED_LOCAL_ONLY_PATHS)
+    def test_local_mode_keeps_all_segmented_endpoints(self, path: str):
+        app = main_module.create_app("local")
+        assert path in _route_paths(app)
+
     def test_no_startup_shutdown_events(self):
         """workers 模式不注册 init_db / scheduler 的 startup、shutdown 事件。"""
         app = main_module.create_app("workers")

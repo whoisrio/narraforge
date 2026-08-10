@@ -78,7 +78,7 @@ class LocalRoleRepository:
 
 
 class SupabaseRoleRepository:
-    """PostgREST 实现。删除不复制 segments 引用清理（3B 迁移 segmented 表后补齐）。"""
+    """PostgREST 实现。删除前做 segments/project 引用清理（3B 补齐，对齐 local）。"""
 
     def __init__(self, client: SupabaseClient):
         self._client = client
@@ -123,4 +123,37 @@ class SupabaseRoleRepository:
         return _row_to_out(rows[0])
 
     def delete(self, role_id: str) -> bool:
+        self._clean_role_references(role_id)
         return bool(self._client.delete(TABLE, params={"id": f"eq.{role_id}"}))
+
+    def _clean_role_references(self, role_id: str) -> None:
+        """对齐 local role_service._clean_role_references 的三处悬挂引用清理。
+
+        segments.role_id / projects.default_narrator_role_id 在 PG 有 FK
+        on delete set null，显式清理是跨实现（含测试夹具）都成立的保障；
+        voice JSON 里的 {"source": "role", "role_id": ...} 没有 FK 可管，
+        必须重置回 chapter 跟随（PostgREST 不支持 JSON 路径条件更新，
+        逐行筛选后 PATCH）。
+        """
+        from app.core.repositories.segmented_projects import PROJECTS, SEGMENTS
+
+        self._client.update(
+            SEGMENTS, {"role_id": None}, params={"role_id": f"eq.{role_id}"}
+        )
+        self._client.update(
+            PROJECTS,
+            {"default_narrator_role_id": None},
+            params={"default_narrator_role_id": f"eq.{role_id}"},
+        )
+        for row in self._client.select(SEGMENTS, params={"select": "id,voice"}):
+            voice = row.get("voice")
+            if (
+                isinstance(voice, dict)
+                and voice.get("source") == "role"
+                and voice.get("role_id") == role_id
+            ):
+                self._client.update(
+                    SEGMENTS,
+                    {"voice": {"source": "chapter"}},
+                    params={"id": f"eq.{row['id']}"},
+                )

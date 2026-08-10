@@ -1,9 +1,9 @@
-"""步骤 3A：SourceDocument 仓储（Protocol + Local + Supabase）。
+"""步骤 3A/3B：SourceDocument 仓储（Protocol + Local + Supabase）。
 
 方法签名提取自 source_document_service + sources.py 路由：
 list / get / create_paste / create_audio / delete。
-Supabase 实现：paste 全链路；audio 源依赖 R2 资产存储（步骤 4），
-本步 create_audio 抛 NotImplementedError。
+Supabase 实现：paste 全链路（含 3B 补齐的项目存在性校验）；
+audio 源依赖 R2 资产存储（步骤 4），本步 create_audio 抛 NotImplementedError。
 """
 import json
 
@@ -90,6 +90,10 @@ class TestSupabaseSourceDocumentRepository:
         seen = {}
 
         def handler(req: httpx.Request) -> httpx.Response:
+            if req.method == "GET":
+                # 项目存在性校验（3B 补齐）：项目存在
+                assert req.url.path.endswith("segmented_projects")
+                return httpx.Response(200, json=[{"id": "p1"}])
             seen["body"] = json.loads(req.content)
             return httpx.Response(201, json=[_src_row(**seen["body"][0])])
 
@@ -103,6 +107,12 @@ class TestSupabaseSourceDocumentRepository:
         assert body["title"] == "这是一个测试文本。"
         assert body["file_size"] == len("这是一个测试文本。".encode("utf-8"))
         assert out.id == body["id"]
+
+    def test_create_paste_missing_project_raises_lookup_error(self):
+        """3B 补齐：对齐 local _ensure_project_exists，项目不存在 → LookupError。"""
+        repo, _ = _supabase(lambda req: httpx.Response(200, json=[]))
+        with pytest.raises(LookupError, match="project_not_found"):
+            repo.create_paste("no-project", title="t", pasted_text="x")
 
     def test_create_audio_not_implemented_until_r2(self):
         repo, _ = _supabase(lambda req: httpx.Response(200, json=[]))
