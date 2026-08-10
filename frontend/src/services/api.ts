@@ -1,8 +1,10 @@
 import axios from 'axios';
 import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus } from '../types';
+import { API_BASE_URL, apiUrl } from './apiBase';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
+  withCredentials: true,
 });
 
 // Voice Clone API
@@ -623,7 +625,7 @@ export const segmentedProjectApi = {
     const params = new URLSearchParams();
     if (exportDirectory) params.set('export_directory', exportDirectory);
     const qs = params.toString();
-    return `/api/segmented-projects/${projectId}/chapters/${chapterId}/export-audio${qs ? `?${qs}` : ''}`;
+    return apiUrl(`/segmented-projects/${projectId}/chapters/${chapterId}/export-audio${qs ? `?${qs}` : ''}`);
   },
   exportTextFileToRemotion: async (projectId: string, filename: string, content: string, exportDirectory?: string | null): Promise<{ path: string }> => {
     const { data } = await api.post<{ path: string }>(

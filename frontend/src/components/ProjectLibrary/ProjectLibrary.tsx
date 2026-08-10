@@ -15,6 +15,7 @@ import { agentClient } from '../../services/langgraph/client';
 import { WORKFLOW_KINDS, type WorkflowKind } from '../../services/langgraph/contracts';
 import { resolveWorkflowThread } from '../../services/langgraph/threads';
 import { segmentedProjectApi } from '../../services/api';
+import { useCapabilities } from '../../hooks/useCapabilities';
 import styles from './ProjectLibrary.module.css';
 
 interface ProjectLibraryProps {
@@ -87,6 +88,7 @@ export function ProjectLibrary({
   onProjectChanged,
 }: ProjectLibraryProps) {
   const { t } = useTranslation();
+  const { features } = useCapabilities();
   const toast = useToast();
   const [mode, setMode] = useState<LibraryMode>('overview');
   const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
@@ -516,7 +518,7 @@ export function ProjectLibrary({
               viewMode={sourceViewMode}
               onViewModeChange={setSourceViewMode}
             />
-            {projectId && (
+            {projectId && features.agent_workflow && (
               <div className={styles.workflowTrigger}>
                 <div>
                   <strong>从源文档启动工作流</strong>
@@ -539,7 +541,7 @@ export function ProjectLibrary({
           narrationContent
         )}
       </div>
-      {drawerThreadId && !drawerCollapsed && projectId && (
+      {drawerThreadId && !drawerCollapsed && projectId && features.agent_workflow && (
                   <WorkflowDrawer
             threadId={drawerThreadId}
             projectId={projectId}
@@ -548,7 +550,7 @@ export function ProjectLibrary({
             onCollapse={() => setDrawerCollapsed(true)}
           />
               )}
-      {drawerThreadId && drawerCollapsed && (
+      {drawerThreadId && drawerCollapsed && features.agent_workflow && (
                   <DrawerIndicator
             status="running"
             onExpand={() => setDrawerCollapsed(false)}

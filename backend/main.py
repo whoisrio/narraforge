@@ -93,6 +93,8 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     is_local = target == "local"
 
     app = FastAPI(title=settings.app_name, debug=settings.debug)
+    # capabilities 端点以 app.state 为准（工厂参数优先于 settings 单例）
+    app.state.deploy_target = target
 
     # Cloudflare Access 校验（spec 3.6，仅 workers 模式）：先于 CORS 注册，
     # 使 CORS 成为更外层中间件——Access 拒绝的 401 也带 ACAO 头，

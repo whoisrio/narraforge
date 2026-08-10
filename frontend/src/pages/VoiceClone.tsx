@@ -5,6 +5,7 @@ import { AudioPreview } from '../components/VoiceClone/AudioPreview';
 import { UrlInput } from '../components/VoiceClone/UrlInput';
 import { ImageUploadZone } from '../components/ui/ImageUploadZone';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
+import { useCapabilities } from '../hooks/useCapabilities';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
 import { voiceApi } from '../services/api';
 import { VoiceAvatar } from '../components/ui/VoiceAvatar';
@@ -41,6 +42,7 @@ function engineLabel(profile: VoiceProfile): string {
 
 export function VoiceClone() {
   const { t } = useTranslation();
+  const { clone_engines: availableCloneEngines } = useCapabilities();
   // ---- 声音列表 ----
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(true);
@@ -58,6 +60,18 @@ export function VoiceClone() {
 
   // ---- 设计流程状态 ----
   const [designEngine, setDesignEngine] = useState<'mimo' | 'voxcpm'>('mimo');
+
+  // workers 模式引擎收敛（spec 第 4 节）：当前选中引擎被 capabilities 过滤掉时回退到可用项
+  useEffect(() => {
+    if (!availableCloneEngines.includes(cloneEngine) && availableCloneEngines.length > 0) {
+      setCloneEngine(availableCloneEngines[0] as CloneEngine);
+    }
+  }, [availableCloneEngines, cloneEngine]);
+  useEffect(() => {
+    if (designEngine === 'voxcpm' && !availableCloneEngines.includes('voxcpm')) {
+      setDesignEngine('mimo');
+    }
+  }, [availableCloneEngines, designEngine]);
   const [designName, setDesignName] = useState('');
   const [designAvatar, setDesignAvatar] = useState<string | null>(null);
   const [designBrief, setDesignBrief] = useState('');
@@ -330,7 +344,7 @@ export function VoiceClone() {
             </div>
           </div>
 
-          {/* 引擎选择 */}
+          {/* 引擎选择（voxcpm 本地专属，workers 模式按 clone_engines 过滤） */}
           <div className={styles.engineSwitch}>
             <button
               className={`${styles.engineOption} ${designEngine === 'mimo' ? styles.active : ''}`}
@@ -338,12 +352,14 @@ export function VoiceClone() {
             >
               MiMo-TTS
             </button>
-            <button
-              className={`${styles.engineOption} ${designEngine === 'voxcpm' ? styles.active : ''}`}
-              onClick={() => setDesignEngine('voxcpm')}
-            >
-              {t('voiceDesign.voxcpmLocal')}
-            </button>
+            {availableCloneEngines.includes('voxcpm') && (
+              <button
+                className={`${styles.engineOption} ${designEngine === 'voxcpm' ? styles.active : ''}`}
+                onClick={() => setDesignEngine('voxcpm')}
+              >
+                {t('voiceDesign.voxcpmLocal')}
+              </button>
+            )}
           </div>
 
           {/* 音色描述 */}
@@ -444,9 +460,9 @@ export function VoiceClone() {
             </div>
           )}
 
-          {/* 引擎选择 */}
+          {/* 引擎选择（按 capabilities.clone_engines 过滤；qwen/voxcpm 为本地专属） */}
           <div className={styles.engineSwitch}>
-            {(['qwen', 'mimo', 'voxcpm'] as CloneEngine[]).map(e => (
+            {(['qwen', 'mimo', 'voxcpm'] as CloneEngine[]).filter(e => availableCloneEngines.includes(e)).map(e => (
               <button
                 key={e}
                 className={`${styles.engineOption} ${cloneEngine === e ? styles.active : ''}`}

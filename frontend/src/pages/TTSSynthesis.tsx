@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { createTranslator, useTranslation } from '../i18n';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
+import { EngineSelect } from '../components/TTSSynthesis/EngineSelect';
+import type { EngineId } from '../components/TTSSynthesis/engineOptions';
 import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSPanel';
 import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMPanel';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
@@ -13,6 +15,7 @@ import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog'
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
 import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi } from '../services/api';
+import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
@@ -23,6 +26,7 @@ import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segm
 import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
+import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
@@ -92,10 +96,18 @@ export function TTSSynthesis({
 }) {
   const { t } = useTranslation();
   const { mode: storageMode } = useStorageMode();
+  const capabilities = useCapabilities();
   const { refreshCounter } = useVoiceRefresh();
   const initialLoadDoneRef = useRef(false);
   const lastSavedUpdatedAtRef = useRef<string | null>(null);
   const [engine, setEngine] = useState<Engine>('edge_tts');
+
+  // workers 模式引擎收敛（spec 第 4 节）：当前选中引擎不可用时回退到第一个可用引擎
+  useEffect(() => {
+    if (!capabilities.engines.includes(engine) && capabilities.engines.length > 0) {
+      setEngine(capabilities.engines[0] as Engine);
+    }
+  }, [capabilities.engines, engine]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [params, setParams] = useState<Partial<TTSRequest>>({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
 
@@ -1461,8 +1473,8 @@ export function TTSSynthesis({
     try {
       // Backend mode: fetch audio as blob, then play via blob URL
       if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
-        const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-        const resp = await fetch(url, { cache: 'no-store' });
+        const url = apiUrl(`/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`);
+        const resp = await fetch(url, { cache: 'no-store', credentials: 'include' });
         if (!resp.ok) {
           // Try to extract backend error detail (FastAPI's `detail` field)
           let detail = `HTTP ${resp.status}`;
@@ -1559,8 +1571,8 @@ export function TTSSynthesis({
       try {
         // Backend mode: fetch audio as blob, then play
         if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
-          const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-          const resp = await fetch(url, { cache: 'no-store' });
+          const url = apiUrl(`/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`);
+          const resp = await fetch(url, { cache: 'no-store', credentials: 'include' });
           if (!resp.ok) {
             let detail = `HTTP ${resp.status}`;
             try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch { /* ignore */ }
@@ -1773,16 +1785,12 @@ export function TTSSynthesis({
                 </div>
                 <div className={styles.sidebarSectionBody}>
                   <div className={styles.sidebarSectionBodyInner}>
-                    <select
+                    <EngineSelect
                       className={styles.sidebarEngineSelect}
                       value={engine}
-                      onChange={e => setEngine(e.target.value as Engine)}
-                    >
-                      <option value="edge_tts">Edge-TTS</option>
-                      <option value="cosyvoice">CosyVoice</option>
-                      <option value="mimo_tts">MiMo TTS</option>
-                      <option value="voxcpm">VoxCPM</option>
-                    </select>
+                      availableEngines={capabilities.engines}
+                      onChange={(next: EngineId) => setEngine(next)}
+                    />
                     {engine === 'cosyvoice' ? (
                       <GlobalControlBar
                         voices={voices} selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}

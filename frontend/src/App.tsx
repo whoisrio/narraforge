@@ -10,6 +10,8 @@ import { indexedDBStorage, type SegmentedProjectStorage } from './services/segme
 import { backendStorage } from './services/backendSegmentedProjectStorage';
 import { createInitialProject } from './hooks/useSegmentedProject';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
+import { CapabilitiesProvider } from './hooks/CapabilitiesProvider';
+import { useCapabilities } from './hooks/useCapabilities';
 import { VoiceRefreshProvider } from './hooks/VoiceRefreshProvider';
 import { ThemeProvider } from './hooks/useTheme';
 import { TranslationProvider, useTranslation } from './i18n';
@@ -30,10 +32,12 @@ type View = Page | Tab;
 
 function SettingsSelect() {
   const { mode, setMode } = useStorageModeContext();
+  const { features } = useCapabilities();
   const { t } = useTranslation();
   return (
     <select value={mode} onChange={(e) => setMode(e.target.value as StorageMode)}>
-      <option value="backend">{t('settings.backend')}</option>
+      {/* workers 模式无后端存储（spec 第 4 节），固定 frontend，不给出 backend 选项 */}
+      {features.backend_storage && <option value="backend">{t('settings.backend')}</option>}
       <option value="frontend">{t('settings.frontend')}</option>
     </select>
   );
@@ -54,8 +58,11 @@ function AppContent() {
   const [projects, setProjects] = useState<SegmentedProject[]>([]);
   const [storageMode, setStorageMode] = useState<StorageMode>('frontend');
   const [storageModeLoaded, setStorageModeLoaded] = useState(false);
+  const capabilities = useCapabilities();
 
-  const projectStorage = storageForMode(storageMode);
+  // workers 模式固定 frontend 存储（spec 第 4 节）：即使后端配置残留 backend 也强制走 IndexedDB
+  const effectiveStorageMode: StorageMode = capabilities.features.backend_storage ? storageMode : 'frontend';
+  const projectStorage = storageForMode(effectiveStorageMode);
   const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
@@ -215,7 +222,7 @@ function AppContent() {
   const inProjectWorkspace = activeTab === 'tts-synthesis' && !!activeProjectId;
 
   return (
-    <StorageModeContext.Provider value={{ mode: storageMode, setMode: handleSetStorageMode }}>
+    <StorageModeContext.Provider value={{ mode: effectiveStorageMode, setMode: handleSetStorageMode }}>
       <div className={styles.app}>
         {isHome && <Landing onNavigate={handleNavigate} />}
 
@@ -225,6 +232,7 @@ function AppContent() {
             onNavigate={handleGlobalNavigate}
             rightSlot={settingsSlot}
             hideSidebar={inProjectWorkspace}
+            hiddenNavIds={capabilities.features.speech_to_text ? [] : ['subtitles']}
           >
             <VoiceRefreshProvider>
               <main className={styles.main}>
@@ -272,7 +280,9 @@ export default function App() {
       <TranslationProvider>
         <ToastProvider>
           <ConfirmProvider>
-            <AppContent />
+            <CapabilitiesProvider>
+              <AppContent />
+            </CapabilitiesProvider>
           </ConfirmProvider>
         </ToastProvider>
       </TranslationProvider>

@@ -797,6 +797,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/api/config/capabilities` | 部署目标能力清单（workers 模式隐藏本地专属能力用） |
 | GET | `/api/config/storage-mode` | 获取存储模式 |
 | PUT | `/api/config/storage-mode` | 设置存储模式 |
 | GET | `/api/config/animation-root` | 获取全局 Remotion 脚手架根目录 |
@@ -808,6 +809,12 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | GET | `/api/model-config` | 获取所有提供商配置 |
 | PUT | `/api/model-config/{provider}/{field}` | 更新配置值 |
 | POST | `/api/model-config/{provider}/{field}/clear` | 清除配置值 |
+
+### 部署能力 (`/api/config/capabilities`)
+
+`GET /api/config/capabilities` 返回 `{ deploy_target, engines, clone_engines, features: { speech_to_text, agent_workflow, backend_storage } }`。
+workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `mimo`、features 全 `false`；local 全量。
+事实源为 `backend/app/core/deploy_capabilities.py`，前端镜像在 `frontend/src/services/capabilities.ts`。
 
 ### 存储模式
 

@@ -26,6 +26,7 @@ vi.mock('../../services/langgraph/client', () => ({
   agentClient: {
     assistants: { getGraph: vi.fn().mockResolvedValue({ nodes: [] }) },
   },
+  agentApiUrl: 'http://127.0.0.1:2024',
 }));
 
 import { WorkflowDrawer } from './WorkflowDrawer';

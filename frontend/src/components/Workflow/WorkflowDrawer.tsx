@@ -3,7 +3,7 @@ import { useTranslation } from '../../i18n';
 import { useToast } from '../ui/useToast';
 import { useConfirm } from '../ui/useConfirm';
 import { useStream } from '@langchain/langgraph-sdk/react';
-import { agentClient } from '../../services/langgraph/client';
+import { agentClient, agentApiUrl } from '../../services/langgraph/client';
 import { NODE_STATE_KEYS } from '../../services/langgraph/contracts';
 import type { MilestoneEvent, ReviewResult, WorkflowState } from '../../services/langgraph/types';
 import {
@@ -86,7 +86,7 @@ export function WorkflowDrawer({ threadId, projectId, assistantId = 'narration',
   const confirm = useConfirm();
 
   const stream = useStream<WorkflowState, { CustomEventType: MilestoneEvent }>({
-    apiUrl: typeof window !== 'undefined' ? `http://${window.location.hostname}:2024` : 'http://127.0.0.1:2024',
+    apiUrl: agentApiUrl,
     assistantId,
     threadId,
     // SDK 回调参数是 { namespace, mutate }，不含节点名；分桶统一用事件自带 stage。

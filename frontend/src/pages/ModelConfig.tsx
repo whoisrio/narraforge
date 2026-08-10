@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { modelConfigApi } from '../services/api';
 import type { ModelConfigs, ModelConfigFieldValue } from '../types';
 import { useTranslation } from '../i18n';
+import { useCapabilities } from '../hooks/useCapabilities';
 import { useToast } from '../components/ui/useToast';
 import { AnimationRootSetting } from '../components/Settings/AnimationRootSetting';
 import { NarrationGitSetting } from '../components/Settings/NarrationGitSetting';
@@ -35,6 +36,14 @@ export function ModelConfig() {
   const [loading, setLoading] = useState(true);
   const toast = useToast();
   const { t } = useTranslation();
+  const { clone_engines: availableCloneEngines } = useCapabilities();
+
+  // provider 可见性按部署能力推导（spec 第 4 节）：qwen_tts 依赖本地 qwen/dashscope，
+  // workers 模式 clone_engines 不含 qwen 时隐藏该 provider 卡片。
+  const isProviderVisible = (providerKey: string): boolean => {
+    if (providerKey === 'qwen_tts') return availableCloneEngines.includes('qwen');
+    return true;
+  };
 
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     if (type === 'error') toast.error(message);
@@ -171,7 +180,7 @@ export function ModelConfig() {
 
       {/* Provider Cards */}
       <div className={styles.providerList}>
-        {Object.entries(configs).map(([providerKey, provider]) => {
+        {Object.entries(configs).filter(([providerKey]) => isProviderVisible(providerKey)).map(([providerKey, provider]) => {
           const state = editStates[providerKey];
           if (!state) return null;
 

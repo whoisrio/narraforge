@@ -1,4 +1,6 @@
 // Voice Profile (cloned voices)
+import { apiUrl } from '../services/apiBase';
+
 export interface VoiceEngine {
   type: string;           // 'CosyVoice' | 'Mimo' | 'VoxCpm' | 'EdgeTTS'
   sub_type?: string | null;  // 'mimo-clone' | 'mimo-design' | 'voxcpm-clone' | 'voxcpm-ultimate' | 'voxcpm-design'
@@ -28,10 +30,10 @@ export interface VoiceProfile {
 
 /** Construct audio URL for a voice profile preview or source audio */
 export function voicePreviewAudioUrl(voiceId: string): string {
-  return `/api/clone/audio/${voiceId}?field=preview`;
+  return apiUrl(`/clone/audio/${voiceId}?field=preview`);
 }
 export function voiceSourceAudioUrl(voiceId: string): string {
-  return `/api/clone/audio/${voiceId}?field=source`;
+  return apiUrl(`/clone/audio/${voiceId}?field=source`);
 }
 
 export interface VoiceProfileVoice {

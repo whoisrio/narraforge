@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import type { Chapter, Role } from '../../types';
 import { useTranslation } from '../../i18n';
+import { apiUrl } from '../../services/apiBase';
 import styles from './ProjectOverview.module.css';
 
 interface ProjectOverviewProps {
@@ -104,7 +105,7 @@ function RolePreviewButton({ role }: { role: Role }) {
           const profiles = await ttsApi.getVoices({ voice_id: voiceId });
           const profile = profiles[0];
           if (profile?.has_preview) {
-            audioSrc = `/api/clone/audio/${profile.id}?field=preview`;
+            audioSrc = apiUrl(`/clone/audio/${profile.id}?field=preview`);
           }
         } catch { /* fall through to synthesis */ }
       }

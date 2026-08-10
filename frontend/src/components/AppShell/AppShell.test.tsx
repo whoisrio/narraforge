@@ -40,4 +40,18 @@ describe('AppShell', () => {
     expect(screen.getByTestId('app-shell')).toHaveAttribute('data-collapsed', 'true');
     expect(screen.getByRole('button', { name: /展开导航/ })).toBeInTheDocument();
   });
+
+  it('hides navigation entries listed in hiddenNavIds (workers 模式隐藏字幕识别)', () => {
+    const onNavigate = vi.fn();
+    render(
+      <AppShell activeNavId="projects" onNavigate={onNavigate} hiddenNavIds={['subtitles']}>
+        <div>Studio content</div>
+      </AppShell>,
+    );
+
+    expect(screen.getByRole('button', { name: /项目/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /字幕识别/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /音色设计/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /设置/ })).toBeInTheDocument();
+  });
 });

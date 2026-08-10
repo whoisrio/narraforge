@@ -9,6 +9,8 @@ interface AppShellProps {
   children: ReactNode;
   rightSlot?: ReactNode;
   hideSidebar?: boolean;
+  /** 按部署能力隐藏的导航项（如 workers 模式隐藏 subtitles） */
+  hiddenNavIds?: GlobalNavId[];
   onNavigate: (id: GlobalNavId) => void;
 }
 
@@ -24,6 +26,7 @@ export function AppShell({
   children,
   rightSlot,
   hideSidebar = false,
+  hiddenNavIds = [],
   onNavigate,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -53,7 +56,7 @@ export function AppShell({
         </div>
 
         <nav className={styles.navList}>
-          {navItems.map(item => {
+          {navItems.filter(item => !hiddenNavIds.includes(item.id as GlobalNavId)).map(item => {
             const id = item.id as GlobalNavId;
             const active = id === activeNavId;
             return (

@@ -1,8 +1,9 @@
 import axios from 'axios';
 import type { SegmentedProject } from '../types';
 import type { SegmentedProjectStorage } from './segmentedProjectStorage';
+import { API_BASE_URL } from './apiBase';
 
-const api = axios.create({ baseURL: '/api' });
+export const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
 
 interface ListResponse {
   id: string;

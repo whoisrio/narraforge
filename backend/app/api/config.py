@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
 
@@ -12,6 +12,7 @@ import tempfile
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.deploy_capabilities import get_capabilities
 from app.core.repositories.deps import get_system_config_repo
 from app.core.repositories.system_configs import SystemConfigRepository
 from app.core.system_config_service import (
@@ -31,6 +32,14 @@ except ImportError:  # workers bundle
     TTSConfig = ModelProvider = Emotion = None  # type: ignore[assignment,misc]
 
 router = APIRouter()
+
+
+@router.get("/capabilities")
+async def get_capabilities_endpoint(request: Request):
+    """部署目标能力清单（spec 第 4 节）：前端据此隐藏/禁用本地专属能力。
+    无需 DB，workers 模式同样可用（config 路由两种模式都挂载）。"""
+    target = getattr(request.app.state, "deploy_target", None) or settings.deploy_target
+    return get_capabilities(target)
 
 
 class ConfigCreate(BaseModel):
