@@ -1,0 +1,6 @@
+{
+  "name": "narraforge-cf-workers-spike",
+  "main": "src/main.py",
+  "compatibility_date": "2025-11-02",
+  "compatibility_flags": ["python_workers"]
+}
