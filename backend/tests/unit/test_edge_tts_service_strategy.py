@@ -28,6 +28,8 @@ def workers_mode(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_workers_synthesize_delegates_to_ws_client(workers_mode, monkeypatch):
+    # 模拟真 Pyodide Workers 运行时（workers.fetch 可用）→ 选择 WS 客户端
+    monkeypatch.setattr(edge_module, "_workers_runtime_available", lambda: True)
     mock_ws = AsyncMock(return_value=FAKE_MP3)
     monkeypatch.setattr("app.services.edge_tts_ws_client.synthesize", mock_ws)
 
@@ -46,6 +48,7 @@ async def test_workers_synthesize_delegates_to_ws_client(workers_mode, monkeypat
 @pytest.mark.asyncio
 async def test_workers_synthesize_does_not_touch_edge_tts_package(workers_mode, monkeypatch):
     """workers 路径即使 edge_tts 包不可用也必须成功（策略分发在选择之后才 import）。"""
+    monkeypatch.setattr(edge_module, "_workers_runtime_available", lambda: True)
     monkeypatch.setattr("app.services.edge_tts_ws_client.synthesize", AsyncMock(return_value=FAKE_MP3))
     # 模拟 edge_tts 包缺失：任何 Communicate 调用都会炸
     monkeypatch.setattr(edge_module, "edge_tts", None, raising=False)
@@ -58,6 +61,7 @@ async def test_workers_synthesize_does_not_touch_edge_tts_package(workers_mode, 
 @pytest.mark.asyncio
 async def test_workers_synthesize_retries_on_failure(workers_mode, monkeypatch):
     """与 local 路径一致的重试语义：最后一次失败才抛。"""
+    monkeypatch.setattr(edge_module, "_workers_runtime_available", lambda: True)
     mock_ws = AsyncMock(side_effect=[RuntimeError("boom"), FAKE_MP3])
     monkeypatch.setattr("app.services.edge_tts_ws_client.synthesize", mock_ws)
     monkeypatch.setattr("asyncio.sleep", AsyncMock())

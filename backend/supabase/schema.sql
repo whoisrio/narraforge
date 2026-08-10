@@ -122,3 +122,15 @@ create index if not exists ix_segments_chapter_id on segmented_project_segments 
 alter table segmented_projects
     add constraint fk_project_default_narrator_role
     foreign key (default_narrator_role_id) references roles(id) on delete set null;
+
+-- ---------------------------------------------------------------------------
+-- Storage bucket（步骤 6A-2）：workers 模式无 R2 binding 的部署（如 Render）
+-- 把克隆样本/试听音频等二进制资产存 Supabase Storage。
+-- bucket 名必须与后端 SUPABASE_STORAGE_BUCKET（默认 voice-assets）一致。
+-- public=false：仅经 service key（后端）读写，音频仍由 API 端点服务。
+-- 若本脚本在无 storage schema 的环境执行报错，可改为 Supabase 控制台
+-- Storage → New bucket 手动创建（同名、Private）。
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public)
+values ('voice-assets', 'voice-assets', false)
+on conflict (id) do nothing;

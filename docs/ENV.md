@@ -19,10 +19,11 @@ See `docs/RUNBOOK.md` → "Cloudflare Workers Deployment".
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
-| `DEPLOY_TARGET` | No | `local` (full routes, SQLite, local models) or `workers` (Cloudflare Workers, online routes only) | `local` |
+| `DEPLOY_TARGET` | No | `local` (full routes, SQLite, local models) or `workers` (online routes only: Cloudflare Workers paid tier, or Render free tier under CPython) | `local` |
 | `ACCESS_ENFORCEMENT` | No | Workers mode only: require the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access (401 `access_required` otherwise). `/health` and OPTIONS preflight are exempt. Never enabled in local mode. | `true` |
 | `CORS_ORIGINS` | No | Workers mode only: comma-separated allowed CORS origins (set to the Pages domain at deploy time). Local mode always uses `*`. | `*` |
-| `LOG_TO_FILE` | No | Write logs to `logs/app.log`. Set `false` in Workers (no writable persistent FS). | `true` |
+| `ASSET_STORE_BACKEND` | No | Binary asset store backend: `auto` (local mode → local FS; workers mode → R2 if a binding is injected, else Supabase Storage), or explicit `local` / `r2` / `supabase` | `auto` |
+| `LOG_TO_FILE` | No | Write logs to `logs/app.log`. Set `false` in Workers (no writable persistent FS) and Render (ephemeral FS, log to stdout). | `true` |
 
 ## Database
 
@@ -38,6 +39,7 @@ Required only when `DEPLOY_TARGET=workers`: the workers runtime has no raw socke
 |----------|----------|-------------|---------|
 | `SUPABASE_URL` | Yes (workers) | Supabase project URL (`https://<project>.supabase.co`) | *(empty)* |
 | `SUPABASE_SERVICE_KEY` | Yes (workers) | Supabase service_role key (server-side only) | *(empty)* |
+| `SUPABASE_STORAGE_BUCKET` | Yes (workers, no R2) | Supabase Storage bucket for binary assets (clone samples / preview audio) when no R2 binding exists (e.g. Render). Created by the `storage.buckets` insert at the end of `backend/supabase/schema.sql` (private bucket). | `voice-assets` |
 
 ## Qwen / CosyVoice API (Voice Cloning)
 

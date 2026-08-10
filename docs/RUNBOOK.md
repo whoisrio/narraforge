@@ -407,6 +407,74 @@ uv run --extra workers pywrangler deploy
 
 ---
 
+## Render Deployment (free tier)
+
+Workers 模式代码（`DEPLOY_TARGET=workers` 的瘦身路由 + Supabase 持久化）原样跑在
+Render 免费档（CPython 正常运行时，非 Pyodide）。背景：Workers bundle 实测 gzip
+6.7MB 超免费档 3MB 限制，全免费目标下后端改部署 Render；Workers 路径保留作付费
+档备选（见上一节）。
+
+运行差异（代码已自动适配，无需额外配置）：
+
+- edge-tts 合成：无 `workers` 运行时自动回退 edge-tts 包（`local-services` extra）。
+- 二进制资产（克隆样本/试听音频）：`ASSET_STORE_BACKEND=auto` + 无 R2 binding
+  → Supabase Storage（Render 免费档文件系统临时，落盘会丢，不能写本地）。
+- 持久化：Supabase PostgREST，与 Workers 模式同一代码路径。
+
+### Blueprint 一键部署
+
+仓库根有 `render.yaml`：Render Dashboard → New → Blueprint → 选仓库。
+build：`pip install uv && cd backend && uv sync --extra local-services`；
+start：`cd backend && uv run uvicorn main:app --host 0.0.0.0 --port $PORT`；
+health check：`/health`。
+**不要用 `backend/Dockerfile`**（local 全量构建含 torch，免费档装不下也不需要）。
+
+手动建 Web Service 亦可：Runtime 选 Python 3，填同样的 build/start 命令。
+
+### 环境变量清单
+
+| 变量 | 值 | 说明 |
+|---|---|---|
+| `DEPLOY_TARGET` | `workers` | 纯在线路由，不注册本地模型路由 |
+| `APP_ENV` / `DEBUG` | `production` / `false` | |
+| `LOG_TO_FILE` | `false` | 日志走 stdout（Render FS 临时） |
+| `ACCESS_ENFORCEMENT` | `true` | Cloudflare Access 头校验（默认开） |
+| `CORS_ORIGINS` | Pages 域名（逗号分隔） | 如 `https://narraforge.pages.dev` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
+| `SUPABASE_STORAGE_BUCKET` | `voice-assets` | 须与 schema.sql 创建的 bucket 同名 |
+| `ASSET_STORE_BACKEND` | `auto` | 无 R2 binding → Supabase Storage |
+| `MIMO_API_KEY` / `MIMO_BASE_URL` | 小米 MiMo key | 在线合成/克隆 |
+
+`sync:false` 的项（CORS_ORIGINS、SUPABASE_*、MIMO_API_KEY）需在控制台手填。
+
+### Supabase 准备
+
+1. 免费档建项目，SQL Editor 执行 `backend/supabase/schema.sql`（末尾含
+   `storage.buckets` 插入，自动建 `voice-assets` 私有桶；若该环境无 storage
+   schema 报错，改在控制台 Storage → New bucket 手动建同名 Private 桶）。
+2. 取 Project URL 与 service_role key 填到 Render 环境变量。
+
+### 免费档休眠与冷启动
+
+- 免费档 15 分钟无请求自动休眠，下一次请求冷启动数十秒（uv sync 产物在
+  构建期已固定，冷启动只是进程拉起 + import，远快于 Pyodide 初始化）。
+- 前端请求超时要容忍冷启动；`healthCheckPath=/health` 供 Render 探活。
+
+### Cloudflare 侧（DNS + Access）
+
+1. DNS：`api.<域名>` CNAME → `<service>.onrender.com`，开橙云代理。
+2. Render 控制台给服务加同名自定义域名；证书自动签发。若签发卡住，
+   先把 DNS 记录改灰云（DNS only）等签发完成再开回橙云。
+3. Cloudflare SSL/TLS 模式须为 **Full**（Render 端有有效证书；不要用
+   Flexible，会回源 HTTP 被重定向循环）。
+4. Zero Trust 建 Access 应用覆盖 `api.<域名>`（同 Pages 前端一个团队域），
+   邮箱 OTP，允许列表只填本人邮箱；Access CORS 设置放行 Pages 域名并允许
+   credentials。后端 `ACCESS_ENFORCEMENT=true` 校验注入的邮箱头作纵深防御。
+5. Render 自带 `onrender.com` 子域无法关闭直连——务必保证 Access 中间件开启
+   （默认开），`onrender.com` 直连会被 401 挡住。
+
+---
+
 ## Production Deployment
 
 1. Set `DEBUG=false` in `.env`

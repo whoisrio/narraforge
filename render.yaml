@@ -1,0 +1,59 @@
+# Render Blueprint：NarraForge 后端免费档部署（步骤 6A-3）
+#
+# 背景：原计划 Cloudflare Workers（Pyodide）实测 bundle gzip 6.7MB 超免费档 3MB
+# 限制，改为 Render 免费档跑同一份 workers 模式代码（DEPLOY_TARGET=workers，
+# CPython 正常运行时，非 Pyodide）：
+# - 持久化：Supabase PostgREST（SUPABASE_URL / SUPABASE_SERVICE_KEY）
+# - 二进制资产：Supabase Storage（ASSET_STORE_BACKEND=auto → 无 R2 binding 时自动选）
+# - edge-tts：无 workers 运行时自动回退 edge-tts 包（local-services extra 提供）
+# - 入口：main.py 底部 app = create_app() 读 DEPLOY_TARGET，无需单独入口文件
+#
+# 注意：不要用 backend/Dockerfile（local 全量构建，含 torch，免费档装不下也不必
+# 要）。本 Blueprint 用 Render 原生 python runtime + uv，仅安装 local-services
+# extra（uvicorn + edge-tts + sqlalchemy 等，不含 local-ml 的 torch）。
+#
+# sync:false 的环境变量需在 Render 控制台（或 blueprint 导入时）手动填值。
+
+services:
+  - type: web
+    name: narraforge-api
+    runtime: python
+    plan: free
+    buildCommand: pip install uv && cd backend && uv sync --extra local-services
+    startCommand: cd backend && uv run uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # workers 模式 = 纯在线路由（edge-tts/mimo/元数据），不注册本地模型路由
+      - key: DEPLOY_TARGET
+        value: workers
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      # Render 免费档文件系统临时：日志走 stdout，不写文件
+      - key: LOG_TO_FILE
+        value: "false"
+      # Cloudflare Access 头校验（纵深防御，见 spec 3.6）
+      - key: ACCESS_ENFORCEMENT
+        value: "true"
+      # 逗号分隔的前端来源（Pages 域名，如 https://narraforge.pages.dev）
+      - key: CORS_ORIGINS
+        sync: false
+      # Supabase 持久化（PostgREST + Storage）
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      # Supabase Storage 资产桶名（须与 backend/supabase/schema.sql 末尾创建的一致）
+      - key: SUPABASE_STORAGE_BUCKET
+        value: voice-assets
+      # auto：workers 模式无 R2 binding → Supabase Storage（Render 场景）
+      - key: ASSET_STORE_BACKEND
+        value: auto
+      # MiMo TTS（小米）在线合成/克隆
+      - key: MIMO_API_KEY
+        sync: false
+      - key: MIMO_BASE_URL
+        value: https://api.xiaomimimo.com/v1

@@ -1,11 +1,18 @@
-"""二进制资产存储（步骤 3A/4D）。
+"""二进制资产存储（步骤 3A/4D/6A-2）。
 
 克隆样本/试听音频等二进制资产的存储抽象：
 - LocalAssetStore：写 backend/data/（现有逻辑）。ref 为相对 base_dir 的 POSIX
   路径，与 DB 现存值同一约定（settings.to_relative），读取方零改动。
 - R2AssetStore（步骤 4D）：Cloudflare R2 binding，workers 模式由 workers_entry
-  经 set_r2_binding(self.env.ASSETS) 注入；未注入时 get_asset_store 响亮报错
-  （部署/配置错误，不静默）。
+  经 set_r2_binding(self.env.ASSETS) 注入；显式 r2 而未注入时 get_asset_store
+  响亮报错（部署/配置错误，不静默）。
+- SupabaseStorageAssetStore（步骤 6A-2）：Supabase Storage REST。Render 免费档
+  文件系统临时、且没有 R2 binding（Workers 专有），此场景下 workers 模式的
+  二进制资产改存 Supabase Storage bucket（settings.supabase_storage_bucket）。
+
+选择逻辑（get_asset_store，settings.asset_store_backend）：
+- auto（默认）：local 模式→Local；workers 模式→有 R2 binding 用 R2，否则 Supabase。
+- 显式 local / r2 / supabase 可覆盖（如付费 Workers 用 R2、本地调试 Supabase）。
 
 接口为异步：R2 binding 方法返回 JS Promise 必须 await；Local 实现同步逻辑
 包 async 保持同一接口，调用方一律 await。
@@ -22,7 +29,10 @@ from __future__ import annotations
 import inspect
 from typing import Protocol, runtime_checkable
 
+import httpx
+
 from app.core.config import settings
+from app.core.supabase_client import SupabaseError
 
 
 @runtime_checkable
@@ -118,6 +128,110 @@ class R2AssetStore:
         return None
 
 
+def _is_storage_not_found(resp: httpx.Response) -> bool:
+    """Supabase Storage 缺失对象判定：404，或部分版本返回的 400 + not_found 负载。"""
+    if resp.status_code == 404:
+        return True
+    if resp.status_code != 400:
+        return False
+    try:
+        body = resp.json()
+    except ValueError:
+        return False
+    if not isinstance(body, dict):
+        return False
+    text = f"{body.get('statusCode', '')} {body.get('error', '')} {body.get('message', '')}".lower()
+    return "not_found" in text or "not found" in text
+
+
+def _raise_storage_error(resp: httpx.Response) -> None:
+    try:
+        detail = resp.json()
+        message = detail.get("message") or str(detail) if isinstance(detail, dict) else str(detail)
+    except ValueError:
+        message = resp.text
+    raise SupabaseError(resp.status_code, message)
+
+
+class SupabaseStorageAssetStore:
+    """Supabase Storage REST 实现（步骤 6A-2，Render 等无 R2 binding 的 workers 部署）。
+
+    REST：``{SUPABASE_URL}/storage/v1/object/{bucket}/{key}``，service key 鉴权
+    （apikey + Authorization Bearer，与 PostgREST 客户端同一约定）。
+    - put：PUT + ``x-upsert: true``（重复生成试听须覆盖而非 409）；ref 即传入 key。
+    - get：GET，缺失（404 / 400 not_found）映射 None，与 Local/R2 同一语义。
+    - delete：DELETE，缺失为 no-op；其他 >=400 抛 SupabaseError。
+    - url()：None——bucket 私有（service key 访问），音频仍经 API 端点服务。
+
+    transport 可注入（测试用 httpx.MockTransport）。
+    """
+
+    def __init__(
+        self,
+        base_url: str | None = None,
+        service_key: str | None = None,
+        bucket: str | None = None,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        timeout: float = 30.0,
+    ):
+        base_url = base_url or settings.supabase_url
+        service_key = service_key or settings.supabase_service_key
+        bucket = bucket or settings.supabase_storage_bucket
+        if not base_url or not service_key or not bucket:
+            raise RuntimeError(
+                "Supabase Storage asset store is not configured: set "
+                "SUPABASE_URL / SUPABASE_SERVICE_KEY / SUPABASE_STORAGE_BUCKET"
+            )
+        self.bucket = bucket
+        self._base_url = base_url.rstrip("/") + "/storage/v1/object"
+        self._headers = {
+            "apikey": service_key,
+            "Authorization": f"Bearer {service_key}",
+        }
+        self._transport = transport
+        self._timeout = timeout
+
+    def _client(self) -> httpx.AsyncClient:
+        # 每次调用新建 client：实现是无状态依赖（FastAPI 每请求注入），
+        # 不持有长连接，避免跨事件循环复用问题。
+        return httpx.AsyncClient(
+            base_url=self._base_url,
+            headers=self._headers,
+            transport=self._transport,
+            timeout=self._timeout,
+        )
+
+    async def put(self, key: str, data: bytes) -> str:
+        async with self._client() as client:
+            resp = await client.put(
+                f"{self.bucket}/{key}", content=data, headers={"x-upsert": "true"}
+            )
+        if resp.status_code >= 400:
+            _raise_storage_error(resp)
+        return key
+
+    async def get(self, ref: str) -> bytes | None:
+        async with self._client() as client:
+            resp = await client.get(f"{self.bucket}/{ref}")
+        if _is_storage_not_found(resp):
+            return None
+        if resp.status_code >= 400:
+            _raise_storage_error(resp)
+        return resp.content
+
+    async def delete(self, ref: str) -> None:
+        async with self._client() as client:
+            resp = await client.delete(f"{self.bucket}/{ref}")
+        if _is_storage_not_found(resp):
+            return
+        if resp.status_code >= 400:
+            _raise_storage_error(resp)
+
+    def url(self, ref: str) -> str | None:
+        return None
+
+
 _r2_binding = None
 
 
@@ -128,11 +242,23 @@ def set_r2_binding(binding) -> None:
 
 
 async def get_asset_store() -> AssetStore:
-    """FastAPI 依赖：按 deploy_target 选择实现。workers 未注入 binding 时响亮报错。
+    """FastAPI 依赖：按 settings.asset_store_backend 选择实现。
+
+    auto（默认）：local 模式→Local；workers 模式→有 R2 binding（真 Workers）用 R2，
+    否则 Supabase Storage（Render 等无 binding 的 CPython 部署）。
+    显式 r2 而未注入 binding 时响亮报错（部署/配置错误，不静默）。
 
     async def：workers 运行时（Pyodide）无线程，sync 依赖会经 anyio.to_thread 失败。
     """
-    if settings.deploy_target == "workers":
+    backend = settings.asset_store_backend
+    if backend == "auto":
+        if settings.deploy_target == "workers":
+            backend = "r2" if _r2_binding is not None else "supabase"
+        else:
+            backend = "local"
+    if backend == "local":
+        return LocalAssetStore()
+    if backend == "r2":
         if _r2_binding is None:
             raise RuntimeError(
                 "R2 asset store unavailable: no bucket binding injected. "
@@ -140,4 +266,8 @@ async def get_asset_store() -> AssetStore:
                 "（wrangler.toml 的 [[r2_buckets]] binding = \"ASSETS\"）"
             )
         return R2AssetStore(_r2_binding)
-    return LocalAssetStore()
+    if backend == "supabase":
+        return SupabaseStorageAssetStore()
+    raise ValueError(
+        f"unknown asset_store_backend: {backend!r}（可选 auto | local | r2 | supabase）"
+    )

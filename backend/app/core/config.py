@@ -89,6 +89,12 @@ class Settings(BaseSettings):
     # Supabase（workers 模式持久化：PostgREST REST 访问，service key 只在后端）
     supabase_url: str = ""
     supabase_service_key: str = ""
+    # Supabase Storage 资产桶（workers 模式无 R2 binding 时的二进制资产后端，如 Render）
+    supabase_storage_bucket: str = "voice-assets"
+    # 二进制资产存储后端：auto | local | r2 | supabase
+    # auto：local 模式→本地文件系统；workers 模式→有 R2 binding 用 R2（真 Workers），
+    # 否则 Supabase Storage（Render 等无 binding 的 CPython 部署）。显式值可覆盖。
+    asset_store_backend: str = "auto"
 
     # API Keys (千问)
     qwen_api_key: str = ""

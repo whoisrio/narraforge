@@ -116,14 +116,44 @@ Access 应用的 CORS 设置放行 Pages 域名并允许 credentials；后端 CO
 - 环境变量：`NODE_VERSION=22`、`VITE_API_BASE_URL=https://api.<域名>/api`。
 
 ### 5.2 后端（Workers）
+
+> **已实测超免费档，改用 Render 免费档（见 5.2a）。**
+> 步骤 5 实测 `pywrangler deploy --dry-run` gzip 6.85MB（pydantic-core 一项 4.4MB），
+> 超 Workers 免费档 3MB 限制；全免费目标下后端部署目标改为 Render。
+> 本节保留作付费档（10MB gzip）备选方案，Workers 代码路径（workers_entry /
+> R2 / WS 客户端）原样保留、测试锁死。
+
 - `backend/wrangler.toml`：python_workers 兼容标志，`compatibility_date >= 2025-11-02`（spike 验证 2025-08-01 有 `on_fetch` 报错），入口 `workers_entry.py`，绑定 R2 bucket，secrets 存 Supabase service key、mimo API key。
 - 关闭 workers.dev 子域路由，API 仅走受 Access 保护的自定义域名（防绕过，见 3.6）。
 - Git 集成：Workers Builds 连接同一仓库，root `backend/`，build command `uv sync && uv run pywrangler deploy`；若 Workers Builds 对 Python 支持有问题，退用 GitHub Actions + `wrangler-action`（ secrets 存 GitHub）。
 - 冷启动风险（spike 遗留）：真实部署后实测首请求延迟，必要时评估 Workers 的 Python 快照预热手段或接受。
 
+### 5.2a 后端（Render 免费档，当前方案）
+
+workers 模式代码原样跑在 Render CPython：`DEPLOY_TARGET=workers`，
+`uvicorn main:app`（main.py 底部 `app = create_app()` 读 settings，无需新入口）。
+适配点（步骤 6A）：
+
+- **edge-tts 能力回退**：workers 模式按运行时能力选后端——真 Pyodide（`workers.fetch`
+  可用）走内置 WS 客户端；Render CPython 自动回退 edge-tts 包（`local-services`
+  extra 提供）；两者皆无响亮报错。
+- **资产存储 auto 选择**：`ASSET_STORE_BACKEND=auto`——local→本地 FS；workers→
+  有 R2 binding 用 R2（付费 Workers 备选），否则 Supabase Storage REST
+  （`SupabaseStorageAssetStore`，bucket 由 `backend/supabase/schema.sql` 末尾创建，
+  默认 `voice-assets` 私有桶）。Render 免费档 FS 临时，克隆样本/试听音频必须走
+  Supabase Storage。
+- **render.yaml**（仓库根 Blueprint）：原生 python runtime + uv，build
+  `uv sync --extra local-services`（不含 local-ml 的 torch），start
+  `uv run uvicorn main:app --host 0.0.0.0 --port $PORT`，health `/health`。
+  不用 `backend/Dockerfile`（local 全量构建）。
+- 免费档 15 分钟休眠、冷启动数十秒；Cloudflare 侧 `api.<域名>` CNAME →
+  onrender.com 开橙云 + Access 应用覆盖 + SSL Full 模式（详见 RUNBOOK）。
+
 ### 5.3 Supabase
-- 免费档建项目，执行 Postgres schema 迁移 SQL（来自 3.5）。
-- 开启 PostgREST，service_role key 只放 Workers secrets，不进前端。
+- 免费档建项目，执行 Postgres schema 迁移 SQL（来自 3.5；`schema.sql` 末尾同时创建
+  `voice-assets` 私有 Storage bucket，供 Render 场景的二进制资产存储）。
+- 开启 PostgREST 与 Storage，service_role key 只放后端（Workers secrets / Render
+  环境变量），不进前端。
 
 ### 5.4 Cloudflare Access
 - Zero Trust 控制台建 Access 应用，覆盖前端和 API 两个 hostname（见 3.6）。
