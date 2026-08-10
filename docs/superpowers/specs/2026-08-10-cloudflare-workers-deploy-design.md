@@ -83,26 +83,28 @@ workers 运行时没有原生 socket，psycopg/asyncpg 不可用（spike 结论�
 - workers 模式：`SupabaseRepository` 用 httpx 调 PostgREST，表结构用一份独立的 Postgres schema SQL（不搬 `database.py` 里约 1000 行 SQLite 方言迁移；schema 从 SQLAlchemy 模型定义导出，作为 Supabase 迁移文件提交）。
 - 二进制资产（克隆样本音频、试听音频）workers 模式存 R2（Workers binding），DB 里存 R2 key；本地模式继续存 `backend/data/`。
 
-### 3.6 鉴权（新增，必须）
+### 3.6 鉴权（新增，必须）：Cloudflare Access
 
 本地版无鉴权，公网部署必须加，否则任何人能消耗 mimo/edge-tts 调用额度、读写你的项目数据。
-workers 模式启用共享密钥校验：
-- 后端：FastAPI 依赖项校验 `Authorization: Bearer <token>`，token 存 Workers secret；校验失败返回 401。`/api/health` 和 CORS 预检放行。
-- 前端：未持 token 时显示一个简洁的解锁页（输入口令），输入后存 localStorage，axios 拦截器统一带上；401 时清掉 token 回到解锁页。
-- 范围：单用户共享口令，不引入多用户/注册体系（YAGNI，后续有需求再换 Supabase Auth）。
-本地模式默认关闭，不破坏现有开发和 e2e。
+采用 **Cloudflare Access**（Zero Trust，免费档 50 用户）在边缘统一拦截，不自建口令体系：
+- 在 Zero Trust 控制台建一个 Access 应用（self-hosted），策略覆盖 Pages 域名和 API 域名两个 hostname；登录方式用邮箱一次性验证码（OTP），允许列表填自己的邮箱。
+- 未认证请求在 Cloudflare 边缘直接被重定向到登录页，**请求不会到达 Workers/Pages 源站**，无需后端校验代码、无需前端解锁页。
+- Workers 侧防绕过：关闭 workers.dev 子域路由，API 只走受 Access 保护的自定义域名；后端中间件校验 `Cf-Access-Authenticated-User-Email` 头存在作为纵深防御（头只能由 Access 边缘注入）。Access JWT 完整验签列为可选加固，首版不做。
+- 前端只需 axios 带 `withCredentials: true`（Access 认证态在 `CF_Authorization` cookie 里）；API 跨子域时在 Access 应用的 CORS 设置里放行 Pages 域名并允许 credentials。
+本地模式不启用任何鉴权，不破坏现有开发和 e2e。
 
 ### 3.7 CORS 与域名
 
-Workers 后端挂 `api.<域名>`（或 workers.dev 子域），CORS 放行 Pages 域名。
-前端 `api.ts` 的 `baseURL` 改为 `import.meta.env.VITE_API_BASE_URL || '/api'`（含 `api.ts:626` 的 export-audio URL 拼接），Pages 环境变量注入后端地址；本地默认 `/api` 走 Vite proxy，行为不变。
+Workers 后端挂 `api.<域名>`，Pages 前端挂 `<域名>`（或 `www`），两个 hostname 都纳入同一个 Access 应用。
+Access 应用的 CORS 设置放行 Pages 域名并允许 credentials；后端 CORS 中间件同步放行 Pages 域名。
+前端 `api.ts` 的 `baseURL` 改为 `import.meta.env.VITE_API_BASE_URL || '/api'`（含 `api.ts:626` 的 export-audio URL 拼接），axios 实例统一 `withCredentials: true`，Pages 环境变量注入后端地址；本地默认 `/api` 走 Vite proxy，行为不变。
 
 ## 4. 前端改动
 
 - 新增运行时能力探测：`GET /api/config/capabilities` 返回 `{ deploy_target, engines: [...], clone_engines: [...], features: { speech_to_text, agent_workflow, backend_storage } }`。
   workers 模式 `engines` 只含 `edge_tts` / `mimo_tts`，`clone_engines` 只含 `mimo`。
   前端据此隐藏/禁用：SpeechToText 页入口、VoiceClone 的 qwen/voxcpm 克隆引擎选项、TTS 面板的 cosyvoice/voxcpm 引擎分支、ModelConfig 页的 `qwen_tts` provider 配置项、工作流 drawer 入口、backend 存储模式切换。
-- axios 实例加 Authorization 拦截器（见 3.6）。
+- axios 实例统一 `withCredentials: true`（配合 Access cookie，见 3.6/3.7）；无需解锁页或 token 拦截器。
 - 修复已发现的 agent URL 不一致（`WorkflowDrawer.tsx:89` 硬编码 `localhost:2024`）——workers 模式直接不渲染 drawer，本地模式顺手修掉。
 - 其余页面（TTSSynthesis 主工作室、VoiceClone 在线克隆、ModelConfig）无结构改动。
 
@@ -114,7 +116,8 @@ Workers 后端挂 `api.<域名>`（或 workers.dev 子域），CORS 放行 Pages
 - 环境变量：`NODE_VERSION=22`、`VITE_API_BASE_URL=https://api.<域名>/api`。
 
 ### 5.2 后端（Workers）
-- `backend/wrangler.toml`：python_workers 兼容标志，`compatibility_date >= 2025-11-02`（spike 验证 2025-08-01 有 `on_fetch` 报错），入口 `workers_entry.py`，绑定 R2 bucket，secrets 存 Supabase service key、mimo API key、访问 token。
+- `backend/wrangler.toml`：python_workers 兼容标志，`compatibility_date >= 2025-11-02`（spike 验证 2025-08-01 有 `on_fetch` 报错），入口 `workers_entry.py`，绑定 R2 bucket，secrets 存 Supabase service key、mimo API key。
+- 关闭 workers.dev 子域路由，API 仅走受 Access 保护的自定义域名（防绕过，见 3.6）。
 - Git 集成：Workers Builds 连接同一仓库，root `backend/`，build command `uv sync && uv run pywrangler deploy`；若 Workers Builds 对 Python 支持有问题，退用 GitHub Actions + `wrangler-action`（ secrets 存 GitHub）。
 - 冷启动风险（spike 遗留）：真实部署后实测首请求延迟，必要时评估 Workers 的 Python 快照预热手段或接受。
 
@@ -122,10 +125,15 @@ Workers 后端挂 `api.<域名>`（或 workers.dev 子域），CORS 放行 Pages
 - 免费档建项目，执行 Postgres schema 迁移 SQL（来自 3.5）。
 - 开启 PostgREST，service_role key 只放 Workers secrets，不进前端。
 
+### 5.4 Cloudflare Access
+- Zero Trust 控制台建 Access 应用，覆盖前端和 API 两个 hostname（见 3.6）。
+- 登录方式邮箱 OTP，允许列表只填本人邮箱；CORS 设置放行 Pages 域名 + 允许 credentials。
+- 真实浏览器走一遍：未登录访问被重定向 → 收验证码登录 → 前端和 API 均通。
+
 ## 6. 数据流（workers 模式一次合成）
 
-1. 前端 POST `/api/tts/synthesize`（带 Bearer token）。
-2. Workers 校验 token → 按引擎分发：edge-tts 走内置 WS 客户端 / mimo 走 httpx REST。
+1. 前端 POST `/api/tts/synthesize`（浏览器自动带 `CF_Authorization` cookie，Access 边缘完成认证）。
+2. Workers 校验 Access 注入的邮箱头 → 按引擎分发：edge-tts 走内置 WS 客户端 / mimo 走 httpx REST。
 3. 音频以 base64 返回前端，前端存 IndexedDB（frontend 存储模式，音频不经 Workers 持久化）。
 4. 项目/章节/分段元数据经 `SupabaseRepository` 写 PostgREST；mimo 克隆样本/试听音频写 R2。
 
@@ -144,13 +152,13 @@ Workers 后端挂 `api.<域名>`（或 workers.dev 子域），CORS 放行 Pages
 | SupabaseRepository 重写遗漏边界 | 仓储接口从现有 service 逐方法提取，TDD 覆盖；frontend 存储模式下需要持久化的表面已收敛到 5 张表 |
 | Workers Builds 不支持 Python 构建 | 退路 GitHub Actions + wrangler-action |
 | edge-tts 协议被微软改动 | WS 客户端是我们自己的代码，协议变更只需改一处；集成测试会立刻暴露 |
-| 共享口令泄露 | token 可随时在 Workers secrets 轮换；前端 localStorage 不含敏感数据 |
+| workers.dev 直连绕过 Access | 关闭 workers.dev 路由仅走自定义域名；后端校验 Access 注入的邮箱头 |
 
 ## 9. 实施顺序（高层）
 
 1. 后端应用工厂化 + `DEPLOY_TARGET` + 依赖分组（本地模式回归全绿）。
 2. mimo httpx 化 + edge-tts WS 客户端产品化与策略化。
 3. 仓储接口 + SupabaseRepository + R2 资产存储。
-4. Workers 入口 + wrangler.toml + 鉴权 + CORS。
-5. 前端 capabilities + 解锁页 + baseURL 环境变量 + axios 拦截器。
-6. Pages / Workers / Supabase 三处部署打通，真实环境验证冷启动与核心链路。
+4. Workers 入口 + wrangler.toml + Access 应用配置 + CORS。
+5. 前端 capabilities + baseURL 环境变量 + axios withCredentials。
+6. Pages / Workers / Supabase / Access 四处部署打通，真实环境验证冷启动、认证拦截与核心链路。
