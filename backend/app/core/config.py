@@ -70,6 +70,10 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite:///./voice_clone.db"
 
+    # Supabase（workers 模式持久化：PostgREST REST 访问，service key 只在后端）
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+
     # API Keys (千问)
     qwen_api_key: str = ""
     qwen_model: str = "qwen-tts"

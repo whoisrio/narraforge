@@ -20,6 +20,8 @@ from pathlib import Path
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.repositories.deps import get_voice_repo
+from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
@@ -204,21 +206,23 @@ async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session =
 
 
 @router.post("/voiceclone", response_model=TTSResultOut)
-async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = Depends(get_db)):
+async def synthesize_voice_clone(
+    request: MiMoVoiceCloneRequest,
+    db: Session = Depends(get_db),
+    repo: VoiceProfileRepository = Depends(get_voice_repo),
+):
     """使用已上传的音频文件进行音色复刻合成"""
-    from app.models.voice_profile import VoiceProfile
-
     # 查找本地声音记录
-    voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
+    voice = repo.get(request.profile_id)
     if not voice:
         raise HTTPException(status_code=404, detail="声音记录不存在")
 
-    model = (voice.voice or {}).get("model", "")
-    source_path = (voice.voice_params or {}).get(model, {}).get("source_audio_path", "")
+    model = (voice["voice"] or {}).get("model", "")
+    source_path = (voice["voice_params"] or {}).get(model, {}).get("source_audio_path", "")
     resolved_src = str(settings.resolve_path(source_path)) if source_path else None
     if not resolved_src or not os.path.exists(resolved_src):
         # 尝试外部 URL
-        vp = (voice.voice_params or {}).get(model, {}) or {}
+        vp = (voice["voice_params"] or {}).get(model, {}) or {}
         ext_url = vp.get("params", {}).get("external_audio_url")
         if ext_url:
             tmp_path = None
@@ -244,7 +248,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
                     audio_bytes=audio_bytes,
                     audio_fmt=request.format,
                     text=request.text,
-                    voice_label=voice.name,
+                    voice_label=voice["name"],
                     instruction=request.instruction,
                     db=db,
                 )
@@ -268,7 +272,7 @@ async def synthesize_voice_clone(request: MiMoVoiceCloneRequest, db: Session = D
             audio_bytes=audio_bytes,
             audio_fmt=request.format,
             text=request.text,
-            voice_label=voice.name,
+            voice_label=voice["name"],
             instruction=request.instruction,
             db=db,
         )

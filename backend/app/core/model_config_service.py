@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.crypto_service import encrypt_value, decrypt_value, is_encrypted
-from app.models.system_config import SystemConfig
+from app.core.system_config_service import get_config, set_config
 
 logger = logging.getLogger(__name__)
 
@@ -112,12 +112,13 @@ def _get_settings_default(provider: str, field: str) -> str:
 
 
 def _load_provider_config(db: Session, provider: str) -> dict:
-    """从 system_configs 表读取某个提供商的配置 JSON，敏感字段自动解密"""
+    """从 system_configs 读取某个提供商的配置 JSON，敏感字段自动解密。
+    经 system_config_service.get_config 访问：workers 模式自动走 Supabase 仓储。"""
     key = PROVIDER_KEYS[provider]
-    row = db.query(SystemConfig).filter(SystemConfig.key == key).first()
-    if row and row.value:
+    raw = get_config(db, key, "")
+    if raw:
         try:
-            config = json.loads(row.value)
+            config = json.loads(raw)
             # 解密敏感字段
             schema = PROVIDER_SCHEMAS.get(provider, {})
             for field_key, field_def in schema.items():
@@ -138,12 +139,7 @@ def _save_provider_config(db: Session, provider: str, config: dict) -> None:
     for field_key, field_def in schema.items():
         if field_def.get("sensitive") and field_key in save_config and save_config[field_key]:
             save_config[field_key] = encrypt_value(save_config[field_key])
-    row = db.query(SystemConfig).filter(SystemConfig.key == key).first()
-    value = json.dumps(save_config, ensure_ascii=False)
-    if row:
-        row.value = value
-    else:
-        db.add(SystemConfig(key=key, value=value))
+    set_config(db, key, json.dumps(save_config, ensure_ascii=False))
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +216,9 @@ def update_provider_config(db: Session, provider: str, updates: dict) -> dict:
     current = _load_provider_config(db, provider)
     current.update(updates)
     _save_provider_config(db, provider, current)
-    db.commit()
+    if db is not None:
+        # workers 模式 db=None：set_config 已走 Supabase 仓储（自带提交语义）
+        db.commit()
 
     logger.info(f"Model config updated for provider: {provider}, fields: {list(updates.keys())}")
     return current

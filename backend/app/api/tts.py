@@ -12,6 +12,8 @@ import aiofiles
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.repositories.deps import get_voice_repo
+from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut
 from app.schemas.tts import TTSResultOut, TTSResultRecordOut
 from app.core.system_config_service import is_frontend_storage
@@ -366,7 +368,7 @@ async def get_tts_audio(audio_id: str, db: Session = Depends(get_db)):
 async def list_available_voices(
     voice_id: Optional[str] = None,
     project_id: Optional[str] = None,
-    db: Session = Depends(get_db),
+    repo: VoiceProfileRepository = Depends(get_voice_repo),
 ):
     """查询已克隆声音。
 
@@ -374,28 +376,19 @@ async def list_available_voices(
     - voice_id: 返回指定单个声音
     - project_id: 返回全局声音 + 该项目专属声音
     """
-    # Query all profiles; is_cloned is now inside engine JSON column, filter in Python
-    all_voices = db.query(VoiceProfile).all()
-
-    # Filter to cloned voices only (unless querying by specific voice_id)
-    voices: list[VoiceProfile] = [
-        v for v in all_voices
-        if (v.voice or {}).get("voice_type") == "clone"
-    ]
-
     if voice_id:
-        voice = db.query(VoiceProfile).filter_by(id=voice_id).first()
+        voice = repo.get(voice_id)
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
-        return {"items": [voice_to_dict(voice)]}
+        return {"items": [voice]}
 
-    if project_id:
-        voices = [v for v in voices
-                  if v.project_id is None or v.project_id == project_id]
-    else:
-        voices = [v for v in voices if v.project_id is None]
+    # voice_type 在 voice JSON 列里，仓储按 project 过滤后在 Python 里筛 clone
+    voices = [
+        v for v in repo.list(project_id=project_id)
+        if (v.get("voice") or {}).get("voice_type") == "clone"
+    ]
 
-    return {"items": [voice_to_dict(v) for v in voices]}
+    return {"items": voices}
 
 
 @router.get("/edge-voices")

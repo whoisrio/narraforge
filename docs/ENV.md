@@ -17,6 +17,15 @@ The `.env` file supports `${ENV_VAR}` and `${ENV_VAR:-default}` syntax for refer
 |----------|----------|-------------|---------|
 | `DATABASE_URL` | No | SQLAlchemy database connection string | `sqlite:///./voice_clone.db` |
 
+## Supabase (workers deploy target only)
+
+Required only when `DEPLOY_TARGET=workers`: the workers runtime has no raw sockets, so persistence goes through Supabase PostgREST over HTTPS instead of SQLAlchemy/SQLite. The service key must stay server-side (Workers secrets). Table DDL lives in `backend/supabase/schema.sql`.
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `SUPABASE_URL` | Yes (workers) | Supabase project URL (`https://<project>.supabase.co`) | *(empty)* |
+| `SUPABASE_SERVICE_KEY` | Yes (workers) | Supabase service_role key (server-side only) | *(empty)* |
+
 ## Qwen / CosyVoice API (Voice Cloning)
 
 | Variable | Required | Description | Default |
