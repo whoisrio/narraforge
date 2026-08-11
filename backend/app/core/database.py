@@ -1,29 +1,88 @@
-from sqlalchemy import create_engine, event, inspect, text
-from sqlalchemy.orm import declarative_base, sessionmaker
-
 from app.core.config import settings
 
-engine = create_engine(
-    settings.database_url,
-    connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
-)
+# workers bundle 不 vendor sqlalchemy（~8.5MB，最大头；workers 持久化全走
+# Supabase/PostgREST）。顶层 import 守卫：无 sqlalchemy 时本模块仍可 import，
+# 只有真实触碰 ORM 的调用路径（local）才会用到这些名字。
+# local 行为零回退：sqlalchemy 存在时一切照旧。
+try:
+    from sqlalchemy import create_engine, event, inspect, text
+    from sqlalchemy.orm import declarative_base, sessionmaker
+    _HAS_SQLALCHEMY = True
+except ImportError:  # workers bundle
+    _HAS_SQLALCHEMY = False
+    create_engine = event = inspect = text = sessionmaker = None
 
-if "sqlite" in settings.database_url:
-    # SQLite 默认不强制外键：不开这个 PRAGMA，模型里所有 ondelete= 声明都是死代码
-    # （曾导致删除 Role 后 segments.role_id 等悬挂引用）。
-    @event.listens_for(engine, "connect")
-    def _sqlite_enable_foreign_keys(dbapi_conn, _connection_record):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-Base = declarative_base()
+# Engine 延迟创建（步骤 3A）：
+# - workers 运行时（Cloudflare Pyodide）没有原生 socket，不得创建 SQLAlchemy
+#   engine；import 本模块只是定义 Base/get_db，不触碰任何数据库连接。
+# - local 模式行为不变：首次访问 engine/SessionLocal 时创建并缓存，SQLite
+#   外键 PRAGMA 照旧注册。模块级 `from app.core.database import engine`
+#   经 PEP 562 __getattr__ 转发，保持历史用法可用。
+_engine = None
+_SessionLocal = None
 
 
-def get_db():
-    db = SessionLocal()
+def get_engine():
+    """返回全局 engine（首次调用时创建）。workers 模式直接报错——
+    workers 的持久化必须走 app.core.repositories 的 Supabase 实现。"""
+    global _engine, _SessionLocal
+    if _engine is None:
+        if settings.deploy_target == "workers":
+            raise RuntimeError(
+                "SQLAlchemy engine is unavailable in workers deploy target; "
+                "use the Supabase repositories (app.core.repositories) instead"
+            )
+        _engine = create_engine(
+            settings.database_url,
+            connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+        )
+        if "sqlite" in settings.database_url:
+            # SQLite 默认不强制外键：不开这个 PRAGMA，模型里所有 ondelete= 声明都是死代码
+            # （曾导致删除 Role 后 segments.role_id 等悬挂引用）。
+            @event.listens_for(_engine, "connect")
+            def _sqlite_enable_foreign_keys(dbapi_conn, _connection_record):
+                cursor = dbapi_conn.cursor()
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.close()
+
+        _SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    return _engine
+
+
+def get_session_factory():
+    """返回全局 sessionmaker（随 engine 首次创建）。"""
+    get_engine()
+    return _SessionLocal
+
+
+def __getattr__(name):
+    # PEP 562：保持 `from app.core.database import engine / SessionLocal` 历史用法
+    if name == "engine":
+        return get_engine()
+    if name == "SessionLocal":
+        return get_session_factory()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+if _HAS_SQLALCHEMY:
+    Base = declarative_base()
+else:
+    # workers 占位：workers 模式不 import app.models，Base 无人使用；
+    # 定义空基类只为让 `from app.core.database import Base` 不炸。
+    class Base:  # type: ignore[no-redef]
+        pass
+
+
+async def get_db():
+    # async generator：workers 运行时（Pyodide）不支持线程，sync generator
+    # 依赖会被 FastAPI 包进 anyio.to_thread 直接失败（can't start new thread）。
+    # local 行为不变（session 创建/关闭语义相同，仅迭代方式改为 async）。
+    # workers 模式没有本地数据库：yield None，未迁移到仓储的端点一旦
+    # 触碰 db 会立即失败（AttributeError），已迁移端点不受影响。
+    if settings.deploy_target == "workers":
+        yield None
+        return
+    db = get_session_factory()()
     try:
         yield db
     finally:
@@ -459,6 +518,7 @@ def init_db():
     # 不能依赖 main 的导入顺序，否则 create_all 和约束修复都会静默跳过。
     from app import models  # noqa: F401
 
+    engine = get_engine()
     Base.metadata.create_all(bind=engine)
     if "sqlite" in settings.database_url:
         # PRAGMA foreign_keys 只能在事务外切换，所以用 autocommit 连接手动

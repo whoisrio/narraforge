@@ -1,8 +1,10 @@
 import axios from 'axios';
 import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus } from '../types';
+import { API_BASE_URL, apiUrl } from './apiBase';
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
+  withCredentials: true,
 });
 
 // Voice Clone API
@@ -623,7 +625,7 @@ export const segmentedProjectApi = {
     const params = new URLSearchParams();
     if (exportDirectory) params.set('export_directory', exportDirectory);
     const qs = params.toString();
-    return `/api/segmented-projects/${projectId}/chapters/${chapterId}/export-audio${qs ? `?${qs}` : ''}`;
+    return apiUrl(`/segmented-projects/${projectId}/chapters/${chapterId}/export-audio${qs ? `?${qs}` : ''}`);
   },
   exportTextFileToRemotion: async (projectId: string, filename: string, content: string, exportDirectory?: string | null): Promise<{ path: string }> => {
     const { data } = await api.post<{ path: string }>(
@@ -684,6 +686,23 @@ export const segmentedProjectApi = {
   resplitFromScript: async (projectId: string, chapterId: string): Promise<import('../types').SegmentedProject> => {
     const { data } = await api.post<import('../types').SegmentedProject>(
       `/segmented-projects/${projectId}/chapters/${chapterId}/resplit-from-script`,
+    );
+    return data;
+  },
+  /** 文本分段：按 rule/llm 把章节文本切成 segment（replace_chapter_segments 时落库） */
+  splitChapter: async (
+    projectId: string,
+    chapterId: string,
+    body: {
+      mode: 'rule' | 'llm';
+      text: string;
+      replace_strategy?: 'preview_only' | 'replace_chapter_segments';
+      delimiters?: string[];
+    },
+  ): Promise<{ items: { text: string }[]; project: import('../types').SegmentedProject | null }> => {
+    const { data } = await api.post(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/split`,
+      body,
     );
     return data;
   },

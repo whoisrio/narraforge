@@ -10,6 +10,12 @@
 
 The database consists of **10 tables** and **2 enums**.
 
+> **workers deploy target (2026-08):** the Cloudflare Workers runtime cannot use SQLAlchemy/SQLite.
+> Persistence for `voice_profiles` / `system_configs` / `roles` / `source_documents` and the three
+> `segmented_project*` tables (step 3B) goes through Supabase PostgREST; the Postgres DDL exported
+> from these models lives in `backend/supabase/schema.sql`
+> and is kept in sync by `backend/tests/unit/test_supabase_schema_sync.py`.
+
 | Table | Purpose |
 |---|---|
 | `voice_profiles` | Stored voice profiles for cloning |

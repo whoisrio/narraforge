@@ -1,0 +1,32 @@
+# NarraForge API — Cloudflare Workers (Python) 部署配置
+# 参照 spike/cf-workers（已真实跑通 wrangler dev）。
+name = "narraforge-api"
+main = "workers_entry.py"
+# spike 验证：2025-08-01 报 `Method on_fetch does not exist`，必须 >= 2025-11-02
+compatibility_date = "2025-11-02"
+compatibility_flags = ["python_workers"]
+
+# ---- 非敏感配置（[vars] 会进仓库）----
+# secrets 不进文件，用 wrangler secret 管理：
+#   uv run --extra workers pywrangler secret put SUPABASE_SERVICE_KEY
+#   uv run --extra workers pywrangler secret put MIMO_API_KEY
+# 本地 pywrangler dev 的 secrets 放 .dev.vars（已 gitignore，模板见 .dev.vars.example）
+[vars]
+DEPLOY_TARGET = "workers"
+APP_ENV = "production"
+LOG_TO_FILE = "false"          # Workers 无可写持久 FS，关闭文件日志
+ACCESS_ENFORCEMENT = "true"    # spec 3.6：校验 Cf-Access-Authenticated-User-Email
+# 占位：Supabase 项目 URL（Dashboard → Project Settings → API）
+SUPABASE_URL = "https://YOUR_PROJECT_REF.supabase.co"
+# 占位：Pages 前端域名，逗号分隔多个（spec 3.7）
+CORS_ORIGINS = "https://YOUR_PAGES_DOMAIN"
+
+# ---- R2 资产桶（克隆样本/试听音频，spec 3.5）----
+# 占位桶名；先建桶：uv run --extra workers pywrangler r2 bucket create narraforge-assets
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "narraforge-assets"
+
+# ---- 防绕过（spec 3.6/5.2）----
+# 部署后关闭 workers.dev 子域路由，API 仅走受 Access 保护的自定义域名：
+#   Dashboard → Workers → narraforge-api → Settings → Domains & Routes

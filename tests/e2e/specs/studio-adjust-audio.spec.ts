@@ -36,6 +36,11 @@ test.describe('合成后音频调整', () => {
     const errors = collectErrors(page);
     await setLocaleToZhCN(page);
 
+    // 清残留 audio_adjust（e2e 库跨 run 持久；若 chapter 残留 tempo=1.5 等记录，
+    // 变速 2x 会基于 previous 原始音频重渲染，使 after/before = 旧tempo/新tempo，
+    // 卡在断言阈值 0.75 边缘导致 flaky）
+    await page.request.post(adjustUrl(CHAPTER_ID), { data: { tempo: 1.0, volume_db: 0 } }).catch(() => {});
+
     // ── 1. 合成第一段（edge_tts 可离线） ──
     const chapter = await getChapter(page);
     const segId = chapter.segments[0].id;

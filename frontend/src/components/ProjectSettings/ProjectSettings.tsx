@@ -5,6 +5,7 @@ import styles from './ProjectSettings.module.css';
 export type ProjectSettingsMeta = {
   description?: string | null;
   export_directory?: string | null;
+  underscore_to_space?: boolean | null;
 };
 
 interface ProjectSettingsProps {
@@ -14,6 +15,7 @@ interface ProjectSettingsProps {
   chapterCount: number;
   projectDescription?: string | null;
   exportDirectory?: string | null;
+  underscoreToSpace?: boolean | null;
   onRenameProject: (name: string) => void;
   onUpdateRemotionPath: (path: string | null) => void;
   onUpdateProjectMeta: (meta: ProjectSettingsMeta) => void;
@@ -27,6 +29,7 @@ export function ProjectSettings({
   chapterCount,
   projectDescription,
   exportDirectory,
+  underscoreToSpace,
   onRenameProject,
   onUpdateRemotionPath,
   onUpdateProjectMeta,
@@ -91,6 +94,20 @@ export function ProjectSettings({
               {t('projectSettings.exportDirHint')}
             </small>
           </label>
+        </section>
+
+        <section className={styles.card}>
+          <span className={styles.kicker}>{t('projectSettings.synthesis')}</span>
+          <label className={styles.toggleField}>
+            <input
+              type="checkbox"
+              aria-label={t('projectSettings.underscoreToSpace')}
+              checked={underscoreToSpace ?? false}
+              onChange={(event) => onUpdateProjectMeta({ underscore_to_space: event.target.checked })}
+            />
+            <span>{t('projectSettings.underscoreToSpace')}</span>
+          </label>
+          <p className={styles.toggleHint}>{t('projectSettings.underscoreToSpaceHint')}</p>
         </section>
       </div>
     </section>

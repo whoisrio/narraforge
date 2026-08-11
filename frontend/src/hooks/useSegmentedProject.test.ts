@@ -74,3 +74,49 @@ describe('UNDO_REGENERATE', () => {
     expect(after.audio.duration_sec).toBeUndefined();
   });
 });
+
+describe('enrichSegment: file_exists gating (backend desync fix)', () => {
+  function migrateWithAudio(
+    current: Record<string, unknown> | undefined,
+    previous?: Record<string, unknown>,
+  ) {
+    const raw = {
+      schema_version: 2 as const,
+      id: 'p1', name: 'p',
+      chapters: [{
+        id: 'c1', name: 'c', position: 0,
+        voice: { engine: 'edge_tts' },
+        segments: [{
+          id: 's1', position: 0, text: 'hi',
+          voice: { source: 'chapter' },
+          audio: {
+            format: 'mp3',
+            ...(current ? { current } : {}),
+            ...(previous ? { previous } : {}),
+          },
+        }],
+      }],
+    };
+    return migrateV1(raw).chapters[0].segments[0];
+  }
+
+  it('is ready when backend current.file_exists is true', () => {
+    expect(migrateWithAudio({ path: 'a/b.mp3', file_exists: true }).status).toBe('ready');
+  });
+
+  it('is idle when backend current.file_exists is false (file lost / desync)', () => {
+    expect(migrateWithAudio({ path: 'a/b.mp3', file_exists: false }).status).toBe('idle');
+  });
+
+  it('is ready for frontend-mode current.id (no file_exists flag)', () => {
+    expect(migrateWithAudio({ id: 'idx-1' }).status).toBe('ready');
+  });
+
+  it('is ready when current has path but no file_exists (fresh synth round-trip)', () => {
+    expect(migrateWithAudio({ path: 'a/b.mp3' }).status).toBe('ready');
+  });
+
+  it('is idle when only previous exists (no current) - aligns with export which checks current', () => {
+    expect(migrateWithAudio(undefined, { path: 'a/b.mp3' }).status).toBe('idle');
+  });
+});

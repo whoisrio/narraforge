@@ -1,5 +1,15 @@
 """Edge-TTS 语音合成服务
 使用 Microsoft Edge 在线 TTS 服务，支持多种语言和音色
+
+部署策略（settings.deploy_target）：
+- local：使用 edge-tts 包（local-services extra，现有行为）。
+- workers：按运行时能力选择（步骤 6A-1）：
+  - 真 Cloudflare Workers（Pyodide，workers.fetch 可用）：内置手写 WS 客户端
+    （edge_tts_ws_client + edge_tts_protocol，spike 验证，无 aiohttp 依赖）。
+  - Render 等 CPython 部署（DEPLOY_TARGET=workers 但无 workers 模块）：
+    回退 edge-tts 包（local-services extra 提供，惰性 import）。
+  - 两者皆无：响亮 RuntimeError（部署/配置错误，不静默）。
+edge_tts 包在 Pyodide workers 环境不存在，import 必须延迟到策略选择之后。
 """
 
 import asyncio
@@ -8,9 +18,12 @@ import time
 import logging
 from typing import Optional
 
-import edge_tts
-
 from app.core.config import settings
+
+# workers 环境没有 edge_tts 包（且 Pyodide 装不了 aiohttp），
+# 只在 local 部署目标下做模块级 import，保留既有测试的 patch 点。
+if settings.deploy_target != "workers":
+    import edge_tts
 
 logger = logging.getLogger(__name__)
 
@@ -47,12 +60,92 @@ def _locale_to_language(locale: str) -> str:
     return LOCALE_LANGUAGE_MAP.get(locale, locale.split("-")[0])
 
 
+def _workers_runtime_available() -> bool:
+    """是否为真正的 Cloudflare Workers Python（Pyodide）运行时。
+
+    Render 等 CPython 部署同样用 DEPLOY_TARGET=workers（同一组在线路由），
+    但没有 workers 模块；以此区分 WS 客户端（Pyodide 专有）与 edge-tts 包回退。
+    """
+    try:
+        import workers
+    except ImportError:
+        return False
+    return hasattr(workers, "fetch")
+
+
+def _edge_tts_package_available() -> bool:
+    """edge-tts 包是否可用。workers 模式下包未做模块级 import，需惰性探测。"""
+    if settings.deploy_target != "workers":
+        return True  # 模块级 import 已成功，否则本模块根本加载不进来
+    try:
+        import edge_tts  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _import_edge_tts():
+    """返回 edge_tts 模块。local 走模块级 import；workers 回退路径惰性 import。"""
+    if settings.deploy_target != "workers":
+        return edge_tts
+    try:
+        import edge_tts as pkg
+
+        return pkg
+    except ImportError as e:
+        raise RuntimeError(
+            "edge-tts 包未安装：workers（CPython 回退）路径需要 edge-tts 包，"
+            "请安装 local-services extra（uv sync --extra local-services）"
+        ) from e
+
+
+def _select_synth_backend() -> str:
+    """合成后端选择：'ws'（Pyodide WS 客户端）| 'package'（edge-tts 包）。
+
+    workers 模式优先 WS 客户端（真 Workers 运行时）；无 workers 运行时
+    （Render 等 CPython 部署）回退 edge-tts 包；两者皆无 → 响亮错误。
+    """
+    if settings.deploy_target != "workers":
+        return "package"
+    if _workers_runtime_available():
+        return "ws"
+    if _edge_tts_package_available():
+        return "package"
+    raise RuntimeError(
+        "edge-tts 不可用：当前既非 Cloudflare Workers（Pyodide）运行时"
+        "（workers.fetch 缺失），也未安装 edge-tts 包。"
+        "CPython 部署（如 Render）请安装 local-services extra"
+    )
+
+
+async def _synthesize_with_package(text: str, voice: str, rate: str, volume: str) -> bytes:
+    """edge-tts 包合成路径（local 与 workers-CPython 回退共用）。"""
+    pkg = _import_edge_tts()
+    communicate = pkg.Communicate(
+        text=text,
+        voice=voice,
+        rate=rate,
+        volume=volume,
+        connect_timeout=10,
+        receive_timeout=30,
+    )
+    audio_data = b""
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio_data += chunk["data"]
+    return audio_data
+
+
 class EdgeTTSService:
     """Edge-TTS 服务 - 支持多种语言和音色"""
 
     _voices_cache: Optional[list[dict]] = None
     _voices_cache_time: float = 0
     _cache_ttl: float = 3600  # 1 hour
+
+    def __init__(self, voices_transport=None):
+        # 可注入的 httpx transport（workers 模式音色列表；测试用 MockTransport）
+        self._voices_transport = voices_transport
 
     async def list_voices(
         self,
@@ -83,7 +176,10 @@ class EdgeTTSService:
         if self._voices_cache is not None and (now - self._voices_cache_time) < self._cache_ttl:
             return self._voices_cache
 
-        raw_voices = await edge_tts.list_voices()
+        if settings.deploy_target == "workers":
+            raw_voices = await self._list_voices_workers()
+        else:
+            raw_voices = await edge_tts.list_voices()
 
         voices = []
         for v in raw_voices:
@@ -108,6 +204,23 @@ class EdgeTTSService:
         self._voices_cache = voices
         self._voices_cache_time = now
         return voices
+
+    async def _list_voices_workers(self) -> list[dict]:
+        """workers 模式音色列表：voices/list REST 端点（httpx，与 edge-tts 7.x 同一 URL/参数）。"""
+        import httpx
+
+        from app.services import edge_tts_protocol as proto
+
+        url = (
+            f"https://{proto.BASE_URL}/voices/list"
+            f"?trustedclienttoken={proto.TRUSTED_CLIENT_TOKEN}"
+            f"&Sec-MS-GEC={proto.generate_sec_ms_gec()}"
+            f"&Sec-MS-GEC-Version={proto.SEC_MS_GEC_VERSION}"
+        )
+        async with httpx.AsyncClient(transport=self._voices_transport, timeout=30) as client:
+            resp = await client.get(url, headers=proto.WSS_HEADERS)
+            resp.raise_for_status()
+            return resp.json()
 
     async def get_available_languages(self) -> list[str]:
         """获取所有可用语言列表"""
@@ -135,23 +248,19 @@ class EdgeTTSService:
         Returns:
             (audio_data, audio_format) 音频数据和格式
         """
-        import asyncio
-
+        backend = _select_synth_backend()
         for attempt in range(max_retries):
             try:
-                communicate = edge_tts.Communicate(
-                    text=text,
-                    voice=voice,
-                    rate=rate,
-                    volume=volume,
-                    connect_timeout=10,
-                    receive_timeout=30,
-                )
+                if backend == "ws":
+                    # 真 Cloudflare Workers（Pyodide）：内置手写 WS 客户端
+                    from app.services.edge_tts_ws_client import synthesize as ws_synthesize
 
-                audio_data = b""
-                async for chunk in communicate.stream():
-                    if chunk["type"] == "audio":
-                        audio_data += chunk["data"]
+                    audio_data = await ws_synthesize(
+                        text=text, voice=voice, rate=rate, volume=volume
+                    )
+                else:
+                    # local 或 workers-CPython（Render）回退：edge-tts 包
+                    audio_data = await _synthesize_with_package(text, voice, rate, volume)
 
                 if not audio_data:
                     raise RuntimeError("No audio received from edge-tts")

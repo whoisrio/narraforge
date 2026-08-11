@@ -1,11 +1,16 @@
 """文本拆分与 SSML 标注 API。"""
 
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 
 from app.core.database import get_db
 from app.services.text_split_service import (
@@ -80,7 +85,7 @@ class SSMLAnnotateResponse(BaseModel):
 # ---- Endpoints ----
 
 @router.post("/rule", response_model=RuleSplitResponse)
-def split_rule(req: RuleSplitRequest):
+async def split_rule(req: RuleSplitRequest):
     """按指定标点切分文本。纯本地，无 LLM 依赖。
 
     后置短段合并：当一段长度少于 ``min_len_to_merge`` 且下一段长度少于
@@ -100,7 +105,7 @@ def split_rule(req: RuleSplitRequest):
 
 
 @router.post("/llm", response_model=LLMSplitResponse)
-def split_llm(req: LLMSplitRequest, db: Session = Depends(get_db)):
+async def split_llm(req: LLMSplitRequest, db: Session = Depends(get_db)):
     """LLM 智能语义拆分。"""
     try:
         result = llm_split(req.text, req.delimiters, db=db)
@@ -118,7 +123,7 @@ def split_llm(req: LLMSplitRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/ssml-annotate", response_model=SSMLAnnotateResponse)
-def annotate_ssml(req: SSMLAnnotateRequest, db: Session = Depends(get_db)):
+async def annotate_ssml(req: SSMLAnnotateRequest, db: Session = Depends(get_db)):
     """LLM 为每段加 SSML 标签。"""
     try:
         result = ssml_annotate(req.texts, req.style_hint, db=db)
@@ -187,7 +192,7 @@ class MarkdownSplitResponse(BaseModel):
 
 
 @router.post("/markdown-detect", response_model=MarkdownDetectResponse)
-def detect_markdown(req: MarkdownDetectRequest):
+async def detect_markdown(req: MarkdownDetectRequest):
     """仅检测, 不切. 返回全部 H1-H6 候选 + 默认推荐章节 (H2 切 + 短章合并).
 
     后端不决定粒度 — UI 让用户挑 levels 再调 /markdown-split.
@@ -205,7 +210,7 @@ def detect_markdown(req: MarkdownDetectRequest):
 
 
 @router.post("/markdown-split", response_model=MarkdownSplitResponse)
-def split_markdown(req: MarkdownSplitRequest):
+async def split_markdown(req: MarkdownSplitRequest):
     """按用户指定的 levels 切分. 返回 flat 章节列表 (不嵌套).
 
     层级包含语义: 勾选最深层级 L 时, 所有 level <= L 的标题都当章节边界.

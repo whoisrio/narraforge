@@ -1,4 +1,12 @@
-"""FastAPI routes for the segmented project editor (backend storage mode)."""
+"""FastAPI routes for the segmented project editor (backend storage mode).
+
+路由分两层（步骤 3B）：
+- ``router``：元数据端点，经 ``Depends(get_segmented_repo)`` 走仓储
+  （local=SQLAlchemy / workers=Supabase PostgREST），两种部署模式都挂载。
+- ``local_router``：依赖 ffmpeg / 本地文件系统 / TTS 引擎的端点
+  （合成落盘、录音上传、音频文件服务、导出、adjust-audio、migrate、
+  项目 ZIP 导出/导入），仅 local 模式挂载；workers 模式一律 404。
+"""
 from __future__ import annotations
 
 import base64
@@ -12,12 +20,20 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session
+from typing import Any
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 
 from app.core import segmented_assets as assets
 from app.core.audio_encoder import AudioEncoderError
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.repositories.deps import get_segmented_repo
+from app.core.repositories.segmented_projects import SegmentedProjectRepository
 from app.core.segmented_assets import project_dir
 from app.schemas.common import ItemsOut
 from app.schemas.segmented_project import (
@@ -37,11 +53,19 @@ from app.schemas.segmented_project import (
     SplitResponse,
     SynthesizeSegmentRequest,
 )
-from app.services import segmented_project_service as svc
 from app.core.time_utils import utcnow
+
+# workers bundle 不含 sqlalchemy，segmented_project_service 顶层依赖 ORM；
+# svc 只在 local_router 端点（workers 不挂载）运行时引用。
+try:
+    from app.services import segmented_project_service as svc
+except ImportError:  # workers bundle
+    svc = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+# local-only：ffmpeg/本地 FS/TTS 引擎依赖端点（workers 模式不挂载）
+local_router = APIRouter()
 
 SCRATCHPAD_PROJECT_ID = "__scratchpad__"
 
@@ -51,52 +75,51 @@ def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_projec
         raise HTTPException(status_code=403, detail=detail)
 
 
-# ----- project CRUD -----
+# ----- project CRUD (metadata) -----
 
 @router.get("/segmented-projects", response_model=ItemsOut[ProjectSummary])
-def list_projects(db: Session = Depends(get_db)):
-    projects = svc.list_projects(db)
+async def list_projects(repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+    projects = repo.list_projects()
     return {"items": [p for p in projects if p.id != SCRATCHPAD_PROJECT_ID]}
 
 
 @router.post("/segmented-projects", response_model=ProjectDetail, status_code=201)
-def create_project(project: ProjectIn, db: Session = Depends(get_db)):
+async def create_project(project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project.id)
-    existing = svc.get_project_row(db, project.id)
-    if existing is not None:
+    if repo.project_exists(project.id):
         raise HTTPException(status_code=409, detail="project_already_exists")
-    return svc.save_project(db, project)
+    return repo.save_project(project)
 
 
 @router.get("/segmented-projects/{project_id}", response_model=ProjectDetail)
-def get_project(project_id: str, db: Session = Depends(get_db)):
+async def get_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project_id)
-    detail = svc.get_project_detail(db, project_id)
+    detail = repo.get_project(project_id)
     if detail is None:
         raise HTTPException(status_code=404, detail="project_not_found")
     return detail
 
 
 @router.put("/segmented-projects/{project_id}", response_model=ProjectDetail)
-def put_project(project_id: str, project: ProjectIn, db: Session = Depends(get_db)):
+async def put_project(project_id: str, project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project_id)
     if project.id != project_id:
         raise HTTPException(status_code=400, detail="id_mismatch")
-    return svc.save_project(db, project)
+    return repo.save_project(project)
 
 
 @router.delete("/segmented-projects/{project_id}", status_code=204)
-def delete_project(project_id: str, db: Session = Depends(get_db)):
+async def delete_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     _reject_scratchpad(project_id)
-    ok = svc.delete_project(db, project_id)
+    ok = repo.delete_project(project_id)
     if not ok:
         raise HTTPException(status_code=404, detail="project_not_found")
     return None
 
 
-# ----- segment audio -----
+# ----- segment synthesis & audio (local-only: TTS 引擎 + 音频落盘) -----
 
-@router.post(
+@local_router.post(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/synthesize",
     response_model=ProjectDetail,
 )
@@ -128,7 +151,7 @@ def synthesize_segment(
     return detail
 
 
-@router.post(
+@local_router.post(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/audio",
     response_model=ProjectDetail,
 )
@@ -209,10 +232,13 @@ class BatchResponse(BaseModel):
     "/segmented-projects/{project_id}/chapters:batch",
     response_model=BatchResponse,
 )
-def batch_create_chapters(project_id: str, body: BatchRequest, db: Session = Depends(get_db)):
+async def batch_create_chapters(
+    project_id: str,
+    body: BatchRequest,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
     try:
-        result = svc.batch_create_structure(
-            db,
+        result = repo.batch_create_structure(
             project_id,
             [c.model_dump() for c in body.chapters],
             narration_script=body.narration_script,
@@ -233,10 +259,10 @@ def batch_create_chapters(project_id: str, body: BatchRequest, db: Session = Dep
     "/segmented-projects/{project_id}/apply-animation-spec",
     response_model=ApplyAnimationSpecResult,
 )
-def apply_animation_spec_endpoint(
+async def apply_animation_spec_endpoint(
     project_id: str,
     body: ApplyAnimationSpecRequest,
-    db: Session = Depends(get_db),
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
 ):
     """skill 一次性 POST 全部 segment spec, 后端原子更新.
 
@@ -244,8 +270,7 @@ def apply_animation_spec_endpoint(
     """
     items = [it.model_dump() for it in body.segments]
     try:
-        result = svc.apply_animation_spec(
-            db,
+        result = repo.apply_animation_spec(
             project_id=project_id,
             theme=body.theme,
             items=items,
@@ -255,7 +280,9 @@ def apply_animation_spec_endpoint(
     return ApplyAnimationSpecResult(**result)
 
 
-@router.get(
+# ----- segment audio file & chapter export (local-only: 磁盘文件 / ffmpeg) -----
+
+@local_router.get(
     "/segmented-projects/{project_id}/audio/{chapter_id}/{segment_id}"
 )
 def get_segment_audio(
@@ -291,7 +318,7 @@ def get_segment_audio(
     return response
 
 
-@router.get(
+@local_router.get(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/export-audio"
 )
 def export_chapter_audio(
@@ -314,7 +341,7 @@ def export_chapter_audio(
     return FileResponse(audio_path, media_type="audio/mpeg", filename=filename)
 
 
-@router.post("/segmented-projects/{project_id}/export-all-chapters")
+@local_router.post("/segmented-projects/{project_id}/export-all-chapters")
 def export_all_chapters_endpoint(
     project_id: str,
     db: Session = Depends(get_db),
@@ -334,6 +361,7 @@ def export_all_chapters_endpoint(
                 "code": "chapters_incomplete",
                 "message": "存在未合成完成的章节，已全部中止",
                 "chapters": e.chapters,
+                "missing_counts": e.missing_counts,
             },
         )
     except AudioEncoderError as e:
@@ -344,7 +372,7 @@ def export_all_chapters_endpoint(
         raise HTTPException(status_code=status, detail=detail)
 
 
-@router.post(
+@local_router.post(
     "/segmented-projects/{project_id}/export-text-file-to-remotion"
 )
 def export_text_file_to_remotion(
@@ -383,7 +411,7 @@ class ScaffoldRemotionRequest(BaseModel):
     target_dir: str | None = None
 
 
-@router.post("/segmented-projects/{project_id}/scaffold-remotion")
+@local_router.post("/segmented-projects/{project_id}/scaffold-remotion")
 def scaffold_remotion(
     project_id: str,
     body: ScaffoldRemotionRequest,
@@ -410,16 +438,19 @@ def scaffold_remotion(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ----- split -----
+# ----- split / layer-sync (metadata) -----
 
 @router.get("/segmented-projects/{project_id}/chapters/{chapter_id}/sync-status")
-def get_sync_status(project_id: str, chapter_id: str, db: Session = Depends(get_db)):
+async def get_sync_status(
+    project_id: str,
+    chapter_id: str,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
     """Layer-sync Phase A: L1/L2/L3 staleness flags for a chapter."""
-    chapter = svc.get_chapter_row(db, project_id, chapter_id)
-    if chapter is None:
+    status = repo.get_sync_status(project_id, chapter_id)
+    if status is None:
         raise HTTPException(status_code=404, detail="chapter_not_found")
-    from app.services.layer_sync_service import sync_status
-    return sync_status(chapter)
+    return status
 
 
 class AdjustAudioRequest(BaseModel):
@@ -427,7 +458,7 @@ class AdjustAudioRequest(BaseModel):
     volume_db: float | None = None
 
 
-@router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/adjust-audio")
+@local_router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/adjust-audio")
 def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioRequest, db: Session = Depends(get_db)):
     """Post-synthesis audio adjustment (atempo / volume) for a chapter's ready segments.
 
@@ -448,32 +479,37 @@ def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioReq
 
 
 @router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/resplit-from-script")
-def resplit_from_script_endpoint(project_id: str, chapter_id: str, db: Session = Depends(get_db)):
+async def resplit_from_script_endpoint(
+    project_id: str,
+    chapter_id: str,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
     """Layer-sync Phase B: re-split segments from the chapter's L2 (narration_script).
 
     Discards existing segment role/emotion/voice config. Frontend MUST confirm.
     """
     try:
-        return svc.resplit_from_script(db, project_id, chapter_id)
+        return repo.resplit_from_script(project_id, chapter_id)
     except LookupError:
         raise HTTPException(status_code=404, detail="chapter_not_found")
 
 
 @router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/rewrite-script-from-segments")
-def rewrite_script_from_segments_endpoint(project_id: str, chapter_id: str, db: Session = Depends(get_db)):
+async def rewrite_script_from_segments_endpoint(
+    project_id: str,
+    chapter_id: str,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
     """Layer-sync Phase B: write edited segment texts back into L2 (localisation merge).
 
     Returns 409 when L2 itself has changed since the last split.
     """
-    chapter = svc.get_chapter_row(db, project_id, chapter_id)
-    if chapter is None:
-        raise HTTPException(status_code=404, detail="chapter_not_found")
-    from app.services.layer_sync_service import rewrite_script_from_segments
     try:
-        new_script = rewrite_script_from_segments(chapter)
+        new_script = repo.rewrite_script_from_segments(project_id, chapter_id)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    db.commit()
     return {"narration_script": new_script}
 
 
@@ -481,13 +517,17 @@ def rewrite_script_from_segments_endpoint(project_id: str, chapter_id: str, db: 
     "/segmented-projects/{project_id}/chapters/{chapter_id}/split",
     response_model=SplitResponse,
 )
-def split_chapter(
+async def split_chapter(
     project_id: str,
     chapter_id: str,
     body: SplitRequest,
-    db: Session = Depends(get_db),
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
 ):
-    chapter = svc.get_chapter_row(db, project_id, chapter_id)
+    detail = repo.get_project(project_id)
+    chapter = next(
+        (c for c in (detail.chapters if detail else []) if c.id == chapter_id),
+        None,
+    )
     if chapter is None:
         raise HTTPException(status_code=404, detail="chapter_not_found")
     if body.mode not in ("rule", "llm"):
@@ -508,64 +548,16 @@ def split_chapter(
     if body.replace_strategy == "preview_only":
         return SplitResponse(items=[SplitItem(text=t) for t in items])
 
-    proj = svc.get_project_row(db, project_id)
-    assert proj is not None
-    payload = ProjectIn(
-        id=proj.id, name=proj.name, schema_version=proj.schema_version,
-        layout=proj.layout, active_chapter_id=proj.active_chapter_id,
-        original_text=proj.original_text,
-        animation_theme=getattr(proj, "animation_theme", None),
-        remotion_project_path=getattr(proj, "remotion_project_path", None),
-        chapters=[
-            {
-                "id": c.id, "position": c.position, "name": c.name,
-                "voice": c.voice or {},
-                "split_config": c.split_config or {},
-                "original_text": c.original_text,
-                "narration_script": c.narration_script,
-                "design_title": getattr(c, "design_title", None),
-                "segments": (
-                    [
-                        {
-                            "id": f"{c.id}-seg-{idx}",
-                            "position": idx, "text": t,
-                            "params": c.voice or {},
-                            "locked_params": [],
-                        }
-                        for idx, t in enumerate(items)
-                    ]
-                    if c.id == chapter_id else
-                    [
-                        {
-                            "id": s.id, "position": s.position, "text": s.text,
-                            "emotion": s.emotion,
-                            "voice": getattr(s, "voice", {"source": "chapter"}),
-                            "generated_params": s.generated_params,
-                            "audio": getattr(s, "audio", None),
-                        }
-                        for s in c.segments
-                    ]
-                ),
-            }
-            for c in proj.chapters
-        ],
-    )
-    detail = svc.save_project(db, payload)
-    # layer-sync: split just regenerated segments from L2 -> re-baseline L2/L3.
-    from app.services.layer_sync_service import mark_split
-    ch_row = svc.get_chapter_row(db, project_id, chapter_id)
-    if ch_row is not None:
-        mark_split(ch_row)
-        db.commit()
+    project = repo.split_replace_segments(project_id, chapter_id, items)
     return SplitResponse(
         items=[SplitItem(text=t) for t in items],
-        project=detail,
+        project=project,
     )
 
 
-# ----- migration -----
+# ----- migration (local-only: 音频 blob 落盘；workers 固定 frontend 存储，用不到) -----
 
-@router.post("/segmented-projects/migrate", response_model=MigrateResponse)
+@local_router.post("/segmented-projects/migrate", response_model=MigrateResponse)
 def migrate(request: MigrateRequest, db: Session = Depends(get_db)):
     results: list[MigrateResultItem] = []
     for proj in request.projects:
@@ -623,9 +615,9 @@ def _write_audio_blob(
     db.commit()
 
 
-# ----- project export / import -----
+# ----- project export / import (local-only: ZIP 含磁盘音频资产) -----
 
-@router.get("/segmented-projects/{project_id}/export")
+@local_router.get("/segmented-projects/{project_id}/export")
 def export_project_endpoint(project_id: str, db: Session = Depends(get_db)):
     """Export a project as a self-contained ZIP bundle. Non-destructive."""
     _reject_scratchpad(project_id, "cannot_export_scratchpad")
@@ -652,7 +644,7 @@ def export_project_endpoint(project_id: str, db: Session = Depends(get_db)):
     )
 
 
-@router.post(
+@local_router.post(
     "/segmented-projects/import",
     response_model=ProjectDetail,
     status_code=201,

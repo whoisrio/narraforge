@@ -2,8 +2,9 @@ import axios from 'axios';
 import type { SegmentedProject } from '../types';
 import { indexedDBStorage } from './segmentedProjectStorage';
 import { getTTSAudioBlob } from './indexedDB';
+import { API_BASE_URL } from './apiBase';
 
-const api = axios.create({ baseURL: '/api' });
+export const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
 
 export interface MigrationResult {
   project_id: string;

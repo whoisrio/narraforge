@@ -1,11 +1,16 @@
 """智能文稿解析 API — 纯正则 + LLM 增强。"""
 
 import logging
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 
 from app.core.database import get_db
 from app.services.text_analysis_service import analyze_script
@@ -49,7 +54,7 @@ class SplitResponse(BaseModel):
 # ---- Endpoints ----
 
 @router.post("/split", response_model=SplitResponse)
-def split_script(req: SplitRequest):
+async def split_script(req: SplitRequest):
     """纯正则拆分：章节识别 + 角色识别 + 台词分配。零配置，不调 LLM。"""
     try:
         result = analyze_script(

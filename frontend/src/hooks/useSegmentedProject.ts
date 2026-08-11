@@ -54,7 +54,13 @@ function isEmotionType(value: unknown): value is EmotionType {
 function enrichSegment(raw: RawSegment): Segment {
   const now = new Date().toISOString();
   const rawAudio = raw.audio as Segment['audio'] | undefined;
-  const hasAudio = !!(rawAudio?.current || rawAudio?.previous);
+  // A segment is ready only when its *current* audio ref is valid. In backend
+  // mode the server sets current.file_exists=false when the mp3 is gone
+  // (db/fs desync) -> drop to idle so the UI matches export's current-file
+  // check. file_exists absent (frontend id-mode, or in-memory fresh synth)
+  // falls back to "ref present" to stay backward compatible.
+  const cur = rawAudio?.current;
+  const hasAudio = !!cur && cur.file_exists !== false && !!(cur.path || cur.id);
   const voice: VoiceSource = ((raw as Record<string, unknown>).voice as VoiceSource) ?? { source: 'chapter' } as VoiceSource;
   const audio: Segment['audio'] = rawAudio ?? { format: 'mp3' };
   // Always use audio.current.duration_sec as the authoritative source.
@@ -165,7 +171,7 @@ function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): S
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
-  | { type: 'SET_PROJECT_META'; meta: { remotion_project_path?: string | null; description?: string | null; export_directory?: string | null } }
+  | { type: 'SET_PROJECT_META'; meta: { remotion_project_path?: string | null; description?: string | null; export_directory?: string | null; underscore_to_space?: boolean | null } }
   | { type: 'SET_SOURCE_DOCUMENT'; text: string }
   | { type: 'SET_NARRATION_SCRIPT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
@@ -262,10 +268,11 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'RENAME_PROJECT':
       return { project: { ...p, name: action.name, updated_at: new Date().toISOString() } };
     case 'SET_PROJECT_META': {
-      const { remotion_project_path, description, export_directory } = action.meta;
+      const { remotion_project_path, description, export_directory, underscore_to_space } = action.meta;
       const nextConfigs = { ...(p.configs ?? {}) };
       if ('description' in action.meta) nextConfigs.description = description ?? null;
       if ('export_directory' in action.meta) nextConfigs.export_directory = export_directory ?? null;
+      if ('underscore_to_space' in action.meta) nextConfigs.underscore_to_space = underscore_to_space ?? null;
       const next: SegmentedProject = {
         ...p,
         ...("remotion_project_path" in action.meta ? { remotion_project_path: remotion_project_path ?? null } : {}),

@@ -13,7 +13,7 @@
 ```bash
 # Terminal 1 - Backend (port 8002)
 cd backend
-uv sync
+uv sync --extra local-ml --extra local-services
 uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload
 
 # Terminal 2 - Frontend
@@ -45,11 +45,11 @@ npm run dev
 
 2. **Missing dependencies**: Reinstall with uv
    ```bash
-   cd backend && uv sync
+   cd backend && uv sync --extra local-ml --extra local-services
    ```
    If PyPI is unstable (common in China), use the Tsinghua mirror:
    ```bash
-   uv sync --index-url https://pypi.tuna.tsinghua.edu.cn/simple
+   uv sync --extra local-ml --extra local-services --index-url https://pypi.tuna.tsinghua.edu.cn/simple
    ```
 
 3. **Database locked**: Delete and recreate
@@ -333,6 +333,175 @@ uv run python -m scripts.migrate_to_unified_storage --apply
 - 无 flag day：读取端以 DB 存储路径为准，先升级代码、后择机迁移完全可行。
 - 新部署环境无需任何迁移。
 - `SEGMENTED_DIR` 等环境变量覆盖优先于默认值（自定义存储根的环境同样适用）。
+
+---
+
+## Cloudflare Workers Deployment
+
+Workers 模式把瘦身后的 FastAPI 后端跑在 Cloudflare Workers Python（Pyodide）上。
+设计文档：`docs/superpowers/specs/2026-08-10-cloudflare-workers-deploy-design.md`。
+入口为 `backend/workers_entry.py`，配置为 `backend/wrangler.toml`（`main = "workers_entry.py"`，`compatibility_date = "2025-11-02"`，更早日期会报 `Method on_fetch does not exist`）。
+
+### Prerequisites
+
+```bash
+cd backend
+uv sync --extra workers   # 安装 workers-py（提供 pywrangler CLI）
+```
+
+### Local smoke (pywrangler dev)
+
+```bash
+cd backend
+cp .dev.vars.example .dev.vars   # 填入 SUPABASE_SERVICE_KEY / MIMO_API_KEY
+uv run --extra workers pywrangler dev --port 8787
+```
+
+`pywrangler dev` 会把 `[project.dependencies]` vendor 成 `python_modules`（Pyodide 平台解析）。
+因此 core dependencies 必须可在 Pyodide 解析且是 workers 运行时真正需要的：local-only 依赖（langgraph 链、apscheduler、本地 ML、在线 SDK，以及步骤 5 移出的 uvicorn / sqlalchemy / pypinyin / pyyaml）都放在 extras（`local-ml` / `local-services`），不进 `[project.dependencies]`。
+首次启动需下载 Pyodide 并 vendor，首个请求要初始化 Pyodide（冷启动 10s+）。
+
+**坑 1：本地 fat .venv 会被整体打包。**
+wrangler 的 Python 模块收集递归遍历项目根下的所有文件（不看 .gitignore），`backend/.venv`（含 torch/modelscope，1.5GB+）会被整体 attach 导致 wrangler 崩溃。
+CI（Workers Builds）上 `uv sync` 不带 extras，venv 是瘦的，无此问题。
+本地冒烟需在瘦身 staging 目录跑（拷出 `app/` + `main.py` + `workers_entry.py` + `wrangler.toml` + `pyproject.toml` + `uv.lock`，`uv sync --extra workers` 后启动）。
+
+**坑 2：Pyodide 不支持线程。**
+sync def 端点、sync 依赖函数、sync generator 依赖都会被 FastAPI 包进 `anyio.to_thread`，直接 `RuntimeError: can't start new thread`。
+workers 可达链路上的端点/依赖必须 async——步骤 5 已全部 async 化，
+`tests/unit/test_workers_async_deps.py` 的静态扫描（遍历 `create_app("workers")` 路由表）锁死回归，新增 sync 端点会立刻红。
+
+**坑 4：core dependencies 决定 bundle 体积。**
+`[project.dependencies]` 会整体 vendor 进 bundle（官方限制：gzip 后 Free 3MB / Paid 10MB，未压缩 64MB）。
+workers 用不到的包必须放 extras：uvicorn / sqlalchemy / pypinyin / pyyaml 在 `local-services`；
+workers 模式下 sqlalchemy/app.models 的 import 全部有守卫或延迟（`tests/unit/test_workers_no_sqlalchemy_import.py` 锁死）。
+步骤 5 实测：`pywrangler deploy --dry-run` Total Upload 30.4MB / gzip 6.85MB（Paid 档内，Free 档 3MB 对 FastAPI 栈不可达——pydantic-core 一项就 4.4MB）。
+
+**坑 3：workers 运行时 FS 只读。**
+`Settings` 在 `deploy_target=workers` 时跳过本地数据目录创建；`LOG_TO_FILE=false` 关闭文件日志。
+
+### Deploy
+
+```bash
+cd backend
+# 1. R2 资产桶（克隆样本/试听音频；wrangler.toml 的 bucket_name 占位符先改为实际桶名）
+uv run --extra workers pywrangler r2 bucket create narraforge-assets
+
+# 2. secrets（不进 wrangler.toml）
+uv run --extra workers pywrangler secret put SUPABASE_SERVICE_KEY
+uv run --extra workers pywrangler secret put MIMO_API_KEY
+
+# 3. [vars] 占位符：SUPABASE_URL、CORS_ORIGINS（Pages 域名，逗号分隔多个）
+
+# 4. 部署
+uv run --extra workers pywrangler deploy
+```
+
+### Post-deploy checklist
+
+- 关闭 workers.dev 子域路由（Dashboard → Workers → Settings → Domains & Routes），API 仅走受 Access 保护的自定义域名（防绕过，spec 3.6/5.2）。
+- Zero Trust 控制台建 Access 应用（self-hosted），覆盖 Pages 域名与 API 域名两个 hostname；登录方式邮箱 OTP。
+- Access 应用 CORS 设置放行 Pages 域名并允许 credentials；后端 `CORS_ORIGINS` 同步填 Pages 域名。
+- 后端中间件校验 `Cf-Access-Authenticated-User-Email` 头作为纵深防御（`ACCESS_ENFORCEMENT=true`，默认开）；缺头返回 401 `access_required`。
+- Supabase：执行 `backend/supabase/schema.sql` 迁移；`SUPABASE_SERVICE_KEY` 只放 Workers secrets。
+
+---
+
+## Koyeb Deployment (free tier, 推荐)
+
+Workers 模式代码（`DEPLOY_TARGET=workers` 的瘦身路由 + Supabase 持久化）跑在
+Koyeb 免费档。选择理由：**免信用卡注册**（Render 实测对部分账户强制要卡，已放弃），
+免费 nano 实例**不休眠**（无冷启动问题），GitHub 直连自动构建。
+
+### 部署步骤
+
+1. Koyeb Dashboard → Create Service → GitHub 连接仓库。
+2. Builder 选 **Dockerfile**，Dockerfile path 填 `backend/Dockerfile.cloud`，
+   build context 填 `backend/`。
+   **不要用 `backend/Dockerfile`**（local 全量构建含 torch，免费档装不下也不需要）。
+3. Instance 选 **Free (nano)**，区域任选（edge-tts/mimo 都要出墙访问，选美西/新加坡均可）。
+4. 环境变量照下表填写（与 Render 章节同一份清单）。
+5. 部署后访问 `https://<app>-<org>.koyeb.app/health` 应返回 200。
+   注意：`Dockerfile.cloud` 本机未构建验证过（开发机无 Docker daemon），
+   首次 Koyeb 构建即真实验证；若构建失败先看构建日志里 `uv sync` 步骤。
+
+### Cloudflare 侧（DNS + Access）
+
+与 Render 章节相同，仅把 CNAME 目标换成 `<app>-<org>.koyeb.app`，
+Koyeb 控制台加同名自定义域名（证书自动签发，卡住先灰云再开回）。
+`koyeb.app` 直连子域同样无法关闭，靠 `ACCESS_ENFORCEMENT=true` 兜底 401。
+
+---
+
+## Render Deployment (free tier, 备选 — 实测要信用卡)
+
+> 2026-08 实测：该账户在 Blueprint 和 New Web Service 流程均被强制要求填信用卡，
+> 免费路径不可用，已改用 Koyeb（见上一节）。本节保留作参考；render.yaml 仍在仓库根，
+> 账户若能过反滥用校验可一键 Blueprint。
+
+Workers 模式代码（`DEPLOY_TARGET=workers` 的瘦身路由 + Supabase 持久化）原样跑在
+Render 免费档（CPython 正常运行时，非 Pyodide）。背景：Workers bundle 实测 gzip
+6.7MB 超免费档 3MB 限制，全免费目标下后端改部署 Render；Workers 路径保留作付费
+档备选（见上一节）。
+
+运行差异（代码已自动适配，无需额外配置）：
+
+- edge-tts 合成：无 `workers` 运行时自动回退 edge-tts 包（`local-services` extra）。
+- 二进制资产（克隆样本/试听音频）：`ASSET_STORE_BACKEND=auto` + 无 R2 binding
+  → Supabase Storage（Render 免费档文件系统临时，落盘会丢，不能写本地）。
+- 持久化：Supabase PostgREST，与 Workers 模式同一代码路径。
+
+### Blueprint 一键部署
+
+仓库根有 `render.yaml`：Render Dashboard → New → Blueprint → 选仓库。
+build：`pip install uv && cd backend && uv sync --extra local-services`；
+start：`cd backend && uv run uvicorn main:app --host 0.0.0.0 --port $PORT`；
+health check：`/health`。
+**不要用 `backend/Dockerfile`**（local 全量构建含 torch，免费档装不下也不需要）。
+
+手动建 Web Service 亦可：Runtime 选 Python 3，填同样的 build/start 命令。
+
+### 环境变量清单
+
+| 变量 | 值 | 说明 |
+|---|---|---|
+| `DEPLOY_TARGET` | `workers` | 纯在线路由，不注册本地模型路由 |
+| `APP_ENV` / `DEBUG` | `production` / `false` | |
+| `LOG_TO_FILE` | `false` | 日志走 stdout（Render FS 临时） |
+| `ACCESS_ENFORCEMENT` | `true` | Cloudflare Access 头校验（默认开） |
+| `CORS_ORIGINS` | Pages 域名（逗号分隔） | 如 `https://narraforge.pages.dev` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
+| `SUPABASE_STORAGE_BUCKET` | `voice-assets` | 须与 schema.sql 创建的 bucket 同名 |
+| `ASSET_STORE_BACKEND` | `auto` | 无 R2 binding → Supabase Storage |
+| `MIMO_API_KEY` / `MIMO_BASE_URL` | 小米 MiMo key | 在线合成/克隆 |
+
+`sync:false` 的项（CORS_ORIGINS、SUPABASE_*、MIMO_API_KEY）需在控制台手填。
+
+### Supabase 准备
+
+1. 免费档建项目，SQL Editor 执行 `backend/supabase/schema.sql`（末尾含
+   `storage.buckets` 插入，自动建 `voice-assets` 私有桶；若该环境无 storage
+   schema 报错，改在控制台 Storage → New bucket 手动建同名 Private 桶）。
+2. 取 Project URL 与 service_role key 填到 Render 环境变量。
+
+### 免费档休眠与冷启动
+
+- 免费档 15 分钟无请求自动休眠，下一次请求冷启动数十秒（uv sync 产物在
+  构建期已固定，冷启动只是进程拉起 + import，远快于 Pyodide 初始化）。
+- 前端请求超时要容忍冷启动；`healthCheckPath=/health` 供 Render 探活。
+
+### Cloudflare 侧（DNS + Access）
+
+1. DNS：`api.<域名>` CNAME → `<service>.onrender.com`，开橙云代理。
+2. Render 控制台给服务加同名自定义域名；证书自动签发。若签发卡住，
+   先把 DNS 记录改灰云（DNS only）等签发完成再开回橙云。
+3. Cloudflare SSL/TLS 模式须为 **Full**（Render 端有有效证书；不要用
+   Flexible，会回源 HTTP 被重定向循环）。
+4. Zero Trust 建 Access 应用覆盖 `api.<域名>`（同 Pages 前端一个团队域），
+   邮箱 OTP，允许列表只填本人邮箱；Access CORS 设置放行 Pages 域名并允许
+   credentials。后端 `ACCESS_ENFORCEMENT=true` 校验注入的邮箱头作纵深防御。
+5. Render 自带 `onrender.com` 子域无法关闭直连——务必保证 Access 中间件开启
+   （默认开），`onrender.com` 直连会被 401 挡住。
 
 ---
 

@@ -1,6 +1,9 @@
 import os
 import re
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Annotated
+
+from pydantic import BeforeValidator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from pathlib import Path
 
 # 匹配 ${ENV_VAR} 或 ${ENV_VAR:-default} 格式
@@ -19,6 +22,13 @@ def _resolve_env_refs(value: str) -> str:
     return _ENV_VAR_PATTERN.sub(_replace, value)
 
 
+def _split_csv(value):
+    """逗号分隔字符串 → list[str]（CORS_ORIGINS 环境变量/.env/[vars] 用）。"""
+    if isinstance(value, str):
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return value
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -26,6 +36,14 @@ class Settings(BaseSettings):
     app_name: str = "NarraForge"
     app_env: str = "production"   # production | e2e (set by .env.e2e overlay)
     debug: bool = True
+    # 部署目标：local（本地全量，含本地模型路由/SQLite/scheduler）| workers（Cloudflare Workers，纯在线路由）
+    deploy_target: str = "local"
+
+    # Cloudflare Access 头校验（spec 3.6；仅 workers 模式注册中间件，local 完全不启用）
+    access_enforcement: bool = True
+    # CORS 允许来源（仅 workers 模式生效，部署时填 Pages 域名；local 恒为 ["*"]，见 main.create_app）。
+    # 环境变量/[vars] 用逗号分隔；NoDecode 关闭 pydantic-settings 的 JSON 解码，交 BeforeValidator 拆分。
+    cors_origins: Annotated[list[str], NoDecode, BeforeValidator(_split_csv)] = ["*"]
 
     # Paths
     base_dir: Path = Path(__file__).parent.parent.parent
@@ -67,6 +85,16 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "sqlite:///./voice_clone.db"
+
+    # Supabase（workers 模式持久化：PostgREST REST 访问，service key 只在后端）
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    # Supabase Storage 资产桶（workers 模式无 R2 binding 时的二进制资产后端，如 Render）
+    supabase_storage_bucket: str = "voice-assets"
+    # 二进制资产存储后端：auto | local | r2 | supabase
+    # auto：local 模式→本地文件系统；workers 模式→有 R2 binding 用 R2（真 Workers），
+    # 否则 Supabase Storage（Render 等无 binding 的 CPython 部署）。显式值可覆盖。
+    asset_store_backend: str = "auto"
 
     # API Keys (千问)
     qwen_api_key: str = ""
@@ -125,6 +153,9 @@ class Settings(BaseSettings):
         merged = {**env_values, **kwargs}
         super().__init__(**merged)
         # Ensure directories exist
+        # workers 运行时（Pyodide）FS 只读且无持久性，跳过本地目录创建
+        if self.deploy_target == "workers":
+            return
         self.videos_dir.mkdir(parents=True, exist_ok=True)
         self.srt_output_dir.mkdir(parents=True, exist_ok=True)
         self.segmented_dir.mkdir(parents=True, exist_ok=True)

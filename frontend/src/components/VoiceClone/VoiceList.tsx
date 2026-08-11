@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { voiceApi } from '../../services/api';
+import { apiUrl } from '../../services/apiBase';
 import { useTranslation } from '../../i18n';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { useToast } from '../ui/useToast';
@@ -152,8 +153,9 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
     if (!selectedVoice) return;
     setRegisteringId(selectedVoice.id);
     try {
-      const result = await fetch('/api/clone/create-clone', {
+      const result = await fetch(apiUrl('/clone/create-clone'), {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           voice_id: selectedVoice.id,

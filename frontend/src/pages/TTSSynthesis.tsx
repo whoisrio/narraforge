@@ -2,16 +2,20 @@ import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { createTranslator, useTranslation } from '../i18n';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
+import { EngineSelect } from '../components/TTSSynthesis/EngineSelect';
+import type { EngineId } from '../components/TTSSynthesis/engineOptions';
 import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSPanel';
 import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMPanel';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { BatchSynthesizeMenu, type BatchSynthesizeMode } from '../components/SegmentedTTS/BatchSynthesizeMenu';
+import { chaptersNeedingSplit, selectProduceAllSegments, type ProduceAllRun } from '../services/produceAll';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
 import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi } from '../services/api';
+import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
 import { trimBase64AudioSilence } from '../services/audioTrim';
@@ -22,6 +26,7 @@ import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segm
 import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
+import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
@@ -91,10 +96,18 @@ export function TTSSynthesis({
 }) {
   const { t } = useTranslation();
   const { mode: storageMode } = useStorageMode();
+  const capabilities = useCapabilities();
   const { refreshCounter } = useVoiceRefresh();
   const initialLoadDoneRef = useRef(false);
   const lastSavedUpdatedAtRef = useRef<string | null>(null);
   const [engine, setEngine] = useState<Engine>('edge_tts');
+
+  // workers 模式引擎收敛（spec 第 4 节）：当前选中引擎不可用时回退到第一个可用引擎
+  useEffect(() => {
+    if (!capabilities.engines.includes(engine) && capabilities.engines.length > 0) {
+      setEngine(capabilities.engines[0] as Engine);
+    }
+  }, [capabilities.engines, engine]);
   const [selectedVoiceId, setSelectedVoiceId] = useState<string>('');
   const [params, setParams] = useState<Partial<TTSRequest>>({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
 
@@ -117,6 +130,9 @@ export function TTSSynthesis({
   const [voxcpmInferenceTimesteps, setVoxcpmInferenceTimesteps] = useState(10);
   // 禁用风格 tag（随 chapter.voice 持久化，合成时透传后端 SynthesizeParams.mute_tags）
   const [muteTags, setMuteTags] = useState(false);
+  // 合成时把下划线转为空格（随 chapter.voice 持久化，透传 SynthesizeParams.underscore_to_space；
+  // 只影响合成语音，不影响显示/字幕文本）
+  const [underscoreToSpace, setUnderscoreToSpace] = useState(false);
 
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
 
@@ -131,6 +147,8 @@ export function TTSSynthesis({
   const [recordBusy, setRecordBusy] = useState(false);
   const [srtDurationMode, setSrtDurationMode] = useState<'chapter' | 'global'>('chapter');
   const [generating, setGenerating] = useState(false);
+  // “一键制作全本”实时进度；非 null 且 running 时在 ProjectShell contextBar 跨 section 可见。
+  const [produceAllRun, setProduceAllRun] = useState<ProduceAllRun | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
   const [playingId, setPlayingId] = useState<string | undefined>();
@@ -198,8 +216,13 @@ export function TTSSynthesis({
   const blobUrlRef = useRef<string | null>(null);
   // Ref to abort play-all sequence
   const playAllAbortRef = useRef(false);
+  // Ref to abort produce-all (一键制作全本) 段间停止
+  const produceAllAbortRef = useRef(false);
+  // Ref to read latest generating inside handleRegenerate (其 useCallback deps 刻意不含 generating)
+  const generatingRef = useRef(generating);
+  generatingRef.current = generating;
   // Ref to always have the latest handleRegenerate (avoids stale closure in confirm dialog)
-  const handleRegenerateRef = useRef<(id: string) => Promise<void>>(() => Promise.resolve());
+  const handleRegenerateRef = useRef<(id: string, opts?: { force?: boolean; internal?: boolean }) => Promise<void>>(() => Promise.resolve());
   // 已解锁的录入片段：下次重新合成需带 force: true（后端可能仍认为其已录入）
   const unlockedRecordedRef = useRef<Set<string>>(new Set());
 
@@ -368,8 +391,9 @@ export function TTSSynthesis({
     });
   }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
 
-  const showToast = useCallback((message: string, type: 'error' | 'success' = 'success') => {
+  const showToast = useCallback((message: string, type: 'error' | 'success' | 'info' = 'success') => {
     if (type === 'error') toast.error(message);
+    else if (type === 'info') toast.info(message);
     else toast.success(message);
   }, [toast]);
 
@@ -395,6 +419,7 @@ export function TTSSynthesis({
     const engine = (v?.engine || 'edge_tts') as Engine;
     setEngine(engine);
     setMuteTags(v?.mute_tags ?? false);
+    setUnderscoreToSpace(v?.underscore_to_space ?? false);
     if (engine === 'edge_tts') {
       setEdgeVoice((v as EdgeTTSParams).voice || '');
       setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
@@ -467,13 +492,13 @@ export function TTSSynthesis({
   /** Build EngineParams from current global state */
   const buildCurrentParams = useCallback((): EngineParams => {
     if (engine === 'edge_tts') {
-      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume), mute_tags: muteTags } as EdgeTTSParams;
+      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume), mute_tags: muteTags, underscore_to_space: underscoreToSpace } as EdgeTTSParams;
     }
     if (engine === 'mimo_tts') {
-      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction, mute_tags: muteTags } as MiMoParams;
+      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction, mute_tags: muteTags, underscore_to_space: underscoreToSpace } as MiMoParams;
     }
     if (engine === 'voxcpm') {
-      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags } as VoxCPMParams;
+      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags, underscore_to_space: underscoreToSpace } as VoxCPMParams;
     }
     return {
       engine: 'cosyvoice', voice_id: selectedVoiceId,
@@ -481,8 +506,9 @@ export function TTSSynthesis({
       pitch: params.pitch ?? 1.0, language: params.language || 'Chinese',
       enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false,
       mute_tags: muteTags,
+      underscore_to_space: underscoreToSpace,
     };
-  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags]);
+  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags, underscoreToSpace]);
 
   // 构建当前全局音色的 VoiceRef（用于新创建的 segment）
   const buildGlobalVoiceRef = useCallback((): import('../types').VoiceRef => {
@@ -907,10 +933,22 @@ export function TTSSynthesis({
     }
   }, [showToast]);
 
-  const handleRegenerate = useCallback(async (id: string, opts?: { force?: boolean }) => {
-    const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg) return;
-    const segIdx = activeChapter.segments.findIndex(s => s.id === id);
+  const handleRegenerate = useCallback(async (id: string, opts?: { force?: boolean; internal?: boolean }) => {
+    // 全本/批量合成在跑时，禁止手动触发单段合成；循环内部调用传 internal=true 绕过。
+    if (generatingRef.current && !opts?.internal) {
+      showToast(t('tts.produceAllInProgress'), 'error');
+      return;
+    }
+    // Project-wide lookup so batch flows (一键制作全本) can synthesize segments
+    // in any chapter, not just the active one.
+    let seg: Segment | undefined;
+    let segChapter: Chapter | undefined;
+    for (const c of project.chapters) {
+      const found = c.segments.find(s => s.id === id);
+      if (found) { seg = found; segChapter = c; break; }
+    }
+    if (!seg || !segChapter) return;
+    const segIdx = segChapter.segments.findIndex(s => s.id === id);
     dispatch({ type: 'GENERATE_START', id });
     try {
       const hasVoiceLock = segHasOverride(seg);
@@ -1026,6 +1064,8 @@ export function TTSSynthesis({
         const requestParams: Record<string, unknown> = { engine: effectiveEngine };
         // 禁用风格 tag：透传后端 SynthesizeParams.mute_tags（clone 音色建议开启）
         if (effectiveParams.mute_tags) requestParams.mute_tags = true;
+        // 下划线转空格：透传后端 SynthesizeParams.underscore_to_space
+        if (effectiveParams.underscore_to_space) requestParams.underscore_to_space = true;
         if (effectiveEngine === 'edge_tts') {
           requestParams.edge_voice = effectiveEdgeVoice;
           requestParams.edge_rate = effectiveEdgeRate;
@@ -1063,7 +1103,7 @@ export function TTSSynthesis({
         }
         const { segmentedProjectApi } = await import('../services/api');
         const updated = await segmentedProjectApi.synthesizeSegment(
-          project.id, activeChapter.id, seg.id, {
+          project.id, segChapter.id, seg.id, {
             params: requestParams,
             text: textToSend,
             ssml: undefined,
@@ -1096,30 +1136,37 @@ export function TTSSynthesis({
         return;
       }
 
+      // frontend 存储模式直调引擎端点，不经过后端 prepare_text_for_engine，
+      // 下划线转空格在本地完成（只影响合成语音；seg.text、历史记录、字幕保持原文）。
+      // 章节开关（effectiveParams）与项目设置里的全局开关（project.configs）任一开启即生效；
+      // backend 存储模式由后端 synthesize_segment 做同样的 OR 兜底。
+      const underscoreToSpaceEffective = Boolean(effectiveParams.underscore_to_space) || Boolean(project.configs?.underscore_to_space);
+      const textForEngine = underscoreToSpaceEffective ? textToSend.replaceAll('_', ' ') : textToSend;
+
       if (effectiveEngine === 'edge_tts') {
-        resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
+        resp = await ttsApi.synthesize({ text: textForEngine, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
       } else if (effectiveEngine === 'mimo_tts') {
         if (finalMimoMode === 'voicedesign') {
-          resp = await mimoTtsApi.synthesizeVoiceDesign({ text: textToSend, voice_description: effectiveMimoVoiceDesc || '', format: 'wav' });
+          resp = await mimoTtsApi.synthesizeVoiceDesign({ text: textForEngine, voice_description: effectiveMimoVoiceDesc || '', format: 'wav' });
         } else if (finalMimoMode === 'voiceclone') {
-          resp = await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
+          resp = await mimoTtsApi.synthesizeVoiceClone({ text: textForEngine, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
         } else {
-          resp = await mimoTtsApi.synthesizePreset({ text: textToSend, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
+          resp = await mimoTtsApi.synthesizePreset({ text: textForEngine, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
         }
       } else if (effectiveEngine === 'voxcpm') {
         if (finalVoxcpmMode === 'design') {
-          resp = await voxcpmApi.design({ voice_description: effectiveVoxcpmDesc, text: textToSend || undefined, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.design({ voice_description: effectiveVoxcpmDesc, text: textForEngine || undefined, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else if (finalVoxcpmMode === 'clone') {
-          resp = await voxcpmApi.clone({ text: textToSend, voice_id: voiceId ?? '', style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.clone({ text: textForEngine, voice_id: voiceId ?? '', style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else if (finalVoxcpmMode === 'ultimate') {
-          resp = await voxcpmApi.ultimateClone({ text: textToSend, voice_id: voiceId ?? '', prompt_text: finalVoxcpmPromptText, style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.ultimateClone({ text: textForEngine, voice_id: voiceId ?? '', prompt_text: finalVoxcpmPromptText, style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else {
-          resp = await voxcpmApi.tts({ text: textToSend, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.tts({ text: textForEngine, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         }
       } else {
         // 原代码引用了未定义的 sp；按上下文恢复为 cosyvoice 的 effectiveParams（该分支原本会因 ReferenceError 崩溃）
         const sp = effectiveParams as CosyVoiceParams;
-        resp = await ttsApi.synthesize({ text: textToSend, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
+        resp = await ttsApi.synthesize({ text: textForEngine, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
       // Auto-trim leading/trailing silence:
@@ -1129,7 +1176,7 @@ export function TTSSynthesis({
       let fmt = resp.audio_format || 'mp3';
       try {
         const leadingKeepMs = 80;
-        const trailingKeepMs = endsWithSentencePeriod(textToSend) ? 100 : 80;
+        const trailingKeepMs = endsWithSentencePeriod(textForEngine) ? 100 : 80;
         const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(resp.audio_base64, { leadingKeepMs, trailingKeepMs });
         if (trimmedMs > 0) {
           audioBase64 = trimmedBase64;
@@ -1154,7 +1201,7 @@ export function TTSSynthesis({
       dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error, t('common.generationFailed')) });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChapter.segments, dispatch, buildCurrentParams, showToast, roles]);
+  }, [project.chapters, dispatch, buildCurrentParams, showToast, roles]);
 
   // Keep ref in sync
   handleRegenerateRef.current = handleRegenerate;
@@ -1289,7 +1336,7 @@ export function TTSSynthesis({
       // Step 3: Generate sequentially to avoid rate-limiting external TTS services
       let i = 0;
       while (i < toRegenerate.length) {
-        await handleRegenerateRef.current(toRegenerate[i++].id);
+        await handleRegenerateRef.current(toRegenerate[i++].id, { internal: true });
       }
       showToast(t('tts.allGenerationComplete'));
     } catch (e) {
@@ -1300,6 +1347,75 @@ export function TTSSynthesis({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, showToast]);
+
+  const handleProduceAll = useCallback(async (mode: BatchSynthesizeMode) => {
+    if (generating) return;
+    setGenerating(true);
+    produceAllAbortRef.current = false;
+    try {
+      // Phase 1: 补切--给无 segment 的章节按规则切分段落（复用 chapter 音色）。
+      const toSplit = chaptersNeedingSplit(project.chapters);
+      if (toSplit.length > 0) {
+        for (const { chapterId, text } of toSplit) {
+          try {
+            await segmentedProjectApi.splitChapter(project.id, chapterId, {
+              mode: 'rule', text, replace_strategy: 'replace_chapter_segments',
+            });
+          } catch (e) {
+            console.error(`[produceAll] split chapter ${chapterId} failed`, e);
+          }
+        }
+        await reloadProjectData();
+        // 等 React 重渲染刷新 handleRegenerateRef，使新段可被全项目查找。
+        await new Promise((r) => setTimeout(r, 0));
+      }
+
+      // 暂停自动保存：逐段合成会 dispatch 状态更新，若中途触发全量 PUT，
+      // 会用陈旧内存态覆盖刚合成段的音频（reconcile 还会删掉刚写的文件）。
+      // 此时还未开始合成，状态与后端一致，暂停安全；最后 reload 恢复。
+      initialLoadDoneRef.current = false;
+
+      // Phase 2: 拉最新项目态收集目标段。
+      const raw = await projectStorage.getProject(project.id);
+      if (!raw) { showToast(t('tts.projectLoadFailedRetry'), 'error'); return; }
+      const fresh = migrateV1(raw, t);
+      const targets = selectProduceAllSegments(fresh.chapters, mode);
+      if (targets.length === 0) {
+        showToast(t('tts.noSegmentsToRegenerate'));
+        return;
+      }
+
+      // Phase 3: 顺序合成，复用 handleRegenerate（重构后全项目可查段），沿用每段已有音色。
+      // 段间停止：每次迭代前检查 abort flag，当前段跑完即停；停止后已合成段保留、未合成段保持 idle/failed。
+      setProduceAllRun({ running: true, mode, total: targets.length, done: 0, startedAt: Date.now() });
+      let doneCount = 0;
+      for (const segId of targets) {
+        if (produceAllAbortRef.current) break;
+        const chName = fresh.chapters.find(c => c.segments.some(s => s.id === segId))?.name;
+        setProduceAllRun(prev => prev ? { ...prev, currentSegmentId: segId, currentChapterName: chName } : prev);
+        await handleRegenerateRef.current(segId, { internal: true });
+        doneCount += 1;
+        setProduceAllRun(prev => prev ? { ...prev, done: doneCount } : prev);
+      }
+      if (produceAllAbortRef.current) {
+        showToast(t('tts.produceAllStopped', { done: doneCount, total: targets.length }), 'info');
+      } else {
+        showToast(t('tts.allGenerationComplete'));
+      }
+    } catch (e) {
+      console.error('[produceAll] failed', e);
+      showToast(t('tts.partialGenerationFailed'), 'error');
+    } finally {
+      setGenerating(false);
+      setProduceAllRun(null);
+      // 恢复 autosave（reloadProjectData 内部置 ref=true）+ 拉回后端权威态。
+      await reloadProjectData();
+    }
+  }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t]);
+
+  const handleStopProduceAll = useCallback(() => {
+    produceAllAbortRef.current = true;
+  }, []);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
     const ids = idsArg ?? activeChapter.segments.filter(s => (segEffectiveParams(s).engine as string) === 'cosyvoice').map(s => s.id);
@@ -1371,8 +1487,8 @@ export function TTSSynthesis({
     try {
       // Backend mode: fetch audio as blob, then play via blob URL
       if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
-        const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-        const resp = await fetch(url, { cache: 'no-store' });
+        const url = apiUrl(`/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`);
+        const resp = await fetch(url, { cache: 'no-store', credentials: 'include' });
         if (!resp.ok) {
           // Try to extract backend error detail (FastAPI's `detail` field)
           let detail = `HTTP ${resp.status}`;
@@ -1469,8 +1585,8 @@ export function TTSSynthesis({
       try {
         // Backend mode: fetch audio as blob, then play
         if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
-          const url = `/api/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`;
-          const resp = await fetch(url, { cache: 'no-store' });
+          const url = apiUrl(`/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`);
+          const resp = await fetch(url, { cache: 'no-store', credentials: 'include' });
           if (!resp.ok) {
             let detail = `HTTP ${resp.status}`;
             try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch { /* ignore */ }
@@ -1568,7 +1684,12 @@ export function TTSSynthesis({
         ? (detail as { code: string }).code : undefined;
       if (resp?.status === 409 && code === 'chapters_incomplete') {
         const chapters = (detail as { chapters?: string[] }).chapters ?? [];
-        showToast(t('studio.exportAllIncomplete', { chapters: chapters.join('、') }), 'error');
+        const missingCounts = (detail as { missing_counts?: Record<string, number> }).missing_counts ?? {};
+        // 章节名后附缺失段数（后端 missing_counts），让用户知道每章还差几段。
+        const chaptersText = chapters
+          .map((c) => (missingCounts[c] ? `${c}(缺${missingCounts[c]}段)` : c))
+          .join('、');
+        showToast(t('studio.exportAllIncomplete', { chapters: chaptersText }), 'error');
       } else if (resp?.status === 409 && code === 'export_directory_not_configured') {
         showToast(t('studio.exportAllNoDir'), 'error');
       } else {
@@ -1625,6 +1746,8 @@ export function TTSSynthesis({
           rightPanelCollapsed={projectSection === 'studio' ? rightPanelCollapsed : true}
           onSectionChange={setProjectSection}
           onBackToProjects={onBackToProjects}
+          produceAllRun={produceAllRun}
+          onStopProduceAll={handleStopProduceAll}
         >
         {projectSection === 'studio' ? (
         <VoiceStudioLayout
@@ -1634,6 +1757,8 @@ export function TTSSynthesis({
           remotionPath={project.remotion_project_path}
           onExport={() => setExportOpen(true)}
           onExportAll={storageMode === 'backend' && !isScratchpadProject ? () => { void handleExportAll(); } : undefined}
+          onProduceAll={storageMode === 'backend' && !isScratchpadProject ? (mode) => { void handleProduceAll(mode); } : undefined}
+          produceAllDisabled={generating}
           onAdjustAudio={storageMode === 'backend' && !isScratchpadProject ? () => setAdjustOpen(true) : undefined}
           onSidebarCollapseChange={setRightPanelCollapsed}
           sidebarContent={
@@ -1674,16 +1799,12 @@ export function TTSSynthesis({
                 </div>
                 <div className={styles.sidebarSectionBody}>
                   <div className={styles.sidebarSectionBodyInner}>
-                    <select
+                    <EngineSelect
                       className={styles.sidebarEngineSelect}
                       value={engine}
-                      onChange={e => setEngine(e.target.value as Engine)}
-                    >
-                      <option value="edge_tts">Edge-TTS</option>
-                      <option value="cosyvoice">CosyVoice</option>
-                      <option value="mimo_tts">MiMo TTS</option>
-                      <option value="voxcpm">VoxCPM</option>
-                    </select>
+                      availableEngines={capabilities.engines}
+                      onChange={(next: EngineId) => setEngine(next)}
+                    />
                     {engine === 'cosyvoice' ? (
                       <GlobalControlBar
                         voices={voices} selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
@@ -1721,6 +1842,14 @@ export function TTSSynthesis({
                         onChange={e => setMuteTags(e.target.checked)}
                       />
                       禁用风格 tag（clone 音色建议开启）
+                    </label>
+                    <label className={styles.sidebarMuteTags} title="开启后传给 TTS 的文本中下划线会替换为空格，显示与字幕保持原文">
+                      <input
+                        type="checkbox"
+                        checked={underscoreToSpace}
+                        onChange={e => setUnderscoreToSpace(e.target.checked)}
+                      />
+                      合成时把下划线转为空格（不影响字幕显示）
                     </label>
                     <button
                       type="button"
@@ -1989,6 +2118,7 @@ export function TTSSynthesis({
             chapterCount={project.chapters.length}
             projectDescription={project.configs?.description ?? null}
             exportDirectory={project.configs?.export_directory ?? null}
+            underscoreToSpace={project.configs?.underscore_to_space ?? null}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

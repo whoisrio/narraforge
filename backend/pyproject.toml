@@ -6,34 +6,22 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.109.0",
-    "uvicorn>=0.27.0",
-    "sqlalchemy>=2.0.25",
     "pydantic>=2.6.0",
     "pydantic-settings>=2.1.0",
     "cryptography>=43.0.0",
     "python-multipart>=0.0.9",
     "aiofiles>=23.2.1",
     "httpx>=0.26.0",
-    "dashscope>=1.25.0",
-    "edge-tts>=7.0.0",
-    "faster-whisper>=1.2.1",
-    "qiniu>=7.17.0",
-    "funasr>=1.0.0",
-    "torch>=2.0.0",
-    "torchaudio>=2.0.0",
-    # VoxCPM 本地 GPU TTS（需要 Python >=3.10, <3.13; PyTorch >=2.5.0; CUDA >=12.0）
-    "voxcpm",
-    "soundfile",
-    "modelscope",
-    # Workflow dependencies
-    "langgraph>=1.2.0",
-    "langgraph-checkpoint-sqlite>=1.0.0",
-    "aiosqlite>=0.20.0",
-    # Narration git versioning dependencies
-    "apscheduler>=3.10",
-    "pypinyin>=0.51",
-    "pyyaml>=6.0",
 ]
+# 依赖分层说明（步骤 5 bundle 瘦身）：
+# - [project.dependencies] 会整体 vendor 进 Cloudflare Workers bundle
+#   （pywrangler 收集），只保留 workers 运行时真正需要的包。
+# - uvicorn / sqlalchemy / pypinyin / pyyaml 是 local-only：
+#   workers 不跑 ASGI server（pywrangler 自带运行时）、持久化全走
+#   Supabase/PostgREST 不碰 ORM、narration git versioning 是本地能力。
+#   这些都在 local-services extra（本地开发/测试安装命令已含该 extra）。
+# - workers 模式下 sqlalchemy/app.models 的 import 全部有守卫或延迟
+#   （见 app/core/database.py 及各 API/repo 模块的 try/except ImportError）。
 
 [[tool.uv.index]]
 name = "pytorch-cu130"
@@ -46,6 +34,38 @@ torch = [
 ]
 
 [project.optional-dependencies]
+# 本地 ML 模型依赖（Pyodide 不兼容，workers 部署不安装）
+local-ml = [
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    # VoxCPM 本地 GPU TTS（需要 Python >=3.10, <3.13; PyTorch >=2.5.0; CUDA >=12.0）
+    "voxcpm",
+    "funasr>=1.0.0",
+    "faster-whisper>=1.2.1",
+    "modelscope",
+    "soundfile",
+]
+# 含原生扩展的在线服务 SDK（workers 模式用 httpx/内置 WS 客户端替代），
+# 以及 local-only 工作流/调度依赖（langgraph 链的 sqlite-vec 无 Pyodide wheel，
+# apscheduler 仅 local startup 注册 —— 均不进 workers vendor 目标）
+local-services = [
+    # local ASGI server（workers 用 pywrangler 自带运行时）
+    "uvicorn>=0.27.0",
+    # 本地持久化 ORM（workers 全走 Supabase/PostgREST，不 vendor）
+    "sqlalchemy>=2.0.25",
+    # Narration git versioning（本地能力：git + 文件系统）
+    "pypinyin>=0.51",
+    "pyyaml>=6.0",
+    "edge-tts>=7.0.0",
+    "dashscope>=1.25.0",
+    "qiniu>=7.17.0",
+    # 遗留工作流依赖（app 代码已无引用，agent/ 服务独立管理依赖）
+    "langgraph>=1.2.0",
+    "langgraph-checkpoint-sqlite>=1.0.0",
+    "aiosqlite>=0.20.0",
+    # Narration git versioning 定时快照（local startup 才注册）
+    "apscheduler>=3.10",
+]
 test = [
     "pytest>=7.4.4",
     "pytest-asyncio>=0.23.2",
@@ -58,6 +78,12 @@ test = [
     "factory-boy>=3.3.0",
     "Faker>=21.0.0",
     "starlette-testclient>=0.3.0"
+]
+# Cloudflare Workers 部署工具链：workers-py 包提供 pywrangler CLI（spike 同款）。
+# 注意：[project.dependencies] 中 pydantic-core/cryptography 为 Rust 扩展，
+# pywrangler vendor 时会解析 Pyodide 发行版的对应 wheel（见 docs/RUNBOOK.md）。
+workers = [
+    "workers-py",
 ]
 dev = [
     "black>=23.12.1",

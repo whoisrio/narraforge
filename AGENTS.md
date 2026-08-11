@@ -46,7 +46,7 @@ npm run lint     # Run ESLint
 
 ```bash
 cd backend
-uv sync                              # Install dependencies with uv, not pip
+uv sync --extra local-ml --extra local-services   # Install dependencies with uv, not pip
 uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload
 ```
 
@@ -123,7 +123,7 @@ Key tables include VoiceProfile, TTSConfig, TTSResult, TranscriptionRecord, Syst
 ### Backend Tests
 
 ```bash
-cd backend && uv run --extra test pytest -q
+cd backend && uv sync --extra test --extra local-ml --extra local-services && uv run pytest -q
 ```
 
 See [`backend/tests/TEST_MAP.md`](backend/tests/TEST_MAP.md) for test structure, isolation rules, mock contracts, and feature-to-test mapping.

@@ -14,10 +14,10 @@ import json
 import logging
 import os
 import asyncio
-import urllib.request
-import urllib.error
 from typing import Optional
 from pathlib import Path
+
+import httpx
 
 from app.core.config import settings
 
@@ -40,11 +40,18 @@ MIMO_PRESET_VOICES = [
 class MiMoTTSService:
     """MiMo-V2.5-TTS 语音合成服务"""
 
-    def __init__(self, api_key: str, base_url: str = "https://api.xiaomimimo.com/v1"):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.xiaomimimo.com/v1",
+        transport: Optional[httpx.BaseTransport] = None,
+    ):
         if not api_key:
             raise ValueError("MiMo API key is required")
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
+        # 可注入的 httpx transport（测试用 MockTransport，生产为 None 走真实网络）
+        self._transport = transport
 
     def _get_headers(self) -> dict:
         """返回请求头（MiMo 使用 api-key 而非 Authorization Bearer）"""
@@ -242,7 +249,7 @@ class MiMoTTSService:
         audio_params: dict,
     ) -> bytes:
         """
-        同步调用 MiMo TTS API
+        同步调用 MiMo TTS API（httpx 同步客户端；urllib 时代的请求头/payload/超时/错误语义不变）
 
         API 兼容 OpenAI Chat Completions 格式：
         POST /chat/completions
@@ -259,17 +266,12 @@ class MiMoTTSService:
 
         body = json.dumps(payload).encode("utf-8")
 
-        req = urllib.request.Request(
-            url,
-            data=body,
-            headers=self._get_headers(),
-            method="POST",
-        )
-
         try:
             logger.info(f"Calling MiMo TTS API: model={model}, messages={messages}")
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                resp_data = json.loads(resp.read().decode("utf-8"))
+            with httpx.Client(transport=self._transport, timeout=120) as client:
+                resp = client.post(url, content=body, headers=self._get_headers())
+            resp.raise_for_status()
+            resp_data = resp.json()
 
             # 解析返回的音频数据
             choices = resp_data.get("choices", [])
@@ -286,13 +288,13 @@ class MiMoTTSService:
             logger.info(f"MiMo TTS API success: received {len(audio_b64)} chars of base64 audio")
             return base64.b64decode(audio_b64)
 
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode("utf-8", errors="replace")
-            logger.error(f"MiMo TTS API HTTP error {e.code}: {error_body}")
-            raise RuntimeError(f"MiMo TTS API error {e.code}: {error_body}")
-        except urllib.error.URLError as e:
-            logger.error(f"MiMo TTS API URL error: {e.reason}")
-            raise RuntimeError(f"MiMo TTS API connection error: {e.reason}")
+        except httpx.HTTPStatusError as e:
+            error_body = e.response.text
+            logger.error(f"MiMo TTS API HTTP error {e.response.status_code}: {error_body}")
+            raise RuntimeError(f"MiMo TTS API error {e.response.status_code}: {error_body}")
+        except httpx.TransportError as e:
+            logger.error(f"MiMo TTS API transport error: {e}")
+            raise RuntimeError(f"MiMo TTS API connection error: {e}")
         except json.JSONDecodeError as e:
             logger.error(f"MiMo TTS API response JSON decode error: {e}")
             raise RuntimeError("MiMo TTS API returned invalid JSON")

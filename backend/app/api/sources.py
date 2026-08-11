@@ -6,11 +6,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.repositories.deps import get_source_document_repo
+from app.core.repositories.source_documents import SourceDocumentRepository
 from app.schemas.segmented_project import SourceDocumentIn, SourceDocumentOut
-from app.services import source_document_service as svc
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -22,9 +21,9 @@ router = APIRouter()
     "/projects/{project_id}/sources",
     response_model=list[SourceDocumentOut],
 )
-def list_sources(project_id: str, db: Session = Depends(get_db)):
+async def list_sources(project_id: str, repo: SourceDocumentRepository = Depends(get_source_document_repo)):
     """列出项目所有源."""
-    return svc.list_sources(db, project_id)
+    return repo.list(project_id)
 
 
 @router.post(
@@ -32,10 +31,10 @@ def list_sources(project_id: str, db: Session = Depends(get_db)):
     response_model=SourceDocumentOut,
     status_code=201,
 )
-def create_paste_source(
+async def create_paste_source(
     project_id: str,
     body: SourceDocumentIn,
-    db: Session = Depends(get_db),
+    repo: SourceDocumentRepository = Depends(get_source_document_repo),
 ):
     """创建粘贴文本源 (source_type='paste')."""
     if body.source_type != "paste":
@@ -43,9 +42,8 @@ def create_paste_source(
     if not body.pasted_text or not body.pasted_text.strip():
         raise HTTPException(status_code=400, detail="pasted_text_required")
     try:
-        return svc.create_source_paste(
-            db,
-            project_id=project_id,
+        return repo.create_paste(
+            project_id,
             title=body.title,
             pasted_text=body.pasted_text,
         )
@@ -62,7 +60,7 @@ async def upload_audio_source(
     project_id: str,
     file: UploadFile = File(...),
     title: str = Form(""),
-    db: Session = Depends(get_db),
+    repo: SourceDocumentRepository = Depends(get_source_document_repo),
 ):
     """上传音频源 (source_type='audio'). 支持 mp3/wav/m4a/ogg."""
     # 校验后缀
@@ -78,33 +76,43 @@ async def upload_audio_source(
         raise HTTPException(status_code=413, detail="file_too_large_50mb_max")
 
     try:
-        return svc.create_source_audio(
-            db,
-            project_id=project_id,
+        return repo.create_audio(
+            project_id,
             title=title or filename,
             audio_bytes=audio_bytes,
             suffix=suffix,
         )
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except NotImplementedError as e:
+        # workers 模式：音频源依赖 R2 资产存储（部署步骤 4）
+        raise HTTPException(status_code=501, detail="audio_source_requires_asset_store") from e
 
 
 @router.delete(
     "/projects/{project_id}/sources/{source_id}",
     status_code=204,
 )
-def delete_source(project_id: str, source_id: str, db: Session = Depends(get_db)):
+async def delete_source(
+    project_id: str,
+    source_id: str,
+    repo: SourceDocumentRepository = Depends(get_source_document_repo),
+):
     """删除源 (audio 会同时删除磁盘文件)."""
-    ok = svc.delete_source(db, project_id, source_id)
+    ok = repo.delete(project_id, source_id)
     if not ok:
         raise HTTPException(status_code=404, detail="source_not_found")
     return None
 
 
 @router.get("/projects/{project_id}/sources/{source_id}/audio")
-def get_source_audio(project_id: str, source_id: str, db: Session = Depends(get_db)):
+async def get_source_audio(
+    project_id: str,
+    source_id: str,
+    repo: SourceDocumentRepository = Depends(get_source_document_repo),
+):
     """下载/播放音频源文件 (audio 类型才有)."""
-    src = svc.get_source(db, project_id, source_id)
+    src = repo.get(project_id, source_id)
     if src is None:
         raise HTTPException(status_code=404, detail="source_not_found")
     if src.source_type != "audio" or not src.audio_path:

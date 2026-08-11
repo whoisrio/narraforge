@@ -1,0 +1,8 @@
+# wrangler 模块收集只读本目录的 .gitignore：必须排除本地 venv（torch/modelscope
+# 等大包会被整体 attach 导致 wrangler 崩溃），以及 pywrangler 生成的构建产物。
+.venv/
+.venv-workers/
+.wrangler/
+python_modules/
+__pycache__/
+.pytest_cache/

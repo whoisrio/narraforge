@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useTranslation, projectNavItems } from '../../i18n';
 import type { Chapter } from '../../types';
+import type { ProduceAllRun } from '../../services/produceAll';
 import { segmentedProjectApi, type ChapterSyncStatus } from '../../services/api';
 import { ChapterSyncBadges } from '../SegmentedTTS/ChapterSyncBadges';
 import { ChapterSyncModal } from '../SegmentedTTS/ChapterSyncModal';
@@ -32,6 +33,9 @@ interface ProjectShellProps {
   children: ReactNode;
   onSectionChange: (section: ProjectSectionId) => void;
   onBackToProjects?: () => void;
+  /** 活跃的“一键制作全本”任务；非空且 running 时在 contextBar 显示进度与停止按钮。 */
+  produceAllRun?: ProduceAllRun | null;
+  onStopProduceAll?: () => void;
 }
 
 const SECTION_ICONS: Record<ProjectSectionId, string> = {
@@ -70,6 +74,8 @@ export function ProjectShell({
   children,
   onSectionChange,
   onBackToProjects,
+  produceAllRun,
+  onStopProduceAll,
 }: ProjectShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
@@ -317,6 +323,26 @@ export function ProjectShell({
             <strong>{t(`projectNav.${activeSection}`)}</strong>
             <span className={styles.inlineMeta}>/ {chapterName} · {segmentCount} 段 · {generatedCount} 已生成 · {formatDuration(durationSec)}</span>
           </div>
+          {produceAllRun?.running && (
+            <div className={styles.produceAllProgress} data-testid="produce-all-progress">
+              <div className={styles.produceAllProgressBar}>
+                <div
+                  className={styles.produceAllProgressFill}
+                  data-testid="produce-all-progress-fill"
+                  style={{ width: `${produceAllRun.total > 0 ? Math.round((produceAllRun.done / produceAllRun.total) * 100) : 0}%` }}
+                />
+              </div>
+              <span className={styles.produceAllProgressText}>
+                {t('tts.produceAllProgress', { done: produceAllRun.done, total: produceAllRun.total })}
+                {produceAllRun.currentChapterName ? ` · ${produceAllRun.currentChapterName}` : ''}
+              </span>
+              {onStopProduceAll && (
+                <button type="button" className={styles.produceAllStopBtn} data-testid="produce-all-stop" onClick={onStopProduceAll}>
+                  {t('tts.produceAllStop')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className={styles.workspaceBody}>{children}</div>

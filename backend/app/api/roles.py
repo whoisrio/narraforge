@@ -3,51 +3,50 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.repositories.deps import get_role_repo
+from app.core.repositories.roles import RoleRepository
 from app.schemas.common import ItemsOut
 from app.schemas.role import RoleIn, RoleOut, RoleUpdate
-from app.services import role_service as svc
 
 router = APIRouter()
 
 
 @router.get("/roles", response_model=ItemsOut[RoleOut])
-def list_roles(
+async def list_roles(
     project_id: Optional[str] = Query(None),
-    db: Session = Depends(get_db),
+    repo: RoleRepository = Depends(get_role_repo),
 ) -> dict:
-    items = svc.list_roles(db, project_id=project_id)
-    return {"items": items}
+    # async：Pyodide 不支持线程，sync def 端点在 workers 运行时经 anyio.to_thread 失败。
+    # （步骤 5 已统一 async 化全部 workers 可达端点，静态扫描测试
+    #  tests/unit/test_workers_async_deps.py 锁死回归。）
+    return {"items": repo.list(project_id=project_id)}
 
 
 @router.post("/roles", response_model=RoleOut, status_code=201)
-def create_role(payload: RoleIn, db: Session = Depends(get_db)) -> RoleOut:
+async def create_role(payload: RoleIn, repo: RoleRepository = Depends(get_role_repo)) -> RoleOut:
     try:
-        role = svc.create_role(db, payload)
-        db.commit()
+        return repo.create(payload)
     except ValueError as exc:
-        db.rollback()
         if str(exc) == "role_already_exists":
             raise HTTPException(status_code=409, detail="role_already_exists") from exc
         raise
-    return svc.role_to_out(role)
 
 
 @router.put("/roles/{role_id}", response_model=RoleOut)
-def update_role(role_id: str, payload: RoleUpdate, db: Session = Depends(get_db)) -> RoleOut:
-    role = svc.update_role(db, role_id, payload)
+async def update_role(
+    role_id: str,
+    payload: RoleUpdate,
+    repo: RoleRepository = Depends(get_role_repo),
+) -> RoleOut:
+    role = repo.update(role_id, payload)
     if role is None:
         raise HTTPException(status_code=404, detail="role_not_found")
-    db.commit()
-    db.refresh(role)
-    return svc.role_to_out(role)
+    return role
 
 
 @router.delete("/roles/{role_id}", status_code=204)
-def delete_role(role_id: str, db: Session = Depends(get_db)) -> None:
-    if not svc.delete_role(db, role_id):
+async def delete_role(role_id: str, repo: RoleRepository = Depends(get_role_repo)) -> None:
+    if not repo.delete(role_id):
         raise HTTPException(status_code=404, detail="role_not_found")
-    db.commit()
     return None

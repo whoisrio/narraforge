@@ -9,8 +9,13 @@ GET  /model-config/schema     — 获取配置 schema（前端渲染表单用）
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Dict
-from sqlalchemy.orm import Session
+from typing import Any, Dict
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 
 from app.core.database import get_db
 from app.core.model_config_service import (
@@ -30,7 +35,7 @@ class ProviderConfigUpdate(BaseModel):
 
 
 @router.get("")
-def get_model_configs(db: Session = Depends(get_db)):
+async def get_model_configs(db: Session = Depends(get_db)):
     """
     获取所有模型提供商的配置。
 
@@ -48,7 +53,7 @@ def get_model_configs(db: Session = Depends(get_db)):
 
 
 @router.get("/public-key")
-def get_public_key():
+async def get_public_key():
     """
     获取 RSA 公钥 (PEM 格式)。
     前端用此公钥加密敏感字段后再提交，防止明文传输。
@@ -58,13 +63,13 @@ def get_public_key():
 
 
 @router.get("/schema")
-def get_model_config_schema():
+async def get_model_config_schema():
     """获取配置 schema（不含实际值），用于前端动态渲染表单"""
     return get_config_schema()
 
 
 @router.put("/{provider}")
-def update_model_config(
+async def update_model_config(
     provider: str,
     data: ProviderConfigUpdate,
     db: Session = Depends(get_db),

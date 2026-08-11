@@ -11,11 +11,35 @@ The `.env` file supports `${ENV_VAR}` and `${ENV_VAR:-default}` syntax for refer
 | `APP_NAME` | No | Application display name | `NarraForge` |
 | `DEBUG` | No | Enable debug mode | `true` |
 
+## Deployment (Cloudflare Workers)
+
+These variables select the deploy target and control workers-only behavior.
+In Workers deployments they are set via `backend/wrangler.toml` `[vars]` (non-sensitive) and `wrangler secret put` / `.dev.vars` (secrets), not via `.env`.
+See `docs/RUNBOOK.md` → "Cloudflare Workers Deployment".
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `DEPLOY_TARGET` | No | `local` (full routes, SQLite, local models) or `workers` (online routes only: Cloudflare Workers paid tier, or Render free tier under CPython) | `local` |
+| `ACCESS_ENFORCEMENT` | No | Workers mode only: require the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access (401 `access_required` otherwise). `/health` and OPTIONS preflight are exempt. Never enabled in local mode. | `true` |
+| `CORS_ORIGINS` | No | Workers mode only: comma-separated allowed CORS origins (set to the Pages domain at deploy time). Local mode always uses `*`. | `*` |
+| `ASSET_STORE_BACKEND` | No | Binary asset store backend: `auto` (local mode → local FS; workers mode → R2 if a binding is injected, else Supabase Storage), or explicit `local` / `r2` / `supabase` | `auto` |
+| `LOG_TO_FILE` | No | Write logs to `logs/app.log`. Set `false` in Workers (no writable persistent FS) and Render (ephemeral FS, log to stdout). | `true` |
+
 ## Database
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `DATABASE_URL` | No | SQLAlchemy database connection string | `sqlite:///./voice_clone.db` |
+
+## Supabase (workers deploy target only)
+
+Required only when `DEPLOY_TARGET=workers`: the workers runtime has no raw sockets, so persistence goes through Supabase PostgREST over HTTPS instead of SQLAlchemy/SQLite. The service key must stay server-side (Workers secrets). Table DDL lives in `backend/supabase/schema.sql`.
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `SUPABASE_URL` | Yes (workers) | Supabase project URL (`https://<project>.supabase.co`) | *(empty)* |
+| `SUPABASE_SERVICE_KEY` | Yes (workers) | Supabase service_role key (server-side only) | *(empty)* |
+| `SUPABASE_STORAGE_BUCKET` | Yes (workers, no R2) | Supabase Storage bucket for binary assets (clone samples / preview audio) when no R2 binding exists (e.g. Render). Created by the `storage.buckets` insert at the end of `backend/supabase/schema.sql` (private bucket). | `voice-assets` |
 
 ## Qwen / CosyVoice API (Voice Cloning)
 

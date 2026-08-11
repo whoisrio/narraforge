@@ -17,6 +17,7 @@ describe('ProjectSettings', () => {
         chapterCount={2}
         projectDescription="给 DeepSeek 视频做旁白"
         exportDirectory="public/audio"
+        underscoreToSpace={true}
         onRenameProject={onRenameProject}
         onUpdateRemotionPath={onUpdateRemotionPath}
         onUpdateProjectMeta={onUpdateProjectMeta}
@@ -31,17 +32,20 @@ describe('ProjectSettings', () => {
     expect(screen.getByText('2 章')).toBeInTheDocument();
     expect(screen.getByLabelText('项目描述')).toHaveValue('给 DeepSeek 视频做旁白');
     expect(screen.getByLabelText('默认导出目录')).toHaveValue('public/audio');
+    expect(screen.getByLabelText('合成时把下划线转为空格')).toBeChecked();
 
     fireEvent.change(screen.getByLabelText('项目名称'), { target: { value: '正式项目' } });
     fireEvent.change(screen.getByLabelText('Remotion 项目路径'), { target: { value: '/Users/rio/video' } });
     fireEvent.change(screen.getByLabelText('项目描述'), { target: { value: '新版项目描述' } });
     fireEvent.change(screen.getByLabelText('默认导出目录'), { target: { value: 'public/narration' } });
+    fireEvent.click(screen.getByLabelText('合成时把下划线转为空格'));
     fireEvent.click(screen.getByRole('button', { name: /返回总览/ }));
 
     expect(onRenameProject).toHaveBeenCalledWith('正式项目');
     expect(onUpdateRemotionPath).toHaveBeenCalledWith('/Users/rio/video');
     expect(onUpdateProjectMeta).toHaveBeenCalledWith({ description: '新版项目描述' });
     expect(onUpdateProjectMeta).toHaveBeenCalledWith({ export_directory: 'public/narration' });
+    expect(onUpdateProjectMeta).toHaveBeenCalledWith({ underscore_to_space: false });
     expect(onBackToOverview).toHaveBeenCalled();
   });
 });

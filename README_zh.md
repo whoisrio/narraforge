@@ -95,7 +95,7 @@ python -m venv .venv
 # Windows: .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 
-uv sync
+uv sync --extra local-ml --extra local-services
 cp .env.example .env   # 编辑填入 API Key
 
 uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload

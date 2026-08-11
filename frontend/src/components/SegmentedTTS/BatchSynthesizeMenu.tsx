@@ -7,9 +7,11 @@ export type BatchSynthesizeMode = 'unsynthesized' | 'all';
 interface BatchSynthesizeMenuProps {
   disabled?: boolean;
   onSelect: (mode: BatchSynthesizeMode) => void;
+  /** 触发按钮文案；默认「批量合成」，一键制作全本复用本组件时传「一键制作全本」 */
+  label?: string;
 }
 
-export function BatchSynthesizeMenu({ disabled, onSelect }: BatchSynthesizeMenuProps) {
+export function BatchSynthesizeMenu({ disabled, onSelect, label }: BatchSynthesizeMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -31,7 +33,7 @@ export function BatchSynthesizeMenu({ disabled, onSelect }: BatchSynthesizeMenuP
         disabled={disabled}
         onClick={(e) => { e.stopPropagation(); setOpen(!open); }}
       >
-        ⚡ {t('studio.batchSynthesize')} ▾
+        ⚡ {label ?? t('studio.batchSynthesize')} ▾
       </button>
       {open && (
         <div className={styles.menu} onClick={(e) => e.stopPropagation()}>

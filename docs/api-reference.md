@@ -797,6 +797,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/api/config/capabilities` | 部署目标能力清单（workers 模式隐藏本地专属能力用） |
 | GET | `/api/config/storage-mode` | 获取存储模式 |
 | PUT | `/api/config/storage-mode` | 设置存储模式 |
 | GET | `/api/config/animation-root` | 获取全局 Remotion 脚手架根目录 |
@@ -808,6 +809,12 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | GET | `/api/model-config` | 获取所有提供商配置 |
 | PUT | `/api/model-config/{provider}/{field}` | 更新配置值 |
 | POST | `/api/model-config/{provider}/{field}/clear` | 清除配置值 |
+
+### 部署能力 (`/api/config/capabilities`)
+
+`GET /api/config/capabilities` 返回 `{ deploy_target, engines, clone_engines, features: { speech_to_text, agent_workflow, backend_storage } }`。
+workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `mimo`、features 全 `false`；local 全量。
+事实源为 `backend/app/core/deploy_capabilities.py`，前端镜像在 `frontend/src/services/capabilities.ts`。
 
 ### 存储模式
 
@@ -954,6 +961,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 | `configs.description` | string | — | 项目描述（UI 展示） |
 | `configs.export_directory` | string | — | 导出目录。绝对路径（含 `~`）时独立于 Remotion 直接使用；相对路径则相对于 `remotion_project_path`，默认 `public/audio` |
 | `configs.split_voice_mode` | string | — | 拆分默认模式：`narration` \| `dialogue` |
+| `configs.underscore_to_space` | boolean | — | 项目级全局开关：TTS 合成时把下划线 `_` 替换为空格（只影响合成文本，显示/字幕保持原文）；与章节级 `params.underscore_to_space` 任一开启即生效 |
 | `chapters` | array | `[]` | 章节列表 |
 
 ### ChapterIn Schema
@@ -997,6 +1005,10 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
   "generated_at": null
 }
 ```
+
+> 注：分片音频为嵌套对象 `audio: {format, current: {path, duration_sec, origin, file_exists}, previous: {…}, duration_sec}`。
+> `audio.current.file_exists`（bool）由后端在 `get_project_detail` 序列化时按 `segmented_dir/rel` 实时 stat 计算，
+> 用于前端识别「DB 有 path 但 mp3 已丢失」的脱节段（避免 UI 假「ready」）。
 
 #### 角色 / 局部语气字段（P3）
 
@@ -1072,6 +1084,11 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 - `force`：默认 `false`。
   当分片 `audio.current.origin === 'recorded'`（用户自行录入的音频，处于锁定状态）时，未带 `force` 的请求会被跳过（返回 200 且音频不变）；`force: true` 才重新合成，录入音频降级为 `audio.previous` 供撤销。
+- `params.underscore_to_space`：默认 `false`。
+  为 `true` 时，传入 TTS 引擎前把文本中的下划线 `_` 替换为空格（有些引擎会把下划线读出来）。
+  项目级全局开关 `configs.underscore_to_space`（项目设置）与此参数任一开启即生效。
+  转换是瞬态的：分片显示文本、字幕导出与历史记录均保持原文。
+  在 `prepare_text_for_engine` 中于风格 tag 适配之后执行。
 
 **Response:** 完整 `ProjectDetail` 对象。
 
@@ -1121,7 +1138,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 **错误:**
 - `404 project_not_found`
 - `409 export_directory_not_configured`（detail 为 `{code, message}`，A8 信封）
-- `409 chapters_incomplete`（detail 为 `{code, message, chapters: ["章节名", ...]}`）
+- `409 chapters_incomplete`（detail 为 `{code, message, chapters: ["章节名", ...], missing_counts: {"章节名": 缺音频分片数}}`；任一分片音频文件缺失即整体中止，不写任何文件）
 - `422` ffmpeg 不可用 / 拼接失败
 
 ### GET `/api/segmented-projects/{id}/chapters/{cid}/sync-status`

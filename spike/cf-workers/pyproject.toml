@@ -1,0 +1,15 @@
+[project]
+name = "narraforge-cf-workers-spike"
+version = "0.1.0"
+description = "Spike: can NarraForge's slimmed FastAPI backend run on Cloudflare Workers Python?"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "httpx",
+]
+
+[dependency-groups]
+dev = [
+    "workers-py",
+    "workers-runtime-sdk",
+]

@@ -118,3 +118,35 @@ describe('VoiceStudioLayout', () => {
     expect(transport).toHaveStyle({ right: 'calc(var(--studio-right-panel-width) + 28px)' });
   });
 });
+
+  it('renders 一键制作全本 dropdown when onProduceAll is provided and wires mode', () => {
+    const onProduceAll = vi.fn();
+    render(
+      <VoiceStudioLayout
+        segmentCount={5}
+        generatedCount={2}
+        durationSec={30}
+        remotionPath={null}
+        onExport={vi.fn()}
+        onProduceAll={onProduceAll}
+        onSidebarCollapseChange={vi.fn()}
+        sidebarContent={<section>side</section>}
+      >
+        <div>content</div>
+      </VoiceStudioLayout>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '展开工具栏' }));
+    fireEvent.click(screen.getByRole('button', { name: /一键制作全本/ }));
+    fireEvent.click(screen.getByText('仅合成未合成'));
+    expect(onProduceAll).toHaveBeenCalledWith('unsynthesized');
+
+    fireEvent.click(screen.getByRole('button', { name: /一键制作全本/ }));
+    fireEvent.click(screen.getByText('重新合成全部'));
+    expect(onProduceAll).toHaveBeenCalledWith('all');
+  });
+
+  it('hides 一键制作全本 when onProduceAll is absent', () => {
+    renderStudio();
+    fireEvent.click(screen.getByRole('button', { name: '展开工具栏' }));
+    expect(screen.queryByRole('button', { name: /一键制作全本/ })).not.toBeInTheDocument();
+  });

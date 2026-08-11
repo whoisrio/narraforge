@@ -1,4 +1,6 @@
 // Voice Profile (cloned voices)
+import { apiUrl } from '../services/apiBase';
+
 export interface VoiceEngine {
   type: string;           // 'CosyVoice' | 'Mimo' | 'VoxCpm' | 'EdgeTTS'
   sub_type?: string | null;  // 'mimo-clone' | 'mimo-design' | 'voxcpm-clone' | 'voxcpm-ultimate' | 'voxcpm-design'
@@ -28,10 +30,10 @@ export interface VoiceProfile {
 
 /** Construct audio URL for a voice profile preview or source audio */
 export function voicePreviewAudioUrl(voiceId: string): string {
-  return `/api/clone/audio/${voiceId}?field=preview`;
+  return apiUrl(`/clone/audio/${voiceId}?field=preview`);
 }
 export function voiceSourceAudioUrl(voiceId: string): string {
-  return `/api/clone/audio/${voiceId}?field=source`;
+  return apiUrl(`/clone/audio/${voiceId}?field=source`);
 }
 
 export interface VoiceProfileVoice {
@@ -60,6 +62,8 @@ export interface EdgeTTSParams {
   voice_id?: string;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export interface MiMoParams {
@@ -70,6 +74,8 @@ export interface MiMoParams {
   voice_description?: string;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export interface CosyVoiceParams {
@@ -85,6 +91,8 @@ export interface CosyVoiceParams {
   enable_markdown_filter?: boolean;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export interface VoxCPMParams {
@@ -98,6 +106,8 @@ export interface VoxCPMParams {
   inference_timesteps?: number;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams;
@@ -120,6 +130,8 @@ export interface SegmentAudioEntry {
   duration_sec?: number;
   /** 'recorded' 表示用户自录入音频（录音/上传），该片段被锁定、跳过 TTS 合成 */
   origin?: 'tts' | 'recorded';
+  /** backend 模式下后端返回：该 path 指向的 mp3 是否真在磁盘。false=文件丢失(db/fs 脱节)。 */
+  file_exists?: boolean;
 }
 
 export interface SegmentAudio {
@@ -482,6 +494,8 @@ export interface Chapter {
   /** Order within the project (0-based, matches array index). Backend trusts this on save. */
   position?: number;
   original_text?: string;
+  /** L2 重写旁白稿（chapter 级，后端 SegmentedProjectChapter.narration_script）；优先于 original_text 作为切分/合成来源。 */
+  narration_script?: string | null;
   design_title?: string;
   /** Post-synthesis adjust params currently applied (null/undefined = 未调整) */
   audio_adjust?: AudioAdjustRecord | null;
@@ -529,6 +543,8 @@ export interface SegmentedProject {
     export_directory?: string | null;
     /** 拆分时默认用旁白/对话模式 */
     split_voice_mode?: 'narration' | 'dialogue';
+    /** 项目级全局开关：TTS 合成时把下划线转为空格（不影响显示/字幕） */
+    underscore_to_space?: boolean | null;
     [key: string]: unknown;
   } | null;
   created_at: string;

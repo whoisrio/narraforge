@@ -1,24 +1,45 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import Any, List, Optional
+
+# workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
+try:
+    from sqlalchemy.orm import Session
+except ImportError:  # workers bundle
+    Session = Any  # type: ignore[assignment,misc]
 from pathlib import Path
 import tempfile
 
 from app.core.database import get_db
+from app.core.config import settings
+from app.core.deploy_capabilities import get_capabilities
+from app.core.repositories.deps import get_system_config_repo
+from app.core.repositories.system_configs import SystemConfigRepository
 from app.core.system_config_service import (
     get_storage_mode,
     set_storage_mode,
     STORAGE_MODE_BACKEND,
     STORAGE_MODE_FRONTEND,
-    get_animation_root_folder,
-    set_animation_root_folder,
+    ANIMATION_ROOT_FOLDER_KEY,
+    NARRATION_GIT_REMOTE_KEY,
+    normalize_animation_root_folder,
     get_narration_git_remote,
-    set_narration_git_remote,
 )
-from app.models import TTSConfig, ModelProvider, Emotion
+# workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
+try:
+    from app.models import TTSConfig, ModelProvider, Emotion
+except ImportError:  # workers bundle
+    TTSConfig = ModelProvider = Emotion = None  # type: ignore[assignment,misc]
 
 router = APIRouter()
+
+
+@router.get("/capabilities")
+async def get_capabilities_endpoint(request: Request):
+    """部署目标能力清单（spec 第 4 节）：前端据此隐藏/禁用本地专属能力。
+    无需 DB，workers 模式同样可用（config 路由两种模式都挂载）。"""
+    target = getattr(request.app.state, "deploy_target", None) or settings.deploy_target
+    return get_capabilities(target)
 
 
 class ConfigCreate(BaseModel):
@@ -42,7 +63,7 @@ class ConfigUpdate(BaseModel):
 
 
 @router.get("/models")
-def list_configs(db: Session = Depends(get_db)):
+async def list_configs(db: Session = Depends(get_db)):
     """获取模型配置列表"""
     configs = db.query(TTSConfig).all()
     items = [
@@ -63,7 +84,7 @@ def list_configs(db: Session = Depends(get_db)):
 
 
 @router.post("/models")
-def create_config(data: ConfigCreate, db: Session = Depends(get_db)):
+async def create_config(data: ConfigCreate, db: Session = Depends(get_db)):
     """创建模型配置"""
     config = TTSConfig(
         name=data.name,
@@ -92,7 +113,7 @@ def create_config(data: ConfigCreate, db: Session = Depends(get_db)):
 
 
 @router.put("/models/{config_id}")
-def update_config(config_id: str, data: ConfigUpdate, db: Session = Depends(get_db)):
+async def update_config(config_id: str, data: ConfigUpdate, db: Session = Depends(get_db)):
     """更新模型配置"""
     config = db.query(TTSConfig).filter(TTSConfig.id == config_id).first()
     if not config:
@@ -129,7 +150,7 @@ def update_config(config_id: str, data: ConfigUpdate, db: Session = Depends(get_
 
 
 @router.delete("/models/{config_id}")
-def delete_config(config_id: str, db: Session = Depends(get_db)):
+async def delete_config(config_id: str, db: Session = Depends(get_db)):
     """删除模型配置"""
     config = db.query(TTSConfig).filter(TTSConfig.id == config_id).first()
     if not config:
@@ -142,7 +163,7 @@ def delete_config(config_id: str, db: Session = Depends(get_db)):
 
 
 @router.post("/models/{config_id}/set-default")
-def set_default_config(config_id: str, db: Session = Depends(get_db)):
+async def set_default_config(config_id: str, db: Session = Depends(get_db)):
     """设为默认配置"""
     # 取消其他默认
     db.query(TTSConfig).update({"is_default": False})
@@ -166,23 +187,24 @@ class StorageModeRequest(BaseModel):
 
 
 @router.get("/storage-mode")
-def get_storage_mode_endpoint(db: Session = Depends(get_db)):
+async def get_storage_mode_endpoint(db: Session = Depends(get_db)):
     """获取当前存储模式"""
     mode = get_storage_mode(db)
     return {"storage_mode": mode}
 
 
 @router.put("/storage-mode")
-def set_storage_mode_endpoint(data: StorageModeRequest, db: Session = Depends(get_db)):
-    """设置存储模式"""
+async def set_storage_mode_endpoint(data: StorageModeRequest, db: Session = Depends(get_db)):
+    """设置存储模式。workers 模式忽略写入，始终返回 frontend。"""
     if data.storage_mode not in (STORAGE_MODE_BACKEND, STORAGE_MODE_FRONTEND):
         raise HTTPException(
             status_code=400,
             detail=f"Invalid storage_mode: {data.storage_mode}. Must be 'backend' or 'frontend'"
         )
     set_storage_mode(db, data.storage_mode)
-    db.commit()
-    return {"storage_mode": data.storage_mode}
+    if db is not None:
+        db.commit()
+    return {"storage_mode": get_storage_mode(db)}
 
 
 # ---------------------------------------------------------------------------
@@ -212,24 +234,26 @@ def _probe_animation_root(value: str) -> tuple[bool, str | None]:
 
 
 @router.get("/animation-root")
-def get_animation_root_endpoint(db: Session = Depends(get_db)):
+async def get_animation_root_endpoint(repo: SystemConfigRepository = Depends(get_system_config_repo)):
     """获取全局 Remotion 脚手架根目录。"""
-    return {"value": get_animation_root_folder(db)}
+    return {"value": repo.get(ANIMATION_ROOT_FOLDER_KEY).strip() or None}
 
 
 @router.put("/animation-root")
-def set_animation_root_endpoint(data: AnimationRootRequest, db: Session = Depends(get_db)):
+async def set_animation_root_endpoint(
+    data: AnimationRootRequest,
+    repo: SystemConfigRepository = Depends(get_system_config_repo),
+):
     """设置全局 Remotion 脚手架根目录（校验可创建且可写）。"""
     ok, error = _probe_animation_root(data.value)
     if not ok:
         raise HTTPException(status_code=422, detail=error)
-    set_animation_root_folder(db, data.value)
-    db.commit()
-    return {"value": get_animation_root_folder(db)}
+    repo.set(ANIMATION_ROOT_FOLDER_KEY, normalize_animation_root_folder(data.value))
+    return {"value": repo.get(ANIMATION_ROOT_FOLDER_KEY).strip() or None}
 
 
 @router.post("/animation-root/test")
-def test_animation_root_endpoint(data: AnimationRootRequest):
+async def test_animation_root_endpoint(data: AnimationRootRequest):
     """探测路径可用性但不保存。"""
     ok, error = _probe_animation_root(data.value)
     return {"ok": ok, "error": error}
@@ -245,22 +269,27 @@ class GitRemoteRequest(BaseModel):
 
 
 @router.get("/narration-git-remote")
-def get_git_remote_endpoint(db: Session = Depends(get_db)):
+async def get_git_remote_endpoint(repo: SystemConfigRepository = Depends(get_system_config_repo)):
     """获取 narration git 远端地址。"""
-    return {"value": get_narration_git_remote(db)}
+    return {"value": repo.get(NARRATION_GIT_REMOTE_KEY).strip() or None}
 
 
 @router.put("/narration-git-remote")
-def set_git_remote_endpoint(data: GitRemoteRequest, db: Session = Depends(get_db)):
+async def set_git_remote_endpoint(
+    data: GitRemoteRequest,
+    repo: SystemConfigRepository = Depends(get_system_config_repo),
+):
     """设置 narration git 远端地址（空字符串 = 清除，只本地 commit）。"""
-    set_narration_git_remote(db, data.value)
-    db.commit()
-    return {"value": get_narration_git_remote(db)}
+    repo.set(NARRATION_GIT_REMOTE_KEY, data.value.strip())
+    return {"value": repo.get(NARRATION_GIT_REMOTE_KEY).strip() or None}
 
 
 @router.post("/narration-git/snapshot")
-def narration_git_snapshot_endpoint(db: Session = Depends(get_db)):
-    """手动触发一次 narration 快照（序列化 + commit），remote 已配则 push。"""
+async def narration_git_snapshot_endpoint(db: Session = Depends(get_db)):
+    """手动触发一次 narration 快照（序列化 + commit），remote 已配则 push。
+    narration 版本化是本地能力（git + 文件系统），workers 模式不可用。"""
+    if settings.deploy_target == "workers":
+        raise HTTPException(status_code=501, detail="narration_versioning_local_only")
     from app.services.narration_versioning.job import snapshot_all
 
     remote = get_narration_git_remote(db)

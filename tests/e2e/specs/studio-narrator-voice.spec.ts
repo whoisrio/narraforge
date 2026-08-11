@@ -70,11 +70,12 @@ test.describe('旁白音色设置', () => {
     const voiceSelect = page.locator('aside select').first();
     await expect(voiceSelect).toBeVisible({ timeout: 5_000 });
     const options = await voiceSelect.locator('option').all();
-    // Pick a different option than what is currently selected
-    const selectedOption = options.length > 1 ? options[1] : options[0];
+    // 选 mimo_tts(option[2]):preset 模式自带默认 voice_id('冰糖'),能通过 validateChapter。
+    // cosyvoice(option[1])需手动选 voice_id,否则 POST validateChapter 报 cosyvoice requires voice_id。
+    const selectedOption = options.length > 2 ? options[2] : options[0];
     const selectedEngine = await selectedOption.evaluate((el) => (el as HTMLOptionElement).value);
-    if (options.length > 1) {
-      await voiceSelect.selectOption({ index: 1 });
+    if (options.length > 2) {
+      await voiceSelect.selectOption({ index: 2 });
     }
 
     // ── Step 3: PRE-COMMIT — UI shows new selection, IndexedDB unchanged ──
@@ -101,7 +102,7 @@ test.describe('旁白音色设置', () => {
     await page.getByRole('button', { name: '应用' }).click();
 
     // Verify confirmation dialog appears
-    await expect(page.getByText(/将当前旁白音色应用到/)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByText(/将当前旁白音色应用/)).toBeVisible({ timeout: 5_000 });
 
     // Confirm (button label is "应用" — use .nth(1) to get the dialog button, not the sidebar button)
     await page.getByRole('button', { name: '应用' }).nth(1).click();
