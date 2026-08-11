@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { modelConfigApi } from '../services/api';
 import type { ModelConfigs, ModelConfigFieldValue } from '../types';
 import { useTranslation } from '../i18n';
@@ -50,8 +50,13 @@ export function ModelConfig() {
     else toast.success(message);
   }, [toast]);
 
-  // 加载配置
+  // 加载配置：每次挂载只拉取一次。t/showToast 理论上引用稳定，但历史上
+  // 不稳定上下文（ToastProvider 未 memo，#53）曾使此 effect 以 ~200/s 狂刷
+  // GET /model-config——用 ref 兜底，依赖抖动也不会重复发请求。
+  const loadedRef = useRef(false);
   useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
     modelConfigApi.getAll().then(data => {
       setConfigs(data);
       const states: Record<string, ProviderEditState> = {};
