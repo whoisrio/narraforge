@@ -573,6 +573,20 @@ export const textAnalysisApi = {
   },
 };
 
+/** chapters:batch 的响应：分配的章节/segment id + 复用统计（preserve_audio/split_segments 开启时） */
+export interface BatchReuseReport {
+  chapters_matched: number;
+  segments_matched: number;
+  segments_reused: number;
+  segments_new: number;
+  per_chapter: { chapter_id: string; title: string; matched: number; reused: number; new: number }[];
+}
+
+export interface BatchCreateChaptersResult {
+  chapters: { id: string; segments: { id: string }[] }[];
+  reuse?: BatchReuseReport | null;
+}
+
 export const segmentedProjectApi = {
   synthesizeSegment: async (
     projectId: string,
@@ -708,12 +722,23 @@ export const segmentedProjectApi = {
   },
   batchCreateChapters: async (
     projectId: string,
-    chapters: { chapter_title: string; narration_script?: string; original_text?: string }[],
+    chapters: {
+      chapter_title: string;
+      narration_script?: string;
+      original_text?: string;
+      split_config?: { delimiters?: string[]; mode?: string };
+    }[],
     narrationScript?: string,
-  ): Promise<{ chapters: { id: string; segments: { id: string }[] }[] }> => {
-    const { data } = await api.post<{ chapters: { id: string; segments: { id: string }[] }[] }>(
+    options?: { preserveAudio?: boolean; splitSegments?: boolean },
+  ): Promise<BatchCreateChaptersResult> => {
+    const { data } = await api.post<BatchCreateChaptersResult>(
       `/segmented-projects/${projectId}/chapters:batch`,
-      { chapters, narration_script: narrationScript ?? null },
+      {
+        chapters,
+        narration_script: narrationScript ?? null,
+        preserve_audio: options?.preserveAudio ?? false,
+        split_segments: options?.splitSegments ?? false,
+      },
     );
     return data;
   },

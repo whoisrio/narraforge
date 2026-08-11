@@ -293,6 +293,8 @@ export function TTSSynthesis({
         return;
       }
 
+      const loadedFromServer = storageMode === 'backend' && !!full;
+
       // 后端模式没有项目时，创建临时项目不保存；前端模式用 scratchpad
       if (!full) {
         if (storageMode === 'frontend') {
@@ -302,6 +304,8 @@ export function TTSSynthesis({
           full.name = t('common.draftProject');
         }
       }
+      // sync-status 轮询基线：只有服务端返回的章节才已落库
+      setServerChapterIds(loadedFromServer ? (full.chapters ?? []).map((c) => c.id) : []);
       const localDraft = await getDraft(full.id);
       console.log('[TTSSynthesis] draft check:', { projectId: full.id, hasDraft: !!localDraft, dirty: localDraft?.dirty, base_updated_at: localDraft?.base_updated_at, project_updated_at: full.updated_at });
       // 时间容差：2 秒内视为同一版本，避免亚秒级时间差误判冲突
@@ -406,7 +410,14 @@ export function TTSSynthesis({
   }, [project.id]);
 
   const projectStorage: SegmentedProjectStorage = storageMode === 'backend' ? backendStorage : indexedDBStorage;
-  const draftSync = useSegmentedDraftSync(project?.id ?? null, { storage: projectStorage });
+  // 后端已落库的章节 id 集合：sync-status 轮询只针对这些章节，
+  // 内存态默认章节（空项目首次打开时注入）未落库，查询会 404 刷 console 噪音。
+  const [serverChapterIds, setServerChapterIds] = useState<string[]>([]);
+  const draftSync = useSegmentedDraftSync(project?.id ?? null, {
+    storage: projectStorage,
+    // 自动保存成功后，当前内存章节全部已落库
+    onSaved: (saved) => setServerChapterIds(saved.chapters.map((c) => c.id)),
+  });
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
   const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: ProjectDraftRecord } | null>(null);
@@ -581,6 +592,8 @@ export function TTSSynthesis({
     if (!project?.id) return;
     const p = await projectStorage.getProject(project.id);
     if (!p) return;
+    // sync-status 轮询基线：后端模式下服务端返回的章节才已落库
+    setServerChapterIds(storageMode === 'backend' ? (p.chapters ?? []).map((c) => c.id) : []);
     const migrated = migrateV1(p, t);
     // SELECT_CHAPTER intentionally doesn't bump updated_at (autosave skips it),
     // so the backend's active_chapter_id may be stale — the in-memory selection
@@ -1725,6 +1738,7 @@ export function TTSSynthesis({
           projectName={project.name}
           projectSubtitle={isScratchpadProject ? t('tts.quickDraft') : t('tts.projectChaptered')}
           projectId={project.id}
+          serverChapterIds={serverChapterIds}
           activeSection={projectSection}
           onProjectChanged={() => { void reloadProjectData(); }}
           chapterName={activeChapter.name}

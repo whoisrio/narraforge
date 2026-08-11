@@ -55,6 +55,11 @@ from app.services.animation_spec_codec import (
     _parse_animation_spec,
 )
 from app.services.text_split_service import rule_split
+from app.services.batch_reuse import (
+    build_reuse_index,
+    new_reuse_report,
+    normalize_chapter_title,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,8 +79,9 @@ class SegmentedProjectRepository(Protocol):
     def save_project(self, project: ProjectIn) -> ProjectDetail: ...
     def delete_project(self, project_id: str) -> bool: ...
     def batch_create_structure(
-        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None
-    ) -> list[dict[str, Any]]: ...  # LookupError("project_not_found")
+        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
+        *, preserve_audio: bool = False, split_segments: bool = False,
+    ) -> dict[str, Any]: ...  # LookupError("project_not_found"); {"chapters": [...], "reuse": report|None}
     def apply_animation_spec(
         self, project_id: str, theme: str | None, items: list[dict[str, Any]]
     ) -> dict[str, Any]: ...  # LookupError(f"project_not_found: {id}")
@@ -114,9 +120,13 @@ class LocalSegmentedProjectRepository:
         return svc.delete_project(self._db, project_id)
 
     def batch_create_structure(
-        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None
-    ) -> list[dict[str, Any]]:
-        return svc.batch_create_structure(self._db, project_id, chapters, narration_script)
+        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
+        *, preserve_audio: bool = False, split_segments: bool = False,
+    ) -> dict[str, Any]:
+        return svc.batch_create_structure(
+            self._db, project_id, chapters, narration_script,
+            preserve_audio=preserve_audio, split_segments=split_segments,
+        )
 
     def apply_animation_spec(
         self, project_id: str, theme: str | None, items: list[dict[str, Any]]
@@ -502,8 +512,9 @@ class SupabaseSegmentedProjectRepository:
     # ----- batch（agent split_segment 节点 / 前端批量建结构） -----
 
     def batch_create_structure(
-        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None
-    ) -> list[dict[str, Any]]:
+        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
+        *, preserve_audio: bool = False, split_segments: bool = False,
+    ) -> dict[str, Any]:
         now = utcnow().isoformat()
         if not self.project_exists(project_id):
             raise LookupError("project_not_found")
@@ -514,6 +525,26 @@ class SupabaseSegmentedProjectRepository:
             )
 
         old_chapters = self._list_chapter_rows(project_id)
+
+        # 复用索引（纯行级匹配；workers 模式不管理音频文件，路径直接沿承）
+        old_index: dict[str, dict[str, Any]] = {}
+        if preserve_audio or split_segments:
+            old_seg_rows = self._list_segment_rows([c["id"] for c in old_chapters])
+            segs_by_chapter: dict[str, list[dict]] = {}
+            for s in old_seg_rows:
+                segs_by_chapter.setdefault(s["chapter_id"], []).append(s)
+            old_index = build_reuse_index(
+                [
+                    {
+                        "name": c.get("name"),
+                        "voice": c.get("voice"),
+                        "split_config": c.get("split_config"),
+                        "segments": segs_by_chapter.get(c["id"], []),
+                    }
+                    for c in old_chapters
+                ]
+            )
+
         # default voice：第一个现有章节，或 edge_tts 默认（对齐 svc）
         default_voice = dict(_DEFAULT_VOICE)
         if old_chapters:
@@ -532,19 +563,42 @@ class SupabaseSegmentedProjectRepository:
             )
             self._client.delete(CHAPTERS, params={"project_id": f"eq.{project_id}"})
 
+        reuse_report = new_reuse_report() if (preserve_audio or split_segments) else None
+
         result: list[dict[str, Any]] = []
         ch_rows: list[dict[str, Any]] = []
         seg_rows: list[dict[str, Any]] = []
         for index, ch_data in enumerate(chapters):
             chapter_id = str(uuid.uuid4())
             title = ch_data.get("chapter_title", f"Chapter {index + 1}")
-            voice = dict(default_voice)
+            snapshot = old_index.get(normalize_chapter_title(title))
+            # 章节级沿承：匹配章节的 voice 优先于默认；split_config payload >
+            # 匹配章节 > 默认。
+            voice = dict(snapshot["voice"]) if snapshot and snapshot["voice"] else dict(default_voice)
             engine = ch_data.get("engine")
             if engine:
                 voice["engine"] = engine
+            if ch_data.get("split_config"):
+                split_config = dict(ch_data["split_config"])
+            elif snapshot and snapshot["split_config"]:
+                split_config = dict(snapshot["split_config"])
+            else:
+                split_config = dict(_DEFAULT_SPLIT_CONFIG)
+
+            seg_payloads = ch_data.get("segments") or []
+            if split_segments and not seg_payloads:
+                body = ch_data.get("narration_script") or ch_data.get("original_text") or ""
+                delimiters = split_config.get("delimiters") or _DEFAULT_SPLIT_CONFIG["delimiters"]
+                seg_payloads = [{"text": t} for t in rule_split(body, delimiters)]
+
+            if reuse_report is not None and snapshot:
+                reuse_report["chapters_matched"] += 1
+            ch_matched = 0
+            ch_reused = 0
+
             seg_result = []
             new_segs = []
-            for position, seg_data in enumerate(ch_data.get("segments", [])):
+            for position, seg_data in enumerate(seg_payloads):
                 seg_id = str(uuid.uuid4())
                 row = {
                     "id": seg_id,
@@ -558,8 +612,43 @@ class SupabaseSegmentedProjectRepository:
                     "created_at": now,
                     "updated_at": now,
                 }
+                matched = None
+                if preserve_audio and snapshot is not None:
+                    pool = snapshot["segments"].get((seg_data["text"] or "").strip())
+                    if pool:
+                        matched = pool.popleft()
+                if matched is not None:
+                    ch_matched += 1
+                    if row["emotion"] is None and matched["emotion"]:
+                        row["emotion"] = matched["emotion"]
+                    if matched["role_id"]:
+                        row["role_id"] = matched["role_id"]
+                    if matched["voice"]:
+                        row["voice"] = matched["voice"]
+                    if matched["audio"]:
+                        row["audio"] = matched["audio"]
+                        if matched["generated_params"]:
+                            row["generated_params"] = matched["generated_params"]
+                        if matched["generated_at"]:
+                            row["generated_at"] = matched["generated_at"]
+                        ch_reused += 1
                 new_segs.append(row)
                 seg_result.append({"id": seg_id})
+
+            if reuse_report is not None:
+                reuse_report["segments_matched"] += ch_matched
+                reuse_report["segments_reused"] += ch_reused
+                reuse_report["segments_new"] += len(seg_result) - ch_reused
+                reuse_report["per_chapter"].append(
+                    {
+                        "chapter_id": chapter_id,
+                        "title": title,
+                        "matched": ch_matched,
+                        "reused": ch_reused,
+                        "new": len(seg_result) - ch_reused,
+                    }
+                )
+
             # layer-sync：L2/L3 同批产出 → 三层基线一次性快照（mark_consistent）
             stand_in, seg_ns = _chapter_stand_in(
                 {
@@ -578,7 +667,7 @@ class SupabaseSegmentedProjectRepository:
                 "position": index,
                 "name": title,
                 "voice": voice,
-                "split_config": dict(_DEFAULT_SPLIT_CONFIG),
+                "split_config": split_config,
                 "original_text": ch_data.get("original_text"),
                 "narration_script": ch_data.get("narration_script"),
                 "sync_state": stand_in.sync_state,
@@ -591,7 +680,7 @@ class SupabaseSegmentedProjectRepository:
             self._client.insert(CHAPTERS, ch_rows)
         if seg_rows:
             self._client.insert(SEGMENTS, seg_rows)
-        return result
+        return {"chapters": result, "reuse": reuse_report}
 
     # ----- animation spec -----
 

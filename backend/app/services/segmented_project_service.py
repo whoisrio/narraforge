@@ -1353,18 +1353,81 @@ def mark_silent_segments_as_missing(
     }
 
 
+# ----- batch reuse helpers (preserve_audio / split_segments) ---------------
+
+# 纯匹配逻辑（标题规范化/复用索引）在 app.services.batch_reuse——workers 模式
+# 的 supabase 仓储也用它，不能留在含 sqlalchemy 的本模块里被直接复用。
+from app.services.batch_reuse import build_reuse_index, normalize_chapter_title
+
+
+def _delete_audio_files_from_snapshot(audio: dict[str, Any]) -> None:
+    """按快照里的存储路径删除 current/previous 音频文件（不重建路径）。"""
+    for slot in ("current", "previous"):
+        entry = audio.get(slot)
+        if isinstance(entry, dict) and isinstance(entry.get("path"), str):
+            assets.delete_audio_file(entry["path"])
+
+
+def _move_reused_audio(
+    project_id: str,
+    chapter_id: str,
+    project_name: str | None,
+    new_segment_id: str,
+    audio: dict[str, Any],
+) -> dict[str, Any] | None:
+    """把复用的 current 音频文件 move 到新 segment 的规范路径。
+
+    返回更新路径后的 audio dict；文件缺失返回 None（调用方按未复用处理）；
+    move 失败保留旧路径（旧文件未 GC，路径仍有效）。
+    """
+    current = audio.get("current")
+    if not isinstance(current, dict) or not isinstance(current.get("path"), str):
+        return None
+    old_abs = Path(current["path"])
+    if not old_abs.is_absolute():
+        old_abs = assets.settings.segmented_dir / old_abs
+    if not old_abs.exists():
+        return None
+    fmt = current.get("format") or audio.get("format") or old_abs.suffix.lstrip(".") or "mp3"
+    new_abs = assets.segment_audio_path(
+        project_id, chapter_id,
+        project_name=project_name, segment_id=new_segment_id, fmt=fmt,
+    )
+    new_abs.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.replace(old_abs, new_abs)
+    except OSError:
+        try:
+            shutil.move(str(old_abs), str(new_abs))
+        except OSError:
+            logger.warning("reuse audio move failed, keep old path: %s", old_abs)
+            return audio
+    current["path"] = new_abs.relative_to(assets.settings.segmented_dir).as_posix()
+    return audio
+
+
 def batch_create_structure(
     db: Session,
     project_id: str,
     chapters: list[dict[str, Any]],
     narration_script: str | None = None,
-) -> list[dict[str, Any]]:
+    *,
+    preserve_audio: bool = False,
+    split_segments: bool = False,
+) -> dict[str, Any]:
     """Replace all chapters+segments of a project in one transaction.
 
     Resolves default voice from the project's first existing chapter
     (or edge_tts default), deletes existing chapters, creates the new
-    structure, and returns assigned ids. ``narration_script``（workflow 产出
-    的完整旁白稿）写入项目级字段；None 表示不更新。
+    structure, and returns ``{"chapters": [...assigned ids...], "reuse": report|None}``.
+    ``narration_script``（workflow 产出的完整旁白稿）写入项目级字段；None 表示不更新。
+
+    ``preserve_audio``：重拆前快照旧章节（按规范化标题匹配），新 segment 文本
+    与旧 segment 一致时沿承其 audio/generated_params/emotion/role_id/voice，
+    并把音频文件 move 到新规范路径；未被复用的旧音频文件在重建后 GC。
+    ``split_segments``：payload 章节未自带 segments 时，按该章最终 split_config
+    的 delimiters 用 rule_split 直接拆分（mode=="llm" 的章节在此同样走规则
+    拆分——批量场景不做逐章 LLM 调用）。
     """
     project = db.query(SegmentedProject).filter_by(id=project_id).first()
     if project is None:
@@ -1376,6 +1439,32 @@ def batch_create_structure(
             project_name=project.name, text=narration_script,
         )
 
+    # 删除前快照旧结构（标题匹配键 -> 章节快照），供沿承/复用
+    old_index: dict[str, dict[str, Any]] = {}
+    if preserve_audio or split_segments:
+        old_index = build_reuse_index(
+            [
+                {
+                    "name": ch.name,
+                    "voice": ch.voice,
+                    "split_config": ch.split_config,
+                    "segments": [
+                        {
+                            "text": s.text,
+                            "emotion": s.emotion,
+                            "role_id": s.role_id,
+                            "voice": s.voice,
+                            "audio": s.audio,
+                            "generated_params": s.generated_params,
+                            "generated_at": s.generated_at,
+                        }
+                        for s in ch.segments
+                    ],
+                }
+                for ch in project.chapters
+            ]
+        )
+
     # default voice: from first existing chapter, or edge_tts default
     default_voice = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
     if project.chapters:
@@ -1385,18 +1474,36 @@ def batch_create_structure(
         elif ch_voice.get("voice_id") and ch_voice.get("engine") in ("cosyvoice", "mimo_tts", "voxcpm"):
             default_voice = ch_voice
 
-    # delete existing chapters (cascade deletes segments) and clean up their
-    # generated audio files on disk so re-splitting does not orphan assets.
+    # delete existing chapters (cascade deletes segments). preserve_audio 时
+    # 音频文件延迟清理：重建匹配完成后只删未被复用的（复用的已 move 走）。
     for ch in list(project.chapters):
-        for seg in list(ch.segments):
-            _delete_segment_audio_files(seg)
+        if not preserve_audio:
+            for seg in list(ch.segments):
+                _delete_segment_audio_files(seg)
         db.delete(ch)
     db.flush()
+
+    from app.services.text_split_service import rule_split
+
+    chapters_matched = 0
+    segments_matched = 0
+    segments_reused = 0
+    segments_new = 0
+    per_chapter: list[dict[str, Any]] = []
 
     result = []
     for index, ch_data in enumerate(chapters):
         title = ch_data.get("chapter_title", f"Chapter {index + 1}")
-        chapter = create_chapter_for_project(db, project_id, title, index, voice=default_voice)
+        snapshot = old_index.get(normalize_chapter_title(title))
+
+        # 章节级沿承：匹配章节的 voice/split_config 优先于默认；payload 显式
+        # split_config 最优先。
+        base_voice = copy.deepcopy(snapshot["voice"]) if snapshot and snapshot["voice"] else default_voice
+        chapter = create_chapter_for_project(db, project_id, title, index, voice=base_voice)
+        if ch_data.get("split_config"):
+            chapter.split_config = copy.deepcopy(ch_data["split_config"])
+        elif snapshot and snapshot["split_config"]:
+            chapter.split_config = copy.deepcopy(snapshot["split_config"])
         chapter.narration_script = ch_data.get("narration_script")
         chapter.original_text = ch_data.get("original_text")
         engine = ch_data.get("engine")
@@ -1404,21 +1511,93 @@ def batch_create_structure(
             voice = dict(chapter.voice or {})
             voice["engine"] = engine
             chapter.voice = voice
+
+        seg_payloads = ch_data.get("segments") or []
+        if split_segments and not seg_payloads:
+            body = ch_data.get("narration_script") or ch_data.get("original_text") or ""
+            delimiters = (chapter.split_config or {}).get(
+                "delimiters", ["，", "。", "！", "？", "；"]
+            )
+            seg_payloads = [{"text": t} for t in rule_split(body, delimiters)]
+
+        if snapshot:
+            chapters_matched += 1
+        ch_matched = 0
+        ch_reused = 0
+
         seg_result = []
-        for seg_data in ch_data.get("segments", []):
+        for seg_data in seg_payloads:
             seg = create_segment_for_chapter(
                 db, chapter.id, seg_data["text"], len(seg_result),
                 emotion=seg_data.get("emotion"), role=seg_data.get("role"),
                 segment_kind=seg_data.get("segment_kind", "narration"),
             )
+            matched = None
+            if preserve_audio and snapshot is not None:
+                pool = snapshot["segments"].get((seg_data["text"] or "").strip())
+                if pool:
+                    matched = pool.popleft()
+            if matched is not None:
+                ch_matched += 1
+                if seg.emotion is None and matched["emotion"]:
+                    seg.emotion = matched["emotion"]
+                if seg.role_id is None and matched["role_id"]:
+                    seg.role_id = matched["role_id"]
+                if matched["voice"]:
+                    seg.voice = copy.deepcopy(matched["voice"])
+                if matched["audio"]:
+                    moved = _move_reused_audio(
+                        project_id, chapter.id, project.name, seg.id,
+                        copy.deepcopy(matched["audio"]),
+                    )
+                    if moved is not None:
+                        seg.audio = moved
+                        if matched["generated_params"]:
+                            seg.generated_params = copy.deepcopy(matched["generated_params"])
+                        if matched["generated_at"] is not None:
+                            seg.generated_at = matched["generated_at"]
+                        ch_reused += 1
             seg_result.append({"id": seg.id})
+
+        segments_matched += ch_matched
+        segments_reused += ch_reused
+        ch_new = len(seg_result) - ch_reused
+        segments_new += ch_new
+        per_chapter.append(
+            {
+                "chapter_id": chapter.id,
+                "title": title,
+                "matched": ch_matched,
+                "reused": ch_reused,
+                "new": ch_new,
+            }
+        )
+
         # layer-sync: this chapter is freshly derived (L2 from L1) and split
         # (L3 from L2) in one go -> snapshot all three hashes as the baseline.
         from app.services.layer_sync_service import mark_consistent
         mark_consistent(chapter)
         result.append({"id": chapter.id, "segments": seg_result})
+
+    # GC：未被复用的旧 segment 音频文件（复用的 current 已 move 走）
+    if preserve_audio:
+        for snap in old_index.values():
+            for pool in snap["segments"].values():
+                for leftover in pool:
+                    if leftover["audio"]:
+                        _delete_audio_files_from_snapshot(leftover["audio"])
+
     db.commit()
-    return result
+    reuse_report = None
+    if preserve_audio or split_segments:
+        reuse_report = {
+            "chapters_matched": chapters_matched,
+            "segments_matched": segments_matched,
+            "segments_reused": segments_reused,
+            "segments_new": segments_new,
+            "per_chapter": per_chapter,
+        }
+    return {"chapters": result, "reuse": reuse_report}
 
 
 def adjust_chapter_audio(

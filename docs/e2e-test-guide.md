@@ -44,7 +44,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs (56 tests, all Chinese locale) |
+| `tests/e2e/specs/` | Automated browser E2E specs (57 tests, all Chinese locale) |
 | `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
 | `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
 | `tests/e2e/global-setup.ts` | Seed data before all tests |
@@ -53,7 +53,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 ```text
 tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (56 tests)
+├── specs/                  ← Automated Playwright browser specs (57 tests)
 ├── fixtures/               ← Stable E2E input fixtures (audio, images)
 ├── helpers/                ← Shared utilities
 │   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)

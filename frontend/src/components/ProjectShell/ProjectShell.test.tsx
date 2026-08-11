@@ -1,7 +1,8 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ProjectShell } from './ProjectShell';
 import type { ProduceAllRun } from '../../services/produceAll';
+import { segmentedProjectApi } from '../../services/api';
 import { ToastProvider } from '../ui/Toast';
 import { ConfirmProvider } from '../ui/Confirm';
 
@@ -296,5 +297,35 @@ describe('ProjectShell', () => {
     );
 
     expect(screen.queryByTestId('produce-all-progress')).not.toBeInTheDocument();
+  });
+
+  it('polls sync-status only for server-persisted chapters when serverChapterIds is provided', async () => {
+    const getSyncStatus = vi.mocked(segmentedProjectApi.getSyncStatus);
+    getSyncStatus.mockClear();
+    const mkChapter = (id: string, name: string) => ({
+      id, name, segments: [],
+      voice: { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' },
+      split_config: { delimiters: ['。'], mode: 'rule' },
+      created_at: '2026-01-01', updated_at: '2026-01-01',
+    });
+    render(
+      <ProjectShell
+        projectName="草稿项目"
+        projectId="p1"
+        activeSection="studio"
+        locale="zh-CN"
+        chapterName="第一章"
+        chapters={[mkChapter('ch-1', '第一章'), mkChapter('ch-local', '内存默认章')]}
+        serverChapterIds={['ch-1']}
+        activeChapterId="ch-local"
+        onSectionChange={vi.fn()}
+      >
+        <div>Studio content</div>
+      </ProjectShell>,
+    );
+
+    // ch-1 已落库：批量轮询会查；ch-local 未落库：批量与 active 轮询都跳过
+    await waitFor(() => expect(getSyncStatus).toHaveBeenCalledWith('p1', 'ch-1'));
+    expect(getSyncStatus).not.toHaveBeenCalledWith('p1', 'ch-local');
   });
 });

@@ -88,4 +88,27 @@ describe('useSegmentedDraftSync', () => {
     const draft = await getDraft('p1');
     expect(draft?.dirty).toBe(false);
   });
+
+  it('onSaved fires after a successful flush with the saved project', async () => {
+    const onSaved = vi.fn();
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, onSaved }),
+    );
+    const proj = makeProject('p1');
+    await act(async () => { await result.current.markDirty(proj); });
+    await act(async () => { await result.current.flush(); });
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalledWith(proj);
+  });
+
+  it('onSaved does not fire when the save fails', async () => {
+    const onSaved = vi.fn();
+    storageCalls.save.mockRejectedValueOnce(new Error('boom'));
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, onSaved }),
+    );
+    await act(async () => { await result.current.markDirty(makeProject('p1')); });
+    await act(async () => { await result.current.flush(); });
+    expect(onSaved).not.toHaveBeenCalled();
+  });
 });

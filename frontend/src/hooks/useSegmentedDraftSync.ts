@@ -13,20 +13,24 @@ export interface DraftSyncOptions {
   storage: SegmentedProjectStorage;
   /** Debounce delay; default 1000ms. Set to 0 or low value in tests. */
   debounceMs?: number;
+  /** 草稿成功写入后端后回调（用于同步"已落库章节集合"等派生状态）。 */
+  onSaved?: (project: SegmentedProject) => void;
 }
 
 export function useSegmentedDraftSync(projectId: string | null, options: DraftSyncOptions) {
-  const { storage, debounceMs = DEBOUNCE_MS } = options;
+  const { storage, debounceMs = DEBOUNCE_MS, onSaved } = options;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   // Stash projectId/storage in refs so the timer callback always reads current values
   const projectIdRef = useRef(projectId);
   const storageRef = useRef(storage);
+  const onSavedRef = useRef(onSaved);
 
   useEffect(() => {
     projectIdRef.current = projectId;
     storageRef.current = storage;
-  }, [projectId, storage]);
+    onSavedRef.current = onSaved;
+  }, [projectId, storage, onSaved]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -52,6 +56,7 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
       };
       await putDraft(next);
       dirtyRef.current = false;
+      onSavedRef.current?.(rec.draft);
     } catch (error: unknown) {
       const next: ProjectDraftRecord = {
         ...rec,

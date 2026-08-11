@@ -274,6 +274,26 @@ The Library organizes project content into two tabs:
 - **Full-text view**: All chapters concatenated, react-markdown rendered
 - **Chapter editor**: Single-chapter immersive editor with edit/preview toggle
 
+#### Chapter Split (按标题拆分章节)
+
+The Narration Document tab header and the full-text view both offer "按标题拆分章节" (`ChapterSplitModal`).
+Flow: `markdown-detect` probes heading levels → user picks levels → `markdown-split` previews → apply calls `chapters:batch`, which replaces all chapters in one transaction.
+Applied chapter titles get a zero-padded numeric prefix (`01. …`) matching the chapter card badges.
+Chapters shorter than 80 chars (`min_chars`) are merged into the next chapter by `markdown-split`.
+
+**"同时拆分 segment" option** (`split_segments`):
+when checked, chapters without payload segments are split server-side by `rule_split` using the chapter's effective `split_config.delimiters`.
+Rule precedence: explicit payload `split_config` > carried-over `split_config` of the title-matched old chapter > default (`，。！？；`).
+Chapters whose stored mode is `llm` still split by rule in this batch path (no per-chapter LLM calls).
+
+**Audio preservation on re-split** (`preserve_audio`, sent automatically when the project already has chapters):
+old chapters are matched by normalized title (leading `01.` numbering ignored, so inserting a chapter mid-document still matches), and within a matched chapter new segments are matched to old segments by exact stripped text, each old segment consumed at most once.
+A matched segment carries over its `audio`, `generated_params`, `emotion`, `role_id`, and `voice` override — including `origin="recorded"` self-recordings.
+In local storage mode the audio file is moved to the new chapter/segment canonical path; unreused old files are garbage-collected after the rebuild, and a missing on-disk file means no reuse.
+The response `reuse` report (`segments_reused` / `segments_new` / per-chapter breakdown) is surfaced as a toast after apply.
+In workers (Supabase) mode the same matching applies at row level; audio objects are not file-managed there, so stored refs carry over as-is.
+Agent workflow calls never pass these flags — their behavior is unchanged.
+
 ### 4.6 Voices — Role Management
 
 The Voices section manages narrator and cast roles:
@@ -305,6 +325,7 @@ When in the Studio sidebar, each engine has specific voice source restrictions:
 - IndexedDB as draft cache with `base_updated_at` for conflict detection
 - 2000ms tolerance: only triggers conflict when backend `updated_at` exceeds local by >2 seconds
 - Initial load does not trigger `markDirty` to prevent false conflicts
+- Chapter sync-status badges poll only backend-persisted chapters: the page tracks the server-known chapter id set (from GET on load/reload, expanded to all in-memory chapters after each successful autosave via the draft-sync `onSaved` callback), and `ProjectShell` skips polling for in-memory-only chapters — e.g. the default chapter injected when opening an empty project — which would otherwise 404 and spam the console.
 
 ---
 
