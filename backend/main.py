@@ -115,18 +115,6 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
         allow_headers=["*"],
     )
 
-    # TEMP 诊断：定位 GET /api/model-config 洪泛调用来源（诊断完成后删除）
-    @app.middleware("http")
-    async def _log_model_config_caller(request: Request, call_next):
-        if request.url.path.rstrip("/") == "/api/model-config":
-            logging.getLogger("diag").info(
-                "[diag] model-config caller: ua=%s referer=%s origin=%s",
-                request.headers.get("user-agent"),
-                request.headers.get("referer"),
-                request.headers.get("origin"),
-            )
-        return await call_next(request)
-
     if is_local:
         @app.on_event("startup")
         def startup():
