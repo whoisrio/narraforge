@@ -3,7 +3,6 @@ import logging.handlers
 import os
 import re
 import sys
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -119,12 +118,16 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
         @app.on_event("startup")
         def startup():
             init_db()
-            from app.services.narration_versioning.scheduler import start as _start_versioning_scheduler
+            from app.services.narration_versioning.scheduler import (
+                start as _start_versioning_scheduler,
+            )
             _start_versioning_scheduler()
 
         @app.on_event("shutdown")
         def shutdown():
-            from app.services.narration_versioning.scheduler import shutdown as _stop_versioning_scheduler
+            from app.services.narration_versioning.scheduler import (
+                shutdown as _stop_versioning_scheduler,
+            )
             _stop_versioning_scheduler()
 
     # 注：必须 async——Pyodide 不支持线程，sync def 端点在 workers 运行时
@@ -198,7 +201,19 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     # Import and include routers
     # 注意：speech_to_text / voxcpm 模块间接 import faster_whisper/torch，
     # workers 模式连 import 都不能发生，故 import 放在条件分支内。
-    from app.api import clone, tts, config, mimo_tts, subtitle_llm, model_config, text_split, text_analysis, segmented_projects, sources, roles
+    from app.api import (
+        clone,
+        config,
+        mimo_tts,
+        model_config,
+        roles,
+        segmented_projects,
+        sources,
+        subtitle_llm,
+        text_analysis,
+        text_split,
+        tts,
+    )
     if is_local:
         from app.api import speech_to_text, voxcpm
 
