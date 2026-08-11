@@ -207,12 +207,17 @@ class BatchChapterIn(BaseModel):
     narration_script: str | None = None
     original_text: str | None = None
     engine: str | None = None
+    split_config: dict[str, Any] | None = None
     segments: list[BatchSegmentIn] = []
 
 
 class BatchRequest(BaseModel):
     chapters: list[BatchChapterIn]
     narration_script: str | None = None
+    # 重拆时保留文本未变 segment 的已合成音频（章节按标题匹配，忽略前导序号）
+    preserve_audio: bool = False
+    # payload 章节未自带 segments 时，按各章最终 split_config 的 delimiters 规则拆分
+    split_segments: bool = False
 
 
 class BatchSegmentOut(BaseModel):
@@ -226,6 +231,8 @@ class BatchChapterOut(BaseModel):
 
 class BatchResponse(BaseModel):
     chapters: list[BatchChapterOut]
+    # preserve_audio/split_segments 开启时的复用统计；否则为 None
+    reuse: dict[str, Any] | None = None
 
 
 @router.post(
@@ -242,14 +249,17 @@ async def batch_create_chapters(
             project_id,
             [c.model_dump() for c in body.chapters],
             narration_script=body.narration_script,
+            preserve_audio=body.preserve_audio,
+            split_segments=body.split_segments,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="project_not_found")
     return BatchResponse(
         chapters=[
             BatchChapterOut(id=c["id"], segments=[BatchSegmentOut(id=s["id"]) for s in c["segments"]])
-            for c in result
-        ]
+            for c in result["chapters"]
+        ],
+        reuse=result.get("reuse"),
     )
 
 

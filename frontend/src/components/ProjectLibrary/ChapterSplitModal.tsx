@@ -8,6 +8,7 @@ import {
   type MarkdownSplitResponse,
 } from '../../services/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useToast } from '../ui/useToast';
 import styles from './ChapterSplitModal.module.css';
 
 interface ChapterSplitModalProps {
@@ -42,6 +43,7 @@ function numberedTitle(index: number, title: string): string {
  */
 export function ChapterSplitModal({ projectId, fullText, existingChapterCount, onClose, onApplied }: ChapterSplitModalProps) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [phase, setPhase] = useState<Phase>('detecting');
   const [error, setError] = useState<string | null>(null);
   const [detect, setDetect] = useState<MarkdownDetectResponse | null>(null);
@@ -49,6 +51,7 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
   const [preview, setPreview] = useState<MarkdownSplitResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmReplace, setConfirmReplace] = useState(false);
+  const [splitSegments, setSplitSegments] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -112,7 +115,17 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
           original_text: body,
         };
       });
-      await segmentedProjectApi.batchCreateChapters(projectId, chapters, fullText);
+      // 重拆（已有章节）时保留文本未变 segment 的已合成音频
+      const result = await segmentedProjectApi.batchCreateChapters(projectId, chapters, fullText, {
+        preserveAudio: existingChapterCount > 0,
+        splitSegments,
+      });
+      if (result.reuse) {
+        toast.success(t('chapterSplit.reuseReport', {
+          reused: result.reuse.segments_reused,
+          fresh: result.reuse.segments_new,
+        }));
+      }
       onApplied();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -148,6 +161,18 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
                 ))}
                 <p className={styles.levelsHint}>{t('chapterSplit.levelsHint')}</p>
               </fieldset>
+              <fieldset className={styles.levels}>
+                <legend>{t('chapterSplit.options')}</legend>
+                <label className={styles.levelItem}>
+                  <input
+                    type="checkbox"
+                    checked={splitSegments}
+                    onChange={() => setSplitSegments((v) => !v)}
+                  />
+                  {t('chapterSplit.splitSegments')}
+                </label>
+                <p className={styles.levelsHint}>{t('chapterSplit.splitSegmentsHint')}</p>
+              </fieldset>
               <button
                 type="button"
                 className={styles.secondaryBtn}
@@ -175,6 +200,7 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, o
               {preview && existingChapterCount > 0 && (
                 <p className={styles.warning}>
                   {t('chapterSplit.replaceWarning', { count: existingChapterCount })}
+                  {' '}{t('chapterSplit.preserveHint')}
                 </p>
               )}
             </>

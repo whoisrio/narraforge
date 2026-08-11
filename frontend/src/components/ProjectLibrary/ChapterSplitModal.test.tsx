@@ -8,6 +8,7 @@ vi.mock('../../i18n', () => ({
 const markdownDetect = vi.fn();
 const markdownSplit = vi.fn();
 const batchCreateChapters = vi.fn();
+const toastSuccess = vi.fn();
 
 vi.mock('../../services/api', () => ({
   textSplitApi: {
@@ -17,6 +18,10 @@ vi.mock('../../services/api', () => ({
   segmentedProjectApi: {
     batchCreateChapters: (...a: unknown[]) => batchCreateChapters(...a),
   },
+}));
+
+vi.mock('../ui/useToast', () => ({
+  useToast: () => ({ success: toastSuccess, error: vi.fn(), info: vi.fn() }),
 }));
 
 afterEach(() => cleanup());
@@ -101,7 +106,44 @@ describe('ChapterSplitModal', () => {
     expect(chapters[1].original_text).toBe('内容二。');
     // 项目级 narration_script 仍是完整文档
     expect(narrationScript).toBe(FULL_TEXT);
+    // 已有章节 -> preserveAudio；未勾选拆分 segment
+    expect(batchCreateChapters.mock.calls[0][3]).toEqual({ preserveAudio: true, splitSegments: false });
     await waitFor(() => expect(onApplied).toHaveBeenCalled());
+  });
+
+  it('splitSegments checkbox sends splitSegments and reports reuse via toast', async () => {
+    markdownDetect.mockResolvedValue(DETECT);
+    markdownSplit.mockResolvedValue(SPLIT);
+    batchCreateChapters.mockResolvedValue({
+      chapters: [],
+      reuse: { chapters_matched: 1, segments_matched: 2, segments_reused: 2, segments_new: 3, per_chapter: [] },
+    });
+    render(<ChapterSplitModal {...baseProps} />);
+    fireEvent.click(await screen.findByText('chapterSplit.preview'));
+    await screen.findByText('01. 第一章');
+
+    fireEvent.click(screen.getByText('chapterSplit.splitSegments'));
+    fireEvent.click(screen.getByText('chapterSplit.apply'));
+    fireEvent.click(await screen.findByRole('button', { name: 'chapterSplit.confirmLabel' }));
+
+    await waitFor(() => expect(batchCreateChapters).toHaveBeenCalled());
+    expect(batchCreateChapters.mock.calls[0][3]).toEqual({ preserveAudio: true, splitSegments: true });
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith(
+      'chapterSplit.reuseReport:{"reused":2,"fresh":3}',
+    ));
+  });
+
+  it('apply with no existing chapters does not preserve audio', async () => {
+    markdownDetect.mockResolvedValue(DETECT);
+    markdownSplit.mockResolvedValue(SPLIT);
+    batchCreateChapters.mockResolvedValue({ chapters: [] });
+    render(<ChapterSplitModal {...baseProps} existingChapterCount={0} />);
+    fireEvent.click(await screen.findByText('chapterSplit.preview'));
+    await screen.findByText('01. 第一章');
+
+    fireEvent.click(screen.getByText('chapterSplit.apply'));
+    await waitFor(() => expect(batchCreateChapters).toHaveBeenCalled());
+    expect(batchCreateChapters.mock.calls[0][3]).toEqual({ preserveAudio: false, splitSegments: false });
   });
 
   it('apply with no existing chapters replaces directly without confirm', async () => {

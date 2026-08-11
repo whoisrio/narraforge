@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useMemo, useCallback, type ReactNode } from 'react';
 import { useTranslation, projectNavItems } from '../../i18n';
 import type { Chapter } from '../../types';
 import type { ProduceAllRun } from '../../services/produceAll';
@@ -22,6 +22,9 @@ interface ProjectShellProps {
   generatedCount?: number;
   durationSec?: number;
   chapters?: Chapter[];
+  /** 后端已落库的章节 id；提供时 sync-status 只查询这些章节
+   * （内存态新章节未落库，查询会 404 刷 console 噪音）。 */
+  serverChapterIds?: string[];
   activeChapterId?: string;
   onSelectChapter?: (chapterId: string) => void;
   onAddChapter?: () => void;
@@ -63,6 +66,7 @@ export function ProjectShell({
   generatedCount = 0,
   durationSec = 0,
   chapters,
+  serverChapterIds,
   activeChapterId,
   onSelectChapter,
   onAddChapter,
@@ -89,37 +93,52 @@ export function ProjectShell({
 
   const chapterIds = (chapters ?? []).map((c) => c.id).join(',');
   const isScratchpad = projectId === '__scratchpad__';
+  // serverChapterIds 变化时更新匹配集合（数组 prop 每次渲染都是新引用，用 join  key 记忆化）
+  const serverIdsKey = serverChapterIds?.join(',');
+  const serverIdSet = useMemo(
+    () => (serverChapterIds ? new Set(serverChapterIds) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [serverIdsKey],
+  );
   // Fetch sync-status for every chapter when the project or chapter set changes.
-  // Skip the scratchpad draft (not backend-persisted; would 404).
+  // Skip the scratchpad draft (not backend-persisted; would 404) and, when the
+  // caller provides serverChapterIds, chapters not yet persisted to the backend
+  // (e.g. the in-memory default chapter of an empty project — would 404).
   useEffect(() => {
     if (!projectId || isScratchpad || !chapters || chapters.length === 0) return;
+    const eligible = serverIdSet ? chapters.filter((c) => serverIdSet.has(c.id)) : chapters;
+    if (eligible.length === 0) {
+      setSyncMap({});
+      return;
+    }
     let alive = true;
     Promise.all(
-      chapters.map((c) =>
+      eligible.map((c) =>
         segmentedProjectApi.getSyncStatus(projectId, c.id).catch(() => null),
       ),
     ).then((results) => {
       if (!alive) return;
       const next: Record<string, ChapterSyncStatus> = {};
-      chapters.forEach((c, i) => {
+      eligible.forEach((c, i) => {
         if (results[i]) next[c.id] = results[i]!;
       });
       setSyncMap(next);
     });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, chapterIds]);
+  }, [projectId, chapterIds, serverIdsKey]);
 
   // Refresh the active chapter's status when the user switches to it.
   useEffect(() => {
     if (!projectId || isScratchpad || !activeChapterId) return;
+    if (serverIdSet && !serverIdSet.has(activeChapterId)) return;
     let alive = true;
     segmentedProjectApi
       .getSyncStatus(projectId, activeChapterId)
       .then((st) => { if (alive) setSyncMap((prev) => ({ ...prev, [activeChapterId]: st })); })
       .catch(() => {});
     return () => { alive = false; };
-  }, [projectId, activeChapterId]);
+  }, [projectId, activeChapterId, isScratchpad, serverIdSet]);
 
   const refetchSyncStatus = useCallback(async (chapterId: string) => {
     if (!projectId) return;

@@ -219,6 +219,68 @@ class TestChaptersBatch:
         resp = client.post("/api/segmented-projects/nope/chapters:batch", json={"chapters": []})
         assert resp.status_code == 404
 
+    def test_batch_preserve_audio_reuses_identical_segment(self, workers_client):
+        """workers 模式：重拆时文本未变的 segment 沿承 audio（audio_id 引用）/generated_params/emotion。"""
+        client, _ = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-1", 0, "01. 介绍", [
+                _segment("seg-1", 0, "不变的一段。", emotion="calm",
+                         audio={"current": {"audio_id": "idb-1", "origin": "tts", "duration_sec": 1.0},
+                                "duration_sec": 1.0},
+                         generated_params={"engine": "edge_tts"}),
+                _segment("seg-2", 1, "旧的一段。",
+                         audio={"current": {"audio_id": "idb-2", "origin": "tts"}},
+                         generated_params={"engine": "edge_tts"}),
+            ], split_config={"delimiters": ["。"], "mode": "rule"}),
+        ])
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters:batch",
+            json={
+                "preserve_audio": True,
+                "chapters": [
+                    {"chapter_title": "02. 介绍",
+                     "segments": [{"text": "不变的一段。"}, {"text": "新的一段。"}]},
+                ],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        reuse = resp.json()["reuse"]
+        assert reuse["chapters_matched"] == 1  # 序号平移（01.->02.）仍匹配
+        assert reuse["segments_reused"] == 1
+        assert reuse["segments_new"] == 1
+
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        ch = detail["chapters"][0]
+        assert ch["split_config"] == {"delimiters": ["。"], "mode": "rule"}  # 沿承旧章规则
+        segs = ch["segments"]
+        assert segs[0]["audio"]["current"]["audio_id"] == "idb-1"
+        assert segs[0]["emotion"] == "calm"
+        assert segs[0]["generated_params"] == {"engine": "edge_tts"}
+        assert segs[1].get("audio") is None
+
+    def test_batch_split_segments_uses_matched_chapter_delimiters(self, workers_client):
+        """workers 模式 split_segments：按匹配章节的 split_config.delimiters 规则拆分。"""
+        client, _ = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-1", 0, "01. 旧章", [],
+                     split_config={"delimiters": ["。"], "mode": "rule"}),
+        ])
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters:batch",
+            json={
+                "split_segments": True,
+                "chapters": [
+                    {"chapter_title": "01. 旧章",
+                     "narration_script": "甲甲甲甲甲，乙乙。丙丙丙丙，丁丁。"},
+                ],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        ch = detail["chapters"][0]
+        assert [s["text"] for s in ch["segments"]] == ["甲甲甲甲甲，乙乙。", "丙丙丙丙，丁丁。"]
+
 
 class TestLayerSync:
     def _create_script_chapter(self, client):
