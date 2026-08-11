@@ -62,6 +62,8 @@ export interface EdgeTTSParams {
   voice_id?: string;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export interface MiMoParams {
@@ -72,6 +74,8 @@ export interface MiMoParams {
   voice_description?: string;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export interface CosyVoiceParams {
@@ -87,6 +91,8 @@ export interface CosyVoiceParams {
   enable_markdown_filter?: boolean;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export interface VoxCPMParams {
@@ -100,6 +106,8 @@ export interface VoxCPMParams {
   inference_timesteps?: number;
   /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
   mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
 }
 
 export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams;
@@ -535,6 +543,8 @@ export interface SegmentedProject {
     export_directory?: string | null;
     /** 拆分时默认用旁白/对话模式 */
     split_voice_mode?: 'narration' | 'dialogue';
+    /** 项目级全局开关：TTS 合成时把下划线转为空格（不影响显示/字幕） */
+    underscore_to_space?: boolean | null;
     [key: string]: unknown;
   } | null;
   created_at: string;

@@ -1008,6 +1008,9 @@ export const zhCN = {
     exportDir: '默认导出目录',
     exportDirHint: '相对于 Remotion 项目路径的目录，导出时会自动创建；未设置 Remotion 路径时可填绝对路径作为独立导出目录',
     exportDirPlaceholder: '如: out',
+    synthesis: '语音合成',
+    underscoreToSpace: '合成时把下划线转为空格',
+    underscoreToSpaceHint: '开启后，传给 TTS 引擎的文本中下划线会替换为空格（部分引擎会把下划线读出来）；显示文本与字幕保持原文。与章节侧栏的同名开关任一开启即生效。',
   },
   projectVoices: {
     roleSampleText: '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。',

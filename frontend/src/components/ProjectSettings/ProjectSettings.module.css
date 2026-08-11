@@ -129,6 +129,32 @@
   color: var(--color-text-primary);
 }
 
+.toggleField {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  cursor: pointer;
+}
+
+.toggleField input[type='checkbox'] {
+  width: auto;
+  accent-color: var(--color-primary);
+}
+
+.toggleField span {
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toggleHint {
+  margin: 8px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 @media (max-width: 900px) {
   .header,
   .grid {

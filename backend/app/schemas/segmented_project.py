@@ -248,6 +248,9 @@ class SynthesizeParams(BaseModel):
     # Style tags
     mute_tags: bool = False
 
+    # 合成前把下划线替换为空格（只影响合成文本，不影响显示/字幕）
+    underscore_to_space: bool = False
+
     # Metadata
     role_id: str | None = None
     segment_kind: str = "narration"

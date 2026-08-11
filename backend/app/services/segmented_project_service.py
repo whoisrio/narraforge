@@ -806,6 +806,10 @@ def synthesize_segment(
         style = sp.mimo_instruction or None
     elif sp.engine == "cosyvoice":
         style = sp.instruction or None
+    # 项目级全局开关（项目设置 configs.underscore_to_space）：
+    # 与请求/章节参数任一开启即生效；只影响合成文本，不影响显示/字幕
+    project_configs = chapter.project.configs if isinstance(chapter.project.configs, dict) else {}
+    underscore_to_space = bool(sp.underscore_to_space) or bool(project_configs.get("underscore_to_space"))
     text_to_speak = prepare_text_for_engine(
         text_to_speak,
         engine=sp.engine,
@@ -813,6 +817,7 @@ def synthesize_segment(
         style=style,
         voxcpm_mode=sp.voxcpm_mode if sp.engine == "voxcpm" else None,
         mute_tags=bool(sp.mute_tags),
+        underscore_to_space=underscore_to_space,
     )
 
     if not is_ffmpeg_available():

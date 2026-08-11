@@ -177,3 +177,24 @@ def test_prepare_unknown_engine_strips_everything():
 def test_prepare_no_emotion_no_style_keeps_text_for_leading_engine():
     out = prepare_text_for_engine("你好世界", engine="mimo_tts")
     assert out == "你好世界"
+
+
+# ----- underscore_to_space -----
+
+def test_prepare_underscore_to_space():
+    out = prepare_text_for_engine(
+        "你好_世界_测试", engine="edge_tts", underscore_to_space=True
+    )
+    assert out == "你好 世界 测试"
+
+
+def test_prepare_underscore_kept_by_default():
+    out = prepare_text_for_engine("你好_世界", engine="edge_tts")
+    assert out == "你好_世界"
+
+
+def test_prepare_underscore_to_space_applies_after_leading_tag():
+    out = prepare_text_for_engine(
+        "你好_世界", engine="mimo_tts", emotion="happy", underscore_to_space=True
+    )
+    assert out == "(开心)你好 世界"

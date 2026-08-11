@@ -961,6 +961,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | `configs.description` | string | — | 项目描述（UI 展示） |
 | `configs.export_directory` | string | — | 导出目录。绝对路径（含 `~`）时独立于 Remotion 直接使用；相对路径则相对于 `remotion_project_path`，默认 `public/audio` |
 | `configs.split_voice_mode` | string | — | 拆分默认模式：`narration` \| `dialogue` |
+| `configs.underscore_to_space` | boolean | — | 项目级全局开关：TTS 合成时把下划线 `_` 替换为空格（只影响合成文本，显示/字幕保持原文）；与章节级 `params.underscore_to_space` 任一开启即生效 |
 | `chapters` | array | `[]` | 章节列表 |
 
 ### ChapterIn Schema
@@ -1083,6 +1084,11 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 
 - `force`：默认 `false`。
   当分片 `audio.current.origin === 'recorded'`（用户自行录入的音频，处于锁定状态）时，未带 `force` 的请求会被跳过（返回 200 且音频不变）；`force: true` 才重新合成，录入音频降级为 `audio.previous` 供撤销。
+- `params.underscore_to_space`：默认 `false`。
+  为 `true` 时，传入 TTS 引擎前把文本中的下划线 `_` 替换为空格（有些引擎会把下划线读出来）。
+  项目级全局开关 `configs.underscore_to_space`（项目设置）与此参数任一开启即生效。
+  转换是瞬态的：分片显示文本、字幕导出与历史记录均保持原文。
+  在 `prepare_text_for_engine` 中于风格 tag 适配之后执行。
 
 **Response:** 完整 `ProjectDetail` 对象。
 

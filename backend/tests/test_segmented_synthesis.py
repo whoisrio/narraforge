@@ -192,7 +192,8 @@ def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkey
 
 def _run_synth_capture_text(db_session, tmp_path, monkeypatch, *,
                             chapter_voice, seg_text, seg_emotion,
-                            request_params=None, text_override=None):
+                            request_params=None, text_override=None,
+                            project_configs=None):
     """Seed p1/c1/s1, patch engine, return the text actually passed to the engine."""
     from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
@@ -201,6 +202,8 @@ def _run_synth_capture_text(db_session, tmp_path, monkeypatch, *,
     seg.chapter.voice = chapter_voice
     seg.text = seg_text
     seg.emotion = seg_emotion
+    if project_configs is not None:
+        seg.chapter.project.configs = project_configs
     db_session.commit()
 
     captured: dict[str, object] = {}
@@ -275,6 +278,38 @@ def test_synth_mute_tags_via_request_params(db_session, tmp_path, monkeypatch):
     )
     assert captured["text"] == "你好世界"
     assert captured["params"].mute_tags is True
+
+
+def test_synth_underscore_to_space_via_request_params(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好_世界", seg_emotion=None,
+        request_params={"underscore_to_space": True},
+    )
+    assert captured["text"] == "你好 世界"
+    assert captured["params"].underscore_to_space is True
+
+
+def test_synth_underscore_kept_when_flag_off(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好_世界", seg_emotion=None,
+    )
+    assert captured["text"] == "你好_世界"
+
+
+def test_synth_underscore_to_space_via_project_configs(db_session, tmp_path, monkeypatch):
+    # 项目级全局开关（项目设置）：configs.underscore_to_space=True 时，
+    # 即使 request params 不带该开关也生效
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好_世界", seg_emotion=None,
+        project_configs={"underscore_to_space": True},
+    )
+    assert captured["text"] == "你好 世界"
 
 
 def test_synth_text_override_also_cleaned(db_session, tmp_path, monkeypatch):

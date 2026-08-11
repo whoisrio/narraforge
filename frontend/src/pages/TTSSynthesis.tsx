@@ -130,6 +130,9 @@ export function TTSSynthesis({
   const [voxcpmInferenceTimesteps, setVoxcpmInferenceTimesteps] = useState(10);
   // 禁用风格 tag（随 chapter.voice 持久化，合成时透传后端 SynthesizeParams.mute_tags）
   const [muteTags, setMuteTags] = useState(false);
+  // 合成时把下划线转为空格（随 chapter.voice 持久化，透传 SynthesizeParams.underscore_to_space；
+  // 只影响合成语音，不影响显示/字幕文本）
+  const [underscoreToSpace, setUnderscoreToSpace] = useState(false);
 
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
 
@@ -416,6 +419,7 @@ export function TTSSynthesis({
     const engine = (v?.engine || 'edge_tts') as Engine;
     setEngine(engine);
     setMuteTags(v?.mute_tags ?? false);
+    setUnderscoreToSpace(v?.underscore_to_space ?? false);
     if (engine === 'edge_tts') {
       setEdgeVoice((v as EdgeTTSParams).voice || '');
       setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
@@ -488,13 +492,13 @@ export function TTSSynthesis({
   /** Build EngineParams from current global state */
   const buildCurrentParams = useCallback((): EngineParams => {
     if (engine === 'edge_tts') {
-      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume), mute_tags: muteTags } as EdgeTTSParams;
+      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume), mute_tags: muteTags, underscore_to_space: underscoreToSpace } as EdgeTTSParams;
     }
     if (engine === 'mimo_tts') {
-      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction, mute_tags: muteTags } as MiMoParams;
+      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction, mute_tags: muteTags, underscore_to_space: underscoreToSpace } as MiMoParams;
     }
     if (engine === 'voxcpm') {
-      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags } as VoxCPMParams;
+      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags, underscore_to_space: underscoreToSpace } as VoxCPMParams;
     }
     return {
       engine: 'cosyvoice', voice_id: selectedVoiceId,
@@ -502,8 +506,9 @@ export function TTSSynthesis({
       pitch: params.pitch ?? 1.0, language: params.language || 'Chinese',
       enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false,
       mute_tags: muteTags,
+      underscore_to_space: underscoreToSpace,
     };
-  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags]);
+  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags, underscoreToSpace]);
 
   // 构建当前全局音色的 VoiceRef（用于新创建的 segment）
   const buildGlobalVoiceRef = useCallback((): import('../types').VoiceRef => {
@@ -1059,6 +1064,8 @@ export function TTSSynthesis({
         const requestParams: Record<string, unknown> = { engine: effectiveEngine };
         // 禁用风格 tag：透传后端 SynthesizeParams.mute_tags（clone 音色建议开启）
         if (effectiveParams.mute_tags) requestParams.mute_tags = true;
+        // 下划线转空格：透传后端 SynthesizeParams.underscore_to_space
+        if (effectiveParams.underscore_to_space) requestParams.underscore_to_space = true;
         if (effectiveEngine === 'edge_tts') {
           requestParams.edge_voice = effectiveEdgeVoice;
           requestParams.edge_rate = effectiveEdgeRate;
@@ -1129,30 +1136,37 @@ export function TTSSynthesis({
         return;
       }
 
+      // frontend 存储模式直调引擎端点，不经过后端 prepare_text_for_engine，
+      // 下划线转空格在本地完成（只影响合成语音；seg.text、历史记录、字幕保持原文）。
+      // 章节开关（effectiveParams）与项目设置里的全局开关（project.configs）任一开启即生效；
+      // backend 存储模式由后端 synthesize_segment 做同样的 OR 兜底。
+      const underscoreToSpaceEffective = Boolean(effectiveParams.underscore_to_space) || Boolean(project.configs?.underscore_to_space);
+      const textForEngine = underscoreToSpaceEffective ? textToSend.replaceAll('_', ' ') : textToSend;
+
       if (effectiveEngine === 'edge_tts') {
-        resp = await ttsApi.synthesize({ text: textToSend, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
+        resp = await ttsApi.synthesize({ text: textForEngine, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
       } else if (effectiveEngine === 'mimo_tts') {
         if (finalMimoMode === 'voicedesign') {
-          resp = await mimoTtsApi.synthesizeVoiceDesign({ text: textToSend, voice_description: effectiveMimoVoiceDesc || '', format: 'wav' });
+          resp = await mimoTtsApi.synthesizeVoiceDesign({ text: textForEngine, voice_description: effectiveMimoVoiceDesc || '', format: 'wav' });
         } else if (finalMimoMode === 'voiceclone') {
-          resp = await mimoTtsApi.synthesizeVoiceClone({ text: textToSend, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
+          resp = await mimoTtsApi.synthesizeVoiceClone({ text: textForEngine, voice_id: effectiveMimoCloneId ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
         } else {
-          resp = await mimoTtsApi.synthesizePreset({ text: textToSend, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
+          resp = await mimoTtsApi.synthesizePreset({ text: textForEngine, voice: effectiveMimoPreset ?? '', instruction: effectiveMimoInstruction ?? '', format: 'wav' });
         }
       } else if (effectiveEngine === 'voxcpm') {
         if (finalVoxcpmMode === 'design') {
-          resp = await voxcpmApi.design({ voice_description: effectiveVoxcpmDesc, text: textToSend || undefined, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.design({ voice_description: effectiveVoxcpmDesc, text: textForEngine || undefined, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else if (finalVoxcpmMode === 'clone') {
-          resp = await voxcpmApi.clone({ text: textToSend, voice_id: voiceId ?? '', style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.clone({ text: textForEngine, voice_id: voiceId ?? '', style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else if (finalVoxcpmMode === 'ultimate') {
-          resp = await voxcpmApi.ultimateClone({ text: textToSend, voice_id: voiceId ?? '', prompt_text: finalVoxcpmPromptText, style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.ultimateClone({ text: textForEngine, voice_id: voiceId ?? '', prompt_text: finalVoxcpmPromptText, style_control: effectiveVoxcpmStyle, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         } else {
-          resp = await voxcpmApi.tts({ text: textToSend, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
+          resp = await voxcpmApi.tts({ text: textForEngine, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         }
       } else {
         // 原代码引用了未定义的 sp；按上下文恢复为 cosyvoice 的 effectiveParams（该分支原本会因 ReferenceError 崩溃）
         const sp = effectiveParams as CosyVoiceParams;
-        resp = await ttsApi.synthesize({ text: textToSend, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
+        resp = await ttsApi.synthesize({ text: textForEngine, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
       // Auto-trim leading/trailing silence:
@@ -1162,7 +1176,7 @@ export function TTSSynthesis({
       let fmt = resp.audio_format || 'mp3';
       try {
         const leadingKeepMs = 80;
-        const trailingKeepMs = endsWithSentencePeriod(textToSend) ? 100 : 80;
+        const trailingKeepMs = endsWithSentencePeriod(textForEngine) ? 100 : 80;
         const { base64: trimmedBase64, trimmedMs } = await trimBase64AudioSilence(resp.audio_base64, { leadingKeepMs, trailingKeepMs });
         if (trimmedMs > 0) {
           audioBase64 = trimmedBase64;
@@ -1829,6 +1843,14 @@ export function TTSSynthesis({
                       />
                       禁用风格 tag（clone 音色建议开启）
                     </label>
+                    <label className={styles.sidebarMuteTags} title="开启后传给 TTS 的文本中下划线会替换为空格，显示与字幕保持原文">
+                      <input
+                        type="checkbox"
+                        checked={underscoreToSpace}
+                        onChange={e => setUnderscoreToSpace(e.target.checked)}
+                      />
+                      合成时把下划线转为空格（不影响字幕显示）
+                    </label>
                     <button
                       type="button"
                       className={styles.sidebarApplyBtn}
@@ -2096,6 +2118,7 @@ export function TTSSynthesis({
             chapterCount={project.chapters.length}
             projectDescription={project.configs?.description ?? null}
             exportDirectory={project.configs?.export_directory ?? null}
+            underscoreToSpace={project.configs?.underscore_to_space ?? null}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

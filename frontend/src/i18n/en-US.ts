@@ -1010,6 +1010,9 @@ export const enUS: Messages = {
     exportDir: 'Default Export Directory',
     exportDirHint: 'Directory relative to the Remotion project path, created automatically on export; without a Remotion path, use an absolute path as a standalone export directory',
     exportDirPlaceholder: 'e.g.: out',
+    synthesis: 'Speech Synthesis',
+    underscoreToSpace: 'Convert underscores to spaces when synthesizing',
+    underscoreToSpaceHint: 'When enabled, underscores in the text sent to the TTS engine are replaced with spaces (some engines read underscores aloud); display text and subtitles keep the original. Effective when either this switch or the chapter sidebar switch is on.',
   },
   projectVoices: {
     roleSampleText: 'Hello, I am this character\'s voice. Please confirm if the tone, rhythm, and voice suit the current scene.',
