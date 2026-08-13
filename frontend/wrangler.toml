@@ -1,7 +1,7 @@
 # NarraForge 前端 — Cloudflare Workers Static Assets 部署配置
 # Pages 已进维护模式（2026），官方继任方案：无脚本 Worker + [assets] 直接托管 dist。
 # 静态资产请求免费；Workers Builds 连 GitHub 自动构建（Root Directory = frontend）。
-name = "narraforge-web"
+name = "narraforge"
 compatibility_date = "2026-08-01"
 
 [assets]
