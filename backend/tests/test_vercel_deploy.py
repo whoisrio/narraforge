@@ -51,6 +51,24 @@ class TestVercelJson:
         )
 
 
+    def test_pyproject_entrypoint_resolves_if_configured(self):
+        """[tool.vercel] entrypoint 若存在，模块路径必须相对 Root Directory（backend/）可解析。
+
+        Vercel 把 entrypoint 解析为 ./<module 路径>.py（相对项目根，即 backend/）。
+        写 "backend.main:app" 会被解析成 backend/backend/main.py 导致构建报错；
+        Root Directory=backend 时 main.py 本就在默认探测列表，该配置应省略。
+        """
+        pyproject = tomllib.loads((BACKEND_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+        entrypoint = (pyproject.get("tool", {}).get("vercel") or {}).get("entrypoint")
+        if entrypoint is None:
+            return  # 未配置时走默认探测（main.py 在根级列表内），合法
+        module_path = entrypoint.split(":")[0].replace(".", "/") + ".py"
+        assert (BACKEND_ROOT / module_path).exists(), (
+            f"[tool.vercel] entrypoint={entrypoint} 解析为 {module_path}，"
+            f"相对 Root Directory（backend/）不存在"
+        )
+
+
 class TestVercelIgnore:
     def test_excludes_heavy_local_dirs(self):
         path = BACKEND_ROOT / ".vercelignore"

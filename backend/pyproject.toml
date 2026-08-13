@@ -116,6 +116,3 @@ markers = [
     "external: tests that call external services",
 ]
 
-[tool.vercel]
-entrypoint = "backend.main:app"
-
