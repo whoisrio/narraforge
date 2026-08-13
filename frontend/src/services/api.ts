@@ -1,11 +1,13 @@
 import axios from 'axios';
 import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus } from '../types';
 import { API_BASE_URL, apiUrl } from './apiBase';
+import { applyAuthInterceptors } from './auth';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
 });
+applyAuthInterceptors(api);
 
 // Voice Clone API
 export const voiceApi = {

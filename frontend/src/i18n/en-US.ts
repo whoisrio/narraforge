@@ -234,6 +234,15 @@ export const enUS: Messages = {
     syncing: 'Syncing…',
     syncFailed: 'Sync failed. Please try again.',
   },
+  auth: {
+    title: 'Enter access token',
+    description: 'This deployment is protected by a shared token. Enter it to continue.',
+    placeholder: 'Access token',
+    submit: 'Unlock',
+    verifying: 'Verifying…',
+    wrongToken: 'Incorrect token, please try again',
+    verifyFailed: 'Verification failed. Please try again later.',
+  },
   settings: {
     storage: 'Storage',
     storageMode: 'Storage Mode',

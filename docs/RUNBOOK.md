@@ -407,17 +407,19 @@ uv run --extra workers pywrangler deploy
 
 ---
 
-## Vercel + Cloudflare Worker 网关 Deployment (free tier, 当前方案)
+## Vercel + Cloudflare Pages 直连 Deployment (free tier, 当前方案)
 
 > 2026-08 变更：HF Spaces 已全面收费（免费 CPU 档取消），HF 方案弃用（见下一节，代码保留作参考）。
-> 当前方案：**Vercel Hobby（免卡）跑后端 serverless 函数 + Cloudflare Worker 纯 JS 网关做域名入口**，
-> 靠共享密钥防 vercel.app 直连绕过。
+> 2026-08 再次变更：用户无自有域名，Cloudflare Access 无法保护 workers.dev/pages.dev 免费子域，
+> Access + CF Worker 网关方案降级为「有自有域名时的可选加固」（见本节末）。
+> 当前主线：**Vercel Hobby（免卡）跑后端 serverless 函数 + Cloudflare Pages 前端直连 Vercel，
+> 后端校验共享 Bearer 口令**——前端解锁页输入口令后逐请求带 `Authorization: Bearer <token>`。
 
 ```
-浏览器 → Pages（前端）→ api.<域名>（CF Worker 网关，Access 保护）
-                          │ 注入 X-Narraforge-Gateway-Secret（共享密钥）
-                          ▼
-                   Vercel Functions（<project>.vercel.app，Python runtime）
+浏览器 → Pages（<app>.pages.dev，前端解锁页持共享口令）
+              │ Authorization: Bearer <ACCESS_TOKEN>
+              ▼
+       Vercel Functions（<project>.vercel.app，Python runtime）
 ```
 
 平台约束（2026-08 官方文档核实）：
@@ -443,13 +445,13 @@ uv run --extra workers pywrangler deploy
 
 ### 2. Vercel 环境变量清单
 
-Project → Settings → Environment Variables（Production）：
+Project → Settings → Environment Variables（Production），完整示例见 `backend/env.vercel.example`：
 
 | 变量 | 值 | 说明 |
 |---|---|---|
 | `DEPLOY_TARGET` | `workers` | 纯在线路由，不注册本地模型路由 |
-| `GATEWAY_SECRET` | 随机长串 | 与 CF Worker 的 `GATEWAY_SECRET` secret 一致；后端据此放行网关注入的密钥头 |
-| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验 Access 邮箱头**或**网关密钥头 |
+| `ACCESS_TOKEN` | `openssl rand -hex 32` | 共享 Bearer 口令，无域名直连方案的唯一凭证；前端解锁页输入的口令须与此一致 |
+| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验 Access 邮箱头 / 网关密钥头 / Bearer 口令，任一满足即放行 |
 | `CORS_ORIGINS` | Pages 域名（逗号分隔） | 如 `https://narraforge.pages.dev` |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
 | `SUPABASE_STORAGE_BUCKET` | `voice-assets` | 须与 schema.sql 创建的 bucket 同名 |
@@ -458,43 +460,57 @@ Project → Settings → Environment Variables（Production）：
 | `APP_ENV` / `DEBUG` | `production` / `false` | |
 | `LOG_TO_FILE` | `false` | 日志走 stdout（代码已容错只读 FS，显式关闭更干净） |
 | `UPSTREAM_TIMEOUT_SECONDS` | 可选，默认 `120` | 出站 API 超时；workers 模式自动 Cap 到 250s，无需调 |
+| `GATEWAY_SECRET` | 可选，留空 | 仅「自有域名 + CF Worker 网关」加固方案使用（见本节末），与网关 secret 一致 |
 
-### 3. 验证部署
+### 3. Cloudflare Pages 前端配置
+
+Pages 项目（构建命令 `npm run build`，输出目录 `frontend/dist`，Root Directory `frontend`）设环境变量：
+
+| 变量 | 值 | 说明 |
+|---|---|---|
+| `VITE_API_BASE_URL` | `https://<project>.vercel.app/api` | 前端直连 Vercel 后端（含 `/api` 前缀） |
+| `VITE_AUTH_REQUIRED` | `true` | 构建期开关：启用解锁页 + axios Bearer 注入；本地开发不设，行为完全不变 |
+
+解锁流程：用户打开 Pages 站点 → 全屏解锁页输入口令 → 前端带口令验证
+`GET /api/config/capabilities` 通过后才写入 localStorage（`nf_access_token`）并整页刷新。
+任意请求 401 → 前端清除口令并回到解锁页。
+
+### 4. 验证部署
 
 ```bash
 curl https://<project>.vercel.app/health
-# → {"status": "healthy", ...}
+# → {"status": "healthy", ...}（探活放行）
 curl https://<project>.vercel.app/api/config/capabilities
-# → 401 access_required（无网关密钥头/Access 邮箱头，防直连生效）
-curl -H "X-Narraforge-Gateway-Secret: $GATEWAY_SECRET" https://<project>.vercel.app/api/config/capabilities
+# → 401 access_required（无凭证，防直连生效）
+curl -H "Authorization: Bearer $ACCESS_TOKEN" https://<project>.vercel.app/api/config/capabilities
 # → {"deploy_target": "workers", ... features.direct_storage_upload: true}
 ```
-
-### 4. Cloudflare Worker 网关
-
-改 `gateway/wrangler.toml` 的 `UPSTREAM_ORIGIN` 为 Vercel 部署域名
-（`https://<project>.vercel.app`），然后：
-
-```bash
-cd gateway
-npx wrangler secret put GATEWAY_SECRET   # 与 Vercel 环境变量一致
-npx wrangler secret put HF_TOKEN         # Vercel 不需要 HF token，填任意占位串即可
-npx wrangler deploy                      # 绑路由 api.<域名>/*
-```
-
-网关代码不变（`Authorization: Bearer <占位>` 头对 Vercel 无害，鉴权靠密钥头）。
-
-### 5. Cloudflare 侧（Access + SSL）
-
-与 HF 方案相同：Zero Trust 建 Access 应用（self-hosted）覆盖 `api.<域名>`，
-邮箱 OTP、允许列表只填本人邮箱；Access CORS 放行 Pages 域名并允许 credentials；
-SSL/TLS 模式 **Full**。`<project>.vercel.app` 直连子域无法关闭——靠后端
-`GATEWAY_SECRET`/Access 头校验挡住（无凭证 401 `access_required`）。
 
 ### Supabase 准备
 
 与 HF/Render 章节相同：执行 `backend/supabase/schema.sql`（含 `voice-assets`
 私有桶），取 Project URL 与 service_role key 填 Vercel 环境变量。
+
+### 可选加固：自有域名 + Access + CF Worker 网关
+
+有自有域名时可在直连方案上加固：Pages 的 `VITE_API_BASE_URL` 改指 `https://api.<域名>/api`，
+浏览器请求经 CF Worker 网关（`gateway/`，代码保留不动）注入 `X-Narraforge-Gateway-Secret`
+共享密钥头转发到 Vercel，Vercel 侧配置 `GATEWAY_SECRET` 与之一致（此时 Bearer 口令可留用也可停用）。
+
+```
+浏览器 → Pages（前端）→ api.<域名>（CF Worker 网关，Access 保护）
+                          │ 注入 X-Narraforge-Gateway-Secret（共享密钥）
+                          ▼
+                   Vercel Functions（<project>.vercel.app，Python runtime）
+```
+
+1. 改 `gateway/wrangler.toml` 的 `UPSTREAM_ORIGIN` 为 Vercel 部署域名（`https://<project>.vercel.app`）。
+2. `cd gateway && npx wrangler secret put GATEWAY_SECRET`（与 Vercel 环境变量一致）；
+   `npx wrangler secret put HF_TOKEN` 填任意占位串；`npx wrangler deploy` 绑路由 `api.<域名>/*`。
+3. Zero Trust 建 Access 应用（self-hosted）覆盖 `api.<域名>`，邮箱 OTP、允许列表只填本人邮箱；
+   Access CORS 放行 Pages 域名并允许 credentials；SSL/TLS 模式 **Full**。
+4. `<project>.vercel.app` 直连子域无法关闭——靠后端 `GATEWAY_SECRET`/Access 头校验挡住
+   （无凭证 401 `access_required`）。
 
 ---
 

@@ -110,6 +110,40 @@ class TestGatewaySecret:
         assert client.get("/").status_code == 200
 
 
+class TestAccessToken:
+    """Bearer 共享口令通道（无域名 Vercel + Pages 直连部署：前端解锁页持有口令，
+    每个请求带 ``Authorization: Bearer <token>``；三条凭证路径任一满足即放行）。"""
+
+    def test_bearer_correct_passes(self, monkeypatch):
+        client = _workers_client(monkeypatch, access_token="tok123")
+        resp = client.get("/", headers={"Authorization": "Bearer tok123"})
+        assert resp.status_code == 200
+
+    def test_bearer_wrong_returns_401(self, monkeypatch):
+        client = _workers_client(monkeypatch, access_token="tok123")
+        resp = client.get("/", headers={"Authorization": "Bearer wrong"})
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "access_required"
+
+    def test_bearer_channel_disabled_when_unset(self, monkeypatch):
+        """access_token 未配置（空串）时 Bearer 通道不生效，带正确格式的头也不放行。"""
+        client = _workers_client(monkeypatch, access_token="")
+        resp = client.get("/", headers={"Authorization": "Bearer anything"})
+        assert resp.status_code == 401
+
+    def test_existing_credentials_not_regressed(self, monkeypatch):
+        """配了 access_token 后，既有两种凭证（Access 邮箱头 / 网关密钥）依旧有效。"""
+        client = _workers_client(monkeypatch, access_token="tok123", gateway_secret="s3cret")
+        assert client.get("/", headers={ACCESS_HEADER: "me@example.com"}).status_code == 200
+        assert client.get("/", headers={GATEWAY_SECRET_HEADER: "s3cret"}).status_code == 200
+
+    def test_local_mode_unaffected_by_access_token(self, monkeypatch):
+        """local 模式不注册中间件：即使配了口令，无头请求照常放行。"""
+        monkeypatch.setattr(settings, "access_token", "tok123")
+        client = TestClient(main_module.create_app("local"))
+        assert client.get("/").status_code == 200
+
+
 class TestWorkersCors:
     def test_preflight_allowed_origin(self, monkeypatch):
         client = _workers_client(monkeypatch, cors_origins=[PAGES_ORIGIN])
@@ -163,6 +197,13 @@ class TestWorkersSettings:
     def test_gateway_secret_from_env(self, monkeypatch):
         monkeypatch.setenv("GATEWAY_SECRET", "s3cret")
         assert Settings().gateway_secret == "s3cret"
+
+    def test_access_token_default_empty(self):
+        assert Settings().access_token == ""
+
+    def test_access_token_from_env(self, monkeypatch):
+        monkeypatch.setenv("ACCESS_TOKEN", "tok123")
+        assert Settings().access_token == "tok123"
 
     def test_workers_mode_skips_local_dir_creation(self, monkeypatch):
         """workers 运行时（Pyodide）FS 只读：Settings 不得 mkdir 本地数据目录。"""

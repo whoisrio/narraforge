@@ -3,8 +3,10 @@ import type { SegmentedProject } from '../types';
 import { indexedDBStorage } from './segmentedProjectStorage';
 import { getTTSAudioBlob } from './indexedDB';
 import { API_BASE_URL } from './apiBase';
+import { applyAuthInterceptors } from './auth';
 
 export const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
+applyAuthInterceptors(api);
 
 export interface MigrationResult {
   project_id: string;

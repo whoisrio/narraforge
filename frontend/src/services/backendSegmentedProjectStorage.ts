@@ -2,8 +2,10 @@ import axios from 'axios';
 import type { SegmentedProject } from '../types';
 import type { SegmentedProjectStorage } from './segmentedProjectStorage';
 import { API_BASE_URL } from './apiBase';
+import { applyAuthInterceptors } from './auth';
 
 export const api = axios.create({ baseURL: API_BASE_URL, withCredentials: true });
+applyAuthInterceptors(api);
 
 interface ListResponse {
   id: string;

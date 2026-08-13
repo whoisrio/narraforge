@@ -20,7 +20,8 @@ See `docs/RUNBOOK.md` → "Cloudflare Workers Deployment".
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `DEPLOY_TARGET` | No | `local` (full routes, SQLite, local models) or `workers` (online routes only: Cloudflare Workers paid tier, or Render free tier under CPython) | `local` |
-| `ACCESS_ENFORCEMENT` | No | Workers mode only: require the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access (401 `access_required` otherwise). `/health` and OPTIONS preflight are exempt. Never enabled in local mode. | `true` |
+| `ACCESS_ENFORCEMENT` | No | Workers mode only: require one of the accepted credentials — the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access, the `X-Narraforge-Gateway-Secret` gateway header, or an `Authorization: Bearer <ACCESS_TOKEN>` token (401 `access_required` otherwise). `/health` and OPTIONS preflight are exempt. Never enabled in local mode. | `true` |
+| `ACCESS_TOKEN` | Workers deploys: yes | Shared Bearer token for the no-custom-domain direct setup (Pages frontend talks to Vercel directly; the unlock page sends `Authorization: Bearer <token>`). Generate with `openssl rand -hex 32`. Empty string disables this credential path. Never used in local mode. | `""` |
 | `CORS_ORIGINS` | No | Workers mode only: comma-separated allowed CORS origins (set to the Pages domain at deploy time). Local mode always uses `*`. | `*` |
 | `ASSET_STORE_BACKEND` | No | Binary asset store backend: `auto` (local mode → local FS; workers mode → R2 if a binding is injected, else Supabase Storage), or explicit `local` / `r2` / `supabase` | `auto` |
 | `UPSTREAM_TIMEOUT_SECONDS` | No | Outbound HTTP timeout for upstream APIs (e.g. MiMo TTS). Workers mode caps the effective value at 250s (Vercel Hobby fluid function limit 300s minus 50s headroom); local mode uses the value as-is | `120` |

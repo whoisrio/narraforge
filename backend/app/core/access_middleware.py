@@ -1,6 +1,6 @@
-"""Cloudflare Access / 网关密钥校验中间件（spec 3.6，仅 workers 模式注册）。
+"""Cloudflare Access / 网关密钥 / Bearer 口令校验中间件（spec 3.6，仅 workers 模式注册）。
 
-两条凭证路径，任一满足即放行：
+三条凭证路径，任一满足即放行：
 
 1. ``Cf-Access-Authenticated-User-Email`` 头存在——Access 在边缘完成认证后注入；
    workers.dev 子域路由关闭后，API 只走受 Access 保护的自定义域名，
@@ -8,9 +8,11 @@
 2. ``settings.gateway_secret`` 非空且请求头 ``X-Narraforge-Gateway-Secret``
    与之相等——HF Spaces 部署形态：Space 私有，无 Access 边缘注入邮箱头，
    由 CF Worker 网关（gateway/）注入共享密钥头，防 hf.space 直连绕过。
+3. ``settings.access_token`` 非空且 ``Authorization: Bearer <token>`` 与之相等——
+   无域名 Vercel + Pages 直连部署形态：前端解锁页持有口令，逐请求带 Bearer 头。
 
 放行：`/health`（监控探活）与 OPTIONS 预检（CORS 由 CORSMiddleware 处理）。
-两者都无 → 401，错误信封与全局异常处理一致（{detail: {code, message}}）。
+三者都无 → 401，错误信封与全局异常处理一致（{detail: {code, message}}）。
 """
 import hmac
 
@@ -21,6 +23,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 ACCESS_EMAIL_HEADER = "cf-access-authenticated-user-email"
 GATEWAY_SECRET_HEADER = "x-narraforge-gateway-secret"
+AUTHORIZATION_HEADER = "authorization"
+_BEARER_PREFIX = "bearer "
 _EXEMPT_PATHS = frozenset({"/health"})
 
 
@@ -34,6 +38,13 @@ class AccessEnforcementMiddleware(BaseHTTPMiddleware):
             request.headers.get(GATEWAY_SECRET_HEADER, ""), settings.gateway_secret
         ):
             return await call_next(request)
+        if settings.access_token:
+            auth = request.headers.get(AUTHORIZATION_HEADER, "")
+            # scheme 大小写不敏感（RFC 9110），口令本体精确比对
+            if auth.lower().startswith(_BEARER_PREFIX) and hmac.compare_digest(
+                auth[len(_BEARER_PREFIX):], settings.access_token
+            ):
+                return await call_next(request)
         return JSONResponse(
             status_code=401,
             content={

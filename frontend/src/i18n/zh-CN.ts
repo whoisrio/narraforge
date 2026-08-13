@@ -232,6 +232,15 @@ export const zhCN = {
     syncing: '同步中…',
     syncFailed: '同步失败，请稍后重试',
   },
+  auth: {
+    title: '输入访问口令',
+    description: '此部署受共享口令保护，请输入口令继续使用。',
+    placeholder: '访问口令',
+    submit: '解锁',
+    verifying: '验证中…',
+    wrongToken: '口令错误，请重试',
+    verifyFailed: '验证失败，请稍后重试',
+  },
   settings: {
     storage: '存储',
     storageMode: '存储模式',
