@@ -1,0 +1,32 @@
+# 可选：push 到 main 时自动同步后端到 HF Space。
+# 默认仅 workflow_dispatch 手动触发；要启用自动触发，取消下方 push 段注释。
+#
+# 启用前提（GitHub 仓库 Settings → Secrets and variables → Actions）：
+#   - Secret  `HF_TOKEN`：HF access token（write 权限，推 Space 仓库用）
+#   - Variable `HF_SPACE_GIT_URL`：Space 仓库 git 地址，
+#     如 https://huggingface.co/spaces/<user>/<space>
+name: deploy-hf-space
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths: [backend/**, hf-space/**, scripts/sync-hf-space.sh]
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync backend to HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_GIT_URL: ${{ vars.HF_SPACE_GIT_URL }}
+        run: |
+          set -euo pipefail
+          AUTH_URL="${HF_SPACE_GIT_URL/https:\/\//https://oauth2:${HF_TOKEN}@}"
+          SYNC_HF_ASSUME_YES=1 scripts/sync-hf-space.sh "$AUTH_URL" .hf-space-clone

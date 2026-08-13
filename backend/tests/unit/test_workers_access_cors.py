@@ -73,6 +73,43 @@ class TestAccessEnforcement:
         assert client.get("/").status_code == 200
 
 
+GATEWAY_SECRET_HEADER = "X-Narraforge-Gateway-Secret"
+
+
+class TestGatewaySecret:
+    """网关共享密钥通道（HF Spaces 部署：CF Worker 网关注入密钥头，Space 私有
+    无 Access 边缘注入邮箱头，故放开第二条凭证路径）。"""
+
+    def test_correct_secret_passes(self, monkeypatch):
+        client = _workers_client(monkeypatch, gateway_secret="s3cret")
+        resp = client.get("/", headers={GATEWAY_SECRET_HEADER: "s3cret"})
+        assert resp.status_code == 200
+
+    def test_wrong_secret_returns_401(self, monkeypatch):
+        client = _workers_client(monkeypatch, gateway_secret="s3cret")
+        resp = client.get("/", headers={GATEWAY_SECRET_HEADER: "wrong"})
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "access_required"
+
+    def test_secret_channel_disabled_when_unset(self, monkeypatch):
+        """gateway_secret 未配置（空串）时密钥通道不生效，带头也 401。"""
+        client = _workers_client(monkeypatch, gateway_secret="")
+        resp = client.get("/", headers={GATEWAY_SECRET_HEADER: "anything"})
+        assert resp.status_code == 401
+
+    def test_email_header_still_passes_with_secret_configured(self, monkeypatch):
+        """两条凭证路径并存：配了密钥后 Access 邮箱头依旧有效。"""
+        client = _workers_client(monkeypatch, gateway_secret="s3cret")
+        resp = client.get("/", headers={ACCESS_HEADER: "me@example.com"})
+        assert resp.status_code == 200
+
+    def test_local_mode_unaffected_by_gateway_secret(self, monkeypatch):
+        """local 模式不注册中间件：即使配了密钥，无头请求照常放行。"""
+        monkeypatch.setattr(settings, "gateway_secret", "s3cret")
+        client = TestClient(main_module.create_app("local"))
+        assert client.get("/").status_code == 200
+
+
 class TestWorkersCors:
     def test_preflight_allowed_origin(self, monkeypatch):
         client = _workers_client(monkeypatch, cors_origins=[PAGES_ORIGIN])
@@ -119,6 +156,13 @@ class TestWorkersSettings:
 
     def test_access_enforcement_default_true(self):
         assert Settings().access_enforcement is True
+
+    def test_gateway_secret_default_empty(self):
+        assert Settings().gateway_secret == ""
+
+    def test_gateway_secret_from_env(self, monkeypatch):
+        monkeypatch.setenv("GATEWAY_SECRET", "s3cret")
+        assert Settings().gateway_secret == "s3cret"
 
     def test_workers_mode_skips_local_dir_creation(self, monkeypatch):
         """workers 运行时（Pyodide）FS 只读：Settings 不得 mkdir 本地数据目录。"""

@@ -1,0 +1,11 @@
+name = "narraforge-api-gateway"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+
+[vars]
+# 替换为你的 Space 直连地址：https://<user>-<space>.hf.space
+UPSTREAM_ORIGIN = "https://<user>-<space>.hf.space"
+
+# Secrets（不要写进此文件，用 CLI 设置）：
+#   npx wrangler secret put GATEWAY_SECRET   # 与后端 GATEWAY_SECRET 环境变量一致
+#   npx wrangler secret put HF_TOKEN         # HF access token（read 即可，访问私有 Space）

@@ -4,3 +4,12 @@ __pycache__
 .pytest_cache
 *.egg-info
 .coverage
+# 云镜像（Dockerfile.cloud COPY . .）不烘焙本地数据/密钥/运行时产物
+.env
+.env.*
+*.db*
+data/
+logs/
+output/
+uploads/
+pretrained_models/

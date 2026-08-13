@@ -407,36 +407,96 @@ uv run --extra workers pywrangler deploy
 
 ---
 
-## Koyeb Deployment (free tier, 推荐)
+## HF Spaces + Cloudflare Worker 网关 Deployment (free tier, 推荐)
 
-Workers 模式代码（`DEPLOY_TARGET=workers` 的瘦身路由 + Supabase 持久化）跑在
-Koyeb 免费档。选择理由：**免信用卡注册**（Render 实测对部分账户强制要卡，已放弃），
-免费 nano 实例**不休眠**（无冷启动问题），GitHub 直连自动构建。
+> 2026-08 变更：Koyeb 被 Mistral 收购后控制台 404、免费路径冻结（原章节删除）；
+> Render 要信用卡。当前方案：**HF Spaces 免费 Docker 档（免卡）跑后端 + Cloudflare
+> Worker 纯 JS 网关做域名入口**，Space 设私有、靠共享密钥防直连绕过。
 
-### 部署步骤
+```
+浏览器 → Pages（前端）→ api.<域名>（CF Worker 网关，Access 保护）
+                          │ 注入 X-Narraforge-Gateway-Secret（共享密钥）
+                          │      Authorization: Bearer <HF_TOKEN>（私有 Space）
+                          ▼
+                   HF Space（Docker SDK，<user>-<space>.hf.space）
+```
 
-1. Koyeb Dashboard → Create Service → GitHub 连接仓库。
-2. Builder 选 **Dockerfile**，Dockerfile path 填 `backend/Dockerfile.cloud`，
-   build context 填 `backend/`。
-   **不要用 `backend/Dockerfile`**（local 全量构建含 torch，免费档装不下也不需要）。
-3. Instance 选 **Free (nano)**，区域任选（edge-tts/mimo 都要出墙访问，选美西/新加坡均可）。
-4. 环境变量照下表填写（与 Render 章节同一份清单）。
-5. 部署后访问 `https://<app>-<org>.koyeb.app/health` 应返回 200。
-   注意：`Dockerfile.cloud` 本机未构建验证过（开发机无 Docker daemon），
-   首次 Koyeb 构建即真实验证；若构建失败先看构建日志里 `uv sync` 步骤。
+### 1. 建 Space
 
-### Cloudflare 侧（DNS + Access）
+1. huggingface.co → New Space → SDK 选 **Docker**，硬件选 **CPU basic（免费）**，
+   可见性选 **Private**（私有后所有请求需 `Authorization: Bearer <HF_TOKEN>`，
+   由网关注入；`HF_TOKEN` 在 HF Settings → Access Tokens 建一个 read 权限的即可）。
+2. Space 仓库内容不由手工维护，用同步脚本从主仓库生成（见第 3 步）。
 
-与 Render 章节相同，仅把 CNAME 目标换成 `<app>-<org>.koyeb.app`，
-Koyeb 控制台加同名自定义域名（证书自动签发，卡住先灰云再开回）。
-`koyeb.app` 直连子域同样无法关闭，靠 `ACCESS_ENFORCEMENT=true` 兜底 401。
+### 2. Space Secrets 配置清单
+
+Space → Settings → Variables and secrets（都建为 **Secrets**）：
+
+| 变量 | 值 | 说明 |
+|---|---|---|
+| `GATEWAY_SECRET` | 随机长串 | 与 CF Worker 的 `GATEWAY_SECRET` secret 一致；后端据此放行网关注入的密钥头 |
+| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验 Access 邮箱头**或**网关密钥头 |
+| `CORS_ORIGINS` | Pages 域名（逗号分隔） | 如 `https://narraforge.pages.dev` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
+| `SUPABASE_STORAGE_BUCKET` | `voice-assets` | 须与 schema.sql 创建的 bucket 同名 |
+| `ASSET_STORE_BACKEND` | `auto` | 无 R2 binding → Supabase Storage（Space FS 临时，落盘会丢） |
+| `MIMO_API_KEY` / `MIMO_BASE_URL` | 小米 MiMo key | 在线合成/克隆 |
+| `APP_ENV` / `DEBUG` | `production` / `false` | |
+
+`DEPLOY_TARGET=workers`、`LOG_TO_FILE=false`、`PORT=7860` 已由 `Dockerfile.cloud`
+的 `ENV` 内置（7860 与 Space Docker SDK 的 `app_port` 一致），无需配置。
+
+### 3. 同步代码到 Space
+
+```bash
+git clone https://huggingface.co/spaces/<user>/<space>   # 首次让脚本自己克隆亦可
+scripts/sync-hf-space.sh https://huggingface.co/spaces/<user>/<space>
+```
+
+脚本把 `hf-space/README.md`（HF frontmatter）、`backend/Dockerfile.cloud`
+（改名 `Dockerfile`）、`backend/` 全量（排除 .venv/.env/data 等）同步进 Space
+克隆目录，确认后 commit + push 触发构建。细节见脚本头部注释；CI 自动同步见
+`.github/workflows/deploy-hf-space.yml`（默认手动触发）。
+
+注意：`Dockerfile.cloud` 本机未构建验证过（开发机无 Docker daemon），
+首次 Space 构建即真实验证；构建失败先看 Space 构建日志里 `uv sync` 步骤。
+
+### 4. 验证 Space
+
+```bash
+curl -H "Authorization: Bearer $HF_TOKEN" https://<user>-<space>.hf.space/health
+# → {"status": "healthy"}
+curl https://<user>-<space>.hf.space/health    # 不带 token → 401/403（私有 Space）
+```
+
+### 5. Cloudflare Worker 网关
+
+见 `gateway/README.md`：`wrangler secret put GATEWAY_SECRET HF_TOKEN` →
+`wrangler deploy` → 绑路由 `api.<域名>/*`。网关把请求原样转发到 Space 并注入
+密钥头与 HF token。
+
+### 6. Cloudflare 侧（Access + SSL）
+
+1. Zero Trust 建 Access 应用（self-hosted）覆盖 `api.<域名>`，邮箱 OTP，
+   允许列表只填本人邮箱；Access CORS 设置放行 Pages 域名并允许 credentials。
+   与 Pages 前端同一个团队域。
+2. `api.<域名>` 的 DNS 记录只是 Worker 路由占位（proxied，指向任意外部地址即可，
+   路由命中后由 Worker 接管）；SSL/TLS 模式保持 **Full**（Worker 在边缘终止 TLS，
+   回源 hf.space 走 HTTPS，天然有效证书，无 Flexible 回源 HTTP 问题）。
+3. hf.space 直连子域无法关闭——靠两道防线：Space 私有（无 HF token 401）+
+   后端 `GATEWAY_SECRET` 校验（无密钥头 401 `access_required`）。
+
+### Supabase 准备
+
+与 Render 章节相同：执行 `backend/supabase/schema.sql`（含 `voice-assets`
+私有桶），取 Project URL 与 service_role key 填 Space Secrets。
 
 ---
 
 ## Render Deployment (free tier, 备选 — 实测要信用卡)
 
 > 2026-08 实测：该账户在 Blueprint 和 New Web Service 流程均被强制要求填信用卡，
-> 免费路径不可用，已改用 Koyeb（见上一节）。本节保留作参考；render.yaml 仍在仓库根，
+> 免费路径不可用，已改用 HF Spaces + CF 网关（见上一节）。本节保留作参考；render.yaml 仍在仓库根，
 > 账户若能过反滥用校验可一键 Blueprint。
 
 Workers 模式代码（`DEPLOY_TARGET=workers` 的瘦身路由 + Supabase 持久化）原样跑在

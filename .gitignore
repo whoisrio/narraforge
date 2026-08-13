@@ -113,3 +113,4 @@ agent/.langgraph_api
 *.db*
 .kimi-code/
 backend/*-backup-*.tgz
+.hf-space-clone/
