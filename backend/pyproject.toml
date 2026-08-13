@@ -92,6 +92,20 @@ dev = [
     "mypy>=1.8.0"
 ]
 
+[dependency-groups]
+# Vercel 部署依赖组：Vercel Python 构建跑 `uv sync --active --no-dev`
+# （无 --extra 入口，见 vercel/vercel packages/python/src/uv.ts），只安装
+# [project.dependencies] + 默认依赖组。把 vercel-deploy 列入 default-groups，
+# 使 Vercel 环境装上 edge-tts（workers 模式 CPython 回退所需）；本地
+# `uv sync --extra local-services` 已含 edge-tts，重复无害。
+# 注意：本组不进 CF Workers bundle（pywrangler 只收集 [project.dependencies]）。
+vercel-deploy = [
+    "edge-tts>=7.0.0",
+]
+
+[tool.uv]
+default-groups = ["vercel-deploy"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

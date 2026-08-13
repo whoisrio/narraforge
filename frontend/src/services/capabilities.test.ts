@@ -17,7 +17,7 @@ describe('LOCAL_CAPABILITIES', () => {
       deploy_target: 'local',
       engines: ['edge_tts', 'mimo_tts', 'cosyvoice', 'voxcpm'],
       clone_engines: ['qwen', 'mimo', 'voxcpm'],
-      features: { speech_to_text: true, agent_workflow: true, backend_storage: true },
+      features: { speech_to_text: true, agent_workflow: true, backend_storage: true, direct_storage_upload: false },
     });
   });
 });

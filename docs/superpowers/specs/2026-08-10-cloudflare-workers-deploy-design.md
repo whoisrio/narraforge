@@ -128,16 +128,27 @@ Access 应用的 CORS 设置放行 Pages 域名并允许 credentials；后端 CO
 - Git 集成：Workers Builds 连接同一仓库，root `backend/`，build command `uv sync && uv run pywrangler deploy`；若 Workers Builds 对 Python 支持有问题，退用 GitHub Actions + `wrangler-action`（ secrets 存 GitHub）。
 - 冷启动风险（spike 遗留）：真实部署后实测首请求延迟，必要时评估 Workers 的 Python 快照预热手段或接受。
 
-### 5.2a 后端（Koyeb 免费档，当前方案）
+### 5.2a 后端（HF Spaces + CF Worker 网关，已弃用 — HF 全面收费）
 
-workers 模式代码原样跑在 Koyeb CPython：`DEPLOY_TARGET=workers`，
+> 2026-08 再变更：HF Spaces 已全面收费（免费 CPU 档取消），改用 **Vercel Hobby**（见 5.2b）。
+> 本节与 `hf-space/`、`backend/Dockerfile.cloud`、`scripts/sync-hf-space.sh`
+> 保留作 Gradio/Docker 兜底代码参考。
+>
+> 原记录：Koyeb 被 Mistral 收购、控制台 404，免费路径冻结。
+> 改为 **HF Spaces 免费 Docker 档（免卡）+ Cloudflare Worker 纯 JS 网关**。
+
+workers 模式代码原样跑在 HF Space Docker SDK（CPython）：`DEPLOY_TARGET=workers`，
 `uvicorn main:app`（main.py 底部 `app = create_app()` 读 settings，无需新入口）。
-选 Koyeb 的理由：免信用卡（Render 实测对该账户强制要卡，已放弃）、免费 nano
-实例不休眠、GitHub 直连构建。
-适配点（步骤 6A）：
+选 HF Spaces 的理由：免信用卡（Render 实测对该账户强制要卡，已放弃）、免费 CPU
+档、Docker SDK 直接跑 `Dockerfile.cloud`。Space 设**私有**，前置 CF Worker 网关
+（`gateway/`）绑定 `api.<域名>`：网关注入 `Authorization: Bearer <HF_TOKEN>`
+（访问私有 Space）与 `X-Narraforge-Gateway-Secret`（共享密钥，Worker secrets），
+后端 Access 中间件接受「Access 邮箱头 **或** 网关密钥头」任一凭证
+（`GATEWAY_SECRET` 环境变量，空串关闭该通道），挡住 hf.space 直连绕过。
+适配点：
 
 - **edge-tts 能力回退**：workers 模式按运行时能力选后端——真 Pyodide（`workers.fetch`
-  可用）走内置 WS 客户端；Koyeb CPython 自动回退 edge-tts 包（`local-services`
+  可用）走内置 WS 客户端；Space CPython 自动回退 edge-tts 包（`local-services`
   extra 提供）；两者皆无响亮报错。
 - **资产存储 auto 选择**：`ASSET_STORE_BACKEND=auto`——local→本地 FS；workers→
   有 R2 binding 用 R2（付费 Workers 备选），否则 Supabase Storage REST
@@ -145,16 +156,60 @@ workers 模式代码原样跑在 Koyeb CPython：`DEPLOY_TARGET=workers`，
   默认 `voice-assets` 私有桶）。免费容器档 FS 临时，克隆样本/试听音频必须走
   Supabase Storage。
 - **`backend/Dockerfile.cloud`**：瘦身镜像，`uv sync --no-dev --extra local-services`
-  （不含 local-ml 的 torch），shell-form CMD 展开 `$PORT`。
-  Koyeb 用 Dockerfile builder 指向它；不用 `backend/Dockerfile`（local 全量构建）。
-- Cloudflare 侧 `api.<域名>` CNAME → koyeb.app 开橙云 + Access 应用覆盖 +
-  SSL Full 模式（详见 RUNBOOK）。
+  （不含 local-ml 的 torch），`ENV PORT=7860`（HF Spaces Docker 默认端口），
+  shell-form CMD 展开 `$PORT`。Space 用 Docker SDK 直接构建；
+  不用 `backend/Dockerfile`（local 全量构建）。
+- **同步**：`scripts/sync-hf-space.sh <space-git-url>` 把 `hf-space/README.md` +
+  `Dockerfile.cloud`→`Dockerfile` + `backend/` 同步进 Space 仓库；CI 见
+  `.github/workflows/deploy-hf-space.yml`（默认手动触发）。
+- Cloudflare 侧 `api.<域名>` 绑 Worker 路由 + Access 应用覆盖 + SSL Full
+  （详见 RUNBOOK「HF Spaces + Cloudflare Worker 网关」章节）。
+
+### 5.2b 后端（Vercel Hobby + CF Worker 网关，当前方案）
+
+> 2026-08 定稿：HF Spaces 全面收费后改为 **Vercel Hobby（免卡）+ Cloudflare Worker 纯 JS 网关**。
+> 跑的还是 `DEPLOY_TARGET=workers` 的瘦身 FastAPI；Vercel 是无服务器函数，
+> 平台约束与适配点如下（2026-08 官方文档核实）。
+
+平台约束与适配：
+
+- **入口**：Vercel Python runtime 自动发现项目根（root directory = `backend`）的
+  `main.py` 顶层 `app`（FastAPI 入口约定），`DEPLOY_TARGET=workers` 环境变量经
+  settings 驱动 `create_app()` 组装 workers 路由，无需新增入口文件。
+  **不**使用 `/api` 目录约定（那是每文件一函数，我们要单函数应用）。
+- **依赖安装**：Vercel 构建跑 `uv sync --active --no-dev`（uv.lock 优先于
+  requirements.txt，且**无 --extra 入口**，见 vercel/vercel packages/python/src/uv.ts）。
+  edge-tts（workers 模式 CPython 回退所需）经 `pyproject.toml` 的
+  `[dependency-groups] vercel-deploy` + `[tool.uv] default-groups` 进入安装集；
+  该组不进 CF Workers bundle（pywrangler 只收集 `[project.dependencies]`）。
+- **函数时长**：Hobby（fluid compute，新项目默认开）默认/上限 **300s**；
+  `backend/vercel.json` 设 `maxDuration: 300`。出站超时 settings 化
+  （`UPSTREAM_TIMEOUT_SECONDS`，默认 120 本地不变），workers 模式经
+  `get_upstream_timeout()` Cap 到 250s（50s 平台余量）。
+- **请求体 4.5MB 上限**：克隆音频改道 Supabase Storage 直传——后端
+  `POST /api/clone/upload-url` 用 service key 签发签名上传 URL，前端直传后带
+  `storage_path` 调 `POST /api/clone/upload-from-storage` 建 VoiceProfile，
+  后续 create-clone-mimo 流程不变；原 multipart `/upload` 路径保留（local 零回退）。
+  capabilities 新增 `features.direct_storage_upload`（workers=true，local=false）。
+  注意：serverless 无 ffmpeg，直传路径不收 webm（前端录音是 webm/opus——
+  Vercel 部署下录音克隆不可用，需上传 MP3/WAV/OGG 文件，列为已知限制）。
+- **响应体 4.5MB 上限**：TTS 合成以 base64 音频返回，常规分段（数百字）产出
+  数百 KB～1MB 级，远低于上限；超长整章一次性合成才可能逼近，列为注意事项。
+- **只读文件系统**：workers 模式本就不建本地目录；`setup_logging` 打不开日志
+  文件时降级为仅控制台（建议 `LOG_TO_FILE=false`）；bundle 上限 500MB，
+  `backend/.vercelignore` 排除 tests/data/venv 等。
+- **网关**：`gateway/` 代码不变，`UPSTREAM_ORIGIN` 指 Vercel 部署域名
+  （`https://<project>.vercel.app`）；`HF_TOKEN` secret 填占位串即可
+  （注入的 Authorization 头对 Vercel 无害）。Access 配置不变；
+  `<project>.vercel.app` 直连靠后端密钥头校验挡住。
+
+详细操作步骤见 RUNBOOK「Vercel + Cloudflare Worker 网关 Deployment」章节。
 
 ### 5.3 Supabase
 - 免费档建项目，执行 Postgres schema 迁移 SQL（来自 3.5；`schema.sql` 末尾同时创建
   `voice-assets` 私有 Storage bucket，供容器部署场景的二进制资产存储）。
-- 开启 PostgREST 与 Storage，service_role key 只放后端（Workers secrets / Koyeb
-  环境变量），不进前端。
+- 开启 PostgREST 与 Storage，service_role key 只放后端（Workers secrets / HF Space
+  Secrets），不进前端。
 
 ### 5.4 Cloudflare Access
 - Zero Trust 控制台建 Access 应用，覆盖前端和 API 两个 hostname（见 3.6）。

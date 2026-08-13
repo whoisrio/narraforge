@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { voiceApi } from '../../services/api';
+import { useCapabilities } from '../../hooks/useCapabilities';
 import { useTranslation } from '../../i18n';
+import type { VoiceProfile } from '../../types';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
 import styles from './AudioPreview.module.css';
 
@@ -24,6 +26,7 @@ interface AudioPreviewProps {
 /** 录音/上传完成后展示音频预览，依次执行 upload → clone（失败则回滚删除）。URL 模式下跳过 upload 直接 clone */
 export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', projectId, engineParams, onCloneSuccess, onCancel }: AudioPreviewProps) {
   const { t } = useTranslation();
+  const capabilities = useCapabilities();
   const [isCloning, setIsCloning] = useState(false);
   const [step, setStep] = useState<'idle' | 'uploading' | 'cloning'>('idle');
   const [error, setError] = useState('');
@@ -45,7 +48,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
     setIsCloning(true);
     setError('');
 
-    let targetVoiceId: string;
+    let targetVoiceId: string | null = null;
 
     try {
       if (voiceId) {
@@ -55,7 +58,24 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
       } else if (file) {
         // 文件模式：先上传再克隆（现有逻辑）
         setStep('uploading');
-        const uploadResult = await voiceApi.upload(file, engine === 'voxcpm' ? promptText : undefined, projectId);
+        let uploadResult: VoiceProfile;
+        if (capabilities.features.direct_storage_upload) {
+          // Vercel 部署：绕 4.5MB 请求体上限，直传 Supabase Storage 后按 storage_path 建记录
+          const signed = await voiceApi.createUploadUrl(file.name, file.type || undefined);
+          const putResp = await fetch(signed.upload_url, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type || 'application/octet-stream' },
+          });
+          if (!putResp.ok) {
+            throw new Error(`Direct storage upload failed: ${putResp.status}`);
+          }
+          uploadResult = await voiceApi.uploadFromStorage(
+            signed.storage_path, undefined, engine === 'voxcpm' ? promptText : undefined, projectId,
+          );
+        } else {
+          uploadResult = await voiceApi.upload(file, engine === 'voxcpm' ? promptText : undefined, projectId);
+        }
         targetVoiceId = uploadResult.id;
         setUploadedVoiceId(targetVoiceId);
         setStep('cloning');
@@ -84,9 +104,10 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
       console.error('Clone failed:', err);
 
       // 文件模式：失败回滚删除已上传的记录
-      if (uploadedVoiceId && !voiceId) {
+      // （用局部变量 targetVoiceId：state 的 setUploadedVoiceId 在同一闭包不可见）
+      if (targetVoiceId && !voiceId) {
         try {
-          await voiceApi.delete(uploadedVoiceId);
+          await voiceApi.delete(targetVoiceId);
         } catch (rollbackErr) {
           console.error('Rollback failed:', rollbackErr);
         }

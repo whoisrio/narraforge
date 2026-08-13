@@ -23,7 +23,8 @@ See `docs/RUNBOOK.md` → "Cloudflare Workers Deployment".
 | `ACCESS_ENFORCEMENT` | No | Workers mode only: require the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access (401 `access_required` otherwise). `/health` and OPTIONS preflight are exempt. Never enabled in local mode. | `true` |
 | `CORS_ORIGINS` | No | Workers mode only: comma-separated allowed CORS origins (set to the Pages domain at deploy time). Local mode always uses `*`. | `*` |
 | `ASSET_STORE_BACKEND` | No | Binary asset store backend: `auto` (local mode → local FS; workers mode → R2 if a binding is injected, else Supabase Storage), or explicit `local` / `r2` / `supabase` | `auto` |
-| `LOG_TO_FILE` | No | Write logs to `logs/app.log`. Set `false` in Workers (no writable persistent FS) and Render (ephemeral FS, log to stdout). | `true` |
+| `UPSTREAM_TIMEOUT_SECONDS` | No | Outbound HTTP timeout for upstream APIs (e.g. MiMo TTS). Workers mode caps the effective value at 250s (Vercel Hobby fluid function limit 300s minus 50s headroom); local mode uses the value as-is | `120` |
+| `LOG_TO_FILE` | No | Write logs to `logs/app.log`. Set `false` in Workers (no writable persistent FS) and Render (ephemeral FS, log to stdout). On read-only filesystems (Vercel) the file handler is skipped automatically | `true` |
 
 ## Database
 

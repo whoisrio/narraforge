@@ -16,17 +16,22 @@ _LOCAL_FEATURES = {
     "speech_to_text": True,
     "agent_workflow": True,
     "backend_storage": True,
+    # 克隆音频直传 Supabase Storage（presigned upload URL）：仅 workers 模式需要
+    # （Vercel 请求体 4.5MB 上限）；local 走原 multipart 上传，行为不变。
+    "direct_storage_upload": False,
 }
 
 
 def get_capabilities(deploy_target: str) -> dict:
     """按部署目标返回能力清单。未知目标按 local 全量处理（本地开发体验不变）。"""
     if deploy_target == "workers":
+        features = {key: False for key in _LOCAL_FEATURES}
+        features["direct_storage_upload"] = True
         return {
             "deploy_target": "workers",
             "engines": list(WORKERS_ENGINES),
             "clone_engines": list(WORKERS_CLONE_ENGINES),
-            "features": {key: False for key in _LOCAL_FEATURES},
+            "features": features,
         }
     return {
         "deploy_target": "local",

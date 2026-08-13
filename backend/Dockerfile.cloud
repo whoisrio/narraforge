@@ -1,4 +1,4 @@
-# Slim cloud image for free-tier container hosts (Koyeb / HF Spaces / any Docker host).
+# Slim cloud image for free-tier container hosts (HF Spaces / any Docker host).
 # Runs the workers feature set (DEPLOY_TARGET=workers): online TTS only, Supabase persistence.
 # Local full-featured image with ffmpeg + local-ml: see Dockerfile.
 FROM python:3.12-slim
@@ -16,11 +16,12 @@ RUN uv sync --no-dev --extra local-services && rm -rf /root/.cache
 
 COPY . .
 
+# Default 7860 = HF Spaces Docker SDK app_port; other hosts inject their own PORT.
 ENV DEPLOY_TARGET=workers \
     LOG_TO_FILE=false \
-    PORT=8000
+    PORT=7860
 
-EXPOSE 8000
+EXPOSE 7860
 
-# Shell form so ${PORT} expands (Koyeb/HF Spaces inject their own PORT).
+# Shell form so ${PORT} expands (hosts may inject their own PORT).
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT}
