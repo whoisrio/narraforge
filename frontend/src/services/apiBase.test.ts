@@ -25,4 +25,11 @@ describe('apiUrl / API_BASE_URL', () => {
     const { apiUrl } = await import('./apiBase');
     expect(apiUrl('/config/capabilities')).toBe('https://api.example.com/api/config/capabilities');
   });
+
+  it('throws a clear error when VITE_API_BASE_URL lacks an http(s) scheme', async () => {
+    // 真实事故：填了 "xxx.vercel.app"（无 scheme）被当成相对路径拼到前端域名后，
+    // SPA 回退返回 index.html 200，排查困难。设了就必须是绝对 URL。
+    vi.stubEnv('VITE_API_BASE_URL', 'xxx.vercel.app/api');
+    await expect(import('./apiBase')).rejects.toThrow(/VITE_API_BASE_URL/);
+  });
 });
