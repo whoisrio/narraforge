@@ -8,3 +8,7 @@ compatibility_date = "2026-08-01"
 directory = "./dist"
 # SPA 回退：未命中的路径回 index.html（前端路由/深链刷新不 404）
 not_found_handling = "single-page-application"
+
+[observability]
+enabled = false
+
