@@ -19,7 +19,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from typing import Any
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
@@ -34,6 +34,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.repositories.deps import get_segmented_repo
 from app.core.repositories.segmented_projects import SegmentedProjectRepository
+from app.core.asset_store import AssetStore, get_asset_store
 from app.core.segmented_assets import project_dir
 from app.schemas.common import ItemsOut
 from app.schemas.segmented_project import (
@@ -117,19 +118,42 @@ async def delete_project(project_id: str, repo: SegmentedProjectRepository = Dep
     return None
 
 
-# ----- segment synthesis & audio (local-only: TTS 引擎 + 音频落盘) -----
+# ----- segment synthesis & audio (local: TTS 引擎 + 音频落盘; workers: edge-tts + Supabase Storage) -----
 
-@local_router.post(
+@router.post(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/synthesize",
     response_model=ProjectDetail,
 )
-def synthesize_segment(
+async def synthesize_segment(
     project_id: str,
     chapter_id: str,
     segment_id: str,
     body: SynthesizeSegmentRequest,
     db: Session = Depends(get_db),
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+    store: AssetStore = Depends(get_asset_store),
 ):
+    if settings.deploy_target == "workers":
+        # workers（Vercel/CF）：无 ORM/ffmpeg，走仓储 + asset store 的轻量实现
+        from app.services.segmented_synth_workers import synthesize_segment_workers
+
+        try:
+            detail = await synthesize_segment_workers(
+                repo, store,
+                project_id=project_id,
+                chapter_id=chapter_id,
+                segment_id=segment_id,
+                request_params=body.params,
+                text_override=body.text,
+                ssml_override=body.ssml,
+                keep_previous=body.keep_previous,
+                force=body.force,
+            )
+        except LookupError:
+            raise HTTPException(status_code=404, detail="segment_not_found")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return detail
     try:
         svc.synthesize_segment(
             db,
@@ -151,7 +175,7 @@ def synthesize_segment(
     return detail
 
 
-@local_router.post(
+@router.post(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/audio",
     response_model=ProjectDetail,
 )
@@ -162,6 +186,8 @@ async def upload_segment_audio(
     file: UploadFile = File(...),
     duration_sec: float | None = Form(None),
     db: Session = Depends(get_db),
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+    store: AssetStore = Depends(get_asset_store),
 ):
     """Upload a user-recorded audio file for a segment (self-recording).
 
@@ -171,6 +197,24 @@ async def upload_segment_audio(
     """
     _reject_scratchpad(project_id)
     content = await file.read()
+    if settings.deploy_target == "workers":
+        from app.services.segmented_synth_workers import upload_segment_audio_workers
+
+        try:
+            detail = await upload_segment_audio_workers(
+                repo, store,
+                project_id=project_id,
+                chapter_id=chapter_id,
+                segment_id=segment_id,
+                audio_bytes=content,
+                filename=file.filename or "",
+                duration_sec=duration_sec,
+            )
+        except LookupError:
+            raise HTTPException(status_code=404, detail="segment_not_found")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return detail
     try:
         svc.save_recorded_segment_audio(
             db,
@@ -292,15 +336,33 @@ async def apply_animation_spec_endpoint(
 
 # ----- segment audio file & chapter export (local-only: 磁盘文件 / ffmpeg) -----
 
-@local_router.get(
+@router.get(
     "/segmented-projects/{project_id}/audio/{chapter_id}/{segment_id}"
 )
-def get_segment_audio(
+async def get_segment_audio(
     project_id: str,
     chapter_id: str,
     segment_id: str,
     db: Session = Depends(get_db),
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+    store: AssetStore = Depends(get_asset_store),
 ):
+    if settings.deploy_target == "workers":
+        # workers：音频存 Supabase Storage，从 store 读
+        from app.services.segmented_synth_workers import get_segment_audio_workers
+
+        data = await get_segment_audio_workers(
+            repo, store,
+            project_id=project_id,
+            chapter_id=chapter_id,
+            segment_id=segment_id,
+        )
+        if data is None:
+            raise HTTPException(status_code=404, detail="audio_not_found")
+        resp = Response(content=data, media_type="audio/mpeg")
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
     seg = svc.get_segment_row(db, project_id, chapter_id, segment_id)
     if seg is None:
         raise HTTPException(status_code=404, detail="audio_not_found")

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
 
@@ -17,7 +17,9 @@ import aiofiles
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.repositories.deps import get_voice_repo
+from app.core.asset_store import AssetStore, get_asset_store
+from app.core.repositories.deps import get_tts_results_repo, get_voice_repo
+from app.core.repositories.tts_results import TTSResultRepository
 from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut
 from app.schemas.tts import TTSResultOut, TTSResultRecordOut
@@ -84,31 +86,44 @@ class BatchTTSRequest(BaseModel):
     pitch: float = Field(default=1.0, ge=0.5, le=2.0, description="音调比率，0.5-2.0")
 
 
-def _result_to_dict(r: TTSResultRecord) -> dict:
+def _result_to_dict(r: dict) -> dict:
     # Shape must match `TTSResultRecordOut` (app/schemas/tts.py); the
     # `/history` endpoint validates against it via response_model.
+    # 兼容 ORM 对象与仓储 dict 两种输入（Local 仓储返回 dict）。
+    if isinstance(r, dict):
+        rid = r["id"]
+        created_at = r.get("created_at")
+    else:
+        rid = r.id
+        created_at = r.created_at
     return {
-        "id": r.id,
-        "text": r.text,
-        "voice_id": r.voice_id,
-        "voice_name": r.voice_name,
-        "audio_url": f"/api/tts/audio/{r.id}",
-        "audio_format": r.audio_format,
-        "speed": r.speed,
-        "volume": r.volume,
-        "pitch": r.pitch,
-        "instruction": r.instruction,
-        "language": r.language,
-        "created_at": r.created_at.isoformat() if r.created_at else None,
+        "id": rid,
+        "text": r["text"] if isinstance(r, dict) else r.text,
+        "voice_id": r["voice_id"] if isinstance(r, dict) else r.voice_id,
+        "voice_name": r.get("voice_name") if isinstance(r, dict) else r.voice_name,
+        "audio_url": f"/api/tts/audio/{rid}",
+        "audio_format": r.get("audio_format") if isinstance(r, dict) else r.audio_format,
+        "speed": r.get("speed") if isinstance(r, dict) else r.speed,
+        "volume": r.get("volume") if isinstance(r, dict) else r.volume,
+        "pitch": r.get("pitch") if isinstance(r, dict) else r.pitch,
+        "instruction": r.get("instruction") if isinstance(r, dict) else r.instruction,
+        "language": r.get("language") if isinstance(r, dict) else r.language,
+        "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else created_at,
     }
 
 
 @router.post("/synthesize", response_model=TTSResultOut)
-async def synthesize_speech(request: TTSRequest, db: Session = Depends(get_db)):
+async def synthesize_speech(
+    request: TTSRequest,
+    db: Session = Depends(get_db),
+    repo: TTSResultRepository = Depends(get_tts_results_repo),
+    store: AssetStore = Depends(get_asset_store),
+):
     """合成语音 - 支持多引擎"""
     if request.engine == "edge_tts":
-        return await _synthesize_edge_tts(request, db)
+        return await _synthesize_edge_tts(request, db, repo, store)
     else:
+        # cosyvoice 依赖 dashscope/qwen SDK，workers 模式不挂载/不支持，保持原逻辑
         return await _synthesize_cosyvoice(request, db)
 
 
@@ -214,8 +229,17 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         raise HTTPException(status_code=500, detail=f"TTS synthesis failed: {str(e)}")
 
 
-async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db)):
-    """Edge-TTS 引擎合成"""
+async def _synthesize_edge_tts(
+    request: TTSRequest,
+    db: Session,
+    repo: TTSResultRepository,
+    store: AssetStore,
+):
+    """Edge-TTS 引擎合成
+
+    后端存储分支：音频经 asset store 落盘（local→data/tts-history/；
+    workers→Supabase Storage/R2），记录经仓储持久化（workers→Supabase tts_results）。
+    """
     if not request.edge_voice:
         raise HTTPException(status_code=400, detail="edge_voice is required for edge_tts engine")
 
@@ -254,26 +278,22 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
                 }
             }
 
-        # 后端存储模式（local）：落盘 + 持久化记录
-        audio_path = settings.tts_history_dir / f"tts_{audio_id}.mp3"
-        async with aiofiles.open(audio_path, "wb") as f:
-            await f.write(audio_data)
-
-        record = TTSResultRecord(
-            id=audio_id,
-            text=request.text,
-            voice_id=request.edge_voice,
-            voice_name=request.edge_voice,
-            audio_path=str(audio_path),
-            audio_format="mp3",
-            speed=1.0,
-            volume=80,
-            pitch=1.0,
-            instruction="",
-            language="Chinese",
-        )
-        db.add(record)
-        db.commit()
+        # 后端存储模式：音频进 asset store（local 写盘 / workers 写 Supabase Storage）
+        ref = await store.put(f"data/tts-history/tts_{audio_id}.mp3", audio_data)
+        repo.create({
+            "id": audio_id,
+            "text": request.text,
+            "voice_id": request.edge_voice,
+            "voice_name": request.edge_voice,
+            "audio_path": ref,
+            "audio_format": "mp3",
+            "speed": 1.0,
+            "volume": 80,
+            "pitch": 1.0,
+            "instruction": "",
+            "language": "Chinese",
+            "source": None,
+        })
 
         return {
             "audio_id": audio_id,
@@ -293,28 +313,31 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
 
 
 @router.get("/history", response_model=ItemsOut[TTSResultRecordOut])
-async def get_synthesis_history(db: Session = Depends(get_db)):
-    """获取合成历史列表"""
-    records = (
-        db.query(TTSResultRecord)
-        .order_by(TTSResultRecord.created_at.desc())
-        .all()
-    )
+async def get_synthesis_history(repo: TTSResultRepository = Depends(get_tts_results_repo)):
+    """获取合成历史列表（local→SQLite；workers→Supabase tts_results）"""
+    records = repo.list()
     return {"items": [_result_to_dict(r) for r in records]}
 
 
 @router.delete("/history/{result_id}")
-async def delete_synthesis_result(result_id: str, db: Session = Depends(get_db)):
+async def delete_synthesis_result(
+    result_id: str,
+    repo: TTSResultRepository = Depends(get_tts_results_repo),
+    store: AssetStore = Depends(get_asset_store),
+):
     """删除合成记录及音频文件"""
-    record = db.query(TTSResultRecord).filter(TTSResultRecord.id == result_id).first()
+    record = repo.get(result_id)
     if not record:
         raise HTTPException(status_code=404, detail="Result not found")
 
-    if os.path.exists(record.audio_path):
-        os.remove(record.audio_path)
+    ref = record.get("audio_path")
+    if ref:
+        try:
+            await store.delete(ref)
+        except Exception as e:
+            logger.warning(f"Failed to delete tts audio asset {ref}: {e}")
 
-    db.delete(record)
-    db.commit()
+    repo.delete(result_id)
 
     return {"message": "Result deleted"}
 
@@ -356,13 +379,29 @@ async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_d
 
 
 @router.get("/audio/{audio_id}")
-async def get_tts_audio(audio_id: str, db: Session = Depends(get_db)):
-    """获取 TTS 生成的音频 - 优先按 DB 记录的 audio_path 返回，兼容历史 tts_{id}.{ext} 文件"""
-    record = db.query(TTSResultRecord).filter(TTSResultRecord.id == audio_id).first()
-    if record and os.path.exists(record.audio_path):
-        ext = (record.audio_format or "mp3").lower()
+async def get_tts_audio(
+    audio_id: str,
+    repo: TTSResultRepository = Depends(get_tts_results_repo),
+    store: AssetStore = Depends(get_asset_store),
+):
+    """获取 TTS 生成的音频。
+
+    优先按 DB 记录的 audio_path（asset store ref）读取：local→磁盘文件，
+    workers→Supabase Storage/R2。兼容历史绝对路径记录与旧 tts_{id}.{ext} 命名。
+    """
+    record = repo.get(audio_id)
+    if record and record.get("audio_path"):
+        data = await store.get(record["audio_path"])
+        if data is not None:
+            ext = (record.get("audio_format") or "mp3").lower()
+            media_type = "audio/mpeg" if ext == "mp3" else f"audio/{ext}"
+            return Response(content=data, media_type=media_type)
+
+    # 兼容旧记录：audio_path 为本地绝对路径（历史数据）
+    if record and record.get("audio_path") and os.path.exists(record["audio_path"]):
+        ext = (record.get("audio_format") or "mp3").lower()
         media_type = "audio/mpeg" if ext == "mp3" else f"audio/{ext}"
-        return FileResponse(record.audio_path, media_type=media_type)
+        return FileResponse(record["audio_path"], media_type=media_type)
 
     # 兼容旧记录 / 旧 batch 临时文件命名：tts_{id}.{ext}（新根优先，旧目录回退）
     for base in (settings.tts_history_dir, settings.voices_dir):

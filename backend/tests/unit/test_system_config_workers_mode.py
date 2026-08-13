@@ -1,6 +1,7 @@
 """步骤 3A：workers 模式下 system_config / model_config 的行为契约。
 
-- storage_mode 固定 frontend：get 直接返回 "frontend"，PUT 忽略（不报错、不写库）。
+- storage_mode 在 workers 模式同样生效（读/写 Supabase system_configs），
+  使 Vercel 部署下"后端存储"可用（音频进 Supabase Storage）。
 - get_config / set_config 在 workers 模式委托 Supabase 仓储（db 形参为 None 也可用），
   使 model_config_service 的所有下游（llm_client、mimo_tts_service）无需改签名。
 """
@@ -35,17 +36,33 @@ def _mock_supabase(monkeypatch, handler):
     return requests
 
 
-class TestStorageModeFixedFrontend:
-    def test_get_storage_mode_ignores_db(self, workers):
+class TestStorageModeWorkers:
+    def test_get_storage_mode_default_frontend(self, workers):
+        _mock_supabase(workers, lambda req: httpx.Response(200, json=[]))
         assert system_config_service.get_storage_mode(None) == "frontend"
 
-    def test_is_frontend_storage_true(self, workers):
-        assert system_config_service.is_frontend_storage(None) is True
+    def test_get_storage_mode_backend_via_supabase(self, workers):
+        _mock_supabase(workers, lambda req: httpx.Response(200, json=[{"value": "backend"}]))
+        assert system_config_service.get_storage_mode(None) == "backend"
+        assert system_config_service.is_frontend_storage(None) is False
 
-    def test_set_storage_mode_is_noop(self, workers):
-        # 不触碰 db（None），不报错
+    def test_set_storage_mode_writes_via_supabase(self, workers):
+        seen: dict = {}
+        store: dict[str, str] = {}
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            if req.method == "GET":
+                return httpx.Response(200, json=[])
+            body = json.loads(req.content)
+            store[body[0]["key"]] = body[0]["value"]
+            seen["body"] = body[0]
+            return httpx.Response(201, json=body)
+
+        _mock_supabase(workers, handler)
+        # db=None：workers 模式不触碰 Session，写入经 Supabase 仓储提交
         system_config_service.set_storage_mode(None, "backend")
-        assert system_config_service.get_storage_mode(None) == "frontend"
+        assert store["storage_mode"] == "backend"
+        assert seen["body"]["key"] == "storage_mode"
 
     def test_set_storage_mode_still_validates(self, workers):
         with pytest.raises(ValueError):
@@ -129,12 +146,14 @@ class TestRepoDeps:
         from app.core.repositories.roles import LocalRoleRepository
         from app.core.repositories.source_documents import LocalSourceDocumentRepository
         from app.core.repositories.system_configs import LocalSystemConfigRepository
+        from app.core.repositories.tts_results import LocalTTSResultRepository
         from app.core.repositories.voice_profiles import LocalVoiceProfileRepository
 
         assert isinstance(await deps.get_system_config_repo(db_session), LocalSystemConfigRepository)
         assert isinstance(await deps.get_role_repo(db_session), LocalRoleRepository)
         assert isinstance(await deps.get_voice_repo(db_session), LocalVoiceProfileRepository)
         assert isinstance(await deps.get_source_document_repo(db_session), LocalSourceDocumentRepository)
+        assert isinstance(await deps.get_tts_results_repo(db_session), LocalTTSResultRepository)
 
     @pytest.mark.asyncio
     async def test_workers_mode_returns_supabase_repos(self, workers):
@@ -142,6 +161,7 @@ class TestRepoDeps:
         from app.core.repositories.roles import SupabaseRoleRepository
         from app.core.repositories.source_documents import SupabaseSourceDocumentRepository
         from app.core.repositories.system_configs import SupabaseSystemConfigRepository
+        from app.core.repositories.tts_results import SupabaseTTSResultRepository
         from app.core.repositories.voice_profiles import SupabaseVoiceProfileRepository
         from app.core.supabase_client import SupabaseClient
 
@@ -156,3 +176,4 @@ class TestRepoDeps:
         assert isinstance(await deps.get_role_repo(None), SupabaseRoleRepository)
         assert isinstance(await deps.get_voice_repo(None), SupabaseVoiceProfileRepository)
         assert isinstance(await deps.get_source_document_repo(None), SupabaseSourceDocumentRepository)
+        assert isinstance(await deps.get_tts_results_repo(None), SupabaseTTSResultRepository)

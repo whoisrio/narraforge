@@ -48,7 +48,8 @@ class TestCapabilitiesWorkers:
         assert data["features"] == {
             "speech_to_text": False,
             "agent_workflow": False,
-            "backend_storage": False,
+            # 后端存储已放开：TTS 历史 / 分段音频经 asset store 存 Supabase Storage
+            "backend_storage": True,
             "direct_storage_upload": True,
         }
 

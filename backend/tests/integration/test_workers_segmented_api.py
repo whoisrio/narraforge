@@ -494,10 +494,7 @@ class TestLocalOnlyEndpointsNotMounted:
     def test_synthesis_and_file_endpoints_404(self, workers_client):
         client, _ = workers_client
         cases = [
-            ("post", "/api/segmented-projects/p/chapters/c/segments/s/synthesize",
-             {"json": {}}),
-            ("post", "/api/segmented-projects/p/chapters/c/segments/s/audio", {}),
-            ("get", "/api/segmented-projects/p/audio/c/s", {}),
+            # synthesize/上传/读取音频已 worker 化（Supabase Storage），见下测试
             ("get", "/api/segmented-projects/p/chapters/c/export-audio", {}),
             ("post", "/api/segmented-projects/p/export-all-chapters", {}),
             ("post", "/api/segmented-projects/p/chapters/c/adjust-audio", {"json": {}}),
@@ -514,3 +511,29 @@ class TestLocalOnlyEndpointsNotMounted:
             assert resp.status_code in (404, 405), (
                 f"{method.upper()} {url} -> {resp.status_code}"
             )
+
+    def test_audio_endpoints_mounted_in_workers(self, workers_client, monkeypatch):
+        """合成/上传/读取音频端点已 worker 化：注入 mock asset store 后，
+        端点走 workers 分支（fake repo 无项目 → 业务 404），不再因
+        Storage 未配置抛 RuntimeError。挂载本身由 test_app_factory 锁。"""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from app.core.asset_store import get_asset_store
+
+        client, _ = workers_client
+        mock_store = MagicMock()
+        mock_store.put = AsyncMock(return_value="k")
+        mock_store.get = AsyncMock(return_value=None)
+        client.app.dependency_overrides[get_asset_store] = lambda: mock_store
+        try:
+            # synthesize/读取：fake repo 无项目 → 业务 404
+            resp = client.post(
+                "/api/segmented-projects/p/chapters/c/segments/s/synthesize", json={})
+            assert resp.status_code == 404
+            resp = client.get("/api/segmented-projects/p/audio/c/s")
+            assert resp.status_code == 404
+            # upload：缺 file 参数 → 422（端点已挂载并进入参数校验）
+            resp = client.post("/api/segmented-projects/p/chapters/c/segments/s/audio")
+            assert resp.status_code in (404, 422)
+        finally:
+            client.app.dependency_overrides.clear()

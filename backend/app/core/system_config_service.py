@@ -54,9 +54,11 @@ def set_config(db: Session, key: str, value: str) -> None:
 
 
 def get_storage_mode(db: Session) -> str:
-    """获取当前存储模式，默认 frontend。workers 模式固定 frontend（音频不经 Workers 持久化）。"""
-    if _in_workers():
-        return STORAGE_MODE_FRONTEND
+    """获取当前存储模式，默认 frontend。
+
+    workers 模式同样读 Supabase system_configs 的 storage_mode（get_config 已按
+    deploy_target 分发），使 Vercel 部署下"后端存储"可用（音频进 Supabase Storage）。
+    """
     mode = get_config(db, "storage_mode", STORAGE_MODE_FRONTEND)
     if mode not in VALID_STORAGE_MODES:
         return STORAGE_MODE_BACKEND
@@ -64,18 +66,14 @@ def get_storage_mode(db: Session) -> str:
 
 
 def set_storage_mode(db: Session, mode: str) -> None:
-    """设置存储模式，由调用方负责 commit。workers 模式忽略写入（始终 frontend）。"""
+    """设置存储模式，由调用方负责 commit。workers 模式经 Supabase 仓储写入（自带提交）。"""
     if mode not in VALID_STORAGE_MODES:
         raise ValueError(f"Invalid storage mode: {mode}")
-    if _in_workers():
-        return
     set_config(db, "storage_mode", mode)
 
 
 def is_frontend_storage(db: Session) -> bool:
-    """判断当前是否为前端存储模式。workers 模式恒为 True。"""
-    if _in_workers():
-        return True
+    """判断当前是否为前端存储模式（workers 模式同样按 storage_mode 判定）。"""
     return get_storage_mode(db) == STORAGE_MODE_FRONTEND
 
 
