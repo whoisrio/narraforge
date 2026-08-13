@@ -101,9 +101,7 @@ class TestWorkersApp:
         "/api/segmented-projects/{project_id}/chapters/{chapter_id}/rewrite-script-from-segments",
     ]
     _SEGMENTED_LOCAL_ONLY_PATHS = [
-        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/synthesize",
-        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/audio",
-        "/api/segmented-projects/{project_id}/audio/{chapter_id}/{segment_id}",
+        # synthesize/上传/读取音频已 worker 化（Supabase Storage），workers 挂载
         "/api/segmented-projects/{project_id}/chapters/{chapter_id}/export-audio",
         "/api/segmented-projects/{project_id}/export-all-chapters",
         "/api/segmented-projects/{project_id}/export-text-file-to-remotion",
@@ -112,6 +110,12 @@ class TestWorkersApp:
         "/api/segmented-projects/migrate",
         "/api/segmented-projects/{project_id}/export",
         "/api/segmented-projects/import",
+    ]
+
+    _SEGMENTED_WORKERS_MOUNTED_PATHS = [
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/synthesize",
+        "/api/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/audio",
+        "/api/segmented-projects/{project_id}/audio/{chapter_id}/{segment_id}",
     ]
 
     @pytest.mark.parametrize("path", _SEGMENTED_METADATA_PATHS)
@@ -123,6 +127,12 @@ class TestWorkersApp:
     def test_excludes_segmented_local_only_endpoints(self, path: str):
         app = main_module.create_app("workers")
         assert path not in _route_paths(app)
+
+    @pytest.mark.parametrize("path", _SEGMENTED_WORKERS_MOUNTED_PATHS)
+    def test_mounts_segmented_audio_endpoints_in_workers(self, path: str):
+        """合成/上传/读取音频端点已 worker 化，workers 模式挂载。"""
+        app = main_module.create_app("workers")
+        assert path in _route_paths(app)
 
     @pytest.mark.parametrize("path", _SEGMENTED_METADATA_PATHS + _SEGMENTED_LOCAL_ONLY_PATHS)
     def test_local_mode_keeps_all_segmented_endpoints(self, path: str):

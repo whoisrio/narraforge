@@ -21,6 +21,7 @@ from app.models.segmented_project import (
 )
 from app.models.source_document import SourceDocument
 from app.models.system_config import SystemConfig
+from app.models.tts_result import TTSResultRecord
 from app.models.voice_profile import VoiceProfile
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent.parent / "supabase" / "schema.sql"
@@ -33,6 +34,7 @@ MODELS = {
     "segmented_projects": SegmentedProject,
     "segmented_project_chapters": SegmentedProjectChapter,
     "segmented_project_segments": SegmentedProjectSegment,
+    "tts_results": TTSResultRecord,
 }
 
 # DDL 列定义里非列名的前导关键字（约束/表级定义）

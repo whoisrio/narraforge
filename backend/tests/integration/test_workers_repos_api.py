@@ -46,19 +46,22 @@ def workers_client(monkeypatch):
 
 
 class TestStorageMode:
-    def test_get_always_frontend(self, workers_client):
+    def test_get_default_frontend(self, workers_client):
         client, _ = workers_client
         resp = client.get("/api/config/storage-mode")
         assert resp.status_code == 200
         assert resp.json() == {"storage_mode": "frontend"}
 
-    def test_put_ignored_and_still_frontend(self, workers_client):
+    def test_put_backend_persists(self, workers_client):
         client, store = workers_client
         resp = client.put("/api/config/storage-mode", json={"storage_mode": "backend"})
         assert resp.status_code == 200
-        assert resp.json() == {"storage_mode": "frontend"}
-        # 忽略语义：不写库
-        assert store.tables["system_configs"] == []
+        assert resp.json() == {"storage_mode": "backend"}
+        # 后端存储已放开：写入 Supabase system_configs（不再是忽略 noop）
+        assert any(
+            row.get("key") == "storage_mode" and row.get("value") == "backend"
+            for row in store.tables.get("system_configs", [])
+        )
 
     def test_put_invalid_mode_rejected(self, workers_client):
         client, _ = workers_client

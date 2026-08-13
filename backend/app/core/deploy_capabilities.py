@@ -27,6 +27,9 @@ def get_capabilities(deploy_target: str) -> dict:
     if deploy_target == "workers":
         features = {key: False for key in _LOCAL_FEATURES}
         features["direct_storage_upload"] = True
+        # 后端存储可用：TTS 历史 / 分段项目音频经 asset store 存 Supabase Storage，
+        # 记录走 Supabase 仓储（原 spec §4 定"workers 无后端存储"，2026-08 放开）
+        features["backend_storage"] = True
         return {
             "deploy_target": "workers",
             "engines": list(WORKERS_ENGINES),

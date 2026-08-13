@@ -72,6 +72,17 @@ async def get_source_document_repo(db: Session = Depends(get_db)):
     return LocalSourceDocumentRepository(db)
 
 
+async def get_tts_results_repo(db: Session = Depends(get_db)):
+    from app.core.repositories.tts_results import (
+        LocalTTSResultRepository,
+        SupabaseTTSResultRepository,
+    )
+
+    if _workers_mode():
+        return SupabaseTTSResultRepository(get_supabase_client())
+    return LocalTTSResultRepository(db)
+
+
 async def get_segmented_repo(db: Session = Depends(get_db)):
     from app.core.repositories.segmented_projects import (
         LocalSegmentedProjectRepository,

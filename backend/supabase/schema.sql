@@ -117,6 +117,24 @@ create table if not exists segmented_project_segments (
 
 create index if not exists ix_segments_chapter_id on segmented_project_segments (chapter_id);
 
+-- TTS 合成历史（后端存储模式）：workers 模式下音频存 Supabase Storage
+-- （audio_path 为 bucket key），记录存本表。
+create table if not exists tts_results (
+    id text primary key,
+    text text not null,
+    voice_id text not null,
+    voice_name text,
+    audio_path text not null,
+    audio_format text default 'wav',
+    speed double precision default 1.0,
+    volume double precision default 80,
+    pitch double precision default 1.0,
+    instruction text,
+    language text default 'Chinese',
+    source text,
+    created_at timestamptz default now()
+);
+
 -- 环状 FK：segmented_projects.default_narrator_role_id → roles(id)
 -- （roles 在 segmented_projects 之后建表，只能后置补约束）
 alter table segmented_projects
