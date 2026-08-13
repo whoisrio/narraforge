@@ -4,7 +4,10 @@ import type { SegmentedProject } from '../../types';
 import 'fake-indexeddb/auto';
 
 const { fakeApi } = vi.hoisted(() => {
-  const fake = { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() };
+  const fake = {
+    get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn(),
+    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
+  };
   return { fakeApi: fake };
 });
 
@@ -16,7 +19,9 @@ vi.mock('axios', () => ({
 
 import { backendStorage } from '../backendSegmentedProjectStorage';
 
-beforeEach(() => { Object.values(fakeApi).forEach((f) => (f as Mock).mockReset()); });
+beforeEach(() => {
+  Object.values(fakeApi).forEach((f) => { if (typeof (f as Mock).mockReset === 'function') (f as Mock).mockReset(); });
+});
 
 describe('backendStorage', () => {
   it('listProjects calls GET /segmented-projects and maps summary stats for project cards', async () => {

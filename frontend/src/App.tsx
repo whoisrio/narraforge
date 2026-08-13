@@ -21,6 +21,8 @@ import { ConfirmProvider } from './components/ui/Confirm';
 import { useConfirm } from './components/ui/useConfirm';
 import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
+import { UnlockGate } from './components/Auth/UnlockGate';
+import { getToken, isAuthRequired, reloadPage } from './services/auth';
 import type { SegmentedProject } from './types';
 import styles from './App.module.css';
 
@@ -275,6 +277,19 @@ function AppContent() {
 }
 
 export default function App() {
+  // 无域名部署的共享口令门控（spec 5.2b）：auth 开启且本地无口令时只渲染解锁页；
+  // 解锁成功后整页刷新，Capabilities 等启动探测带口令重试。
+  // 本地开发不设 VITE_AUTH_REQUIRED，isAuthRequired() 恒 false，行为不变。
+  const [locked] = useState(() => isAuthRequired() && !getToken());
+  if (locked) {
+    return (
+      <ThemeProvider>
+        <TranslationProvider>
+          <UnlockGate onUnlocked={reloadPage} />
+        </TranslationProvider>
+      </ThemeProvider>
+    );
+  }
   return (
     <ThemeProvider>
       <TranslationProvider>

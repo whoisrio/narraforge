@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # 网关共享密钥（HF Spaces 部署：CF Worker 网关注入 X-Narraforge-Gateway-Secret，
     # Space 私有、无 Access 边缘注入邮箱头；空串 = 关闭该凭证通道，仅认 Access 邮箱头）
     gateway_secret: str = ""
+    # Bearer 共享口令（无域名 Vercel + Pages 直连部署：前端解锁页持有口令，请求带
+    # Authorization: Bearer <token>；空串 = 关闭该凭证通道）
+    access_token: str = ""
     # CORS 允许来源（仅 workers 模式生效，部署时填 Pages 域名；local 恒为 ["*"]，见 main.create_app）。
     # 环境变量/[vars] 用逗号分隔；NoDecode 关闭 pydantic-settings 的 JSON 解码，交 BeforeValidator 拆分。
     cors_origins: Annotated[list[str], NoDecode, BeforeValidator(_split_csv)] = ["*"]

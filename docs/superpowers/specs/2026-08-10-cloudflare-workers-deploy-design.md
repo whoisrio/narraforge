@@ -85,6 +85,15 @@ workers 运行时没有原生 socket，psycopg/asyncpg 不可用（spike 结论�
 
 ### 3.6 鉴权（新增，必须）：Cloudflare Access
 
+> 2026-08 补充（无自有域名场景）：Access 无法保护 workers.dev/pages.dev 免费子域，
+> 此时改用**共享 Bearer 口令**——后端 settings 新增 `access_token`（env `ACCESS_TOKEN`），
+> workers 中间件在 Access 邮箱头、网关密钥头之外增加第三条凭证路径
+> `Authorization: Bearer <token>`（hmac.compare_digest，三条任一满足即放行）；
+> 前端构建期开关 `VITE_AUTH_REQUIRED=true` 启用全屏解锁页
+> （`components/Auth/UnlockGate`），口令存 localStorage（`nf_access_token`），
+> axios 实例统一经 `services/auth.ts` 的请求拦截器注入 Bearer 头，401 时清除口令并回到解锁页。
+> 本地不设 `VITE_AUTH_REQUIRED`，行为完全不变。以下 Access 方案仍是有自有域名时的推荐加固。
+
 本地版无鉴权，公网部署必须加，否则任何人能消耗 mimo/edge-tts 调用额度、读写你的项目数据。
 采用 **Cloudflare Access**（Zero Trust，免费档 50 用户）在边缘统一拦截，不自建口令体系：
 - 在 Zero Trust 控制台建一个 Access 应用（self-hosted），策略覆盖 Pages 域名和 API 域名两个 hostname；登录方式用邮箱一次性验证码（OTP），允许列表填自己的邮箱。
@@ -165,11 +174,14 @@ workers 模式代码原样跑在 HF Space Docker SDK（CPython）：`DEPLOY_TARG
 - Cloudflare 侧 `api.<域名>` 绑 Worker 路由 + Access 应用覆盖 + SSL Full
   （详见 RUNBOOK「HF Spaces + Cloudflare Worker 网关」章节）。
 
-### 5.2b 后端（Vercel Hobby + CF Worker 网关，当前方案）
+### 5.2b 后端（Vercel Hobby，当前方案）
 
-> 2026-08 定稿：HF Spaces 全面收费后改为 **Vercel Hobby（免卡）+ Cloudflare Worker 纯 JS 网关**。
-> 跑的还是 `DEPLOY_TARGET=workers` 的瘦身 FastAPI；Vercel 是无服务器函数，
-> 平台约束与适配点如下（2026-08 官方文档核实）。
+> 2026-08 定稿：HF Spaces 全面收费后改为 **Vercel Hobby（免卡）** 跑 `DEPLOY_TARGET=workers` 的瘦身 FastAPI。
+> 2026-08 再次变更：用户无自有域名，CF Worker 网关 + Access 降级为可选加固；
+> **主线为 Pages 前端直连 `<project>.vercel.app` + 共享 Bearer 口令**（见 3.6 补充与 RUNBOOK
+> 「Vercel + Cloudflare Pages 直连 Deployment」章节）：Pages 环境变量
+> `VITE_API_BASE_URL=https://<project>.vercel.app/api`、`VITE_AUTH_REQUIRED=true`，
+> Vercel 环境变量配 `ACCESS_TOKEN`（`GATEWAY_SECRET` 仅网关方案用，直连留空）。
 
 平台约束与适配：
 
@@ -198,12 +210,13 @@ workers 模式代码原样跑在 HF Space Docker SDK（CPython）：`DEPLOY_TARG
 - **只读文件系统**：workers 模式本就不建本地目录；`setup_logging` 打不开日志
   文件时降级为仅控制台（建议 `LOG_TO_FILE=false`）；bundle 上限 500MB，
   `backend/.vercelignore` 排除 tests/data/venv 等。
-- **网关**：`gateway/` 代码不变，`UPSTREAM_ORIGIN` 指 Vercel 部署域名
+- **网关（可选加固，需自有域名）**：`gateway/` 代码不变，`UPSTREAM_ORIGIN` 指 Vercel 部署域名
   （`https://<project>.vercel.app`）；`HF_TOKEN` secret 填占位串即可
   （注入的 Authorization 头对 Vercel 无害）。Access 配置不变；
-  `<project>.vercel.app` 直连靠后端密钥头校验挡住。
+  `<project>.vercel.app` 直连靠后端密钥头校验挡住。无域名直连方案不部署网关，
+  鉴权靠 `ACCESS_TOKEN` Bearer 口令。
 
-详细操作步骤见 RUNBOOK「Vercel + Cloudflare Worker 网关 Deployment」章节。
+详细操作步骤见 RUNBOOK「Vercel + Cloudflare Pages 直连 Deployment」章节。
 
 ### 5.3 Supabase
 - 免费档建项目，执行 Postgres schema 迁移 SQL（来自 3.5；`schema.sql` 末尾同时创建
