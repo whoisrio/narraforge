@@ -7,6 +7,7 @@ import { ModelConfig } from './pages/ModelConfig';
 import { ProjectHub } from './components/ProjectHub/ProjectHub';
 import { configApi, segmentedProjectApi } from './services/api';
 import { indexedDBStorage, type SegmentedProjectStorage } from './services/segmentedProjectStorage';
+import { downloadProjectBundle, importProjectBundleFromFile } from './services/projectBundle';
 import { backendStorage } from './services/backendSegmentedProjectStorage';
 import { createInitialProject } from './hooks/useSegmentedProject';
 import { StorageModeContext, type StorageMode } from './hooks/useStorageMode';
@@ -175,7 +176,14 @@ function AppContent() {
 
   const handleExportProject = async (projectId: string) => {
     try {
-      await segmentedProjectApi.exportProject(projectId);
+      if (effectiveStorageMode === 'frontend') {
+        // 前端模式：本地打包（与后端同构 .narraforge.zip），不依赖后端导出端点
+        const project = await projectStorage.getProject(projectId);
+        if (!project) throw new Error('project_not_found');
+        await downloadProjectBundle(project);
+      } else {
+        await segmentedProjectApi.exportProject(projectId);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('projectHub.import.failed'));
     }
@@ -183,7 +191,12 @@ function AppContent() {
 
   const handleImportProject = async (file: File) => {
     try {
-      await segmentedProjectApi.importProject(file);
+      if (effectiveStorageMode === 'frontend') {
+        // 前端模式：解包适配为 IndexedDB 项目（后端包同样可导）
+        await importProjectBundleFromFile(file);
+      } else {
+        await segmentedProjectApi.importProject(file);
+      }
       await refreshProjects();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: unknown } } };

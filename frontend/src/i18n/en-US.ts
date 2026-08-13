@@ -498,6 +498,10 @@ export const enUS: Messages = {
     errorExportFailed: 'Export failed',
     mp3ExportFailed: 'MP3 export failed: ',
     segmentsNotReady: 'segments not ready, will skip. Continue?',
+    exportToFolder: 'Export to Folder (per segment)',
+    folderExportHint: 'Frontend mode: write per-segment audio + subtitle to a chosen folder (Chrome/Edge pick directory; others download files)',
+    folderExportDone: 'Exported {audio} audio segments ({skipped} skipped, no audio)',
+    folderExportFailed: 'Export to folder failed',
   },
   roleSync: {
     syncCurrent: 'Sync Current Segment',

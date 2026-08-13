@@ -8,6 +8,7 @@ import { segmentedProjectApi, subtitleLlmApi } from '../../services/api';
 import { buildSRTContent, buildExportTimeline, concatAudioBuffers, encodeWAV } from '../../services/audioConcat';
 import { stripStyleTags } from '../../services/styleTags';
 import { getTTSAudioBlob } from '../../services/indexedDB';
+import { exportChapterToFolder } from '../../services/exportToFolder';
 import styles from './ExportDialog.module.css';
 
 interface ExportDialogProps {
@@ -44,6 +45,8 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
   const [targetLang, setTargetLang] = useState('English');
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [folderExport, setFolderExport] = useState(false);
   const { t } = useTranslation();
   const confirm = useConfirm();
 
@@ -69,7 +72,18 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
       const segsWithTs = buildExportTimeline(segments, storageMode, startOffset);
 
       // Audio: backend storage exports MP3 from server; frontend storage keeps WAV concat.
-      if (options.includes('audio')) {
+      const folderMode = storageMode === 'frontend' && folderExport;
+      if (folderMode) {
+        // 前端模式 + 导出到文件夹：逐段音频 + SRT 直接写入用户指定目录（降级为下载）
+        const result = await exportChapterToFolder(segments, chapterDesignTitle || name, {
+          startOffsetSec: srtUseGlobalTime ? globalStartOffset : 0,
+          includeSrt: options.includes('srt'),
+        });
+        setSuccess(t('export.folderExportDone', {
+          audio: String(result.audioFiles),
+          skipped: String(result.skipped),
+        }));
+      } else if (options.includes('audio')) {
         const ready = segsWithTs;
         if (ready.length < segments.length) {
           const confirmMsg = t('segment.exportDialog.confirmSkip', {
@@ -133,8 +147,8 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
         await exportTextFile(`${sanitized}.script.json`, json, 'application/json');
       }
 
-      // SRT
-      if (options.includes('srt')) {
+      // SRT（folder 模式已随音频写入目录，跳过重复下载）
+      if (options.includes('srt') && !folderMode) {
         const srt = buildSRTContent(segsWithTs.map(s => ({
           text: stripStyleTags(s.text), startMs: s._startMs, endMs: s._endMs,
         })));
@@ -160,7 +174,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
     } finally {
       setExporting(false);
     }
-  }, [segments, name, options, targetLang, storageMode, projectId, chapterId, chapterDesignTitle, remotionProjectPath, exportDirectory, srtUseGlobalTime, globalStartOffset, t]);
+  }, [segments, name, options, targetLang, storageMode, folderExport, projectId, chapterId, chapterDesignTitle, remotionProjectPath, exportDirectory, srtUseGlobalTime, globalStartOffset, t]);
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -172,6 +186,15 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
         </div>
         <div className={styles.options}>
           <label><input type="checkbox" checked={options.includes('audio')} onChange={() => toggleOpt('audio')} /> {storageMode === 'backend' ? t('export.audioMp3') : t('export.audioWav')}</label>
+          {storageMode === 'frontend' && (
+            <>
+              <label className={styles.folderOpt}>
+                <input type="checkbox" checked={folderExport} onChange={() => setFolderExport(v => !v)} />
+                {t('export.exportToFolder')}
+              </label>
+              {folderExport && <div className={styles.hint}>{t('export.folderExportHint')}</div>}
+            </>
+          )}
           <label><input type="checkbox" checked={options.includes('srt')} onChange={() => toggleOpt('srt')} /> {t('export.srtSubtitle')}</label>
           {options.includes('srt') && globalStartOffset > 0 && (
             <label style={{ marginLeft: '20px', fontSize: '0.9em' }}>
@@ -188,6 +211,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
           </div>
         )}
         {error && <div className={styles.error}>{error}</div>}
+        {success && <div className={styles.hint}>{success}</div>}
         <div className={styles.buttons}>
           <button className={styles.cancelBtn} onClick={onClose}>{t('common.cancel')}</button>
           <button className={styles.exportBtn} onClick={doExport} disabled={exporting}>

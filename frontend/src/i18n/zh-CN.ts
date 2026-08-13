@@ -496,6 +496,10 @@ export const zhCN = {
     errorExportFailed: '导出失败',
     mp3ExportFailed: 'MP3 导出失败：',
     segmentsNotReady: '段未生成，将跳过。继续？',
+    exportToFolder: '导出到文件夹（逐段）',
+    folderExportHint: '前端模式：逐段导出音频 + 字幕到指定文件夹（Chrome/Edge 选目录；其他浏览器逐文件下载）',
+    folderExportDone: '已导出 {audio} 段音频（{skipped} 段无音频已跳过）',
+    folderExportFailed: '导出到文件夹失败',
   },
   roleSync: {
     syncCurrent: '同步当前段',

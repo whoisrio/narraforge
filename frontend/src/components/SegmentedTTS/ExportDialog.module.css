@@ -27,6 +27,13 @@
   font-size: var(--font-size-sm); color: var(--color-text-secondary);
   display: flex; align-items: center; gap: 6px;
 }
+.folderOpt { font-weight: 600; color: var(--color-text-primary) !important; }
+.hint {
+  font-size: var(--font-size-xs); color: var(--color-text-secondary);
+  background: color-mix(in srgb, var(--color-text-secondary) 8%, transparent);
+  border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+  padding: var(--spacing-sm) var(--spacing-md); margin-bottom: var(--spacing-md);
+}
 .langRow { display: flex; gap: var(--spacing-sm); align-items: center; margin-bottom: var(--spacing-md); }
 .langRow select {
   background: var(--color-background); border: 1px solid var(--color-border);
