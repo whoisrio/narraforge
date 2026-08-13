@@ -407,16 +407,18 @@ uv run --extra workers pywrangler deploy
 
 ---
 
-## Vercel + Cloudflare Pages 直连 Deployment (free tier, 当前方案)
+## Vercel + Cloudflare Workers 静态资产 Deployment (free tier, 当前方案)
 
 > 2026-08 变更：HF Spaces 已全面收费（免费 CPU 档取消），HF 方案弃用（见下一节，代码保留作参考）。
-> 2026-08 再次变更：用户无自有域名，Cloudflare Access 无法保护 workers.dev/pages.dev 免费子域，
+> 2026-08 再次变更：用户无自有域名，Cloudflare Access 无法保护 workers.dev 免费子域，
 > Access + CF Worker 网关方案降级为「有自有域名时的可选加固」（见本节末）。
-> 当前主线：**Vercel Hobby（免卡）跑后端 serverless 函数 + Cloudflare Pages 前端直连 Vercel，
+> 2026-08 三次变更：Pages 进入维护模式、新控制台默认建 Worker，前端改用
+> **Workers Static Assets**（Pages 官方继任方案，静态请求免费，配置见 `frontend/wrangler.toml`）。
+> 当前主线：**Vercel Hobby（免卡）跑后端 serverless 函数 + Cloudflare Workers 静态资产托管前端，
 > 后端校验共享 Bearer 口令**——前端解锁页输入口令后逐请求带 `Authorization: Bearer <token>`。
 
 ```
-浏览器 → Pages（<app>.pages.dev，前端解锁页持共享口令）
+浏览器 → CF Workers 静态资产（narraforge-web.<子域>.workers.dev，解锁页持共享口令）
               │ Authorization: Bearer <ACCESS_TOKEN>
               ▼
        Vercel Functions（<project>.vercel.app，Python runtime）
@@ -452,7 +454,7 @@ Project → Settings → Environment Variables（Production），完整示例见
 | `DEPLOY_TARGET` | `workers` | 纯在线路由，不注册本地模型路由 |
 | `ACCESS_TOKEN` | `openssl rand -hex 32` | 共享 Bearer 口令，无域名直连方案的唯一凭证；前端解锁页输入的口令须与此一致 |
 | `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验 Access 邮箱头 / 网关密钥头 / Bearer 口令，任一满足即放行 |
-| `CORS_ORIGINS` | Pages 域名（逗号分隔） | 如 `https://narraforge.pages.dev` |
+| `CORS_ORIGINS` | 前端域名（逗号分隔） | 如 `https://narraforge-web.<子域>.workers.dev` |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
 | `SUPABASE_STORAGE_BUCKET` | `voice-assets` | 须与 schema.sql 创建的 bucket 同名 |
 | `ASSET_STORE_BACKEND` | `auto` | 无 R2 binding → Supabase Storage（函数 FS 临时，落盘会丢） |
@@ -462,16 +464,27 @@ Project → Settings → Environment Variables（Production），完整示例见
 | `UPSTREAM_TIMEOUT_SECONDS` | 可选，默认 `120` | 出站 API 超时；workers 模式自动 Cap 到 250s，无需调 |
 | `GATEWAY_SECRET` | 可选，留空 | 仅「自有域名 + CF Worker 网关」加固方案使用（见本节末），与网关 secret 一致 |
 
-### 3. Cloudflare Pages 前端配置
+### 3. Cloudflare 前端配置（Workers 静态资产）
 
-Pages 项目（构建命令 `npm run build`，输出目录 `frontend/dist`，Root Directory `frontend`）设环境变量：
+Pages 已进维护模式，前端用 **Workers Static Assets** 托管（`frontend/wrangler.toml`：
+无脚本 Worker，`[assets] directory = "./dist"` + SPA 回退）。
+
+1. Workers & Pages → Create → **Import a repository** → 选 narraforge 仓库。
+2. 构建设置：Root Directory = `frontend`，Build command = `npm run build`，
+   Deploy command 留默认（`npx wrangler deploy`）。
+3. 环境变量（Settings → Variables and Secrets，**明文 Variables**，构建期可见）：
 
 | 变量 | 值 | 说明 |
 |---|---|---|
+| `NODE_VERSION` | `22` | Vite 8 要求 |
 | `VITE_API_BASE_URL` | `https://<project>.vercel.app/api` | 前端直连 Vercel 后端（含 `/api` 前缀） |
 | `VITE_AUTH_REQUIRED` | `true` | 构建期开关：启用解锁页 + axios Bearer 注入；本地开发不设，行为完全不变 |
 
-解锁流程：用户打开 Pages 站点 → 全屏解锁页输入口令 → 前端带口令验证
+`VITE_*` 是构建期打进去的，改完必须重新部署（Deployments → Retry）。
+部署后前端地址为 `https://narraforge-web.<你的子域>.workers.dev`，把它回填到
+Vercel 的 `CORS_ORIGINS` 并 Redeploy。
+
+解锁流程：用户打开站点 → 全屏解锁页输入口令 → 前端带口令验证
 `GET /api/config/capabilities` 通过后才写入 localStorage（`nf_access_token`）并整页刷新。
 任意请求 401 → 前端清除口令并回到解锁页。
 
