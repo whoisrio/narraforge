@@ -16,6 +16,8 @@ export interface Capabilities {
     speech_to_text: boolean;
     agent_workflow: boolean;
     backend_storage: boolean;
+    /** 克隆音频直传 Supabase Storage（workers=true；local=false 走 multipart 上传） */
+    direct_storage_upload: boolean;
   };
 }
 
@@ -24,7 +26,7 @@ export const LOCAL_CAPABILITIES: Capabilities = {
   deploy_target: 'local',
   engines: ['edge_tts', 'mimo_tts', 'cosyvoice', 'voxcpm'],
   clone_engines: ['qwen', 'mimo', 'voxcpm'],
-  features: { speech_to_text: true, agent_workflow: true, backend_storage: true },
+  features: { speech_to_text: true, agent_workflow: true, backend_storage: true, direct_storage_upload: false },
 };
 
 export async function fetchCapabilities(): Promise<Capabilities> {
@@ -45,5 +47,6 @@ export function isCapabilities(value: unknown): value is Capabilities {
     && typeof v.features.speech_to_text === 'boolean'
     && typeof v.features.agent_workflow === 'boolean'
     && typeof v.features.backend_storage === 'boolean'
+    && typeof v.features.direct_storage_upload === 'boolean'
   );
 }

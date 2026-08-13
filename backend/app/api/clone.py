@@ -16,12 +16,18 @@ import subprocess
 import tempfile
 
 from app.api._voice_helpers import voice_to_dict
-from app.core.asset_store import AssetStore, get_asset_store
+from app.core.asset_store import (
+    AssetStore,
+    SupabaseStorageAssetStore,
+    get_asset_store,
+)
 from app.core.repositories.deps import get_voice_repo
 from app.core.repositories.voice_profiles import VoiceProfileRepository
+from app.core.supabase_client import SupabaseError
 from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.voice_profile import VoiceProfileOut
 import logging
+import re
 
 from app.core.database import get_db
 from app.core.config import settings
@@ -156,6 +162,22 @@ class UploadFromUrlRequest(BaseModel):
 class UpdateDescriptionRequest(BaseModel):
     description: str = ""
     prompt_text: Optional[str] = None
+
+
+class SignedUploadUrlRequest(BaseModel):
+    """签发 Supabase 签名上传 URL 的请求（V2：Vercel 直传，绕 4.5MB 请求体上限）。"""
+
+    filename: str
+    content_type: str | None = None
+
+
+class UploadFromStorageRequest(BaseModel):
+    """直传完成后按 storage_path 建 VoiceProfile（与 /upload 同一数据形状）。"""
+
+    storage_path: str
+    name: str | None = None
+    prompt_text: Optional[str] = None
+    project_id: str | None = None
 
 
 class DesignVoiceRequest(BaseModel):
@@ -339,6 +361,101 @@ async def upload_voice_from_url(
         "name": request.name or f"Voice_{file_id[:8]}",
         "voice": {"model": "", "voice_type": "upload"},
         "voice_params": {"": {"source_audio_path": stored_ref, "params": {"external_audio_url": audio_url, "prompt_text": request.prompt_text or None}}},
+        "project_id": request.project_id or None,
+    })
+
+    return voice
+
+
+# ============ V2：Supabase Storage 直传（Vercel 适配，绕 4.5MB 请求体上限） ============
+
+# 直传允许的扩展名：serverless（Vercel）无 ffmpeg，webm 无法转 MP3，故排除
+# （local 的 /upload multipart 路径不受影响，仍支持 webm 转码）。
+DIRECT_UPLOAD_EXTENSIONS = ["mp3", "wav", "ogg", "m4a", "flac"]
+
+
+async def get_signed_upload_store() -> SupabaseStorageAssetStore:
+    """签名上传 URL 固定走 Supabase Storage（与 asset_store_backend 无关）。
+
+    未配置 Supabase 时响亮 503（依赖注入处即失败，不进业务逻辑）。
+    """
+    try:
+        return SupabaseStorageAssetStore()
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+def _direct_upload_key(filename: str) -> str:
+    """生成直传存储 key：与 /upload 同一前缀约定（voices_profiles_dir 相对路径）。
+
+    文件名净化为 ASCII（签名 URL 拼进路径，避免非 ASCII/空白的编码坑）。
+    """
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext == "webm":
+        raise HTTPException(
+            status_code=400,
+            detail="WebM 需要 ffmpeg 转码，当前部署（serverless）不可用；请上传 MP3/WAV/OGG 文件",
+        )
+    if ext not in DIRECT_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format: {ext or filename}. "
+            f"Please upload {', '.join(DIRECT_UPLOAD_EXTENSIONS)} files.",
+        )
+    base_name = os.path.splitext(os.path.basename(filename or "voice"))[0]
+    safe_name = re.sub(r"[^A-Za-z0-9_-]+", "_", base_name)[:30].strip("_") or "voice"
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return settings.to_relative(settings.voices_profiles_dir / f"{safe_name}_{ts}.{ext}")
+
+
+@router.post("/upload-url")
+async def create_signed_upload_url(
+    request: SignedUploadUrlRequest,
+    store: SupabaseStorageAssetStore = Depends(get_signed_upload_store),
+):
+    """签发 Supabase 签名上传 URL（workers 直传；见 capabilities.direct_storage_upload）。
+
+    前端拿到 upload_url 后直接 fetch(PUT) 上传到 Supabase Storage，
+    随后带 storage_path 调 /upload-from-storage 建 VoiceProfile。
+    """
+    key = _direct_upload_key(request.filename)
+    try:
+        return await store.create_signed_upload_url(key)
+    except SupabaseError as e:
+        raise HTTPException(status_code=502, detail=f"Supabase signed upload URL failed: {e}")
+
+
+@router.post("/upload-from-storage", response_model=VoiceProfileOut)
+async def upload_voice_from_storage(
+    request: UploadFromStorageRequest,
+    repo: VoiceProfileRepository = Depends(get_voice_repo),
+    store: AssetStore = Depends(get_asset_store),
+):
+    """直传完成后按 storage_path 建 VoiceProfile（后续 create-clone-mimo 流程不变）。"""
+    path = request.storage_path
+    prefix = settings.to_relative(settings.voices_profiles_dir) + "/"
+    if path.startswith("/") or ".." in path.split("/") or not path.startswith(prefix):
+        raise HTTPException(
+            status_code=400,
+            detail=f"invalid storage_path: must be under {prefix}",
+        )
+    ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
+    if ext not in DIRECT_UPLOAD_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file format: {ext or '(none)'}.",
+        )
+
+    data = await store.get(path)
+    if data is None:
+        raise HTTPException(status_code=404, detail="Audio not found in storage")
+
+    file_id = str(uuid.uuid4())
+    voice = repo.create({
+        "id": file_id,
+        "name": request.name or os.path.basename(path),
+        "voice": {"model": "", "voice_type": "upload"},
+        "voice_params": {"": {"source_audio_path": path, "params": {"prompt_text": request.prompt_text or None}}},
         "project_id": request.project_id or None,
     })
 

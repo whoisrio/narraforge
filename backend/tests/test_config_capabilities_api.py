@@ -34,6 +34,7 @@ class TestCapabilitiesLocal:
             "speech_to_text": True,
             "agent_workflow": True,
             "backend_storage": True,
+            "direct_storage_upload": False,
         }
 
 
@@ -48,6 +49,7 @@ class TestCapabilitiesWorkers:
             "speech_to_text": False,
             "agent_workflow": False,
             "backend_storage": False,
+            "direct_storage_upload": True,
         }
 
     def test_workers_capabilities_is_subset_of_local(self):

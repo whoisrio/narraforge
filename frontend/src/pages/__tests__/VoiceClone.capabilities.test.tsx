@@ -20,7 +20,7 @@ const WORKERS_CAPABILITIES: Capabilities = {
   deploy_target: 'workers',
   engines: ['edge_tts', 'mimo_tts'],
   clone_engines: ['mimo'],
-  features: { speech_to_text: false, agent_workflow: false, backend_storage: false },
+  features: { speech_to_text: false, agent_workflow: false, backend_storage: false, direct_storage_upload: true },
 };
 
 function renderVoiceClone(caps: Capabilities) {

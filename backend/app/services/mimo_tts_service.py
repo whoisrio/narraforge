@@ -19,7 +19,7 @@ from pathlib import Path
 
 import httpx
 
-from app.core.config import settings
+from app.core.config import get_upstream_timeout, settings
 
 logger = logging.getLogger(__name__)
 
@@ -268,7 +268,7 @@ class MiMoTTSService:
 
         try:
             logger.info(f"Calling MiMo TTS API: model={model}, messages={messages}")
-            with httpx.Client(transport=self._transport, timeout=120) as client:
+            with httpx.Client(transport=self._transport, timeout=get_upstream_timeout()) as client:
                 resp = client.post(url, content=body, headers=self._get_headers())
             resp.raise_for_status()
             resp_data = resp.json()

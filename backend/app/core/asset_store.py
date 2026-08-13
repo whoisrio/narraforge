@@ -228,6 +228,31 @@ class SupabaseStorageAssetStore:
         if resp.status_code >= 400:
             _raise_storage_error(resp)
 
+    async def create_signed_upload_url(self, key: str, expires_in: int = 600) -> dict:
+        """签发 Supabase Storage 签名上传 URL（Vercel 适配：前端直传，绕 4.5MB 请求体上限）。
+
+        REST：``POST /storage/v1/object/upload/sign/{bucket}/{key}``，service key 鉴权。
+        响应 ``{url, path, token}``，其中 url 为相对 /storage/v1 的路径（含 token
+        查询参数）；返回绝对 upload_url 供前端直接 ``fetch(PUT)``。
+        """
+        async with self._client() as client:
+            resp = await client.post(
+                f"upload/sign/{self.bucket}/{key}", json={"expiresIn": expires_in}
+            )
+        if resp.status_code >= 400:
+            _raise_storage_error(resp)
+        data = resp.json()
+        rel_url = data.get("url")
+        token = data.get("token")
+        if not rel_url or not token:
+            raise SupabaseError(500, f"unexpected signed upload URL response: {data}")
+        storage_root = self._base_url[: -len("/object")]
+        return {
+            "upload_url": f"{storage_root}{rel_url}",
+            "storage_path": key,
+            "token": token,
+        }
+
     def url(self, ref: str) -> str | None:
         return None
 

@@ -10,6 +10,8 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 |------|------|------|
 | POST | `/api/clone/upload` | 上传音频文件（multipart/form-data） |
 | POST | `/api/clone/upload-from-url` | 从公网 URL 下载音频 |
+| POST | `/api/clone/upload-url` | 签发 Supabase 签名上传 URL（workers 直传，绕 serverless 请求体上限） |
+| POST | `/api/clone/upload-from-storage` | 直传完成后按 storage_path 建 VoiceProfile |
 | POST | `/api/clone/create-clone` | CosyVoice 注册克隆（需已上传的音频） |
 | POST | `/api/clone/create-clone-mimo` | MiMo 标记为复刻音色 |
 | POST | `/api/clone/create-clone-voxcpm` | VoxCPM 标记为复刻音色 |
@@ -70,6 +72,51 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
   "is_cloned": false
 }
 ```
+
+### POST `/api/clone/upload-url`
+
+workers（serverless）部署的克隆音频直传第一步：绕开平台请求体上限（Vercel 4.5MB），
+由后端用 Supabase service key 签发签名上传 URL，前端随后直传 Supabase Storage。
+仅当 `capabilities.features.direct_storage_upload = true` 时前端使用本流程；
+local 模式继续走 multipart `/upload`。
+
+**Request Body:**
+```json
+{
+  "filename": "voice.mp3",
+  "content_type": "audio/mpeg"
+}
+```
+
+**Response:**
+```json
+{
+  "upload_url": "https://<ref>.supabase.co/storage/v1/object/upload/sign/voice-assets/data/voices/profiles/voice_20260813_123000.mp3?token=...",
+  "storage_path": "data/voices/profiles/voice_20260813_123000.mp3",
+  "token": "..."
+}
+```
+
+前端直传：`fetch(upload_url, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } })`。
+
+**错误:** 400（不支持的扩展名；serverless 无 ffmpeg，webm 不收）/ 502（Supabase 上游失败）/ 503（未配置 Supabase）。
+
+### POST `/api/clone/upload-from-storage`
+
+直传第二步：按 `storage_path` 建 VoiceProfile（与 `/upload` 同一数据形状，
+后续 `create-clone-mimo` 流程不变）。
+
+**Request Body:**
+```json
+{
+  "storage_path": "data/voices/profiles/voice_20260813_123000.mp3",
+  "name": "我的声音",
+  "prompt_text": "参考音频的转录文本",
+  "project_id": null
+}
+```
+
+**错误:** 400（路径穿越 / 前缀不符 / 扩展名不支持）/ 404（存储中无此对象）。
 
 ### POST `/api/clone/create-clone`
 
@@ -812,7 +859,7 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 ### 部署能力 (`/api/config/capabilities`)
 
-`GET /api/config/capabilities` 返回 `{ deploy_target, engines, clone_engines, features: { speech_to_text, agent_workflow, backend_storage } }`。
+`GET /api/config/capabilities` 返回 `{ deploy_target, engines, clone_engines, features: { speech_to_text, agent_workflow, backend_storage, direct_storage_upload } }`。
 workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `mimo`、features 全 `false`；local 全量。
 事实源为 `backend/app/core/deploy_capabilities.py`，前端镜像在 `frontend/src/services/capabilities.ts`。
 

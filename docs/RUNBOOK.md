@@ -407,10 +407,105 @@ uv run --extra workers pywrangler deploy
 
 ---
 
-## HF Spaces + Cloudflare Worker 网关 Deployment (free tier, 推荐)
+## Vercel + Cloudflare Worker 网关 Deployment (free tier, 当前方案)
 
-> 2026-08 变更：Koyeb 被 Mistral 收购后控制台 404、免费路径冻结（原章节删除）；
-> Render 要信用卡。当前方案：**HF Spaces 免费 Docker 档（免卡）跑后端 + Cloudflare
+> 2026-08 变更：HF Spaces 已全面收费（免费 CPU 档取消），HF 方案弃用（见下一节，代码保留作参考）。
+> 当前方案：**Vercel Hobby（免卡）跑后端 serverless 函数 + Cloudflare Worker 纯 JS 网关做域名入口**，
+> 靠共享密钥防 vercel.app 直连绕过。
+
+```
+浏览器 → Pages（前端）→ api.<域名>（CF Worker 网关，Access 保护）
+                          │ 注入 X-Narraforge-Gateway-Secret（共享密钥）
+                          ▼
+                   Vercel Functions（<project>.vercel.app，Python runtime）
+```
+
+平台约束（2026-08 官方文档核实）：
+
+- 请求体/响应体上限均为 **4.5MB**（413 `FUNCTION_PAYLOAD_TOO_LARGE`）。
+  克隆音频上传已改道 Supabase Storage 直传（`capabilities.direct_storage_upload`），不经过函数体。
+- 函数时长：Hobby（fluid compute，新项目默认开）默认/上限 **300s**；
+  `backend/vercel.json` 已把 `maxDuration` 设为 300。
+  出站调用超时由 `get_upstream_timeout()` 在 workers 模式 Cap 到 250s（留 50s 平台余量）。
+- Python bundle 上限 **500MB**（未压缩）；`backend/.vercelignore` 已排除 tests/data/venv 等。
+- 文件系统只读：workers 模式不建本地目录；日志文件打不开时自动降级为仅控制台（建议仍显式 `LOG_TO_FILE=false`）。
+
+### 1. 建 Vercel 项目
+
+1. Vercel Dashboard → Add New → Project → 导入 GitHub 仓库。
+2. **Root Directory 设为 `backend`**。
+3. 无需手填 build/install 命令：Vercel 自动发现 `backend/main.py` 顶层的 `app`
+   （FastAPI 入口约定），用 uv 按 `backend/uv.lock` 安装依赖
+   （`uv sync --no-dev`；edge-tts 经 `pyproject.toml` 的 `vercel-deploy` 默认依赖组进入安装集）。
+   Python 版本由 `backend/.python-version`（3.12）指定。
+4. Deploy。`DEPLOY_TARGET=workers` 由下方环境变量注入，`main.py` 底部的
+   `app = create_app()` 读 settings 组装 workers 瘦版路由。
+
+### 2. Vercel 环境变量清单
+
+Project → Settings → Environment Variables（Production）：
+
+| 变量 | 值 | 说明 |
+|---|---|---|
+| `DEPLOY_TARGET` | `workers` | 纯在线路由，不注册本地模型路由 |
+| `GATEWAY_SECRET` | 随机长串 | 与 CF Worker 的 `GATEWAY_SECRET` secret 一致；后端据此放行网关注入的密钥头 |
+| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验 Access 邮箱头**或**网关密钥头 |
+| `CORS_ORIGINS` | Pages 域名（逗号分隔） | 如 `https://narraforge.pages.dev` |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
+| `SUPABASE_STORAGE_BUCKET` | `voice-assets` | 须与 schema.sql 创建的 bucket 同名 |
+| `ASSET_STORE_BACKEND` | `auto` | 无 R2 binding → Supabase Storage（函数 FS 临时，落盘会丢） |
+| `MIMO_API_KEY` / `MIMO_BASE_URL` | 小米 MiMo key | 在线合成/克隆 |
+| `APP_ENV` / `DEBUG` | `production` / `false` | |
+| `LOG_TO_FILE` | `false` | 日志走 stdout（代码已容错只读 FS，显式关闭更干净） |
+| `UPSTREAM_TIMEOUT_SECONDS` | 可选，默认 `120` | 出站 API 超时；workers 模式自动 Cap 到 250s，无需调 |
+
+### 3. 验证部署
+
+```bash
+curl https://<project>.vercel.app/health
+# → {"status": "healthy", ...}
+curl https://<project>.vercel.app/api/config/capabilities
+# → 401 access_required（无网关密钥头/Access 邮箱头，防直连生效）
+curl -H "X-Narraforge-Gateway-Secret: $GATEWAY_SECRET" https://<project>.vercel.app/api/config/capabilities
+# → {"deploy_target": "workers", ... features.direct_storage_upload: true}
+```
+
+### 4. Cloudflare Worker 网关
+
+改 `gateway/wrangler.toml` 的 `UPSTREAM_ORIGIN` 为 Vercel 部署域名
+（`https://<project>.vercel.app`），然后：
+
+```bash
+cd gateway
+npx wrangler secret put GATEWAY_SECRET   # 与 Vercel 环境变量一致
+npx wrangler secret put HF_TOKEN         # Vercel 不需要 HF token，填任意占位串即可
+npx wrangler deploy                      # 绑路由 api.<域名>/*
+```
+
+网关代码不变（`Authorization: Bearer <占位>` 头对 Vercel 无害，鉴权靠密钥头）。
+
+### 5. Cloudflare 侧（Access + SSL）
+
+与 HF 方案相同：Zero Trust 建 Access 应用（self-hosted）覆盖 `api.<域名>`，
+邮箱 OTP、允许列表只填本人邮箱；Access CORS 放行 Pages 域名并允许 credentials；
+SSL/TLS 模式 **Full**。`<project>.vercel.app` 直连子域无法关闭——靠后端
+`GATEWAY_SECRET`/Access 头校验挡住（无凭证 401 `access_required`）。
+
+### Supabase 准备
+
+与 HF/Render 章节相同：执行 `backend/supabase/schema.sql`（含 `voice-assets`
+私有桶），取 Project URL 与 service_role key 填 Vercel 环境变量。
+
+---
+
+## HF Spaces + Cloudflare Worker 网关 Deployment (已弃用 — HF 全面收费，保留作参考)
+
+> 2026-08 再次变更：HF Spaces 已全面收费（免费 CPU 档取消），本方案弃用，
+> 改用 Vercel（见上一节）。`hf-space/`、`backend/Dockerfile.cloud`、
+> `scripts/sync-hf-space.sh` 保留作 Gradio/Docker 兜底代码参考。
+>
+> 原记录：Koyeb 被 Mistral 收购后控制台 404、免费路径冻结（原章节删除）；
+> Render 要信用卡。本方案：**HF Spaces 免费 Docker 档（免卡）跑后端 + Cloudflare
 > Worker 纯 JS 网关做域名入口**，Space 设私有、靠共享密钥防直连绕过。
 
 ```

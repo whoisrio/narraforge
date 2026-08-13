@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     # 否则 Supabase Storage（Render 等无 binding 的 CPython 部署）。显式值可覆盖。
     asset_store_backend: str = "auto"
 
+    # 出站 HTTP 调用超时（秒）：mimo TTS 等上游 API。
+    # 默认 120s 保持本地行为不变；workers 模式经 get_upstream_timeout() Cap 到
+    # WORKERS_UPSTREAM_TIMEOUT_CAP（Vercel Hobby fluid 函数上限 300s − 50s 余量）。
+    upstream_timeout_seconds: float = 120.0
+
     # API Keys (千问)
     qwen_api_key: str = ""
     qwen_model: str = "qwen-tts"
@@ -221,3 +226,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Vercel Hobby（fluid compute，2026-08 官方文档核实）函数时长上限 300s；
+# workers 部署的出站超时收敛到该上限减 50s 平台余量，避免请求被平台硬杀。
+# 若部署环境函数上限更低（如无 fluid 的旧 Hobby 60s），用
+# UPSTREAM_TIMEOUT_SECONDS 环境变量进一步调低即可（min 语义自动生效）。
+WORKERS_UPSTREAM_TIMEOUT_CAP = 250.0
+
+
+def get_upstream_timeout() -> float:
+    """出站 HTTP 调用有效超时：workers 模式 Cap 到平台函数时长上限内。"""
+    if settings.deploy_target == "workers":
+        return min(settings.upstream_timeout_seconds, WORKERS_UPSTREAM_TIMEOUT_CAP)
+    return settings.upstream_timeout_seconds

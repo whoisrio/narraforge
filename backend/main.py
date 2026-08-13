@@ -57,23 +57,28 @@ def setup_logging():
     # 2. 文件处理器 - 输出到文件（按大小轮转）
     if settings.log_to_file:
         log_file = settings.logs_dir / "app.log"
-        file_handler = logging.handlers.RotatingFileHandler(
-            log_file,
-            maxBytes=settings.log_file_max_bytes,  # 单个文件最大 10MB
-            backupCount=settings.log_backup_count,  # 保留 7 个备份文件
-            encoding="utf-8"
-        )
-        file_handler.setLevel(log_level)
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
-        
-        # 记录日志配置信息
-        logging.getLogger(__name__).info(
-            f"Logging configured: level={settings.log_level}, "
-            f"log_file={log_file}, "
-            f"max_bytes={settings.log_file_max_bytes}, "
-            f"backup_count={settings.log_backup_count}"
-        )
+        try:
+            file_handler = logging.handlers.RotatingFileHandler(
+                log_file,
+                maxBytes=settings.log_file_max_bytes,  # 单个文件最大 10MB
+                backupCount=settings.log_backup_count,  # 保留 7 个备份文件
+                encoding="utf-8"
+            )
+        except OSError:
+            # serverless 只读文件系统（Vercel）：降级为仅控制台日志，不得崩溃
+            file_handler = None
+        if file_handler is not None:
+            file_handler.setLevel(log_level)
+            file_handler.setFormatter(formatter)
+            root_logger.addHandler(file_handler)
+
+            # 记录日志配置信息
+            logging.getLogger(__name__).info(
+                f"Logging configured: level={settings.log_level}, "
+                f"log_file={log_file}, "
+                f"max_bytes={settings.log_file_max_bytes}, "
+                f"backup_count={settings.log_backup_count}"
+            )
 
 
 # 在应用启动前初始化日志

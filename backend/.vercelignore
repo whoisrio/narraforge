@@ -1,0 +1,30 @@
+# Vercel 函数 bundle 瘦身（Python bundle 上限 500MB 未压缩；越小冷启动越快）。
+# 注意：Vercel 存在 .vercelignore 时不再参考 .gitignore，需完整列出排除项。
+
+# 虚拟环境与构建产物
+.venv/
+.venv-workers/
+.wrangler/
+python_modules/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# 测试与本地数据（workers 模式持久化全走 Supabase，本地资产不进 bundle）
+tests/
+data/
+logs/
+output/
+uploads/
+migrations/
+supabase/
+
+# 本地 SQLite 数据库
+*.db
+*.db-wal
+*.db-shm
+
+# 其他部署目标的构建文件
+Dockerfile
+Dockerfile.cloud
+wrangler.toml

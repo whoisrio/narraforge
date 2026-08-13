@@ -29,6 +29,26 @@ export const voiceApi = {
     return data;
   },
 
+  /** Vercel 直传（workers 模式）：签发 Supabase 签名上传 URL，绕 4.5MB 请求体上限 */
+  createUploadUrl: async (filename: string, contentType?: string): Promise<{ upload_url: string; storage_path: string; token: string }> => {
+    const { data } = await api.post('/clone/upload-url', {
+      filename,
+      content_type: contentType,
+    });
+    return data;
+  },
+
+  /** 直传完成后按 storage_path 创建 VoiceProfile（后续 createCloneMiMo 流程不变） */
+  uploadFromStorage: async (storagePath: string, name?: string, promptText?: string, projectId?: string): Promise<VoiceProfile> => {
+    const { data } = await api.post<VoiceProfile>('/clone/upload-from-storage', {
+      storage_path: storagePath,
+      name,
+      prompt_text: promptText,
+      project_id: projectId,
+    });
+    return data;
+  },
+
   list: async (projectId?: string): Promise<VoiceProfile[]> => {
     const { data } = await api.get<{ items: VoiceProfile[] }>('/clone/list', {
       params: projectId ? { project_id: projectId } : undefined,
