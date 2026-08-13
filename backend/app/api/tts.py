@@ -220,7 +220,10 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="edge_voice is required for edge_tts engine")
 
     audio_id = str(uuid.uuid4())
-    audio_path = settings.tts_history_dir / f"tts_{audio_id}.mp3"
+    # 存储模式必须在写盘之前判定：workers 模式（Vercel/CF）FS 只读且无持久性，
+    # 一旦先写 data/tts-history/ 再判存储模式，会在写盘处直接崩（Errno 2/EROFS），
+    # 根本走不到 base64 分支。前端存储（含 workers 恒 True）不落盘、不建 DB 记录。
+    frontend_storage = is_frontend_storage(db)
 
     try:
         from app.services.edge_tts_service import get_edge_tts_service
@@ -234,19 +237,11 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
             volume=request.edge_volume,
         )
 
-        async with aiofiles.open(audio_path, "wb") as f:
-            await f.write(audio_data)
-
-        if is_frontend_storage(db):
-            # 前端存储模式：返回 base64，不持久化
-            audio_base64 = base64.b64encode(audio_data).decode("utf-8")
-            try:
-                os.remove(str(audio_path))
-            except OSError:
-                pass
+        if frontend_storage:
+            # 前端存储模式（含 workers 只读 FS）：不落盘，直接返回 base64
             return {
                 "audio_id": audio_id,
-                "audio_base64": audio_base64,
+                "audio_base64": base64.b64encode(audio_data).decode("utf-8"),
                 "audio_format": "mp3",
                 "text": request.text,
                 "voice_id": request.edge_voice,
@@ -258,34 +253,39 @@ async def _synthesize_edge_tts(request: TTSRequest, db: Session = Depends(get_db
                     "edge_volume": request.edge_volume,
                 }
             }
-        else:
-            record = TTSResultRecord(
-                id=audio_id,
-                text=request.text,
-                voice_id=request.edge_voice,
-                voice_name=request.edge_voice,
-                audio_path=str(audio_path),
-                audio_format="mp3",
-                speed=1.0,
-                volume=80,
-                pitch=1.0,
-                instruction="",
-                language="Chinese",
-            )
-            db.add(record)
-            db.commit()
 
-            return {
-                "audio_id": audio_id,
-                "audio_url": f"/api/tts/audio/{audio_id}",
-                "text": request.text,
-                "params": {
-                    "engine": "edge_tts",
-                    "edge_voice": request.edge_voice,
-                    "edge_rate": request.edge_rate,
-                    "edge_volume": request.edge_volume,
-                }
+        # 后端存储模式（local）：落盘 + 持久化记录
+        audio_path = settings.tts_history_dir / f"tts_{audio_id}.mp3"
+        async with aiofiles.open(audio_path, "wb") as f:
+            await f.write(audio_data)
+
+        record = TTSResultRecord(
+            id=audio_id,
+            text=request.text,
+            voice_id=request.edge_voice,
+            voice_name=request.edge_voice,
+            audio_path=str(audio_path),
+            audio_format="mp3",
+            speed=1.0,
+            volume=80,
+            pitch=1.0,
+            instruction="",
+            language="Chinese",
+        )
+        db.add(record)
+        db.commit()
+
+        return {
+            "audio_id": audio_id,
+            "audio_url": f"/api/tts/audio/{audio_id}",
+            "text": request.text,
+            "params": {
+                "engine": "edge_tts",
+                "edge_voice": request.edge_voice,
+                "edge_rate": request.edge_rate,
+                "edge_volume": request.edge_volume,
             }
+        }
 
     except Exception as e:
         logger.error(f"Edge-TTS synthesis failed: {str(e)}")
