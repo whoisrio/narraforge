@@ -428,6 +428,21 @@ uv run --extra workers pywrangler deploy
    由网关注入；`HF_TOKEN` 在 HF Settings → Access Tokens 建一个 read 权限的即可）。
 2. Space 仓库内容不由手工维护，用同步脚本从主仓库生成（见第 3 步）。
 
+> **如果 Docker SDK 在你的账户上要求付费**（2026-08 有用户反馈新建 Docker Space
+> 时只显示付费硬件；多份公开资料仍标注免费 CPU 支持 Docker，可能是账户/区域差异），
+> 改用 **Gradio SDK 兜底路径**：SDK 选 **Gradio**（确定免费），其余步骤相同，
+> 仅同步命令加 `--sdk gradio`：
+>
+> ```bash
+> scripts/sync-hf-space.sh --sdk gradio https://huggingface.co/spaces/<user>/<space>
+> ```
+>
+> Gradio 路径不建 Docker 镜像：HF 直接 `pip install -r requirements.txt`（脚本用
+> `uv export` 从锁文件生成，core + local-services，不含 torch）后跑 `app.py`
+> （`hf-space/app.py`：起 uvicorn 服务 `backend/main:app`，不启用任何 Gradio 界面）。
+> 注意：Gradio SDK 的 Python 版本由 README frontmatter 的 `python_version: "3.12"`
+> 指定；若构建日志报 Python 版本不符，检查该字段是否被支持/生效。
+
 ### 2. Space Secrets 配置清单
 
 Space → Settings → Variables and secrets（都建为 **Secrets**）：

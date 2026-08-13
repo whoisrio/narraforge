@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# 同步后端代码到 Hugging Face Space 仓库（Docker SDK）。
+# 同步后端代码到 Hugging Face Space 仓库（Docker 或 Gradio SDK）。
 #
 # 用法：
-#   scripts/sync-hf-space.sh <space-git-url> [clone-dir]
+#   scripts/sync-hf-space.sh [--sdk docker|gradio] <space-git-url> [clone-dir]
+#     --sdk            Space SDK，默认 docker；gradio 为免费兜底路径
+#                      （app.py 起 uvicorn，不依赖 Docker SDK 收费策略）
 #     <space-git-url>  Space 仓库 git 地址，如 https://huggingface.co/spaces/<user>/<space>
 #     [clone-dir]      本地克隆目录，默认 .hf-space-clone（已 gitignore）
 #
-# 同步内容（Space 仓库 = 纯镜像，见下）：
-#   hf-space/README.md          → <clone>/README.md   （HF frontmatter）
-#   backend/Dockerfile.cloud    → <clone>/Dockerfile
-#   backend/ 全量               → <clone>/ 根目录     （Docker SDK 构建上下文 = 仓库根）
+# 同步内容（Space 仓库 = 纯镜像）：
+#   docker 模式（构建上下文 = 仓库根）：
+#     hf-space/README.md          → <clone>/README.md
+#     backend/Dockerfile.cloud    → <clone>/Dockerfile
+#     backend/ 全量               → <clone>/ 根目录
+#   gradio 模式（HF 跑 pip install -r requirements.txt && python app.py）：
+#     hf-space/README-gradio.md   → <clone>/README.md
+#     hf-space/app.py             → <clone>/app.py
+#     uv export 生成              → <clone>/requirements.txt
+#     backend/ 全量               → <clone>/backend/
 #
 # 文件集合 = git 已跟踪 + 未忽略的新文件（git ls-files --cached --others
 # --exclude-standard）。本地数据/密钥/模型权重（.env、*.db*、pretrained_models、
@@ -22,8 +30,18 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+SDK="docker"
+if [[ "${1:-}" == "--sdk" ]]; then
+  SDK="${2:?--sdk 需要参数 docker|gradio}"
+  shift 2
+fi
+if [[ "$SDK" != "docker" && "$SDK" != "gradio" ]]; then
+  echo "error: --sdk 只支持 docker|gradio，收到: $SDK" >&2
+  exit 1
+fi
+
 if [[ $# -lt 1 ]]; then
-  echo "usage: $0 <space-git-url> [clone-dir]" >&2
+  echo "usage: $0 [--sdk docker|gradio] <space-git-url> [clone-dir]" >&2
   exit 1
 fi
 SPACE_URL="$1"
@@ -41,21 +59,36 @@ fi
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 cd "$REPO_ROOT"
-git ls-files -z --cached --others --exclude-standard -- backend/ hf-space/README.md \
+git ls-files -z --cached --others --exclude-standard -- backend/ hf-space/ \
   | while IFS= read -r -d '' f; do
       mkdir -p "$STAGE/$(dirname "$f")"
       cp "$f" "$STAGE/$f"
     done
-cp "$STAGE/backend/Dockerfile.cloud" "$STAGE/backend/Dockerfile"
-cp "$STAGE/hf-space/README.md" "$STAGE/backend/README.md"
+
+if [[ "$SDK" == "docker" ]]; then
+  OUT="$STAGE/out"
+  mv "$STAGE/backend" "$OUT"
+  cp "$OUT/Dockerfile.cloud" "$OUT/Dockerfile"
+  cp "$STAGE/hf-space/README.md" "$OUT/README.md"
+else
+  OUT="$STAGE/out"
+  mkdir -p "$OUT"
+  mv "$STAGE/backend" "$OUT/backend"
+  cp "$STAGE/hf-space/app.py" "$OUT/app.py"
+  cp "$STAGE/hf-space/README-gradio.md" "$OUT/README.md"
+  # 从锁文件导出依赖（core + local-services：uvicorn/edge-tts 等，不含 torch）
+  (cd "$OUT/backend" && uv export --format requirements-txt --no-dev \
+      --extra local-services --no-emit-project --no-hashes) > "$OUT/requirements.txt"
+fi
 
 # 主仓库里被误跟踪的运行时产物/测试配置，不进 Space 仓库
-rm -f "$STAGE/backend/.coverage" \
-      "$STAGE/backend"/workflow_checkpoints.db* \
-      "$STAGE/backend/.env.e2e" "$STAGE/backend/.env.prod-test"
+find "$OUT" -name '.coverage' -delete
+find "$OUT" -name 'workflow_checkpoints.db*' -delete
+find "$OUT" -name '.env.e2e' -delete
+find "$OUT" -name '.env.prod-test' -delete
 
 rsync -a --delete --exclude=.git --exclude=.gitattributes \
-  "$STAGE/backend/" "$CLONE_DIR/"
+  "$OUT/" "$CLONE_DIR/"
 
 # 3. 提交并推送（需确认；CI 场景用 SYNC_HF_ASSUME_YES=1 跳过提示）
 cd "$CLONE_DIR"
@@ -71,7 +104,7 @@ else
   read -r -p "==> 提交并推送到 Space（触发重新构建）？[y/N] " answer
 fi
 if [[ "$answer" == "y" || "$answer" == "Y" ]]; then
-  git commit -m "sync: backend $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  git commit -m "sync: backend $(git -C "$REPO_ROOT" rev-parse --short HEAD) [$SDK]"
   git push origin main
   echo "==> 已推送，到 Space 页面看构建日志。"
 else
