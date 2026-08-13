@@ -77,20 +77,47 @@ describe('play handler error extraction', () => {
 });
 
 describe('storage mode mismatch detection', () => {
-  // Mirrors the storage-mode guard in handlePlaySegment
-  function isStorageModeMismatch(seg: { current_audio_id?: string; current_audio_path?: string }, mode: string): boolean {
-    return mode === 'frontend' && !!seg.current_audio_path && !seg.current_audio_id;
+  // Mirrors the storage-mode guard in handlePlaySegment (V3 audio.current structure)
+  function isStorageModeMismatch(seg: { audio?: { current?: { path?: string; id?: string } } }, mode: string): boolean {
+    return mode === 'frontend' && !!seg.audio?.current?.path && !seg.audio?.current?.id;
   }
 
   it('flags when segment has backend audio_path but mode is frontend', () => {
-    expect(isStorageModeMismatch({ current_audio_path: 'a/b/c.mp3' }, 'frontend')).toBe(true);
+    expect(isStorageModeMismatch({ audio: { current: { path: 'a/b/c.mp3' } } }, 'frontend')).toBe(true);
   });
 
   it('does not flag when mode is backend', () => {
-    expect(isStorageModeMismatch({ current_audio_path: 'a/b/c.mp3' }, 'backend')).toBe(false);
+    expect(isStorageModeMismatch({ audio: { current: { path: 'a/b/c.mp3' } } }, 'backend')).toBe(false);
   });
 
-  it('does not flag when segment has local audio_id (synthesized in frontend mode)', () => {
-    expect(isStorageModeMismatch({ current_audio_id: 'local-123' }, 'frontend')).toBe(false);
+  it('does not flag when segment has local audio_id in audio.current (V3 field)', () => {
+    // 回归：新数据只有 audio.current.id、废弃字段 current_audio_id 缺失时，
+    // 不能误判为"后端音频切前端模式"（曾导致播放走错分支）。
+    expect(isStorageModeMismatch({ audio: { current: { id: 'local-123' } } }, 'frontend')).toBe(false);
+  });
+});
+
+describe('segAudioId resolution', () => {
+  // Mirrors TTSSynthesis.segAudioId: prefer V3 audio.current.id, fall back to
+  // deprecated current_audio_id for legacy IndexedDB records.
+  function segAudioId(seg: { audio?: { current?: { id?: string } }; current_audio_id?: string }): string | undefined {
+    return seg.audio?.current?.id ?? seg.current_audio_id;
+  }
+
+  it('uses audio.current.id (V3 authoritative field)', () => {
+    expect(segAudioId({ audio: { current: { id: 'new-audio' } } })).toBe('new-audio');
+  });
+
+  it('falls back to deprecated current_audio_id for legacy records', () => {
+    expect(segAudioId({ current_audio_id: 'legacy-audio' })).toBe('legacy-audio');
+  });
+
+  it('prefers audio.current.id over deprecated field when both present', () => {
+    expect(segAudioId({ audio: { current: { id: 'new-audio' } }, current_audio_id: 'legacy-audio' }))
+      .toBe('new-audio');
+  });
+
+  it('returns undefined when neither is present', () => {
+    expect(segAudioId({})).toBeUndefined();
   });
 });

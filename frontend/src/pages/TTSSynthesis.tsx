@@ -58,6 +58,16 @@ function endsWithSentencePeriod(text: string): boolean {
   return /[。．.](?:[”"』」》）)]*)\s*$/.test(text.trim());
 }
 
+/**
+ * 当前音频的本地 IndexedDB id。
+ * 优先 V3 正式字段 audio.current.id；回退废弃字段 current_audio_id（旧数据兼容）。
+ * 播放/删除等 IndexedDB 读路径必须用本函数，否则新数据（只有 audio.current.id）
+ * 会拿到 undefined 传进 IDBObjectStore.get() 抛 DataError。
+ */
+function segAudioId(seg: Segment): string | undefined {
+  return seg.audio.current?.id ?? seg.current_audio_id;
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : String(error || fallback);
 }
@@ -1337,8 +1347,9 @@ export function TTSSynthesis({
     try {
       // Step 1: Delete existing audio for segments that have it
       for (const seg of toRegenerate) {
-        if (seg.current_audio_id) {
-          try { await deleteTTSResult(seg.current_audio_id); } catch { /* ignore */ }
+        const audioId = segAudioId(seg);
+        if (audioId) {
+          try { await deleteTTSResult(audioId); } catch { /* ignore */ }
         }
         dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id });
       }
@@ -1478,7 +1489,7 @@ export function TTSSynthesis({
     stopCurrentAudio();
 
     const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg?.audio.current?.id && !seg?.audio.current?.path) {
+    if (!seg?.audio.current?.id && !seg?.audio.current?.path && !seg?.current_audio_id) {
       showToast(t('tts.segmentNoAudio'), 'error');
       return;
     }
@@ -1534,11 +1545,16 @@ export function TTSSynthesis({
       }
       // Path mismatch: segment has backend audio_path but storage mode is frontend.
       // This happens when the user generated audio in backend mode then switched modes.
-      if (seg.audio.current?.path && !seg.current_audio_id) {
+      if (seg.audio.current?.path && !seg.audio.current?.id) {
         showToast(t('tts.audioOnBackendSwitchMode'), 'error');
         return;
       }
-      const blob = await getTTSAudioBlob(seg.current_audio_id!);
+      const audioId = segAudioId(seg);
+      if (!audioId) {
+        showToast(t('tts.localAudioNotFound'), 'error');
+        return;
+      }
+      const blob = await getTTSAudioBlob(audioId);
       if (!blob) {
         showToast(t('tts.localAudioNotFound'), 'error');
         return;
@@ -1619,7 +1635,9 @@ export function TTSSynthesis({
           });
           continue;
         }
-        const blob = await getTTSAudioBlob(seg.current_audio_id!);
+        const audioId = segAudioId(seg);
+        if (!audioId) continue;
+        const blob = await getTTSAudioBlob(audioId);
         if (!blob || playAllAbortRef.current) continue;
         const url = URL.createObjectURL(blob);
         blobUrlRef.current = url;
@@ -1647,9 +1665,11 @@ export function TTSSynthesis({
 
   const handleTrimSilence = useCallback(async (id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
-    if (!seg?.audio.current?.id) return;
+    if (!seg) return;
+    const audioId = segAudioId(seg);
+    if (!audioId) return;
     try {
-      const blob = await getTTSAudioBlob(seg.current_audio_id!);
+      const blob = await getTTSAudioBlob(audioId);
       if (!blob) return;
       const reader = new FileReader();
       const base64 = await new Promise<string>((resolve) => {
@@ -1674,7 +1694,7 @@ export function TTSSynthesis({
       const eff = segEffectiveParams(seg);
       const currentOrigin = seg.audio.current?.origin;
       await saveTTSResult({ id: newId, text: seg.text, voice_id: (eff.voice_id as string) || '', voice_name: '', audioBlob: trimmedBlob, audio_format: 'wav', speed: (eff.speed as number) ?? 1, volume: (eff.volume as number) ?? 80, pitch: (eff.pitch as number) ?? 1, instruction: (eff.instruction as string) || '', language: (eff.language as string) || 'Chinese', created_at: new Date().toISOString(), source: currentOrigin === 'recorded' ? 'segmented_record' : 'segmented_tts' });
-      try { await deleteTTSResult(seg.current_audio_id!); } catch { /* ignore */ }
+      try { await deleteTTSResult(audioId); } catch { /* ignore */ }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, origin: currentOrigin });
       showToast(t('tts.trimmedSilence', { ms: trimmedMs }));
     } catch (e) { console.error('Trim failed:', e); showToast(t('tts.trimFailed'), 'error'); }

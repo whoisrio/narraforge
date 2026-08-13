@@ -101,6 +101,9 @@ export async function deleteTTSResult(id: string): Promise<void> {
 
 /** 获取指定记录的音频 Blob */
 export async function getTTSAudioBlob(id: string): Promise<Blob | null> {
+  // 防御：空 key 直接返回 null，避免 IDBObjectStore.get(undefined) 抛
+  // DataError "No key or key range specified"（调用方偶发传废弃字段/空值）。
+  if (!id) return null;
   const db = await openDB();
   const record = await storeGet<TTSLocalRecord>(db, TTS_STORE, id);
   return record?.audioBlob ?? null;
