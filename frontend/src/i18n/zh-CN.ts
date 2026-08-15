@@ -1219,9 +1219,9 @@ export const zhCN = {
     useRecording: '使用录音',
   },
   audioUploader: {
-    invalidFormat: '请上传 MP3、WAV 或 WebM 格式的文件',
+    invalidFormat: '请上传 MP3、WAV、OGG、WebM、M4A、AAC、FLAC 或 OPUS 格式的文件',
     dragHere: '拖拽音频文件到此处',
-    clickToBrowse: '或点击浏览（支持 MP3、WAV、WebM）',
+    clickToBrowse: '或点击浏览（支持 MP3、WAV、M4A、AAC 等）',
   },
   audioPreview: {
     missingAudioData: '缺少音频数据',

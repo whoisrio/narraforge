@@ -206,15 +206,16 @@ async def upload_voice(
     repo: VoiceProfileRepository = Depends(get_voice_repo),
     store: AssetStore = Depends(get_asset_store),
 ):
-    """上传音频文件 - 支持 WebM/MP3/WAV/OGG，WebM 会自动转换为 MP3"""
-    # 支持的输入格式
-    allowed_extensions = ["mp3", "wav", "ogg", "webm"]
+    """上传音频文件 - 支持 MP3/WAV/OGG/WebM/M4A/AAC/FLAC/OPUS，全部自动归一化为 MP3"""
+    # 支持的输入格式（后端统一经 ffmpeg 转码为 MP3，因此可放心放开常见录音格式）
+    allowed_extensions = ["mp3", "wav", "ogg", "webm", "m4a", "aac", "flac", "opus"]
     file_ext = file.filename.split(".")[-1].lower() if "." in file.filename else ""
 
     if file_ext not in allowed_extensions:
+        allowed_hint = ", ".join(ext.upper() for ext in allowed_extensions)
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file format: {file_ext}. Please upload MP3, WAV, OGG, or WebM files."
+            detail=f"Unsupported file format: {file_ext or '(none)'}. Please upload one of: {allowed_hint}."
         )
 
     file_id = str(uuid.uuid4())
@@ -225,41 +226,39 @@ async def upload_voice(
 
     content = await file.read()
 
-    # 如果是 WebM 格式，先保存到临时文件，然后转换为 MP3
-    if file_ext == "webm":
-        temp_dir = tempfile.gettempdir()
-        temp_webm_path = os.path.join(temp_dir, f"{file_id}.webm")
-        temp_mp3_path = os.path.join(temp_dir, f"{file_id}.mp3")
+    # 统一归一化为 MP3：
+    # - 不再信任上传文件名/URL 的扩展名（曾出现 AAC/M4A 内容被命名为 .mp3，
+    #   导致下游 VoxCPM 用 MP3 解码器读取参考音频时
+    #   "Giving up searching valid MPEG header after 65536 bytes of junk"）。
+    # - ffmpeg 按内容探测真实格式，因此无论扩展名如何都可正确转码。
+    temp_dir = tempfile.gettempdir()
+    orig_path = os.path.join(temp_dir, f"{file_id}.{file_ext or 'bin'}")
+    temp_mp3_path = os.path.join(temp_dir, f"{file_id}.mp3")
 
-        try:
-            # 保存上传的文件
-            async with aiofiles.open(temp_webm_path, "wb") as f:
-                await f.write(content)
+    try:
+        # 保存上传的原始内容（保留扩展名，便于 ffmpeg 探测；但探测以内容为准）
+        async with aiofiles.open(orig_path, "wb") as f:
+            await f.write(content)
 
-            # 转换为 MP3（ffmpeg 需要本地文件路径，转换到临时文件再入资产存储）
-            convert_audio_to_mp3(temp_webm_path, temp_mp3_path)
-            with open(temp_mp3_path, "rb") as f:
-                converted = f.read()
+        # 归一化为 MP3（ffmpeg 需要本地文件路径，转换到临时文件再入资产存储）
+        convert_audio_to_mp3(orig_path, temp_mp3_path)
+        with open(temp_mp3_path, "rb") as f:
+            converted = f.read()
 
-            file_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.mp3"
-            stored_ref = await store.put(settings.to_relative(file_path), converted)
-            file_extension = "mp3"
+        file_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.mp3"
+        stored_ref = await store.put(settings.to_relative(file_path), converted)
+        file_extension = "mp3"
 
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Failed to convert audio: {str(e)}"
-            )
-        finally:
-            # 清理临时文件
-            for tmp in (temp_webm_path, temp_mp3_path):
-                if os.path.exists(tmp):
-                    os.remove(tmp)
-    else:
-        # 直接保存其他格式
-        file_extension = file_ext
-        file_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.{file_extension}"
-        stored_ref = await store.put(settings.to_relative(file_path), content)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to convert audio: {str(e)}"
+        )
+    finally:
+        # 清理临时文件
+        for tmp in (orig_path, temp_mp3_path):
+            if os.path.exists(tmp):
+                os.remove(tmp)
 
     voice = repo.create({
         "id": file_id,
@@ -315,7 +314,8 @@ async def upload_voice_from_url(
     safe_name = (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_dir = tempfile.gettempdir()
-    temp_audio_path = os.path.join(temp_dir, f"{file_id}.mp3")
+    # 下载到临时文件时不假定格式（扩展名来自 URL 不可信，可能实际是 M4A/AAC）
+    temp_audio_path = os.path.join(temp_dir, f"{file_id}.download")
     final_audio_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.mp3"
     temp_converted_path = os.path.join(temp_dir, f"{file_id}_converted.mp3")
 
@@ -333,15 +333,11 @@ async def upload_voice_from_url(
             for chunk in download_resp.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        # 转换为 MP3（如果不是 MP3 格式），随后入资产存储
-        file_ext = audio_url.split('?')[0].split('.')[-1].lower() if '.' in audio_url else 'mp3'
-        if file_ext != 'mp3':
-            convert_audio_to_mp3(temp_audio_path, temp_converted_path)
-            with open(temp_converted_path, "rb") as f:
-                final_bytes = f.read()
-        else:
-            with open(temp_audio_path, "rb") as f:
-                final_bytes = f.read()
+        # 统一归一化为 MP3：用 ffmpeg 按内容探测真实格式并转码，
+        # 避免 URL 以 .mp3 结尾但实际为 M4A/AAC 时直接落盘导致下游解码失败。
+        convert_audio_to_mp3(temp_audio_path, temp_converted_path)
+        with open(temp_converted_path, "rb") as f:
+            final_bytes = f.read()
 
         stored_ref = await store.put(settings.to_relative(final_audio_path), final_bytes)
 

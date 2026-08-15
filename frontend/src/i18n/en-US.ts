@@ -1221,9 +1221,9 @@ export const enUS: Messages = {
     useRecording: 'Use Recording',
   },
   audioUploader: {
-    invalidFormat: 'Please upload MP3, WAV, or WebM format files',
+    invalidFormat: 'Please upload MP3, WAV, OGG, WebM, M4A, AAC, FLAC, or OPUS format files',
     dragHere: 'Drag audio file here',
-    clickToBrowse: 'or click to browse (supports MP3, WAV, WebM)',
+    clickToBrowse: 'or click to browse (supports MP3, WAV, M4A, AAC, etc.)',
   },
   audioPreview: {
     missingAudioData: 'Missing audio data',
