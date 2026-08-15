@@ -13,7 +13,7 @@ export function AudioUploader({ onFileSelected }: AudioUploaderProps) {
   const [dragOver, setDragOver] = useState(false);
 
   const handleFile = (file: File) => {
-    if (!file.name.match(/\.(mp3|wav|webm)$/i)) {
+    if (!file.name.match(/\.(mp3|wav|ogg|webm|m4a|aac|flac|opus)$/i)) {
       toast.error(t('audioUploader.invalidFormat'));
       return;
     }
@@ -47,7 +47,7 @@ export function AudioUploader({ onFileSelected }: AudioUploaderProps) {
     >
       <input
         type="file"
-        accept=".mp3,.wav,.webm"
+        accept=".mp3,.wav,.ogg,.webm,.m4a,.aac,.flac,.opus"
         onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         style={{ display: 'none' }}
         id="audio-upload"
