@@ -1724,6 +1724,55 @@ def adjust_chapter_audio(
     }
 
 
+def adjust_all_chapters_audio(
+    db: Session,
+    project_id: str,
+    *,
+    tempo: float = 1.0,
+    volume_db: float = 0.0,
+) -> dict[str, Any]:
+    """Apply post-synthesis tempo/volume adjust to ALL chapters' ready segments.
+
+    Reuses :func:`adjust_chapter_audio` per chapter — identical absolute
+    semantics and identical duration recomputation (top-level ``duration_sec``
+    is re-probed so the timeline/SRT/chapter timing stays correct). Chapters
+    that have no ready segments and no existing adjust record are skipped
+    (``adjust_chapter_audio`` raises ``no_adjustment`` for them).
+    """
+    if not 0.5 <= tempo <= 2.0:
+        raise ValueError("tempo_out_of_range")
+    if not -12.0 <= volume_db <= 12.0:
+        raise ValueError("volume_db_out_of_range")
+    if not is_ffmpeg_available():
+        raise ValueError("ffmpeg_unavailable")
+
+    project = get_project_row(db, project_id)
+    if project is None:
+        raise LookupError("project_not_found")
+
+    chapters = list(project.chapters)
+    total_adjusted = 0
+    total_skipped_recorded = 0
+    chapters_processed = 0
+    chapters_skipped = 0
+    for ch in chapters:
+        try:
+            res = adjust_chapter_audio(db, project_id, ch.id, tempo=tempo, volume_db=volume_db)
+        except ValueError:
+            # no_adjustment: chapter has no ready segments and no existing record
+            chapters_skipped += 1
+            continue
+        total_adjusted += res.get("adjusted", 0)
+        total_skipped_recorded += res.get("skipped_recorded", 0)
+        chapters_processed += 1
+    return {
+        "adjusted": total_adjusted,
+        "skipped_recorded": total_skipped_recorded,
+        "chapters_processed": chapters_processed,
+        "chapters_skipped": chapters_skipped,
+    }
+
+
 def resplit_from_script(db: Session, project_id: str, chapter_id: str):
     """Layer-sync Phase B: re-split segments from the chapter's current L2.
 

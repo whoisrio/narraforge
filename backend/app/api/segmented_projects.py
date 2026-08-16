@@ -550,6 +550,25 @@ def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioReq
         raise HTTPException(status_code=422, detail=str(e))
 
 
+@local_router.post("/segmented-projects/{project_id}/adjust-audio-all")
+def adjust_audio_all_endpoint(project_id: str, body: AdjustAudioRequest, db: Session = Depends(get_db)):
+    """Post-synthesis audio adjustment (atempo / volume) for ALL chapters' ready
+    segments. Reuses the per-chapter contract: original audio preserved as
+    ``audio.previous``; durations re-probed so timeline/SRT stay correct.
+    Chapters with no ready segments and no existing record are skipped.
+    """
+    try:
+        return svc.adjust_all_chapters_audio(
+            db, project_id,
+            tempo=body.tempo if body.tempo is not None else 1.0,
+            volume_db=body.volume_db if body.volume_db is not None else 0.0,
+        )
+    except LookupError:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 @router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/resplit-from-script")
 async def resplit_from_script_endpoint(
     project_id: str,

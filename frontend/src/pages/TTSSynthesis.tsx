@@ -642,6 +642,27 @@ export function TTSSynthesis({
     }
   }, [project?.id, activeChapter?.id, reloadProjectData, showToast, t]);
 
+  const handleAdjustAudioAll = useCallback(async (tempo: number, volumeDb: number) => {
+    if (!project?.id) return;
+    setAdjustBusy(true);
+    try {
+      const result = await segmentedProjectApi.adjustAllChaptersAudio(project.id, {
+        tempo: tempo === 1 ? undefined : tempo,
+        volume_db: volumeDb === 0 ? undefined : volumeDb,
+      });
+      setAdjustOpen(false);
+      showToast(
+        t('adjustAudio.doneAll', { count: result.adjusted, chapters: result.chapters_processed }),
+        'success',
+      );
+      await reloadProjectData();
+    } catch (e) {
+      showToast(t('tts.playbackFailed', { context: 'adjust', message: e instanceof Error ? e.message : String(e) }), 'error');
+    } finally {
+      setAdjustBusy(false);
+    }
+  }, [project?.id, reloadProjectData, showToast, t]);
+
   const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {    const np = createInitialProject(t);
     np.name = name || t('tts.newProjectName', { n: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
     if (logo) np.logo = logo;
@@ -2062,6 +2083,7 @@ export function TTSSynthesis({
                   busy={adjustBusy}
                   onCancel={() => setAdjustOpen(false)}
                   onConfirm={(tempo, volumeDb) => { void handleAdjustAudio(tempo, volumeDb); }}
+                  onApplyAll={(tempo, volumeDb) => { void handleAdjustAudioAll(tempo, volumeDb); }}
                 />
               )}
               {exportOpen && (

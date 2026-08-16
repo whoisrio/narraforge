@@ -11,13 +11,15 @@ interface AdjustAudioDialogProps {
   busy?: boolean;
   onCancel: () => void;
   onConfirm: (tempo: number, volumeDb: number) => void;
+  /** 应用到项目下所有章节（含已合成音频的变速/音量与时间重算） */
+  onApplyAll?: (tempo: number, volumeDb: number) => void;
 }
 
 /**
  * 合成后音频调整（速度/音量）：ffmpeg atempo + volume 批处理章节内已生成音频。
  * 绝对语义：始终以原始音频为基准渲染；调回 1.0x/0dB 即还原。
  */
-export function AdjustAudioDialog({ readyCount, currentAdjust, busy, onCancel, onConfirm }: AdjustAudioDialogProps) {
+export function AdjustAudioDialog({ readyCount, currentAdjust, busy, onCancel, onConfirm, onApplyAll }: AdjustAudioDialogProps) {
   const { t } = useTranslation();
   const [tempo, setTempo] = useState(currentAdjust?.tempo ?? 1.0);
   const [volumeDb, setVolumeDb] = useState(currentAdjust?.volume_db ?? 0);
@@ -27,6 +29,7 @@ export function AdjustAudioDialog({ readyCount, currentAdjust, busy, onCancel, o
     && Math.abs(tempo - currentAdjust.tempo) < 1e-9
     && volumeDb === currentAdjust.volume_db;
   const canApply = !busy && readyCount > 0 && !unchanged && (hasRecord || !identity);
+  const canApplyAll = !busy && (hasRecord || !identity);
 
   return (
     <div className={styles.overlay} role="dialog" aria-label={t('adjustAudio.title')}>
@@ -73,6 +76,16 @@ export function AdjustAudioDialog({ readyCount, currentAdjust, busy, onCancel, o
         </div>
         <footer className={styles.footer}>
           <button type="button" className={styles.ghostBtn} onClick={onCancel}>{t('common.cancel')}</button>
+          {onApplyAll && (
+            <button
+              type="button"
+              className={styles.applyAllBtn}
+              disabled={!canApplyAll}
+              onClick={() => onApplyAll(tempo, volumeDb)}
+            >
+              {busy ? t('adjustAudio.applying') : t('adjustAudio.applyAll')}
+            </button>
+          )}
           <button
             type="button"
             className={styles.primaryBtn}

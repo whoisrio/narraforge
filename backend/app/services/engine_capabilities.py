@@ -126,8 +126,8 @@ def prepare_text_for_engine(
     - 引擎支持 leading 且未 mute → apply_leading_tag；
     - 其余情况（不支持 leading 或 mute）→ strip_leading_style_tag。
     即：不支持任何 tag 的引擎会得到完全无 tag 的纯文本。
-    - ``underscore_to_space`` → 最后把下划线替换为空格（只影响合成文本，
-      显示/字幕文本不受影响）。
+    - ``underscore_to_space`` → 最后把下划线、斜杠替换为空格（只影响合成
+      文本，显示/字幕文本不受影响）。斜杠转空格便于把路径/分隔类文本读成停顿。
     """
     caps = _caps_for(engine, voxcpm_mode)
     out = text or ""
@@ -139,4 +139,5 @@ def prepare_text_for_engine(
         out = strip_leading_style_tag(out)
     if underscore_to_space:
         out = out.replace("_", " ")
+        out = out.replace("/", " ")
     return out
