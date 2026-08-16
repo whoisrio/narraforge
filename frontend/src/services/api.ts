@@ -775,6 +775,16 @@ export const segmentedProjectApi = {
     );
     return data;
   },
+  adjustAllChaptersAudio: async (
+    projectId: string,
+    params: { tempo?: number; volume_db?: number },
+  ): Promise<{ adjusted: number; skipped_recorded: number; chapters_processed: number; chapters_skipped: number }> => {
+    const { data } = await api.post<{ adjusted: number; skipped_recorded: number; chapters_processed: number; chapters_skipped: number }>(
+      `/segmented-projects/${projectId}/adjust-audio-all`,
+      params,
+    );
+    return data;
+  },
   rewriteScriptFromSegments: async (projectId: string, chapterId: string): Promise<{ narration_script: string }> => {
     const { data } = await api.post<{ narration_script: string }>(
       `/segmented-projects/${projectId}/chapters/${chapterId}/rewrite-script-from-segments`,

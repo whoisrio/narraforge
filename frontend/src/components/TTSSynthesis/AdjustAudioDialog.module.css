@@ -61,3 +61,9 @@
 .primaryBtn { background: var(--accent, #b45309); border-color: var(--accent, #b45309); color: #fff; }
 .primaryBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 .ghostBtn { background: transparent; }
+.applyAllBtn {
+  background: transparent;
+  color: var(--accent, #b45309);
+  border-color: var(--accent, #b45309);
+}
+.applyAllBtn:disabled { opacity: 0.5; cursor: not-allowed; }
