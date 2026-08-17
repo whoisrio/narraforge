@@ -22,25 +22,34 @@ import { ConfirmProvider } from './components/ui/Confirm';
 import { useConfirm } from './components/ui/useConfirm';
 import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
-import { UnlockGate } from './components/Auth/UnlockGate';
-import { getToken, isAuthRequired, reloadPage } from './services/auth';
+import { AuthPage } from './pages/Auth';
+import { Admin } from './pages/Admin';
+import { AuthProvider } from './hooks/AuthProvider';
+import { useAuth } from './hooks/authContext';
+import { isAuthRequired } from './services/auth';
 import type { SegmentedProject } from './types';
 import styles from './App.module.css';
 
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
 
-type Page = 'home';
-type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config';
+type Page = 'home' | 'auth';
+type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config' | 'admin';
 type View = Page | Tab;
 
 function SettingsSelect() {
   const { mode, setMode } = useStorageModeContext();
   const { features } = useCapabilities();
+  const { isAnonymous } = useAuth();
   const { t } = useTranslation();
   return (
-    <select value={mode} onChange={(e) => setMode(e.target.value as StorageMode)}>
-      {/* workers 模式无后端存储（spec 第 4 节），固定 frontend，不给出 backend 选项 */}
-      {features.backend_storage && <option value="backend">{t('settings.backend')}</option>}
+    <select
+      value={mode}
+      onChange={(e) => setMode(e.target.value as StorageMode)}
+      title={isAnonymous ? t('auth.loginRequired') : undefined}
+    >
+      {/* workers 模式无后端存储（spec 第 4 节），固定 frontend，不给出 backend 选项；
+          匿名用户同样只保留浏览器存储（后端持久化端点不在匿名 allowlist 内） */}
+      {features.backend_storage && !isAnonymous && <option value="backend">{t('settings.backend')}</option>}
       <option value="frontend">{t('settings.frontend')}</option>
     </select>
   );
@@ -54,6 +63,60 @@ function storageForMode(mode: StorageMode): SegmentedProjectStorage {
   return mode === 'backend' ? backendStorage : indexedDBStorage;
 }
 
+/** 登录用户菜单：邮箱 + 管理后台入口（isAdmin）+ 登出。 */
+function UserMenu({ onOpenAdmin }: { onOpenAdmin: () => void }) {
+  const { user, isAdmin, signOut } = useAuth();
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  if (!user) return null;
+  return (
+    <div className={styles.userMenu}>
+      <button
+        type="button"
+        className={styles.userMenuTrigger}
+        data-testid="user-menu-trigger"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {user.email}
+      </button>
+      {open && (
+        <div className={styles.userMenuDropdown}>
+          {isAdmin && (
+            <button
+              type="button"
+              className={styles.userMenuItem}
+              onClick={() => { setOpen(false); onOpenAdmin(); }}
+            >
+              {t('auth.adminEntry')}
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.userMenuItem}
+            onClick={() => { setOpen(false); void signOut(); }}
+          >
+            {t('auth.logout')}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 匿名用户访问受限功能时的占位提示。 */
+function LoginRequired({ onLogin }: { onLogin: () => void }) {
+  const { t } = useTranslation();
+  return (
+    <div className={styles.loginRequired} data-testid="login-required">
+      <p className={styles.loginRequiredTitle}>{t('auth.loginRequired')}</p>
+      <p className={styles.loginRequiredDesc}>{t('auth.loginRequiredDesc')}</p>
+      <button type="button" className={styles.loginRequiredButton} onClick={onLogin}>
+        {t('auth.login')}
+      </button>
+    </div>
+  );
+}
+
 function AppContent() {
   const [activeView, setActiveView] = useState<View>('home');
   const [activeTab, setActiveTab] = useState<Tab>('tts-synthesis');
@@ -61,14 +124,26 @@ function AppContent() {
   const [projects, setProjects] = useState<SegmentedProject[]>([]);
   const [storageMode, setStorageMode] = useState<StorageMode>('frontend');
   const [storageModeLoaded, setStorageModeLoaded] = useState(false);
+  const [anonBannerDismissed, setAnonBannerDismissed] = useState(false);
   const capabilities = useCapabilities();
+  const { user, isAnonymous, loading: authLoading, sessionExpired, clearSessionExpired } = useAuth();
 
-  // workers 模式固定 frontend 存储（spec 第 4 节）：即使后端配置残留 backend 也强制走 IndexedDB
-  const effectiveStorageMode: StorageMode = capabilities.features.backend_storage ? storageMode : 'frontend';
+  // workers 模式固定 frontend 存储（spec 第 4 节）：即使后端配置残留 backend 也强制走 IndexedDB；
+  // 匿名用户同样强制 frontend（后端持久化端点不在匿名 allowlist 内）
+  const effectiveStorageMode: StorageMode =
+    capabilities.features.backend_storage && !isAnonymous ? storageMode : 'frontend';
   const projectStorage = storageForMode(effectiveStorageMode);
   const { t } = useTranslation();
   const toast = useToast();
   const confirm = useConfirm();
+
+  // 会话彻底失效（refresh 失败）→ 跳登录页
+  useEffect(() => {
+    if (sessionExpired) {
+      clearSessionExpired();
+      setActiveView('auth');
+    }
+  }, [sessionExpired, clearSessionExpired]);
 
   useEffect(() => {
     configApi.getStorageMode().then(
@@ -91,6 +166,7 @@ function AppContent() {
   }, [projectStorage]);
 
   const handleSetStorageMode = async (mode: StorageMode) => {
+    if (mode === 'backend' && isAnonymous) return;
     try {
       await configApi.setStorageMode(mode);
       setStorageMode(mode);
@@ -225,21 +301,91 @@ function AppContent() {
     handleTabClick(nextTab);
   };
 
+  const handleOpenAuth = () => {
+    setActiveProjectId(null);
+    setActiveView('auth');
+  };
+
+  const handleAuthSuccess = () => {
+    setActiveView('home');
+  };
+
+  const handleOpenAdmin = () => {
+    setActiveProjectId(null);
+    setActiveTab('admin');
+    setActiveView('admin');
+  };
+
   const settingsSlot = (
     <div className={styles.shellSettings}>
       <span className={styles.storageLabel}>{t('settings.storage')}</span>
       <SettingsSelect />
       <LanguageSwitcher />
+      {isAuthRequired() && !user && (
+        <button
+          type="button"
+          className={styles.loginButton}
+          data-testid="header-login-button"
+          onClick={handleOpenAuth}
+        >
+          {t('auth.login')}
+        </button>
+      )}
+      {isAuthRequired() && user && <UserMenu onOpenAdmin={handleOpenAdmin} />}
     </div>
   );
 
   const isHome = activeView === 'home';
   const inProjectWorkspace = activeTab === 'tts-synthesis' && !!activeProjectId;
 
+  // 首次会话恢复中：避免匿名横幅/登录按钮闪烁
+  if (isAuthRequired() && authLoading) {
+    return <div className={styles.app} data-testid="auth-loading" />;
+  }
+
+  if (activeView === 'auth') {
+    return (
+      <AuthPage
+        onSuccess={handleAuthSuccess}
+        onBack={() => setActiveView('home')}
+      />
+    );
+  }
+
+  // 匿名用户：allowlist 之外的页面整体隐藏入口（语音克隆上传、语音转写均需登录）
+  const hiddenNavIds: GlobalNavId[] = [
+    ...(!capabilities.features.speech_to_text || isAnonymous ? ['subtitles' as GlobalNavId] : []),
+    ...(isAnonymous ? ['voice-design' as GlobalNavId] : []),
+  ];
+
   return (
     <StorageModeContext.Provider value={{ mode: effectiveStorageMode, setMode: handleSetStorageMode }}>
       <div className={styles.app}>
-        {isHome && <Landing onNavigate={handleNavigate} />}
+        {isHome && (
+          <>
+            {isAnonymous && !anonBannerDismissed && (
+              <div className={styles.anonBanner} data-testid="anon-banner">
+                <div className={styles.anonBannerText}>
+                  <span className={styles.anonBannerTitle}>{t('auth.anonBannerTitle')}</span>
+                  <span className={styles.anonBannerDesc}>{t('auth.anonBannerDesc')}</span>
+                </div>
+                <div className={styles.anonBannerActions}>
+                  <button type="button" className={styles.anonBannerLogin} onClick={handleOpenAuth}>
+                    {t('auth.login')}
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.anonBannerDismiss}
+                    onClick={() => setAnonBannerDismissed(true)}
+                  >
+                    {t('auth.continueAnon')}
+                  </button>
+                </div>
+              </div>
+            )}
+            <Landing onNavigate={handleNavigate} />
+          </>
+        )}
 
         {!isHome && (
           <AppShell
@@ -247,7 +393,7 @@ function AppContent() {
             onNavigate={handleGlobalNavigate}
             rightSlot={settingsSlot}
             hideSidebar={inProjectWorkspace}
-            hiddenNavIds={capabilities.features.speech_to_text ? [] : ['subtitles']}
+            hiddenNavIds={hiddenNavIds}
           >
             <VoiceRefreshProvider>
               <main className={styles.main}>
@@ -271,11 +417,12 @@ function AppContent() {
                     onNavigateToClone={() => handleTabClick('voice-clone')}
                   />
                 )}
+                {activeTab === 'admin' && <Admin />}
                 <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none' }}>
-                  <VoiceClone />
+                  {isAnonymous ? <LoginRequired onLogin={handleOpenAuth} /> : <VoiceClone />}
                 </div>
                 <div style={{ display: activeTab === 'speech-to-text' ? 'block' : 'none' }}>
-                  <SpeechToText />
+                  {isAnonymous ? <LoginRequired onLogin={handleOpenAuth} /> : <SpeechToText />}
                 </div>
                 <div style={{ display: activeTab === 'model-config' ? 'block' : 'none' }}>
                   <ModelConfig />
@@ -290,15 +437,20 @@ function AppContent() {
 }
 
 export default function App() {
-  // 无域名部署的共享口令门控（spec 5.2b）：auth 开启且本地无口令时只渲染解锁页；
-  // 解锁成功后整页刷新，Capabilities 等启动探测带口令重试。
-  // 本地开发不设 VITE_AUTH_REQUIRED，isAuthRequired() 恒 false，行为不变。
-  const [locked] = useState(() => isAuthRequired() && !getToken());
-  if (locked) {
+  // Supabase Auth 门控（spec 5.2c）：auth 开启时包 AuthProvider —— 恢复会话后
+  // 未登录用户可继续匿名使用（allowlist 内的无状态端点）或去登录页；
+  // 本地开发不设 VITE_AUTH_REQUIRED，isAuthRequired() 恒 false，行为完全不变。
+  if (!isAuthRequired()) {
     return (
       <ThemeProvider>
         <TranslationProvider>
-          <UnlockGate onUnlocked={reloadPage} />
+          <ToastProvider>
+            <ConfirmProvider>
+              <CapabilitiesProvider>
+                <AppContent />
+              </CapabilitiesProvider>
+            </ConfirmProvider>
+          </ToastProvider>
         </TranslationProvider>
       </ThemeProvider>
     );
@@ -306,13 +458,15 @@ export default function App() {
   return (
     <ThemeProvider>
       <TranslationProvider>
-        <ToastProvider>
-          <ConfirmProvider>
-            <CapabilitiesProvider>
-              <AppContent />
-            </CapabilitiesProvider>
-          </ConfirmProvider>
-        </ToastProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <ConfirmProvider>
+              <CapabilitiesProvider>
+                <AppContent />
+              </CapabilitiesProvider>
+            </ConfirmProvider>
+          </ToastProvider>
+        </AuthProvider>
       </TranslationProvider>
     </ThemeProvider>
   );

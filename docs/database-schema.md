@@ -15,6 +15,12 @@ The database consists of **10 tables** and **2 enums**.
 > `segmented_project*` tables (step 3B) goes through Supabase PostgREST; the Postgres DDL exported
 > from these models lives in `backend/supabase/schema.sql`
 > and is kept in sync by `backend/tests/unit/test_supabase_schema_sync.py`.
+>
+> **Supabase 多用户扩展（2026-08, workers only）：** `schema.sql` additionally defines per-user
+> ownership (`user_id`) columns, the stats/auth-adjacent tables (`profiles` / `daily_stats` /
+> `operation_logs` / `daily_active_users`) and the `increment_metric` RPC — see
+> [Supabase Multi-User Schema](#supabase-multi-user-schema-workers-only).
+> These exist only on the Supabase side; the local SQLite schema is unchanged (single-tenant).
 
 | Table | Purpose |
 |---|---|
@@ -666,3 +672,68 @@ Temporary data, overwritten on each preview. Nothing stored here is used for syn
 - The segmented project models use a three-tier hierarchy: `project -> chapter -> segment`. Segments carry a denormalized `project_id` for direct querying.
 - `voice_profiles.project_id` allows project-scoped voices (NULL = global). `segments.role_id` and `projects.default_narrator_role_id` reference the global `roles` table.
 - `voice_profiles.voice` routes the frontend to the correct TTS panel. `voice_params` stores the actual parameters nested under the model key.
+
+---
+
+## Supabase Multi-User Schema (workers only)
+
+以下改动只存在于 Supabase（`backend/supabase/schema.sql`）一侧；本地 SQLite 模型不加这些列/表，保持单租户无认证。
+事实源为 `schema.sql`，由 `backend/tests/unit/test_supabase_schema_sync.py` 保持同步。
+
+### `user_id` ownership columns
+
+五张顶层归属表新增 `user_id uuid`（nullable，带索引 `idx_<table>_user_id`）：
+`segmented_projects` / `voice_profiles` / `roles` / `source_documents` / `tts_results`。
+
+- NULL = 存量未归属行（升级后由 `backend/scripts/backfill_user_ownership.py` 回填给初始用户）。
+- chapters/segments 不加列：归属经所属 project 传递，仓储层操作前先校验 project 归属。
+- `system_configs` 全局共享，不加列。
+- 隔离在仓储层实现（service key 走 PostgREST 绕过 RLS）：登录用户 select/update/delete 追加
+  `user_id` 过滤、insert 写入归属；legacy admin 看全部行；匿名兜底 `user_id IS NULL` 作用域。
+  详见 `backend/app/core/repositories/user_scope.py`。
+
+### Table: `profiles`
+
+Supabase Auth 用户档案。`id` = `auth.users.id`（不建 FK，避免耦合 auth schema）；由 stats 中间件首见 upsert。
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | Supabase Auth user id |
+| `email` | text | |
+| `created_at` | timestamptz | default `now()` |
+| `last_seen_at` | timestamptz | 每次已认证请求刷新 |
+| `is_admin` | boolean | default false |
+
+### Table: `daily_stats`
+
+按日计数指标（`visit_authed` / `visit_anon` / `synthesize` 等）。
+
+| Column | Type | Notes |
+|---|---|---|
+| `date` | date | PK 一部分 |
+| `metric` | text | PK 一部分 |
+| `count` | bigint | default 0 |
+
+### Table: `operation_logs`
+
+变更类操作审计（POST/PUT/DELETE，剔除 `/health` 与 `/api/admin/` 等路径）。
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | bigint identity PK | |
+| `user_id` | uuid | nullable（匿名操作为 NULL） |
+| `action` | text | `<router>.<verb>` 语义映射 |
+| `method` / `path` / `status` / `duration_ms` | text / text / int / int | 请求快照 |
+| `created_at` | timestamptz | default `now()`；索引 `idx_operation_logs_created_at`、`idx_operation_logs_user_id` |
+
+### Table: `daily_active_users`
+
+| Column | Type | Notes |
+|---|---|---|
+| `date` | date | PK 一部分 |
+| `user_id` | uuid | PK 一部分 |
+
+### RPC: `increment_metric(p_date date, p_metric text)`
+
+对 `daily_stats` 原子 +1（`INSERT ... ON CONFLICT DO UPDATE`，避免读-改-写竞态）。
+经 PostgREST 调用：`POST /rest/v1/rpc/increment_metric`。

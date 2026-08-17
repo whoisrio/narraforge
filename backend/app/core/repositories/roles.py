@@ -11,6 +11,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient, SupabaseError
 from app.core.time_utils import utcnow
+from app.core.repositories.user_scope import UserScope
 from app.schemas.role import RoleIn, RoleOut, RoleUpdate
 
 # workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化。
@@ -83,10 +84,15 @@ class LocalRoleRepository:
         return True
 
 
-class SupabaseRoleRepository:
-    """PostgREST 实现。删除前做 segments/project 引用清理（3B 补齐，对齐 local）。"""
+class SupabaseRoleRepository(UserScope):
+    """PostgREST 实现。删除前做 segments/project 引用清理（3B 补齐，对齐 local）。
 
-    def __init__(self, client: SupabaseClient):
+    M4：构造接收 (owner_id, see_all) 用户作用域（UserScope），全部查询/写入
+    按归属过滤/标记；local 模式走 LocalRoleRepository 不受影响。
+    """
+
+    def __init__(self, client: SupabaseClient, owner_id: str | None = None, see_all: bool = False):
+        super().__init__(owner_id=owner_id, see_all=see_all)
         self._client = client
 
     def list(self, project_id: str | None = None) -> list[RoleOut]:
@@ -95,14 +101,16 @@ class SupabaseRoleRepository:
         else:
             params = {"project_id": "is.null"}
         params["order"] = "updated_at.desc"
-        return [_row_to_out(row) for row in self._client.select(TABLE, params=params)]
+        return [_row_to_out(row) for row in self._client.select(TABLE, params=self._scope_params(params))]
 
     def create(self, payload: RoleIn) -> RoleOut:
-        if self._client.select_one(TABLE, params={"id": f"eq.{payload.id}", "select": "id"}):
+        if self._client.select_one(
+            TABLE, params=self._scope_params({"id": f"eq.{payload.id}", "select": "id"})
+        ):
             raise ValueError("role_already_exists")
         # "__scratchpad__" 是前端占位符，非真实项目行，归一化为 NULL（对齐 local）
         project_id = payload.project_id if payload.project_id != "__scratchpad__" else None
-        row = {
+        row = self._stamp_row({
             "id": payload.id,
             "name": payload.name,
             "avatar": payload.avatar,
@@ -111,7 +119,7 @@ class SupabaseRoleRepository:
             "project_id": project_id,
             "voice": payload.voice,
             "favorite_styles": payload.favorite_styles,
-        }
+        })
         try:
             inserted = self._client.insert(TABLE, [row])
         except SupabaseError as exc:
@@ -123,14 +131,17 @@ class SupabaseRoleRepository:
     def update(self, role_id: str, payload: RoleUpdate) -> RoleOut | None:
         values = payload.model_dump(exclude_unset=True)
         values["updated_at"] = utcnow().isoformat()  # 对齐 local 的 onupdate 语义
-        rows = self._client.update(TABLE, values, params={"id": f"eq.{role_id}"})
+        rows = self._client.update(TABLE, values, params=self._scope_params({"id": f"eq.{role_id}"}))
         if not rows:
             return None
         return _row_to_out(rows[0])
 
     def delete(self, role_id: str) -> bool:
+        # 先删（带归属过滤）再清理引用：跨用户角色删不掉，也绝不清理他人的引用
+        if not self._client.delete(TABLE, params=self._scope_params({"id": f"eq.{role_id}"})):
+            return False
         self._clean_role_references(role_id)
-        return bool(self._client.delete(TABLE, params={"id": f"eq.{role_id}"}))
+        return True
 
     def _clean_role_references(self, role_id: str) -> None:
         """对齐 local role_service._clean_role_references 的三处悬挂引用清理。
@@ -149,7 +160,8 @@ class SupabaseRoleRepository:
         self._client.update(
             PROJECTS,
             {"default_narrator_role_id": None},
-            params={"default_narrator_role_id": f"eq.{role_id}"},
+            # 项目引用清理限定自己的项目（segments 无 user_id 列，靠角色归属约束）
+            params=self._scope_params({"default_narrator_role_id": f"eq.{role_id}"}),
         )
         for row in self._client.select(SEGMENTS, params={"select": "id,voice"}):
             voice = row.get("voice")

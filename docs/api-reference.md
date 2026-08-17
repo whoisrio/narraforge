@@ -4,6 +4,45 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 
 ---
 
+## 认证与数据隔离（workers 模式）
+
+以下规则只在 `DEPLOY_TARGET=workers`（Vercel serverless / Cloudflare Workers + Supabase）生效。
+本地（local）模式不注册认证中间件，全部端点免认证，SQLite 单租户。
+
+**身份判定顺序**（`backend/app/core/auth_middleware.py`）：
+
+1. **legacy admin**：满足任一旧凭证即视为管理员，放行一切请求并在仓储层看到全部用户的数据。
+   - `Cf-Access-Authenticated-User-Email` 头存在（CF Access 边缘注入；只验存在性、可伪造，仅在 `TRUST_CF_ACCESS_HEADER=true` 时生效——仅 CF Access 前置拓扑开启）；
+   - `X-Narraforge-Gateway-Secret` 与 `GATEWAY_SECRET` 一致；
+   - `Authorization: Bearer <ACCESS_TOKEN>` 共享口令。
+2. **Supabase 用户**：`Authorization: Bearer <Supabase access_token>`，经 JWKS
+   （`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`，ES256）验签，
+   校验 `aud`（`SUPABASE_JWT_AUD`，默认 `authenticated`）与 `iss`（`{SUPABASE_URL}/auth/v1`）。
+3. **匿名**：只允许无状态 allowlist（见下）；其余返回 `401`。
+
+**匿名 allowlist**（精确/前缀匹配，不读写用户数据）：
+
+| 端点 | 说明 |
+|---|---|
+| `GET /health`、`GET /` | 探活/根页 |
+| `GET /api/config/capabilities`、`GET /api/config/storage-mode` | 能力/存储模式 |
+| `POST /api/tts/synthesize` | workers 模式仅 edge_tts 引擎；匿名请求不持久化（只回 base64） |
+| `POST /api/mimo-tts/*` | MiMo 在线合成/克隆 |
+| `POST /api/text-split/*`、`/api/subtitle-llm/*`、`/api/text-analysis/*` | 纯文本处理 |
+
+**每用户数据隔离**（workers/Supabase 模式，本地 SQLite 不变）：
+`segmented_projects` / `voice_profiles` / `roles` / `source_documents` / `tts_results`
+带 `user_id` 归属列，在仓储层强制过滤（`backend/app/core/repositories/user_scope.py`）。
+登录用户只见自己的行；chapters/segments 经所属 project 继承归属；跨用户访问返回 404；
+legacy admin 看全部行；匿名兜底为 `user_id IS NULL` 作用域（只触达 allowlist 端点，纵深防御）。
+
+**错误码**（detail 为 `{code, message}` 信封）：
+
+- `401 auth_required` — 匿名访问非 allowlist 端点。
+- `403 admin_required` — 非管理员访问 `/api/admin/*`（JWT 邮箱需在 `ADMIN_EMAILS` 内；legacy admin 恒通过）。
+
+---
+
 ## 声音复刻 (`/api/clone`)
 
 | 方法 | 路径 | 说明 |
@@ -1415,6 +1454,81 @@ Layer-sync Phase B：把 L3 分段文本的改动定位合并回写 L2。
 
 ---
 
+## 管理后台 (`/api/admin`)
+
+仅 workers 模式挂载；全部端点要求管理员（legacy admin 恒通过，用户 JWT 邮箱需在 `ADMIN_EMAILS` 内，
+否则 `403 admin_required`）。数据来自 Supabase 统计表（由 stats 中间件 best-effort 写入）。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/admin/stats/overview` | 总览：总用户数、今日 DAU、近 30 天 DAU/访问量序列 |
+| GET | `/api/admin/users` | 用户列表（分页，含操作次数） |
+| GET | `/api/admin/logs` | 操作日志（分页，支持 user_id/action/date 过滤） |
+
+### GET `/api/admin/stats/overview`
+
+**Response:**
+```json
+{
+  "total_users": 3,
+  "today_dau": 1,
+  "dau_series": [{ "date": "2026-08-17", "count": 1 }],
+  "visit_series": [{ "date": "2026-08-17", "authed": 10, "anon": 2 }]
+}
+```
+
+`dau_series` / `visit_series` 为近 30 天逐日序列。
+
+### GET `/api/admin/users`
+
+**Query:** `page`（默认 1）、`page_size`（默认 20，上限 200）。
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": "user-uuid",
+      "email": "a@example.com",
+      "created_at": "2026-08-01T00:00:00",
+      "last_seen_at": "2026-08-17T03:00:00",
+      "is_admin": true,
+      "operation_count": 42
+    }
+  ],
+  "total": 3,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+### GET `/api/admin/logs`
+
+**Query:** `page`、`page_size`（默认 50）、`user_id`、`action`、`date`（`YYYY-MM-DD` 前缀过滤），均可选；按 `created_at` 倒序。
+
+**Response:**
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "user_id": "user-uuid",
+      "action": "tts.synthesize",
+      "method": "POST",
+      "path": "/api/tts/synthesize",
+      "status": 200,
+      "duration_ms": 1234,
+      "created_at": "2026-08-17T03:00:00"
+    }
+  ],
+  "total": 100,
+  "page": 1,
+  "page_size": 50
+}
+```
+
+---
+
 ## 通用响应格式
 
 ### VoiceProfile 响应对象
@@ -1458,7 +1572,9 @@ or `/api/clone/audio/{id}?field=source` when `has_source` is true.
 
 常见 HTTP 状态码：
 - `400` — 请求参数错误
-- `404` — 资源不存在
+- `401` — 未认证（workers 模式匿名访问非 allowlist 端点，`auth_required`）
+- `403` — 权限不足（workers 模式非管理员访问 `/api/admin/*`，`admin_required`）
+- `404` — 资源不存在（workers 模式下也用于跨用户访问，不泄露存在性）
 - `409` — 资源冲突（如重复描述、项目已存在）
 - `422` — 请求体验证失败
 - `500` — 服务器内部错误

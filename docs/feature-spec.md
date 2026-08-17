@@ -422,6 +422,17 @@ A global toggle switches between:
 - Segmented editor supports vertical (card list) and horizontal (compact block) layouts
 - Toggleable via `SET_LAYOUT` action
 
+### 7.4 Multi-User & Anonymous Mode (workers deployment)
+
+Applies only to the workers deployment shape (Vercel serverless + Supabase; see `docs/deployment-feature-matrix.md` for the full feature classification).
+Local mode is unchanged: no auth, single-tenant SQLite.
+
+- **Auth**: the frontend build (`VITE_AUTH_REQUIRED=true` + `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`) shows a Supabase email+password login/signup page (`src/pages/Auth.tsx`); axios interceptors attach the Supabase access token and retry once on 401 after token refresh.
+- **Per-user isolation**: projects, voice profiles, roles, source documents and TTS results are scoped to the signed-in user (`user_id` ownership, enforced in the backend repository layer); cross-user access returns 404.
+- **Anonymous mode**: without login, only stateless features are usable (edge_tts/MiMo synthesis, text split, subtitle LLM, text analysis); storage is fixed to frontend IndexedDB (the backend-storage option is hidden) and non-allowlisted pages show a login CTA.
+- **Admin console**: admins (JWT email in `ADMIN_EMAILS`, or legacy `ACCESS_TOKEN`/gateway/Access-header credentials) see a 管理后台 entry in the user menu → `/admin`: overview cards + 30-day DAU/visit charts, users table, operation logs table (backed by `GET /api/admin/*`, see `docs/api-reference.md`).
+- Usage stats (visits, DAU, synthesize counts, mutation audit log) are collected best-effort by the backend stats middleware; collection failures never fail requests.
+
 ---
 
 ## 8. Data Types Reference

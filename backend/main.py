@@ -100,13 +100,23 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     # capabilities 端点以 app.state 为准（工厂参数优先于 settings 单例）
     app.state.deploy_target = target
 
-    # Cloudflare Access 校验（spec 3.6，仅 workers 模式）：先于 CORS 注册，
-    # 使 CORS 成为更外层中间件——Access 拒绝的 401 也带 ACAO 头，
+    # 认证 + 使用统计（仅 workers 模式）：
+    # - SupabaseAuthMiddleware 取代旧 AccessEnforcementMiddleware：旧凭证通道
+    #   （Access 邮箱头/网关密钥/共享口令）视为 legacy admin 放行；Supabase Auth
+    #   用户 JWT 经 JWKS 验签；匿名仅放行无状态 allowlist，其余 401。
+    # - StatsMiddleware 后注册 = 更外层（Starlette 语义），call_next 返回后读
+    #   request.state.user（scope state 共享），连 auth 拒绝的 401 也计入 visit_anon。
+    # 两者都先于 CORS 注册，使 CORS 成为最外层——拒绝的 401 也带 ACAO 头，
     # 浏览器跨域能读到真实 401 而非 CORS 错误。
     if not is_local and settings.access_enforcement:
-        from app.core.access_middleware import AccessEnforcementMiddleware
+        from app.core.auth_middleware import SupabaseAuthMiddleware
 
-        app.add_middleware(AccessEnforcementMiddleware)
+        app.add_middleware(SupabaseAuthMiddleware)
+
+    if not is_local:
+        from app.core.stats_middleware import StatsMiddleware
+
+        app.add_middleware(StatsMiddleware)
 
     # CORS：workers 用 settings.cors_origins（部署填 Pages 域名），local 恒 ["*"]。
     # 注：allow_credentials=True 时规范禁止字面 "*" 配 credentials，Starlette
@@ -249,6 +259,11 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
         app.include_router(voxcpm.router, prefix="/api/voxcpm", tags=["voxcpm"])
     app.include_router(sources.router, prefix="/api", tags=["sources"])
     app.include_router(roles.router, prefix="/api", tags=["roles"])
+    if not is_local:
+        # 管理后台（M5）：全端点 require_admin，仅 workers 挂载
+        from app.api import admin
+
+        app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
     return app
 

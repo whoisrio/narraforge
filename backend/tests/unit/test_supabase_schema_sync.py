@@ -37,12 +37,31 @@ MODELS = {
     "tts_results": TTSResultRecord,
 }
 
+# 仅存在于 Supabase 侧的表（无 SQLAlchemy 模型）：M2 用户体系/使用统计，
+# local 单用户模式用不到，不进模型层。
+SUPABASE_ONLY_TABLES = {"profiles", "daily_stats", "operation_logs", "daily_active_users"}
+
+# DDL 允许比模型多出的列（Postgres-only）：M2 的 user_id 归属列只在 Supabase
+# 侧存在（local SQLite 单用户无认证，模型不加）。chapters/segments 归属经
+# project 传递，不在此列。
+EXTRA_DDL_COLUMNS = {
+    "segmented_projects": {"user_id"},
+    "voice_profiles": {"user_id"},
+    "roles": {"user_id"},
+    "source_documents": {"user_id"},
+    "tts_results": {"user_id"},
+}
+
 # DDL 列定义里非列名的前导关键字（约束/表级定义）
 _CONSTRAINT_KEYWORDS = {"primary", "foreign", "unique", "constraint", "check"}
 
 
 def _parse_schema(sql: str) -> dict[str, dict[str, str]]:
-    """解析 CREATE TABLE 块 → {table: {column: 定义行原文}}。"""
+    """解析 CREATE TABLE 块 → {table: {column: 定义行原文}}。
+
+    同时收集 ``alter table ... add column`` 的后置列（M2 的 user_id 归属列
+    以该形式追加，避免改动既有 create table 块）。
+    """
     tables: dict[str, dict[str, str]] = {}
     for match in re.finditer(
         r"create\s+table\s+(?:if\s+not\s+exists\s+)?(\w+)\s*\((.*?)\n\);",
@@ -60,6 +79,13 @@ def _parse_schema(sql: str) -> dict[str, dict[str, str]]:
                 continue
             columns[first] = line
         tables[table] = columns
+    for match in re.finditer(
+        r"alter\s+table\s+(\w+)\s+add\s+column\s+(?:if\s+not\s+exists\s+)?(\w+)\s+([^;]+?);",
+        sql,
+        re.IGNORECASE,
+    ):
+        table, column, definition = match.group(1), match.group(2), match.group(3)
+        tables.setdefault(table, {})[column.lower()] = f"{column.lower()} {definition.strip()}"
     return tables
 
 
@@ -71,13 +97,14 @@ def ddl() -> dict[str, dict[str, str]]:
 
 class TestSchemaSync:
     def test_table_set_matches(self, ddl):
-        assert set(ddl.keys()) == set(MODELS.keys())
+        assert set(ddl.keys()) == set(MODELS.keys()) | SUPABASE_ONLY_TABLES
 
     @pytest.mark.parametrize("table,model", list(MODELS.items()))
     def test_column_set_matches(self, ddl, table, model):
         model_columns = {c.name for c in model.__table__.columns}
-        assert set(ddl[table].keys()) == model_columns, (
-            f"{table}: schema.sql={sorted(ddl[table].keys())} model={sorted(model_columns)}"
+        expected = model_columns | EXTRA_DDL_COLUMNS.get(table, set())
+        assert set(ddl[table].keys()) == expected, (
+            f"{table}: schema.sql={sorted(ddl[table].keys())} expected={sorted(expected)}"
         )
 
     @pytest.mark.parametrize("table,model", list(MODELS.items()))
@@ -126,3 +153,35 @@ class TestSchemaSync:
                 assert re.search(pattern, full_sql), (
                     f"{table}.{col.name}: schema.sql 缺少 references {target}"
                 )
+
+
+class TestMultiUserSchema:
+    """M2：多用户归属列 + 用户/统计表 + 计数 RPC。"""
+
+    def test_user_id_columns_nullable_uuid(self, ddl):
+        for table, extra in EXTRA_DDL_COLUMNS.items():
+            col_def = ddl[table]["user_id"].lower()
+            assert "uuid" in col_def, f"{table}.user_id 应为 uuid 类型"
+            assert "not null" not in col_def, f"{table}.user_id 必须 nullable（存量行回填前为 NULL）"
+
+    def test_user_id_columns_indexed(self):
+        full_sql = SCHEMA_PATH.read_text(encoding="utf-8").lower()
+        for table in EXTRA_DDL_COLUMNS:
+            pattern = rf"create\s+index\s+if\s+not\s+exists\s+\w+\s+on\s+{table}\s*\(user_id\)"
+            assert re.search(pattern, full_sql), f"{table}: 缺少 user_id 索引"
+
+    def test_stats_tables_columns(self, ddl):
+        assert set(ddl["profiles"]) == {"id", "email", "created_at", "last_seen_at", "is_admin"}
+        assert set(ddl["daily_stats"]) == {"date", "metric", "count"}
+        assert set(ddl["operation_logs"]) == {
+            "id", "user_id", "action", "method", "path", "status", "duration_ms", "created_at",
+        }
+        assert set(ddl["daily_active_users"]) == {"date", "user_id"}
+
+    def test_increment_metric_rpc_present(self):
+        full_sql = SCHEMA_PATH.read_text(encoding="utf-8").lower()
+        assert re.search(
+            r"create\s+or\s+replace\s+function\s+increment_metric\s*\(\s*p_date\s+date\s*,\s*p_metric\s+text\s*\)",
+            full_sql,
+        ), "缺少 increment_metric(p_date, p_metric) RPC 函数"
+        assert "on conflict (date, metric)" in full_sql

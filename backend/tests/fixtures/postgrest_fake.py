@@ -16,7 +16,7 @@ import httpx
 
 from app.core.supabase_client import SupabaseClient
 
-# 各表主键（upsert 冲突判定）
+# 各表主键（upsert 冲突判定）；复合主键用 tuple
 _PRIMARY_KEYS = {
     "voice_profiles": "id",
     "system_configs": "key",
@@ -25,14 +25,24 @@ _PRIMARY_KEYS = {
     "segmented_projects": "id",
     "segmented_project_chapters": "id",
     "segmented_project_segments": "id",
+    "tts_results": "id",
+    "profiles": "id",
+    "daily_stats": ("date", "metric"),
+    "daily_active_users": ("date", "user_id"),
+    "operation_logs": "id",
 }
 
 
 class FakePostgrestStore:
-    """tables: {table: [row, ...]}，测试可直接播种/断言。"""
+    """tables: {table: [row, ...]}，测试可直接播种/断言。
+
+    requests: 按序记录 (method, table, params, body)，供 M4 隔离测试断言
+    user_id=eq.<id> 过滤与插入行归属。
+    """
 
     def __init__(self):
         self.tables: dict[str, list[dict]] = {t: [] for t in _PRIMARY_KEYS}
+        self.requests: list[dict] = []
 
     # ---- 过滤 ----
     def _matches(self, row: dict, params: dict) -> bool:
@@ -46,6 +56,10 @@ class FakePostgrestStore:
             if op == "neq" and str(cell) == value:
                 return False
             if op == "is" and value == "null" and cell is not None:
+                return False
+            if op == "gte" and not (cell is not None and str(cell) >= value):
+                return False
+            if op == "lt" and not (cell is not None and str(cell) < value):
                 return False
             if op == "in":
                 # 形如 in.(a,b,c)
@@ -78,10 +92,26 @@ class FakePostgrestStore:
         )
 
     def handle(self, request: httpx.Request) -> httpx.Response:
+        # RPC：post /rpc/increment_metric（daily_stats 原子 +1）
+        if request.method == "POST" and request.url.path.endswith("/rpc/increment_metric"):
+            body = json.loads(request.content)
+            rows = self.tables.setdefault("daily_stats", [])
+            for row in rows:
+                if row.get("date") == body["p_date"] and row.get("metric") == body["p_metric"]:
+                    row["count"] = int(row.get("count") or 0) + 1
+                    break
+            else:
+                rows.append({"date": body["p_date"], "metric": body["p_metric"], "count": 1})
+            return httpx.Response(200, content=b"")
+
         table = request.url.path.rsplit("/", 1)[-1]
         params = dict(request.url.params)
         rows = self.tables.setdefault(table, [])
         prefer = request.headers.get("Prefer", "")
+        body = json.loads(request.content) if request.content else None
+        self.requests.append(
+            {"method": request.method, "table": table, "params": params, "body": body}
+        )
 
         if request.method == "GET":
             matched = self._sort([r for r in rows if self._matches(r, params)], params.get("order"))
@@ -91,9 +121,10 @@ class FakePostgrestStore:
             body = json.loads(request.content)
             if "merge-duplicates" in prefer:
                 pk = _PRIMARY_KEYS[table]
+                pk_fields = (pk,) if isinstance(pk, str) else pk
                 for new_row in body:
                     for i, row in enumerate(rows):
-                        if row.get(pk) == new_row.get(pk):
+                        if all(row.get(f) == new_row.get(f) for f in pk_fields):
                             rows[i] = {**row, **new_row}
                             break
                     else:

@@ -41,6 +41,10 @@ class Settings(BaseSettings):
 
     # Cloudflare Access 头校验（spec 3.6；仅 workers 模式注册中间件，local 完全不启用）
     access_enforcement: bool = True
+    # 信任 Cf-Access-Authenticated-User-Email 头（旧凭证通道之一）。该头只有
+    # "前面真的有 Cloudflare Access 边缘代理"时才可信——Vercel 直连拓扑下客户端
+    # 可随意伪造，故默认 False；仅 CF Access 自定义域名拓扑的部署显式开启。
+    trust_cf_access_header: bool = False
     # 网关共享密钥（HF Spaces 部署：CF Worker 网关注入 X-Narraforge-Gateway-Secret，
     # Space 私有、无 Access 边缘注入邮箱头；空串 = 关闭该凭证通道，仅认 Access 邮箱头）
     gateway_secret: str = ""
@@ -70,6 +74,11 @@ class Settings(BaseSettings):
     logs_dir: Path = base_dir / "logs"
 
     @property
+    def admin_email_list(self) -> list[str]:
+        """admin_emails（逗号分隔）→ 小写邮箱列表（require_admin 用）。"""
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
+    @property
     def projects_dir(self) -> Path:
         """Alias for segmented_dir (unified data root naming)."""
         return self.segmented_dir
@@ -95,6 +104,11 @@ class Settings(BaseSettings):
     # Supabase（workers 模式持久化：PostgREST REST 访问，service key 只在后端）
     supabase_url: str = ""
     supabase_service_key: str = ""
+    # Supabase Auth 用户 JWT 验签（M3）：audience 校验值，默认 authenticated
+    supabase_jwt_aud: str = "authenticated"
+    # 管理员邮箱（逗号分隔，大小写不敏感）：require_admin 判定依据
+    # （统计后台 /api/admin/*）；旧凭证通道（Access 头/网关密钥/共享口令）恒为管理员
+    admin_emails: str = ""
     # Supabase Storage 资产桶（workers 模式无 R2 binding 时的二进制资产后端，如 Render）
     supabase_storage_bucket: str = "voice-assets"
     # 二进制资产存储后端：auto | local | r2 | supabase

@@ -21,6 +21,7 @@ The **narration workflow** (4-stage: gen_script → script_review → split_segm
 | Database schema | `docs/database-schema.md` | SQLAlchemy models, field definitions, and table relationships. |
 | Environment variables | `docs/ENV.md` | Backend `.env` configuration. |
 | Runbook | `docs/RUNBOOK.md` | Deployment and operations guide. |
+| Deployment feature matrix | `docs/deployment-feature-matrix.md` | Feature classification by deployment shape: A=workers-capable, B=cloud-API blocked by SDK, C=local-only. |
 | Contributing guide | `docs/CONTRIBUTING.md` | Development conventions and contribution guidelines. |
 | design guide | `docs/design/stitch_narraforge_story_global_prj/DESIGN.md` | UI design guidelines. |
 | Narration git versioning | `docs/narration-git-versioning.md` | Automatic snapshot pipeline for narration text — layout, IDs, cron, ops commands. |
@@ -86,6 +87,7 @@ curl http://127.0.0.1:8002/health
 - `app/models/` — SQLAlchemy ORM models: voice_profile, tts_config, tts_result, transcription_record, system_config, segmented_project, and related models.
 - `app/services/` — Business logic: cosyvoice_service, edge_tts_service, llm_client, text_split_service, whisper_service, funasr_service, and related services.
 - `app/core/` — Configuration, database setup, model_config_service, storage mode utilities, and shared core helpers.
+- Workers (Supabase) mode adds multi-user auth and isolation: `app/core/auth_middleware.py` verifies Supabase Auth JWTs (ES256, JWKS) with a stateless anonymous allowlist; `app/core/repositories/user_scope.py` enforces per-user `user_id` scoping at the repository layer (local SQLite stays single-tenant); `app/core/stats_middleware.py` collects usage stats (best-effort); admin endpoints live at `/api/admin/*` (see `docs/api-reference.md`).
 - Dependencies are managed with `uv`, not pip. Use `uv sync` or `uv pip install --python .venv/bin/python`.
 
 ### Frontend: React 19 + TypeScript + Vite

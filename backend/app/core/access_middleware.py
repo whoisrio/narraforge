@@ -1,5 +1,9 @@
 """Cloudflare Access / 网关密钥 / Bearer 口令校验中间件（spec 3.6，仅 workers 模式注册）。
 
+.. deprecated:: M3 起由 app.core.auth_middleware.SupabaseAuthMiddleware 取代
+   （create_app 不再注册本中间件）；三条旧凭证通道的判定逻辑已原样搬入
+   auth_middleware._has_legacy_credentials。本文件保留供参考，不再使用。
+
 三条凭证路径，任一满足即放行：
 
 1. ``Cf-Access-Authenticated-User-Email`` 头存在——Access 在边缘完成认证后注入；
