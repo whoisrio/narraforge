@@ -488,7 +488,9 @@ Pages 已进维护模式，前端用 **Workers Static Assets** 托管（`fronten
 | `VITE_SUPABASE_URL` | Supabase Project URL | 与后端 `SUPABASE_URL` 相同 |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon public key | 前端登录用（非 service key） |
 
-`VITE_*` 是构建期打进去的，改完必须重新部署（Deployments → Retry）。
+`VITE_*` 是构建期打进去的，改完必须重新构建。
+Workers 项目的 Deployments 菜单没有 Retry 按钮（那是 Pages 的），推一个空 commit 触发重建：
+`git commit --allow-empty -m "chore: rebuild" && git push`。
 部署后前端地址为 `https://narraforge-web.<你的子域>.workers.dev`，把它回填到
 Vercel 的 `CORS_ORIGINS` 并 Redeploy。
 
