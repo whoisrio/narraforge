@@ -18,7 +18,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from typing import Any
 
@@ -76,6 +76,33 @@ def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_projec
         raise HTTPException(status_code=403, detail=detail)
 
 
+def _enforce_project_quota(request: Request, repo: SegmentedProjectRepository) -> None:
+    """每用户 backend 项目配额（workers 模式，仅普通登录用户）。
+
+    名下项目数 >= max_projects_per_user 时拒绝新建 → 409 project_limit_reached。
+    豁免：local 模式（单租户无用户概念）、legacy admin（旧凭证通道）、
+    admin_emails 管理员、max_projects_per_user <= 0（不限制）。
+    只约束"新建"：更新已有项目不触发（调用方先判定是新建才调本函数）。
+    """
+    if settings.deploy_target != "workers":
+        return
+    if settings.max_projects_per_user <= 0:
+        return
+    if getattr(request.state, "legacy_admin", False):
+        return
+    user = getattr(request.state, "user", None)
+    if user and (user.get("email") or "").lower() in settings.admin_email_list:
+        return
+    if repo.count_owned() >= settings.max_projects_per_user:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "project_limit_reached",
+                "message": "每位用户限一个后端项目，已有项目可直接打开编辑",
+            },
+        )
+
+
 # ----- project CRUD (metadata) -----
 
 @router.get("/segmented-projects", response_model=ItemsOut[ProjectSummary])
@@ -85,10 +112,15 @@ async def list_projects(repo: SegmentedProjectRepository = Depends(get_segmented
 
 
 @router.post("/segmented-projects", response_model=ProjectDetail, status_code=201)
-async def create_project(project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def create_project(
+    project: ProjectIn,
+    request: Request,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
     _reject_scratchpad(project.id)
     if repo.project_exists(project.id):
         raise HTTPException(status_code=409, detail="project_already_exists")
+    _enforce_project_quota(request, repo)
     try:
         return repo.save_project(project)
     except LookupError:
@@ -106,10 +138,18 @@ async def get_project(project_id: str, repo: SegmentedProjectRepository = Depend
 
 
 @router.put("/segmented-projects/{project_id}", response_model=ProjectDetail)
-async def put_project(project_id: str, project: ProjectIn, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def put_project(
+    project_id: str,
+    project: ProjectIn,
+    request: Request,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
     _reject_scratchpad(project_id)
     if project.id != project_id:
         raise HTTPException(status_code=400, detail="id_mismatch")
+    # PUT 是 upsert 语义：已有项目（更新）不触发配额；对他人 id 按不存在处理
+    if not repo.project_exists(project_id):
+        _enforce_project_quota(request, repo)
     try:
         return repo.save_project(project)
     except LookupError:

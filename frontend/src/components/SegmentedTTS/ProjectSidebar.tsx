@@ -9,6 +9,10 @@ interface ProjectSidebarProps {
   scratchpadId: string;
   /** P2 v2: 当前项目的源文件列表 (项目级) */
   activeSources?: SourceDocument[];
+  /** 每用户项目配额已满：禁用新建入口（backend 存储 + 普通登录用户 + 已有项目） */
+  createDisabled?: boolean;
+  /** createDisabled 时新建按钮的提示文案 */
+  createDisabledHint?: string;
   onToggleCollapse: () => void;
   onSelectProject: (projectId: string) => void;
   onCreateProject: () => void;
@@ -52,6 +56,8 @@ export function ProjectSidebar({
   collapsed,
   scratchpadId,
   activeSources = [],
+  createDisabled = false,
+  createDisabledHint,
   onToggleCollapse,
   onSelectProject,
   onCreateProject,
@@ -124,8 +130,9 @@ export function ProjectSidebar({
             type="button"
             className={styles.iconButton}
             onClick={onCreateProject}
-            aria-label={t('segment.projectSidebar.newProject')}
-            title={t('segment.projectSidebar.newProject')}
+            disabled={createDisabled}
+            aria-label={createDisabled && createDisabledHint ? createDisabledHint : t('segment.projectSidebar.newProject')}
+            title={createDisabled && createDisabledHint ? createDisabledHint : t('segment.projectSidebar.newProject')}
           >
             +
           </button>
@@ -159,8 +166,14 @@ export function ProjectSidebar({
           {regularProjects.length > 0 ? (
             regularProjects.map(project => renderProject(project, 'project'))
           ) : !collapsed ? (
-            <button type="button" className={styles.emptyState} onClick={onCreateProject}>
-              <span>{t('segment.projectSidebar.noProjects')}</span>
+            <button
+              type="button"
+              className={styles.emptyState}
+              onClick={onCreateProject}
+              disabled={createDisabled}
+              title={createDisabled ? createDisabledHint : undefined}
+            >
+              <span>{createDisabled && createDisabledHint ? createDisabledHint : t('segment.projectSidebar.noProjects')}</span>
               <strong>{t('segment.projectSidebar.createProject')}</strong>
             </button>
           ) : null}

@@ -77,6 +77,7 @@ class SegmentedProjectRepository(Protocol):
     def list_projects(self) -> list[ProjectSummary]: ...
     def get_project(self, project_id: str) -> ProjectDetail | None: ...
     def project_exists(self, project_id: str) -> bool: ...
+    def count_owned(self) -> int: ...
     def save_project(self, project: ProjectIn) -> ProjectDetail: ...
     def delete_project(self, project_id: str) -> bool: ...
     def batch_create_structure(
@@ -113,6 +114,10 @@ class LocalSegmentedProjectRepository:
 
     def project_exists(self, project_id: str) -> bool:
         return svc.get_project_row(self._db, project_id) is not None
+
+    def count_owned(self) -> int:
+        """local 单租户无用户概念：配额检查不生效（路由层只在 workers 模式调用），返回 0。"""
+        return 0
 
     def save_project(self, project: ProjectIn) -> ProjectDetail:
         return svc.save_project(self._db, project)
@@ -427,6 +432,14 @@ class SupabaseSegmentedProjectRepository(UserScope):
 
     def project_exists(self, project_id: str) -> bool:
         return self._owns_project(project_id)
+
+    def count_owned(self) -> int:
+        """名下项目数（带 user_id 作用域；see_all 时返回全表行数）。
+
+        配额检查由路由层驱动：legacy admin（see_all=True）跳检查，正常不会
+        走到这里；普通登录用户得到的是自己名下的项目数。
+        """
+        return len(self._client.select(PROJECTS, params=self._scope_params({"select": "id"})))
 
     # ----- 全量保存 -----
 

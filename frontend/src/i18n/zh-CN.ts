@@ -937,6 +937,7 @@ export const zhCN = {
       addFirstSource: '添加第一个源 →',
       generateNarration: '基于 {count} 个源生成旁白',
       pasteText: '{count}字',
+      quotaReached: '每位用户限一个后端项目，已有项目可直接打开编辑',
     },
     editDrawer: {
       title: '编辑 #{id}',
