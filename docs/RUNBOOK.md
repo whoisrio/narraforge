@@ -524,6 +524,7 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" https://<project>.vercel.app/api/s
    现含多用户归属（`segmented_projects` / `voice_profiles` / `roles` / `source_documents` /
    `tts_results` 的 `user_id uuid` 列 + 索引）与统计表（`profiles` / `daily_stats` /
    `operation_logs` / `daily_active_users` + `increment_metric` RPC）。
+   全文件幂等（`if not exists` / `or replace` / DO 块判存），重复执行安全。
 3. 取 Project URL、service_role key（后端）与 anon key（前端）分别填 Vercel 与 CF Workers 环境变量。
 4. **存量数据回填**（仅升级环境需要）：五张归属表中原有行 `user_id IS NULL`，登录用户看不到。
    先用 Supabase Auth 注册首个管理员账号（或在 Dashboard 手工建用户），再回填：

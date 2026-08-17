@@ -137,9 +137,18 @@ create table if not exists tts_results (
 
 -- 环状 FK：segmented_projects.default_narrator_role_id → roles(id)
 -- （roles 在 segmented_projects 之后建表，只能后置补约束）
-alter table segmented_projects
-    add constraint fk_project_default_narrator_role
-    foreign key (default_narrator_role_id) references roles(id) on delete set null;
+-- 幂等：DO 块包裹，约束已存在则跳过——本文件重复执行不报错
+-- （Postgres 的 alter table add constraint 没有 if not exists 语法）。
+do $$
+begin
+    if not exists (
+        select 1 from pg_constraint where conname = 'fk_project_default_narrator_role'
+    ) then
+        alter table segmented_projects
+            add constraint fk_project_default_narrator_role
+            foreign key (default_narrator_role_id) references roles(id) on delete set null;
+    end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 多用户数据归属（M2）：user_id 归属列。
