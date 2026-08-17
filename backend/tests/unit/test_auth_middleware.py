@@ -180,10 +180,17 @@ class TestLegacyCredentials:
     """旧凭证三通道 → legacy admin（state.user=None、legacy_admin=True，放行一切）。"""
 
     def test_access_email_header(self, monkeypatch):
-        client = _workers_client(monkeypatch)
+        client = _workers_client(monkeypatch, trust_cf_access_header=True)
         resp = client.get("/api/__whoami", headers={ACCESS_HEADER: "me@example.com"})
         assert resp.status_code == 200
         assert resp.json() == {"user": None, "legacy_admin": True}
+
+    def test_access_email_header_untrusted_by_default(self, monkeypatch):
+        """信任开关默认关：带头也不放行（Vercel 直连可伪造该头 → 全量 admin）。"""
+        client = _workers_client(monkeypatch)
+        resp = client.get("/api/__whoami", headers={ACCESS_HEADER: "me@example.com"})
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "auth_required"
 
     def test_gateway_secret(self, monkeypatch):
         client = _workers_client(monkeypatch, gateway_secret="s3cret")

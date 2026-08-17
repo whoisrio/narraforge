@@ -8,7 +8,8 @@
 - 每个请求：RPC ``increment_metric`` → ``visit_authed`` / ``visit_anon``；
 - POST /api/tts/synthesize 与 /api/mimo-tts/* 合成路径：再加 ``synthesize``；
 - 已认证用户：upsert ``profiles``（首见插入，刷 last_seen_at）与
-  ``daily_active_users``（date, user_id）；
+  ``daily_active_users``（date, user_id）——进程内去重：DAU 每 (date, user)
+  每天一次，profiles 每 (hour, user) 每小时一次，避免每请求两次额外往返；
 - 变更类请求（POST/PUT/DELETE，剔除 /health、OPTIONS、/api/admin/ 与
   轮询路径）：插 ``operation_logs``（action 由路径映射 <router>.<verb>）。
 
@@ -54,6 +55,24 @@ _SYNTH_PREFIXES = (("POST", "/api/mimo-tts/"),)
 
 _MUTATION_METHODS = {"POST", "PUT", "DELETE"}
 
+# 进程内去重（review 🟡-1：已认证请求原本每请求 2 次额外 Supabase 往返——
+# profiles upsert + DAU upsert；同一 (date, user) 的 DAU 当天只需写一次，
+# profiles.last_seen_at 按小时粒度刷新足够）。Serverless 实例回收即重置，
+# 代价仅是冷启动后多写一次，可接受。
+_dau_seen: set[tuple[str, str]] = set()  # (date, user_id)
+_profile_seen: set[tuple[str, str]] = set()  # (hour_bucket, user_id)
+_SEEN_MAX = 10000
+
+
+def _mark_seen(cache: set[tuple[str, str]], key: tuple[str, str]) -> bool:
+    """首次出现返回 True（应写库）；集合超上限时清空防内存膨胀。"""
+    if key in cache:
+        return False
+    if len(cache) >= _SEEN_MAX:
+        cache.clear()
+    cache.add(key)
+    return True
+
 
 def _derive_action(method: str, path: str) -> str:
     for m, prefix, action in _ACTION_MAP:
@@ -93,17 +112,19 @@ def record_request(request: Request, status: int, duration_ms: int) -> None:
         client.rpc("increment_metric", {"p_date": today, "p_metric": "synthesize"})
 
     if user:
-        now_iso = datetime.now(UTC).isoformat()
-        client.insert(
-            "profiles",
-            [{"id": user["id"], "email": user.get("email") or "", "last_seen_at": now_iso}],
-            upsert=True,
-        )
-        client.insert(
-            "daily_active_users",
-            [{"date": today, "user_id": user["id"]}],
-            upsert=True,
-        )
+        now = datetime.now(UTC)
+        if _mark_seen(_profile_seen, (now.strftime("%Y-%m-%dT%H"), user["id"])):
+            client.insert(
+                "profiles",
+                [{"id": user["id"], "email": user.get("email") or "", "last_seen_at": now.isoformat()}],
+                upsert=True,
+            )
+        if _mark_seen(_dau_seen, (today, user["id"])):
+            client.insert(
+                "daily_active_users",
+                [{"date": today, "user_id": user["id"]}],
+                upsert=True,
+            )
 
     if method in _MUTATION_METHODS and not any(
         path.startswith(p) for p in _LOG_SKIP_PREFIXES

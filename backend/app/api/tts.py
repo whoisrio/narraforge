@@ -24,6 +24,7 @@ from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut
 from app.schemas.tts import TTSResultOut, TTSResultRecordOut
 from app.core.system_config_service import is_frontend_storage
+from app.core.auth_deps import is_workers_anonymous
 from app.api._voice_helpers import voice_to_dict
 
 # workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
@@ -121,23 +122,18 @@ async def synthesize_speech(
     store: AssetStore = Depends(get_asset_store),
 ):
     """合成语音 - 支持多引擎"""
+    # workers 模式只有 edge_tts（cosyvoice 依赖 local-only SDK，挂载即 500）；
+    # 该路由在匿名 allowlist 内，必须给干净的 4xx 而非 ImportError 500。
+    if settings.deploy_target == "workers" and request.engine != "edge_tts":
+        raise HTTPException(status_code=400, detail="engine_unavailable")
     if request.engine == "edge_tts":
         # M4：workers 模式匿名请求（allowlist 放行）禁止落库——即使 storage_mode
         # 是 backend 也按前端存储处理（只回 base64，不写 tts_results/资产存储）。
-        force_frontend = _is_workers_anonymous(http_request)
+        force_frontend = is_workers_anonymous(http_request)
         return await _synthesize_edge_tts(request, db, repo, store, force_frontend=force_frontend)
     else:
         # cosyvoice 依赖 dashscope/qwen SDK，workers 模式不挂载/不支持，保持原逻辑
         return await _synthesize_cosyvoice(request, db)
-
-
-def _is_workers_anonymous(http_request: Request) -> bool:
-    """workers 模式下的匿名请求（无用户 JWT 且非 legacy admin）。"""
-    if settings.deploy_target != "workers":
-        return False
-    return not getattr(http_request.state, "user", None) and not getattr(
-        http_request.state, "legacy_admin", False
-    )
 
 
 async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_db)):

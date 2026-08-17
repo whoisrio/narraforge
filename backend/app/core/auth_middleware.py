@@ -3,7 +3,9 @@
 取代 AccessEnforcementMiddleware（共享口令时代），身份优先级：
 
 1. 旧凭证通道（向后兼容，任一满足即视为 legacy admin，放行一切）：
-   - ``Cf-Access-Authenticated-User-Email`` 头存在（CF Access 边缘注入）；
+   - ``Cf-Access-Authenticated-User-Email`` 头存在（CF Access 边缘注入）——
+     仅在 ``settings.trust_cf_access_header`` 开启时生效（默认关：Vercel
+     直连拓扑下该头可被客户端伪造，伪造即全量 admin，见 PR #80 review）；
    - ``X-Narraforge-Gateway-Secret`` == settings.gateway_secret（HF Spaces 网关）；
    - ``Authorization: Bearer <token>`` == settings.access_token（共享口令）。
    命中 → ``request.state.user = None``、``request.state.legacy_admin = True``
@@ -100,6 +102,7 @@ def verify_supabase_jwt(token: str) -> dict | None:
             _jwks_cache["fetched_at"] = 0.0
             key = _find_signing_key(_load_jwks(), kid)
         if key is None:
+            logger.debug("JWT verify failed: kid %r not found in JWKS", kid)
             return None
         payload = jwt.decode(
             token,
@@ -108,17 +111,24 @@ def verify_supabase_jwt(token: str) -> dict | None:
             audience=settings.supabase_jwt_aud,
             issuer=f"{settings.supabase_url.rstrip('/')}/auth/v1",
         )
-    except Exception:
+    except Exception as exc:
+        # 线上排查"登录态却 401"的关键线索（debug 级，避免日志刷屏）
+        logger.debug("JWT verify failed: %s", exc)
         return None
     sub = payload.get("sub")
     if not sub:
+        logger.debug("JWT verify failed: missing sub claim")
         return None
     return {"id": sub, "email": payload.get("email") or ""}
 
 
 def _has_legacy_credentials(request: Request) -> bool:
-    """旧凭证通道三选一（Access 邮箱头 / 网关共享密钥 / Bearer 共享口令）。"""
-    if request.headers.get(ACCESS_EMAIL_HEADER):
+    """旧凭证通道三选一（Access 邮箱头 / 网关共享密钥 / Bearer 共享口令）。
+
+    Access 邮箱头只验存在性，仅当部署前方确有 CF Access 边缘代理剥离/注入
+    该头时才可信，故由 settings.trust_cf_access_header 显式开启（默认关）。
+    """
+    if settings.trust_cf_access_header and request.headers.get(ACCESS_EMAIL_HEADER):
         return True
     if settings.gateway_secret and hmac.compare_digest(
         request.headers.get(GATEWAY_SECRET_HEADER, ""), settings.gateway_secret

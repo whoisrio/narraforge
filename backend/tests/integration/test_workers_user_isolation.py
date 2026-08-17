@@ -306,3 +306,69 @@ class TestAnonymousSynthesize:
         assert len(rows) == 1
         assert rows[0]["user_id"] == USER_A
         assert asset_store.objects  # 音频落资产存储
+
+
+class TestWorkersEngineWhitelist:
+    """review 🟡-2：workers 只有 edge_tts/mimo_tts；/api/tts/synthesize 传
+    cosyvoice 必须给干净 4xx 而非 dashscope ImportError 500。"""
+
+    def test_cosyvoice_rejected_in_workers(self, workers_client):
+        client, _, _ = workers_client
+        resp = client.post(
+            "/api/tts/synthesize",
+            json={"text": "你好", "engine": "cosyvoice", "voice_id": "v1"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "engine_unavailable"
+
+    def test_cosyvoice_rejected_for_authenticated_too(self, workers_client):
+        client, _, _ = workers_client
+        resp = client.post(
+            "/api/tts/synthesize",
+            json={"text": "你好", "engine": "cosyvoice", "voice_id": "v1"},
+            headers=AUTH_A,
+        )
+        assert resp.status_code == 400
+
+
+class TestMimoSynthesizeStorage:
+    """review 🟠：mimo 合成与 edge 路径同一套持久化语义——匿名强制前端存储
+    （不落库/不落资产），已认证 backend 模式走 AssetStore + tts_results 仓储。"""
+
+    def _mimo_mock(self):
+        service = Mock()
+        service.synthesize_preset = AsyncMock(return_value=b"\xff\xfb\x90\x00" * 10)
+        return patch(
+            "app.api.mimo_tts.get_mimo_tts_service", new=AsyncMock(return_value=service)
+        )
+
+    def test_anonymous_never_persists_even_in_backend_storage(self, workers_client):
+        client, store, asset_store = workers_client
+        store.tables["system_configs"] = [{"key": "storage_mode", "value": "backend"}]
+
+        with self._mimo_mock():
+            resp = client.post(
+                "/api/mimo-tts/preset",
+                json={"text": "你好", "voice": "冰糖", "format": "mp3"},
+            )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["audio_base64"]
+        assert store.tables["tts_results"] == []
+        assert asset_store.objects == {}
+
+    def test_authenticated_persists_via_asset_store(self, workers_client):
+        client, store, asset_store = workers_client
+        store.tables["system_configs"] = [{"key": "storage_mode", "value": "backend"}]
+
+        with self._mimo_mock():
+            resp = client.post(
+                "/api/mimo-tts/preset",
+                json={"text": "你好", "voice": "冰糖", "format": "mp3"},
+                headers=AUTH_A,
+            )
+        assert resp.status_code == 200, resp.text
+        assert "audio_url" in resp.json()
+        rows = store.tables["tts_results"]
+        assert len(rows) == 1
+        assert rows[0]["user_id"] == USER_A
+        assert asset_store.objects  # 音频落资产存储而非本地 FS

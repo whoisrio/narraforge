@@ -55,9 +55,17 @@ class TestAccessEnforcement:
         assert resp.json()["detail"]["code"] == "auth_required"
 
     def test_with_header_passes(self, monkeypatch):
-        client = _workers_client(monkeypatch)
+        client = _workers_client(monkeypatch, trust_cf_access_header=True)
         resp = client.get(PROBE, headers={ACCESS_HEADER: "me@example.com"})
         assert resp.status_code == 404  # 过了中间件，路径不存在
+
+    def test_cf_header_untrusted_by_default(self, monkeypatch):
+        """默认不信任 Access 邮箱头（Vercel 直连拓扑下客户端可伪造，
+        伪造即全量 admin —— PR #80 review 🔴）。"""
+        client = _workers_client(monkeypatch)
+        resp = client.get(PROBE, headers={ACCESS_HEADER: "me@example.com"})
+        assert resp.status_code == 401
+        assert resp.json()["detail"]["code"] == "auth_required"
 
     def test_health_exempt(self, monkeypatch):
         client = _workers_client(monkeypatch)
@@ -105,8 +113,10 @@ class TestGatewaySecret:
         assert resp.status_code == 401
 
     def test_email_header_still_passes_with_secret_configured(self, monkeypatch):
-        """两条凭证路径并存：配了密钥后 Access 邮箱头依旧有效。"""
-        client = _workers_client(monkeypatch, gateway_secret="s3cret")
+        """两条凭证路径并存：配了密钥后 Access 邮箱头依旧有效（需信任开关）。"""
+        client = _workers_client(
+            monkeypatch, gateway_secret="s3cret", trust_cf_access_header=True
+        )
         resp = client.get(PROBE, headers={ACCESS_HEADER: "me@example.com"})
         assert resp.status_code == 404
 
@@ -140,7 +150,12 @@ class TestAccessToken:
 
     def test_existing_credentials_not_regressed(self, monkeypatch):
         """配了 access_token 后，既有两种凭证（Access 邮箱头 / 网关密钥）依旧有效。"""
-        client = _workers_client(monkeypatch, access_token="tok123", gateway_secret="s3cret")
+        client = _workers_client(
+            monkeypatch,
+            access_token="tok123",
+            gateway_secret="s3cret",
+            trust_cf_access_header=True,
+        )
         assert client.get(PROBE, headers={ACCESS_HEADER: "me@example.com"}).status_code == 404
         assert client.get(PROBE, headers={GATEWAY_SECRET_HEADER: "s3cret"}).status_code == 404
 

@@ -17,6 +17,19 @@ async def get_current_user(request: Request) -> dict | None:
     return getattr(request.state, "user", None)
 
 
+def is_workers_anonymous(request: Request) -> bool:
+    """workers 模式下的匿名请求（无用户 JWT 且非 legacy admin）。
+
+    匿名请求禁止落库：即使全局 storage_mode=backend 也按前端存储处理
+    （只回 base64，不写 tts_results/资产存储）。
+    """
+    if settings.deploy_target != "workers":
+        return False
+    return not getattr(request.state, "user", None) and not getattr(
+        request.state, "legacy_admin", False
+    )
+
+
 async def require_user(request: Request) -> dict | None:
     """要求已认证（用户 JWT 或 legacy admin），否则 401。"""
     user = getattr(request.state, "user", None)

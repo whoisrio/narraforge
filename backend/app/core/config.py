@@ -41,6 +41,10 @@ class Settings(BaseSettings):
 
     # Cloudflare Access 头校验（spec 3.6；仅 workers 模式注册中间件，local 完全不启用）
     access_enforcement: bool = True
+    # 信任 Cf-Access-Authenticated-User-Email 头（旧凭证通道之一）。该头只有
+    # "前面真的有 Cloudflare Access 边缘代理"时才可信——Vercel 直连拓扑下客户端
+    # 可随意伪造，故默认 False；仅 CF Access 自定义域名拓扑的部署显式开启。
+    trust_cf_access_header: bool = False
     # 网关共享密钥（HF Spaces 部署：CF Worker 网关注入 X-Narraforge-Gateway-Secret，
     # Space 私有、无 Access 边缘注入邮箱头；空串 = 关闭该凭证通道，仅认 Access 邮箱头）
     gateway_secret: str = ""

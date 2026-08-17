@@ -12,7 +12,7 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 **身份判定顺序**（`backend/app/core/auth_middleware.py`）：
 
 1. **legacy admin**：满足任一旧凭证即视为管理员，放行一切请求并在仓储层看到全部用户的数据。
-   - `Cf-Access-Authenticated-User-Email` 头存在（CF Access 边缘注入）；
+   - `Cf-Access-Authenticated-User-Email` 头存在（CF Access 边缘注入；只验存在性、可伪造，仅在 `TRUST_CF_ACCESS_HEADER=true` 时生效——仅 CF Access 前置拓扑开启）；
    - `X-Narraforge-Gateway-Secret` 与 `GATEWAY_SECRET` 一致；
    - `Authorization: Bearer <ACCESS_TOKEN>` 共享口令。
 2. **Supabase 用户**：`Authorization: Bearer <Supabase access_token>`，经 JWKS

@@ -62,6 +62,9 @@ def base(monkeypatch):
     monkeypatch.setattr(settings, "gateway_secret", "s3cret")
     monkeypatch.setattr(settings, "admin_emails", ADMIN_EMAIL)
     monkeypatch.setattr(auth_middleware, "_load_jwks", lambda: _jwks())
+    # 进程内去重缓存是模块级状态，测试间必须重置（否则首测标记后后续用例不再写库）
+    stats_middleware._dau_seen.clear()
+    stats_middleware._profile_seen.clear()
 
     client, store = make_fake_supabase_client()
     monkeypatch.setattr("app.core.repositories.deps.get_supabase_client", lambda: client)
@@ -126,6 +129,23 @@ class TestStatsMiddleware:
             r for r in store.tables["daily_stats"] if r["metric"] == "visit_authed"
         ]
         assert visits[0]["count"] == 2
+
+    def test_profile_and_dau_deduped_in_process(self, stats_client):
+        """进程内去重（review 🟡-1）：同 (hour, user) 的 profiles upsert 与
+        同 (date, user) 的 DAU upsert 每进程只发一次，visit 计数不受影响。"""
+        client, store = stats_client
+        client.get("/", headers=USER_JWT)
+        client.get("/", headers=USER_JWT)
+        profile_writes = [
+            r for r in store.requests if r["table"] == "profiles" and r["method"] == "POST"
+        ]
+        dau_writes = [
+            r
+            for r in store.requests
+            if r["table"] == "daily_active_users" and r["method"] == "POST"
+        ]
+        assert len(profile_writes) == 1
+        assert len(dau_writes) == 1
 
     def test_synthesize_metric_and_operation_log(self, stats_client):
         client, store = stats_client

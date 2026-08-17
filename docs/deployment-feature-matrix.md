@@ -17,6 +17,14 @@
 | 项目/章节/分段 CRUD | `/api/segmented-projects/*`（通用 router） | Supabase PostgREST + Storage（asset store） |
 | 分段合成 | segment synthesize（engine ∈ edge_tts/mimo_tts） | `segmented_synth_workers.py` 已限定引擎 |
 | 角色/源文档/配置 | `/api/roles`、`/api/sources`、`/api/config/*`、`/api/model-config/*` | PostgREST；model-config 用 RSA 加密（cryptography 为 base 依赖） |
+| 管理后台统计 | `GET /api/admin/stats/overview`、`/api/admin/users`、`/api/admin/logs` | Supabase 统计表（profiles/daily_stats/operation_logs/daily_active_users）+ `increment_metric` RPC；仅 admin |
+
+> workers 模式的认证语义（2026-08 起）：A 类端点中，仅匿名 allowlist
+> （`GET /health`、`GET /`、`GET /api/config/capabilities`、`GET /api/config/storage-mode`、
+> `POST /api/tts/synthesize`（仅 edge_tts）、`POST /api/mimo-tts/*`、`POST /api/text-split/*`、
+> `POST /api/subtitle-llm/*`、`POST /api/text-analysis/*`）对匿名放行；
+> 其余一律要求 Supabase 用户 JWT 或 legacy admin 凭证，且按用户隔离数据。
+> 详见 `docs/api-reference.md`「认证与数据隔离」。
 | MiMo 克隆 | `POST /api/clone/create-clone-mimo`、`/create-from-design`、`/upload-from-url`、`/upload-from-storage` | httpx + Supabase Storage presigned 上传 |
 
 ## B. 本质是云端 API，但因 SDK 依赖暂只能在 local 跑（后续可改造）

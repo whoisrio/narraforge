@@ -7,7 +7,7 @@ MiMo-V2.5-TTS API 路由
 3. 音频克隆合成 (/mimo/voiceclone)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel, Field, field_validator
 from typing import Any, Optional
 
@@ -25,18 +25,15 @@ from pathlib import Path
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.repositories.deps import get_voice_repo
+from app.core.asset_store import AssetStore, get_asset_store
+from app.core.auth_deps import is_workers_anonymous
+from app.core.repositories.deps import get_tts_results_repo, get_voice_repo
+from app.core.repositories.tts_results import TTSResultRepository
 from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
 from app.services.mimo_tts_service import get_mimo_tts_service
-
-# workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
-try:
-    from app.models.tts_result import TTSResultRecord
-except ImportError:  # workers bundle
-    TTSResultRecord = None  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +92,23 @@ async def _save_and_respond(
     voice_label: str,
     instruction: str,
     db: Session,
+    repo: TTSResultRepository,
+    store: AssetStore,
+    *,
+    force_frontend: bool = False,
 ):
-    """根据存储模式保存音频并返回响应"""
+    """根据存储模式保存音频并返回响应
+
+    后端存储分支与 edge-tts 路径同一套（tts.py._synthesize_edge_tts）：音频
+    经 asset store（local 写盘 / workers 写 Supabase Storage），记录经仓储
+    持久化——workers 只读 FS 不能直接 open() 写盘，db 在 workers 为 None。
+    force_frontend（workers 匿名请求）：无论 storage_mode 都走前端存储分支。
+    """
     audio_id = str(uuid.uuid4())
 
-    if is_frontend_storage(db):
+    # 存储模式必须在写盘之前判定：workers（Vercel/CF）FS 只读（见 tts.py 同名注释）。
+    frontend_storage = force_frontend or is_frontend_storage(db)
+    if frontend_storage:
         audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
         return {
             "audio_id": audio_id,
@@ -113,27 +122,23 @@ async def _save_and_respond(
             },
         }
 
-    # 后端存储模式
+    # 后端存储模式：音频进 asset store（local 写盘 / workers 写 Supabase Storage）
     ext = audio_fmt if audio_fmt in ("wav", "mp3") else "wav"
-    audio_path = settings.voices_previews_dir / f"mimo_{audio_id}.{ext}"
-    with open(audio_path, "wb") as f:
-        f.write(audio_bytes)
-
-    record = TTSResultRecord(
-        id=audio_id,
-        text=text,
-        voice_id=voice_label,
-        voice_name=voice_label,
-        audio_path=str(audio_path),
-        audio_format=ext,
-        speed=1.0,
-        volume=80,
-        pitch=1.0,
-        instruction=instruction,
-        language="Chinese",
-    )
-    db.add(record)
-    db.commit()
+    ref = await store.put(f"data/tts-history/mimo_{audio_id}.{ext}", audio_bytes)
+    repo.create({
+        "id": audio_id,
+        "text": text,
+        "voice_id": voice_label,
+        "voice_name": voice_label,
+        "audio_path": ref,
+        "audio_format": ext,
+        "speed": 1.0,
+        "volume": 80,
+        "pitch": 1.0,
+        "instruction": instruction,
+        "language": "Chinese",
+        "source": None,
+    })
 
     return {
         "audio_id": audio_id,
@@ -157,7 +162,13 @@ async def list_mimo_voices():
 
 
 @router.post("/preset", response_model=TTSResultOut)
-async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(get_db)):
+async def synthesize_preset(
+    request: MiMoPresetRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
+    store: AssetStore = Depends(get_asset_store),
+):
     """使用预置音色进行语音合成"""
     try:
         service = await get_mimo_tts_service(db)
@@ -174,6 +185,9 @@ async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(ge
             voice_label=request.voice,
             instruction=request.instruction,
             db=db,
+            repo=tts_repo,
+            store=store,
+            force_frontend=is_workers_anonymous(http_request),
         )
     except RuntimeError as e:
         logger.error(f"MiMo preset TTS failed: {e}")
@@ -184,7 +198,13 @@ async def synthesize_preset(request: MiMoPresetRequest, db: Session = Depends(ge
 
 
 @router.post("/voicedesign", response_model=TTSResultOut)
-async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session = Depends(get_db)):
+async def synthesize_voice_design(
+    request: MiMoVoiceDesignRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
+    store: AssetStore = Depends(get_asset_store),
+):
     """使用文本描述设计音色进行语音合成"""
     try:
         service = await get_mimo_tts_service(db)
@@ -206,6 +226,9 @@ async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session =
             voice_label=label,
             instruction=request.voice_description,
             db=db,
+            repo=tts_repo,
+            store=store,
+            force_frontend=is_workers_anonymous(http_request),
         )
     except RuntimeError as e:
         logger.error(f"MiMo voice design TTS failed: {e}")
@@ -218,8 +241,11 @@ async def synthesize_voice_design(request: MiMoVoiceDesignRequest, db: Session =
 @router.post("/voiceclone", response_model=TTSResultOut)
 async def synthesize_voice_clone(
     request: MiMoVoiceCloneRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     repo: VoiceProfileRepository = Depends(get_voice_repo),
+    tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
+    store: AssetStore = Depends(get_asset_store),
 ):
     """使用已上传的音频文件进行音色复刻合成"""
     # 查找本地声音记录
@@ -261,6 +287,9 @@ async def synthesize_voice_clone(
                     voice_label=voice["name"],
                     instruction=request.instruction,
                     db=db,
+                    repo=tts_repo,
+                    store=store,
+                    force_frontend=is_workers_anonymous(http_request),
                 )
             except Exception as e:
                 if tmp_path and os.path.exists(tmp_path):
@@ -285,6 +314,9 @@ async def synthesize_voice_clone(
             voice_label=voice["name"],
             instruction=request.instruction,
             db=db,
+            repo=tts_repo,
+            store=store,
+            force_frontend=is_workers_anonymous(http_request),
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -299,7 +331,10 @@ async def synthesize_voice_clone(
 @router.post("/voiceclone-direct", response_model=TTSResultOut)
 async def synthesize_voice_clone_direct(
     request: MiMoVoiceCloneDirectRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
+    tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
+    store: AssetStore = Depends(get_asset_store),
 ):
     """直接使用 Base64 音频数据进行音色复刻合成"""
     try:
@@ -318,6 +353,9 @@ async def synthesize_voice_clone_direct(
             voice_label="音色复刻",
             instruction=request.instruction,
             db=db,
+            repo=tts_repo,
+            store=store,
+            force_frontend=is_workers_anonymous(http_request),
         )
     except RuntimeError as e:
         logger.error(f"MiMo direct voice clone TTS failed: {e}")

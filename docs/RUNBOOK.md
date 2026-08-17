@@ -402,7 +402,7 @@ uv run --extra workers pywrangler deploy
 - 关闭 workers.dev 子域路由（Dashboard → Workers → Settings → Domains & Routes），API 仅走受 Access 保护的自定义域名（防绕过，spec 3.6/5.2）。
 - Zero Trust 控制台建 Access 应用（self-hosted），覆盖 Pages 域名与 API 域名两个 hostname；登录方式邮箱 OTP。
 - Access 应用 CORS 设置放行 Pages 域名并允许 credentials；后端 `CORS_ORIGINS` 同步填 Pages 域名。
-- 后端认证中间件（`SupabaseAuthMiddleware`，`ACCESS_ENFORCEMENT=true` 默认开）把 `Cf-Access-Authenticated-User-Email` 头视为 legacy admin 通道放行；Supabase 用户 JWT 经 JWKS 验签；匿名仅放行无状态 allowlist，其余 401 `auth_required`（详见下方 Vercel 章节与 `docs/api-reference.md`）。
+- 后端认证中间件（`SupabaseAuthMiddleware`，`ACCESS_ENFORCEMENT=true` 默认开）把 `Cf-Access-Authenticated-User-Email` 头视为 legacy admin 通道放行——**该头只验存在性，必须同时设 `TRUST_CF_ACCESS_HEADER=true`**（默认关，防 Vercel 直连拓扑下客户端伪造）；Supabase 用户 JWT 经 JWKS 验签；匿名仅放行无状态 allowlist，其余 401 `auth_required`（详见下方 Vercel 章节与 `docs/api-reference.md`）。
 - Supabase：执行 `backend/supabase/schema.sql` 迁移（含多用户 `user_id` 归属列与统计表）；`SUPABASE_SERVICE_KEY` 只放 Workers secrets。
 
 ---
@@ -456,7 +456,8 @@ Project → Settings → Environment Variables（Production），完整示例见
 |---|---|---|
 | `DEPLOY_TARGET` | `workers` | 纯在线路由，不注册本地模型路由 |
 | `ACCESS_TOKEN` | `openssl rand -hex 32` | 共享 Bearer 口令；Supabase Auth 上线后降级为 **legacy admin 通道**（命中即视为管理员，看全部用户数据），保留作运维兜底 |
-| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验顺序：legacy 凭证（Access 邮箱头 / 网关密钥头 / Bearer 口令，任一满足即 legacy admin 放行）→ Supabase 用户 JWT → 匿名 allowlist 之外 401 `auth_required` |
+| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验顺序：legacy 凭证（Access 邮箱头——需 `TRUST_CF_ACCESS_HEADER=true` / 网关密钥头 / Bearer 口令，任一满足即 legacy admin 放行）→ Supabase 用户 JWT → 匿名 allowlist 之外 401 `auth_required` |
+| `TRUST_CF_ACCESS_HEADER` | **勿开**（默认 `false`） | 信任 CF Access 邮箱头作为 legacy admin 凭证；该头可伪造，仅 CF Access 前置的自有域名拓扑开启，Vercel 直连必须保持关闭 |
 | `CORS_ORIGINS` | 前端域名（逗号分隔） | 如 `https://narraforge-web.<子域>.workers.dev` |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
 | `SUPABASE_JWT_AUD` | 一般不设 | 校验 Supabase 用户 JWT 的 `aud`，默认 `authenticated`；仅自定义 JWT 场景需改 |
@@ -532,6 +533,10 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" https://<project>.vercel.app/api/s
    uv run python -m scripts.backfill_user_ownership --user-id <uuid> --apply   # 执行（幂等）
    ```
 5. Vercel 环境变量补 `ADMIN_EMAILS`（管理员邮箱，逗号分隔）；`SUPABASE_JWT_AUD` 一般用默认值。
+6. **统计表保留期**：`operation_logs` 无自动清理，按需手动截断（Supabase SQL Editor）：
+   ```sql
+   delete from operation_logs where created_at < now() - interval '90 days';
+   ```
 
 ### 可选加固：自有域名 + Access + CF Worker 网关
 
