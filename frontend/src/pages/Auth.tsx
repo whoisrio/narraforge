@@ -47,11 +47,20 @@ export function AuthPage({ onSuccess, onBack }: { onSuccess: () => void; onBack?
         }
       }
     } catch (err) {
+      // 诊断：完整错误进 console（配置缺失/网络/未映射 code 都靠它排查）。
+      console.error('[auth] submit failed:', err);
       // 注册时 Supabase 会做密码策略校验（长度/弱密码库），把真实原因亮出来，
       // 不要吞成通用失败——否则用户分不清是"密码不合格"还是"服务挂了"。
       const code = authErrorCode(err);
       const key = code ? AUTH_ERROR_KEYS[code] : undefined;
-      setError(key ? t(key) : t('auth.failed'));
+      if (key) {
+        setError(t(key));
+      } else if (code) {
+        // 未映射的 AuthError code：直接显示服务端原文（如 "Signups not allowed for this instance"）
+        setError((err as Error).message || t('auth.failed'));
+      } else {
+        setError(t('auth.failed'));
+      }
     } finally {
       setSubmitting(false);
     }
