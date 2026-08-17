@@ -89,7 +89,11 @@ async def create_project(project: ProjectIn, repo: SegmentedProjectRepository = 
     _reject_scratchpad(project.id)
     if repo.project_exists(project.id):
         raise HTTPException(status_code=409, detail="project_already_exists")
-    return repo.save_project(project)
+    try:
+        return repo.save_project(project)
+    except LookupError:
+        # workers 多用户：id 属于他人项目 → 按不存在处理（不泄露存在性）
+        raise HTTPException(status_code=404, detail="project_not_found")
 
 
 @router.get("/segmented-projects/{project_id}", response_model=ProjectDetail)
@@ -106,7 +110,11 @@ async def put_project(project_id: str, project: ProjectIn, repo: SegmentedProjec
     _reject_scratchpad(project_id)
     if project.id != project_id:
         raise HTTPException(status_code=400, detail="id_mismatch")
-    return repo.save_project(project)
+    try:
+        return repo.save_project(project)
+    except LookupError:
+        # workers 多用户：id 属于他人项目 → 按不存在处理（不泄露存在性）
+        raise HTTPException(status_code=404, detail="project_not_found")
 
 
 @router.delete("/segmented-projects/{project_id}", status_code=204)

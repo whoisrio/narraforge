@@ -14,6 +14,7 @@ from __future__ import annotations
 from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient
+from app.core.repositories.user_scope import UserScope
 
 # workers bundle 不含 sqlalchemy / app.models：Local* 只在 local 模式实例化。
 try:
@@ -122,22 +123,23 @@ class LocalTTSResultRepository:
         return True
 
 
-class SupabaseTTSResultRepository:
-    """PostgREST 实现（workers 模式）。"""
+class SupabaseTTSResultRepository(UserScope):
+    """PostgREST 实现（workers 模式）。M4：用户归属作用域。"""
 
-    def __init__(self, client: SupabaseClient):
+    def __init__(self, client: SupabaseClient, owner_id: str | None = None, see_all: bool = False):
+        super().__init__(owner_id=owner_id, see_all=see_all)
         self._client = client
 
     def list(self) -> list[dict]:
-        rows = self._client.select(TABLE, params={"order": "created_at.desc"})
+        rows = self._client.select(TABLE, params=self._scope_params({"order": "created_at.desc"}))
         return [tts_row_to_dict(r) for r in rows]
 
     def get(self, result_id: str) -> dict | None:
-        row = self._client.select_one(TABLE, params={"id": f"eq.{result_id}"})
+        row = self._client.select_one(TABLE, params=self._scope_params({"id": f"eq.{result_id}"}))
         return tts_row_to_dict(row) if row else None
 
     def create(self, fields: dict) -> dict:
-        row = {
+        row = self._stamp_row({
             "id": fields["id"],
             "text": fields["text"],
             "voice_id": fields["voice_id"],
@@ -150,9 +152,9 @@ class SupabaseTTSResultRepository:
             "instruction": fields.get("instruction", ""),
             "language": fields.get("language", "Chinese"),
             "source": fields.get("source"),
-        }
+        })
         inserted = self._client.insert(TABLE, [row])
         return tts_row_to_dict(inserted[0])
 
     def delete(self, result_id: str) -> bool:
-        return bool(self._client.delete(TABLE, params={"id": f"eq.{result_id}"}))
+        return bool(self._client.delete(TABLE, params=self._scope_params({"id": f"eq.{result_id}"})))

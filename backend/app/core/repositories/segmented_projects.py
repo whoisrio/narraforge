@@ -28,6 +28,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient
 from app.core.time_utils import utcnow
+from app.core.repositories.user_scope import UserScope
 from app.schemas.segmented_project import (
     ChapterIn,
     ProjectDetail,
@@ -333,16 +334,34 @@ def _chapter_stand_in(ch_row: dict, seg_rows: list[dict]):
     return chapter, segs
 
 
-class SupabaseSegmentedProjectRepository:
-    """PostgREST 实现。无本地 FS 依赖；多步写无事务（PostgREST 限制），单用户规模可接受。"""
+class SupabaseSegmentedProjectRepository(UserScope):
+    """PostgREST 实现。无本地 FS 依赖；多步写无事务（PostgREST 限制），单用户规模可接受。
 
-    def __init__(self, client: SupabaseClient):
+    M4 用户归属：projects 表带 user_id 过滤/标记；chapters/segments 无该列，
+    归属经 project 传递——所有章节/分段级操作先经 `_owns_project` 校验归属
+    （校验走带作用域的 project 查询，跨用户一律按不存在处理 → 路由 404）。
+    """
+
+    def __init__(self, client: SupabaseClient, owner_id: str | None = None, see_all: bool = False):
+        super().__init__(owner_id=owner_id, see_all=see_all)
         self._client = client
 
     # ----- 查询 -----
 
     def _get_project_row(self, project_id: str) -> dict | None:
-        return self._client.select_one(PROJECTS, params={"id": f"eq.{project_id}"})
+        return self._client.select_one(
+            PROJECTS, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+
+    def _owns_project(self, project_id: str) -> bool:
+        """章节/分段操作前的归属校验（跨用户 → False → 调用方按 not found 处理）。"""
+        return (
+            self._client.select_one(
+                PROJECTS,
+                params=self._scope_params({"id": f"eq.{project_id}", "select": "id"}),
+            )
+            is not None
+        )
 
     def _list_chapter_rows(self, project_id: str) -> list[dict]:
         return self._client.select(
@@ -363,14 +382,37 @@ class SupabaseSegmentedProjectRepository:
         )
 
     def list_projects(self) -> list[ProjectSummary]:
-        projects = self._client.select(PROJECTS, params={"order": "updated_at.desc"})
-        chapters = self._client.select(CHAPTERS)
-        segments = self._client.select(SEGMENTS)
+        projects = self._client.select(
+            PROJECTS, params=self._scope_params({"order": "updated_at.desc"})
+        )
+        if not projects:
+            return []
+        project_ids = [p["id"] for p in projects]
+        # 章节/分段只拉自己项目的（chapters/segments 无 user_id 列，按 project 过滤）
+        chapters = self._client.select(
+            CHAPTERS, params={"project_id": f"in.({','.join(project_ids)})"}
+        )
+        chapter_ids = [c["id"] for c in chapters]
+        segments = (
+            self._client.select(
+                SEGMENTS, params={"chapter_id": f"in.({','.join(chapter_ids)})"}
+            )
+            if chapter_ids
+            else []
+        )
+        chapters_by_project: dict[str, list[dict]] = {}
+        for c in chapters:
+            chapters_by_project.setdefault(c["project_id"], []).append(c)
         return [
             _row_to_summary(
                 p,
-                [c for c in chapters if c["project_id"] == p["id"]],
-                [s for s in segments if s["chapter_id"] in {c["id"] for c in chapters if c["project_id"] == p["id"]}],
+                chapters_by_project.get(p["id"], []),
+                [
+                    s
+                    for s in segments
+                    if s["chapter_id"]
+                    in {c["id"] for c in chapters_by_project.get(p["id"], [])}
+                ],
             )
             for p in projects
         ]
@@ -384,16 +426,21 @@ class SupabaseSegmentedProjectRepository:
         return _rows_to_detail(p_row, ch_rows, seg_rows)
 
     def project_exists(self, project_id: str) -> bool:
-        return (
-            self._client.select_one(PROJECTS, params={"id": f"eq.{project_id}", "select": "id"})
-            is not None
-        )
+        return self._owns_project(project_id)
 
     # ----- 全量保存 -----
 
     def save_project(self, project: ProjectIn) -> ProjectDetail:
         now = utcnow().isoformat()
         existing_p = self._get_project_row(project.id)
+        if existing_p is None and not self._see_all:
+            # 跨用户抢占防护：无作用域视角下项目已存在 → 属于他人，
+            # 按不存在处理（LookupError → 路由 404，不泄露存在性、不覆盖他人行）
+            clash = self._client.select_one(
+                PROJECTS, params={"id": f"eq.{project.id}", "select": "id"}
+            )
+            if clash is not None:
+                raise LookupError("project_not_found")
         # 先读出要保留的行状态（全量 reconcile 是删旧插新，否则这些列会丢）
         old_chapters = self._list_chapter_rows(project.id) if existing_p else []
         old_ch_by_id = {c["id"]: c for c in old_chapters}
@@ -416,6 +463,11 @@ class SupabaseSegmentedProjectRepository:
             "created_at": project.created_at or (existing_p or {}).get("created_at") or now,
             "updated_at": now,
         }
+        if existing_p:
+            # 保留既有归属（编辑不改变 owner）；新建行由 _stamp_row 写入当前用户
+            p_row["user_id"] = existing_p.get("user_id")
+        else:
+            self._stamp_row(p_row)
         if existing_p:
             # 保留本地资产路径类列（workers 恒 None，但不主动清）
             for key in ("source_document_path", "narration_document_path"):
@@ -696,7 +748,7 @@ class SupabaseSegmentedProjectRepository:
             self._client.update(
                 PROJECTS,
                 {"animation_theme": theme, "updated_at": now},
-                params={"id": f"eq.{project_id}"},
+                params=self._scope_params({"id": f"eq.{project_id}"}),
             )
             theme_updated = True
 
@@ -736,6 +788,8 @@ class SupabaseSegmentedProjectRepository:
     # ----- layer-sync -----
 
     def get_sync_status(self, project_id: str, chapter_id: str) -> dict[str, bool] | None:
+        if not self._owns_project(project_id):
+            return None
         ch_row = self._get_chapter_row(project_id, chapter_id)
         if ch_row is None:
             return None
@@ -744,6 +798,8 @@ class SupabaseSegmentedProjectRepository:
         return ls_sync_status(stand_in)
 
     def resplit_from_script(self, project_id: str, chapter_id: str) -> ProjectDetail:
+        if not self._owns_project(project_id):
+            raise LookupError("project_not_found")
         ch_row = self._get_chapter_row(project_id, chapter_id)
         if ch_row is None:
             raise LookupError("chapter_not_found")
@@ -783,6 +839,8 @@ class SupabaseSegmentedProjectRepository:
         return detail
 
     def rewrite_script_from_segments(self, project_id: str, chapter_id: str) -> str:
+        if not self._owns_project(project_id):
+            raise LookupError("project_not_found")
         ch_row = self._get_chapter_row(project_id, chapter_id)
         if ch_row is None:
             raise LookupError("chapter_not_found")
@@ -814,6 +872,8 @@ class SupabaseSegmentedProjectRepository:
         self, project_id: str, chapter_id: str, texts: list[str]
     ) -> ProjectDetail:
         """workers 语义：只替换目标章节的分段（其余章节/分段行不动）。"""
+        if not self._owns_project(project_id):
+            raise LookupError("project_not_found")
         ch_row = self._get_chapter_row(project_id, chapter_id)
         if ch_row is None:
             raise LookupError("chapter_not_found")
@@ -844,7 +904,9 @@ class SupabaseSegmentedProjectRepository:
             {"sync_state": stand_in.sync_state, "updated_at": now},
             params={"id": f"eq.{chapter_id}"},
         )
-        self._client.update(PROJECTS, {"updated_at": now}, params={"id": f"eq.{project_id}"})
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
         detail = self.get_project(project_id)
         assert detail is not None
         return detail

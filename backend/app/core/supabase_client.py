@@ -89,6 +89,10 @@ class SupabaseClient:
     def delete(self, table: str, *, params: dict) -> list:
         return self._request("DELETE", table, params=params, prefer=_PREFER_RETURN) or []
 
+    def rpc(self, fn: str, payload: dict):
+        """调用 Postgres 函数（POST /rpc/<fn>）；返回 void 的函数给 None。"""
+        return self._request("POST", f"rpc/{fn}", json_body=payload)
+
 
 def get_supabase_client(*, transport: httpx.BaseTransport | None = None) -> SupabaseClient:
     """按 settings 构建客户端。未配置时 RuntimeError（workers 部署必须配置 secrets）。"""

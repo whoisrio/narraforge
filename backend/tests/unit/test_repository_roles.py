@@ -147,7 +147,8 @@ class TestSupabaseRoleRepository:
         assert repo.update("missing", RoleUpdate(name="x")) is None
 
     def test_delete_returns_true_when_row_deleted(self):
-        """删除前先清理 segments/project 引用（3B 补齐），最后 DELETE 角色行。"""
+        """M4 起顺序调整为：先带归属过滤 DELETE 角色行，成功后才清理引用——
+        跨用户角色删不掉，也绝不清理他人的 segments/project 引用。"""
 
         def handler(req: httpx.Request) -> httpx.Response:
             if req.method == "DELETE":
@@ -156,14 +157,26 @@ class TestSupabaseRoleRepository:
 
         repo, requests = _supabase(handler)
         assert repo.delete("role-linxia") is True
-        # 顺序：PATCH segments.role_id → PATCH projects.default_narrator_role_id
-        # → GET segments(voice 扫描) → DELETE roles
-        assert [r.method for r in requests] == ["PATCH", "PATCH", "GET", "DELETE"]
-        assert requests[0].url.path.endswith("segmented_project_segments")
-        assert requests[0].url.params["role_id"] == "eq.role-linxia"
-        assert requests[1].url.path.endswith("segmented_projects")
-        assert requests[1].url.params["default_narrator_role_id"] == "eq.role-linxia"
-        assert requests[3].url.params["id"] == "eq.role-linxia"
+        # 顺序：DELETE roles → PATCH segments.role_id → PATCH
+        # projects.default_narrator_role_id → GET segments(voice 扫描)
+        assert [r.method for r in requests] == ["DELETE", "PATCH", "PATCH", "GET"]
+        assert requests[0].url.params["id"] == "eq.role-linxia"
+        assert requests[1].url.path.endswith("segmented_project_segments")
+        assert requests[1].url.params["role_id"] == "eq.role-linxia"
+        assert requests[2].url.path.endswith("segmented_projects")
+        assert requests[2].url.params["default_narrator_role_id"] == "eq.role-linxia"
+
+    def test_delete_missing_skips_reference_cleanup(self):
+        """删除未命中（含跨用户行）→ False 且不发出任何引用清理请求。"""
+        seen: list[str] = []
+
+        def handler(req: httpx.Request) -> httpx.Response:
+            seen.append(req.method)
+            return httpx.Response(200, json=[])
+
+        repo, _ = _supabase(handler)
+        assert repo.delete("missing") is False
+        assert seen == ["DELETE"]
 
     def test_delete_cleans_voice_json_references(self):
         """voice JSON 里 {"source": "role", "role_id": ...} 无 FK 可管，必须重置回 chapter。"""

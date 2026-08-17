@@ -10,6 +10,7 @@ import copy
 from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient
+from app.core.repositories.user_scope import UserScope
 
 # workers bundle 不含 sqlalchemy / app.models：Local* 只在 local 模式实例化。
 try:
@@ -145,10 +146,11 @@ class LocalVoiceProfileRepository:
         return _orm_to_dict(v) if v else None
 
 
-class SupabaseVoiceProfileRepository:
-    """PostgREST 实现。"""
+class SupabaseVoiceProfileRepository(UserScope):
+    """PostgREST 实现。M4：构造接收 (owner_id, see_all) 用户作用域。"""
 
-    def __init__(self, client: SupabaseClient):
+    def __init__(self, client: SupabaseClient, owner_id: str | None = None, see_all: bool = False):
+        super().__init__(owner_id=owner_id, see_all=see_all)
         self._client = client
 
     def list(self, project_id: str | None = None) -> list[dict]:
@@ -157,14 +159,17 @@ class SupabaseVoiceProfileRepository:
         else:
             params = {"project_id": "is.null"}
         params["order"] = "created_at.desc"
-        return [voice_row_to_dict(row) for row in self._client.select(TABLE, params=params)]
+        return [
+            voice_row_to_dict(row)
+            for row in self._client.select(TABLE, params=self._scope_params(params))
+        ]
 
     def get(self, voice_id: str) -> dict | None:
-        row = self._client.select_one(TABLE, params={"id": f"eq.{voice_id}"})
+        row = self._client.select_one(TABLE, params=self._scope_params({"id": f"eq.{voice_id}"}))
         return voice_row_to_dict(row) if row else None
 
     def create(self, fields: dict) -> dict:
-        row = {
+        row = self._stamp_row({
             "id": fields["id"],
             "name": fields["name"],
             "description": fields.get("description"),
@@ -173,7 +178,7 @@ class SupabaseVoiceProfileRepository:
             "voice": fields.get("voice") or {},
             "voice_params": fields.get("voice_params") or {},
             "preview": fields.get("preview"),
-        }
+        })
         inserted = self._client.insert(TABLE, [row])
         return voice_row_to_dict(inserted[0])
 
@@ -182,17 +187,19 @@ class SupabaseVoiceProfileRepository:
         if not values:
             current = self.get(voice_id)
             return current
-        rows = self._client.update(TABLE, values, params={"id": f"eq.{voice_id}"})
+        rows = self._client.update(TABLE, values, params=self._scope_params({"id": f"eq.{voice_id}"}))
         if not rows:
             return None
         return voice_row_to_dict(rows[0])
 
     def delete(self, voice_id: str) -> bool:
-        return bool(self._client.delete(TABLE, params={"id": f"eq.{voice_id}"}))
+        return bool(self._client.delete(TABLE, params=self._scope_params({"id": f"eq.{voice_id}"})))
 
     def find_by_description(self, description: str, exclude_id: str) -> dict | None:
         row = self._client.select_one(
             TABLE,
-            params={"description": f"eq.{description}", "id": f"neq.{exclude_id}"},
+            params=self._scope_params(
+                {"description": f"eq.{description}", "id": f"neq.{exclude_id}"}
+            ),
         )
         return voice_row_to_dict(row) if row else None

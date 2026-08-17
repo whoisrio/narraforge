@@ -9,6 +9,8 @@ dependencies = [
     "pydantic>=2.6.0",
     "pydantic-settings>=2.1.0",
     "cryptography>=43.0.0",
+    # Supabase Auth 用户 JWT 验签（ES256，纯 Python；签名运算走已 vendor 的 cryptography）
+    "pyjwt>=2.8.0",
     "python-multipart>=0.0.9",
     "aiofiles>=23.2.1",
     "httpx>=0.26.0",

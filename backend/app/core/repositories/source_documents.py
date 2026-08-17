@@ -15,6 +15,7 @@ import uuid
 from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient
+from app.core.repositories.user_scope import UserScope
 from app.schemas.segmented_project import SourceDocumentOut
 
 # workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化。
@@ -92,41 +93,49 @@ class LocalSourceDocumentRepository:
         return svc.delete_source(self._db, project_id, source_id)
 
 
-class SupabaseSourceDocumentRepository:
-    """PostgREST 实现。audio 源见模块 docstring。"""
+class SupabaseSourceDocumentRepository(UserScope):
+    """PostgREST 实现。audio 源见模块 docstring。M4：用户归属作用域。
 
-    def __init__(self, client: SupabaseClient):
+    归属双保险：source 行自身带 user_id 过滤，create 前的项目存在性校验
+    也加归属过滤（他人项目 → LookupError → 路由 404）。
+    """
+
+    def __init__(self, client: SupabaseClient, owner_id: str | None = None, see_all: bool = False):
+        super().__init__(owner_id=owner_id, see_all=see_all)
         self._client = client
 
     def list(self, project_id: str) -> list[SourceDocumentOut]:
         rows = self._client.select(
             TABLE,
-            params={"project_id": f"eq.{project_id}", "order": "created_at.desc"},
+            params=self._scope_params(
+                {"project_id": f"eq.{project_id}", "order": "created_at.desc"}
+            ),
         )
         return [_row_to_out(row) for row in rows]
 
     def get(self, project_id: str, source_id: str) -> SourceDocumentOut | None:
         row = self._client.select_one(
             TABLE,
-            params={"id": f"eq.{source_id}", "project_id": f"eq.{project_id}"},
+            params=self._scope_params({"id": f"eq.{source_id}", "project_id": f"eq.{project_id}"}),
         )
         return _row_to_out(row) if row else None
 
     def create_paste(self, project_id: str, title: str, pasted_text: str) -> SourceDocumentOut:
-        # 项目存在性校验（3B 补齐，对齐 local _ensure_project_exists → 路由 404）
+        # 项目存在性 + 归属校验（对齐 local _ensure_project_exists → 路由 404）
         if not self._client.select_one(
-            "segmented_projects", params={"id": f"eq.{project_id}", "select": "id"}
+            "segmented_projects",
+            params=self._scope_params({"id": f"eq.{project_id}", "select": "id"}),
         ):
             raise LookupError(f"project_not_found: {project_id}")
         # 对齐 local：title 为空取正文前 30 字；file_size 为 UTF-8 字节数
-        row = {
+        row = self._stamp_row({
             "id": f"src_{uuid.uuid4().hex[:12]}",
             "project_id": project_id,
             "source_type": "paste",
             "title": title or pasted_text[:30].replace("\n", " "),
             "pasted_text": pasted_text,
             "file_size": len(pasted_text.encode("utf-8")),
-        }
+        })
         inserted = self._client.insert(TABLE, [row])
         return _row_to_out(inserted[0])
 
@@ -147,6 +156,8 @@ class SupabaseSourceDocumentRepository:
         return bool(
             self._client.delete(
                 TABLE,
-                params={"id": f"eq.{source_id}", "project_id": f"eq.{project_id}"},
+                params=self._scope_params(
+                    {"id": f"eq.{source_id}", "project_id": f"eq.{project_id}"}
+                ),
             )
         )

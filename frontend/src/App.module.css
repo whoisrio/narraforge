@@ -243,6 +243,182 @@
   outline: none;
 }
 
+/* ---- Auth: 登录按钮 / 用户菜单 ---- */
+.loginButton {
+  border: 0;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.loginButton:hover {
+  background: var(--color-cta-hover);
+}
+
+.userMenu {
+  position: relative;
+}
+
+.userMenuTrigger {
+  border: 0;
+  background: transparent;
+  color: var(--color-primary-dark);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 4px 6px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userMenuDropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  min-width: 140px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  z-index: var(--z-popover);
+}
+
+.userMenuItem {
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.userMenuItem:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-primary);
+}
+
+/* ---- 匿名模式横幅（Landing 顶部） ---- */
+.anonBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  margin: 16px auto 0;
+  max-width: 960px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.anonBannerText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.anonBannerTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.anonBannerDesc {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.anonBannerActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.anonBannerLogin {
+  border: 0;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.anonBannerLogin:hover {
+  background: var(--color-cta-hover);
+}
+
+.anonBannerDismiss {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.anonBannerDismiss:hover {
+  background: var(--color-surface-hover);
+}
+
+/* ---- 匿名用户受限功能占位 ---- */
+.loginRequired {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.loginRequiredTitle {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.loginRequiredDesc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.loginRequiredButton {
+  margin-top: 8px;
+  border: 0;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 20px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.loginRequiredButton:hover {
+  background: var(--color-cta-hover);
+}
+
 /* ---- Empty State ---- */
 .emptyState {
   display: flex;

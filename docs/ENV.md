@@ -20,7 +20,7 @@ See `docs/RUNBOOK.md` → "Cloudflare Workers Deployment".
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `DEPLOY_TARGET` | No | `local` (full routes, SQLite, local models) or `workers` (online routes only: Cloudflare Workers paid tier, or Render free tier under CPython) | `local` |
-| `ACCESS_ENFORCEMENT` | No | Workers mode only: require one of the accepted credentials — the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access, the `X-Narraforge-Gateway-Secret` gateway header, or an `Authorization: Bearer <ACCESS_TOKEN>` token (401 `access_required` otherwise). `/health` and OPTIONS preflight are exempt. Never enabled in local mode. | `true` |
+| `ACCESS_ENFORCEMENT` | No | Workers mode only: require authentication — a Supabase Auth user JWT (`Authorization: Bearer <jwt>`, verified via JWKS), or one of the legacy credentials (the `Cf-Access-Authenticated-User-Email` header injected by Cloudflare Access, the `X-Narraforge-Gateway-Secret` gateway header, or an `Authorization: Bearer <ACCESS_TOKEN>` shared token, all treated as legacy admin). Anonymous requests are only allowed for a stateless allowlist (`/health`, `/`, config capabilities/storage-mode GET, stateless TTS/split POSTs); everything else gets 401 `auth_required`. Never enabled in local mode. | `true` |
 | `ACCESS_TOKEN` | Workers deploys: yes | Shared Bearer token for the no-custom-domain direct setup (Pages frontend talks to Vercel directly; the unlock page sends `Authorization: Bearer <token>`). Generate with `openssl rand -hex 32`. Empty string disables this credential path. Never used in local mode. | `""` |
 | `CORS_ORIGINS` | No | Workers mode only: comma-separated allowed CORS origins (set to the Pages domain at deploy time). Local mode always uses `*`. | `*` |
 | `ASSET_STORE_BACKEND` | No | Binary asset store backend: `auto` (local mode → local FS; workers mode → R2 if a binding is injected, else Supabase Storage), or explicit `local` / `r2` / `supabase` | `auto` |
@@ -42,6 +42,8 @@ Required only when `DEPLOY_TARGET=workers`: the workers runtime has no raw socke
 | `SUPABASE_URL` | Yes (workers) | Supabase project URL (`https://<project>.supabase.co`) | *(empty)* |
 | `SUPABASE_SERVICE_KEY` | Yes (workers) | Supabase service_role key (server-side only) | *(empty)* |
 | `SUPABASE_STORAGE_BUCKET` | Yes (workers, no R2) | Supabase Storage bucket for binary assets (clone samples / preview audio) when no R2 binding exists (e.g. Render). Created by the `storage.buckets` insert at the end of `backend/supabase/schema.sql` (private bucket). | `voice-assets` |
+| `SUPABASE_JWT_AUD` | No | Expected `aud` claim when verifying Supabase Auth user JWTs (workers mode, via JWKS at `{SUPABASE_URL}/auth/v1/.well-known/jwks.json`). Supabase issues user tokens with `aud=authenticated`; change only for custom JWT setups | `authenticated` |
+| `ADMIN_EMAILS` | No | Comma-separated admin email list (case-insensitive). Authenticated users whose JWT email is listed can access the admin stats API (`/api/admin/*`); legacy credentials (Access header / gateway secret / shared token) always count as admin. Workers mode only | `""` |
 
 ## Qwen / CosyVoice API (Voice Cloning)
 

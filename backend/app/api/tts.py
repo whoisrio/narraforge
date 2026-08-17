@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
@@ -115,16 +115,29 @@ def _result_to_dict(r: dict) -> dict:
 @router.post("/synthesize", response_model=TTSResultOut)
 async def synthesize_speech(
     request: TTSRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     repo: TTSResultRepository = Depends(get_tts_results_repo),
     store: AssetStore = Depends(get_asset_store),
 ):
     """合成语音 - 支持多引擎"""
     if request.engine == "edge_tts":
-        return await _synthesize_edge_tts(request, db, repo, store)
+        # M4：workers 模式匿名请求（allowlist 放行）禁止落库——即使 storage_mode
+        # 是 backend 也按前端存储处理（只回 base64，不写 tts_results/资产存储）。
+        force_frontend = _is_workers_anonymous(http_request)
+        return await _synthesize_edge_tts(request, db, repo, store, force_frontend=force_frontend)
     else:
         # cosyvoice 依赖 dashscope/qwen SDK，workers 模式不挂载/不支持，保持原逻辑
         return await _synthesize_cosyvoice(request, db)
+
+
+def _is_workers_anonymous(http_request: Request) -> bool:
+    """workers 模式下的匿名请求（无用户 JWT 且非 legacy admin）。"""
+    if settings.deploy_target != "workers":
+        return False
+    return not getattr(http_request.state, "user", None) and not getattr(
+        http_request.state, "legacy_admin", False
+    )
 
 
 async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_db)):
@@ -234,11 +247,14 @@ async def _synthesize_edge_tts(
     db: Session,
     repo: TTSResultRepository,
     store: AssetStore,
+    *,
+    force_frontend: bool = False,
 ):
     """Edge-TTS 引擎合成
 
     后端存储分支：音频经 asset store 落盘（local→data/tts-history/；
     workers→Supabase Storage/R2），记录经仓储持久化（workers→Supabase tts_results）。
+    force_frontend（workers 匿名请求）：无论 storage_mode 都走前端存储分支。
     """
     if not request.edge_voice:
         raise HTTPException(status_code=400, detail="edge_voice is required for edge_tts engine")
@@ -247,7 +263,7 @@ async def _synthesize_edge_tts(
     # 存储模式必须在写盘之前判定：workers 模式（Vercel/CF）FS 只读且无持久性，
     # 一旦先写 data/tts-history/ 再判存储模式，会在写盘处直接崩（Errno 2/EROFS），
     # 根本走不到 base64 分支。前端存储（含 workers 恒 True）不落盘、不建 DB 记录。
-    frontend_storage = is_frontend_storage(db)
+    frontend_storage = force_frontend or is_frontend_storage(db)
 
     try:
         from app.services.edge_tts_service import get_edge_tts_service

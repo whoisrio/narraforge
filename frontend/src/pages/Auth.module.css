@@ -1,3 +1,5 @@
+/* 登录 / 注册页 —— 沿用设计 token（variables.css），与 UnlockGate 同款卡片布局 */
+
 .gate {
   position: fixed;
   inset: 0;
@@ -6,6 +8,7 @@
   justify-content: center;
   background: var(--color-background);
   padding: 24px;
+  z-index: var(--z-fixed, 100);
 }
 
 .card {
@@ -13,7 +16,7 @@
   flex-direction: column;
   gap: 16px;
   width: 100%;
-  max-width: 360px;
+  max-width: 380px;
   padding: 32px;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
@@ -35,6 +38,18 @@
   line-height: 1.6;
   color: var(--color-text-muted);
   text-align: center;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
 }
 
 .input {
@@ -61,6 +76,13 @@
   text-align: center;
 }
 
+.notice {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-success);
+  text-align: center;
+}
+
 .submit {
   padding: 10px 16px;
   font-size: 14px;
@@ -80,4 +102,31 @@
 .submit:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.switchMode {
+  padding: 4px;
+  font-size: 13px;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.switchMode:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
+.back {
+  padding: 4px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.back:hover {
+  color: var(--color-text-secondary);
 }

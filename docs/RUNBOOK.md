@@ -402,8 +402,8 @@ uv run --extra workers pywrangler deploy
 - 关闭 workers.dev 子域路由（Dashboard → Workers → Settings → Domains & Routes），API 仅走受 Access 保护的自定义域名（防绕过，spec 3.6/5.2）。
 - Zero Trust 控制台建 Access 应用（self-hosted），覆盖 Pages 域名与 API 域名两个 hostname；登录方式邮箱 OTP。
 - Access 应用 CORS 设置放行 Pages 域名并允许 credentials；后端 `CORS_ORIGINS` 同步填 Pages 域名。
-- 后端中间件校验 `Cf-Access-Authenticated-User-Email` 头作为纵深防御（`ACCESS_ENFORCEMENT=true`，默认开）；缺头返回 401 `access_required`。
-- Supabase：执行 `backend/supabase/schema.sql` 迁移；`SUPABASE_SERVICE_KEY` 只放 Workers secrets。
+- 后端认证中间件（`SupabaseAuthMiddleware`，`ACCESS_ENFORCEMENT=true` 默认开）把 `Cf-Access-Authenticated-User-Email` 头视为 legacy admin 通道放行；Supabase 用户 JWT 经 JWKS 验签；匿名仅放行无状态 allowlist，其余 401 `auth_required`（详见下方 Vercel 章节与 `docs/api-reference.md`）。
+- Supabase：执行 `backend/supabase/schema.sql` 迁移（含多用户 `user_id` 归属列与统计表）；`SUPABASE_SERVICE_KEY` 只放 Workers secrets。
 
 ---
 
@@ -415,11 +415,14 @@ uv run --extra workers pywrangler deploy
 > 2026-08 三次变更：Pages 进入维护模式、新控制台默认建 Worker，前端改用
 > **Workers Static Assets**（Pages 官方继任方案，静态请求免费，配置见 `frontend/wrangler.toml`）。
 > 当前主线：**Vercel Hobby（免卡）跑后端 serverless 函数 + Cloudflare Workers 静态资产托管前端，
-> 后端校验共享 Bearer 口令**——前端解锁页输入口令后逐请求带 `Authorization: Bearer <token>`。
+> Supabase Auth 邮箱登录 + 每用户数据隔离**——前端登录后逐请求带 `Authorization: Bearer <Supabase JWT>`。
+> 2026-08 四次变更：共享口令解锁页替换为 Supabase Auth（`@supabase/supabase-js` 邮箱+密码）；
+> 旧凭证（`ACCESS_TOKEN` / `GATEWAY_SECRET` / CF Access 邮箱头）保留为 legacy admin 通道；
+> 无状态端点对匿名放行（见下「匿名 allowlist」），其余 401 `auth_required`。
 
 ```
-浏览器 → CF Workers 静态资产（narraforge-web.<子域>.workers.dev，解锁页持共享口令）
-              │ Authorization: Bearer <ACCESS_TOKEN>
+浏览器 → CF Workers 静态资产（narraforge-web.<子域>.workers.dev，Supabase 邮箱登录）
+              │ Authorization: Bearer <Supabase access_token>
               ▼
        Vercel Functions（<project>.vercel.app，Python runtime）
 ```
@@ -452,10 +455,12 @@ Project → Settings → Environment Variables（Production），完整示例见
 | 变量 | 值 | 说明 |
 |---|---|---|
 | `DEPLOY_TARGET` | `workers` | 纯在线路由，不注册本地模型路由 |
-| `ACCESS_TOKEN` | `openssl rand -hex 32` | 共享 Bearer 口令，无域名直连方案的唯一凭证；前端解锁页输入的口令须与此一致 |
-| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验 Access 邮箱头 / 网关密钥头 / Bearer 口令，任一满足即放行 |
+| `ACCESS_TOKEN` | `openssl rand -hex 32` | 共享 Bearer 口令；Supabase Auth 上线后降级为 **legacy admin 通道**（命中即视为管理员，看全部用户数据），保留作运维兜底 |
+| `ACCESS_ENFORCEMENT` | `true` | 默认开；workers 模式校验顺序：legacy 凭证（Access 邮箱头 / 网关密钥头 / Bearer 口令，任一满足即 legacy admin 放行）→ Supabase 用户 JWT → 匿名 allowlist 之外 401 `auth_required` |
 | `CORS_ORIGINS` | 前端域名（逗号分隔） | 如 `https://narraforge-web.<子域>.workers.dev` |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Supabase 项目值 | service key 只在后端 |
+| `SUPABASE_JWT_AUD` | 一般不设 | 校验 Supabase 用户 JWT 的 `aud`，默认 `authenticated`；仅自定义 JWT 场景需改 |
+| `ADMIN_EMAILS` | 管理员邮箱（逗号分隔） | JWT 邮箱在列表内才可访问 `/api/admin/*`（否则 403 `admin_required`）；legacy admin 恒通过 |
 | `SUPABASE_STORAGE_BUCKET` | `voice-assets` | 须与 schema.sql 创建的 bucket 同名 |
 | `ASSET_STORE_BACKEND` | `auto` | 无 R2 binding → Supabase Storage（函数 FS 临时，落盘会丢） |
 | `MIMO_API_KEY` / `MIMO_BASE_URL` | 小米 MiMo key | 在线合成/克隆 |
@@ -478,31 +483,55 @@ Pages 已进维护模式，前端用 **Workers Static Assets** 托管（`fronten
 |---|---|---|
 | `NODE_VERSION` | `22` | Vite 8 要求 |
 | `VITE_API_BASE_URL` | `https://<project>.vercel.app/api` | 前端直连 Vercel 后端（含 `/api` 前缀） |
-| `VITE_AUTH_REQUIRED` | `true` | 构建期开关：启用解锁页 + axios Bearer 注入；本地开发不设，行为完全不变 |
+| `VITE_AUTH_REQUIRED` | `true` | 构建期开关：启用 Supabase 登录页 + axios 注入 access token（401 自动刷新重试）；本地开发不设，行为完全不变 |
+| `VITE_SUPABASE_URL` | Supabase Project URL | 与后端 `SUPABASE_URL` 相同 |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon public key | 前端登录用（非 service key） |
 
 `VITE_*` 是构建期打进去的，改完必须重新部署（Deployments → Retry）。
 部署后前端地址为 `https://narraforge-web.<你的子域>.workers.dev`，把它回填到
 Vercel 的 `CORS_ORIGINS` 并 Redeploy。
 
-解锁流程：用户打开站点 → 全屏解锁页输入口令 → 前端带口令验证
-`GET /api/config/capabilities` 通过后才写入 localStorage（`nf_access_token`）并整页刷新。
-任意请求 401 → 前端清除口令并回到解锁页。
+登录/匿名流程：用户打开站点 → 登录页（`frontend/src/pages/Auth.tsx`，邮箱+密码登录/注册，
+会话由 `@supabase/supabase-js` 管理）→ axios 拦截器逐请求带 `Authorization: Bearer <access_token>`，
+401 时刷新 token 重试一次，仍 401 则回登录页。
+未登录（匿名）也可使用无状态功能：存储固定为前端 IndexedDB（backend 存储选项隐藏），
+非 allowlist 页面显示登录引导 CTA。
 
 ### 4. 验证部署
 
 ```bash
 curl https://<project>.vercel.app/health
-# → {"status": "healthy", ...}（探活放行）
+# → {"status": "healthy", ...}（探活在匿名 allowlist 内）
 curl https://<project>.vercel.app/api/config/capabilities
-# → 401 access_required（无凭证，防直连生效）
-curl -H "Authorization: Bearer $ACCESS_TOKEN" https://<project>.vercel.app/api/config/capabilities
-# → {"deploy_target": "workers", ... features.direct_storage_upload: true}
+# → 200（allowlist 内，匿名可读）
+curl https://<project>.vercel.app/api/segmented-projects
+# → 401 {"detail":{"code":"auth_required"}}（非 allowlist，无凭证被拒）
+curl -H "Authorization: Bearer $ACCESS_TOKEN" https://<project>.vercel.app/api/segmented-projects
+# → 200（legacy admin 通道，看全部行）
 ```
+
+匿名 allowlist（精确/前缀匹配，全部无状态、不落用户数据）：
+`GET /health`、`GET /`、`GET /api/config/capabilities`、`GET /api/config/storage-mode`、
+`POST /api/tts/synthesize`（workers 模式仅 edge_tts 引擎；匿名不持久化，只回 base64）、`POST /api/mimo-tts/*`、
+`POST /api/text-split/*`、`POST /api/subtitle-llm/*`、`POST /api/text-analysis/*`。
+其余端点匿名一律 401 `auth_required`。
 
 ### Supabase 准备
 
-与 HF/Render 章节相同：执行 `backend/supabase/schema.sql`（含 `voice-assets`
-私有桶），取 Project URL 与 service_role key 填 Vercel 环境变量。
+1. Supabase Dashboard → Authentication → Providers，启用 **Email** 登录。
+2. SQL Editor 执行 `backend/supabase/schema.sql`——除业务表与 `voice-assets` 私有桶外，
+   现含多用户归属（`segmented_projects` / `voice_profiles` / `roles` / `source_documents` /
+   `tts_results` 的 `user_id uuid` 列 + 索引）与统计表（`profiles` / `daily_stats` /
+   `operation_logs` / `daily_active_users` + `increment_metric` RPC）。
+3. 取 Project URL、service_role key（后端）与 anon key（前端）分别填 Vercel 与 CF Workers 环境变量。
+4. **存量数据回填**（仅升级环境需要）：五张归属表中原有行 `user_id IS NULL`，登录用户看不到。
+   先用 Supabase Auth 注册首个管理员账号（或在 Dashboard 手工建用户），再回填：
+   ```bash
+   cd backend
+   uv run python -m scripts.backfill_user_ownership --user-id <uuid>           # dry-run（默认）
+   uv run python -m scripts.backfill_user_ownership --user-id <uuid> --apply   # 执行（幂等）
+   ```
+5. Vercel 环境变量补 `ADMIN_EMAILS`（管理员邮箱，逗号分隔）；`SUPABASE_JWT_AUD` 一般用默认值。
 
 ### 可选加固：自有域名 + Access + CF Worker 网关
 
@@ -523,7 +552,7 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" https://<project>.vercel.app/api/c
 3. Zero Trust 建 Access 应用（self-hosted）覆盖 `api.<域名>`，邮箱 OTP、允许列表只填本人邮箱；
    Access CORS 放行 Pages 域名并允许 credentials；SSL/TLS 模式 **Full**。
 4. `<project>.vercel.app` 直连子域无法关闭——靠后端 `GATEWAY_SECRET`/Access 头校验挡住
-   （无凭证 401 `access_required`）。
+   （匿名仅放行 allowlist 无状态端点，其余 401 `auth_required`）。
 
 ---
 

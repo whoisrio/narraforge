@@ -70,6 +70,11 @@ class Settings(BaseSettings):
     logs_dir: Path = base_dir / "logs"
 
     @property
+    def admin_email_list(self) -> list[str]:
+        """admin_emails（逗号分隔）→ 小写邮箱列表（require_admin 用）。"""
+        return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
+    @property
     def projects_dir(self) -> Path:
         """Alias for segmented_dir (unified data root naming)."""
         return self.segmented_dir
@@ -95,6 +100,11 @@ class Settings(BaseSettings):
     # Supabase（workers 模式持久化：PostgREST REST 访问，service key 只在后端）
     supabase_url: str = ""
     supabase_service_key: str = ""
+    # Supabase Auth 用户 JWT 验签（M3）：audience 校验值，默认 authenticated
+    supabase_jwt_aud: str = "authenticated"
+    # 管理员邮箱（逗号分隔，大小写不敏感）：require_admin 判定依据
+    # （统计后台 /api/admin/*）；旧凭证通道（Access 头/网关密钥/共享口令）恒为管理员
+    admin_emails: str = ""
     # Supabase Storage 资产桶（workers 模式无 R2 binding 时的二进制资产后端，如 Render）
     supabase_storage_bucket: str = "voice-assets"
     # 二进制资产存储后端：auto | local | r2 | supabase

@@ -142,6 +142,81 @@ alter table segmented_projects
     foreign key (default_narrator_role_id) references roles(id) on delete set null;
 
 -- ---------------------------------------------------------------------------
+-- 多用户数据归属（M2）：user_id 归属列。
+-- 只加在六张顶层表中的五张（model_providers 在 Supabase 侧不存在——
+-- 模型配置存于 system_configs，全局共享，故不加）；chapters/segments 不加
+-- （归属经 project 传递，仓储层先校验 project 归属再操作）。
+-- nullable：存量行回填前为 NULL（匿名/旧数据），回填脚本见
+-- backend/scripts/backfill_user_ownership.py。local SQLite 模型不加此列
+-- （local 单用户无认证），本文件是 Postgres-only 超集。
+-- ---------------------------------------------------------------------------
+alter table segmented_projects add column if not exists user_id uuid;
+alter table voice_profiles add column if not exists user_id uuid;
+alter table roles add column if not exists user_id uuid;
+alter table source_documents add column if not exists user_id uuid;
+alter table tts_results add column if not exists user_id uuid;
+
+create index if not exists idx_segmented_projects_user_id on segmented_projects (user_id);
+create index if not exists idx_voice_profiles_user_id on voice_profiles (user_id);
+create index if not exists idx_roles_user_id on roles (user_id);
+create index if not exists idx_source_documents_user_id on source_documents (user_id);
+create index if not exists idx_tts_results_user_id on tts_results (user_id);
+
+-- ---------------------------------------------------------------------------
+-- 用户档案与使用统计（M2/M5，Supabase Auth 用户体系）
+-- profiles.id = Supabase Auth user id（auth.users.id），由后端统计中间件
+-- 首见时 upsert（service key 直写，不建 FK 到 auth.users，避免 auth schema 耦合）。
+-- ---------------------------------------------------------------------------
+create table if not exists profiles (
+    id uuid primary key,
+    email text,
+    created_at timestamptz not null default now(),
+    last_seen_at timestamptz,
+    is_admin boolean not null default false
+);
+
+-- 按日计数指标（visit_authed / visit_anon / synthesize 等），经 RPC
+-- increment_metric 原子 +1（避免读-改-写竞态）。
+create table if not exists daily_stats (
+    date date not null,
+    metric text not null,
+    count bigint not null default 0,
+    primary key (date, metric)
+);
+
+-- 变更类操作审计（POST/PUT/DELETE，剔除轮询与管理端路径）
+create table if not exists operation_logs (
+    id bigint generated always as identity primary key,
+    user_id uuid,
+    action text,
+    method text,
+    path text,
+    status integer,
+    duration_ms integer,
+    created_at timestamptz not null default now()
+);
+
+create index if not exists idx_operation_logs_created_at on operation_logs (created_at);
+create index if not exists idx_operation_logs_user_id on operation_logs (user_id);
+
+create table if not exists daily_active_users (
+    date date not null,
+    user_id uuid not null,
+    primary key (date, user_id)
+);
+
+-- 原子计数 +1：PostgREST RPC（post /rest/v1/rpc/increment_metric）
+create or replace function increment_metric(p_date date, p_metric text)
+returns void
+language sql
+as $$
+    insert into daily_stats (date, metric, count)
+    values (p_date, p_metric, 1)
+    on conflict (date, metric)
+    do update set count = daily_stats.count + 1;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Storage bucket（步骤 6A-2）：workers 模式无 R2 binding 的部署（如 Render）
 -- 把克隆样本/试听音频等二进制资产存 Supabase Storage。
 -- bucket 名必须与后端 SUPABASE_STORAGE_BUCKET（默认 voice-assets）一致。

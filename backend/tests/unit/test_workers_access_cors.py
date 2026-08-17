@@ -1,14 +1,18 @@
-"""步骤 4B/4C：workers 模式 Access 校验中间件 + CORS 配置化（spec 3.6/3.7）。
+"""步骤 4B/4C：workers 模式凭证校验 + CORS 配置化（spec 3.6/3.7）。
 
-Access（3.6）：
-- workers 模式校验 ``Cf-Access-Authenticated-User-Email`` 头存在（该头由 Access
-  边缘注入；workers.dev 路由关闭后头只能来自 Access，是纵深防御）。
-- 缺头 → 401 ``{detail: {code: "access_required"}}``；``/health`` 与 OPTIONS
-  预检放行；``access_enforcement=False`` 可整体关闭；local 模式不注册该中间件。
+M3 起 AccessEnforcementMiddleware 由 SupabaseAuthMiddleware 取代
+（app/core/auth_middleware.py；Supabase Auth 用户 JWT + 匿名 allowlist 见
+tests/unit/test_auth_middleware.py）。本文件锁定**旧凭证通道**的兼容行为：
+
+- ``Cf-Access-Authenticated-User-Email`` 头 / ``X-Narraforge-Gateway-Secret``
+  网关密钥 / ``Authorization: Bearer <ACCESS_TOKEN>`` 共享口令三通道依旧放行
+  （视为 legacy admin）；缺凭证 → 401 ``{detail: {code: "auth_required"}}``；
+  ``/health`` 与 OPTIONS 预检放行；``access_enforcement=False`` 整体关闭；
+  local 模式不注册中间件。
 
 CORS（3.7）：
 - workers 模式用 ``settings.cors_origins``（部署时填 Pages 域名），
-  ``allow_credentials=True``（Access 认证态在 cookie 里）。
+  ``allow_credentials=True``。
 - local 保持 ``["*"]`` 不变。注意 Starlette 语义：``allow_credentials=True`` 时
   字面 ``"*"`` 不可用，Starlette 降级为反射请求 Origin（两种模式 ACAO 均为具体
   origin 而非 "*"）。
@@ -21,6 +25,9 @@ from app.core.config import Settings, settings
 
 ACCESS_HEADER = "Cf-Access-Authenticated-User-Email"
 PAGES_ORIGIN = "https://narraforge.pages.dev"
+# 非匿名 allowlist 的探针路径（M3 起 `/` 匿名放行，不能再用它测 401）：
+# 路径不存在 → 通过中间件后 404，被拦则 401。
+PROBE = "/api/__protected_probe"
 
 
 def _workers_client(monkeypatch, **overrides) -> TestClient:
@@ -43,14 +50,14 @@ def _preflight(client: TestClient, origin: str):
 class TestAccessEnforcement:
     def test_missing_header_returns_401(self, monkeypatch):
         client = _workers_client(monkeypatch)
-        resp = client.get("/")
+        resp = client.get(PROBE)
         assert resp.status_code == 401
-        assert resp.json()["detail"]["code"] == "access_required"
+        assert resp.json()["detail"]["code"] == "auth_required"
 
     def test_with_header_passes(self, monkeypatch):
         client = _workers_client(monkeypatch)
-        resp = client.get("/", headers={ACCESS_HEADER: "me@example.com"})
-        assert resp.status_code == 200
+        resp = client.get(PROBE, headers={ACCESS_HEADER: "me@example.com"})
+        assert resp.status_code == 404  # 过了中间件，路径不存在
 
     def test_health_exempt(self, monkeypatch):
         client = _workers_client(monkeypatch)
@@ -65,12 +72,12 @@ class TestAccessEnforcement:
 
     def test_disabled_by_setting(self, monkeypatch):
         client = _workers_client(monkeypatch, access_enforcement=False)
-        assert client.get("/").status_code == 200
+        assert client.get(PROBE).status_code == 404  # 无中间件，直接落到路由
 
     def test_local_mode_has_no_middleware(self):
-        """local 模式完全不启用 Access 校验（无头也 200）。"""
+        """local 模式完全不启用认证中间件（无凭证也落到路由）。"""
         client = TestClient(main_module.create_app("local"))
-        assert client.get("/").status_code == 200
+        assert client.get(PROBE).status_code == 404
 
 
 GATEWAY_SECRET_HEADER = "X-Narraforge-Gateway-Secret"
@@ -82,32 +89,32 @@ class TestGatewaySecret:
 
     def test_correct_secret_passes(self, monkeypatch):
         client = _workers_client(monkeypatch, gateway_secret="s3cret")
-        resp = client.get("/", headers={GATEWAY_SECRET_HEADER: "s3cret"})
-        assert resp.status_code == 200
+        resp = client.get(PROBE, headers={GATEWAY_SECRET_HEADER: "s3cret"})
+        assert resp.status_code == 404  # 过了中间件，路径不存在
 
     def test_wrong_secret_returns_401(self, monkeypatch):
         client = _workers_client(monkeypatch, gateway_secret="s3cret")
-        resp = client.get("/", headers={GATEWAY_SECRET_HEADER: "wrong"})
+        resp = client.get(PROBE, headers={GATEWAY_SECRET_HEADER: "wrong"})
         assert resp.status_code == 401
-        assert resp.json()["detail"]["code"] == "access_required"
+        assert resp.json()["detail"]["code"] == "auth_required"
 
     def test_secret_channel_disabled_when_unset(self, monkeypatch):
         """gateway_secret 未配置（空串）时密钥通道不生效，带头也 401。"""
         client = _workers_client(monkeypatch, gateway_secret="")
-        resp = client.get("/", headers={GATEWAY_SECRET_HEADER: "anything"})
+        resp = client.get(PROBE, headers={GATEWAY_SECRET_HEADER: "anything"})
         assert resp.status_code == 401
 
     def test_email_header_still_passes_with_secret_configured(self, monkeypatch):
         """两条凭证路径并存：配了密钥后 Access 邮箱头依旧有效。"""
         client = _workers_client(monkeypatch, gateway_secret="s3cret")
-        resp = client.get("/", headers={ACCESS_HEADER: "me@example.com"})
-        assert resp.status_code == 200
+        resp = client.get(PROBE, headers={ACCESS_HEADER: "me@example.com"})
+        assert resp.status_code == 404
 
     def test_local_mode_unaffected_by_gateway_secret(self, monkeypatch):
         """local 模式不注册中间件：即使配了密钥，无头请求照常放行。"""
         monkeypatch.setattr(settings, "gateway_secret", "s3cret")
         client = TestClient(main_module.create_app("local"))
-        assert client.get("/").status_code == 200
+        assert client.get(PROBE).status_code == 404
 
 
 class TestAccessToken:
@@ -116,32 +123,32 @@ class TestAccessToken:
 
     def test_bearer_correct_passes(self, monkeypatch):
         client = _workers_client(monkeypatch, access_token="tok123")
-        resp = client.get("/", headers={"Authorization": "Bearer tok123"})
-        assert resp.status_code == 200
+        resp = client.get(PROBE, headers={"Authorization": "Bearer tok123"})
+        assert resp.status_code == 404  # 过了中间件，路径不存在
 
     def test_bearer_wrong_returns_401(self, monkeypatch):
         client = _workers_client(monkeypatch, access_token="tok123")
-        resp = client.get("/", headers={"Authorization": "Bearer wrong"})
+        resp = client.get(PROBE, headers={"Authorization": "Bearer wrong"})
         assert resp.status_code == 401
-        assert resp.json()["detail"]["code"] == "access_required"
+        assert resp.json()["detail"]["code"] == "auth_required"
 
     def test_bearer_channel_disabled_when_unset(self, monkeypatch):
         """access_token 未配置（空串）时 Bearer 通道不生效，带正确格式的头也不放行。"""
         client = _workers_client(monkeypatch, access_token="")
-        resp = client.get("/", headers={"Authorization": "Bearer anything"})
+        resp = client.get(PROBE, headers={"Authorization": "Bearer anything"})
         assert resp.status_code == 401
 
     def test_existing_credentials_not_regressed(self, monkeypatch):
         """配了 access_token 后，既有两种凭证（Access 邮箱头 / 网关密钥）依旧有效。"""
         client = _workers_client(monkeypatch, access_token="tok123", gateway_secret="s3cret")
-        assert client.get("/", headers={ACCESS_HEADER: "me@example.com"}).status_code == 200
-        assert client.get("/", headers={GATEWAY_SECRET_HEADER: "s3cret"}).status_code == 200
+        assert client.get(PROBE, headers={ACCESS_HEADER: "me@example.com"}).status_code == 404
+        assert client.get(PROBE, headers={GATEWAY_SECRET_HEADER: "s3cret"}).status_code == 404
 
     def test_local_mode_unaffected_by_access_token(self, monkeypatch):
         """local 模式不注册中间件：即使配了口令，无头请求照常放行。"""
         monkeypatch.setattr(settings, "access_token", "tok123")
         client = TestClient(main_module.create_app("local"))
-        assert client.get("/").status_code == 200
+        assert client.get(PROBE).status_code == 404
 
 
 class TestWorkersCors:
@@ -159,10 +166,10 @@ class TestWorkersCors:
         assert "access-control-allow-origin" not in resp.headers
 
     def test_access_401_carries_cors_headers(self, monkeypatch):
-        """CORS 是最外层中间件：Access 拒绝的 401 也带 ACAO 头，
+        """CORS 是最外层中间件：认证拒绝的 401 也带 ACAO 头，
         浏览器跨域能读到真实 401 而非 CORS 错误。"""
         client = _workers_client(monkeypatch, cors_origins=[PAGES_ORIGIN])
-        resp = client.get("/", headers={"Origin": PAGES_ORIGIN})
+        resp = client.get(PROBE, headers={"Origin": PAGES_ORIGIN})
         assert resp.status_code == 401
         assert resp.headers["access-control-allow-origin"] == PAGES_ORIGIN
 

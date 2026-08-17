@@ -1,0 +1,308 @@
+"""M4：workers 模式多用户数据隔离（端到端，经真实 deps 工厂 + 内存版 PostgREST）。
+
+create_app("workers") + 真 SupabaseAuthMiddleware（伪造 ES256 JWKS，无网络）
++ deps.get_supabase_client 指向 fake——请求链路：JWT → request.state.user →
+deps 工厂 → 带 (owner_id, see_all) 作用域的 Supabase 仓储 → PostgREST 查询。
+
+覆盖：
+- select/update/delete 追加 user_id=eq.<id>、insert 写入 user_id；
+- 跨用户访问 404（不泄露存在性）；save_project 跨用户抢占防护；
+- legacy admin（网关密钥）看全部行；
+- 匿名 synthesize 不落库（storage_mode=backend 也按前端存储处理）；
+- 已认证 synthesize 正常持久化且行带 user_id。
+"""
+import json
+import time
+from unittest.mock import AsyncMock, Mock, patch
+
+import jwt as pyjwt
+import pytest
+from cryptography.hazmat.primitives.asymmetric import ec
+from fastapi.testclient import TestClient
+
+import main as main_module
+from app.core import auth_middleware
+from app.core.asset_store import get_asset_store
+from app.core.config import settings
+from tests.fixtures.postgrest_fake import make_fake_supabase_client
+
+SUPABASE_URL = "https://fake.supabase.co"
+ISSUER = f"{SUPABASE_URL}/auth/v1"
+USER_A = "aaaaaaaa-1111-1111-1111-111111111111"
+USER_B = "bbbbbbbb-2222-2222-2222-222222222222"
+GATEWAY_SECRET_HEADER = "X-Narraforge-Gateway-Secret"
+
+_PRIVATE_KEY = ec.generate_private_key(ec.SECP256R1())
+
+
+def _jwks() -> list[dict]:
+    jwk = json.loads(pyjwt.algorithms.ECAlgorithm.to_jwk(_PRIVATE_KEY.public_key()))
+    jwk["kid"] = "test-kid"
+    return [jwk]
+
+
+def _token(user_id: str, email: str) -> str:
+    return pyjwt.encode(
+        {
+            "sub": user_id,
+            "email": email,
+            "aud": "authenticated",
+            "iss": ISSUER,
+            "exp": int(time.time()) + 3600,
+        },
+        _PRIVATE_KEY,
+        algorithm="ES256",
+        headers={"kid": "test-kid"},
+    )
+
+
+def _auth(user_id: str, email: str) -> dict:
+    return {"Authorization": f"Bearer {_token(user_id, email)}"}
+
+
+AUTH_A = _auth(USER_A, "a@example.com")
+AUTH_B = _auth(USER_B, "b@example.com")
+ADMIN = {GATEWAY_SECRET_HEADER: "s3cret"}
+
+
+class _FakeAssetStore:
+    """内存资产存储（避免 workers 模式的 Supabase Storage 网络调用）。"""
+
+    def __init__(self):
+        self.objects: dict[str, bytes] = {}
+
+    async def put(self, key: str, data: bytes) -> str:
+        self.objects[key] = data
+        return key
+
+    async def get(self, key: str) -> bytes | None:
+        return self.objects.get(key)
+
+    async def delete(self, key: str) -> None:
+        self.objects.pop(key, None)
+
+
+@pytest.fixture
+def workers_client(monkeypatch):
+    monkeypatch.setattr(settings, "deploy_target", "workers")
+    monkeypatch.setattr(settings, "supabase_url", SUPABASE_URL)
+    monkeypatch.setattr(settings, "supabase_service_key", "service-key")
+    monkeypatch.setattr(settings, "gateway_secret", "s3cret")
+    monkeypatch.setattr(auth_middleware, "_load_jwks", lambda: _jwks())
+
+    client, store = make_fake_supabase_client()
+    # 真实 deps 工厂 + 假 PostgREST：隔离逻辑全链路走真代码
+    monkeypatch.setattr("app.core.repositories.deps.get_supabase_client", lambda: client)
+    monkeypatch.setattr(
+        "app.core.system_config_service.get_supabase_client", lambda: client
+    )
+    monkeypatch.setattr("app.core.stats_middleware.get_supabase_client", lambda: client)
+
+    asset_store = _FakeAssetStore()
+    app = main_module.create_app("workers")
+    app.dependency_overrides[get_asset_store] = lambda: asset_store
+    with TestClient(app) as test_client:
+        yield test_client, store, asset_store
+    app.dependency_overrides.clear()
+
+
+def _queries(store, table: str, method: str | None = None) -> list[dict]:
+    return [
+        r
+        for r in store.requests
+        if r["table"] == table and (method is None or r["method"] == method)
+    ]
+
+
+class TestProjectIsolation:
+    def _create_project(self, client, headers, project_id="p1"):
+        return client.post(
+            "/api/segmented-projects",
+            json={"id": project_id, "name": "项目", "schema_version": 2, "chapters": []},
+            headers=headers,
+        )
+
+    def test_insert_stamps_user_id_and_select_filters(self, workers_client):
+        client, store, _ = workers_client
+        resp = self._create_project(client, AUTH_A)
+        assert resp.status_code == 201, resp.text
+        row = store.tables["segmented_projects"][0]
+        assert row["user_id"] == USER_A
+        # 所有 projects 查询都带归属过滤（唯一例外：save_project 的跨用户
+        # 防抢占复查——有意不带作用域，只取 id 判存在）
+        for q in _queries(store, "segmented_projects"):
+            if q["method"] == "POST":
+                assert q["body"][0]["user_id"] == USER_A
+                continue
+            if q["params"].get("user_id") == f"eq.{USER_A}":
+                continue
+            assert q["params"] == {"id": "eq.p1", "select": "id"}, q
+
+    def test_cross_user_read_and_list(self, workers_client):
+        client, _, _ = workers_client
+        assert self._create_project(client, AUTH_A).status_code == 201
+
+        assert client.get("/api/segmented-projects", headers=AUTH_A).json()["items"]
+        assert client.get("/api/segmented-projects", headers=AUTH_B).json()["items"] == []
+        # 跨用户读 → 404（不泄露存在性）
+        resp = client.get("/api/segmented-projects/p1", headers=AUTH_B)
+        assert resp.status_code == 404
+
+    def test_cross_user_save_does_not_clobber(self, workers_client):
+        """跨用户用同 id PUT：404 且不覆盖他人行（防 upsert 抢占）。"""
+        client, store, _ = workers_client
+        assert self._create_project(client, AUTH_A).status_code == 201
+
+        resp = client.put(
+            "/api/segmented-projects/p1",
+            json={"id": "p1", "name": "被抢注", "schema_version": 2, "chapters": []},
+            headers=AUTH_B,
+        )
+        assert resp.status_code == 404
+        row = store.tables["segmented_projects"][0]
+        assert row["name"] == "项目"
+        assert row["user_id"] == USER_A
+
+    def test_cross_user_create_same_id_404(self, workers_client):
+        client, store, _ = workers_client
+        assert self._create_project(client, AUTH_A).status_code == 201
+        resp = self._create_project(client, AUTH_B)
+        assert resp.status_code == 404
+        assert len(store.tables["segmented_projects"]) == 1
+
+    def test_cross_user_chapter_op_404(self, workers_client):
+        """章节级操作先验项目归属：跨用户 sync-status → 404。"""
+        client, _, _ = workers_client
+        resp = client.post(
+            "/api/segmented-projects",
+            json={
+                "id": "p1",
+                "name": "项目",
+                "schema_version": 2,
+                "chapters": [
+                    {"id": "c1", "position": 0, "name": "第一章", "segments": []}
+                ],
+            },
+            headers=AUTH_A,
+        )
+        assert resp.status_code == 201, resp.text
+        resp = client.get("/api/segmented-projects/p1/chapters/c1/sync-status", headers=AUTH_B)
+        assert resp.status_code == 404
+        # 本人正常
+        resp = client.get("/api/segmented-projects/p1/chapters/c1/sync-status", headers=AUTH_A)
+        assert resp.status_code == 200
+
+    def test_legacy_admin_sees_all(self, workers_client):
+        client, store, _ = workers_client
+        assert self._create_project(client, AUTH_A).status_code == 201
+        assert self._create_project(client, AUTH_B, project_id="p2").status_code == 201
+
+        items = client.get("/api/segmented-projects", headers=ADMIN).json()["items"]
+        assert {p["id"] for p in items} == {"p1", "p2"}
+        # legacy admin 查询不带 user_id 过滤
+        list_queries = [
+            q for q in _queries(store, "segmented_projects", "GET") if "order" in q["params"]
+        ]
+        assert any("user_id" not in q["params"] for q in list_queries)
+
+
+class TestRoleIsolation:
+    def _payload(self, role_id="role-1"):
+        return {
+            "id": role_id,
+            "name": "角色",
+            "role_kind": "cast",
+            "voice": {"engine": "edge_tts", "params": {}},
+            "favorite_styles": [],
+        }
+
+    def test_crud_scoped_and_cross_user_404(self, workers_client):
+        client, store, _ = workers_client
+        assert client.post("/api/roles", json=self._payload(), headers=AUTH_A).status_code == 201
+        assert store.tables["roles"][0]["user_id"] == USER_A
+
+        assert client.get("/api/roles", headers=AUTH_B).json()["items"] == []
+        assert client.put("/api/roles/role-1", json={"name": "x"}, headers=AUTH_B).status_code == 404
+        assert client.delete("/api/roles/role-1", headers=AUTH_B).status_code == 404
+        # 本人正常
+        assert client.put("/api/roles/role-1", json={"name": "x"}, headers=AUTH_A).status_code == 200
+
+    def test_insert_and_select_carry_scope(self, workers_client):
+        client, store, _ = workers_client
+        client.post("/api/roles", json=self._payload(), headers=AUTH_A)
+        for q in _queries(store, "roles"):
+            if q["method"] == "POST":
+                assert q["body"][0]["user_id"] == USER_A
+            else:
+                assert q["params"].get("user_id") == f"eq.{USER_A}", q
+
+
+class TestTtsHistoryIsolation:
+    def test_history_scoped(self, workers_client):
+        client, store, _ = workers_client
+        base = {
+            "text": "x",
+            "voice_id": "v",
+            "voice_name": "v",
+            "audio_format": "mp3",
+            "speed": 1.0,
+            "volume": 80,
+            "pitch": 1.0,
+            "instruction": "",
+            "language": "Chinese",
+            "source": None,
+            "created_at": "2026-08-10T01:00:00+00:00",
+        }
+        store.tables["tts_results"] = [
+            {**base, "id": "t1", "audio_path": "k1", "user_id": USER_A},
+            {**base, "id": "t2", "audio_path": "k2", "user_id": USER_B},
+        ]
+        items = client.get("/api/tts/history", headers=AUTH_A).json()["items"]
+        assert [i["id"] for i in items] == ["t1"]
+        # 跨用户删除 → 404
+        assert client.delete("/api/tts/history/t2", headers=AUTH_A).status_code == 404
+        # legacy admin 全见
+        items = client.get("/api/tts/history", headers=ADMIN).json()["items"]
+        assert {i["id"] for i in items} == {"t1", "t2"}
+
+
+class TestAnonymousSynthesize:
+    def _edge_mock(self):
+        service = Mock()
+        service.synthesize = AsyncMock(return_value=(b"\xff\xfb\x90\x00" * 10, "mp3"))
+        return patch(
+            "app.services.edge_tts_service.get_edge_tts_service", return_value=service
+        )
+
+    def test_anonymous_never_persists_even_in_backend_storage(self, workers_client):
+        """匿名 + storage_mode=backend：强制前端存储，只回 base64，不落库/不落资产。"""
+        client, store, asset_store = workers_client
+        store.tables["system_configs"] = [{"key": "storage_mode", "value": "backend"}]
+
+        with self._edge_mock():
+            resp = client.post(
+                "/api/tts/synthesize",
+                json={"text": "你好", "engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+            )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["audio_base64"]
+        assert store.tables["tts_results"] == []
+        assert asset_store.objects == {}
+
+    def test_authenticated_persists_with_user_id(self, workers_client):
+        """已认证 + storage_mode=backend：正常持久化，行带 user_id。"""
+        client, store, asset_store = workers_client
+        store.tables["system_configs"] = [{"key": "storage_mode", "value": "backend"}]
+
+        with self._edge_mock():
+            resp = client.post(
+                "/api/tts/synthesize",
+                json={"text": "你好", "engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+                headers=AUTH_A,
+            )
+        assert resp.status_code == 200, resp.text
+        assert "audio_url" in resp.json()
+        rows = store.tables["tts_results"]
+        assert len(rows) == 1
+        assert rows[0]["user_id"] == USER_A
+        assert asset_store.objects  # 音频落资产存储

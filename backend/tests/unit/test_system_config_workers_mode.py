@@ -142,6 +142,8 @@ class TestRepoDeps:
     @pytest.mark.asyncio
     async def test_local_mode_returns_local_repos(self, db_session, monkeypatch):
         monkeypatch.setattr(settings, "deploy_target", "local")
+        from types import SimpleNamespace
+
         from app.core.repositories import deps
         from app.core.repositories.roles import LocalRoleRepository
         from app.core.repositories.source_documents import LocalSourceDocumentRepository
@@ -149,14 +151,20 @@ class TestRepoDeps:
         from app.core.repositories.tts_results import LocalTTSResultRepository
         from app.core.repositories.voice_profiles import LocalVoiceProfileRepository
 
-        assert isinstance(await deps.get_system_config_repo(db_session), LocalSystemConfigRepository)
-        assert isinstance(await deps.get_role_repo(db_session), LocalRoleRepository)
-        assert isinstance(await deps.get_voice_repo(db_session), LocalVoiceProfileRepository)
-        assert isinstance(await deps.get_source_document_repo(db_session), LocalSourceDocumentRepository)
-        assert isinstance(await deps.get_tts_results_repo(db_session), LocalTTSResultRepository)
+        # M4：工厂第一个参数是 Request（local 模式不消费，给匿名 state 桩即可）
+        anon_request = SimpleNamespace(
+            state=SimpleNamespace(user=None, legacy_admin=False)
+        )
+        assert isinstance(await deps.get_system_config_repo(anon_request, db_session), LocalSystemConfigRepository)
+        assert isinstance(await deps.get_role_repo(anon_request, db_session), LocalRoleRepository)
+        assert isinstance(await deps.get_voice_repo(anon_request, db_session), LocalVoiceProfileRepository)
+        assert isinstance(await deps.get_source_document_repo(anon_request, db_session), LocalSourceDocumentRepository)
+        assert isinstance(await deps.get_tts_results_repo(anon_request, db_session), LocalTTSResultRepository)
 
     @pytest.mark.asyncio
     async def test_workers_mode_returns_supabase_repos(self, workers):
+        from types import SimpleNamespace
+
         from app.core.repositories import deps
         from app.core.repositories.roles import SupabaseRoleRepository
         from app.core.repositories.source_documents import SupabaseSourceDocumentRepository
@@ -171,9 +179,41 @@ class TestRepoDeps:
         )
         workers.setattr(deps, "get_supabase_client", lambda: client)
 
-        # db=None：workers 模式不得触碰 Session
-        assert isinstance(await deps.get_system_config_repo(None), SupabaseSystemConfigRepository)
-        assert isinstance(await deps.get_role_repo(None), SupabaseRoleRepository)
-        assert isinstance(await deps.get_voice_repo(None), SupabaseVoiceProfileRepository)
-        assert isinstance(await deps.get_source_document_repo(None), SupabaseSourceDocumentRepository)
-        assert isinstance(await deps.get_tts_results_repo(None), SupabaseTTSResultRepository)
+        # M4：工厂第一个参数是 Request（读 state.user 构造归属作用域）；
+        # 用匿名 state 桩代替。db=None：workers 模式不得触碰 Session
+        anon_request = SimpleNamespace(
+            state=SimpleNamespace(user=None, legacy_admin=False)
+        )
+        assert isinstance(await deps.get_system_config_repo(anon_request, None), SupabaseSystemConfigRepository)
+        assert isinstance(await deps.get_role_repo(anon_request, None), SupabaseRoleRepository)
+        assert isinstance(await deps.get_voice_repo(anon_request, None), SupabaseVoiceProfileRepository)
+        assert isinstance(await deps.get_source_document_repo(anon_request, None), SupabaseSourceDocumentRepository)
+        assert isinstance(await deps.get_tts_results_repo(anon_request, None), SupabaseTTSResultRepository)
+
+    @pytest.mark.asyncio
+    async def test_workers_repos_carry_user_scope(self, workers):
+        """M4：request.state.user → 仓储 owner_id；legacy_admin → see_all。"""
+        from types import SimpleNamespace
+
+        from app.core.repositories import deps
+        from app.core.supabase_client import SupabaseClient
+
+        client = SupabaseClient(
+            "https://test.supabase.co", "k",
+            transport=httpx.MockTransport(lambda req: httpx.Response(200, json=[])),
+        )
+        workers.setattr(deps, "get_supabase_client", lambda: client)
+
+        user_request = SimpleNamespace(
+            state=SimpleNamespace(user={"id": "u-1", "email": "u@example.com"},
+                                  legacy_admin=False)
+        )
+        repo = await deps.get_role_repo(user_request, None)
+        assert repo._owner_id == "u-1"
+        assert repo._see_all is False
+
+        admin_request = SimpleNamespace(
+            state=SimpleNamespace(user=None, legacy_admin=True)
+        )
+        repo = await deps.get_role_repo(admin_request, None)
+        assert repo._see_all is True
