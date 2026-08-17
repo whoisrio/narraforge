@@ -44,6 +44,11 @@ test.describe('合成后音频调整', () => {
     // ── 1. 合成第一段（edge_tts 可离线） ──
     const chapter = await getChapter(page);
     const segId = chapter.segments[0].id;
+    // 跨 run 残留自愈：上次 run 若中断在录音用例还原之前，第一段仍是 recorded，
+    // 无 force 合成会被跳过、adjust 也豁免录音段 —— 先强制还原为普通 TTS 段
+    if (chapter.segments[0].audio?.current?.origin === 'recorded') {
+      await synthSegment(page, CHAPTER_ID, segId, { force: true });
+    }
     const synthResp = await page.request.post(
       `${BACKEND}/api/segmented-projects/${PROJECT_ID}/chapters/${CHAPTER_ID}/segments/${segId}/synthesize`,
       { data: {} },
@@ -62,7 +67,8 @@ test.describe('合成后音频调整', () => {
     const dialog = page.getByRole('dialog', { name: /调整音频/ });
     await expect(dialog).toBeVisible();
     await dialog.getByLabel('速度').fill('2');
-    await dialog.getByRole('button', { name: '应用' }).click();
+    // exact: #79 新增「应用到所有章节」按钮，非精确匹配会命中两个按钮
+    await dialog.getByRole('button', { name: '应用', exact: true }).click();
     await expect(dialog).toBeHidden({ timeout: 30_000 });
 
     // ── 3. API：时长约缩短一半，previous 保留 ──
@@ -137,7 +143,7 @@ test.describe('合成后音频调整', () => {
     const dialog = page.getByRole('dialog', { name: /调整音频/ });
     await expect(dialog).toBeVisible();
     await dialog.getByLabel('音量').fill('3');
-    await dialog.getByRole('button', { name: '应用' }).click();
+    await dialog.getByRole('button', { name: '应用', exact: true }).click();
     await expect(dialog).toBeHidden({ timeout: 30_000 });
 
     // ── 3. 应用后仍停留在第二章 ──
@@ -176,6 +182,11 @@ test.describe('合成后音频调整', () => {
 
     // ── 0. 清残留（e2e 库跨 run 持久），合成第一章全部 3 段 ──
     await page.request.post(adjustUrl(CHAPTER_ID), { data: { tempo: 1.0, volume_db: 0 } }).catch(() => {});
+    // 跨 run 残留自愈：上次 run 若中断在本用例还原之前，seg-1-1 仍是 recorded，
+    // 无 force 合成会被跳过导致 adjusted 计数不符 —— 先强制还原为普通 TTS 段
+    if ((await getSeg(page, CHAPTER_ID, 'seg-1-1')).audio?.current?.origin === 'recorded') {
+      await synthSegment(page, CHAPTER_ID, 'seg-1-1', { force: true });
+    }
     for (const sid of ['seg-1-1', 'seg-1-2', 'seg-1-3']) await synthSegment(page, CHAPTER_ID, sid);
     const origDur: Record<string, number> = {};
     for (const sid of ['seg-1-1', 'seg-1-2', 'seg-1-3']) {
@@ -199,12 +210,24 @@ test.describe('合成后音频调整', () => {
     await page.getByRole('button', { name: '确认', exact: true }).click();
     await expect(page.getByTitle('已录入音频，点击解锁后可重新合成').first()).toBeVisible({ timeout: 15_000 });
 
+    // 录音落库后，前端会把本地草稿在安静期（防抖 1s）后整包 PUT 回后端。
+    // 若该 PUT 落在本用例后续 API 调整/还原之后，旧草稿会回写覆盖服务端状态
+    // （P6 flaky 根因：force 重合成被草稿里的 recorded 音频盖回）。
+    // 先挂起等待这次 PUT，待其落库、再离开工作室页面后，才继续纯 API 步骤。
+    const draftPut = page.waitForResponse(
+      (r) => r.request().method() === 'PUT' && r.url().includes(`/api/segmented-projects/${PROJECT_ID}`),
+      { timeout: 20_000 },
+    );
+
     // 等草稿同步收敛到 recorded（防抖 PUT）
     let recAudio: any;
     await expect.poll(async () => {
       recAudio = (await getSeg(page, CHAPTER_ID, 'seg-1-1')).audio;
       return recAudio?.current?.origin;
     }, { timeout: 15_000 }).toBe('recorded');
+    await draftPut; // 草稿 PUT 已落库，服务端状态与页面草稿一致
+    // 卸载工作室页面（草稿同步随之销毁），确保后续 API 步骤期间页面不再产生任何写操作
+    await page.goto('about:blank');
     const recPath = recAudio.current.path as string;
     const recDur = recAudio.current.duration_sec as number;
     const recBytes = fs.readFileSync(path.join(PROJECTS_ROOT, recPath));
@@ -263,6 +286,10 @@ test.describe('合成后音频调整', () => {
 
     // ── 0. 清残留，合成第一章 3 段，设 1.5x ──
     await page.request.post(adjustUrl(CHAPTER_ID), { data: { tempo: 1.0, volume_db: 0 } }).catch(() => {});
+    // 跨 run 残留自愈：seg-1-1 若残留 recorded（上次 run 中断），合成会被跳过导致计数不符
+    if ((await getSeg(page, CHAPTER_ID, 'seg-1-1')).audio?.current?.origin === 'recorded') {
+      await synthSegment(page, CHAPTER_ID, 'seg-1-1', { force: true });
+    }
     for (const sid of ['seg-1-1', 'seg-1-2', 'seg-1-3']) await synthSegment(page, CHAPTER_ID, sid);
     const r1 = await page.request.post(adjustUrl(CHAPTER_ID), { data: { tempo: 1.5 } });
     expect((await r1.json()).adjusted).toBe(3);
