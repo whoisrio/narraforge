@@ -28,6 +28,8 @@ import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
+import { useAuth } from '../hooks/authContext';
+import { isAuthRequired } from '../services/auth';
 import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -108,6 +110,7 @@ export function TTSSynthesis({
   const { mode: storageMode } = useStorageMode();
   const capabilities = useCapabilities();
   const { refreshCounter } = useVoiceRefresh();
+  const { user, isAdmin } = useAuth();
   const initialLoadDoneRef = useRef(false);
   const lastSavedUpdatedAtRef = useRef<string | null>(null);
   const [engine, setEngine] = useState<Engine>('edge_tts');
@@ -663,16 +666,42 @@ export function TTSSynthesis({
     }
   }, [project?.id, reloadProjectData, showToast, t]);
 
-  const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {    const np = createInitialProject(t);
+  // 每用户 backend 项目配额（M6）：backend 存储 + auth 开启 + 登录用户（非管理员）
+  // + 已有项目 → 禁用新建入口。管理员豁免；未登录在 backend 模式拿不到项目列表（401）。
+  const createProjectBlocked = useMemo(
+    () => storageMode === 'backend'
+      && isAuthRequired()
+      && !!user
+      && !isAdmin
+      && projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length >= 1,
+    [storageMode, user, isAdmin, projectList],
+  );
+
+  const handleCreateProject = useCallback(async (name?: string, logo?: string | null) => {
+    // 双保险：后端 409 project_limit_reached 兜底，前端禁用入口只做体验优化
+    if (createProjectBlocked) {
+      showToast(t('segment.projectSidebar.quotaReached'), 'error');
+      return;
+    }
+    const np = createInitialProject(t);
     np.name = name || t('tts.newProjectName', { n: projectList.filter(p => p.id !== SCRATCHPAD_PROJECT_ID).length + 1 });
     if (logo) np.logo = logo;
-    await projectStorage.saveProject(np, { mode: 'immediate' });
+    try {
+      await projectStorage.saveProject(np, { mode: 'immediate' });
+    } catch (e) {
+      const code = (e as { response?: { data?: { detail?: { code?: string } } } })?.response?.data?.detail?.code;
+      if (code === 'project_limit_reached') {
+        showToast(t('segment.projectSidebar.quotaReached'), 'error');
+        return;
+      }
+      throw e;
+    }
     const list = sortProjectsWithScratchpad(await projectStorage.listProjects());
     setProjectList(list);
     setProject(np);
     dispatch({ type: 'LOAD_PROJECT', project: np });
     resetGlobalSettings();
-  }, [projectList, projectStorage, dispatch, resetGlobalSettings]);
+  }, [projectList, projectStorage, dispatch, resetGlobalSettings, createProjectBlocked, showToast, t]);
 
   const doDeleteProject = useCallback(async (projectId: string) => {
     if (projectId === SCRATCHPAD_PROJECT_ID) {
@@ -1768,6 +1797,8 @@ export function TTSSynthesis({
           activeProjectId={project.id}
           collapsed={projectSidebarCollapsed}
           scratchpadId={SCRATCHPAD_PROJECT_ID}
+          createDisabled={createProjectBlocked}
+          createDisabledHint={t('segment.projectSidebar.quotaReached')}
           onToggleCollapse={() => setProjectSidebarCollapsed(value => !value)}
           onSelectProject={(projectId) => { void loadProjectById(projectId); }}
           onCreateProject={() => { void handleCreateProject(); }}

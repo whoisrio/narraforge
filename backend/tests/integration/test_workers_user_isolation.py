@@ -88,6 +88,8 @@ def workers_client(monkeypatch):
     monkeypatch.setattr(settings, "supabase_url", SUPABASE_URL)
     monkeypatch.setattr(settings, "supabase_service_key", "service-key")
     monkeypatch.setattr(settings, "gateway_secret", "s3cret")
+    # 存量隔离用例同用户最多建 1 个项目；配额默认放宽，配额用例自行收紧
+    monkeypatch.setattr(settings, "max_projects_per_user", 100)
     monkeypatch.setattr(auth_middleware, "_load_jwks", lambda: _jwks())
 
     client, store = make_fake_supabase_client()
@@ -372,3 +374,84 @@ class TestMimoSynthesizeStorage:
         assert len(rows) == 1
         assert rows[0]["user_id"] == USER_A
         assert asset_store.objects  # 音频落资产存储而非本地 FS
+
+
+class TestProjectQuota:
+    """每用户 backend 项目配额：普通用户限 1 个，管理员（legacy / admin_emails）不限。
+
+    create_project（POST）与 put_project（PUT upsert 的新建路径）都受配额约束；
+    更新已有项目不触发。
+    """
+
+    def _create(self, client, headers, project_id: str):
+        return client.post(
+            "/api/segmented-projects",
+            json={"id": project_id, "name": "项目", "schema_version": 2, "chapters": []},
+            headers=headers,
+        )
+
+    def test_regular_user_limited_to_one(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_projects_per_user", 1)
+
+        assert self._create(client, AUTH_A, "p1").status_code == 201
+        # 第二个项目 → 409，不落库
+        resp = self._create(client, AUTH_A, "p2")
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "project_limit_reached"
+        assert len(store.tables["segmented_projects"]) == 1
+
+        # PUT 到新 id（前端 backend 存储的 save 路径）同样被拦
+        resp = client.put(
+            "/api/segmented-projects/p3",
+            json={"id": "p3", "name": "x", "schema_version": 2, "chapters": []},
+            headers=AUTH_A,
+        )
+        assert resp.status_code == 409
+        assert len(store.tables["segmented_projects"]) == 1
+
+        # 更新已有项目不受配额约束
+        resp = client.put(
+            "/api/segmented-projects/p1",
+            json={"id": "p1", "name": "改名", "schema_version": 2, "chapters": []},
+            headers=AUTH_A,
+        )
+        assert resp.status_code == 200
+        assert store.tables["segmented_projects"][0]["name"] == "改名"
+
+    def test_other_users_unaffected(self, workers_client, monkeypatch):
+        """配额按 owner 独立计数：A 占满后 B 仍可建自己的项目。"""
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_projects_per_user", 1)
+
+        assert self._create(client, AUTH_A, "p1").status_code == 201
+        assert self._create(client, AUTH_B, "q1").status_code == 201
+        # B 再建第二个 → 409（B 自己超限）
+        assert self._create(client, AUTH_B, "q2").status_code == 409
+        assert len(store.tables["segmented_projects"]) == 2
+
+    def test_legacy_admin_unlimited(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_projects_per_user", 1)
+
+        for pid in ("a1", "a2", "a3"):
+            assert self._create(client, ADMIN, pid).status_code == 201
+        assert len(store.tables["segmented_projects"]) == 3
+
+    def test_admin_email_unlimited(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_projects_per_user", 1)
+        monkeypatch.setattr(settings, "admin_emails", "admin@example.com")
+        admin_auth = _auth(USER_A, "admin@example.com")
+
+        for pid in ("a1", "a2"):
+            assert self._create(client, admin_auth, pid).status_code == 201
+        assert len(store.tables["segmented_projects"]) == 2
+
+    def test_quota_disabled_when_zero(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_projects_per_user", 0)
+
+        for pid in ("a1", "a2", "a3"):
+            assert self._create(client, AUTH_A, pid).status_code == 201
+        assert len(store.tables["segmented_projects"]) == 3

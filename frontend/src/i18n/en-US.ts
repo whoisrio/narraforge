@@ -939,6 +939,7 @@ export const enUS: Messages = {
       addFirstSource: 'Add first source →',
       generateNarration: 'Generate narration from {count} source(s)',
       pasteText: '{count} chars',
+      quotaReached: 'One backend project per user — open an existing project',
     },
     editDrawer: {
       title: 'Edit #{id}',
