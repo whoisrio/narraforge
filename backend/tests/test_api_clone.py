@@ -13,7 +13,24 @@ VOICE_PROFILE_FIELDS = {
 }
 
 
-def test_upload_voice(client: TestClient):
+@pytest.fixture
+def fake_transcode(monkeypatch):
+    """Stub ffmpeg 转码：上传路径自 fe5de25 起总是先归一化为 MP3。
+
+    转码行为本身由 tests/test_audio_encoder.py 覆盖；本文件的测试只关心
+    VoiceProfile 响应形状（A5 回归），不需要真实 ffmpeg。
+    """
+    from app.api import clone as clone_module
+
+    def _fake_convert(input_path: str, output_path: str) -> bool:
+        with open(output_path, "wb") as f:
+            f.write(b"fake mp3 data")
+        return True
+
+    monkeypatch.setattr(clone_module, "convert_audio_to_mp3", _fake_convert)
+
+
+def test_upload_voice(client: TestClient, fake_transcode):
     """上传音频文件 -> 返回完整 VoiceProfile 形状（A5 回归）."""
     audio_data = BytesIO(b"fake audio data")
     files = {"file": ("test.mp3", audio_data, "audio/mpeg")}
@@ -27,7 +44,7 @@ def test_upload_voice(client: TestClient):
     assert "audio_url" not in data
 
 
-def test_upload_voice_preserves_prompt_text_in_voice_params(client: TestClient):
+def test_upload_voice_preserves_prompt_text_in_voice_params(client: TestClient, fake_transcode):
     """prompt_text 仍可通过 voice_params 取回（不再在顶层）."""
     audio_data = BytesIO(b"fake audio data")
     files = {"file": ("test.mp3", audio_data, "audio/mpeg")}
@@ -39,7 +56,7 @@ def test_upload_voice_preserves_prompt_text_in_voice_params(client: TestClient):
     assert params.get("prompt_text") == "hello"
 
 
-def test_upload_from_url_returns_full_voice_profile(client: TestClient, monkeypatch):
+def test_upload_from_url_returns_full_voice_profile(client: TestClient, monkeypatch, fake_transcode):
     """/clone/upload-from-url 也返回完整 VoiceProfile 形状（A5）."""
     import requests
 

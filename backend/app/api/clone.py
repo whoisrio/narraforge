@@ -233,7 +233,9 @@ async def upload_voice(
     # - ffmpeg 按内容探测真实格式，因此无论扩展名如何都可正确转码。
     temp_dir = tempfile.gettempdir()
     orig_path = os.path.join(temp_dir, f"{file_id}.{file_ext or 'bin'}")
-    temp_mp3_path = os.path.join(temp_dir, f"{file_id}.mp3")
+    # 输出路径必须与输入不同：上传 .mp3 时两者若同名，ffmpeg 拒绝原地覆盖
+    # ("FFmpeg cannot edit existing files in-place") 导致上传 500。
+    temp_mp3_path = os.path.join(temp_dir, f"{file_id}_normalized.mp3")
 
     try:
         # 保存上传的原始内容（保留扩展名，便于 ffmpeg 探测；但探测以内容为准）
