@@ -15,8 +15,9 @@ import * as path from 'node:path';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 import { readDbProject } from '../helpers/dbReader';
 import { projectDirNameForId, listSegmentFiles } from '../helpers/fsAssertions';
+import { E2E_BACKEND_URL } from '../helpers/ports';
 
-const BACKEND = 'http://127.0.0.1:8012';
+const BACKEND = E2E_BACKEND_URL;
 const FIXTURE_AUDIO = path.resolve(__dirname, '../fixtures/sample-audio/temp_audio.mp3');
 
 function payload(id: string, name: string) {
