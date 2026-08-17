@@ -106,6 +106,15 @@ export function onAuthStateChange(callback: (session: Session | null) => void): 
   return () => data.subscription.unsubscribe();
 }
 
+/**
+ * 提取 Supabase AuthError 的 machine code（如 weak_password / invalid_credentials）。
+ * 非 AuthError（网络异常、mock 的普通 Error 等）返回 null，调用方回退到通用文案。
+ */
+export function authErrorCode(err: unknown): string | null {
+  const e = err as { __isAuthError?: boolean; code?: string } | null;
+  return e && e.__isAuthError === true ? (e.code ?? null) : null;
+}
+
 /** 测试专用：重置单例与缓存。 */
 export function __resetAuthSessionForTests(): void {
   client = null;

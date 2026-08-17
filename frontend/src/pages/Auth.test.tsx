@@ -62,6 +62,19 @@ describe('AuthPage', () => {
     expect(onSuccess).not.toHaveBeenCalled();
   });
 
+  it('surfaces the Supabase weak-password reason on signup', async () => {
+    // 注册时 Supabase 服务端做密码策略校验；真实原因必须透出而非通用失败文案
+    const weak = Object.assign(new Error('Password should be at least 6 characters'), {
+      __isAuthError: true,
+      code: 'weak_password',
+    });
+    const { onSuccess } = renderAuthPage({ signUp: vi.fn().mockRejectedValue(weak) });
+    fireEvent.click(screen.getByRole('button', { name: '没有账号？立即注册' }));
+    fillAndSubmit('注册');
+    expect(await screen.findByText('密码不符合要求：至少 6 位，且不要使用常见弱密码')).toBeInTheDocument();
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
   it('renders a back button when onBack is provided', () => {
     const onBack = vi.fn();
     renderAuthPage({}, { onBack });

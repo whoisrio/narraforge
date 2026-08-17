@@ -1,7 +1,17 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from '../i18n';
 import { useAuth } from '../hooks/authContext';
+import { authErrorCode } from '../services/authSession';
 import styles from './Auth.module.css';
+
+/** Supabase AuthError code → i18n key（静态映射，避免动态 key 泄漏原始字符串）。 */
+const AUTH_ERROR_KEYS: Record<string, string> = {
+  weak_password: 'auth.errorWeakPassword',
+  user_already_exists: 'auth.errorUserExists',
+  email_address_invalid: 'auth.errorEmailInvalid',
+  invalid_credentials: 'auth.errorInvalidCredentials',
+  over_request_rate_limit: 'auth.errorRateLimited',
+};
 
 /**
  * 登录 / 注册页（spec 5.2c · M6）：替代旧的共享口令 UnlockGate。
@@ -36,8 +46,12 @@ export function AuthPage({ onSuccess, onBack }: { onSuccess: () => void; onBack?
           onSuccess();
         }
       }
-    } catch {
-      setError(t('auth.failed'));
+    } catch (err) {
+      // 注册时 Supabase 会做密码策略校验（长度/弱密码库），把真实原因亮出来，
+      // 不要吞成通用失败——否则用户分不清是"密码不合格"还是"服务挂了"。
+      const code = authErrorCode(err);
+      const key = code ? AUTH_ERROR_KEYS[code] : undefined;
+      setError(key ? t(key) : t('auth.failed'));
     } finally {
       setSubmitting(false);
     }
