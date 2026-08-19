@@ -285,12 +285,26 @@ Chapters shorter than 80 chars (`min_chars`) are merged into the next chapter by
 when checked, chapters without payload segments are split server-side by `rule_split` using the chapter's effective `split_config.delimiters`.
 Rule precedence: explicit payload `split_config` > carried-over `split_config` of the title-matched old chapter > default (`，。！？；`).
 Chapters whose stored mode is `llm` still split by rule in this batch path (no per-chapter LLM calls).
+On a first split (no existing chapters) the checkbox is shown and defaults to checked, so the result is immediately usable in Studio.
+On a re-split (existing chapters) the checkbox is hidden and `split_segments: true` is always sent — preserving audio semantically implies rebuilding segments, so the "empty chapters + delete all audio" combination no longer exists.
 
 **Audio preservation on re-split** (`preserve_audio`, sent automatically when the project already has chapters):
-old chapters are matched by normalized title (leading `01.` numbering ignored, so inserting a chapter mid-document still matches), and within a matched chapter new segments are matched to old segments by exact stripped text, each old segment consumed at most once.
+old chapters are matched by normalized title (leading `01.` numbering ignored, so inserting a chapter mid-document still matches), and new segments are matched to old segments by exact stripped text, each old segment consumed at most once.
+Matching runs in two phases: exact matches within the title-matched chapter first, then a global fallback pool of all unconsumed old segments — so restructuring one chapter into several (segment texts untouched) still reuses audio across chapters.
 A matched segment carries over its `audio`, `generated_params`, `emotion`, `role_id`, and `voice` override — including `origin="recorded"` self-recordings.
-In local storage mode the audio file is moved to the new chapter/segment canonical path; unreused old files are garbage-collected after the rebuild, and a missing on-disk file means no reuse.
-The response `reuse` report (`segments_reused` / `segments_new` / per-chapter breakdown) is surfaced as a toast after apply.
+When a re-split payload chapter has no `segments` and title-matches an old chapter that has segments, the chapter is automatically `rule_split` with its effective delimiters (same precedence as above), so the default modal path rebuilds segments instead of producing empty chapters.
+In local storage mode the audio file is moved to the new chapter/segment canonical path (`audio.previous` follows the move with the `.prev` naming convention), unreused old files are garbage-collected only after a successful commit, and a commit failure triggers reverse compensation that moves files back to their old paths.
+A missing on-disk file means no reuse.
+
+**Honest reuse preview** (`dry_run`):
+while the re-split confirmation is open, the modal runs `chapters:batch` with `dry_run: true` in the background and the confirm dialog states the estimated outcome: kept segments, discard breakdown (`text_changed` / `boundary_changed` — a new segment whose text equals the concatenation of consecutive old segments within one old chapter), and a highlighted warning when user recordings (`origin="recorded"`) will be deleted.
+If the dry-run call fails, the dialog falls back to the plain message and does not block the split.
+The response `reuse` report (kept/discarded breakdown + per-chapter detail) is surfaced as a toast after apply in the same terms.
+
+**Divergence warning**:
+`narration_script` is the master document and re-splitting always derives from it.
+When the narration document diverges from the concatenated chapter texts (chapter-side edits), the split modal shows a warning that applying uses the document as the source of truth and chapter-side changes will be overwritten.
+
 In workers (Supabase) mode the same matching applies at row level; audio objects are not file-managed there, so stored refs carry over as-is.
 Agent workflow calls never pass these flags — their behavior is unchanged.
 
