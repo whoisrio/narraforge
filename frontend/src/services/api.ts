@@ -601,7 +601,11 @@ export interface BatchReuseReport {
   segments_matched: number;
   segments_reused: number;
   segments_new: number;
-  per_chapter: { chapter_id: string; title: string; matched: number; reused: number; new: number }[];
+  per_chapter: { chapter_id?: string; title: string; matched: number; reused: number; new: number }[];
+  /** 丢弃明细（A4 诚实确认）：文本变化 / 拆分边界变化 / 文本命中但旧段无音频 */
+  discard?: { text_changed: number; boundary_changed: number; no_audio: number };
+  /** 将丢弃的用户录音段数（origin=recorded，无法恢复，需特别警示） */
+  recorded_discard?: number;
 }
 
 export interface BatchCreateChaptersResult {
@@ -751,7 +755,7 @@ export const segmentedProjectApi = {
       split_config?: { delimiters?: string[]; mode?: string };
     }[],
     narrationScript?: string,
-    options?: { preserveAudio?: boolean; splitSegments?: boolean },
+    options?: { preserveAudio?: boolean; splitSegments?: boolean; dryRun?: boolean },
   ): Promise<BatchCreateChaptersResult> => {
     const { data } = await api.post<BatchCreateChaptersResult>(
       `/segmented-projects/${projectId}/chapters:batch`,
@@ -760,6 +764,7 @@ export const segmentedProjectApi = {
         narration_script: narrationScript ?? null,
         preserve_audio: options?.preserveAudio ?? false,
         split_segments: options?.splitSegments ?? false,
+        dry_run: options?.dryRun ?? false,
       },
     );
     return data;

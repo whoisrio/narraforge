@@ -537,3 +537,130 @@ class TestLocalOnlyEndpointsNotMounted:
             assert resp.status_code in (404, 422)
         finally:
             client.app.dependency_overrides.clear()
+
+
+class TestChaptersBatchPreservePlan:
+    """workers 模式共享 plan_batch_reuse：A2 自动拆分 / 全局兜底 / dry_run / 边界识别。"""
+
+    def test_batch_dry_run_has_no_side_effects(self, workers_client):
+        client, _ = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-1", 0, "01. 章", [
+                _segment("seg-1", 0, "不变的一段。",
+                         audio={"current": {"audio_id": "idb-1", "origin": "tts"}},
+                         generated_params={"engine": "edge_tts"}),
+                _segment("seg-2", 1, "将被丢弃的录音。",
+                         audio={"current": {"audio_id": "idb-2", "origin": "recorded"}}),
+            ]),
+        ])
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters:batch",
+            json={
+                "dry_run": True,
+                "preserve_audio": True,
+                "split_segments": True,
+                "chapters": [
+                    {"chapter_title": "01. 章", "narration_script": "不变的一段。新的一段。"},
+                ],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["chapters"] == []
+        reuse = body["reuse"]
+        assert reuse["segments_reused"] == 1
+        assert reuse["discard"]["text_changed"] == 1
+        assert reuse["recorded_discard"] == 1
+
+        # 零副作用：原结构原样保留
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        assert detail["chapters"][0]["id"] == "ch-1"
+        assert [s["id"] for s in detail["chapters"][0]["segments"]] == ["seg-1", "seg-2"]
+
+    def test_batch_preserve_audio_auto_splits_matched_chapter(self, workers_client):
+        """A2：preserve_audio + 无 payload segments + 命中含旧段的快照 -> 自动 rule_split。"""
+        client, _ = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-1", 0, "01. 介绍", [
+                _segment("seg-1", 0, "文本完全不变。",
+                         audio={"current": {"audio_id": "idb-1", "origin": "tts"}},
+                         generated_params={"engine": "edge_tts"}),
+            ]),
+        ])
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters:batch",
+            json={
+                "preserve_audio": True,
+                "split_segments": False,
+                "chapters": [
+                    {"chapter_title": "01. 介绍", "narration_script": "文本完全不变。"},
+                ],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["reuse"]["segments_reused"] == 1
+
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        segs = detail["chapters"][0]["segments"]
+        assert [s["text"] for s in segs] == ["文本完全不变。"]
+        assert segs[0]["audio"]["current"]["audio_id"] == "idb-1"
+
+    def test_batch_chapter_restructure_global_fallback(self, workers_client):
+        """S3：章节重组（新标题）但文本未动 -> 全局兜底沿承 audio。"""
+        client, _ = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-1", 0, "01. 大章", [
+                _segment("seg-1", 0, "前半段内容。",
+                         audio={"current": {"audio_id": "idb-a", "origin": "tts"}}),
+                _segment("seg-2", 1, "后半段内容。",
+                         audio={"current": {"audio_id": "idb-b", "origin": "tts"}}),
+            ]),
+        ])
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters:batch",
+            json={
+                "preserve_audio": True,
+                "split_segments": True,
+                "chapters": [
+                    {"chapter_title": "01. 大章(上)", "narration_script": "前半段内容。"},
+                    {"chapter_title": "02. 大章(下)", "narration_script": "后半段内容。"},
+                ],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        reuse = resp.json()["reuse"]
+        assert reuse["chapters_matched"] == 0
+        assert reuse["segments_reused"] == 2
+
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        assert detail["chapters"][0]["segments"][0]["audio"]["current"]["audio_id"] == "idb-a"
+        assert detail["chapters"][1]["segments"][0]["audio"]["current"]["audio_id"] == "idb-b"
+
+    def test_batch_boundary_change_reported(self, workers_client):
+        """S2：新文本 == 同一旧章内连续多段连接 -> boundary_changed 如实上报，不复用。"""
+        client, _ = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-1", 0, "01. 章", [
+                _segment("seg-1", 0, "这是一句很长的话，",
+                         audio={"current": {"audio_id": "idb-a", "origin": "tts"}}),
+                _segment("seg-2", 1, "后面还有半句。",
+                         audio={"current": {"audio_id": "idb-b", "origin": "tts"}}),
+            ]),
+        ])
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters:batch",
+            json={
+                "preserve_audio": True,
+                "chapters": [
+                    {"chapter_title": "01. 章",
+                     "segments": [{"text": "这是一句很长的话，后面还有半句。"}]},
+                ],
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        reuse = resp.json()["reuse"]
+        assert reuse["segments_reused"] == 0
+        assert reuse["discard"]["boundary_changed"] == 1
+
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        assert detail["chapters"][0]["segments"][0].get("audio") is None

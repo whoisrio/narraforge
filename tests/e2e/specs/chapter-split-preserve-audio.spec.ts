@@ -89,7 +89,8 @@ test.describe('重拆保留已合成音频', () => {
     const oldAudioPaths: string[] = [];
 
     try {
-      // ── 1. 首轮拆分：勾选「同时拆分 segment」──
+      // ── 1. 首轮拆分（勾选框仅首拆可见且默认勾选；注入默认章时为重拆路径、
+      //       勾选框隐藏但恒拆分 segment）──
       await page.goto('/');
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
@@ -98,7 +99,8 @@ test.describe('重拆保留已合成音频', () => {
       await page.getByRole('button', { name: '按标题拆分章节' }).click();
       let modal = page.getByRole('dialog', { name: '按标题拆分章节' });
       await expect(modal.getByText('H2 (2)')).toBeVisible({ timeout: 10_000 });
-      await modal.getByRole('checkbox', { name: '同时拆分 segment' }).check();
+      const firstCheckbox = modal.getByRole('checkbox', { name: '同时拆分 segment' });
+      if (await firstCheckbox.isVisible()) await firstCheckbox.check();
       await modal.getByRole('button', { name: '预览拆分' }).click();
       await expect(modal.locator('ol li strong')).toHaveCount(2, { timeout: 10_000 });
       await modal.getByRole('button', { name: '应用到项目' }).click();
@@ -177,7 +179,7 @@ test.describe('重拆保留已合成音频', () => {
       const withAudioCount = (detail2.chapters as Ch[]).flatMap((c) => c.segments).filter((s) => s.audio?.current?.path).length;
       expect(withAudioCount).toBe(6);
 
-      // ── 4. 小改后重拆（勾选「同时拆分 segment」）──
+      // ── 4. 小改后重拆（A3：重拆路径隐藏勾选框，恒拆分 segment）──
       await page.reload();
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
@@ -186,7 +188,7 @@ test.describe('重拆保留已合成音频', () => {
       await page.getByRole('button', { name: '按标题拆分章节' }).click();
       modal = page.getByRole('dialog', { name: '按标题拆分章节' });
       await expect(modal.getByText('H2 (2)')).toBeVisible({ timeout: 10_000 });
-      await modal.getByRole('checkbox', { name: '同时拆分 segment' }).check();
+      await expect(modal.getByRole('checkbox', { name: '同时拆分 segment' })).toBeHidden();
       await modal.getByRole('button', { name: '预览拆分' }).click();
       await expect(modal.locator('ol li strong')).toHaveCount(2, { timeout: 10_000 });
       await modal.getByRole('button', { name: '应用到项目' }).click();
@@ -240,6 +242,297 @@ test.describe('重拆保留已合成音频', () => {
       }
     } finally {
       await page.request.delete(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
+    }
+
+    expect(errors).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// 共用：给项目全部 segment 挂载假音频（写盘 + PUT 落库），返回旧相对路径
+// ────────────────────────────────────────────────────────────────────────────
+
+interface FullSeg extends Seg { emotion?: string | null }
+interface FullCh extends Ch {
+  voice?: unknown;
+  split_config?: unknown;
+  original_text?: unknown;
+  narration_script?: unknown;
+  segments: FullSeg[];
+}
+
+async function attachFakeAudioToAll(
+  page: import('@playwright/test').Page,
+  projectId: string,
+  projectName: string,
+  narration: string,
+): Promise<{ chapters: FullCh[]; oldPaths: string[] }> {
+  const detail = await (await page.request.get(`${BACKEND}/api/segmented-projects/${projectId}`)).json();
+  const chapters = detail.chapters as FullCh[];
+  const relById = new Map<string, string>();
+  const buildPut = () => ({
+    id: projectId,
+    name: projectName,
+    schema_version: 2,
+    layout: 'vertical',
+    narration_script: narration,
+    chapters: chapters.map((c, ci) => ({
+      id: c.id,
+      position: ci,
+      name: c.name,
+      voice: c.voice,
+      split_config: c.split_config,
+      original_text: c.original_text,
+      narration_script: c.narration_script,
+      segments: c.segments.map((s, si) => ({
+        id: s.id,
+        position: si,
+        text: s.text,
+        emotion: s.emotion ?? 'neutral',
+        role_id: null,
+        segment_kind: 'narration',
+        voice: { source: 'chapter' },
+        ...(relById.has(s.id)
+          ? {
+              audio: {
+                format: 'mp3',
+                duration_sec: 0.4,
+                current: { path: relById.get(s.id), format: 'mp3', origin: 'tts', duration_sec: 0.4 },
+              },
+              generated_params: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural' },
+            }
+          : {}),
+      })),
+    })),
+  });
+  // save_project 会写 manifest，先 PUT 一次再解析 slug
+  let resp = await page.request.put(`${BACKEND}/api/segmented-projects/${projectId}`, { data: buildPut() });
+  expect(resp.status()).toBe(200, await resp.text());
+  const dirName = projectDirNameForId(projectId);
+  expect(dirName, 'project asset dir (manifest) should exist after save').toBeTruthy();
+  const oldPaths: string[] = [];
+  for (const c of chapters) {
+    for (const s of c.segments) {
+      const rel = writeFakeAudio(dirName!, c.id, s.id);
+      relById.set(s.id, rel);
+      oldPaths.push(rel);
+    }
+  }
+  resp = await page.request.put(`${BACKEND}/api/segmented-projects/${projectId}`, { data: buildPut() });
+  expect(resp.status()).toBe(200, await resp.text());
+  return { chapters, oldPaths };
+}
+
+/** 打开拆分弹窗（返回 modal locator；预览点击留给调用方，便于先注册 dry_run 等待） */
+async function openSplitModal(page: import('@playwright/test').Page, projectName: string, h2Text: string) {
+  await page.getByRole('button', { name: new RegExp(`打开 ${projectName}`) }).first().click();
+  await page.getByRole('button', { name: /文本库/ }).click();
+  await page.getByRole('button', { name: '旁白文档' }).click();
+  await page.getByRole('button', { name: '按标题拆分章节' }).click();
+  const modal = page.getByRole('dialog', { name: '按标题拆分章节' });
+  await expect(modal.getByText(h2Text)).toBeVisible({ timeout: 10_000 });
+  return modal;
+}
+
+/** 等重拆预览后的 dry_run 请求完成（A4 诚实确认的数据来源） */
+function waitForDryRun(page: import('@playwright/test').Page) {
+  return page.waitForResponse(
+    (resp) => resp.url().includes('chapters:batch') && resp.request().postDataJSON()?.dry_run === true,
+    { timeout: 15_000 },
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// S1 修复：真实 UI 默认路径（不碰任何勾选框）重拆同一文档 -> 音频保留
+// ────────────────────────────────────────────────────────────────────────────
+
+test.describe('S1: 默认路径重拆保留音频', () => {
+  test.setTimeout(120_000);
+  const S1_ID = 'e2e-split-preserve-s1';
+  const S1_NAME = '重拆默认路径测试';
+
+  test('首轮拆分 -> 全部挂音频 -> 文档不改默认路径重拆 -> 8 段音频全保留（UI + API + DB + FS）', async ({ page }) => {
+    const errors = collectErrors(page);
+    await setLocaleToZhCN(page);
+    await page.request.delete(`${BACKEND}/api/segmented-projects/${S1_ID}`);
+    const createResp = await page.request.post(`${BACKEND}/api/segmented-projects`, {
+      data: { id: S1_ID, name: S1_NAME, schema_version: 2, layout: 'vertical', narration_script: NARRATION_V1, chapters: [] },
+    });
+    expect(createResp.status()).toBe(201);
+
+    try {
+      // ── 1. 首轮拆分 ──
+      await page.goto('/');
+      await enterWorkspace(page);
+      let modal = await openSplitModal(page, S1_NAME, 'H2 (2)');
+      await modal.getByRole('button', { name: '预览拆分' }).click();
+      await expect(modal.locator('ol li strong')).toHaveCount(2, { timeout: 10_000 });
+      await modal.getByRole('button', { name: '应用到项目' }).click();
+      const confirm1 = page.getByRole('alertdialog', { name: '确认替换章节' });
+      if (await confirm1.isVisible()) {
+        await confirm1.getByRole('button', { name: '确认替换' }).click();
+      }
+      await expect(modal).toBeHidden({ timeout: 15_000 });
+
+      // ── 2. 全部 8 段挂假音频 ──
+      const { oldPaths } = await attachFakeAudioToAll(page, S1_ID, S1_NAME, NARRATION_V1);
+      expect(oldPaths).toHaveLength(8);
+
+      // ── 3. 文档一字不改，真实 UI 默认路径重拆（A3：重拆无勾选框可碰）──
+      await page.reload();
+      await enterWorkspace(page);
+      modal = await openSplitModal(page, S1_NAME, 'H2 (2)');
+      await expect(modal.getByRole('checkbox', { name: '同时拆分 segment' })).toBeHidden();
+      // 先注册 dry_run 等待再点预览（A4：确认框如实展示保留明细的数据来源）
+      const dryRunDone = waitForDryRun(page);
+      await modal.getByRole('button', { name: '预览拆分' }).click();
+      await expect(modal.locator('ol li strong')).toHaveCount(2, { timeout: 10_000 });
+      await dryRunDone;
+      await modal.getByRole('button', { name: '应用到项目' }).click();
+      const confirm = page.getByRole('alertdialog', { name: '确认替换章节' });
+      await expect(confirm.getByText('将替换为 2 章。')).toBeVisible();
+      await expect(confirm.getByText('预计保留 8 段已合成音频。')).toBeVisible();
+      await confirm.getByRole('button', { name: '确认替换' }).click();
+
+      await expect(page.getByText('拆分完成：保留 8 段已合成音频，新增 0 段')).toBeVisible({ timeout: 15_000 });
+      await expect(modal).toBeHidden({ timeout: 15_000 });
+
+      // ── 4. API：8 段全部保留音频（路径指向新 id）──
+      const detail = await (await page.request.get(`${BACKEND}/api/segmented-projects/${S1_ID}`)).json();
+      const newChapters = detail.chapters as Ch[];
+      expect(newChapters).toHaveLength(2);
+      for (const c of newChapters) {
+        for (const s of c.segments) {
+          const rel = s.audio?.current?.path;
+          expect(rel, `reused segment should keep audio: ${s.text}`).toBeTruthy();
+          expect(rel).toContain(c.id);
+          expect(rel).toContain(s.id);
+          expect(fs.existsSync(path.join(SEGMENTED_DIR, rel!)), `file should exist: ${rel}`).toBe(true);
+        }
+      }
+      // 旧路径全部失效（全部被 move，无 GC 误删）
+      for (const rel of oldPaths) {
+        expect(fs.existsSync(path.join(SEGMENTED_DIR, rel)), `old path should be gone: ${rel}`).toBe(false);
+      }
+
+      // ── 5. DB 双读 ──
+      const db = await readDbProject(S1_ID);
+      expect(db).toBeTruthy();
+      expect(db!.segments).toHaveLength(8);
+      for (const s of db!.segments) {
+        const audio = s.audio ? (JSON.parse(s.audio) as { current: { origin: string } }) : null;
+        expect(audio?.current.origin, `db audio for: ${s.text}`).toBe('tts');
+      }
+    } finally {
+      await page.request.delete(`${BACKEND}/api/segmented-projects/${S1_ID}`);
+    }
+
+    expect(errors).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// S3 修复：章节重组（文档加标题、segment 文本逐字未动）-> 全局兜底保留
+// ────────────────────────────────────────────────────────────────────────────
+
+const S3_TEXTS = [
+  '山间的清晨总是伴着薄薄的雾气和清脆的鸟叫。',
+  '砍柴的老人沿着熟悉的小路一步一步慢慢上山。',
+  '溪水缓缓流过布满青苔的石头发出轻轻声响。',
+  '阳光穿过茂密枝叶在地上洒下点点金色光斑。',
+  '午后的村庄安静得只能听见远处的阵阵蝉鸣。',
+  '屋顶的炊烟袅袅升起然后慢慢散开不见了。',
+  '放学的孩子背着书包蹦蹦跳跳跑过石板桥。',
+  '田野里的稻穗在微风里轻轻摇晃泛起波浪。',
+];
+const S3_V1 = ['# 重组测试', '', '## 大章', S3_TEXTS.join('')].join('\n');
+const S3_V2 = [
+  '# 重组测试', '',
+  '## 大章(上)', S3_TEXTS.slice(0, 4).join(''), '',
+  '## 大章(下)', S3_TEXTS.slice(4).join(''),
+].join('\n');
+
+test.describe('S3: 章节重组兜底保留音频', () => {
+  test.setTimeout(120_000);
+  const S3_ID = 'e2e-split-preserve-s3';
+  const S3_NAME = '章节重组保留测试';
+
+  test('一章拆两章（文本未动）-> 8 段音频跨章兜底保留（UI + API + DB + FS）', async ({ page }) => {
+    const errors = collectErrors(page);
+    await setLocaleToZhCN(page);
+    await page.request.delete(`${BACKEND}/api/segmented-projects/${S3_ID}`);
+    const createResp = await page.request.post(`${BACKEND}/api/segmented-projects`, {
+      data: { id: S3_ID, name: S3_NAME, schema_version: 2, layout: 'vertical', narration_script: S3_V1, chapters: [] },
+    });
+    expect(createResp.status()).toBe(201);
+
+    try {
+      // ── 1. 首轮拆分：1 章 8 段 ──
+      await page.goto('/');
+      await enterWorkspace(page);
+      let modal = await openSplitModal(page, S3_NAME, 'H2 (1)');
+      await modal.getByRole('button', { name: '预览拆分' }).click();
+      await expect(modal.locator('ol li strong')).toHaveCount(1, { timeout: 10_000 });
+      await modal.getByRole('button', { name: '应用到项目' }).click();
+      const confirm1 = page.getByRole('alertdialog', { name: '确认替换章节' });
+      if (await confirm1.isVisible()) {
+        await confirm1.getByRole('button', { name: '确认替换' }).click();
+      }
+      await expect(modal).toBeHidden({ timeout: 15_000 });
+
+      const detail1 = await (await page.request.get(`${BACKEND}/api/segmented-projects/${S3_ID}`)).json();
+      expect(detail1.chapters).toHaveLength(1);
+      expect(detail1.chapters[0].segments.map((s: Seg) => s.text)).toEqual(S3_TEXTS);
+
+      // ── 2. 全部 8 段挂假音频，同时把文档改成 V2（加标题拆两章，文本未动）──
+      const { oldPaths } = await attachFakeAudioToAll(page, S3_ID, S3_NAME, S3_V2);
+      expect(oldPaths).toHaveLength(8);
+
+      // ── 3. 重拆：新标题对不上旧标题，靠全局兜底保留 ──
+      await page.reload();
+      await enterWorkspace(page);
+      modal = await openSplitModal(page, S3_NAME, 'H2 (2)');
+      const dryRunDone = waitForDryRun(page);
+      await modal.getByRole('button', { name: '预览拆分' }).click();
+      await expect(modal.locator('ol li strong')).toHaveCount(2, { timeout: 10_000 });
+      await dryRunDone;
+      await modal.getByRole('button', { name: '应用到项目' }).click();
+      const confirm = page.getByRole('alertdialog', { name: '确认替换章节' });
+      await expect(confirm.getByText('预计保留 8 段已合成音频。')).toBeVisible();
+      await confirm.getByRole('button', { name: '确认替换' }).click();
+
+      await expect(page.getByText('拆分完成：保留 8 段已合成音频，新增 0 段')).toBeVisible({ timeout: 15_000 });
+      await expect(modal).toBeHidden({ timeout: 15_000 });
+
+      // ── 4. API：两章各 4 段，文本原样，音频全部保留并 move 到对应新章目录 ──
+      const detail = await (await page.request.get(`${BACKEND}/api/segmented-projects/${S3_ID}`)).json();
+      const newChapters = detail.chapters as Ch[];
+      expect(newChapters).toHaveLength(2);
+      expect(newChapters[0].segments.map((s) => s.text)).toEqual(S3_TEXTS.slice(0, 4));
+      expect(newChapters[1].segments.map((s) => s.text)).toEqual(S3_TEXTS.slice(4));
+      for (const c of newChapters) {
+        for (const s of c.segments) {
+          const rel = s.audio?.current?.path;
+          expect(rel, `reused segment should keep audio: ${s.text}`).toBeTruthy();
+          expect(rel).toContain(c.id);
+          expect(rel).toContain(s.id);
+          expect(fs.existsSync(path.join(SEGMENTED_DIR, rel!)), `file should exist: ${rel}`).toBe(true);
+        }
+      }
+      for (const rel of oldPaths) {
+        expect(fs.existsSync(path.join(SEGMENTED_DIR, rel)), `old path should be gone: ${rel}`).toBe(false);
+      }
+
+      // ── 5. DB 双读 ──
+      const db = await readDbProject(S3_ID);
+      expect(db).toBeTruthy();
+      expect(db!.segments).toHaveLength(8);
+      for (const s of db!.segments) {
+        const audio = s.audio ? (JSON.parse(s.audio) as { current: { origin: string } }) : null;
+        expect(audio?.current.origin, `db audio for: ${s.text}`).toBe('tts');
+      }
+    } finally {
+      await page.request.delete(`${BACKEND}/api/segmented-projects/${S3_ID}`);
     }
 
     expect(errors).toEqual([]);

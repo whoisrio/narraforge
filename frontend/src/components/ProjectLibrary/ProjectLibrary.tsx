@@ -98,7 +98,7 @@ export function ProjectLibrary({
   const [drawerThreadId, setDrawerThreadId] = useState<string | null>(null);
   const [drawerCollapsed, setDrawerCollapsed] = useState(false);
   const [drawerKind, setDrawerKind] = useState<WorkflowKind>('narration');
-  const [splitModal, setSplitModal] = useState<{ fullText: string } | null>(null);
+  const [splitModal, setSplitModal] = useState<{ fullText: string; diverged: boolean } | null>(null);
   const [splitLoading, setSplitLoading] = useState(false);
 
   const joinedChapterText = useMemo(
@@ -109,15 +109,22 @@ export function ProjectLibrary({
   const openSplitModal = async () => {
     if (!projectId) return;
     setSplitLoading(true);
+    // A6：narration_script 是 master。文档（去空白）与章节合并文本不一致时，
+    // 弹窗顶部明示「以文档为准，章节侧改动将被覆盖」。
+    const squash = (s: string) => s.replace(/\s+/g, '');
+    const divergedFrom = (doc: string) =>
+      chapters.length > 0 && squash(joinedChapterText) !== '' && squash(doc) !== squash(joinedChapterText);
     try {
       const fromProp = (narrationScript ?? '').trim();
-      if (fromProp) { setSplitModal({ fullText: fromProp }); return; }
+      if (fromProp) { setSplitModal({ fullText: fromProp, diverged: divergedFrom(fromProp) }); return; }
       const detail = await segmentedProjectApi.getProject(projectId) as unknown as { narration_script?: string | null };
-      const fullText = (detail.narration_script || '').trim() || joinedChapterText || (sourceDocument ?? '');
-      if (fullText.trim()) setSplitModal({ fullText });
+      const fromDetail = (detail.narration_script || '').trim();
+      if (fromDetail) { setSplitModal({ fullText: fromDetail, diverged: divergedFrom(fromDetail) }); return; }
+      const fallback = joinedChapterText || (sourceDocument ?? '');
+      if (fallback.trim()) setSplitModal({ fullText: fallback, diverged: false });
     } catch {
-      const fullText = joinedChapterText || (sourceDocument ?? '');
-      if (fullText.trim()) setSplitModal({ fullText });
+      const fallback = joinedChapterText || (sourceDocument ?? '');
+      if (fallback.trim()) setSplitModal({ fullText: fallback, diverged: false });
     } finally {
       setSplitLoading(false);
     }
@@ -314,6 +321,7 @@ export function ProjectLibrary({
             projectId={projectId}
             fullText={splitModal.fullText}
             existingChapterCount={chapters.length}
+            divergenceWarning={splitModal.diverged}
             onClose={() => setSplitModal(null)}
             onApplied={() => { setSplitModal(null); onProjectChanged?.(); }}
           />
@@ -561,6 +569,7 @@ export function ProjectLibrary({
           projectId={projectId}
           fullText={splitModal.fullText}
           existingChapterCount={chapters.length}
+          divergenceWarning={splitModal.diverged}
           onClose={() => setSplitModal(null)}
           onApplied={() => { setSplitModal(null); onProjectChanged?.(); }}
         />

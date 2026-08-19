@@ -150,3 +150,13 @@
 .error {
   color: var(--error-text, #b91c1c);
 }
+
+/* A4 诚实确认：用户录音丢弃的高亮警示 */
+.recordedWarning {
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--danger-bg, #fef2f2);
+  color: var(--danger-text, #b91c1c);
+  font-weight: 600;
+}

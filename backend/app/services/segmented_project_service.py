@@ -1355,9 +1355,15 @@ def mark_silent_segments_as_missing(
 
 # ----- batch reuse helpers (preserve_audio / split_segments) ---------------
 
-# 纯匹配逻辑（标题规范化/复用索引）在 app.services.batch_reuse——workers 模式
-# 的 supabase 仓储也用它，不能留在含 sqlalchemy 的本模块里被直接复用。
-from app.services.batch_reuse import build_reuse_index, normalize_chapter_title
+# 纯匹配逻辑（标题规范化/复用索引/匹配规划器）在 app.services.batch_reuse——
+# workers 模式的 supabase 仓储也用它，不能留在含 sqlalchemy 的本模块里被直接复用。
+from app.services.batch_reuse import (
+    build_reuse_index,
+    normalize_chapter_title,
+    plan_batch_reuse,
+    resolve_split_delimiters,
+    snapshot_has_segments,
+)
 
 
 def _delete_audio_files_from_snapshot(audio: dict[str, Any]) -> None:
@@ -1368,17 +1374,57 @@ def _delete_audio_files_from_snapshot(audio: dict[str, Any]) -> None:
             assets.delete_audio_file(entry["path"])
 
 
-def _move_reused_audio(
+class _AudioMove:
+    """一次待执行的复用音频搬运（A5：DB 行先指向计划路径，搬运失败回退引用）。"""
+
+    __slots__ = ("entry", "old_abs", "new_abs", "old_rel")
+
+    def __init__(self, entry: dict[str, Any], old_abs: Path, new_abs: Path) -> None:
+        self.entry = entry
+        self.old_abs = old_abs
+        self.new_abs = new_abs
+        self.old_rel = entry["path"]
+        entry["path"] = new_abs.relative_to(assets.settings.segmented_dir).as_posix()
+
+    def execute(self) -> bool:
+        """执行搬运；失败时回退 DB 引用到旧路径（文件未动，引用仍有效）。"""
+        self.new_abs.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            os.replace(self.old_abs, self.new_abs)
+        except OSError:
+            try:
+                shutil.move(str(self.old_abs), str(self.new_abs))
+            except OSError:
+                logger.warning("reuse audio move failed, keep old path: %s", self.old_abs)
+                self.entry["path"] = self.old_rel
+                return False
+        return True
+
+    def compensate(self) -> None:
+        """commit 失败后的反向补偿：把已搬走的文件搬回旧路径。"""
+        try:
+            os.replace(self.new_abs, self.old_abs)
+        except OSError:
+            try:
+                shutil.move(str(self.new_abs), str(self.old_abs))
+            except OSError:
+                logger.error(
+                    "compensation move failed, file left at: %s (should be %s)",
+                    self.new_abs, self.old_abs,
+                )
+
+
+def _prepare_reused_audio_moves(
     project_id: str,
     chapter_id: str,
     project_name: str | None,
     new_segment_id: str,
     audio: dict[str, Any],
-) -> dict[str, Any] | None:
-    """把复用的 current 音频文件 move 到新 segment 的规范路径。
+) -> list[_AudioMove] | None:
+    """为复用的 audio 计算搬运列表并把路径引用更新为新规范路径。
 
-    返回更新路径后的 audio dict；文件缺失返回 None（调用方按未复用处理）；
-    move 失败保留旧路径（旧文件未 GC，路径仍有效）。
+    current 文件缺失返回 None（调用方按未复用降级）；``previous`` 存在时随迁
+    到新 segment 目录旁（沿用 ``{seg_id}.prev.{fmt}`` 命名惯例）并更新引用。
     """
     current = audio.get("current")
     if not isinstance(current, dict) or not isinstance(current.get("path"), str):
@@ -1393,17 +1439,20 @@ def _move_reused_audio(
         project_id, chapter_id,
         project_name=project_name, segment_id=new_segment_id, fmt=fmt,
     )
-    new_abs.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.replace(old_abs, new_abs)
-    except OSError:
-        try:
-            shutil.move(str(old_abs), str(new_abs))
-        except OSError:
-            logger.warning("reuse audio move failed, keep old path: %s", old_abs)
-            return audio
-    current["path"] = new_abs.relative_to(assets.settings.segmented_dir).as_posix()
-    return audio
+    moves = [_AudioMove(current, old_abs, new_abs)]
+    previous = audio.get("previous")
+    if isinstance(previous, dict) and isinstance(previous.get("path"), str):
+        prev_old_abs = Path(previous["path"])
+        if not prev_old_abs.is_absolute():
+            prev_old_abs = assets.settings.segmented_dir / prev_old_abs
+        if prev_old_abs.exists():
+            prev_fmt = previous.get("format") or prev_old_abs.suffix.lstrip(".") or fmt
+            moves.append(
+                _AudioMove(previous, prev_old_abs, new_abs.with_name(f"{new_segment_id}.prev.{prev_fmt}"))
+            )
+        else:
+            logger.warning("reuse audio previous missing on disk, keep old ref: %s", prev_old_abs)
+    return moves
 
 
 def batch_create_structure(
@@ -1414,24 +1463,77 @@ def batch_create_structure(
     *,
     preserve_audio: bool = False,
     split_segments: bool = False,
+    dry_run: bool = False,
 ) -> dict[str, Any]:
     """Replace all chapters+segments of a project in one transaction.
 
-    Resolves default voice from the project's first existing chapter
-    (or edge_tts default), deletes existing chapters, creates the new
-    structure, and returns ``{"chapters": [...assigned ids...], "reuse": report|None}``.
+    流程（A1/A4/A5）：快照旧结构 -> 解析新章 segments（payload > split_segments
+    > A2 自动拆分）-> ``plan_batch_reuse`` 出纯匹配计划 -> 落库 -> 搬运复用音频
+    -> commit -> 提交成功后 GC 未消费旧音频；commit 失败对已成功搬运的文件做
+    反向补偿再上抛。返回 ``{"chapters": [...assigned ids...], "reuse": report|None}``。
     ``narration_script``（workflow 产出的完整旁白稿）写入项目级字段；None 表示不更新。
 
-    ``preserve_audio``：重拆前快照旧章节（按规范化标题匹配），新 segment 文本
-    与旧 segment 一致时沿承其 audio/generated_params/emotion/role_id/voice，
-    并把音频文件 move 到新规范路径；未被复用的旧音频文件在重建后 GC。
+    ``preserve_audio``：新 segment 文本与旧 segment 一致时沿承其
+    audio/generated_params/emotion/role_id/voice（章节内匹配 + 全局兜底），
+    并把音频文件 move 到新规范路径（``audio.previous`` 随迁）。
     ``split_segments``：payload 章节未自带 segments 时，按该章最终 split_config
     的 delimiters 用 rule_split 直接拆分（mode=="llm" 的章节在此同样走规则
     拆分——批量场景不做逐章 LLM 调用）。
+    A2：``preserve_audio=True`` 且某章 payload 无 segments 且命中了含旧 segment
+    的快照时，该章同样按最终 split_config 自动 rule_split——保留音频在语义上
+    蕴含重建 segment；未匹配章节不受影响。
+    ``dry_run=True``：只跑规划并返回 reuse 报告（含 discard 明细），不写库、
+    不动文件、不更新 narration 文档，``chapters`` 为空数组。
     """
     project = db.query(SegmentedProject).filter_by(id=project_id).first()
     if project is None:
         raise LookupError("project_not_found")
+
+    # 快照旧结构（供沿承/复用/A2 自动拆分判定）
+    old_chapters: list[dict[str, Any]] = []
+    if preserve_audio or split_segments:
+        old_chapters = [
+            {
+                "name": ch.name,
+                "voice": ch.voice,
+                "split_config": ch.split_config,
+                "segments": [
+                    {
+                        "text": s.text,
+                        "emotion": s.emotion,
+                        "role_id": s.role_id,
+                        "voice": s.voice,
+                        "audio": s.audio,
+                        "generated_params": s.generated_params,
+                        "generated_at": s.generated_at,
+                    }
+                    for s in ch.segments
+                ],
+            }
+            for ch in project.chapters
+        ]
+    old_index = build_reuse_index(old_chapters) if old_chapters else {}
+
+    from app.services.text_split_service import rule_split
+
+    # 解析每章 segments：payload 自带 > split_segments 规则拆分 > A2 保留即重建
+    resolved_chapters: list[dict[str, Any]] = []
+    for index, ch_data in enumerate(chapters):
+        seg_payloads = ch_data.get("segments") or []
+        if not seg_payloads:
+            title = ch_data.get("chapter_title") or f"Chapter {index + 1}"
+            snapshot = old_index.get(normalize_chapter_title(title))
+            if split_segments or (preserve_audio and snapshot_has_segments(snapshot)):
+                body = ch_data.get("narration_script") or ch_data.get("original_text") or ""
+                delimiters = resolve_split_delimiters(ch_data.get("split_config"), snapshot)
+                seg_payloads = [{"text": t} for t in rule_split(body, delimiters)]
+        resolved_chapters.append({**ch_data, "segments": seg_payloads})
+
+    plan = plan_batch_reuse(old_chapters, resolved_chapters, preserve_audio=preserve_audio)
+    report = plan["report"] if (preserve_audio or split_segments) else None
+
+    if dry_run:
+        return {"chapters": [], "reuse": report}
 
     if narration_script is not None:
         project.narration_document_path = assets.write_project_document(
@@ -1439,43 +1541,8 @@ def batch_create_structure(
             project_name=project.name, text=narration_script,
         )
 
-    # 删除前快照旧结构（标题匹配键 -> 章节快照），供沿承/复用
-    old_index: dict[str, dict[str, Any]] = {}
-    if preserve_audio or split_segments:
-        old_index = build_reuse_index(
-            [
-                {
-                    "name": ch.name,
-                    "voice": ch.voice,
-                    "split_config": ch.split_config,
-                    "segments": [
-                        {
-                            "text": s.text,
-                            "emotion": s.emotion,
-                            "role_id": s.role_id,
-                            "voice": s.voice,
-                            "audio": s.audio,
-                            "generated_params": s.generated_params,
-                            "generated_at": s.generated_at,
-                        }
-                        for s in ch.segments
-                    ],
-                }
-                for ch in project.chapters
-            ]
-        )
-
-    # default voice: from first existing chapter, or edge_tts default
-    default_voice = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
-    if project.chapters:
-        ch_voice = project.chapters[0].voice or {}
-        if ch_voice.get("voice") and ch_voice.get("engine") == "edge_tts":
-            default_voice = ch_voice
-        elif ch_voice.get("voice_id") and ch_voice.get("engine") in ("cosyvoice", "mimo_tts", "voxcpm"):
-            default_voice = ch_voice
-
     # delete existing chapters (cascade deletes segments). preserve_audio 时
-    # 音频文件延迟清理：重建匹配完成后只删未被复用的（复用的已 move 走）。
+    # 音频文件延迟清理：commit 成功后只 GC 未被复用的（复用的已 move 走）。
     for ch in list(project.chapters):
         if not preserve_audio:
             for seg in list(ch.segments):
@@ -1483,62 +1550,27 @@ def batch_create_structure(
         db.delete(ch)
     db.flush()
 
-    from app.services.text_split_service import rule_split
-
-    chapters_matched = 0
-    segments_matched = 0
-    segments_reused = 0
-    segments_new = 0
-    per_chapter: list[dict[str, Any]] = []
-
+    moves: list[_AudioMove] = []
     result = []
-    for index, ch_data in enumerate(chapters):
-        title = ch_data.get("chapter_title", f"Chapter {index + 1}")
-        snapshot = old_index.get(normalize_chapter_title(title))
-
-        # 章节级沿承：匹配章节的 voice/split_config 优先于默认；payload 显式
-        # split_config 最优先。
-        base_voice = copy.deepcopy(snapshot["voice"]) if snapshot and snapshot["voice"] else default_voice
-        chapter = create_chapter_for_project(db, project_id, title, index, voice=base_voice)
-        if ch_data.get("split_config"):
-            chapter.split_config = copy.deepcopy(ch_data["split_config"])
-        elif snapshot and snapshot["split_config"]:
-            chapter.split_config = copy.deepcopy(snapshot["split_config"])
-        chapter.narration_script = ch_data.get("narration_script")
-        chapter.original_text = ch_data.get("original_text")
-        engine = ch_data.get("engine")
-        if engine:
-            voice = dict(chapter.voice or {})
-            voice["engine"] = engine
-            chapter.voice = voice
-
-        seg_payloads = ch_data.get("segments") or []
-        if split_segments and not seg_payloads:
-            body = ch_data.get("narration_script") or ch_data.get("original_text") or ""
-            delimiters = (chapter.split_config or {}).get(
-                "delimiters", ["，", "。", "！", "？", "；"]
-            )
-            seg_payloads = [{"text": t} for t in rule_split(body, delimiters)]
-
-        if snapshot:
-            chapters_matched += 1
-        ch_matched = 0
-        ch_reused = 0
+    for position, plan_ch in enumerate(plan["chapters"]):
+        chapter = create_chapter_for_project(
+            db, project_id, plan_ch["title"], position, voice=plan_ch["voice"],
+        )
+        if plan_ch["split_config"]:
+            chapter.split_config = plan_ch["split_config"]
+        chapter.narration_script = plan_ch["narration_script"]
+        chapter.original_text = plan_ch["original_text"]
 
         seg_result = []
-        for seg_data in seg_payloads:
+        file_missing = 0
+        for plan_seg in plan_ch["segments"]:
             seg = create_segment_for_chapter(
-                db, chapter.id, seg_data["text"], len(seg_result),
-                emotion=seg_data.get("emotion"), role=seg_data.get("role"),
-                segment_kind=seg_data.get("segment_kind", "narration"),
+                db, chapter.id, plan_seg["text"], len(seg_result),
+                emotion=plan_seg["emotion"], role=plan_seg["role"],
+                segment_kind=plan_seg["segment_kind"],
             )
-            matched = None
-            if preserve_audio and snapshot is not None:
-                pool = snapshot["segments"].get((seg_data["text"] or "").strip())
-                if pool:
-                    matched = pool.popleft()
+            matched = plan_seg["match"]
             if matched is not None:
-                ch_matched += 1
                 if seg.emotion is None and matched["emotion"]:
                     seg.emotion = matched["emotion"]
                 if seg.role_id is None and matched["role_id"]:
@@ -1546,32 +1578,29 @@ def batch_create_structure(
                 if matched["voice"]:
                     seg.voice = copy.deepcopy(matched["voice"])
                 if matched["audio"]:
-                    moved = _move_reused_audio(
-                        project_id, chapter.id, project.name, seg.id,
-                        copy.deepcopy(matched["audio"]),
+                    audio = copy.deepcopy(matched["audio"])
+                    prepared = _prepare_reused_audio_moves(
+                        project_id, chapter.id, project.name, seg.id, audio,
                     )
-                    if moved is not None:
-                        seg.audio = moved
+                    if prepared is not None:
+                        seg.audio = audio
+                        moves.extend(prepared)
                         if matched["generated_params"]:
                             seg.generated_params = copy.deepcopy(matched["generated_params"])
                         if matched["generated_at"] is not None:
                             seg.generated_at = matched["generated_at"]
-                        ch_reused += 1
+                    else:
+                        file_missing += 1  # 磁盘文件缺失：降级为不复用
             seg_result.append({"id": seg.id})
 
-        segments_matched += ch_matched
-        segments_reused += ch_reused
-        ch_new = len(seg_result) - ch_reused
-        segments_new += ch_new
-        per_chapter.append(
-            {
-                "chapter_id": chapter.id,
-                "title": title,
-                "matched": ch_matched,
-                "reused": ch_reused,
-                "new": ch_new,
-            }
-        )
+        if report is not None:
+            per_ch = report["per_chapter"][position]
+            per_ch["chapter_id"] = chapter.id
+            if file_missing:
+                per_ch["reused"] -= file_missing
+                per_ch["new"] += file_missing
+                report["segments_reused"] -= file_missing
+                report["segments_new"] += file_missing
 
         # layer-sync: this chapter is freshly derived (L2 from L1) and split
         # (L3 from L2) in one go -> snapshot all three hashes as the baseline.
@@ -1579,25 +1608,27 @@ def batch_create_structure(
         mark_consistent(chapter)
         result.append({"id": chapter.id, "segments": seg_result})
 
-    # GC：未被复用的旧 segment 音频文件（复用的 current 已 move 走）
-    if preserve_audio:
-        for snap in old_index.values():
-            for pool in snap["segments"].values():
-                for leftover in pool:
-                    if leftover["audio"]:
-                        _delete_audio_files_from_snapshot(leftover["audio"])
+    # 搬运复用音频（commit 前）；单个失败保留旧路径引用（文件未动，引用仍有效）
+    moved: list[_AudioMove] = []
+    for mv in moves:
+        if mv.execute():
+            moved.append(mv)
 
-    db.commit()
-    reuse_report = None
-    if preserve_audio or split_segments:
-        reuse_report = {
-            "chapters_matched": chapters_matched,
-            "segments_matched": segments_matched,
-            "segments_reused": segments_reused,
-            "segments_new": segments_new,
-            "per_chapter": per_chapter,
-        }
-    return {"chapters": result, "reuse": reuse_report}
+    try:
+        db.commit()
+    except Exception:
+        # 反向补偿：DB 回滚到旧段引用旧路径时，文件也必须回到旧路径
+        for mv in reversed(moved):
+            mv.compensate()
+        raise
+
+    # 提交成功后才 GC 未被消费的旧 segment 音频文件
+    if preserve_audio:
+        for leftover in plan["unconsumed"]:
+            if leftover["audio"]:
+                _delete_audio_files_from_snapshot(leftover["audio"])
+
+    return {"chapters": result, "reuse": report}
 
 
 def adjust_chapter_audio(

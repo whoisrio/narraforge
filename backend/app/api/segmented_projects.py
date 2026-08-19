@@ -310,6 +310,8 @@ class BatchRequest(BaseModel):
     preserve_audio: bool = False
     # payload 章节未自带 segments 时，按各章最终 split_config 的 delimiters 规则拆分
     split_segments: bool = False
+    # 只跑匹配规划并返回 reuse 报告（含 discard 明细），不写库、不动文件
+    dry_run: bool = False
 
 
 class BatchSegmentOut(BaseModel):
@@ -343,6 +345,7 @@ async def batch_create_chapters(
             narration_script=body.narration_script,
             preserve_audio=body.preserve_audio,
             split_segments=body.split_segments,
+            dry_run=body.dry_run,
         )
     except LookupError:
         raise HTTPException(status_code=404, detail="project_not_found")

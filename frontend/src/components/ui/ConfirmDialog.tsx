@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from '../../i18n';
 import styles from './ConfirmDialog.module.css';
 
 export interface ConfirmDialogProps {
   open: boolean;
   title: string;
-  message: string;
+  /** 纯文本或富内容（如重拆确认的保留/丢弃明细） */
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'warning' | 'danger';
@@ -47,7 +48,7 @@ export function ConfirmDialog({
           <h3 className={styles.title}>{title}</h3>
         </div>
         <div className={styles.body}>
-          <p className={styles.message}>{message}</p>
+          <div className={styles.message}>{message}</div>
         </div>
         <div className={styles.actions}>
           <button

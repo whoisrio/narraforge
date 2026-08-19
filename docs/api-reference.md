@@ -1131,7 +1131,8 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
   ],
   "narration_script": "项目级完整旁白稿（可选）",
   "preserve_audio": false,
-  "split_segments": false
+  "split_segments": false,
+  "dry_run": false
 }
 ```
 
@@ -1149,8 +1150,9 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | `chapters[].segments[].role` | string | `"narration"` | 分片角色 |
 | `chapters[].segments[].segment_kind` | string | `"narration"` | 分片类型 |
 | `narration_script` | string | `null` | 项目级完整旁白稿。内容写入项目资产目录的 `narration.md`，DB 只存 `narration_document_path`；未传不更新。detail 响应的 `narration_script` 字段读穿返回文件内容 |
-| `preserve_audio` | bool | `false` | 重拆保留模式。删除前按规范化标题（忽略 `01.` 等前导序号）匹配旧章节，新 segment 文本与旧 segment 一致时沿承其 `audio`/`generated_params`/`emotion`/`role_id`/`voice`；local 模式下音频文件 move 到新规范路径，未被复用的旧音频文件在重建后 GC。文本匹配按章节内精确匹配（strip 后），每条旧 segment 只被消费一次。`origin=="recorded"` 的录音同样保留 |
-| `split_segments` | bool | `false` | payload 章节未自带 `segments` 时，按该章最终 `split_config` 的 `delimiters` 用规则拆分直接生成 segment（正文取 `narration_script` 或 `original_text`）；`mode=="llm"` 的章节在批量场景同样走规则拆分 |
+| `preserve_audio` | bool | `false` | 重拆保留模式。删除前按规范化标题（忽略 `01.` 等前导序号）匹配旧章节，新 segment 文本与旧 segment 一致时沿承其 `audio`/`generated_params`/`emotion`/`role_id`/`voice`；local 模式下音频文件 move 到新规范路径（`audio.previous` 随迁，`.prev` 命名），未被复用的旧音频文件在 commit 成功后 GC，commit 失败时对已搬运文件做反向补偿。匹配分两阶段：章节内精确匹配（strip 后全等，每条旧 segment 只被消费一次），然后剩余新段进全局兜底池（所有旧章未消费段，按章序+段序）——章节重组（新标题）但文本未动时仍可复用。`origin=="recorded"` 的录音同样保留 |
+| `split_segments` | bool | `false` | payload 章节未自带 `segments` 时，按该章最终 `split_config` 的 `delimiters` 用规则拆分直接生成 segment（正文取 `narration_script` 或 `original_text`）；`mode=="llm"` 的章节在批量场景同样走规则拆分。另：`preserve_audio=true` 且某章 payload 无 `segments` 且命中了含旧 segment 的旧章快照时，该章同样自动规则拆分（保留即重建）；未匹配章节不受影响 |
+| `dry_run` | bool | `false` | 只跑匹配规划并返回 `reuse` 报告（含 discard 明细），不写库、不动文件、不更新 `narration_document_path`；响应 `chapters` 为空数组。磁盘不做探测，`segments_reused` 为计划口径（应用时文件缺失会降级为不复用） |
 
 **Response:**
 ```json
@@ -1165,13 +1167,18 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
     "segments_new": 2,
     "per_chapter": [
       { "chapter_id": "chapter-id", "title": "01. 第一章", "matched": 3, "reused": 3, "new": 2 }
-    ]
+    ],
+    "discard": { "text_changed": 1, "boundary_changed": 1, "no_audio": 0 },
+    "recorded_discard": 0
   }
 }
 ```
 
 `reuse` 仅在 `preserve_audio` 或 `split_segments` 开启时返回，否则为 `null`。
-`segments_reused` 是实际保留了音频的段数（旧音频文件缺失时不复用、计入 `segments_new`）。
+`segments_reused` 是实际保留了音频的段数（旧音频文件缺失时不复用、计入 `segments_new`；`dry_run` 不做磁盘探测，为预计口径）。
+`discard` 明细（仅 `preserve_audio=true` 时分类）：`text_changed` = 全局找不到同文本旧段；`boundary_changed` = 新文本等于同一旧章内连续 ≥2 段旧文本的连接（忽略空白，跨章连接不识别）；`no_audio` = 文本命中但旧段无音频记录。
+`recorded_discard` = 将被丢弃的用户录音（`origin=="recorded"`）段数。
+`dry_run=true` 时 `chapters` 为 `[]`，`per_chapter[].chapter_id` 缺省。
 
 > 项目级长文档（源文档 `source.md`、旁白稿 `narration.md`）的内容一律存文件，DB 仅存 `source_document_path` / `narration_document_path`；`GET /segmented-projects/{id}` 的 `source_document` / `narration_script` 字段读穿返回内容。旧 `source_document` TEXT 列仅作遗留回退。
 
