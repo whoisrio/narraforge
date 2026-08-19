@@ -1005,6 +1005,8 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | POST | `/api/segmented-projects/migrate` | 批量迁移 IndexedDB 项目 |
 
 > **多用户配额（workers 模式）**：普通登录用户名下项目数达到 `MAX_PROJECTS_PER_USER`（默认 `1`）后，POST 创建 / PUT 新建（upsert 到不存在的 id）返回 `409 project_limit_reached`；更新已有项目不受限。legacy admin（旧凭证通道）与 `ADMIN_EMAILS` 管理员豁免。local 模式不启用。
+>
+> **设计音色配额（workers 模式）**：普通登录用户名下设计音色数（`voice.voice_type == "design"`，全局 + 项目内合并）达到 `MAX_DESIGNED_VOICES_PER_USER`（默认 `1`）后，`POST /clone/create-from-design`（engine 为 `mimo`/`voxcpm`）返回 `409 designed_voice_limit_reached`；预置音色保存（engine=`preset`）与克隆上传不受限。legacy admin 与 `ADMIN_EMAILS` 管理员豁免。
 
 ### ProjectIn Schema
 

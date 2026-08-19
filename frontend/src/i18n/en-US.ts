@@ -46,6 +46,7 @@ export const enUS: Messages = {
     cannotGetAudio: 'Cannot get audio data.',
     savedAsProfile: 'Saved as Voice Profile.',
     saveFailed: 'Save failed.',
+    quotaReached: 'Each user can keep one designed voice. Delete the existing one before creating a new one.',
     defaultSampleText: 'This is a preview text to confirm if this voice suits your project.',
 
     description: 'Manage reusable global voice assets. Supports cloning and text description design, can be bound to project roles.',

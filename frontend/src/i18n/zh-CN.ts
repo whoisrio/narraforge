@@ -44,6 +44,7 @@ export const zhCN = {
     cannotGetAudio: '无法获取音频数据',
     savedAsProfile: '已保存为 Voice Profile',
     saveFailed: '保存失败',
+    quotaReached: '每位用户限保存一个设计音色，可删除已有设计音色后再新建',
     defaultSampleText: '这是一段试听文本，用来确认这个音色是否适合你的项目。',
 
     description: '管理可复用的全局音色资产，支持克隆和文本描述设计，可绑定到项目角色。',

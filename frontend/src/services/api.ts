@@ -9,6 +9,13 @@ const api = axios.create({
 });
 applyAuthInterceptors(api);
 
+/** 从 axios 错误里取后端结构化错误码（detail.code，如配额 409）。 */
+export function apiErrorCode(err: unknown): string | undefined {
+  const detail = (err as { response?: { data?: { detail?: { code?: string } } } })
+    ?.response?.data?.detail;
+  return typeof detail === 'object' && detail !== null ? detail.code : undefined;
+}
+
 // Voice Clone API
 export const voiceApi = {
   upload: async (file: File, promptText?: string, projectId?: string): Promise<VoiceProfile> => {

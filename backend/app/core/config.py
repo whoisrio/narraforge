@@ -115,6 +115,11 @@ class Settings(BaseSettings):
     # 名下项目数 >= 该值后拒绝新建（409 project_limit_reached）；0 = 不限制。
     # legacy admin（旧凭证通道）与 admin_emails 管理员不受限。
     max_projects_per_user: int = 1
+    # 每用户设计音色配额（workers 模式，仅对普通登录用户生效）：
+    # 名下设计音色（voice.voice_type == 'design'，含项目内）>= 该值后拒绝再建
+    # （409 designed_voice_limit_reached）；0 = 不限制。预置/克隆音色不占名额。
+    # legacy admin（旧凭证通道）与 admin_emails 管理员不受限。
+    max_designed_voices_per_user: int = 1
     # 二进制资产存储后端：auto | local | r2 | supabase
     # auto：local 模式→本地文件系统；workers 模式→有 R2 binding 用 R2（真 Workers），
     # 否则 Supabase Storage（Render 等无 binding 的 CPython 部署）。显式值可覆盖。

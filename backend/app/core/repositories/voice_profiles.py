@@ -145,6 +145,10 @@ class LocalVoiceProfileRepository:
         )
         return _orm_to_dict(v) if v else None
 
+    def count_owned_designs(self) -> int:
+        """local 单租户无用户概念：配额检查不生效（路由层只在 workers 模式调用），返回 0。"""
+        return 0
+
 
 class SupabaseVoiceProfileRepository(UserScope):
     """PostgREST 实现。M4：构造接收 (owner_id, see_all) 用户作用域。"""
@@ -203,3 +207,16 @@ class SupabaseVoiceProfileRepository(UserScope):
             ),
         )
         return voice_row_to_dict(row) if row else None
+
+    def count_owned_designs(self) -> int:
+        """名下设计音色数（voice.voice_type == 'design'，全局 + 项目内合并）。
+
+        配额检查由路由层驱动（同 segmented_projects.count_owned 模式）：
+        legacy admin（see_all=True）跳检查，正常不会到这里；普通登录用户
+        得到的是自己名下的设计音色数。行内 Python 侧过滤 JSON 列，
+        不依赖 PostgREST 的 ->> 操作符（fake PostgREST 同样可跑）。
+        """
+        rows = self._client.select(TABLE, params=self._scope_params({"select": "voice"}))
+        return sum(
+            1 for r in rows if (r.get("voice") or {}).get("voice_type") == "design"
+        )
