@@ -8,7 +8,6 @@ vi.mock('../../i18n', () => ({
 const markdownDetect = vi.fn();
 const markdownSplit = vi.fn();
 const batchCreateChapters = vi.fn();
-const toastSuccess = vi.fn();
 
 vi.mock('../../services/api', () => ({
   textSplitApi: {
@@ -18,10 +17,6 @@ vi.mock('../../services/api', () => ({
   segmentedProjectApi: {
     batchCreateChapters: (...a: unknown[]) => batchCreateChapters(...a),
   },
-}));
-
-vi.mock('../ui/useToast', () => ({
-  useToast: () => ({ success: toastSuccess, error: vi.fn(), info: vi.fn() }),
 }));
 
 afterEach(() => cleanup());
@@ -123,7 +118,8 @@ describe('ChapterSplitModal', () => {
       chapters: [],
       reuse: { chapters_matched: 1, segments_matched: 2, segments_reused: 2, segments_new: 3, per_chapter: [] },
     });
-    render(<ChapterSplitModal {...baseProps} />);
+    const onApplied = vi.fn();
+    render(<ChapterSplitModal {...baseProps} onApplied={onApplied} />);
     fireEvent.click(await screen.findByText('chapterSplit.preview'));
     await screen.findByText('01. 第一章');
 
@@ -135,8 +131,9 @@ describe('ChapterSplitModal', () => {
 
     await waitFor(() => expect(applyCall()).toBeTruthy());
     expect(applyCall()![3]).toEqual({ preserveAudio: true, splitSegments: true });
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith(
-      'chapterSplit.reuseReport:{"reused":2,"fresh":3}',
+    // B5：reuse 报告透传给 onApplied（结果反馈由调用方统一呈现）
+    await waitFor(() => expect(onApplied).toHaveBeenCalledWith(
+      expect.objectContaining({ segments_reused: 2, segments_new: 3 }),
     ));
   });
 
@@ -223,7 +220,7 @@ describe('ChapterSplitModal', () => {
     expect(within(confirm).queryByText(/chapterSplit.confirmKept/)).not.toBeInTheDocument();
   });
 
-  it('apply toast extends reuse report with discard details and recorded warning (A4)', async () => {
+  it('onApplied receives the full reuse report including discard details (B5)', async () => {
     markdownDetect.mockResolvedValue(DETECT);
     markdownSplit.mockResolvedValue(SPLIT);
     const report = {
@@ -233,18 +230,15 @@ describe('ChapterSplitModal', () => {
       recorded_discard: 2,
     };
     batchCreateChapters.mockResolvedValue({ chapters: [], reuse: report });
-    render(<ChapterSplitModal {...baseProps} />);
+    const onApplied = vi.fn();
+    render(<ChapterSplitModal {...baseProps} onApplied={onApplied} />);
     fireEvent.click(await screen.findByText('chapterSplit.preview'));
     await screen.findByText('01. 第一章');
 
     fireEvent.click(screen.getByText('chapterSplit.apply'));
     fireEvent.click(await screen.findByRole('button', { name: 'chapterSplit.confirmLabel' }));
 
-    await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
-    const msg = toastSuccess.mock.calls[0][0] as string;
-    expect(msg).toContain('chapterSplit.reuseReport:{"reused":5,"fresh":3}');
-    expect(msg).toContain('chapterSplit.reuseReportDiscard');
-    expect(msg).toContain('chapterSplit.reuseReportRecorded:{"count":2}');
+    await waitFor(() => expect(onApplied).toHaveBeenCalledWith(report));
   });
 
   it('shows divergence warning only when narration doc diverges from chapters (A6)', async () => {

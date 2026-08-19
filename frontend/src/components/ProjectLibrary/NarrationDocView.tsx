@@ -12,16 +12,17 @@ interface NarrationDocViewProps {
   chapterCount: number;
   onUpdateNarrationScript: (text: string) => void;
   onSplit: () => void;
-  onBack: () => void;
-  onViewByChapter: () => void;
+  /** 形态 A 次按钮：切到源文档视图（B2）。 */
+  onGoToSource: () => void;
 }
 
 /**
- * 旁白文档视图（全文视图的替代）。
+ * 旁白文档视图（Library 默认 landing 视图，B2）。
  *
- * 形态 A（narration_script 为空）：章节合并只读预览 + 转换入口
- *   （粘贴旁白文档 / 从现有章节生成），不显示拆分按钮。
+ * 形态 A（narration_script 为空）：粘贴 CTA 主按钮 + 「去源文档」次按钮
+ *   + 有章节文本时保留「从现有章节生成」回退，不显示拆分按钮。
  * 形态 B（narration_script 已存在）：编辑/预览切换 + 顶栏「按标题拆分章节」。
+ * 底部「返回资料库 / 按章节查看」条已移除——头部视图切换器覆盖导航。
  */
 export function NarrationDocView({
   narrationScript,
@@ -29,8 +30,7 @@ export function NarrationDocView({
   chapterCount,
   onUpdateNarrationScript,
   onSplit,
-  onBack,
-  onViewByChapter,
+  onGoToSource,
 }: NarrationDocViewProps) {
   const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<'view' | 'edit'>('view');
@@ -102,11 +102,19 @@ export function NarrationDocView({
               <button
                 type="button"
                 className={styles.ghostBtn}
-                onClick={() => onUpdateNarrationScript(joinedChapterText)}
-                disabled={!canGenerateFromChapters}
+                onClick={onGoToSource}
               >
-                {t('projectLibrary.narrationDoc.generateFromChapters')}
+                {t('projectLibrary.narrationDoc.goToSource')}
               </button>
+              {canGenerateFromChapters && (
+                <button
+                  type="button"
+                  className={styles.ghostBtn}
+                  onClick={() => onUpdateNarrationScript(joinedChapterText)}
+                >
+                  {t('projectLibrary.narrationDoc.generateFromChapters')}
+                </button>
+              )}
             </div>
             <p className={styles.fallbackLabel}>{t('projectLibrary.narrationDoc.fallbackPreviewLabel')}</p>
             <div className={styles.preview}>
@@ -116,15 +124,6 @@ export function NarrationDocView({
         )}
       </div>
 
-      <div className={styles.bottomBar}>
-        <button type="button" className={styles.ghostBtn} onClick={onBack}>
-          ← {t('projectLibrary.backToLibrary')}
-        </button>
-        <div className={styles.bottomBarDivider} />
-        <button type="button" className={styles.ghostBtn} onClick={onViewByChapter}>
-          {t('projectLibrary.viewByChapter')}
-        </button>
-      </div>
     </section>
   );
 }

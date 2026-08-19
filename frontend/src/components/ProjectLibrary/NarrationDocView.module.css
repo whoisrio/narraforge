@@ -160,29 +160,6 @@
   text-transform: uppercase;
 }
 
-.bottomBar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-md);
-  padding: 14px var(--spacing-xl);
-  border: 1px solid rgba(216, 194, 180, 0.42);
-  background: rgba(255, 255, 255, 0.82);
-  box-shadow: 0 -4px 20px rgba(109, 76, 58, 0.06);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  position: sticky;
-  bottom: var(--spacing-md);
-  z-index: 10;
-}
-
-.bottomBarDivider {
-  width: 1px;
-  height: 24px;
-  background: rgba(216, 194, 180, 0.3);
-  flex-shrink: 0;
-}
-
 @media (max-width: 720px) {
   .header {
     gap: var(--spacing-sm);
@@ -190,9 +167,5 @@
   .actions {
     margin-left: 0;
     width: 100%;
-  }
-  .bottomBar {
-    flex-wrap: wrap;
-    gap: var(--spacing-sm);
   }
 }

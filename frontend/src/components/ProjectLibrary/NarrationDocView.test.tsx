@@ -19,8 +19,7 @@ const baseProps = {
   chapterCount: 1,
   onUpdateNarrationScript: vi.fn(),
   onSplit: vi.fn(),
-  onBack: vi.fn(),
-  onViewByChapter: vi.fn(),
+  onGoToSource: vi.fn(),
 };
 
 describe('NarrationDocView', () => {
@@ -28,9 +27,18 @@ describe('NarrationDocView', () => {
     render(<NarrationDocView {...baseProps} />);
     expect(screen.getByText('projectLibrary.narrationDoc.emptyHint')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'projectLibrary.narrationDoc.paste' })).toBeInTheDocument();
+    // B2：「去源文档」次按钮（切到 source 视图）
+    expect(screen.getByRole('button', { name: 'projectLibrary.narrationDoc.goToSource' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'projectLibrary.narrationDoc.generateFromChapters' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'projectLibrary.splitChapters' })).not.toBeInTheDocument();
     expect(screen.getByText('这是第一章的内容。')).toBeInTheDocument();
+  });
+
+  it('form A: go-to-source button calls onGoToSource', () => {
+    const onGoToSource = vi.fn();
+    render(<NarrationDocView {...baseProps} onGoToSource={onGoToSource} />);
+    fireEvent.click(screen.getByRole('button', { name: 'projectLibrary.narrationDoc.goToSource' }));
+    expect(onGoToSource).toHaveBeenCalled();
   });
 
   it('form A: generate-from-chapters fills narration_script with joined chapter text', () => {
@@ -46,9 +54,12 @@ describe('NarrationDocView', () => {
     expect(screen.getByRole('textbox')).toHaveValue('');
   });
 
-  it('form A: generate-from-chapters disabled when no chapter text', () => {
+  it('form A: generate-from-chapters hidden when no chapter text', () => {
     render(<NarrationDocView {...baseProps} joinedChapterText="" chapterCount={0} />);
-    expect(screen.getByRole('button', { name: 'projectLibrary.narrationDoc.generateFromChapters' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'projectLibrary.narrationDoc.generateFromChapters' })).not.toBeInTheDocument();
+    // 粘贴 CTA 与去源文档始终可用
+    expect(screen.getByRole('button', { name: 'projectLibrary.narrationDoc.paste' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'projectLibrary.narrationDoc.goToSource' })).toBeInTheDocument();
   });
 
   it('form B (narration set): shows split button + markdown preview, no empty-state banner', () => {
@@ -74,13 +85,9 @@ describe('NarrationDocView', () => {
     expect(onSplit).toHaveBeenCalled();
   });
 
-  it('back and view-by-chapter buttons call callbacks', () => {
-    const onBack = vi.fn();
-    const onViewByChapter = vi.fn();
-    render(<NarrationDocView {...baseProps} onBack={onBack} onViewByChapter={onViewByChapter} />);
-    fireEvent.click(screen.getByRole('button', { name: /projectLibrary.backToLibrary/ }));
-    expect(onBack).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'projectLibrary.viewByChapter' }));
-    expect(onViewByChapter).toHaveBeenCalled();
+  it('bottom bar is removed (B2: header switcher covers navigation)', () => {
+    render(<NarrationDocView {...baseProps} />);
+    expect(screen.queryByText(/projectLibrary.backToLibrary/)).not.toBeInTheDocument();
+    expect(screen.queryByText('projectLibrary.viewByChapter')).not.toBeInTheDocument();
   });
 });
