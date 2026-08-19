@@ -9,7 +9,6 @@ import {
   type MarkdownSplitResponse,
 } from '../../services/api';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { useToast } from '../ui/useToast';
 import styles from './ChapterSplitModal.module.css';
 
 interface ChapterSplitModalProps {
@@ -20,7 +19,8 @@ interface ChapterSplitModalProps {
   /** A6：旁白文档与当前章节内容存在分叉（章节侧有编辑）——应用后以文档为准 */
   divergenceWarning?: boolean;
   onClose: () => void;
-  onApplied: () => void;
+  /** B5：应用成功，透传 reuse 报告给调用方做结果反馈（留在文档/查看章节） */
+  onApplied: (reuse?: BatchReuseReport | null) => void;
 }
 
 type Phase = 'detecting' | 'configure' | 'error';
@@ -46,7 +46,6 @@ function numberedTitle(index: number, title: string): string {
  */
 export function ChapterSplitModal({ projectId, fullText, existingChapterCount, divergenceWarning, onClose, onApplied }: ChapterSplitModalProps) {
   const { t } = useTranslation();
-  const toast = useToast();
   const [phase, setPhase] = useState<Phase>('detecting');
   const [error, setError] = useState<string | null>(null);
   const [detect, setDetect] = useState<MarkdownDetectResponse | null>(null);
@@ -150,27 +149,7 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, d
         preserveAudio: isResplit,
         splitSegments: effectiveSplitSegments,
       });
-      if (result.reuse) {
-        // A4：toast 与确认框同口径——保留/丢弃明细 + 录音警示
-        let msg = t('chapterSplit.reuseReport', {
-          reused: result.reuse.segments_reused,
-          fresh: result.reuse.segments_new,
-        });
-        const discard = result.reuse.discard;
-        const discardTotal = (discard?.text_changed ?? 0) + (discard?.boundary_changed ?? 0);
-        if (discardTotal > 0) {
-          msg += t('chapterSplit.reuseReportDiscard', {
-            total: discardTotal,
-            textChanged: discard?.text_changed ?? 0,
-            boundaryChanged: discard?.boundary_changed ?? 0,
-          });
-        }
-        if ((result.reuse.recorded_discard ?? 0) > 0) {
-          msg += t('chapterSplit.reuseReportRecorded', { count: result.reuse.recorded_discard });
-        }
-        toast.success(msg);
-      }
-      onApplied();
+      onApplied(result.reuse ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -193,7 +172,7 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, d
       )}
       {(dryRunReport.recorded_discard ?? 0) > 0 && (
         <p className={styles.recordedWarning}>
-          {t('chapterSplit.confirmRecorded', { count: dryRunReport.recorded_discard })}
+          {t('chapterSplit.confirmRecorded', { count: dryRunReport.recorded_discard ?? 0 })}
         </p>
       )}
     </>

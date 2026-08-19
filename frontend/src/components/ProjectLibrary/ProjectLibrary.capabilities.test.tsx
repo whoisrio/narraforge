@@ -83,10 +83,12 @@ describe('ProjectLibrary workflow entry gating', () => {
     expect(screen.getByRole('button', { name: /知识视频/ })).toBeInTheDocument();
   });
 
-  it('hides the workflow trigger when agent_workflow is unavailable', () => {
+  it('hides the workflow trigger when agent_workflow is unavailable, but the source view stays accessible', () => {
     renderLibrary(WORKERS_CAPABILITIES);
     fireEvent.click(screen.getByRole('button', { name: '源文档' }));
 
+    // B4：无工作流能力时源文档视图仍可访问，仅工作流按钮隐藏
+    expect(screen.getByPlaceholderText(/源文档内容|source/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /生成旁白/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /知识视频/ })).not.toBeInTheDocument();
   });

@@ -181,38 +181,6 @@
   line-height: 1;
 }
 
-.filterRow {
-  display: flex;
-  gap: 10px;
-  margin-bottom: var(--spacing-lg);
-  overflow-x: auto;
-}
-
-.filterChip,
-.filterChipActive {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: var(--radius-full);
-  color: var(--color-text-secondary);
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.filterChip {
-  background: var(--color-surface-container);
-}
-
-.filterChipActive {
-  border: 1px solid rgba(196, 122, 58, 0.22);
-  background: rgba(255, 220, 195, 0.35);
-  color: var(--color-primary-dark);
-}
-
 .chapterGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

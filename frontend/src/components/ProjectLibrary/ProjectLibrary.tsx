@@ -5,16 +5,16 @@ import { useTranslation } from '../../i18n';
 import { CompareView } from './CompareView';
 import { SourceDocumentView } from './SourceDocumentView';
 import { WorkflowDrawer } from '../Workflow/WorkflowDrawer';
-import { StoryboardPanel } from '../Storyboard/StoryboardPanel';
 import { DrawerIndicator } from '../Workflow/DrawerIndicator';
 import { ChapterSplitModal } from './ChapterSplitModal';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/useToast';
 import { NarrationDocView } from './NarrationDocView';
 import { countTextChars, estimateDurationSec, formatSeconds } from './utils';
 import { agentClient } from '../../services/langgraph/client';
 import { WORKFLOW_KINDS, type WorkflowKind } from '../../services/langgraph/contracts';
 import { resolveWorkflowThread } from '../../services/langgraph/threads';
-import { segmentedProjectApi } from '../../services/api';
+import { segmentedProjectApi, type BatchReuseReport } from '../../services/api';
 import { useCapabilities } from '../../hooks/useCapabilities';
 import styles from './ProjectLibrary.module.css';
 
@@ -35,12 +35,37 @@ interface ProjectLibraryProps {
   onAddChapter: (name?: string) => void;
   onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
-  onModeChange?: (mode: 'overview' | 'chapter' | 'fulltext') => void;
+  onModeChange?: (mode: LibraryMode) => void;
   onProjectChanged?: () => void;
 }
 
-type LibraryMode = 'overview' | 'chapter' | 'fulltext';
-type LibraryTab = 'source' | 'narration' | 'storyboard';
+/** B1：3 视图 + 章节沉浸编辑器（原 3 tab × 3 mode 导航矩阵的收敛） */
+export type LibraryView = 'doc' | 'chapters' | 'source';
+export type LibraryMode = LibraryView | 'chapter';
+
+/** 每个 project 记住上次视图（B1）；localStorage 不可用时静默降级为默认 doc */
+function viewStorageKey(projectId: string): string {
+  return `nf.library.view.${projectId}`;
+}
+
+function loadStoredView(projectId?: string): LibraryView {
+  if (!projectId) return 'doc';
+  try {
+    const v = localStorage.getItem(viewStorageKey(projectId));
+    return v === 'doc' || v === 'chapters' || v === 'source' ? v : 'doc';
+  } catch {
+    return 'doc';
+  }
+}
+
+function storeView(projectId: string | undefined, view: LibraryView): void {
+  if (!projectId) return;
+  try {
+    localStorage.setItem(viewStorageKey(projectId), view);
+  } catch {
+    /* localStorage 不可用：静默降级 */
+  }
+}
 
 function chapterText(chapter: Chapter): string {
   return chapter.original_text ?? chapter.segments.map(segment => segment.text).join('\n');
@@ -90,8 +115,8 @@ export function ProjectLibrary({
   const { t } = useTranslation();
   const { features } = useCapabilities();
   const toast = useToast();
-  const [mode, setMode] = useState<LibraryMode>('overview');
-  const [activeTab, setActiveTab] = useState<LibraryTab>('narration');
+  const [view, setView] = useState<LibraryView>(() => loadStoredView(projectId));
+  const [chapterEditorId, setChapterEditorId] = useState<string | null>(null);
   const [comparing, setComparing] = useState(false);
   const [sourceViewMode, setSourceViewMode] = useState<'edit' | 'view'>('edit');
   const [showPreview, setShowPreview] = useState(false);
@@ -100,11 +125,29 @@ export function ProjectLibrary({
   const [drawerKind, setDrawerKind] = useState<WorkflowKind>('narration');
   const [splitModal, setSplitModal] = useState<{ fullText: string; diverged: boolean } | null>(null);
   const [splitLoading, setSplitLoading] = useState(false);
+  const [splitResult, setSplitResult] = useState<BatchReuseReport | null>(null);
 
   const joinedChapterText = useMemo(
     () => chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n'),
     [chapters],
   );
+
+  const setLibraryView = (next: LibraryView) => {
+    setView(next);
+    storeView(projectId, next);
+    onModeChange?.(next);
+  };
+
+  const openChapterEditor = (id: string) => {
+    onSelectChapter(id);
+    setChapterEditorId(id);
+    onModeChange?.('chapter');
+  };
+
+  const closeChapterEditor = () => {
+    setChapterEditorId(null);
+    onModeChange?.(view);
+  };
 
   const openSplitModal = async () => {
     if (!projectId) return;
@@ -149,15 +192,11 @@ export function ProjectLibrary({
     }
   };
 
-  const setLibraryMode = (next: LibraryMode) => {
-    setMode(next);
-    onModeChange?.(next);
-  };
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   const [chapterNameDraft, setChapterNameDraft] = useState('');
   const [creatingChapter, setCreatingChapter] = useState(false);
   const [newChapterName, setNewChapterName] = useState('');
-  const activeChapter = chapters.find(chapter => chapter.id === activeChapterId) ?? chapters[0];
+  const editorChapter = chapters.find(chapter => chapter.id === chapterEditorId) ?? null;
   const canDeleteChapter = chapters.length > 1;
   const totals = useMemo(() => {
     const chars = chapters.reduce((sum, chapter) => sum + countTextChars(chapterText(chapter)), 0);
@@ -191,21 +230,11 @@ export function ProjectLibrary({
     setCreatingChapter(false);
   };
 
-  if (!activeChapter) {
-    return (
-      <section className={styles.emptyRoot}>
-        <span className={styles.kicker}>{t('projectLibrary.title')}</span>
-        <h2>{t('projectLibrary.title')}</h2>
-        <p>{t('projectLibrary.emptyDesc')}</p>
-        <button type="button" onClick={() => onAddChapter()}>{t('projectLibrary.newChapter')}</button>
-      </section>
-    );
-  }
-
-  if (mode === 'chapter') {
-    const text = chapterText(activeChapter);
+  // ── 章节沉浸编辑器（原 chapter mode 原样保留，B1） ──
+  if (editorChapter) {
+    const text = chapterText(editorChapter);
     const chars = countTextChars(text);
-    const progress = chapterProgress(activeChapter);
+    const progress = chapterProgress(editorChapter);
     return (
       <section className={styles.chapterEditorRoot}>
         <header className={styles.editorHeader}>
@@ -213,8 +242,8 @@ export function ProjectLibrary({
           <input
             className={styles.chapterTitleInput}
             aria-label={t('projectLibrary.chapterTitle')}
-            value={activeChapter.name}
-            onChange={(event) => onRenameChapter(activeChapter.id, event.target.value)}
+            value={editorChapter.name}
+            onChange={(event) => onRenameChapter(editorChapter.id, event.target.value)}
             placeholder={t('projectLibrary.chapterTitle')}
           />
           <div className={styles.editorMetrics}>
@@ -227,8 +256,8 @@ export function ProjectLibrary({
         <label className={styles.designTitleField}>
           <span>{t('projectLibrary.designTitle')}</span>
           <input
-            value={activeChapter.design_title ?? ''}
-            onChange={(event) => onUpdateChapterDesignTitle(activeChapter.id, event.target.value)}
+            value={editorChapter.design_title ?? ''}
+            onChange={(event) => onUpdateChapterDesignTitle(editorChapter.id, event.target.value)}
             placeholder={t('projectLibrary.designTitlePlaceholder')}
           />
         </label>
@@ -242,7 +271,7 @@ export function ProjectLibrary({
             className={styles.manuscriptEditor}
             aria-label={t("ariaLabels.chapterFullText")}
             value={text}
-            onChange={(event) => onUpdateChapterText(activeChapter.id, event.target.value)}
+            onChange={(event) => onUpdateChapterText(editorChapter.id, event.target.value)}
             placeholder={t('projectLibrary.descPlaceholder')}
           />
         )}
@@ -251,7 +280,7 @@ export function ProjectLibrary({
           <button
             type="button"
             className={styles.ghostButton}
-            onClick={() => setLibraryMode('overview')}
+            onClick={closeChapterEditor}
           >
             ← {t('projectLibrary.backToLibrary')}
           </button>
@@ -259,7 +288,7 @@ export function ProjectLibrary({
           <button
             type="button"
             className={styles.ghostButton}
-            onClick={() => setLibraryMode('fulltext')}
+            onClick={() => { setChapterEditorId(null); setLibraryView('doc'); }}
           >
             {t('projectLibrary.viewFulltext')}
           </button>
@@ -273,23 +302,31 @@ export function ProjectLibrary({
           <button
             type="button"
             className={styles.bottomBarNav}
-            onClick={() => onSelectChapter(navigateChapter(chapters, activeChapter.id, 'prev'))}
+            onClick={() => {
+              const nextId = navigateChapter(chapters, editorChapter.id, 'prev');
+              onSelectChapter(nextId);
+              setChapterEditorId(nextId);
+            }}
             aria-label={t('projectLibrary.previousChapter')}
           >
             ← {t('projectLibrary.previousChapter')}
           </button>
-          <span className={styles.bottomBarLabel}>{activeChapter.name}</span>
+          <span className={styles.bottomBarLabel}>{editorChapter.name}</span>
           <button
             type="button"
             className={styles.primaryButton}
-            onClick={() => onEnterStudio(activeChapter.id)}
+            onClick={() => onEnterStudio(editorChapter.id)}
           >
             {t('projectLibrary.enterStudio')}
           </button>
           <button
             type="button"
             className={styles.bottomBarNav}
-            onClick={() => onSelectChapter(navigateChapter(chapters, activeChapter.id, 'next'))}
+            onClick={() => {
+              const nextId = navigateChapter(chapters, editorChapter.id, 'next');
+              onSelectChapter(nextId);
+              setChapterEditorId(nextId);
+            }}
             aria-label={t('projectLibrary.nextChapter')}
           >
             {t('projectLibrary.nextChapter')} →
@@ -299,45 +336,15 @@ export function ProjectLibrary({
     );
   }
 
-  if (mode === 'fulltext') {
-    return (
-      <>
-        <NarrationDocView
-          narrationScript={narrationScript ?? null}
-          joinedChapterText={joinedChapterText}
-          chapterCount={chapters.length}
-          onUpdateNarrationScript={(text) => onUpdateNarrationScript?.(text)}
-          onSplit={() => void openSplitModal()}
-          onBack={() => setLibraryMode('overview')}
-          onViewByChapter={() => {
-            if (activeChapter) {
-              onSelectChapter(activeChapter.id);
-              setLibraryMode('chapter');
-            }
-          }}
-        />
-        {splitModal && projectId && (
-          <ChapterSplitModal
-            projectId={projectId}
-            fullText={splitModal.fullText}
-            existingChapterCount={chapters.length}
-            divergenceWarning={splitModal.diverged}
-            onClose={() => setSplitModal(null)}
-            onApplied={() => { setSplitModal(null); onProjectChanged?.(); }}
-          />
-        )}
-      </>
-    );
-  }
-
-  const narrationContent = (
+  const chaptersContent = chapters.length === 0 ? (
+    <div className={styles.emptyRoot}>
+      <span className={styles.kicker}>{t('projectLibrary.title')}</span>
+      <h2>{t('projectLibrary.title')}</h2>
+      <p>{t('projectLibrary.emptyDesc')}</p>
+      <button type="button" onClick={() => onAddChapter()}>{t('projectLibrary.newChapter')}</button>
+    </div>
+  ) : (
     <>
-      <div className={styles.filterRow}>
-        <span className={styles.filterChipActive}>{t('projectLibrary.active')} <strong>{chapters.length}</strong></span>
-        <span className={styles.filterChip}>{t('projectLibrary.draft')}</span>
-        <span className={styles.filterChip}>{t('projectLibrary.completed')} <strong>{totals.ready}</strong></span>
-      </div>
-
       {creatingChapter && (
         <div className={styles.createChapterPanel}>
           <label htmlFor="library-new-chapter-name">{t('projectLibrary.chapterName')}</label>
@@ -373,7 +380,7 @@ export function ProjectLibrary({
               <button
                 type="button"
                 className={styles.chapterCover}
-                aria-current={chapter.id === activeChapter.id ? 'page' : undefined}
+                aria-current={chapter.id === activeChapterId ? 'page' : undefined}
                 aria-label={`选择${chapter.name}`}
                 onClick={() => onSelectChapter(chapter.id)}
               >
@@ -425,7 +432,7 @@ export function ProjectLibrary({
                 </div>
                 <div className={styles.progressTrack}><span style={{ width: `${progress.percent}%` }} /></div>
                 <div className={styles.cardActions}>
-                  <button type="button" onClick={() => { onSelectChapter(chapter.id); setLibraryMode('chapter'); }}>{t('projectLibrary.openText')}</button>
+                  <button type="button" onClick={() => openChapterEditor(chapter.id)}>{t('projectLibrary.openText')}</button>
                   <button type="button" onClick={() => onEnterStudio(chapter.id)}>{t('projectLibrary.enterStudio')}</button>
                 </div>
               </div>
@@ -436,46 +443,61 @@ export function ProjectLibrary({
     </>
   );
 
+  // B5：拆分结果反馈（留在 doc 视图 + 「查看章节」主动跳转）
+  const splitDiscard = splitResult?.discard;
+  const splitDiscardTotal = (splitDiscard?.text_changed ?? 0) + (splitDiscard?.boundary_changed ?? 0);
+  const splitResultMessage = splitResult ? (
+    <>
+      <p>{t('chapterSplit.reuseReport', {
+        reused: splitResult.segments_reused,
+        fresh: splitResult.segments_new,
+      })}</p>
+      {splitDiscardTotal > 0 && (
+        <p>{t('chapterSplit.confirmDiscard', {
+          total: splitDiscardTotal,
+          textChanged: splitDiscard?.text_changed ?? 0,
+          boundaryChanged: splitDiscard?.boundary_changed ?? 0,
+        })}</p>
+      )}
+      {(splitResult.recorded_discard ?? 0) > 0 && (
+        <p>{t('chapterSplit.confirmRecorded', { count: splitResult.recorded_discard ?? 0 })}</p>
+      )}
+    </>
+  ) : '';
+
+  const VIEW_KEYS: { id: LibraryView; key: string }[] = [
+    { id: 'doc', key: 'projectLibrary.viewDoc' },
+    { id: 'chapters', key: 'projectLibrary.viewChapters' },
+    { id: 'source', key: 'projectLibrary.viewSource' },
+  ];
+
   return (
     <section className={styles.root}>
       <header className={styles.libraryHeader}>
         <div>
-          {/* {activeTab === 'source' ? (
-            <input
-              className={styles.sourceTitleInput}
-              value={projectName ?? ''}
-              onChange={(e) => onRenameProject?.(e.target.value)}
-              placeholder={t("placeholders.sourceDocTitle")}
-            />
-          ) : (
-            <h2>文本库</h2>
-          )} */}
           <div className={styles.tabBar}>
-            <button
-              type="button"
-              className={`${styles.tab} ${activeTab === 'source' ? styles.tabActive : ''}`}
-              onClick={() => { setActiveTab('source'); setComparing(false); }}
-            >
-              {t('projectLibrary.sourceDoc')}
-            </button>
-            <button
-              type="button"
-              className={`${styles.tab} ${activeTab === 'narration' ? styles.tabActive : ''}`}
-              onClick={() => { setActiveTab('narration'); setComparing(false); }}
-            >
-              {t('projectLibrary.narrationDoc.tab')}
-            </button>
-            <button
-              type="button"
-              className={`${styles.tab} ${activeTab === 'storyboard' ? styles.tabActive : ''}`}
-              onClick={() => { setActiveTab('storyboard'); setComparing(false); }}
-            >
-              分镜
-            </button>
+            {VIEW_KEYS.map(({ id, key }) => (
+              <button
+                key={id}
+                type="button"
+                className={`${styles.tab} ${view === id ? styles.tabActive : ''}`}
+                onClick={() => { setComparing(false); setLibraryView(id); }}
+              >
+                {t(key)}
+              </button>
+            ))}
           </div>
         </div>
         <div className={styles.headerActions}>
-          {activeTab === 'source' && !comparing && (
+          {view === 'chapters' && (
+            <>
+              <div className={styles.headerStat}><span>{t('projectLibrary.chapterCount')}</span><strong>{chapters.length}</strong></div>
+              <div className={styles.headerStat}><span>{t('projectLibrary.wordCount')}</span><strong>{totals.chars}</strong></div>
+              <div className={styles.headerStat}><span>{t('projectLibrary.segments')}</span><strong>{totals.segments}</strong></div>
+              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>{t('projectLibrary.newChapter')}</button>
+            </>
+          )}
+          {view === 'source' && !comparing && (
             <>
               <button
                 type="button"
@@ -484,86 +506,76 @@ export function ProjectLibrary({
               >
                 {sourceViewMode === 'edit' ? t('projectLibrary.view') : t('common.edit')}
               </button>
-              <button type="button" className={styles.ghostButton} onClick={() => setComparing(true)}>{t('projectLibrary.compare') || '对比'}</button>
-              <button type="button" className={styles.ghostButton} onClick={() => setActiveTab('narration')}>← {t('projectLibrary.backToLibrary')}</button>
-            </>
-          )}
-          {activeTab === 'narration' && !comparing && (
-            <>
-              <div className={styles.headerStat}><span>{t('projectLibrary.chapterCount')}</span><strong>{chapters.length}</strong></div>
-              <div className={styles.headerStat}><span>{t('projectLibrary.wordCount')}</span><strong>{totals.chars}</strong></div>
-              <div className={styles.headerStat}><span>{t('projectLibrary.segments')}</span><strong>{totals.segments}</strong></div>
-              <button type="button" className={styles.ghostButton} onClick={() => setLibraryMode('fulltext')}>{t('projectLibrary.viewFulltext')}</button>
-              <button
-                type="button"
-                className={styles.ghostButton}
-                onClick={() => void openSplitModal()}
-                disabled={splitLoading || !projectId}
-                title={t('projectLibrary.splitChapters')}
-              >
-                {splitLoading ? t('chapterSplit.detecting') : t('projectLibrary.splitChapters')}
-              </button>
-              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>{t('projectLibrary.newChapter')}</button>
+              <button type="button" className={styles.ghostButton} onClick={() => setComparing(true)}>{t('projectLibrary.compare')}</button>
             </>
           )}
         </div>
       </header>
 
       <div className={styles.scrollContent}>
-        {comparing ? (
-          <CompareView
-            sourceDocument={sourceDocument ?? ''}
-            narrationText={chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n')}
-            onBack={() => setComparing(false)}
+        {view === 'doc' && (
+          <NarrationDocView
+            narrationScript={narrationScript ?? null}
+            joinedChapterText={joinedChapterText}
+            chapterCount={chapters.length}
+            onUpdateNarrationScript={(text) => onUpdateNarrationScript?.(text)}
+            onSplit={() => void openSplitModal()}
+            onGoToSource={() => setLibraryView('source')}
           />
-        ) : activeTab === 'source' ? (
-          <>
-            <SourceDocumentView
-              content={sourceDocument ?? ''}
-              onChange={(text) => onUpdateSourceDocument?.(text)}
-              onCompare={() => setComparing(true)}
-              onBack={() => setActiveTab('narration')}
-              viewMode={sourceViewMode}
-              onViewModeChange={setSourceViewMode}
+        )}
+        {view === 'chapters' && chaptersContent}
+        {view === 'source' && (
+          comparing ? (
+            <CompareView
+              sourceDocument={sourceDocument ?? ''}
+              narrationText={chapters.map(ch => chapterText(ch)).filter(Boolean).join('\n\n')}
+              onBack={() => setComparing(false)}
             />
-            {projectId && features.agent_workflow && (
-              <div className={styles.workflowTrigger}>
-                <div>
-                  <strong>从源文档启动工作流</strong>
-                  <span>旁白：改写 → 审查 → 拆分 → 合成；知识视频：转写 → 审查 → 拆分 → 合成 → Remotion 工程 → 分镜 brief</span>
+          ) : (
+            <>
+              <SourceDocumentView
+                content={sourceDocument ?? ''}
+                onChange={(text) => onUpdateSourceDocument?.(text)}
+                onCompare={() => setComparing(true)}
+                onBack={() => setLibraryView('doc')}
+                viewMode={sourceViewMode}
+                onViewModeChange={setSourceViewMode}
+              />
+              {projectId && features.agent_workflow && (
+                <div className={styles.workflowTrigger}>
+                  <div>
+                    <strong>从源文档启动工作流</strong>
+                    <span>旁白：改写 → 审查 → 拆分 → 合成；知识视频：转写 → 审查 → 拆分 → 合成 → Remotion 工程 → 分镜 brief</span>
+                  </div>
+                  <button className={styles.workflowBtn} onClick={() => startWorkflow('narration')}>
+                    <span className="material-symbols-outlined">auto_awesome</span>
+                    生成旁白
+                  </button>
+                  <button className={styles.workflowBtn} onClick={() => startWorkflow('knowledge_video')}>
+                    <span className="material-symbols-outlined">movie</span>
+                    知识视频
+                  </button>
                 </div>
-                <button className={styles.workflowBtn} onClick={() => startWorkflow('narration')}>
-                  <span className="material-symbols-outlined">auto_awesome</span>
-                  生成旁白
-                </button>
-                <button className={styles.workflowBtn} onClick={() => startWorkflow('knowledge_video')}>
-                  <span className="material-symbols-outlined">movie</span>
-                  知识视频
-                </button>
-              </div>
-            )}
-          </>
-        ) : activeTab === 'storyboard' ? (
-          <StoryboardPanel chapters={chapters} />
-        ) : (
-          narrationContent
+              )}
+            </>
+          )
         )}
       </div>
       {drawerThreadId && !drawerCollapsed && projectId && features.agent_workflow && (
-                  <WorkflowDrawer
-            threadId={drawerThreadId}
-            projectId={projectId}
-            assistantId={WORKFLOW_KINDS[drawerKind].assistantId}
-            onClose={() => setDrawerThreadId(null)}
-            onCollapse={() => setDrawerCollapsed(true)}
-          />
-              )}
+        <WorkflowDrawer
+          threadId={drawerThreadId}
+          projectId={projectId}
+          assistantId={WORKFLOW_KINDS[drawerKind].assistantId}
+          onClose={() => setDrawerThreadId(null)}
+          onCollapse={() => setDrawerCollapsed(true)}
+        />
+      )}
       {drawerThreadId && drawerCollapsed && features.agent_workflow && (
-                  <DrawerIndicator
-            status="running"
-            onExpand={() => setDrawerCollapsed(false)}
-          />
-              )}
+        <DrawerIndicator
+          status="running"
+          onExpand={() => setDrawerCollapsed(false)}
+        />
+      )}
       {splitModal && projectId && (
         <ChapterSplitModal
           projectId={projectId}
@@ -571,9 +583,25 @@ export function ProjectLibrary({
           existingChapterCount={chapters.length}
           divergenceWarning={splitModal.diverged}
           onClose={() => setSplitModal(null)}
-          onApplied={() => { setSplitModal(null); onProjectChanged?.(); }}
+          onApplied={(reuse) => {
+            setSplitModal(null);
+            onProjectChanged?.();
+            // B5：留在 doc 视图，结果反馈附「查看章节」主动跳转
+            if (reuse) setSplitResult(reuse);
+          }}
         />
       )}
+      <ConfirmDialog
+        open={splitResult !== null}
+        title={t('chapterSplit.resultTitle')}
+        message={splitResultMessage}
+        confirmLabel={t('chapterSplit.viewChapters')}
+        cancelLabel={t('chapterSplit.stayInDoc')}
+        variant="warning"
+        onConfirm={() => { setSplitResult(null); setLibraryView('chapters'); }}
+        onCancel={() => setSplitResult(null)}
+      />
+      {splitLoading && <span className={styles.srOnly}>{t('chapterSplit.detecting')}</span>}
     </section>
   );
 }

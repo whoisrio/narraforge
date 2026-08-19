@@ -259,24 +259,27 @@ Segments are compared against `Chapter.voice` (the applied/saved voice), NOT the
 | Export All (导出全部) | One-click export of **all chapters**' mp3 + chapter-local SRT to the project export directory (`configs.export_directory`; absolute path works without a Remotion path). Backend storage mode only. Pre-checks every chapter first: any segment missing audio aborts the whole export with a 409 listing the incomplete chapters and per-chapter `missing_counts`. The check is strict on purpose — the "export always reports incomplete" symptom was traced to a UI false-ready: segments showed ready based on DB `audio.current` alone, without verifying the mp3 exists on disk. Fix: the backend now returns `audio.current.file_exists` (stat) and the frontend marks a segment ready only when `current.path && current.file_exists !== false`, so file-lost segments drop to idle and become produce-all / unsynthesized targets. |
 | Batch delete (批量删除) | 「选择」toggle in the toolbar enters selection mode: every row (compact + expanded) gets a leading checkbox, with 全选/取消全选 and a danger 「删除选中 (N)」 button. Confirm dialog warns how many selected segments have audio; deletion removes IndexedDB blobs (frontend mode) / relies on save_project reconcile (backend mode) and dispatches one `DELETE_SEGMENTS` action. |
 
-### 4.5 Library — Source & Narration Documents
+### 4.5 Library — Doc-First Views
 
-The Library organizes project content into two tabs:
+The Library is organized into three first-class views plus an immersive chapter editor, switched from a persistent header switcher:
 
-| Tab | Description |
-|-----|-------------|
-| **Source Document** | Raw source text. Textarea editing + react-markdown view mode. 500ms debounced auto-save. |
-| **Narration Document** | Chapter grid with progress stats, segment counts, estimated duration. |
+| View | Description |
+|------|-------------|
+| **Full Text (doc, default)** | The narration document (`narration_script`) as the master text. Header: stats (chars / estimated duration / chapter count) + actions (edit/preview toggle, 按标题拆分章节). Empty-document form A: paste CTA primary button + "去源文档" secondary button (jumps to Source view); when chapter text exists, a "从现有章节生成" fallback is kept. |
+| **Chapters** | The chapter card grid (rename/delete/create, progress bars, open text, enter Studio). "新建章节" lives in this view's header. |
+| **Source** | Raw source document. Textarea editing + react-markdown view mode, 500ms debounced auto-save, compare entry. Always accessible; the workflow trigger block (生成旁白 / 知识视频 → `WorkflowDrawer`) renders only when the `agent_workflow` capability is on. |
 
-**Compare View**: Side-by-side two-column layout comparing source (left) vs narration (right). Both render via react-markdown.
+The default view is `doc`; each project remembers its last view in `localStorage` (`nf.library.view.{projectId}`, silent fallback to `doc`).
+The storyboard (`StoryboardPanel`) entry is removed from the switcher for now; the component itself is kept.
+`onModeChange` reports `'doc' | 'chapters' | 'source' | 'chapter'`.
 
-**Additional modes**:
-- **Full-text view**: All chapters concatenated, react-markdown rendered
-- **Chapter editor**: Single-chapter immersive editor with edit/preview toggle
+**Chapter editor**: single-chapter immersive editor with edit/preview toggle, opened from a chapter card; back returns to the chapters view.
+
+**Compare View**: side-by-side two-column layout comparing source (left) vs narration (right), entered from the Source view.
 
 #### Chapter Split (按标题拆分章节)
 
-The Narration Document tab header and the full-text view both offer "按标题拆分章节" (`ChapterSplitModal`).
+The doc view header offers "按标题拆分章节" (`ChapterSplitModal`).
 Flow: `markdown-detect` probes heading levels → user picks levels → `markdown-split` previews → apply calls `chapters:batch`, which replaces all chapters in one transaction.
 Applied chapter titles get a zero-padded numeric prefix (`01. …`) matching the chapter card badges.
 Chapters shorter than 80 chars (`min_chars`) are merged into the next chapter by `markdown-split`.
@@ -304,6 +307,8 @@ The response `reuse` report (kept/discarded breakdown + per-chapter detail) is s
 **Divergence warning**:
 `narration_script` is the master document and re-splitting always derives from it.
 When the narration document diverges from the concatenated chapter texts (chapter-side edits), the split modal shows a warning that applying uses the document as the source of truth and chapter-side changes will be overwritten.
+
+**After apply**: the UI stays in the doc view and shows a result dialog with the honest reuse report (kept / discard breakdown / recorded warning) and two actions — "查看章节" jumps to the chapters view, "留在文档" dismisses and stays.
 
 In workers (Supabase) mode the same matching applies at row level; audio objects are not file-managed there, so stored refs carry over as-is.
 Agent workflow calls never pass these flags — their behavior is unchanged.

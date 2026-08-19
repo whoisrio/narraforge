@@ -66,10 +66,8 @@ test.describe('手动导入旁白文档并拆分', () => {
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
       await page.getByRole('button', { name: /文本库/ }).click();
-      await page.getByRole('button', { name: '旁白文档' }).click();
 
-      // 进入全文视图（形态 A：无 narration_script）
-      await page.getByRole('button', { name: /查看全文/ }).click();
+      // Library 默认落 doc 视图（形态 A：无 narration_script）
       await expect(page.getByRole('button', { name: /粘贴旁白文档/ })).toBeVisible();
       await expect(page.getByRole('button', { name: /按标题拆分章节/ })).toBeHidden();
 
@@ -104,8 +102,10 @@ test.describe('手动导入旁白文档并拆分', () => {
       await confirm.getByRole('button', { name: '确认替换' }).click();
       await expect(modal).toBeHidden({ timeout: 15_000 });
 
-      // UI：返回章节列表，章节已替换且带正文内容
-      await page.getByRole('button', { name: /返回文本库/ }).click();
+      // B5：拆分后留在 doc 视图，结果反馈弹窗点「查看章节」跳转章节网格
+      const resultDialog = page.getByRole('alertdialog', { name: '拆分完成' });
+      await expect(resultDialog).toBeVisible({ timeout: 15_000 });
+      await resultDialog.getByRole('button', { name: '查看章节' }).click();
       await expect(page.getByText(/夜路/).first()).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('02. 破庙', { exact: true }).first()).toBeVisible();
       // 章节卡片有正文（original_text 已落库，不再是只有标题）
@@ -158,10 +158,8 @@ test.describe('手动导入旁白文档并拆分', () => {
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
       await page.getByRole('button', { name: /文本库/ }).click();
-      await page.getByRole('button', { name: '旁白文档' }).click();
 
-      await page.getByRole('button', { name: /查看全文/ }).click();
-      // 形态 A：章节合并预览 + 转换入口
+      // Library 默认落 doc 视图：形态 A 章节合并预览 + 转换入口
       await expect(page.getByText(CHAPTER_TEXT)).toBeVisible();
       await expect(page.getByRole('button', { name: /从现有章节生成旁白文档/ })).toBeEnabled();
 

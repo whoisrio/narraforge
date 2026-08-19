@@ -59,12 +59,11 @@ test.describe('按标题拆分章节', () => {
     expect(createResp.status()).toBe(201);
 
     try {
-      // ── 1. 打开 文本库 → 旁白文档 tab → 按标题拆分章节 ──
+      // ── 1. 打开 文本库（默认落 doc 视图）→ 按标题拆分章节 ──
       await page.goto('/');
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
       await page.getByRole('button', { name: /文本库/ }).click();
-      await page.getByRole('button', { name: '旁白文档' }).click();
 
       await page.getByRole('button', { name: '按标题拆分章节' }).click();
       const modal = page.getByRole('dialog', { name: '按标题拆分章节' });
@@ -90,7 +89,10 @@ test.describe('按标题拆分章节', () => {
       await confirm.getByRole('button', { name: '确认替换' }).click();
       await expect(modal).toBeHidden({ timeout: 15_000 });
 
-      // ── 2. UI：章节列表已替换 ──
+      // ── 2. UI：拆分后留在 doc 视图，结果反馈点「查看章节」-> 章节列表已替换 ──
+      const resultDialog = page.getByRole('alertdialog', { name: '拆分完成' });
+      await expect(resultDialog).toBeVisible({ timeout: 15_000 });
+      await resultDialog.getByRole('button', { name: '查看章节' }).click();
       await expect(page.getByText(/夜路/).first()).toBeVisible({ timeout: 15_000 });
       await expect(page.getByText('02. 破庙', { exact: true }).first()).toBeVisible();
 

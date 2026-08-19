@@ -95,7 +95,6 @@ test.describe('重拆保留已合成音频', () => {
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
       await page.getByRole('button', { name: /文本库/ }).click();
-      await page.getByRole('button', { name: '旁白文档' }).click();
       await page.getByRole('button', { name: '按标题拆分章节' }).click();
       let modal = page.getByRole('dialog', { name: '按标题拆分章节' });
       await expect(modal.getByText('H2 (2)')).toBeVisible({ timeout: 10_000 });
@@ -184,7 +183,6 @@ test.describe('重拆保留已合成音频', () => {
       await enterWorkspace(page);
       await page.getByRole('button', { name: new RegExp(`打开 ${PROJECT_NAME}`) }).first().click();
       await page.getByRole('button', { name: /文本库/ }).click();
-      await page.getByRole('button', { name: '旁白文档' }).click();
       await page.getByRole('button', { name: '按标题拆分章节' }).click();
       modal = page.getByRole('dialog', { name: '按标题拆分章节' });
       await expect(modal.getByText('H2 (2)')).toBeVisible({ timeout: 10_000 });
@@ -327,7 +325,6 @@ async function attachFakeAudioToAll(
 async function openSplitModal(page: import('@playwright/test').Page, projectName: string, h2Text: string) {
   await page.getByRole('button', { name: new RegExp(`打开 ${projectName}`) }).first().click();
   await page.getByRole('button', { name: /文本库/ }).click();
-  await page.getByRole('button', { name: '旁白文档' }).click();
   await page.getByRole('button', { name: '按标题拆分章节' }).click();
   const modal = page.getByRole('dialog', { name: '按标题拆分章节' });
   await expect(modal.getByText(h2Text)).toBeVisible({ timeout: 10_000 });

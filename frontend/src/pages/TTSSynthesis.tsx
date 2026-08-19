@@ -2157,7 +2157,7 @@ export function TTSSynthesis({
             narrationScript={project.narration_script}
             onSelectChapter={handleSelectChapter}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
-            onModeChange={(mode) => setLibraryFulltext(mode === 'fulltext')}
+            onModeChange={(mode) => setLibraryFulltext(mode === 'doc' || mode === 'source')}
             onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
             onUpdateChapterText={(id, text) => {
               dispatch({ type: 'SET_CHAPTER_META_BY_ID', id, meta: { original_text: text } });
