@@ -2,18 +2,15 @@
  * Knowledge video workflow E2E tests.
  *
  * Covers (per spec §9.1, without running the full agent chain):
- *   1. Source document page shows both workflow entry points (生成旁白 / 知识视频)
- *   2. Storyboard (分镜) view renders animation_spec briefs — brief seeded via
- *      the apply-animation-spec API — with API + DB dual-layer verification.
+ *   1. Source document view shows both workflow entry points (生成旁白 / 知识视频)
+ *   2. animation_spec brief persistence — brief seeded via the apply-animation-spec
+ *      API — with API + DB dual-layer verification.
+ *      （分镜视图 UI 断言随 Library 文档优先重构暂停：入口已从切换器移除，组件保留。）
  *
  * Adaptations vs the plan's literal spec:
- *   - Test 1 navigates via goToLibrary + 源文档 tab click: the library defaults
- *     to the 旁白文档 tab, so a single /源文档|文本库/ click would not reveal
- *     the workflow buttons.
+ *   - Test 1 navigates via goToLibrary + 源文档 switcher click: the library
+ *     defaults to the doc (全文) view, so the source view must be selected first.
  *   - `readDbProject` is async — awaited.
- *   - AFTER-UI re-opens the project via goToLibrary instead of page.reload():
- *     the SPA has no router, so reload returns to the landing page; a fresh
- *     project open refetches the project (including animation_spec).
  *
  * @feature docs/superpowers/plans/2026-07-21-knowledge-video-workflow.md (Task 19)
  */
@@ -90,14 +87,8 @@ test.describe('知识视频工作流', () => {
     validateDbProjectRow(bundle!);
     await verifyDbWithScreenshot(page, testProject.id, 'storyboard-spec-written');
 
-    // AFTER-UI: 重新打开项目（前端需重新拉取 animation_spec），切到 分镜 tab
-    await goToLibrary(page);
-    await page.getByRole('button', { name: '分镜' }).click();
-    const card = page.locator('[class*="storyboardCard"]').first();
-    await expect(card).toBeVisible();
-    await expect(card).toContainText('00:00 – 00:04');
-    await expect(card).toContainText('展示示例代码');
-    await expect(card).toContainText('typewriter');
+    // 注：分镜（StoryboardPanel）入口已随 Library 文档优先重构（B1）从切换器
+    // 移除，组件代码保留；UI 层断言待入口恢复时回补。
     expect(errors).toEqual([]);
   });
 });
