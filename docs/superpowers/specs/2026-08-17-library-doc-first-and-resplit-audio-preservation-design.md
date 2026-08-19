@@ -61,7 +61,8 @@ UI 承诺文案: 「文本未变的 segment 会保留已合成音频」。
 
 - Library 默认落在旁白文档视图, 「粘贴 -> 拆分」零层级可达。
 - 全文/章节双视图切换, 章节网格降级为结果/管理视图。
-- 源文档折叠为工作流入口（「从原文生成」）, 无工作流能力时完全消失。
+- 源文档保留为独立视图, 无工作流能力时也可访问; 工作流启动按钮仅在有能力时展示。
+- 分镜本轮从 Library 切换器移除（组件保留, 入口后续再说）。
 - 重拆保留功能兑现承诺: 默认路径不再销毁音频（S1）, 章节重组不丢未变文本的音频（S3）。
 - 拆分前如实预告保留/丢弃明细, 含用户录音特别警示（S2 诚实化 + F2a）。
 - 文档与章节分叉时, 拆分前明示「以文档为准, 章节侧改动将被覆盖」（S5）。
@@ -71,7 +72,8 @@ UI 承诺文案: 「文本未变的 segment 会保留已合成音频」。
 - 不做边界变化 segment 的音频拼接复用（新文本 = 多段旧文本连接时 ffmpeg concat 出新音频, 即 F2b）;
   本轮只识别并如实报告, 拼接收敛为后续独立设计。
 - 不做 `narration_script` 与章节编辑的自动同步（用户已决策: 文档是 master, 不回写）。
-- 不改分镜面板（StoryboardPanel 原样保留为第三个视图）。
+- 不改分镜面板内部（`StoryboardPanel` 代码保留, 仅从切换器移除入口, 不删组件）。
+- 不做源文档抽屉/滑出层（用户决策: 源文档作为常规视图保留, 见 B4）。
 - 不改 agent 工作流调用（工作流从不传 preserve_audio/split_segments, 行为不变）。
 - 不引入数据库 schema 变更或迁移。
 - 不做文档版本管理。
@@ -208,25 +210,25 @@ local 模式 `batch_create_structure` 调整顺序:
 
 ### Part B（Phase 2）: Library 文档优先重构
 
-#### B1. 信息架构: 3 mode + 3 tab -> 3 view + 章节编辑器
+#### B1. 信息架构: 3 mode + 3 tab -> 3 视图 + 章节编辑器
 
 ```
-view: 'doc' | 'chapters' | 'storyboard'   # 头部一等切换
-chapterEditorId: string | null            # 章节沉浸编辑器（现 chapter mode 原样保留）
+view: 'doc' | 'chapters' | 'source'      # 头部一等切换
+chapterEditorId: string | null           # 章节沉浸编辑器（现 chapter mode 原样保留）
 ```
 
 - 默认 `view = 'doc'`; 每个 project 记住上次视图（localStorage `nf.library.view.{projectId}`）, 新项目/无记录时落 `doc`。
-- 头部切换器替代现有 tab 条: `[全文 | 章节 | 分镜]`。
-- 源文档 tab 删除（去向见 B4）。
-- `onModeChange` 契约同步: `'overview' | 'chapter' | 'fulltext'` -> `'doc' | 'chapters' | 'storyboard' | 'chapter'`, 调用方 `TTSSynthesis` 适配。
+- 头部切换器替代现有 tab 条: `[全文 | 章节 | 源文档]`。
+- 分镜从切换器移除, `StoryboardPanel` 代码保留、入口本轮不呈现。
+- `onModeChange` 契约同步: `'overview' | 'chapter' | 'fulltext'` -> `'doc' | 'chapters' | 'source' | 'chapter'`, 调用方 `TTSSynthesis` 适配。
 
 #### B2. doc 视图（landing, `NarrationDocView` 演进）
 
-- 头部: 切换器 + 统计（字数 / 预计时长 / 章数）+ 动作（编辑|预览、拆分章节、从原文生成*）。
+- 头部: 切换器 + 统计（字数 / 预计时长 / 章数）+ 动作（编辑|预览、拆分章节）。
 - 形态 B（有文档）: 现状保留（编辑/预览 + 拆分）。
-- 形态 A（空文档）: 粘贴 CTA 主按钮 + 从原文生成* 次按钮;
+- 形态 A（空文档）: 粘贴 CTA 主按钮 + 「去源文档」次按钮（切到 source 视图）;
   有章节无文档时保留「从现有章节生成」回退预览（现行为）。
-- 删除底部「返回资料库 / 按章节查看」条——头部切换器已覆盖（`onBack` / `onViewByChapter` props 移除）。
+- 删除底部「返回资料库 / 按章节查看」条--头部切换器已覆盖（`onBack` / `onViewByChapter` props 移除）。
 
 #### B3. chapters 视图（现章节网格降级入驻）
 
@@ -234,22 +236,28 @@ chapterEditorId: string | null            # 章节沉浸编辑器（现 chapter 
 - 「新建章节」入口从 doc 视图头部移到 chapters 视图头部（手工建章成为次级路径）。
 - 删除装饰性 filter chips 行（「进行中/草稿/完成」无交互无实义）。
 
-#### B4. 源文档折叠为「从原文生成」抽屉
+#### B4. 源文档保留为第三个视图
 
-- doc 视图头部放 ghost 按钮「从原文生成」, 打开右侧滑出抽屉:
-  - `SourceDocumentView`（编辑/查看 + 对比入口, 现组件搬迁）。
-  - 工作流触发块（生成旁白 / 知识视频, 现有 `workflowTrigger` 搬迁）-> 照旧拉起 `WorkflowDrawer`。
-- `!features.agent_workflow` 时按钮与抽屉整体不渲染, 源文档在 UI 上彻底消失。
+- 源文档视图 = 现 `SourceDocumentView`（编辑/查看 + 对比入口）原样入驻切换器, 无论工作流能力开关始终可访问。
+- 工作流触发块（生成旁白 / 知识视频 -> `WorkflowDrawer`）保留在源文档视图内, 仅 `features.agent_workflow` 开启时渲染。
+- 不引入抽屉/滑出层; 原「从原文生成抽屉」方案被否决（用户反馈: 源文档在无工作流时也需要保留, 常规视图更直接）。
 - CompareView 保留, 入口随迁。
 
 #### B5. 拆分应用后的落点
 
-应用成功 -> 切到 chapters 视图（拆分的产物是章节, 直接看到结果与进度）+ 诚实 reuse toast（A4）。
+应用成功 -> **留在 doc 视图**（不自动切换）, 弹出结果反馈:
+
+- 展示诚实 reuse 报告（保留 X / 丢弃 Y 明细, 同 A4 口径）。
+- 附「查看章节」跳转按钮, 用户主动点击才切到 chapters 视图。
+- 点 OK/关闭则停留在当前 UI。
+
+实现落点: 复用 toast 或小型结果弹窗;
+若 toast 不支持动作按钮, 则用轻量结果弹窗（仅含报告文本 + [查看章节] [留在文档] 两钮）。
 
 #### B6. 顺手清理
 
 - 删除 `ProjectLibrary.tsx` 头部注释掉的标题代码块。
-- 「分镜」硬编码改 i18n key（`projectLibrary.storyboardTab`）。
+- 移除分镜入口后, 「分镜」硬编码文案随入口一并退场（新增的切换器三键全部走 i18n key: `projectLibrary.viewDoc / viewChapters / viewSource`）。
 - 移除因重构失效的 i18n key, `missing-keys` 测试保绿。
 
 ---
@@ -279,19 +287,19 @@ chapterEditorId: string | null            # 章节沉浸编辑器（现 chapter 
   -> 用户确认
   -> chapters:batch（preserve_audio=true, split_segments=true）           # 重拆
       后端: plan_batch_reuse -> 落库 -> 搬文件 -> commit -> GC（A1/A2/A5）
-  -> 切到 chapters 视图 + reuse toast（B5）
+  -> 留在 doc 视图 + 结果反馈（含「查看章节」跳转按钮, B5）
 ```
 
 ### 首次拆分
 
 ```
-doc 视图粘贴 -> 拆分（split_segments 默认 true, 可关）
-  -> chapters:batch（preserve_audio=false）-> chapters 视图
+doc 视图粘贴 -> 拆分（split_segments 默认勾选, 可关, A3）
+  -> chapters:batch（preserve_audio=false）-> 留在 doc 视图 + 结果反馈（B5）
 ```
 
 ### 工作流产文档（不变）
 
-`agent -> 后端`, 前端只在抽屉里看进度;
+`agent -> 后端`, 前端只在 WorkflowDrawer（工作流运行侧边抽屉, 现有组件不变）里看进度;
 结束后 doc 视图呈现 `narration_script`。
 
 ## 边界与错误处理
@@ -326,9 +334,10 @@ doc 视图粘贴 -> 拆分（split_segments 默认 true, 可关）
 
 ### 前端单元（vitest）
 
-- `ProjectLibrary`: 默认 view=doc; 切换器三态; 空 doc 空 chapter 的粘贴 CTA; 视图记忆; `onModeChange` 新契约。
+- `ProjectLibrary`: 默认 view=doc; 切换器三态（全文/章节/源文档）; 源文档视图无工作流能力时仍可见（仅工作流按钮隐藏）; 空 doc 空 chapter 的粘贴 CTA + 去源文档次按钮; 视图记忆; 分镜入口不存在; `onModeChange` 新契约。
 - `NarrationDocView`: 底部条移除后 props 收窄。
 - `ChapterSplitModal`: 重拆隐藏勾选框且恒发 split_segments=true; 首拆默认勾选; dry_run 明细渲染（含 recorded 高亮）; 分叉警告显隐。
+- 拆分结果反馈: 留在 doc 视图 + 「查看章节」跳转按钮可用。
 - i18n `missing-keys` 保绿; 新 key 中英齐全。
 
 ### E2E（`tests/e2e/`）
@@ -337,7 +346,8 @@ doc 视图粘贴 -> 拆分（split_segments 默认 true, 可关）
   - S1 真实 UI 默认路径（不碰勾选框）重拆 -> 音频保留, 双读验证（DB audio + 磁盘文件）。
   - S3 章节重组场景 -> 兜底保留。
 - 新增 `library-doc-first.spec.ts`:
-  新项目 -> library 落 doc 视图 -> 粘贴 -> 拆分 -> 自动落 chapters 视图;
+  新项目 -> library 落 doc 视图 -> 粘贴 -> 拆分 -> 留在 doc 视图、结果反馈可跳转章节;
+  源文档视图在无工作流能力下仍可访问;
   数据断言: `narration_script` 落库、章节/段落数量与文本逐字段核对。
 - 既有 spec 受影响面回归（tab 文案变化: `project-pages.spec.ts`、`navigation.ts`、`narration-manual-import-split.spec.ts`）。
 
@@ -355,11 +365,12 @@ Phase 1（数据安全, 先行合入并部署）:
 
 Phase 2（Library 重构）:
 
-1. `ProjectLibrary` 视图状态机单测 -> 重构（B1/B3）。
+1. `ProjectLibrary` 视图状态机单测 -> 重构（B1/B3, 含分镜入口移除）。
 2. `NarrationDocView` 收窄（B2）。
-3. 源文档抽屉（B4）。
-4. i18n 与清理（B6）。
-5. e2e 新 spec + 回归 + 文档同步。
+3. 源文档视图入驻切换器 + 工作流块能力开关（B4）。
+4. 拆分结果反馈与跳转（B5）。
+5. i18n 与清理（B6）。
+6. e2e 新 spec + 回归 + 文档同步。
 
 部署提醒: 用户实测环境曾运行 PR #69 之前的旧前端;
 Phase 1 合入后需确认 Vercel 重建生效再验证体验。
@@ -372,11 +383,10 @@ Phase 1 合入后需确认 Vercel 重建生效再验证体验。
 - `docs/e2e-test-guide.md`（新 spec 与缺口分析更新）。
 - `docs/frontend-audit.md`（标记 filter chips / 分镜 i18n / 注释代码三项已处理）。
 
-## 开放问题（待用户拍板）
+## 已决决策（2026-08-17 用户拍板）
 
-1. **B5 拆分后落点**: 我建议切到 chapters 视图（直接看到产物与进度）;
-   备选是留在 doc 视图只弹 toast（文档中心心智更纯）。
-2. **B4 源文档形态**: 我建议右侧抽屉（从原文生成 + 工作流启动同屏, 因果链连贯）;
-   备选是最小方案——保留为第三 tab, 仅在 `features.agent_workflow` 开启时显示。
-3. **首拆默认值**: 「同时拆分 segment」首次拆分默认改为勾选（拆完即可进 Studio）;
-   若你偏好保持默认不勾（先裸章节、进 Studio 再拆）, 只改一处默认值, 其余设计不变。
+1. **拆分后落点**: 不自动切换视图; 留在当前 UI, 结果反馈附「查看章节」跳转按钮, 用户主动点击才切（B5）。
+2. **源文档形态**: 不做抽屉; 源文档作为第三个视图常驻切换器, 无工作流能力时也可访问, 仅工作流按钮按能力显隐（B4）。
+3. **首拆默认值**: 「同时拆分 segment」首次拆分默认勾选（A3）。
+
+附: 分镜本轮从切换器移除, 组件代码保留, 入口后续需要时再恢复。
