@@ -172,7 +172,7 @@ export function ChapterSplitModal({ projectId, fullText, existingChapterCount, d
       )}
       {(dryRunReport.recorded_discard ?? 0) > 0 && (
         <p className={styles.recordedWarning}>
-          {t('chapterSplit.confirmRecorded', { count: dryRunReport.recorded_discard })}
+          {t('chapterSplit.confirmRecorded', { count: dryRunReport.recorded_discard ?? 0 })}
         </p>
       )}
     </>

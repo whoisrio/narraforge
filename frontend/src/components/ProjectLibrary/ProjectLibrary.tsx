@@ -460,7 +460,7 @@ export function ProjectLibrary({
         })}</p>
       )}
       {(splitResult.recorded_discard ?? 0) > 0 && (
-        <p>{t('chapterSplit.confirmRecorded', { count: splitResult.recorded_discard })}</p>
+        <p>{t('chapterSplit.confirmRecorded', { count: splitResult.recorded_discard ?? 0 })}</p>
       )}
     </>
   ) : '';
