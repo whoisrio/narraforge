@@ -455,3 +455,102 @@ class TestProjectQuota:
         for pid in ("a1", "a2", "a3"):
             assert self._create(client, AUTH_A, pid).status_code == 201
         assert len(store.tables["segmented_projects"]) == 3
+
+
+class TestDesignedVoiceQuota:
+    """每用户设计音色配额（workers 模式；管理员豁免；preset/克隆不受限）。"""
+
+    def _design(self, client, headers, name: str, *, engine: str = "mimo"):
+        return client.post(
+            "/api/clone/create-from-design",
+            json={
+                "audio_base64": "QUFB" * 50 + "QUFBQQ==",  # 解码后 >100 字节
+                "engine": engine,
+                "name": name,
+                "description": "desc",
+            },
+            headers=headers,
+        )
+
+    def _design_count(self, store) -> int:
+        return len(store.tables.get("voice_profiles", []))
+
+    def test_regular_user_limited_to_one(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_designed_voices_per_user", 1)
+
+        assert self._design(client, AUTH_A, "v1").status_code == 200
+        # 第二个设计音色 -> 409，不落库
+        resp = self._design(client, AUTH_A, "v2")
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "designed_voice_limit_reached"
+        assert self._design_count(store) == 1
+
+    def test_other_users_unaffected(self, workers_client, monkeypatch):
+        """配额按 owner 独立计数：A 占满后 B 仍可设计自己的音色。"""
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_designed_voices_per_user", 1)
+
+        assert self._design(client, AUTH_A, "v1").status_code == 200
+        assert self._design(client, AUTH_B, "v1").status_code == 200
+        resp = self._design(client, AUTH_B, "v2")
+        assert resp.status_code == 409
+        assert self._design_count(store) == 2
+
+    def test_legacy_admin_unlimited(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_designed_voices_per_user", 1)
+
+        assert self._design(client, ADMIN, "a1").status_code == 200
+        assert self._design(client, ADMIN, "a2").status_code == 200
+        assert self._design_count(store) == 2
+
+    def test_admin_email_unlimited(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_designed_voices_per_user", 1)
+        monkeypatch.setattr(settings, "admin_emails", "admin@example.com")
+        admin_auth = _auth(USER_A, "admin@example.com")
+
+        assert self._design(client, admin_auth, "a1").status_code == 200
+        assert self._design(client, admin_auth, "a2").status_code == 200
+
+    def test_quota_disabled_when_zero(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_designed_voices_per_user", 0)
+
+        assert self._design(client, AUTH_A, "v1").status_code == 200
+        assert self._design(client, AUTH_A, "v2").status_code == 200
+
+    def test_preset_engine_not_counted(self, workers_client, monkeypatch):
+        """预置音色保存（engine=preset）不是设计音色，不受配额限制。"""
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_designed_voices_per_user", 1)
+
+        assert self._design(client, AUTH_A, "d1", engine="mimo").status_code == 200
+        # preset 保存不占设计音色名额
+        assert self._design(client, AUTH_A, "p1", engine="preset").status_code == 200
+        # 但第二个设计音色仍被拦
+        resp = self._design(client, AUTH_A, "d2", engine="mimo")
+        assert resp.status_code == 409
+
+    def test_project_scoped_design_counts(self, workers_client, monkeypatch):
+        """项目内创建的设计音色同样占用配额（全局 + 项目合并计数）。"""
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_designed_voices_per_user", 1)
+
+        resp = client.post(
+            "/api/clone/create-from-design",
+            json={
+                "audio_base64": "QUFB" * 50 + "QUFBQQ==",
+                "engine": "voxcpm",
+                "name": "proj-voice",
+                "description": "d",
+                "project_id": "p1",
+            },
+            headers=AUTH_A,
+        )
+        assert resp.status_code == 200
+        # 项目内已有 1 个 -> 全局再设计 -> 409
+        resp = self._design(client, AUTH_A, "g1")
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "designed_voice_limit_reached"

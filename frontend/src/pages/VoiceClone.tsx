@@ -7,7 +7,7 @@ import { ImageUploadZone } from '../components/ui/ImageUploadZone';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
-import { voiceApi } from '../services/api';
+import { voiceApi, apiErrorCode } from '../services/api';
 import { VoiceAvatar } from '../components/ui/VoiceAvatar';
 import { useTranslation } from '../i18n';
 import type { TTSResult, VoiceProfile } from '../types';
@@ -270,6 +270,11 @@ export function VoiceClone() {
         setDesignStatus('');
       }, 1200);
     } catch (err) {
+      if (apiErrorCode(err) === 'designed_voice_limit_reached') {
+        setDesignError(t('voiceDesign.quotaReached'));
+        setDesignPhase('previewed');
+        return;
+      }
       setDesignError(err instanceof Error ? err.message : t('voiceDesign.saveFailed'));
       setDesignPhase('previewed');
     }

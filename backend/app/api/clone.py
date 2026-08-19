@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
 from typing import Any, List, Optional
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
@@ -56,6 +56,35 @@ def is_qiniu_configured(db=None) -> bool:
     from app.services.qiniu_service import is_qiniu_configured as _impl
 
     return _impl(db)
+
+
+def _enforce_designed_voice_quota(request: Request, repo: VoiceProfileRepository) -> None:
+    """每用户设计音色配额（workers 模式，仅普通登录用户）。
+
+    名下设计音色（voice.voice_type == 'design'，含项目内）>=
+    max_designed_voices_per_user 时拒绝再建 -> 409 designed_voice_limit_reached。
+    豁免：local 模式（单租户无用户概念）、legacy admin（旧凭证通道）、
+    admin_emails 管理员、max_designed_voices_per_user <= 0（不限制）。
+    仅约束 create-from-design 的 mimo/voxcpm 设计流；预置音色保存
+    （engine=preset）与克隆上传不占名额。同项目配额（#82）同一模式。
+    """
+    if settings.deploy_target != "workers":
+        return
+    if settings.max_designed_voices_per_user <= 0:
+        return
+    if getattr(request.state, "legacy_admin", False):
+        return
+    user = getattr(request.state, "user", None)
+    if user and (user.get("email") or "").lower() in settings.admin_email_list:
+        return
+    if repo.count_owned_designs() >= settings.max_designed_voices_per_user:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "designed_voice_limit_reached",
+                "message": "每位用户限保存一个设计音色，可删除已有设计音色后再新建",
+            },
+        )
 
 
 def upload_to_qiniu(local_file_path: str, key: str, db=None) -> str:
@@ -630,6 +659,7 @@ async def create_clone_voxcpm(request: RegisterRequest, db: Session = Depends(ge
 @router.post("/create-from-design", response_model=VoiceProfileOut)
 async def create_voice_from_design(
     request: DesignVoiceRequest,
+    http_request: Request,
     repo: VoiceProfileRepository = Depends(get_voice_repo),
     store: AssetStore = Depends(get_asset_store),
 ):
@@ -642,6 +672,10 @@ async def create_voice_from_design(
     """
     import base64
     from datetime import datetime
+
+    # 设计音色配额：仅 mimo/voxcpm 设计流；preset 是预置音色保存，不占名额
+    if request.engine in ("mimo", "voxcpm"):
+        _enforce_designed_voice_quota(http_request, repo)
 
     try:
         audio_bytes = base64.b64decode(request.audio_base64)

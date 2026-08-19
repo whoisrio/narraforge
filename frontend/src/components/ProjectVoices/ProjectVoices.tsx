@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Role, RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, CosyVoiceParams, VoxCPMParams, VoiceProfile, MiMoPresetVoice } from '../../types';
 import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../../types';
-import { ttsApi, voiceApi, mimoTtsApi, voxcpmApi } from '../../services/api';
+import { ttsApi, voiceApi, mimoTtsApi, voxcpmApi, apiErrorCode } from '../../services/api';
 import { fetchVoiceRolePreview, synthesizeVoiceRolePreview } from '../../services/voiceRolePreview';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
 import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
@@ -301,6 +301,11 @@ function VoiceRoleEditor({
       triggerRefresh();
       return profile.id;
     } catch (err) {
+      if (apiErrorCode(err) === 'designed_voice_limit_reached') {
+        setDesignError(t('voiceDesign.quotaReached'));
+        setDesignPhase('previewed');
+        return null;
+      }
       setDesignError(err instanceof Error ? err.message : t('projectVoices.saveFailed'));
       setDesignPhase('previewed');
       return null;
