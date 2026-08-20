@@ -1,5 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { createTranslator, isSupportedLocale, locales, navItems } from './index';
+import { createElement, type ReactNode } from 'react';
+import { renderHook } from '@testing-library/react';
+import {
+  DEFAULT_LOCALE,
+  TranslationProvider,
+  createTranslator,
+  isSupportedLocale,
+  locales,
+  navItems,
+  useTranslation,
+} from './index';
+
+const providerWrapper = ({ children }: { children: ReactNode }) =>
+  createElement(TranslationProvider, null, children);
+
+describe('i18n default locale', () => {
+  it('falls back to en-US when no locale is saved (online acquisition default)', () => {
+    expect(DEFAULT_LOCALE).toBe('en-US');
+    window.localStorage.removeItem('narraforge-locale');
+    const { result } = renderHook(() => useTranslation(), { wrapper: providerWrapper });
+    expect(result.current.locale).toBe('en-US');
+  });
+
+  it('honors the saved locale over the default', () => {
+    window.localStorage.setItem('narraforge-locale', 'zh-CN');
+    const { result } = renderHook(() => useTranslation(), { wrapper: providerWrapper });
+    expect(result.current.locale).toBe('zh-CN');
+  });
+});
 
 describe('i18n', () => {
   it('translates global and project navigation in Chinese and English', () => {

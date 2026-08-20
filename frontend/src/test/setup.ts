@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { vi } from 'vitest';
+import { beforeEach, vi } from 'vitest';
 
 // jsdom 的 Blob 缺少 arrayBuffer()（node 原生 Blob 有）；经 FileReader 补上，
 // 否则从 IndexedDB 读出的 Blob 无法转 bytes（projectBundle/exportToFolder 依赖）。
@@ -20,6 +20,21 @@ if (typeof Blob !== 'undefined' && typeof (Blob.prototype as { arrayBuffer?: unk
 if (typeof window !== 'undefined') {
   window.localStorage.setItem('narraforge-locale', 'zh-CN');
 }
+
+// 用例里 localStorage.clear() 会把上面的 zh-CN 钉值一起抹掉（如 ProjectLibrary/
+// App.auth 的 beforeEach）：直接补丁 Storage.prototype.clear，清完即补回；
+// 另有 beforeEach 兜底 removeItem 场景。显式设置 en-US 的用例均不受影响。
+const originalStorageClear = Storage.prototype.clear;
+Storage.prototype.clear = function clear(this: Storage) {
+  originalStorageClear.call(this);
+  this.setItem('narraforge-locale', 'zh-CN');
+};
+
+beforeEach(() => {
+  if (typeof window !== 'undefined' && !window.localStorage.getItem('narraforge-locale')) {
+    window.localStorage.setItem('narraforge-locale', 'zh-CN');
+  }
+});
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
