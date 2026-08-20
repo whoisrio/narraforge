@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ttsApi, apiErrorCode } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import type { EdgeVoice, TTSLocalRecord } from '../types';
@@ -11,6 +11,7 @@ import {
 } from './tryHistory';
 import { shouldShowDownloadUpsell, markDownloadUpsellShown } from './tryUpsell';
 import { stashTryHandoffText } from './tryHandoff';
+import { distinctLanguages, filterEdgeVoices } from './voiceFilter';
 import styles from './TryPage.module.css';
 
 function toEdgeFormat(value: number): string {
@@ -44,6 +45,15 @@ interface CurrentAudio {
   text: string;
 }
 
+/** 品牌小标识：四条声波柱 */
+function WaveMark({ className }: { className?: string }) {
+  return (
+    <span className={className ?? styles.waveMark} aria-hidden="true">
+      <i /><i /><i /><i />
+    </span>
+  );
+}
+
 /**
  * Try 页（/try）：粘贴整份文档 → edge_tts 一键合成。
  * 无分段/无项目/无需登录；数据只存浏览器 IndexedDB。
@@ -51,7 +61,9 @@ interface CurrentAudio {
  */
 export function TryPage() {
   const [text, setText] = useState('');
-  const [voices, setVoices] = useState<EdgeVoice[]>([]);
+  const [allVoices, setAllVoices] = useState<EdgeVoice[]>([]);
+  const [language, setLanguage] = useState('English');
+  const [gender, setGender] = useState('');
   const [voice, setVoice] = useState('');
   const [rate, setRate] = useState(0);
   const [volume, setVolume] = useState(0);
@@ -69,9 +81,8 @@ export function TryPage() {
       // 微软音色列表偶发网络失败：自动重试一次
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          const items = await ttsApi.getEdgeVoices('English');
-          setVoices(items);
-          if (items.length > 0) setVoice((v) => v || items[0].short_name);
+          const items = await ttsApi.getEdgeVoices();
+          setAllVoices(items);
           return;
         } catch (err) {
           console.error('Failed to load voices:', err);
@@ -81,6 +92,23 @@ export function TryPage() {
     })();
     void listTryTTSRecords().then(setHistory).catch(() => {});
   }, []);
+
+  const languages = useMemo(() => distinctLanguages(allVoices), [allVoices]);
+  const filteredVoices = useMemo(
+    () => filterEdgeVoices(allVoices, { language, gender }),
+    [allVoices, language, gender],
+  );
+
+  // 过滤条件变化后，当前选中音色不在结果集时回退到第一个
+  useEffect(() => {
+    if (filteredVoices.length === 0) {
+      setVoice('');
+      return;
+    }
+    if (!filteredVoices.some((v) => v.short_name === voice)) {
+      setVoice(filteredVoices[0].short_name);
+    }
+  }, [filteredVoices, voice]);
 
   const validation = validateTryText(text);
 
@@ -113,7 +141,7 @@ export function TryPage() {
       } else {
         throw new Error('No audio returned');
       }
-      const voiceName = voices.find((v) => v.short_name === voice)?.display_name ?? voice;
+      const voiceName = allVoices.find((v) => v.short_name === voice)?.display_name ?? voice;
       const record: TTSLocalRecord = {
         id: crypto.randomUUID(),
         text,
@@ -143,7 +171,7 @@ export function TryPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, [validation, isGenerating, voice, text, rate, volume, voices]);
+  }, [validation, isGenerating, voice, text, rate, volume, allVoices]);
 
   const handlePlayRecord = useCallback((record: TTSLocalRecord) => {
     setCurrent((prev) => {
@@ -188,52 +216,82 @@ export function TryPage() {
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <span className={styles.brand}>NarraForge</span>
+        <span className={styles.brand}>
+          <WaveMark />
+          NarraForge <span className={styles.brandTry}>Try</span>
+        </span>
         <button type="button" className={styles.ctaButton} onClick={handleTryFullVersion}>
-          Try full version
+          Try full version →
         </button>
       </header>
 
       <main className={styles.main}>
-        <section className={styles.toolCard}>
-          <textarea
-            className={styles.textarea}
-            placeholder="Paste your document here — article, story, script, anything. Up to 3,000 characters."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            rows={10}
-          />
-          <div className={styles.toolRow}>
+        <section className={styles.toolCard} aria-label="Text to speech">
+          <div className={styles.textareaWrap}>
+            <textarea
+              className={styles.textarea}
+              placeholder="Paste your document here — article, story, script, anything. Up to 3,000 characters."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={9}
+            />
             <span
               data-testid="char-count"
               className={text.length > TRY_TEXT_MAX_CHARS ? styles.charCountOver : styles.charCount}
             >
               {text.length.toLocaleString()} / {TRY_TEXT_MAX_CHARS.toLocaleString()}
             </span>
-            {!validation.ok && validation.reason === 'too_long' && (
-              <span className={styles.limitWarning}>
-                This demo supports up to 3,000 characters per generation.
-              </span>
-            )}
           </div>
+          {!validation.ok && validation.reason === 'too_long' && (
+            <p className={styles.limitWarning}>
+              This demo supports up to 3,000 characters per generation.
+            </p>
+          )}
 
-          <div className={styles.controls}>
+          <div className={styles.voiceRow}>
             <label className={styles.field}>
-              Voice
+              <span className={styles.fieldLabel}>Language</span>
+              <select
+                aria-label="Language"
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+              >
+                {languages.map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span className={styles.fieldLabel}>Gender</span>
+              <select
+                aria-label="Gender"
+                value={gender}
+                onChange={(e) => setGender(e.target.value)}
+              >
+                <option value="">All</option>
+                <option value="Female">Female</option>
+                <option value="Male">Male</option>
+              </select>
+            </label>
+            <label className={`${styles.field} ${styles.fieldGrow}`}>
+              <span className={styles.fieldLabel}>Voice</span>
               <select
                 aria-label="Voice"
                 value={voice}
                 onChange={(e) => setVoice(e.target.value)}
               >
-                {voices.map((v) => (
+                {filteredVoices.map((v) => (
                   <option key={v.short_name} value={v.short_name}>
                     {v.display_name} ({v.locale})
                   </option>
                 ))}
               </select>
             </label>
-            <label className={styles.field}>
-              Speed {toEdgeFormat(rate)}
+          </div>
+
+          <div className={styles.sliderRow}>
+            <label className={styles.sliderField}>
+              <span className={styles.fieldLabel}>Speed <em>{toEdgeFormat(rate)}</em></span>
               <input
                 type="range"
                 min={-50}
@@ -243,8 +301,8 @@ export function TryPage() {
                 onChange={(e) => setRate(Number(e.target.value))}
               />
             </label>
-            <label className={styles.field}>
-              Volume {toEdgeFormat(volume)}
+            <label className={styles.sliderField}>
+              <span className={styles.fieldLabel}>Volume <em>{toEdgeFormat(volume)}</em></span>
               <input
                 type="range"
                 min={-50}
@@ -262,7 +320,14 @@ export function TryPage() {
             disabled={!validation.ok || isGenerating || !voice}
             onClick={() => void handleGenerate()}
           >
-            {isGenerating ? 'Generating…' : 'Generate speech'}
+            {isGenerating ? (
+              <>
+                <WaveMark className={styles.waveMarkActive} />
+                Generating…
+              </>
+            ) : (
+              'Generate speech'
+            )}
           </button>
 
           {rateLimited && (
@@ -276,13 +341,19 @@ export function TryPage() {
           )}
 
           {current && (
-            <audio data-testid="audio-player" className={styles.player} controls src={current.url} />
+            <div className={styles.playerCard}>
+              <WaveMark />
+              <audio data-testid="audio-player" className={styles.player} controls src={current.url} />
+            </div>
           )}
         </section>
 
-        <section className={styles.historySection}>
+        <aside className={styles.historyRail} aria-label="Recordings">
           <div className={styles.historyHeader}>
-            <h2 className={styles.historyTitle}>Your recordings</h2>
+            <h2 className={styles.historyTitle}>
+              Recordings
+              {history.length > 0 && <span className={styles.countBadge}>{history.length}</span>}
+            </h2>
             {history.length > 0 && (
               <button
                 type="button"
@@ -295,28 +366,29 @@ export function TryPage() {
           </div>
           {history.length === 0 ? (
             <p className={styles.historyEmpty}>
-              Generated audio is stored in your browser only — replay or download it anytime.
+              Nothing here yet — generate your first recording and it will show up here,
+              stored only in this browser.
             </p>
           ) : (
             <ul data-testid="history-list" className={styles.historyList}>
               {history.map((record) => (
                 <li key={record.id} className={styles.historyItem}>
-                  <div className={styles.historyMeta}>
-                    <span className={styles.historyText}>{record.text}</span>
+                  <p className={styles.historyText}>{record.text}</p>
+                  <div className={styles.historyMetaRow}>
                     <span className={styles.historyVoice}>
                       {record.voice_name} · {new Date(record.created_at).toLocaleString()}
                     </span>
-                  </div>
-                  <div className={styles.historyActions}>
-                    <button type="button" onClick={() => handlePlayRecord(record)}>Play</button>
-                    <button type="button" onClick={() => handleDownload(record)}>Download</button>
-                    <button type="button" onClick={() => void handleDeleteRecord(record.id)}>Delete</button>
+                    <span className={styles.historyActions}>
+                      <button type="button" title="Play" onClick={() => handlePlayRecord(record)}>Play</button>
+                      <button type="button" title="Download" onClick={() => handleDownload(record)}>Download</button>
+                      <button type="button" title="Delete" onClick={() => void handleDeleteRecord(record.id)}>Delete</button>
+                    </span>
                   </div>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </aside>
       </main>
 
       {upsellOpen && (
@@ -345,7 +417,7 @@ export function TryPage() {
             <h3>Clear all recordings?</h3>
             <p>This permanently deletes all generated audio stored in this browser.</p>
             <div className={styles.modalActions}>
-              <button type="button" onClick={() => setConfirmClearOpen(false)}>Cancel</button>
+              <button type="button" className={styles.cancelButton} onClick={() => setConfirmClearOpen(false)}>Cancel</button>
               <button
                 type="button"
                 className={styles.dangerButton}

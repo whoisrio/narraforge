@@ -4,6 +4,68 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#fff8f1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      :root { color-scheme: light; }
+      body { margin: 0; background: #fff8f1; }
+      .seo-wrap {
+        max-width: 1080px;
+        margin: 0 auto;
+        padding: 0 24px;
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #1d1b17;
+      }
+      /* Hero：编辑感衬线大标题 + 声波柱点缀 */
+      .seo-hero { padding: 56px 24px 8px; text-align: center; }
+      .seo-hero h1 {
+        font-family: 'Newsreader', Georgia, 'Times New Roman', serif;
+        font-size: clamp(34px, 5vw, 52px);
+        font-weight: 600;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        margin: 0 0 18px;
+      }
+      .seo-hero h1 em { font-style: italic; color: #c47a3a; }
+      .seo-hero p {
+        font-size: 17px;
+        line-height: 1.7;
+        color: #534439;
+        max-width: 620px;
+        margin: 0 auto;
+      }
+      .seo-wave {
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        gap: 4px;
+        height: 28px;
+        margin: 26px 0 0;
+      }
+      .seo-wave i { display: block; width: 4px; border-radius: 2px; background: #c47a3a; opacity: 0.85; }
+      .seo-wave i:nth-child(1) { height: 8px; }
+      .seo-wave i:nth-child(2) { height: 18px; }
+      .seo-wave i:nth-child(3) { height: 12px; }
+      .seo-wave i:nth-child(4) { height: 24px; }
+      .seo-wave i:nth-child(5) { height: 14px; }
+      .seo-wave i:nth-child(6) { height: 20px; }
+      .seo-wave i:nth-child(7) { height: 9px; }
+      /* 说明区 */
+      .seo-section { padding: 40px 24px 8px; max-width: 760px; margin: 0 auto; }
+      .seo-section h2 {
+        font-family: 'Newsreader', Georgia, serif;
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        margin: 0 0 14px;
+      }
+      .seo-section ol { line-height: 1.9; color: #534439; padding-left: 22px; margin: 0; }
+      .seo-section h3 { font-size: 15px; margin: 22px 0 6px; color: #1d1b17; }
+      .seo-section p { line-height: 1.75; color: #534439; margin: 0; font-size: 15px; }
+      .seo-divider { border: none; border-top: 1px solid #e8e1db; margin: 40px 0 0; }
+    </style>
     <title>NarraForge Try — Turn Any Document into Natural Speech, Free</title>
     <meta
       name="description"
@@ -74,39 +136,39 @@
   </head>
   <body>
     <!-- 静态 SEO 内容：不依赖 JS 即可被爬虫读取 -->
-    <section id="intro" style="max-width:760px;margin:0 auto;padding:40px 16px 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1b17;">
-      <h1 style="font-size:28px;line-height:1.3;margin:0 0 12px;">
-        Turn any document into natural speech
-      </h1>
-      <p style="font-size:16px;line-height:1.7;color:#534439;margin:0;">
+    <section id="intro" class="seo-wrap seo-hero">
+      <h1>Turn any document into <em>natural speech</em></h1>
+      <p>
         Paste an article, story, or script below and hear it read aloud in seconds.
         Free to use — no sign-up, no install. Your audio is generated in the cloud
         and stored only in your browser, ready to replay or download as MP3 anytime.
       </p>
+      <div class="seo-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     </section>
 
     <div id="root"></div>
 
-    <section id="how-it-works" style="max-width:760px;margin:0 auto;padding:8px 16px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1b17;">
-      <h2 style="font-size:20px;">How it works</h2>
-      <ol style="line-height:1.8;color:#534439;padding-left:20px;">
+    <section id="how-it-works" class="seo-wrap seo-section">
+      <hr class="seo-divider" />
+      <h2>How it works</h2>
+      <ol>
         <li>Paste your text — up to 3,000 characters per generation.</li>
-        <li>Pick a natural English voice and adjust speed or volume.</li>
+        <li>Pick a natural voice and adjust speed or volume.</li>
         <li>Generate, listen, and download your MP3. Your history stays in this browser.</li>
       </ol>
-      <h2 style="font-size:20px;">Frequently asked questions</h2>
-      <h3 style="font-size:16px;">Is NarraForge Try really free?</h3>
-      <p style="line-height:1.7;color:#534439;">
+      <h2 style="margin-top:36px;">Frequently asked questions</h2>
+      <h3>Is NarraForge Try really free?</h3>
+      <p>
         Yes. You can generate up to 50 audio files per day (3,000 characters each) without an account.
         The full version removes these limits.
       </p>
-      <h3 style="font-size:16px;">Where is my text and audio stored?</h3>
-      <p style="line-height:1.7;color:#534439;">
+      <h3>Where is my text and audio stored?</h3>
+      <p>
         Your generated audio is stored only in your own browser. Nothing is saved on our servers
         and no account is needed.
       </p>
-      <h3 style="font-size:16px;">What does the full version add?</h3>
-      <p style="line-height:1.7;color:#534439;">
+      <h3>What does the full version add?</h3>
+      <p>
         Projects and chapter management, cloud sync, premium MiMo voices, voice cloning,
         and long-document synthesis segment by segment.
       </p>

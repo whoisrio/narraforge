@@ -29,6 +29,33 @@ test.describe('Try 页', () => {
     await expect(page.getByRole('combobox', { name: /voice/i }).locator('option').first()).toBeAttached({ timeout: 15_000 });
   });
 
+  // @feature 音色过滤 — 语言/性别下拉
+  test('声音列表支持语言与性别过滤', async ({ page }) => {
+    await page.goto('/try.html');
+    const voiceCombo = page.getByRole('combobox', { name: 'Voice', exact: true });
+    await expect(voiceCombo.locator('option').first()).toBeAttached({ timeout: 15_000 });
+
+    // 默认 English
+    await expect(page.getByRole('combobox', { name: 'Language' })).toHaveValue('English');
+    const englishCount = await voiceCombo.locator('option').count();
+    expect(englishCount).toBeGreaterThan(0);
+
+    // 切到 Chinese → 选项变化且全部 zh-
+    await page.getByRole('combobox', { name: 'Language' }).selectOption('Chinese');
+    const zhOptions = voiceCombo.locator('option');
+    await expect(zhOptions.first()).toBeAttached();
+    const zhValues = await zhOptions.evaluateAll((opts) => opts.map((o) => (o as HTMLOptionElement).value));
+    expect(zhValues.length).toBeGreaterThan(0);
+    expect(zhValues.every((v) => v.startsWith('zh-'))).toBe(true);
+
+    // 性别过滤 Male → 选项减少且不为 0
+    await page.getByRole('combobox', { name: 'Language' }).selectOption('English');
+    await page.getByRole('combobox', { name: 'Gender' }).selectOption('Male');
+    const maleCount = await voiceCombo.locator('option').count();
+    expect(maleCount).toBeGreaterThan(0);
+    expect(maleCount).toBeLessThan(englishCount);
+  });
+
   // @feature 字数上限 — 单次 3000 字
   test('超过 3000 字禁止合成', async ({ page }) => {
     await page.goto('/try.html');
@@ -72,7 +99,7 @@ test.describe('Try 页', () => {
     // 单条删除
     await page.getByRole('button', { name: 'Delete' }).first().click();
     await expect(historyList).not.toBeVisible();
-    await expect(page.getByText(/stored in your browser only/)).toBeVisible();
+    await expect(page.getByText(/stored only in this browser/)).toBeVisible();
 
     // 一键清空：再造一条记录后清空
     await page.getByRole('textbox').fill(SAMPLE_TEXT);
