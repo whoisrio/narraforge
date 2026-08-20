@@ -6,6 +6,8 @@
 - `local`：本地开发/自托管，全量功能（含本地 ML 模型、ffmpeg、git、Node.js）。
 - `workers`：线上轻量形态，不安装 `local-ml` 依赖（torch/faster-whisper/funasr/voxcpm），不挂载本地专属路由。
 
+> 前端导航差异：workers 部署下「设置」（模型配置页）入口对用户隐藏——线上凭据由服务端环境变量统一管理，页面无可配置项；`/api/model-config/*` 端点本身仍按 A 类保留。
+
 ## A. 线上轻量可跑（workers 模式已支持）
 
 | 功能 | 端点 | 依赖 |

@@ -66,8 +66,8 @@ test.describe('Try 页', () => {
     await expect(page.getByTestId('char-count')).toHaveText(/3,001 \/ 3,000/);
   });
 
-  // @feature 核心链路 — 合成/试听/下载/历史
-  test('粘贴 → 合成 → 试听 → 下载（首次弹推荐）→ 历史管理', async ({ page }) => {
+  // @feature 核心链路 — 合成/试听/下载/全部下载/历史
+  test('粘贴 → 合成 → 试听 → 下载（每 5 次弹推荐）→ 全部下载 → 历史管理', async ({ page }) => {
     await page.goto('/try.html');
     await expect(page.getByRole('combobox', { name: /voice/i }).locator('option').first()).toBeAttached({ timeout: 15_000 });
 
@@ -80,8 +80,16 @@ test.describe('Try 页', () => {
     const historyList = page.getByTestId('history-list');
     await expect(historyList).toContainText(SAMPLE_TEXT);
 
-    // 首次下载 → 推荐弹窗 → 继续下载
-    await page.getByRole('button', { name: 'Download' }).first().click();
+    // 前 4 次下载直接触发，不弹推荐确认（页面停留计数，刷新归零）
+    for (let i = 0; i < 4; i++) {
+      const directDownloadPromise = page.waitForEvent('download');
+      await page.getByRole('button', { name: 'Download', exact: true }).first().click();
+      await expect(page.getByRole('dialog')).not.toBeVisible();
+      await directDownloadPromise;
+    }
+
+    // 第 5 次下载 → 推荐弹窗 → 继续下载
+    await page.getByRole('button', { name: 'Download', exact: true }).first().click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
     await expect(dialog).toContainText(/full version/);
@@ -90,11 +98,18 @@ test.describe('Try 页', () => {
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toMatch(/\.mp3$/);
 
-    // 同会话第二次下载不再弹窗
+    // 确认后再次下载不弹窗
     const download2Promise = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Download' }).first().click();
+    await page.getByRole('button', { name: 'Download', exact: true }).first().click();
     await expect(page.getByRole('dialog')).not.toBeVisible();
     await download2Promise;
+
+    // 全部下载：打包为单个 zip，不弹推荐确认
+    const zipDownloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Download all' }).click();
+    const zipDownload = await zipDownloadPromise;
+    expect(zipDownload.suggestedFilename()).toMatch(/\.zip$/);
+    await expect(page.getByRole('dialog')).not.toBeVisible();
 
     // 单条删除
     await page.getByRole('button', { name: 'Delete' }).first().click();
@@ -114,13 +129,14 @@ test.describe('Try 页', () => {
 
   // @feature 转化链路 — 「试用完整功能」内容接力到主应用
   test('「试用完整功能」把文档带入主应用空项目', async ({ page }) => {
+    // locale 需在首次导航前注入：跳回主应用时落地页已按 localStorage 渲染，事后设置不会重渲染
+    await setLocaleToZhCN(page);
     await page.goto('/try.html');
     await page.getByRole('textbox').fill(SAMPLE_TEXT);
     await page.getByRole('button', { name: 'Try full version' }).first().click();
 
     // 跳回主应用落地页
     await page.waitForURL(/\/$/);
-    await setLocaleToZhCN(page);
     await enterWorkspace(page);
 
     // 新建空项目（创建后自动进入项目工作区）→ 切到工作室 → 接力文本预填进原文

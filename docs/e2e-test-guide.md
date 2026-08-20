@@ -194,7 +194,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G8 | **Knowledge video workflow entry + storyboard** | 工作流类型入口 + 分镜视图（brief API 预置 + 双层验证） | `knowledge-video-workflow.spec.ts` | Medium | ✅ Done |
 | G9 | **Chapter & segment reorder** | 章节侧边栏 + 段落行 ↑/↓ 调整顺序，UI->API->DB `position` 三层一致 | `reorder.spec.ts` | Medium | ✅ Done |
 | G10 | **重拆保留真实 UI 路径** | S1 默认路径（不碰勾选框）重拆文档不改 → 音频全保留；S3 章节重组（加标题、文本逐字未动）→ 全局兜底保留；含 dry_run 诚实确认文案与 UI->API->DB->FS 四层验证 | `chapter-split-preserve-audio.spec.ts` | High | ✅ Done |
-| G12 | **Try 页（/try 获客页）** | SEO 静态内容、3000 字上限、真实 edge_tts 合成链路、历史记录（重复下载/删除/清空）、下载推荐弹窗每会话一次、「试用完整功能」内容接力进主应用 | `try-page.spec.ts` | High | ✅ Done |
+| G12 | **Try 页（/try 获客页）** | SEO 静态内容、3000 字上限、真实 edge_tts 合成链路、历史记录（重复下载/删除/清空）、全部下载打包 zip、下载推荐弹窗每 5 次下载一次（页面停留计数、刷新归零）、「试用完整功能」内容接力进主应用 | `try-page.spec.ts` | High | ✅ Done |
 | G11 | **Library 文档优先 IA** | 默认落 doc 视图、形态 A 粘贴 CTA + 去源文档、拆分后留在 doc + 结果反馈跳转、源文档视图可访问、视图记忆；章节/段落逐字段 API + DB 双读 | `library-doc-first.spec.ts` | High | ✅ Done |
 
 **Additional rules**:

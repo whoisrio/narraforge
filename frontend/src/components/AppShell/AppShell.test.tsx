@@ -41,6 +41,23 @@ describe('AppShell', () => {
     expect(screen.getByRole('button', { name: /展开导航/ })).toBeInTheDocument();
   });
 
+  it('renders a contact-admin mailto link when an email is provided', () => {
+    render(
+      <AppShell activeNavId="projects" onNavigate={vi.fn()} contactEmail="admin@example.com">
+        <div>Studio content</div>
+      </AppShell>,
+    );
+
+    const link = screen.getByRole('link', { name: /联系管理员/ });
+    expect(link).toHaveAttribute('href', 'mailto:admin@example.com');
+  });
+
+  it('omits the contact-admin link when no email is configured', () => {
+    renderShell();
+
+    expect(screen.queryByRole('link', { name: /联系管理员/ })).not.toBeInTheDocument();
+  });
+
   it('hides navigation entries listed in hiddenNavIds (workers 模式隐藏字幕识别)', () => {
     const onNavigate = vi.fn();
     render(

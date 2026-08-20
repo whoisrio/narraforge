@@ -9,7 +9,8 @@ import {
   deleteTryTTSRecord,
   clearTryTTSRecords,
 } from './tryHistory';
-import { shouldShowDownloadUpsell, markDownloadUpsellShown } from './tryUpsell';
+import { recordDownloadAndCheckUpsell } from './tryUpsell';
+import { buildRecordingsZip, downloadName } from './tryExport';
 import { stashTryHandoffText } from './tryHandoff';
 import { distinctLanguages, filterEdgeVoices } from './voiceFilter';
 import styles from './TryPage.module.css';
@@ -34,10 +35,6 @@ function downloadBlob(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
-}
-
-function downloadName(record: TTSLocalRecord): string {
-  return `narraforge-${record.id}.${record.audio_format || 'mp3'}`;
 }
 
 interface CurrentAudio {
@@ -192,14 +189,20 @@ export function TryPage() {
   }, []);
 
   const handleDownload = useCallback((record: TTSLocalRecord) => {
-    if (shouldShowDownloadUpsell()) {
-      markDownloadUpsellShown();
+    // 页面停留期间每下载 5 次弹一次推荐确认（刷新归零）
+    if (recordDownloadAndCheckUpsell()) {
       pendingDownload.current = record;
       setUpsellOpen(true);
       return;
     }
     downloadBlob(record.audioBlob, downloadName(record));
   }, []);
+
+  const handleDownloadAll = useCallback(async () => {
+    if (history.length === 0) return;
+    const zip = await buildRecordingsZip(history);
+    downloadBlob(zip, 'narraforge-recordings.zip');
+  }, [history]);
 
   const handleUpsellContinue = useCallback(() => {
     const record = pendingDownload.current;
@@ -375,13 +378,22 @@ export function TryPage() {
               {history.length > 0 && <span className={styles.countBadge}>{history.length}</span>}
             </h2>
             {history.length > 0 && (
-              <button
-                type="button"
-                className={styles.clearButton}
-                onClick={() => setConfirmClearOpen(true)}
-              >
-                Clear all
-              </button>
+              <span className={styles.historyHeaderActions}>
+                <button
+                  type="button"
+                  className={styles.downloadAllButton}
+                  onClick={() => void handleDownloadAll()}
+                >
+                  Download all
+                </button>
+                <button
+                  type="button"
+                  className={styles.clearButton}
+                  onClick={() => setConfirmClearOpen(true)}
+                >
+                  Clear all
+                </button>
+              </span>
             )}
           </div>
           {history.length === 0 ? (

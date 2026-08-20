@@ -13,10 +13,23 @@ vi.mock('../services/api', async (importOriginal) => {
   };
 });
 
+// 包一层 spy：默认仍走真实 IndexedDB；打包下载等用例需要真实 Blob
+// （fake-indexeddb 会把 Blob 结构化克隆成空对象），可临时 mockResolvedValue。
+vi.mock('./tryHistory', async (importOriginal) => {
+  const original = await importOriginal<typeof import('./tryHistory')>();
+  return {
+    ...original,
+    listTryTTSRecords: vi.fn(original.listTryTTSRecords),
+  };
+});
+
 import { ttsApi } from '../services/api';
 import { _openDB, _TTS_STORE } from '../services/indexedDB';
 import { TryPage } from './TryPage';
 import { listTryTTSRecords, saveTryTTSRecord } from './tryHistory';
+
+const mockedListRecords = vi.mocked(listTryTTSRecords);
+import { resetDownloadUpsellCounter } from './tryUpsell';
 import type { TTSLocalRecord } from '../types';
 
 const mockedGetEdgeVoices = vi.mocked(ttsApi.getEdgeVoices);
@@ -65,6 +78,7 @@ describe('TryPage', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     sessionStorage.clear();
+    resetDownloadUpsellCounter();
     await resetTTSStore();
     lastDownloadName = null;
     objectUrlSeq = 0;
@@ -248,21 +262,47 @@ describe('TryPage', () => {
     await screen.findByText(/daily free trial limit/i);
   });
 
-  it('first download of a session shows upsell dialog, continue proceeds', async () => {
+  it('shows upsell dialog on every 5th download, others proceed directly', async () => {
     await saveTryTTSRecord(makeRecord('r1'));
     await renderPage();
-    const downloadButtons = await screen.findAllByRole('button', { name: /download/i });
-    fireEvent.click(downloadButtons[0]);
+    const downloadButton = await screen.findByRole('button', { name: /^download$/i });
 
+    // 前 4 次下载直接触发，不弹确认
+    for (let i = 0; i < 4; i++) {
+      fireEvent.click(downloadButton);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(lastDownloadName).toMatch(/\.mp3$/);
+    }
+
+    // 第 5 次下载弹确认，继续后触发下载
+    fireEvent.click(downloadButton);
     const dialog = await screen.findByRole('dialog');
     expect(dialog.textContent).toMatch(/full version/i);
     fireEvent.click(screen.getByRole('button', { name: /continue download/i }));
     expect(lastDownloadName).toMatch(/\.mp3$/);
 
-    // 同一会话第二次下载不再弹窗
-    fireEvent.click(downloadButtons[0]);
+    // 确认后的 4 次又恢复直接下载
+    for (let i = 0; i < 4; i++) {
+      fireEvent.click(downloadButton);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    }
+
+    // 第 10 次再次弹窗
+    fireEvent.click(downloadButton);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('downloads all history records as one zip', async () => {
+    // 经 IDB 往返的 Blob 在 fake-indexeddb 下丢失方法，这里直接给内存记录（once：不泄漏到后续用例）
+    mockedListRecords.mockResolvedValueOnce([makeRecord('r2'), makeRecord('r1')]);
+    await renderPage();
+    await screen.findByText('record r1');
+
+    fireEvent.click(screen.getByRole('button', { name: /download all/i }));
+
+    await waitFor(() => expect(lastDownloadName).toMatch(/\.zip$/));
+    // 打包下载不弹推荐确认框
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(lastDownloadName).toMatch(/\.mp3$/);
   });
 
   it('deletes a single history record', async () => {

@@ -1,22 +1,39 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
-  shouldShowDownloadUpsell,
-  markDownloadUpsellShown,
+  DOWNLOAD_UPSELL_INTERVAL,
+  recordDownloadAndCheckUpsell,
+  resetDownloadUpsellCounter,
 } from './tryUpsell';
 import { stashTryHandoffText, consumeTryHandoffText, peekTryHandoffText } from './tryHandoff';
 
 describe('tryUpsell', () => {
   beforeEach(() => {
-    sessionStorage.clear();
+    resetDownloadUpsellCounter();
   });
 
-  it('shows upsell on first download of the session', () => {
-    expect(shouldShowDownloadUpsell()).toBe(true);
+  it('upsell interval is 5 downloads', () => {
+    expect(DOWNLOAD_UPSELL_INTERVAL).toBe(5);
   });
 
-  it('does not show upsell again after marked shown', () => {
-    markDownloadUpsellShown();
-    expect(shouldShowDownloadUpsell()).toBe(false);
+  it('does not show upsell for the first four downloads', () => {
+    expect(recordDownloadAndCheckUpsell()).toBe(false);
+    expect(recordDownloadAndCheckUpsell()).toBe(false);
+    expect(recordDownloadAndCheckUpsell()).toBe(false);
+    expect(recordDownloadAndCheckUpsell()).toBe(false);
+  });
+
+  it('shows upsell on every 5th download', () => {
+    for (let i = 0; i < 4; i++) recordDownloadAndCheckUpsell();
+    expect(recordDownloadAndCheckUpsell()).toBe(true);
+
+    for (let i = 0; i < 4; i++) recordDownloadAndCheckUpsell();
+    expect(recordDownloadAndCheckUpsell()).toBe(true);
+  });
+
+  it('counter resets to zero (page refresh semantics)', () => {
+    for (let i = 0; i < 4; i++) recordDownloadAndCheckUpsell();
+    resetDownloadUpsellCounter();
+    expect(recordDownloadAndCheckUpsell()).toBe(false);
   });
 });
 

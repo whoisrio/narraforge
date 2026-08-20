@@ -32,6 +32,10 @@ import styles from './App.module.css';
 
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
 
+/** 联系管理员邮箱（构建期 VITE_ADMIN_EMAIL 注入；未配置则不在侧栏展示入口） */
+const ADMIN_CONTACT_EMAIL =
+  (import.meta.env.VITE_ADMIN_EMAIL as string | undefined)?.trim() || undefined;
+
 type Page = 'home' | 'auth';
 type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config' | 'admin';
 type View = Page | Tab;
@@ -356,6 +360,8 @@ function AppContent() {
   const hiddenNavIds: GlobalNavId[] = [
     ...(!capabilities.features.speech_to_text || isAnonymous ? ['subtitles' as GlobalNavId] : []),
     ...(isAnonymous ? ['voice-design' as GlobalNavId] : []),
+    // 在线部署（workers）：模型凭据由服务端环境变量管理，设置页无可配置项，隐藏入口
+    ...(capabilities.deploy_target !== 'local' ? ['settings' as GlobalNavId] : []),
   ];
 
   return (
@@ -394,6 +400,7 @@ function AppContent() {
             rightSlot={settingsSlot}
             hideSidebar={inProjectWorkspace}
             hiddenNavIds={hiddenNavIds}
+            contactEmail={ADMIN_CONTACT_EMAIL}
           >
             <VoiceRefreshProvider>
               <main className={styles.main}>

@@ -11,6 +11,8 @@ interface AppShellProps {
   hideSidebar?: boolean;
   /** 按部署能力隐藏的导航项（如 workers 模式隐藏 subtitles） */
   hiddenNavIds?: GlobalNavId[];
+  /** 联系管理员邮箱（配置后在侧栏底部展示 mailto 入口） */
+  contactEmail?: string;
   onNavigate: (id: GlobalNavId) => void;
 }
 
@@ -27,6 +29,7 @@ export function AppShell({
   rightSlot,
   hideSidebar = false,
   hiddenNavIds = [],
+  contactEmail,
   onNavigate,
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -76,15 +79,29 @@ export function AppShell({
           })}
         </nav>
 
-        <button
-          type="button"
-          className={styles.collapseButton}
-          aria-label={collapsed ? t('appShell.expandNav') : t('appShell.collapseNav')}
-          onClick={() => setCollapsed(value => !value)}
-        >
-          <span>{collapsed ? '›' : '‹'}</span>
-          {!collapsed && <span>{t('appShell.collapseNav')}</span>}
-        </button>
+        <div className={styles.sidebarFooter}>
+          {contactEmail && (
+            <a
+              className={styles.contactAdmin}
+              href={`mailto:${contactEmail}`}
+              title={collapsed ? t('appShell.contactAdmin') : contactEmail}
+              aria-label={collapsed ? t('appShell.contactAdmin') : undefined}
+            >
+              <span className={styles.navIcon}>✉</span>
+              {!collapsed && <span className={styles.navLabel}>{t('appShell.contactAdmin')}</span>}
+            </a>
+          )}
+
+          <button
+            type="button"
+            className={styles.collapseButton}
+            aria-label={collapsed ? t('appShell.expandNav') : t('appShell.collapseNav')}
+            onClick={() => setCollapsed(value => !value)}
+          >
+            <span>{collapsed ? '›' : '‹'}</span>
+            {!collapsed && <span>{t('appShell.collapseNav')}</span>}
+          </button>
+        </div>
       </aside>
       )}
 
