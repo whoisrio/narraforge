@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -7,30 +7,46 @@
     <meta name="theme-color" content="#1a1814" />
     <meta
       name="description"
-      content="NarraForge — AI 配音工作台：声音克隆、文本转语音、语音转字幕。粘贴文本即可生成自然语音，支持章节化长文合成与多音色管理。"
+      content="NarraForge is an AI voice studio: voice cloning, text-to-speech, and speech-to-subtitle. Paste any text and generate natural speech, with chapter-based long-form synthesis and multi-voice management."
     />
+    <link rel="canonical" href="%VITE_SITE_URL%/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="NarraForge" />
-    <meta property="og:title" content="NarraForge — AI 配音工作台" />
+    <meta property="og:title" content="NarraForge — AI Voice Studio" />
     <meta
       property="og:description"
-      content="声音克隆、文本转语音、语音转字幕。粘贴文本即可生成自然语音，支持章节化长文合成与多音色管理。"
+      content="Voice cloning, text-to-speech, and speech-to-subtitle. Paste text, get natural speech — with chapter-based long-form synthesis and multi-voice management."
     />
+    <meta property="og:url" content="%VITE_SITE_URL%/" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="NarraForge — AI 配音工作台" />
+    <meta name="twitter:title" content="NarraForge — AI Voice Studio" />
     <meta
       name="twitter:description"
-      content="声音克隆、文本转语音、语音转字幕。粘贴文本即可生成自然语音，支持章节化长文合成与多音色管理。"
+      content="Voice cloning, text-to-speech, and speech-to-subtitle. Paste text, get natural speech — with chapter-based long-form synthesis and multi-voice management."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
-    <title>NarraForge — AI 配音工作台：声音克隆、文本转语音、语音转字幕</title>
+    <title>NarraForge — AI Voice Studio: Voice Cloning, Text to Speech, Speech to Subtitle</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- 静态回退内容：爬虫与不执行 JS 的客户端可见；React 挂载后自动替换 -->
+      <header style="max-width:720px;margin:64px auto;padding:0 24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1d1b17;">
+        <h1 style="font-size:32px;line-height:1.25;margin:0 0 14px;">NarraForge — AI Voice Studio</h1>
+        <p style="font-size:16px;line-height:1.7;color:#534439;margin:0 0 10px;">
+          Voice cloning, text-to-speech, and speech-to-subtitle in one workspace.
+          Paste any text and generate natural-sounding speech, synthesize long documents
+          chapter by chapter, and manage multiple voices per project.
+        </p>
+        <p style="font-size:16px;line-height:1.7;color:#534439;margin:0;">
+          Try it free, no sign-up:
+          <a href="/try" style="color:#8b4c0d;font-weight:600;">turn any document into speech</a>.
+        </p>
+      </header>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
