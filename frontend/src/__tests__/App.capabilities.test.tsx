@@ -76,5 +76,20 @@ describe('App capabilities gating (workers)', () => {
     expect(screen.getByRole('button', { name: /音色设计/ })).toBeInTheDocument();
     // workers 固定 frontend 存储：切换器不给出 backend 选项
     expect(screen.queryByRole('option', { name: /后端|backend/i })).not.toBeInTheDocument();
+    // 在线部署无可配置项：隐藏设置入口（对照组：音色设计入口仍在）
+    expect(screen.queryByRole('button', { name: /设置/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps the settings nav entry under local capabilities (对照组，防选择器误匹配)', async () => {
+    const { fetchCapabilities } = await import('../services/capabilities');
+    vi.mocked(fetchCapabilities).mockResolvedValueOnce({
+      ...WORKERS_CAPABILITIES,
+      deploy_target: 'local',
+      features: { ...WORKERS_CAPABILITIES.features, speech_to_text: true },
+    });
+    render(<App />);
+
+    expect(await screen.findByTestId('app-shell')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /设置/ })).toBeInTheDocument();
   });
 });

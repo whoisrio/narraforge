@@ -665,6 +665,7 @@ export const enUS: Messages = {
     collapseNav: 'Collapse Navigation',
     studioWorkspace: 'Studio Workspace',
     workspaceHub: 'Workspace Hub',
+    contactAdmin: 'Contact admin',
   },
   projectShell: {
     backToProjects: 'Back to Projects',

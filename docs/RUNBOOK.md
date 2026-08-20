@@ -488,6 +488,7 @@ Pages 已进维护模式，前端用 **Workers Static Assets** 托管（`fronten
 | `VITE_SUPABASE_URL` | Supabase Project URL | 与后端 `SUPABASE_URL` 相同 |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon public key | 前端登录用（非 service key） |
 | `VITE_SITE_URL` | `https://narraforge-web.<你的子域>.workers.dev` | 可选；构建期生成 `robots.txt` / `sitemap.xml`（Try 页 SEO，见下） |
+| `VITE_ADMIN_EMAIL` | `admin@example.com` | 可选；配置后创作工作区侧栏底部展示「联系管理员」mailto 入口，留空不展示 |
 
 `VITE_*` 是构建期打进去的，改完必须重新构建。
 

@@ -379,7 +379,14 @@
   font-weight: 700;
 }
 
-.clearButton {
+.historyHeaderActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.clearButton,
+.downloadAllButton {
   border: none;
   background: none;
   color: var(--color-text-muted);
@@ -390,6 +397,10 @@
 
 .clearButton:hover {
   color: var(--color-error);
+}
+
+.downloadAllButton:hover {
+  color: var(--color-primary-dark);
 }
 
 .historyEmpty {

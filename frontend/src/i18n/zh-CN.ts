@@ -663,6 +663,7 @@ export const zhCN = {
     collapseNav: '收起导航',
     studioWorkspace: '创作工作区',
     workspaceHub: '工作区枢纽',
+    contactAdmin: '联系管理员',
   },
   projectShell: {
     backToProjects: '返回项目总览',
