@@ -277,19 +277,55 @@
   font-weight: 600;
 }
 
+/* ---- 播放条：当前音频（最新生成 / 历史点选） ---- */
+
 .playerCard {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  background: var(--color-surface-low);
-  border: 1px solid var(--color-border);
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, var(--color-surface-low), var(--color-primary-container));
+  border: 1px solid var(--color-primary-light);
+  box-shadow: 0 2px 10px rgba(196, 122, 58, 0.12);
+}
+
+.playerWave {
+  composes: waveMark;
+  flex-shrink: 0;
+}
+
+.playerWave i {
+  background: var(--color-primary-dark);
+  animation: waveBounce 0.9s ease-in-out infinite;
+}
+
+.playerWave i:nth-child(2) { animation-delay: 0.12s; }
+.playerWave i:nth-child(3) { animation-delay: 0.24s; }
+.playerWave i:nth-child(4) { animation-delay: 0.36s; }
+
+.playerBody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.playerText {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player {
-  flex: 1;
-  height: 36px;
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
 }
 
 /* ---- 历史栏 ---- */
@@ -412,23 +448,46 @@
 
 .historyActions {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   flex-shrink: 0;
 }
 
 .historyActions button {
-  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
   border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text-secondary);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
+  transition: transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
-.historyActions button:hover {
+.historyActions .playButton {
+  border: none;
+  background: var(--color-primary-gradient);
+  color: var(--color-text-on-primary);
+  box-shadow: 0 1px 4px rgba(196, 122, 58, 0.3);
+}
+
+.historyActions .playButton:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(196, 122, 58, 0.4);
+}
+
+.historyActions .actionButton:hover {
   border-color: var(--color-primary);
   color: var(--color-primary-dark);
+}
+
+.historyActions .deleteButton:hover {
+  border-color: var(--color-error);
+  background: var(--color-danger-light);
+  color: var(--color-error);
 }
 
 /* ---- 弹窗 ---- */

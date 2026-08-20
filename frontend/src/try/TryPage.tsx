@@ -75,6 +75,23 @@ export function TryPage() {
   const [upsellOpen, setUpsellOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const pendingDownload = useRef<TTSLocalRecord | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // object URL 生命周期：在 effect cleanup 里吊销上一个 URL——
+  // cleanup 发生于新 src 已提交到 DOM 之后，不会吊销正在播放的地址
+  const currentUrl = current?.url ?? null;
+  useEffect(() => {
+    return () => {
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+    };
+  }, [currentUrl]);
+
+  // 生成完成 / 点击历史 Play 后自动开播；autoplay 被浏览器拦截时静默兜底（用户可手点原生播放键）
+  useEffect(() => {
+    if (current && audioRef.current) {
+      audioRef.current.play().catch(() => {});
+    }
+  }, [current]);
 
   useEffect(() => {
     void (async () => {
@@ -158,10 +175,7 @@ export function TryPage() {
       };
       await saveTryTTSRecord(record);
       setHistory((prev) => [record, ...prev]);
-      setCurrent((prev) => {
-        if (prev) URL.revokeObjectURL(prev.url);
-        return { url: URL.createObjectURL(blob), text };
-      });
+      setCurrent({ url: URL.createObjectURL(blob), text });
     } catch (err) {
       if (apiErrorCode(err) === 'rate_limit_exceeded') {
         setRateLimited(true);
@@ -174,10 +188,7 @@ export function TryPage() {
   }, [validation, isGenerating, voice, text, rate, volume, allVoices]);
 
   const handlePlayRecord = useCallback((record: TTSLocalRecord) => {
-    setCurrent((prev) => {
-      if (prev) URL.revokeObjectURL(prev.url);
-      return { url: URL.createObjectURL(record.audioBlob), text: record.text };
-    });
+    setCurrent({ url: URL.createObjectURL(record.audioBlob), text: record.text });
   }, []);
 
   const handleDownload = useCallback((record: TTSLocalRecord) => {
@@ -342,8 +353,17 @@ export function TryPage() {
 
           {current && (
             <div className={styles.playerCard}>
-              <WaveMark />
-              <audio data-testid="audio-player" className={styles.player} controls src={current.url} />
+              <WaveMark className={styles.playerWave} />
+              <div className={styles.playerBody}>
+                <p className={styles.playerText} title={current.text}>{current.text}</p>
+                <audio
+                  ref={audioRef}
+                  data-testid="audio-player"
+                  className={styles.player}
+                  controls
+                  src={current.url}
+                />
+              </div>
             </div>
           )}
         </section>
@@ -379,9 +399,15 @@ export function TryPage() {
                       {record.voice_name} · {new Date(record.created_at).toLocaleString()}
                     </span>
                     <span className={styles.historyActions}>
-                      <button type="button" title="Play" onClick={() => handlePlayRecord(record)}>Play</button>
-                      <button type="button" title="Download" onClick={() => handleDownload(record)}>Download</button>
-                      <button type="button" title="Delete" onClick={() => void handleDeleteRecord(record.id)}>Delete</button>
+                      <button type="button" className={styles.playButton} title="Play" onClick={() => handlePlayRecord(record)}>
+                        <span aria-hidden="true">▶</span> Play
+                      </button>
+                      <button type="button" className={styles.actionButton} title="Download" onClick={() => handleDownload(record)}>
+                        <span aria-hidden="true">⬇</span> Download
+                      </button>
+                      <button type="button" className={styles.deleteButton} title="Delete" onClick={() => void handleDeleteRecord(record.id)}>
+                        <span aria-hidden="true">✕</span> Delete
+                      </button>
                     </span>
                   </div>
                 </li>

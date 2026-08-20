@@ -41,6 +41,9 @@ function makeRecord(id: string, text = `record ${id}`): TTSLocalRecord {
 
 /** 触发下载的真实实现被 stub，这里只暴露最近一次触发的下载文件名 */
 let lastDownloadName: string | null = null;
+/** createObjectURL 每次生成唯一 URL，便于断言旧 URL 的吊销时机 */
+let objectUrlSeq = 0;
+let playSpy: ReturnType<typeof vi.spyOn>;
 
 async function renderPage() {
   render(<TryPage />);
@@ -64,11 +67,16 @@ describe('TryPage', () => {
     sessionStorage.clear();
     await resetTTSStore();
     lastDownloadName = null;
+    objectUrlSeq = 0;
     vi.stubGlobal('URL', {
       ...URL,
-      createObjectURL: vi.fn(() => 'blob:mock'),
+      createObjectURL: vi.fn(() => `blob:mock-${++objectUrlSeq}`),
       revokeObjectURL: vi.fn(),
     });
+    // jsdom 未实现媒体播放；autoplay 被浏览器拒绝时实现方需静默兜底
+    playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockImplementation(() => Promise.resolve());
     // 拦截 <a download> 点击，记录文件名
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
       lastDownloadName = this.download;
@@ -152,6 +160,48 @@ describe('TryPage', () => {
     expect(history).toHaveLength(1);
     expect(history[0].text).toBe('hello world');
     expect(screen.getByTestId('history-list').textContent).toContain('hello world');
+  });
+
+  it('autoplays the audio right after generation', async () => {
+    await renderPage();
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'hello world' } });
+    fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+
+    await screen.findByTestId('audio-player');
+    await waitFor(() => expect(playSpy).toHaveBeenCalled());
+  });
+
+  it('clicking Play on a history record loads it into the player and autoplays', async () => {
+    await saveTryTTSRecord(makeRecord('r1'));
+    await renderPage();
+    await screen.findByText('record r1');
+    expect(screen.queryByTestId('audio-player')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^play$/i }));
+
+    await screen.findByTestId('audio-player');
+    await waitFor(() => expect(playSpy).toHaveBeenCalled());
+  });
+
+  it('revokes the previous object URL only after switching to another recording', async () => {
+    await saveTryTTSRecord(makeRecord('r1'));
+    await saveTryTTSRecord(makeRecord('r2'));
+    await renderPage();
+    await screen.findByText('record r1');
+
+    const playButtons = screen.getAllByRole('button', { name: /^play$/i });
+    fireEvent.click(playButtons[0]);
+    await screen.findByTestId('audio-player');
+    const firstUrl = (screen.getByTestId('audio-player') as HTMLAudioElement).src;
+    // 切换前：当前正在用的 URL 不能被吊销
+    expect(URL.revokeObjectURL).not.toHaveBeenCalledWith(firstUrl);
+
+    fireEvent.click(playButtons[1]);
+    await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith(firstUrl));
+    const secondUrl = (screen.getByTestId('audio-player') as HTMLAudioElement).src;
+    expect(secondUrl).not.toBe(firstUrl);
+    // 切换后再次播放，仍应自动开播
+    expect(playSpy).toHaveBeenCalledTimes(2);
   });
 
   it('retries once when voice list loading fails', async () => {
