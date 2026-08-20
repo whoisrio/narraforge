@@ -216,6 +216,28 @@ as $$
     do update set count = daily_stats.count + 1;
 $$;
 
+-- Try 页（/try 获客页）匿名合成限流计数：key = "<scope>:<ip>"，按天计数。
+-- local 单用户模式用不到（不进模型层）。
+create table if not exists rate_limit_counters (
+    key text not null,
+    day date not null,
+    count bigint not null default 0,
+    primary key (key, day)
+);
+
+-- 原子 +1 并返回新计数（post /rest/v1/rpc/hit_rate_limit）；
+-- 由 app/core/rate_limit.py 的 SupabaseRateLimitStore 调用。
+create or replace function hit_rate_limit(p_key text, p_day date)
+returns bigint
+language sql
+as $$
+    insert into rate_limit_counters (key, day, count)
+    values (p_key, p_day, 1)
+    on conflict (key, day)
+    do update set count = rate_limit_counters.count + 1
+    returning count;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- Storage bucket（步骤 6A-2）：workers 模式无 R2 binding 的部署（如 Render）
 -- 把克隆样本/试听音频等二进制资产存 Supabase Storage。

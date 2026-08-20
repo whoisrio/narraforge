@@ -281,7 +281,7 @@ export interface TTSLocalRecord {
   instruction: string;
   language: string;
   created_at: string;
-  source?: string;  // 'segmented_tts' 分段编辑器合成音频；'segmented_record' 分段编辑器用户录入音频
+  source?: string;  // 'segmented_tts' 分段编辑器合成音频；'segmented_record' 分段编辑器用户录入音频；'try_page' Try 页（/try）合成记录
 }
 
 // 前端 IndexedDB 本地存储的 STT 记录

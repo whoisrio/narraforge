@@ -487,8 +487,15 @@ Pages 已进维护模式，前端用 **Workers Static Assets** 托管（`fronten
 | `VITE_AUTH_REQUIRED` | `true` | 构建期开关：启用 Supabase 登录页 + axios 注入 access token（401 自动刷新重试）；本地开发不设，行为完全不变 |
 | `VITE_SUPABASE_URL` | Supabase Project URL | 与后端 `SUPABASE_URL` 相同 |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon public key | 前端登录用（非 service key） |
+| `VITE_SITE_URL` | `https://narraforge-web.<你的子域>.workers.dev` | 可选；构建期生成 `robots.txt` / `sitemap.xml`（Try 页 SEO，见下） |
 
 `VITE_*` 是构建期打进去的，改完必须重新构建。
+
+**Try 页（`/try`）**：Vite 多页入口（`frontend/try.html`），Workers Static Assets 默认
+`html_handling = "auto-trailing-slash"`，`try.html` 自动以 `/try` 裸路径可达，无需额外 rewrite。
+该页是匿名可用的 SEO 获客页（edge_tts 粘贴即转语音），匿名合成按 IP 限流
+（`TRY_ANON_DAILY_LIMIT`，默认每日 50 次）；Supabase 侧需要 `rate_limit_counters` 表与
+`hit_rate_limit` RPC——首次部署或升级时对库执行最新 `backend/supabase/schema.sql` 即可。
 Workers 项目的 Deployments 菜单没有 Retry 按钮（那是 Pages 的），推一个空 commit 触发重建：
 `git commit --allow-empty -m "chore: rebuild" && git push`。
 部署后前端地址为 `https://narraforge-web.<你的子域>.workers.dev`，把它回填到

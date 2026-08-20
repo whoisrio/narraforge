@@ -15,6 +15,8 @@ import json
 import time
 from unittest.mock import AsyncMock, Mock, patch
 
+import httpx
+
 import jwt as pyjwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -554,3 +556,59 @@ class TestDesignedVoiceQuota:
         resp = self._design(client, AUTH_A, "g1")
         assert resp.status_code == 409
         assert resp.json()["detail"]["code"] == "designed_voice_limit_reached"
+
+
+class TestTryAnonRateLimit:
+    """Try 页匿名限流（spec 2026-08-20-try-page-seo-acquisition-design）：
+    单 IP 每日 N 次匿名 edge_tts 合成；已认证用户与管理员不受限。"""
+
+    def _edge_mock(self):
+        service = Mock()
+        service.synthesize = AsyncMock(return_value=(b"\xff\xfb\x90\x00" * 10, "mp3"))
+        return patch(
+            "app.services.edge_tts_service.get_edge_tts_service", return_value=service
+        )
+
+    def _patch_rate_limit_store(self, monkeypatch, store):
+        """把限流存储指向与 workers_client 同一个 fake PostgREST。"""
+        from app.core.supabase_client import SupabaseClient
+
+        supa = SupabaseClient(
+            "https://fake.supabase.co",
+            "service-key",
+            transport=httpx.MockTransport(store.handle),
+        )
+        monkeypatch.setattr(
+            "app.core.supabase_client.get_supabase_client", lambda: supa
+        )
+
+    def _synthesize(self, client, headers=None):
+        return client.post(
+            "/api/tts/synthesize",
+            json={"text": "你好", "engine": "edge_tts", "edge_voice": "zh-CN-XiaoxiaoNeural"},
+            headers=headers,
+        )
+
+    def test_anonymous_limited_per_day(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "try_anon_daily_limit", 2)
+        self._patch_rate_limit_store(monkeypatch, store)
+
+        with self._edge_mock():
+            assert self._synthesize(client).status_code == 200
+            assert self._synthesize(client).status_code == 200
+            resp = self._synthesize(client)
+        assert resp.status_code == 429
+        assert resp.json()["detail"]["code"] == "rate_limit_exceeded"
+        assert resp.json()["detail"]["limit"] == 2
+
+    def test_authenticated_not_limited(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "try_anon_daily_limit", 1)
+        self._patch_rate_limit_store(monkeypatch, store)
+
+        with self._edge_mock():
+            for _ in range(3):
+                assert self._synthesize(client, headers=AUTH_A).status_code == 200
+        # 已认证请求不写限流计数
+        assert store.tables.get("rate_limit_counters", []) == []
