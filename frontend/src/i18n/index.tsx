@@ -14,6 +14,16 @@ export const messages: Record<Locale, Messages> = {
   'en-US': enUS,
 };
 
+/** 未选择语言时的默认回退：英文（online 部署面向海外获客） */
+export const DEFAULT_LOCALE: Locale = 'en-US';
+
+/** 初始语言：用户已保存的选择优先，否则回退 DEFAULT_LOCALE */
+function detectInitialLocale(): Locale {
+  if (typeof window === 'undefined') return DEFAULT_LOCALE;
+  const saved = window.localStorage.getItem('narraforge-locale');
+  return saved && isSupportedLocale(saved) ? saved : DEFAULT_LOCALE;
+}
+
 export interface NavItem {
   id: string;
   labelKey: TranslationKey;
@@ -65,8 +75,7 @@ export function createTranslator(locale: Locale = 'zh-CN') {
 }
 
 // Default translator for direct imports (prefer useTranslation() in React components).
-// Default locale is zh-CN because our primary UI language is Chinese.
-export const t = createTranslator('zh-CN');
+export const t = createTranslator(detectInitialLocale());
 
 // Translation Context — shared locale state across all components
 interface TranslationContextValue {
@@ -78,12 +87,7 @@ interface TranslationContextValue {
 const TranslationContext = createContext<TranslationContextValue | null>(null);
 
 export function TranslationProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => {
-    if (typeof window === 'undefined') return 'zh-CN';
-    const saved = localStorage.getItem('narraforge-locale');
-    if (saved && isSupportedLocale(saved)) return saved;
-    return 'zh-CN';
-  });
+  const [locale, setLocaleState] = useState<Locale>(detectInitialLocale);
 
   const t = useMemo(() => createTranslator(locale), [locale]);
 
@@ -107,10 +111,10 @@ export function TranslationProvider({ children }: { children: React.ReactNode })
 export function useTranslation() {
   const ctx = useContext(TranslationContext);
   if (!ctx) {
-    // Fallback: if not wrapped in provider, use module-level translator.
-    // Default to zh-CN because our primary UI language is Chinese and many
-    // component-level tests assert on Chinese strings without wrapping.
-    return { t: createTranslator('zh-CN'), locale: 'zh-CN' as Locale, setLocale: () => {} };
+    // Fallback: if not wrapped in provider, honor the saved locale (tests pin zh-CN
+    // via localStorage in src/test/setup.ts), else DEFAULT_LOCALE.
+    const initial = detectInitialLocale();
+    return { t: createTranslator(initial), locale: initial, setLocale: () => {} };
   }
   return ctx;
 }
