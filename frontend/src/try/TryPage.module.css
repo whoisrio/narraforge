@@ -71,6 +71,24 @@
   50% { transform: scaleY(1); }
 }
 
+.headerActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.contactLink {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.contactLink:hover {
+  color: var(--color-primary-dark);
+}
+
 .ctaButton {
   padding: 8px 18px;
   border: 1.5px solid var(--color-primary);

@@ -712,6 +712,7 @@ export const enUS: Messages = {
     footer: {
       brand: 'NarraForge',
       copy: 'Powered by iamrio · 2026',
+      contactUs: 'Contact us',
     },
   },
   transcription: {

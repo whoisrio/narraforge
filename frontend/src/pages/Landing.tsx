@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from '../i18n';
+import { getAdminContactEmail } from '../services/contact';
 import styles from './Landing.module.css';
 
 interface LandingProps {
@@ -179,6 +180,11 @@ export default function Landing({ onNavigate }: LandingProps) {
       {/* ════════════ Footer ════════════ */}
       <footer className={styles.footer}>
         <span className={styles.footerBrand}>{t('landing.footer.brand')}</span>
+        {getAdminContactEmail() && (
+          <a className={styles.footerContact} href={`mailto:${getAdminContactEmail()}`}>
+            ✉ {t('landing.footer.contactUs')}
+          </a>
+        )}
         <span className={styles.footerCopy}>{t('landing.footer.copy')}</span>
       </footer>
     </div>

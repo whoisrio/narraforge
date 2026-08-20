@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ProjectShell } from './ProjectShell';
 import type { ProduceAllRun } from '../../services/produceAll';
 import { segmentedProjectApi } from '../../services/api';
@@ -40,6 +40,26 @@ function renderProjectShell(activeSection: 'overview' | 'library' | 'studio' | '
   );
   return { onSectionChange, onBackToProjects };
 }
+
+describe('ProjectShell contact entry', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('renders a contact-admin mailto link in the rail when admin email is configured', () => {
+    vi.stubEnv('VITE_ADMIN_EMAIL', 'admin@example.com');
+    renderProjectShell();
+
+    const link = screen.getByRole('link', { name: /联系管理员/ });
+    expect(link).toHaveAttribute('href', 'mailto:admin@example.com');
+  });
+
+  it('omits the contact link when admin email is not configured', () => {
+    renderProjectShell();
+
+    expect(screen.queryByRole('link', { name: /联系管理员/ })).not.toBeInTheDocument();
+  });
+});
 
 describe('ProjectShell', () => {
   it('renders project-level navigation without an exports entry', () => {

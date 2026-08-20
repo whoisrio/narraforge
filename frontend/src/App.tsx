@@ -27,14 +27,11 @@ import { Admin } from './pages/Admin';
 import { AuthProvider } from './hooks/AuthProvider';
 import { useAuth } from './hooks/authContext';
 import { isAuthRequired } from './services/auth';
+import { getAdminContactEmail } from './services/contact';
 import type { SegmentedProject } from './types';
 import styles from './App.module.css';
 
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
-
-/** 联系管理员邮箱（构建期 VITE_ADMIN_EMAIL 注入；未配置则不在侧栏展示入口） */
-const ADMIN_CONTACT_EMAIL =
-  (import.meta.env.VITE_ADMIN_EMAIL as string | undefined)?.trim() || undefined;
 
 type Page = 'home' | 'auth';
 type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config' | 'admin';
@@ -400,7 +397,7 @@ function AppContent() {
             rightSlot={settingsSlot}
             hideSidebar={inProjectWorkspace}
             hiddenNavIds={hiddenNavIds}
-            contactEmail={ADMIN_CONTACT_EMAIL}
+            contactEmail={getAdminContactEmail()}
           >
             <VoiceRefreshProvider>
               <main className={styles.main}>

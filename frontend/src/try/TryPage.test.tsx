@@ -110,6 +110,7 @@ describe('TryPage', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -333,6 +334,20 @@ describe('TryPage', () => {
     await waitFor(async () => {
       expect(await listTryTTSRecords()).toHaveLength(0);
     });
+  });
+
+  it('shows a contact-us mailto link when admin email is configured', async () => {
+    vi.stubEnv('VITE_ADMIN_EMAIL', 'admin@example.com');
+    await renderPage();
+
+    const link = screen.getByRole('link', { name: /contact us/i });
+    expect(link).toHaveAttribute('href', 'mailto:admin@example.com');
+  });
+
+  it('omits the contact link when admin email is not configured', async () => {
+    await renderPage();
+
+    expect(screen.queryByRole('link', { name: /contact us/i })).not.toBeInTheDocument();
   });
 
   it('CTA stashes current text for the full app handoff', async () => {

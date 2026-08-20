@@ -492,6 +492,19 @@
   color: var(--lp-text-secondary);
 }
 
+.footerContact {
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lp-text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.footerContact:hover {
+  color: var(--lp-primary);
+}
+
 /* ════════════════════════════════════
    Responsive
    ════════════════════════════════════ */
