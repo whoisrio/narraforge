@@ -26,7 +26,7 @@ Voice Studio 后端 API 完整参考。所有端点前缀 `/api`。
 |---|---|
 | `GET /health`、`GET /` | 探活/根页 |
 | `GET /api/config/capabilities`、`GET /api/config/storage-mode` | 能力/存储模式 |
-| `POST /api/tts/synthesize` | workers 模式仅 edge_tts 引擎；匿名请求不持久化（只回 base64） |
+| `POST /api/tts/synthesize` | workers 模式仅 edge_tts 引擎；匿名请求不持久化（只回 base64），且按 IP 限流（每日 `TRY_ANON_DAILY_LIMIT` 次，超限返回 `429 rate_limit_exceeded`） |
 | `POST /api/mimo-tts/*` | MiMo 在线合成/克隆 |
 | `POST /api/text-split/*`、`/api/subtitle-llm/*`、`/api/text-analysis/*` | 纯文本处理 |
 
@@ -39,6 +39,7 @@ legacy admin 看全部行；匿名兜底为 `user_id IS NULL` 作用域（只触
 **错误码**（detail 为 `{code, message}` 信封）：
 
 - `401 auth_required` — 匿名访问非 allowlist 端点。
+- `429 rate_limit_exceeded` — 匿名 edge_tts 合成超出单 IP 每日限额（Try 页获客限流，见 `docs/superpowers/specs/2026-08-20-try-page-seo-acquisition-design.md`）。
 - `403 admin_required` — 非管理员访问 `/api/admin/*`（JWT 邮箱需在 `ADMIN_EMAILS` 内；legacy admin 恒通过）。
 
 ---
@@ -385,6 +386,12 @@ local 模式继续走 multipart `/upload`。
   "params": { "speed": 1.0, "volume": 80, "pitch": 1.0, "instruction": "..." }
 }
 ```
+
+**限流（workers 模式匿名请求）**：单 IP 每日 edge_tts 合成上限 `TRY_ANON_DAILY_LIMIT`（默认 50），超限返回 `429`：
+```json
+{ "detail": { "code": "rate_limit_exceeded", "message": "...", "limit": 50 } }
+```
+已认证用户与 local 模式不受限。
 
 ### GET `/api/tts/voices`
 

@@ -25,6 +25,7 @@ from app.schemas.common import ItemsOut
 from app.schemas.tts import TTSResultOut, TTSResultRecordOut
 from app.core.system_config_service import is_frontend_storage
 from app.core.auth_deps import is_workers_anonymous
+from app.core.rate_limit import enforce_try_rate_limit
 from app.api._voice_helpers import voice_to_dict
 
 # workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
@@ -130,6 +131,9 @@ async def synthesize_speech(
         # M4：workers 模式匿名请求（allowlist 放行）禁止落库——即使 storage_mode
         # 是 backend 也按前端存储处理（只回 base64，不写 tts_results/资产存储）。
         force_frontend = is_workers_anonymous(http_request)
+        # Try 页获客：匿名 edge_tts 合成按 IP 限流（每日 try_anon_daily_limit 次）
+        if force_frontend:
+            enforce_try_rate_limit(http_request)
         return await _synthesize_edge_tts(request, db, repo, store, force_frontend=force_frontend)
     else:
         # cosyvoice 依赖 dashscope/qwen SDK，workers 模式不挂载/不支持，保持原逻辑

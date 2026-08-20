@@ -22,6 +22,8 @@ import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
 import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
+import { peekTryHandoffText, consumeTryHandoffText } from '../try/tryHandoff';
+import { applyTryHandoffToProject } from '../try/applyTryHandoff';
 import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segmentedDraftStore';
 import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
@@ -112,6 +114,8 @@ export function TTSSynthesis({
   const { refreshCounter } = useVoiceRefresh();
   const { user, isAdmin } = useAuth();
   const initialLoadDoneRef = useRef(false);
+  // Try 页接力文本：首次应用后存 ref，加载 effect 重跑时重放（防 StrictMode 双跑覆盖）
+  const handoffTextRef = useRef<string | null>(null);
   const lastSavedUpdatedAtRef = useRef<string | null>(null);
   const [engine, setEngine] = useState<Engine>('edge_tts');
 
@@ -338,13 +342,36 @@ export function TTSSynthesis({
         return;
       }
       const migrated = migrateV1(full, t);
+      // Try 页（/try）「试用完整功能」接力：peek 接力文本，仅当目标章节为空时应用
+      // 并 consume；非空则保留 stash，后续打开空项目仍可接入。
+      // 应用成功后存 handoffTextRef：dev StrictMode/依赖变化会让本加载 effect 重跑，
+      // 第二轮从后端重读的数据没有接力文本，需用 ref 重放，防止覆盖回空。
+      let withHandoff = migrated;
+      if (!handoffTextRef.current) {
+        const handoffText = peekTryHandoffText();
+        if (handoffText) {
+          const applied = applyTryHandoffToProject(migrated, handoffText);
+          if (applied !== migrated) {
+            handoffTextRef.current = handoffText;
+            consumeTryHandoffText();
+            withHandoff = applied;
+          }
+        }
+      } else {
+        withHandoff = applyTryHandoffToProject(migrated, handoffTextRef.current);
+      }
       console.log(`[TTSSynthesis] setting project: ${migrated.name} (id=${migrated.id}, chapters=${migrated.chapters?.length})`);
       initialLoadDoneRef.current = false; // 暂停自动保存，防止初始加载触发 markDirty
-      setProject(migrated);
-      dispatch({ type: 'LOAD_PROJECT', project: migrated });
-      const ch = getActiveChapter(migrated);
+      setProject(withHandoff);
+      dispatch({ type: 'LOAD_PROJECT', project: withHandoff });
+      const ch = getActiveChapter(withHandoff);
       if (ch) restoreChapterSettings(ch);
       await draftSync.adoptBackendVersion(migrated);
+      if (withHandoff !== migrated) {
+        // 接力文本属于真实内容变更：标记脏让自动保存落库（否则首轮 adopt 的
+        // 干净基线不含接力文本，页面刷新后丢失）。
+        await draftSync.markDirty(withHandoff);
+      }
       initialLoadDoneRef.current = true; // 初始加载完成，后续变更可触发自动保存
       lastSavedUpdatedAtRef.current = migrated.updated_at; // 跳过首次无变更的自动保存
 

@@ -46,7 +46,9 @@
 2. 前端调用 `POST /api/tts/synthesize`（engine=edge_tts，已在匿名白名单）。
 3. 返回音频 blob，页面内播放器试听，可下载 MP3。
 4. 每条合成记录写入 IndexedDB `tts_results` store。
-5. 点击「试用完整功能」：当前文档文本写入 scratchpad 草稿（IndexedDB drafts store）→ 跳转主 SPA → 未登录走登录页 → 登录后由现有 MigrationPrompt 机制迁移为正式项目。
+5. 点击「试用完整功能」：当前文档文本存入 sessionStorage（`try_handoff_text`）→ 跳转主 SPA → TTSSynthesis 挂载时 peek，目标章节为空才应用并 consume（非空保留 stash，后续空项目仍可接入）。
+   未登录用户先走登录页；stash 存 sessionStorage，同标签页登录跳转后仍在。
+   （设计评审后修正：不写 scratchpad IDB 草稿——workers 模式的 MigrationPrompt 明确排除 scratchpad，该路径无法迁移。）
 
 ## 功能细节
 
@@ -77,7 +79,7 @@
   文案要点：注册完整版可保存项目、云端同步、解锁 MiMo 高表现语音。
   按钮：「继续下载」（主）、「了解完整版」（次，跳主 SPA）。
 - **「试用完整功能」CTA**：常驻页面顶部。
-  点击时把当前输入框文本写入 scratchpad 草稿再跳转，保证用户进度不丢。
+  点击时把当前输入框文本 stash 到 sessionStorage 再跳转；主应用侧 peek/apply-if-empty（见「数据流」），保证用户进度不丢且绝不覆盖已有项目内容。
 
 ## 后端改动
 
@@ -113,3 +115,4 @@
 - `TTSLocalRecord.source` 的取值集合需要在前端类型注释中补充 `'try_page'`。
 - 限流在 workers（Supabase 计数）与 local（内存计数）两种形态下的实现差异，实现时确定细节。
 - 中文 entry、Turnstile、分享卡片 OG 图片为后置项。
+- backend 存储模式下 synthesize 只回 `audio_url`，前端需回取音频转 Blob（已实现，注意剥掉 `/api` 前缀再拼 `API_BASE_URL`）。

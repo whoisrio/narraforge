@@ -18,6 +18,7 @@
 | 分段合成 | segment synthesize（engine ∈ edge_tts/mimo_tts） | `segmented_synth_workers.py` 已限定引擎 |
 | 角色/源文档/配置 | `/api/roles`、`/api/sources`、`/api/config/*`、`/api/model-config/*` | PostgREST；model-config 用 RSA 加密（cryptography 为 base 依赖） |
 | 管理后台统计 | `GET /api/admin/stats/overview`、`/api/admin/users`、`/api/admin/logs` | Supabase 统计表（profiles/daily_stats/operation_logs/daily_active_users）+ `increment_metric` RPC；仅 admin |
+| Try 页（/try 获客页） | 前端静态页 + `POST /api/tts/synthesize`（edge_tts）+ `GET /api/tts/edge-voices`；匿名按 IP 限流（`rate_limit_counters` 表 + `hit_rate_limit` RPC） | 纯前端 IndexedDB 存储历史，零项目持久化 |
 
 > workers 模式的认证语义（2026-08 起）：A 类端点中，仅匿名 allowlist
 > （`GET /health`、`GET /`、`GET /api/config/capabilities`、`GET /api/config/storage-mode`、

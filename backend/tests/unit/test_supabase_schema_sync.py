@@ -39,7 +39,7 @@ MODELS = {
 
 # 仅存在于 Supabase 侧的表（无 SQLAlchemy 模型）：M2 用户体系/使用统计，
 # local 单用户模式用不到，不进模型层。
-SUPABASE_ONLY_TABLES = {"profiles", "daily_stats", "operation_logs", "daily_active_users"}
+SUPABASE_ONLY_TABLES = {"profiles", "daily_stats", "operation_logs", "daily_active_users", "rate_limit_counters"}
 
 # DDL 允许比模型多出的列（Postgres-only）：M2 的 user_id 归属列只在 Supabase
 # 侧存在（local SQLite 单用户无认证，模型不加）。chapters/segments 归属经

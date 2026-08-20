@@ -25,7 +25,7 @@ Each worktree has its own SQLite e2e DB (`backend/voice_clone_e2e.db` is per-wor
 Note: two e2e runs in the **same** worktree still share one stack — `webServer.reuseExistingServer` means the second run attaches to the first run's servers; run them serially.
 
 ```bash
-npm run e2e          # Full suite (62 tests, --workers=1, HTML report)
+npm run e2e          # Full suite (66 tests, --workers=1, HTML report)
 npm run e2e:ui       # Playwright visual test explorer
 npm run e2e:report   # Open latest HTML report
 npm run e2e:clean    # Remove all test-results/ and playwright-report/ dirs
@@ -44,7 +44,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs (62 tests, all Chinese locale) |
+| `tests/e2e/specs/` | Automated browser E2E specs (66 tests; main app in zh-CN locale, Try page spec in en-US) |
 | `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
 | `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
 | `tests/e2e/global-setup.ts` | Seed data before all tests |
@@ -53,7 +53,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 ```text
 tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (62 tests)
+├── specs/                  ← Automated Playwright browser specs (66 tests)
 ├── fixtures/               ← Stable E2E input fixtures (audio, images)
 ├── helpers/                ← Shared utilities
 │   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
@@ -162,7 +162,7 @@ CSS Modules hash class names. Use partial match selectors:
 
 ### i18n Considerations
 
-- All 62 tests set `setLocaleToZhCN(page)` and use Chinese test names.
+- Except for the Try page spec (`try-page.spec.ts`, English UI under test), tests set `setLocaleToZhCN(page)` and use Chinese test names.
 - Components using `useTranslation()` render correctly in Chinese.
 - Components using static `t` from `i18n` always render in English — watch for these.
 
@@ -176,7 +176,7 @@ CSS Modules hash class names. Use partial match selectors:
 
 ## Pending E2E Coverage (Gap Analysis)
 
-All 62 current tests pass. The following scenarios are not yet covered.
+All 66 current tests pass. The following scenarios are not yet covered.
 
 **Verification standard for new tests**: Every test must verify both API and DB layers
 against their own contracts (API → `docs/api-reference.md` + Pydantic schema; DB →
@@ -188,12 +188,13 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G2 | **CosyVoice / VoxCPM role creation** | voice-role-flows only tests MiMo preset; other engines not verified | Extend `voice-role-flows.spec.ts` | Medium |
 | G3 | **Voice Clone flow** | MiMo clone: upload → preview → create → verify — covered by `voice-clone.spec.ts` | `voice-clone.spec.ts` | Medium | ✅ Done |
 | G4 | **Actual audio playback** | Only checks player UI visibility; does not verify audio src is valid and duration > 0 | Extend existing studio specs | Medium |
-| G5 | **English locale UI** | All 62 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
+| G5 | **English locale UI** | All 66 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
 | G6 | **Error recovery** | Synthesis-failure retry, state rollback, user feedback — untested | Extend `studio-segment-operations` / `studio-batch-export` | Low |
 | G7 | **Mobile / responsive** | No viewport-dimension tests | New `responsive.spec.ts` | Low |
 | G8 | **Knowledge video workflow entry + storyboard** | 工作流类型入口 + 分镜视图（brief API 预置 + 双层验证） | `knowledge-video-workflow.spec.ts` | Medium | ✅ Done |
 | G9 | **Chapter & segment reorder** | 章节侧边栏 + 段落行 ↑/↓ 调整顺序，UI->API->DB `position` 三层一致 | `reorder.spec.ts` | Medium | ✅ Done |
 | G10 | **重拆保留真实 UI 路径** | S1 默认路径（不碰勾选框）重拆文档不改 → 音频全保留；S3 章节重组（加标题、文本逐字未动）→ 全局兜底保留；含 dry_run 诚实确认文案与 UI->API->DB->FS 四层验证 | `chapter-split-preserve-audio.spec.ts` | High | ✅ Done |
+| G12 | **Try 页（/try 获客页）** | SEO 静态内容、3000 字上限、真实 edge_tts 合成链路、历史记录（重复下载/删除/清空）、下载推荐弹窗每会话一次、「试用完整功能」内容接力进主应用 | `try-page.spec.ts` | High | ✅ Done |
 | G11 | **Library 文档优先 IA** | 默认落 doc 视图、形态 A 粘贴 CTA + 去源文档、拆分后留在 doc + 结果反馈跳转、源文档视图可访问、视图记忆；章节/段落逐字段 API + DB 双读 | `library-doc-first.spec.ts` | High | ✅ Done |
 
 **Additional rules**:

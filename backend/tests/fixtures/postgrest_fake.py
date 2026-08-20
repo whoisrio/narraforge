@@ -104,6 +104,17 @@ class FakePostgrestStore:
                 rows.append({"date": body["p_date"], "metric": body["p_metric"], "count": 1})
             return httpx.Response(200, content=b"")
 
+        # RPC：post /rpc/hit_rate_limit（rate_limit_counters 原子 +1，返回新计数）
+        if request.method == "POST" and request.url.path.endswith("/rpc/hit_rate_limit"):
+            body = json.loads(request.content)
+            rows = self.tables.setdefault("rate_limit_counters", [])
+            for row in rows:
+                if row.get("key") == body["p_key"] and row.get("day") == body["p_day"]:
+                    row["count"] = int(row.get("count") or 0) + 1
+                    return httpx.Response(200, json=row["count"])
+            rows.append({"key": body["p_key"], "day": body["p_day"], "count": 1})
+            return httpx.Response(200, json=1)
+
         table = request.url.path.rsplit("/", 1)[-1]
         params = dict(request.url.params)
         rows = self.tables.setdefault(table, [])

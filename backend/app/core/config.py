@@ -115,6 +115,9 @@ class Settings(BaseSettings):
     # 名下项目数 >= 该值后拒绝新建（409 project_limit_reached）；0 = 不限制。
     # legacy admin（旧凭证通道）与 admin_emails 管理员不受限。
     max_projects_per_user: int = 1
+    # Try 页（/try 获客页）匿名合成限流：单 IP 每日 edge_tts 合成次数上限
+    # （仅 workers 模式匿名请求生效；已认证用户与 local 模式不限）。
+    try_anon_daily_limit: int = 50
     # 每用户设计音色配额（workers 模式，仅对普通登录用户生效）：
     # 名下设计音色（voice.voice_type == 'design'，含项目内）>= 该值后拒绝再建
     # （409 designed_voice_limit_reached）；0 = 不限制。预置/克隆音色不占名额。
