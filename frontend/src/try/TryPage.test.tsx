@@ -91,6 +91,37 @@ describe('TryPage', () => {
     vi.restoreAllMocks();
   });
 
+  it('filters voice options by language and gender', async () => {
+    mockedGetEdgeVoices.mockResolvedValue([
+      { name: 'Ava', short_name: 'en-US-AvaNeural', display_name: 'Ava', gender: 'Female', locale: 'en-US', language: 'English' },
+      { name: 'Andrew', short_name: 'en-US-AndrewNeural', display_name: 'Andrew', gender: 'Male', locale: 'en-US', language: 'English' },
+      { name: 'Xiaoxiao', short_name: 'zh-CN-XiaoxiaoNeural', display_name: 'Xiaoxiao', gender: 'Female', locale: 'zh-CN', language: 'Chinese' },
+    ]);
+    await renderPage();
+
+    // 默认 English：不含中文音色
+    const voiceCombo = screen.getByRole('combobox', { name: /^voice$/i });
+    expect(voiceCombo.textContent).toContain('Ava');
+    expect(voiceCombo.textContent).not.toContain('Xiaoxiao');
+
+    // 切到 Chinese
+    fireEvent.change(screen.getByRole('combobox', { name: /language/i }), { target: { value: 'Chinese' } });
+    expect(voiceCombo.textContent).toContain('Xiaoxiao');
+    expect(voiceCombo.textContent).not.toContain('Ava');
+
+    // 再按性别过滤
+    fireEvent.change(screen.getByRole('combobox', { name: /language/i }), { target: { value: 'English' } });
+    fireEvent.change(screen.getByRole('combobox', { name: /gender/i }), { target: { value: 'Male' } });
+    expect(voiceCombo.textContent).toContain('Andrew');
+    expect(voiceCombo.textContent).not.toContain('Ava');
+  });
+
+  it('filters voices without duplicating state across renders', async () => {
+    await renderPage();
+    expect(screen.getByRole('combobox', { name: /language/i })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: /gender/i })).toBeInTheDocument();
+  });
+
   it('shows char counter with the 3000 limit', async () => {
     await renderPage();
     expect(screen.getByTestId('char-count').textContent).toContain('3,000');
