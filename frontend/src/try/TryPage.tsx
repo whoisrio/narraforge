@@ -11,6 +11,7 @@ import {
 } from './tryHistory';
 import { recordDownloadAndCheckUpsell } from './tryUpsell';
 import { buildRecordingsZip, downloadName } from './tryExport';
+import { getAdminContactEmail } from '../services/contact';
 import { stashTryHandoffText } from './tryHandoff';
 import { distinctLanguages, filterEdgeVoices } from './voiceFilter';
 import styles from './TryPage.module.css';
@@ -234,9 +235,16 @@ export function TryPage() {
           <WaveMark />
           NarraForge <span className={styles.brandTry}>Try</span>
         </span>
-        <button type="button" className={styles.ctaButton} onClick={handleTryFullVersion}>
-          Try full version →
-        </button>
+        <span className={styles.headerActions}>
+          {getAdminContactEmail() && (
+            <a className={styles.contactLink} href={`mailto:${getAdminContactEmail()}`}>
+              Contact us
+            </a>
+          )}
+          <button type="button" className={styles.ctaButton} onClick={handleTryFullVersion}>
+            Try full version →
+          </button>
+        </span>
       </header>
 
       <main className={styles.main}>

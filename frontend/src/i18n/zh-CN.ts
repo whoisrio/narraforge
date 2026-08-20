@@ -710,6 +710,7 @@ export const zhCN = {
     footer: {
       brand: 'NarraForge',
       copy: 'Powered by iamrio · 2026',
+      contactUs: '联系我们',
     },
   },
   transcription: {

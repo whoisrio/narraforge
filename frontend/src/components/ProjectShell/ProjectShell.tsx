@@ -3,6 +3,7 @@ import { useTranslation, projectNavItems } from '../../i18n';
 import type { Chapter } from '../../types';
 import type { ProduceAllRun } from '../../services/produceAll';
 import { segmentedProjectApi, type ChapterSyncStatus } from '../../services/api';
+import { getAdminContactEmail } from '../../services/contact';
 import { ChapterSyncBadges } from '../SegmentedTTS/ChapterSyncBadges';
 import { ChapterSyncModal } from '../SegmentedTTS/ChapterSyncModal';
 import { useToast } from '../ui/useToast';
@@ -321,6 +322,18 @@ export function ProjectShell({
               </button>
             )}
           </div>
+        )}
+
+        {getAdminContactEmail() && (
+          <a
+            className={styles.contactAdmin}
+            href={`mailto:${getAdminContactEmail()}`}
+            title={collapsed ? t('appShell.contactAdmin') : getAdminContactEmail()}
+            aria-label={collapsed ? t('appShell.contactAdmin') : undefined}
+          >
+            <span className={styles.projectNavIcon}>✉</span>
+            {!collapsed && <span>{t('appShell.contactAdmin')}</span>}
+          </a>
         )}
 
         <button
