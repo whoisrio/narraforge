@@ -8,11 +8,11 @@
 
 ## Overview
 
-The database consists of **10 tables** and **2 enums**.
+The database consists of **11 tables** and **2 enums**.
 
 > **workers deploy target (2026-08):** the Cloudflare Workers runtime cannot use SQLAlchemy/SQLite.
-> Persistence for `voice_profiles` / `system_configs` / `roles` / `source_documents` and the three
-> `segmented_project*` tables (step 3B) goes through Supabase PostgREST; the Postgres DDL exported
+> Persistence for `voice_profiles` / `system_configs` / `roles` / `source_documents` / `usage_events`
+> and the three `segmented_project*` tables (step 3B) goes through Supabase PostgREST; the Postgres DDL exported
 > from these models lives in `backend/supabase/schema.sql`
 > and is kept in sync by `backend/tests/unit/test_supabase_schema_sync.py`.
 >
@@ -34,6 +34,7 @@ The database consists of **10 tables** and **2 enums**.
 | `segmented_project_chapters` | Chapters within a segmented project |
 | `segmented_project_segments` | Individual text segments within a chapter |
 | `source_documents` | Project-level source files (text/audio/path) |
+| `usage_events` | Usage metering events for TTS synthesis and LLM calls |
 
 ---
 
@@ -284,6 +285,27 @@ Project-level source files. Each record represents one input source (pasted text
 
 ---
 
+## Table: `usage_events`
+
+Usage metering events — the billing raw material for TTS synthesis and LLM calls.
+Written best-effort at metering call sites (edge/mimo TTS synthesis, segment synthesis, LLM split/SSML-annotate/subtitle correct/translate); workers-anonymous calls are not recorded.
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | String | No | UUID4 | **Primary Key** |
+| `project_id` | String | Yes | `NULL` | Owning project; `NULL` = LLM calls without project context (subtitle correct/translate, text split) |
+| `kind` | String | No | — | Event kind: `"tts"` / `"llm"` |
+| `chars` | Integer | No | `0` | `tts`: synthesized text length; `llm`: input text length |
+| `input_tokens` | Integer | No | `0` | LLM input tokens (`0` for `tts`) |
+| `output_tokens` | Integer | No | `0` | LLM output tokens (`0` for `tts`) |
+| `estimated` | Boolean | No | `False` | `True` when tokens are char-estimated because the LLM API returned no/zero usage |
+| `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
+
+No foreign keys: `project_id` is a soft reference (usage survives project deletion).
+The Supabase side adds a Postgres-only `user_id uuid` column plus indexes on `user_id`/`project_id` — see [Supabase Multi-User Schema](#supabase-multi-user-schema-workers-only).
+
+---
+
 ## Relationships
 
 ```
@@ -319,6 +341,8 @@ Tables `voice_profiles`, `tts_configs`, `tts_results`, `transcription_records`, 
 | `segmented_project_segments` | `(chapter_id, position)` | Unique: `uq_segment_chapter_position` (D6) |
 | `source_documents` | `id` | Primary Key |
 | `source_documents` | `project_id` | Explicit index |
+| `usage_events` | `id` | Primary Key |
+| `usage_events` | `user_id`, `project_id` | Postgres-only（Supabase `schema.sql`）：`idx_usage_events_user_id`、`idx_usage_events_project_id` |
 
 ---
 
@@ -682,8 +706,9 @@ Temporary data, overwritten on each preview. Nothing stored here is used for syn
 
 ### `user_id` ownership columns
 
-五张顶层归属表新增 `user_id uuid`（nullable，带索引 `idx_<table>_user_id`）：
-`segmented_projects` / `voice_profiles` / `roles` / `source_documents` / `tts_results`。
+六张顶层归属表新增 `user_id uuid`（nullable，带索引 `idx_<table>_user_id`）：
+`segmented_projects` / `voice_profiles` / `roles` / `source_documents` / `tts_results` / `usage_events`。
+`usage_events` 另有 `idx_usage_events_project_id` 索引（项目用量聚合按 `project_id` 过滤）。
 
 - NULL = 存量未归属行（升级后由 `backend/scripts/backfill_user_ownership.py` 回填给初始用户）。
 - chapters/segments 不加列：归属经所属 project 传递，仓储层操作前先校验 project 归属。
