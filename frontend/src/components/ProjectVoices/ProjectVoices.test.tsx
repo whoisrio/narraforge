@@ -139,6 +139,28 @@ describe('ProjectVoices', () => {
     expect(screen.getByLabelText('角色名')).toHaveValue('新角色');
   });
 
+  it('new role draft carries project_id on save (no cross-project ghosts)', async () => {
+    const onSaveRole = vi.fn();
+    render(
+      <ProjectVoices
+        roles={[]}
+        projectId="p1"
+        onSaveRole={onSaveRole}
+        onPreviewRole={vi.fn()}
+        onManageRoles={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /创建角色/ }));
+    fireEvent.click(screen.getByRole('button', { name: /保存角色/ }));
+
+    // 不带 project_id 的角色会落库为 NULL（全局角色），出现在所有项目里
+    await waitFor(() => expect(onSaveRole).toHaveBeenCalled());
+    expect(onSaveRole).toHaveBeenCalledWith(
+      expect.objectContaining({ project_id: 'p1' }),
+    );
+  });
+
   it('cancels editing and closes editor', () => {
     render(
       <ProjectVoices
