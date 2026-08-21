@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Chapter, Role } from '../../types';
 import { useTranslation } from '../../i18n';
 import { apiUrl } from '../../services/apiBase';
-import { usageApi, type ProjectUsage } from '../../services/usageApi';
+import { usageApi, SHOW_TOKEN_USAGE, type ProjectUsage } from '../../services/usageApi';
 import styles from './ProjectOverview.module.css';
 
 interface ProjectOverviewProps {
@@ -380,16 +380,20 @@ export function ProjectOverview(props: ProjectOverviewProps) {
                   <span className={styles.techLabel}>{t('usage.statChars')}</span>
                   <span className={styles.usageValue} data-testid="usage-chars">{usage.data.chars}</span>
                 </div>
-                <div className={styles.techField}>
-                  <span className={styles.techLabel}>{t('usage.statInputTokens')}</span>
-                  <span className={styles.usageValue} data-testid="usage-input-tokens">{usage.data.input_tokens}</span>
-                </div>
-                <div className={styles.techField}>
-                  <span className={styles.techLabel}>{t('usage.statOutputTokens')}</span>
-                  <span className={styles.usageValue} data-testid="usage-output-tokens">{usage.data.output_tokens}</span>
-                </div>
+                {SHOW_TOKEN_USAGE && (
+                  <>
+                    <div className={styles.techField}>
+                      <span className={styles.techLabel}>{t('usage.statInputTokens')}</span>
+                      <span className={styles.usageValue} data-testid="usage-input-tokens">{usage.data.input_tokens}</span>
+                    </div>
+                    <div className={styles.techField}>
+                      <span className={styles.techLabel}>{t('usage.statOutputTokens')}</span>
+                      <span className={styles.usageValue} data-testid="usage-output-tokens">{usage.data.output_tokens}</span>
+                    </div>
+                  </>
+                )}
               </div>
-              <p className={styles.usageFootnote}>{t('usage.tokenEstimateNote')}</p>
+              {SHOW_TOKEN_USAGE && <p className={styles.usageFootnote}>{t('usage.tokenEstimateNote')}</p>}
             </>
           )}
         </section>

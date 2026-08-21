@@ -81,3 +81,9 @@ export const usageApi = {
     return adaptGlobalUsage(data);
   },
 };
+
+/**
+ * token 统计展示开关（2026-08-21）：LLM 计量数据正常记录，但当前全为 0，
+ * UI 先隐藏 token 卡片/列；要恢复展示改回 true 即可。
+ */
+export const SHOW_TOKEN_USAGE = false;

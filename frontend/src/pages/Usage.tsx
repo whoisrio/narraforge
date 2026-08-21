@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '../i18n';
-import { usageApi, type GlobalUsage, type GlobalUsageProject } from '../services/usageApi';
+import { usageApi, SHOW_TOKEN_USAGE, type GlobalUsage, type GlobalUsageProject } from '../services/usageApi';
 import styles from './Usage.module.css';
 
 const PAGE_SIZE = 20;
@@ -119,14 +119,18 @@ export function Usage() {
               <span className={styles.cardLabel}>{t('usage.statChars')}</span>
               <span className={styles.cardValue} data-testid="usage-total-chars">{usage.data.totals.chars}</span>
             </div>
-            <div className={styles.card}>
-              <span className={styles.cardLabel}>{t('usage.statInputTokens')}</span>
-              <span className={styles.cardValue} data-testid="usage-total-input-tokens">{usage.data.totals.input_tokens}</span>
-            </div>
-            <div className={styles.card}>
-              <span className={styles.cardLabel}>{t('usage.statOutputTokens')}</span>
-              <span className={styles.cardValue} data-testid="usage-total-output-tokens">{usage.data.totals.output_tokens}</span>
-            </div>
+            {SHOW_TOKEN_USAGE && (
+              <>
+                <div className={styles.card}>
+                  <span className={styles.cardLabel}>{t('usage.statInputTokens')}</span>
+                  <span className={styles.cardValue} data-testid="usage-total-input-tokens">{usage.data.totals.input_tokens}</span>
+                </div>
+                <div className={styles.card}>
+                  <span className={styles.cardLabel}>{t('usage.statOutputTokens')}</span>
+                  <span className={styles.cardValue} data-testid="usage-total-output-tokens">{usage.data.totals.output_tokens}</span>
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>
@@ -142,29 +146,29 @@ export function Usage() {
                   <th>{t('usage.projectName')}</th>
                   <th>{t('usage.statTts')}</th>
                   <th>{t('usage.statChars')}</th>
-                  <th>{t('usage.statInputTokens')}</th>
-                  <th>{t('usage.statOutputTokens')}</th>
+                  {SHOW_TOKEN_USAGE && <th>{t('usage.statInputTokens')}</th>}
+                  {SHOW_TOKEN_USAGE && <th>{t('usage.statOutputTokens')}</th>}
                   <th>{t('usage.usageBar')}</th>
                 </tr>
               </thead>
               <tbody>
                 {pageItems.length === 0 && (
-                  <tr><td colSpan={6} className={styles.emptyCell}>{t('usage.empty')}</td></tr>
+                  <tr><td colSpan={SHOW_TOKEN_USAGE ? 6 : 4} className={styles.emptyCell}>{t('usage.empty')}</td></tr>
                 )}
                 {pageItems.map((p) => (
                   <tr key={p.project_id || p.project_name}>
                     <td>{p.project_name || p.project_id || t('usage.unattributed')}</td>
                     <td>{p.tts_count}</td>
                     <td>{p.chars}</td>
-                    <td>{p.input_tokens}</td>
-                    <td>{p.output_tokens}</td>
+                    {SHOW_TOKEN_USAGE && <td>{p.input_tokens}</td>}
+                    {SHOW_TOKEN_USAGE && <td>{p.output_tokens}</td>}
                     <td className={styles.barCell}><UsageBar project={p} maxChars={maxChars} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <Pagination page={page} total={projects.length} pageSize={PAGE_SIZE} onPage={setPage} />
-            <p className={styles.footnote}>{t('usage.tokenEstimateNote')}</p>
+            {SHOW_TOKEN_USAGE && <p className={styles.footnote}>{t('usage.tokenEstimateNote')}</p>}
           </>
         )}
       </section>
