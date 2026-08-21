@@ -2,6 +2,8 @@
 
 > [中文说明](README_zh.md)
 
+> **[Live Demo → https://narraforge.rio-dong.workers.dev/](https://narraforge.rio-dong.workers.dev/)**
+
 One-stop AI narration workshop for voice cloning, text-to-speech, and speech-to-subtitle. Designed for narrators and dialogue production with multi-voice project management.
 
 ![NarraForge Homepage](docs/uiscreenshots/narraforge-landing-page-screenshots.png)
@@ -9,10 +11,12 @@ One-stop AI narration workshop for voice cloning, text-to-speech, and speech-to-
 ## Highlights
 
 - **Narration + Dialogue** — segmented editor with role assignment, emotion tags, and per-segment voice override
+- **AI narration workflow** — LangGraph agent pipeline: source document → script → review → chapter split → synthesis
 - **Free offline TTS** — Edge-TTS and VoxCPM work out of the box, no API key needed
 - **Voice cloning** — upload a sample, get a reusable cloned voice (VoxCPM free local / CosyVoice paid / MiMo paid)
 - **Speech-to-subtitle** — Whisper (multilingual) or FunASR (Chinese-optimized, 30x faster than real-time on CPU)
 - **LLM-powered** — smart sentence splitting, emotion analysis, subtitle calibration, bilingual translation
+- **Local or cloud** — full-featured local deployment, or hosted multi-user mode (Supabase + Vercel + Cloudflare Workers) with per-user quotas and usage stats
 
 ## Screenshots
 
@@ -62,18 +66,21 @@ One-stop AI narration workshop for voice cloning, text-to-speech, and speech-to-
 
 Professional timeline for long-form narration:
 
-- **Smart splitting** — LLM semantic analysis or rule-based punctuation split
+- **Smart splitting** — LLM semantic analysis or rule-based punctuation split (auto-capped at 80 chars per segment, cut at the nearest punctuation)
 - **Emotion per segment** — auto-detect (happy / excited / calm / neutral / sad / angry), manual override
 - **Role assignment** — narrator and cast roles with dedicated voice configs
 - **Voice override** — global voice + per-segment custom, generated segments protected from global changes
+- **Synthesis ignore options** — expandable ignore rules: underscores/slashes to spaces, skip parenthesized content (engine-bound text only; display and subtitles keep the original)
 - **Stale detection** — auto-flag when global voice changes
 - **Play all** — sequential playback with per-character highlight sync
 - **Export** — audio (WAV/MP3) and SRT subtitles
+- **Usage stats** — per-project and global dashboards for TTS runs and character consumption
 
 ## Tech Stack
 
 - **Frontend:** React 19 + TypeScript + Vite + IndexedDB
-- **Backend:** Python 3.12+ / FastAPI / SQLAlchemy / SQLite
+- **Backend:** Python 3.12+ / FastAPI / SQLAlchemy / SQLite (Supabase multi-user mode optional)
+- **Agent:** LangGraph narration workflow service
 - **TTS:** Edge-TTS, CosyVoice, MiMo, VoxCPM
 - **STT:** Faster-Whisper, FunASR
 - **LLM:** MiMo-v2.5-pro (splitting, emotion, calibration, translation)
