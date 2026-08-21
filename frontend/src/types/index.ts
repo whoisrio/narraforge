@@ -370,6 +370,8 @@ export interface RoleSnapshot {
   avatar?: string | null;
   description?: string | null;
   role_kind?: 'narrator' | 'cast' | null;
+  /** 归属项目；null/缺省 = 全局角色（新建草稿必须带，否则会出现在所有项目） */
+  project_id?: string | null;
   voice?: EngineParams;
   favorite_styles: FavoriteStyle[];
 
