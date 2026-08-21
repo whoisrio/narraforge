@@ -10,6 +10,7 @@ from app.models.segmented_project import (
 )
 from app.models.source_document import SourceDocument
 from app.models.role import Role
+from app.models.usage_event import UsageEvent
 
 __all__ = [
     "VoiceProfile",
@@ -24,4 +25,5 @@ __all__ = [
     "SegmentedProjectSegment",
     "SourceDocument",
     "Role",
+    "UsageEvent",
 ]

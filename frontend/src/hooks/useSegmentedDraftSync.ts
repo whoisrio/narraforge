@@ -15,22 +15,26 @@ export interface DraftSyncOptions {
   debounceMs?: number;
   /** 草稿成功写入后端后回调（用于同步"已落库章节集合"等派生状态）。 */
   onSaved?: (project: SegmentedProject) => void;
+  /** 草稿写入后端失败时回调（用于 422/409 等结构化错误码的兜底提示）。 */
+  onSaveError?: (error: unknown) => void;
 }
 
 export function useSegmentedDraftSync(projectId: string | null, options: DraftSyncOptions) {
-  const { storage, debounceMs = DEBOUNCE_MS, onSaved } = options;
+  const { storage, debounceMs = DEBOUNCE_MS, onSaved, onSaveError } = options;
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   // Stash projectId/storage in refs so the timer callback always reads current values
   const projectIdRef = useRef(projectId);
   const storageRef = useRef(storage);
   const onSavedRef = useRef(onSaved);
+  const onSaveErrorRef = useRef(onSaveError);
 
   useEffect(() => {
     projectIdRef.current = projectId;
     storageRef.current = storage;
     onSavedRef.current = onSaved;
-  }, [projectId, storage, onSaved]);
+    onSaveErrorRef.current = onSaveError;
+  }, [projectId, storage, onSaved, onSaveError]);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current) {
@@ -65,6 +69,7 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
         last_save_attempt_at: new Date().toISOString(),
       };
       await putDraft(next);
+      onSaveErrorRef.current?.(error);
     }
   }, []);
 

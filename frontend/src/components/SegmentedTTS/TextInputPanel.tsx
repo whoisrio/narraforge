@@ -209,6 +209,7 @@ export function TextInputPanel({
               {isSplitting ? t('textInput.splitting') : hasSegments ? t('textInput.reSplit') : t('textInput.split')}
             </button>
             <span className={styles.charCount}>{text.length} {t('common.chars')}</span>
+            <span className={styles.capHint}>{t('textInput.segmentCharCapHint')}</span>
           </div>
 
           {showSettings && (

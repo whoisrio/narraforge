@@ -89,13 +89,15 @@ function roleVoiceDisplayName(role: Role): string {
   return '';
 }
 
-function createRoleDraft(t: (key: string) => string): RoleSnapshot {
+function createRoleDraft(t: (key: string) => string, projectId?: string): RoleSnapshot {
   const voice = { engine: 'edge_tts' as const, voice: DEFAULT_EDGE_CAST_VOICE, rate: '+0%', volume: '+0%' } as EdgeTTSParams;
   return {
     id: `role-cast-${Date.now()}`,
     name: t('projectVoices.newRole'),
     avatar: '',
     description: 'Cast',
+    // 必须带 project_id：缺省会落库为 NULL（全局角色），出现在所有项目的角色列表里
+    project_id: projectId ?? null,
     voice,
     favorite_styles: [],
     default_engine: voice.engine,
@@ -1401,7 +1403,7 @@ export function ProjectVoices({
               if (onCreateRole) {
                 onCreateRole();
               } else {
-                setEditingRole(createRoleDraft(t));
+                setEditingRole(createRoleDraft(t, projectId));
               }
             }}
           >

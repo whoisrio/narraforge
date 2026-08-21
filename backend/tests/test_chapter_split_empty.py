@@ -86,3 +86,34 @@ def test_split_empty_chapter_creates_segments_and_preserves_other_audio(
 
     # project-level configs survived the reconcile (split must not drop export_directory etc.)
     assert detail.configs == {"export_directory": str(tmp_path / "out"), "split_voice_mode": "narration"}
+
+
+def test_split_llm_mode_consumes_split_result_segments(
+    client, db_session, tmp_path, monkeypatch,
+):
+    """llm 模式：llm_split 返回 SplitResult dataclass，端点必须取 .segments。
+
+    回归：之前端点直接迭代 SplitResult（dataclass 不可迭代），llm 模式必 500。
+    """
+    _seed(db_session, tmp_path, monkeypatch)
+    from app.services import text_split_service
+    from app.services.text_split_service import SplitResult
+
+    monkeypatch.setattr(
+        text_split_service,
+        "llm_split",
+        lambda text, **kw: SplitResult(
+            segments=[
+                {"text": "第一段。", "reason": "", "emotion": ""},
+                {"text": "第二段。", "reason": "", "emotion": ""},
+            ],
+            model="fake-model",
+        ),
+    )
+
+    r = client.post(
+        "/api/segmented-projects/p1/chapters/c2/split",
+        json={"text": "第一段。第二段。", "mode": "llm", "replace_strategy": "preview_only"},
+    )
+    assert r.status_code == 200, r.text
+    assert [it["text"] for it in r.json()["items"]] == ["第一段。", "第二段。"]

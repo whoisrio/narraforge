@@ -51,6 +51,8 @@ EMOTION_LEADING_TAG: dict[str, str] = {
 
 _INLINE_TAG_RE = re.compile(r"\[[^\[\]]*\]")
 _LEADING_TAG_RE = re.compile(r"^\s*[\(（][^\)）]*[\)）]\s*")
+# 成对的非嵌套括号：半角 (...) 或全角 （...）（内容不含任何括号字符）
+_PAREN_PAIR_RE = re.compile(r"\([^()（）]*\)|（[^()（）]*）")
 
 
 def voxcpm_supports(mode: str | None, feature: str) -> bool:
@@ -87,6 +89,20 @@ def strip_leading_style_tag(text: str) -> str:
     return _LEADING_TAG_RE.sub("", text, count=1)
 
 
+def strip_parenthesized(text: str) -> str:
+    """移除成对的半角 ``(...)`` / 全角 ``（...）`` 括号及其内容，并清理多余空白。
+
+    只处理非嵌套的成对括号；不匹配的括号原样保留。
+    空白清理与 strip_inline_tags 同款（双空格合并、标点前空格去掉）。
+    """
+    if not text:
+        return ""
+    cleaned = _PAREN_PAIR_RE.sub("", text)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r" +(?=[，。！？；：、,.!?;:])", "", cleaned)
+    return cleaned.strip()
+
+
 def apply_leading_tag(
     text: str,
     emotion: str | None = None,
@@ -118,10 +134,13 @@ def prepare_text_for_engine(
     voxcpm_mode: str | None = None,
     mute_tags: bool = False,
     underscore_to_space: bool = False,
+    skip_parenthesized: bool = False,
 ) -> str:
     """按引擎能力清洗/标注待合成文本。
 
     规则：
+    - ``skip_parenthesized`` → 最先移除成对括号及其内容（只影响合成文本，
+      显示/字幕文本不受影响）；先于 tag 处理，后续新加的开头风格标签不受影响；
     - ``mute_tags`` 或引擎不支持 inline → strip_inline_tags；
     - 引擎支持 leading 且未 mute → apply_leading_tag；
     - 其余情况（不支持 leading 或 mute）→ strip_leading_style_tag。
@@ -131,6 +150,8 @@ def prepare_text_for_engine(
     """
     caps = _caps_for(engine, voxcpm_mode)
     out = text or ""
+    if skip_parenthesized:
+        out = strip_parenthesized(out)
     if mute_tags or not caps.inline_tags:
         out = strip_inline_tags(out)
     if caps.leading_style_tag and not mute_tags:

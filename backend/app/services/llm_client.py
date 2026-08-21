@@ -16,7 +16,7 @@ import re
 import ssl
 import urllib.request
 import urllib.error
-from typing import Type, TypeVar
+from typing import Callable, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -37,6 +37,48 @@ class LLMValidationError(RuntimeError):
         super().__init__(message)
         self.last_raw = last_raw
         self.last_error = last_error
+
+
+# ---------------------------------------------------------------------------
+# 用量计量（Phase 3）：usage_sink 回调 + token 提取/字符估算
+# ---------------------------------------------------------------------------
+
+def _extract_usage(result: dict, messages: list[dict], content: str) -> dict:
+    """从一次 LLM 调用提取 {input_tokens, output_tokens, estimated}。
+
+    优先取 API 返回的 usage（prompt/completion tokens 均 >0 才采信）；
+    否则按字符数估算（输入=各消息 content 长度合计，输出=返回 content 长度），
+    estimated=True 标记估算值。
+    """
+    usage = result.get("usage") or {}
+    prompt_tokens = int(usage.get("prompt_tokens") or 0)
+    completion_tokens = int(usage.get("completion_tokens") or 0)
+    if prompt_tokens > 0 and completion_tokens > 0:
+        return {
+            "input_tokens": prompt_tokens,
+            "output_tokens": completion_tokens,
+            "estimated": False,
+        }
+    return {
+        "input_tokens": sum(len(str(m.get("content") or "")) for m in messages),
+        "output_tokens": len(content),
+        "estimated": True,
+    }
+
+
+def _emit_usage(
+    usage_sink: Callable[[dict], None] | None,
+    result: dict,
+    messages: list[dict],
+    content: str,
+) -> None:
+    """best-effort 调用 sink：计量异常不能拖垮 LLM 主链路。"""
+    if usage_sink is None:
+        return
+    try:
+        usage_sink(_extract_usage(result, messages, content))
+    except Exception:  # noqa: BLE001
+        logger.warning("usage_sink 调用失败", exc_info=True)
 
 
 def extract_json_array(raw: str | None) -> str | None:
@@ -182,6 +224,7 @@ def call_agent_llm(
     db=None,
     timeout: int = 300,
     response_format: dict | None = None,
+    usage_sink: Callable[[dict], None] | None = None,
 ) -> str:
     """调用 Agent LLM（工作流等非 TTS 功能专用）。"""
     api_key, base_url, default_model = get_agent_llm_config(db=db)
@@ -229,6 +272,7 @@ def call_agent_llm(
                 raise RuntimeError(
                     f"模型推理耗尽 token（reasoning={rt}），未产生输出。请减少输入长度或更换模型。"
                 )
+        _emit_usage(usage_sink, result, messages, content)
         return content
     except urllib.error.HTTPError as e:
         body_err = e.read().decode("utf-8", errors="replace")
@@ -247,6 +291,7 @@ async def call_agent_llm_streaming(
     max_tokens: int = 8192,
     db=None,
     timeout: int = 300,
+    usage_sink: Callable[[dict], None] | None = None,
 ) -> str:
     """调用 Agent LLM 并流式返回结果。
 
@@ -258,6 +303,9 @@ async def call_agent_llm_streaming(
         max_tokens: 最大 token 数
         db: 数据库连接
         timeout: 超时时间
+        usage_sink: 用量回调（Phase 3）。流结束时调用一次：被动解析 chunk 里
+            的 usage 字段（部分 provider 末尾会发）；全程未见则按字符估算。
+            不主动加 stream_options（MiMo/未知 provider 兼容风险）。
 
     Returns:
         完整的 LLM 响应文本
@@ -285,6 +333,7 @@ async def call_agent_llm_streaming(
 
     logger.info(f"Agent LLM 流式调用: {model} @ {base_url}")
     full_content = ""
+    stream_usage: dict = {}
 
     try:
         with urllib.request.urlopen(req, context=ctx, timeout=timeout) as resp:
@@ -295,6 +344,10 @@ async def call_agent_llm_streaming(
                 if line.startswith("data: "):
                     try:
                         data = json.loads(line[6:])
+                        # 部分 provider 在末尾 chunk 带 usage（choices 为空）
+                        chunk_usage = data.get("usage")
+                        if isinstance(chunk_usage, dict) and chunk_usage:
+                            stream_usage = chunk_usage
                         choices = data.get("choices", [])
                         if not choices:
                             continue
@@ -307,6 +360,7 @@ async def call_agent_llm_streaming(
                         continue
 
         logger.info(f"Agent LLM 流式调用完成，总长度: {len(full_content)}")
+        _emit_usage(usage_sink, {"usage": stream_usage}, messages, full_content)
         return full_content
 
     except urllib.error.HTTPError as e:
@@ -326,6 +380,7 @@ def call_llm(
     db=None,
     timeout: int = 300,
     response_format: dict | None = None,
+    usage_sink: Callable[[dict], None] | None = None,
 ) -> str:
     """调用 LLM Chat API 并返回 assistant 消息内容。
 
@@ -334,6 +389,8 @@ def call_llm(
 
     新增 `response_format` 参数（默认 None 表示不带），由 call_llm_structured 按
     provider 自动决定。直接调用 call_llm 时通常不需要传。
+    `usage_sink`（Phase 3）：每次成功 HTTP 调用后回调一次用量
+    {input_tokens, output_tokens, estimated}。
     """
     api_key, base_url, default_model = get_llm_config(db=db)
     model = model or default_model
@@ -380,6 +437,7 @@ def call_llm(
                 raise RuntimeError(
                     f"模型推理耗尽 token（reasoning={rt}），未产生输出。请减少输入长度或更换模型。"
                 )
+        _emit_usage(usage_sink, result, messages, content)
         return content
     except urllib.error.HTTPError as e:
         body_err = e.read().decode("utf-8", errors="replace")
@@ -433,6 +491,7 @@ def call_llm_structured(
     timeout: int = 300,
     max_retries: int = 2,
     use_response_format: bool | None = None,
+    usage_sink: Callable[[dict], None] | None = None,
 ) -> T:
     """调用 LLM 并把返回解析为指定的 Pydantic schema 实例。
 
@@ -445,6 +504,8 @@ def call_llm_structured(
             仅对"返回内容无法通过 Pydantic 校验"重试；HTTP/网络错误不重试。
         use_response_format: 是否在请求里带 `response_format={"type":"json_object"}`。
             默认 None → 按 base_url 自动判断（Qwen 带，MiMo 不带）。
+        usage_sink: 用量回调（Phase 3），透传给每次 call_llm 尝试——重试每次都
+            是真实 API 调用，用量逐次累计。
 
     Returns:
         schema 的实例。
@@ -475,6 +536,7 @@ def call_llm_structured(
             db=db,
             timeout=timeout,
             response_format=response_format,
+            usage_sink=usage_sink,
         )
         last_raw = raw
 

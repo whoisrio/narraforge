@@ -33,6 +33,10 @@ interface ProjectLibraryProps {
   onUpdateSourceDocument?: (text: string) => void;
   onUpdateNarrationScript?: (text: string) => void;
   onAddChapter: (name?: string) => void;
+  /** 章节配额已满：禁用新建章节入口（backend 存储 + 普通登录用户 + 已达上限） */
+  createChapterDisabled?: boolean;
+  /** createChapterDisabled 时新建入口的提示文案 */
+  createChapterDisabledHint?: string;
   onDeleteChapter: (id: string) => void;
   onEnterStudio: (chapterId: string) => void;
   onModeChange?: (mode: LibraryMode) => void;
@@ -107,6 +111,8 @@ export function ProjectLibrary({
   onUpdateSourceDocument,
   onUpdateNarrationScript,
   onAddChapter,
+  createChapterDisabled = false,
+  createChapterDisabledHint,
   onDeleteChapter,
   onEnterStudio,
   onModeChange,
@@ -225,6 +231,7 @@ export function ProjectLibrary({
   };
 
   const createChapter = () => {
+    if (createChapterDisabled) return;
     onAddChapter(newChapterName.trim() || undefined);
     setNewChapterName('');
     setCreatingChapter(false);
@@ -341,7 +348,12 @@ export function ProjectLibrary({
       <span className={styles.kicker}>{t('projectLibrary.title')}</span>
       <h2>{t('projectLibrary.title')}</h2>
       <p>{t('projectLibrary.emptyDesc')}</p>
-      <button type="button" onClick={() => onAddChapter()}>{t('projectLibrary.newChapter')}</button>
+      <button
+        type="button"
+        onClick={() => onAddChapter()}
+        disabled={createChapterDisabled}
+        title={createChapterDisabled ? createChapterDisabledHint : undefined}
+      >{t('projectLibrary.newChapter')}</button>
     </div>
   ) : (
     <>
@@ -363,7 +375,12 @@ export function ProjectLibrary({
             autoFocus
           />
           <div className={styles.createChapterActions}>
-            <button type="button" onClick={createChapter}>{t('projectLibrary.createChapter')}</button>
+            <button
+              type="button"
+              onClick={createChapter}
+              disabled={createChapterDisabled}
+              title={createChapterDisabled ? createChapterDisabledHint : undefined}
+            >{t('projectLibrary.createChapter')}</button>
             <button type="button" onClick={() => { setCreatingChapter(false); setNewChapterName(''); }}>{t('common.cancel')}</button>
           </div>
         </div>
@@ -494,7 +511,13 @@ export function ProjectLibrary({
               <div className={styles.headerStat}><span>{t('projectLibrary.chapterCount')}</span><strong>{chapters.length}</strong></div>
               <div className={styles.headerStat}><span>{t('projectLibrary.wordCount')}</span><strong>{totals.chars}</strong></div>
               <div className={styles.headerStat}><span>{t('projectLibrary.segments')}</span><strong>{totals.segments}</strong></div>
-              <button type="button" className={styles.primaryButton} onClick={() => setCreatingChapter(true)}>{t('projectLibrary.newChapter')}</button>
+              <button
+                type="button"
+                className={styles.primaryButton}
+                onClick={() => setCreatingChapter(true)}
+                disabled={createChapterDisabled}
+                title={createChapterDisabled ? createChapterDisabledHint : undefined}
+              >{t('projectLibrary.newChapter')}</button>
             </>
           )}
           {view === 'source' && !comparing && (

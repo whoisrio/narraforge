@@ -22,6 +22,7 @@ from app.models.segmented_project import (
 from app.models.source_document import SourceDocument
 from app.models.system_config import SystemConfig
 from app.models.tts_result import TTSResultRecord
+from app.models.usage_event import UsageEvent
 from app.models.voice_profile import VoiceProfile
 
 SCHEMA_PATH = Path(__file__).resolve().parent.parent.parent / "supabase" / "schema.sql"
@@ -35,6 +36,7 @@ MODELS = {
     "segmented_project_chapters": SegmentedProjectChapter,
     "segmented_project_segments": SegmentedProjectSegment,
     "tts_results": TTSResultRecord,
+    "usage_events": UsageEvent,
 }
 
 # 仅存在于 Supabase 侧的表（无 SQLAlchemy 模型）：M2 用户体系/使用统计，
@@ -50,6 +52,7 @@ EXTRA_DDL_COLUMNS = {
     "roles": {"user_id"},
     "source_documents": {"user_id"},
     "tts_results": {"user_id"},
+    "usage_events": {"user_id"},
 }
 
 # DDL 列定义里非列名的前导关键字（约束/表级定义）

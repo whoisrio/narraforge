@@ -336,6 +336,11 @@
   font-variant-numeric: tabular-nums;
 }
 
+.capHint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
 /* Collapsible settings panel */
 .settingsPanel {
   padding: 10px 12px;

@@ -123,6 +123,15 @@ class Settings(BaseSettings):
     # （409 designed_voice_limit_reached）；0 = 不限制。预置/克隆音色不占名额。
     # legacy admin（旧凭证通道）与 admin_emails 管理员不受限。
     max_designed_voices_per_user: int = 1
+    # segment 文本最长字符数（local + workers 两种部署模式都生效，env: MAX_SEGMENT_CHARS）：
+    # 属内容质量约束（非计费配额）——拆分结果超长自动截断；全量保存 / 合成
+    # 传入超长文本直接拒绝（422 segment_too_long）。0 或负数 = 不限制。
+    max_segment_chars: int = 80
+    # 每项目章节上限（workers 模式，仅对普通登录用户生效，env: MAX_CHAPTERS_PER_PROJECT）：
+    # 传入章节数 > 该值且超过项目现有章节数（增长）时拒绝
+    # （409 chapter_limit_reached）；已超上限的存量项目仍可保存。0 = 不限制。
+    # legacy admin（旧凭证通道）与 admin_emails 管理员不受限；未来按 plan 覆盖。
+    max_chapters_per_project: int = 3
     # 二进制资产存储后端：auto | local | r2 | supabase
     # auto：local 模式→本地文件系统；workers 模式→有 R2 binding 用 R2（真 Workers），
     # 否则 Supabase Storage（Render 等无 binding 的 CPython 部署）。显式值可覆盖。

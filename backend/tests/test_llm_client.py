@@ -299,3 +299,151 @@ def test_call_llm_structured_strips_markdown_fence(monkeypatch):
         [{"role": "user", "content": "go"}], schema=_SampleResp,
     )
     assert result.items[0].name == "a"
+
+
+# ---------------------------------------------------------------------------
+# _extract_usage + usage_sink（Phase 3 用量计量）
+# ---------------------------------------------------------------------------
+
+def test_extract_usage_prefers_api_values():
+    from app.services.llm_client import _extract_usage
+    result = {"usage": {"prompt_tokens": 120, "completion_tokens": 30}}
+    u = _extract_usage(result, [{"role": "user", "content": "hello"}], "world")
+    assert u == {"input_tokens": 120, "output_tokens": 30, "estimated": False}
+
+
+def test_extract_usage_fallback_when_usage_missing():
+    from app.services.llm_client import _extract_usage
+    messages = [
+        {"role": "system", "content": "abc"},
+        {"role": "user", "content": "defgh"},
+        {"role": "user"},  # content 缺失按 0 计
+    ]
+    u = _extract_usage({}, messages, "output!")
+    assert u == {"input_tokens": 8, "output_tokens": 7, "estimated": True}
+
+
+def test_extract_usage_fallback_when_tokens_zero():
+    from app.services.llm_client import _extract_usage
+    result = {"usage": {"prompt_tokens": 0, "completion_tokens": 0}}
+    u = _extract_usage(result, [{"role": "user", "content": "abcd"}], "xy")
+    assert u == {"input_tokens": 4, "output_tokens": 2, "estimated": True}
+
+
+def test_call_llm_invokes_usage_sink_with_api_tokens(monkeypatch):
+    """call_llm 成功时调用一次 sink，优先用 API 返回的 token 数。"""
+    from unittest.mock import Mock
+    from app.services import llm_client
+
+    fake_response = {
+        "choices": [{"message": {"content": "hello world", "reasoning_content": ""}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 11, "completion_tokens": 7},
+    }
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return __import__('json').dumps(fake_response).encode()
+
+    monkeypatch.setattr(llm_client, "get_llm_config", lambda db=None: ("k", "https://api.example.com/v1", "m"))
+    monkeypatch.setattr(llm_client.urllib.request, "urlopen", lambda *a, **kw: FakeResp())
+
+    sink = Mock()
+    result = llm_client.call_llm([{"role": "user", "content": "hi"}], usage_sink=sink)
+    assert result == "hello world"
+    sink.assert_called_once_with({"input_tokens": 11, "output_tokens": 7, "estimated": False})
+
+
+def test_call_llm_sink_falls_back_to_char_estimate(monkeypatch):
+    """API 未返回 usage → sink 收到字符估算值（estimated=True）。"""
+    from unittest.mock import Mock
+    from app.services import llm_client
+
+    fake_response = {
+        "choices": [{"message": {"content": "abcd", "reasoning_content": ""}, "finish_reason": "stop"}],
+    }
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return __import__('json').dumps(fake_response).encode()
+
+    monkeypatch.setattr(llm_client, "get_llm_config", lambda db=None: ("k", "https://api.example.com/v1", "m"))
+    monkeypatch.setattr(llm_client.urllib.request, "urlopen", lambda *a, **kw: FakeResp())
+
+    sink = Mock()
+    llm_client.call_llm([{"role": "user", "content": "hi"}], usage_sink=sink)
+    sink.assert_called_once_with({"input_tokens": 2, "output_tokens": 4, "estimated": True})
+
+
+def test_call_llm_without_sink_still_works(monkeypatch):
+    """不传 sink 行为不变。"""
+    from app.services import llm_client
+
+    fake_response = {
+        "choices": [{"message": {"content": "ok", "reasoning_content": ""}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1},
+    }
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return __import__('json').dumps(fake_response).encode()
+
+    monkeypatch.setattr(llm_client, "get_llm_config", lambda db=None: ("k", "https://api.example.com/v1", "m"))
+    monkeypatch.setattr(llm_client.urllib.request, "urlopen", lambda *a, **kw: FakeResp())
+
+    assert llm_client.call_llm([{"role": "user", "content": "hi"}]) == "ok"
+
+
+def test_call_llm_structured_sink_fires_per_attempt_including_retries(monkeypatch):
+    """校验失败重试时每次尝试都是一次真实 API 调用，sink 每次都触发。"""
+    from unittest.mock import Mock
+    from app.services import llm_client
+
+    monkeypatch.setattr(llm_client, "get_llm_config",
+                        lambda db=None: ("k", "https://random.example.com/v1", "m"))
+
+    responses = iter([
+        '{"items": [{"name": "a"}]}',                 # 缺 score → 校验失败
+        '{"items": [{"name": "a", "score": 7}]}',     # 合法
+    ])
+
+    def fake_call_llm(messages, **kw):
+        sink = kw.get("usage_sink")
+        if sink:
+            sink({"input_tokens": 10, "output_tokens": 5, "estimated": False})
+        return next(responses)
+
+    monkeypatch.setattr(llm_client, "call_llm", fake_call_llm)
+
+    sink = Mock()
+    result = llm_client.call_llm_structured(
+        [{"role": "user", "content": "go"}], schema=_SampleResp,
+        max_retries=2, usage_sink=sink,
+    )
+    assert result.items[0].score == 7
+    assert sink.call_count == 2
+
+
+def test_call_agent_llm_invokes_usage_sink(monkeypatch):
+    from unittest.mock import Mock
+    from app.services import llm_client
+
+    fake_response = {
+        "choices": [{"message": {"content": "agent ok", "reasoning_content": ""}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 21, "completion_tokens": 9},
+    }
+
+    class FakeResp:
+        def __enter__(self): return self
+        def __exit__(self, *a): pass
+        def read(self): return __import__('json').dumps(fake_response).encode()
+
+    monkeypatch.setattr(llm_client, "get_agent_llm_config", lambda db=None: ("k", "https://api.example.com/v1", "m"))
+    monkeypatch.setattr(llm_client.urllib.request, "urlopen", lambda *a, **kw: FakeResp())
+
+    sink = Mock()
+    result = llm_client.call_agent_llm([{"role": "user", "content": "hi"}], usage_sink=sink)
+    assert result == "agent ok"
+    sink.assert_called_once_with({"input_tokens": 21, "output_tokens": 9, "estimated": False})

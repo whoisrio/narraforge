@@ -34,6 +34,7 @@ export const navItems: NavItem[] = [
   { id: 'projects', labelKey: 'nav.projects', path: '/projects' },
   { id: 'subtitles', labelKey: 'nav.subtitles', path: '/subtitles' },
   { id: 'voice-design', labelKey: 'nav.voiceDesign', path: '/voice-design' },
+  { id: 'usage', labelKey: 'nav.usage', path: '/usage' },
   { id: 'settings', labelKey: 'nav.settings', path: '/settings' },
 ];
 

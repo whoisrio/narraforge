@@ -130,6 +130,21 @@ async def get_segmented_repo(request: Request, db: Session = Depends(get_db)):
     return LocalSegmentedProjectRepository(db)
 
 
+async def get_usage_repo(request: Request, db: Session = Depends(get_db)):
+    """用量计量仓储（Phase 3）：workers 按用户作用域，local 单租户。"""
+    from app.core.repositories.usage import (
+        LocalUsageRepository,
+        SupabaseUsageRepository,
+    )
+
+    if _workers_mode():
+        owner_id, see_all = _request_scope(request)
+        return SupabaseUsageRepository(
+            get_supabase_client(), owner_id=owner_id, see_all=see_all
+        )
+    return LocalUsageRepository(db)
+
+
 async def get_admin_stats_repo():
     """管理后台统计仓储（M5，Supabase-only；路由只在 workers 模式挂载）。"""
     from app.core.repositories.admin_stats import SupabaseAdminStatsRepository

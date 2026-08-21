@@ -24,6 +24,7 @@ import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
 import { AuthPage } from './pages/Auth';
 import { Admin } from './pages/Admin';
+import { Usage } from './pages/Usage';
 import { AuthProvider } from './hooks/AuthProvider';
 import { useAuth } from './hooks/authContext';
 import { isAuthRequired } from './services/auth';
@@ -34,7 +35,7 @@ import styles from './App.module.css';
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
 
 type Page = 'home' | 'auth';
-type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config' | 'admin';
+type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config' | 'admin' | 'usage';
 type View = Page | Tab;
 
 function SettingsSelect() {
@@ -289,16 +290,18 @@ function AppContent() {
   const activeGlobalNav: GlobalNavId =
     activeTab === 'speech-to-text' ? 'subtitles'
       : activeTab === 'voice-clone' ? 'voice-design'
-        : activeTab === 'model-config' ? 'settings'
-          : 'projects';
+        : activeTab === 'usage' ? 'usage'
+          : activeTab === 'model-config' ? 'settings'
+            : 'projects';
 
   const handleGlobalNavigate = (id: GlobalNavId) => {
     setActiveProjectId(null);
     const nextTab: Tab =
       id === 'subtitles' ? 'speech-to-text'
         : id === 'voice-design' ? 'voice-clone'
-          : id === 'settings' ? 'model-config'
-            : 'tts-synthesis';
+          : id === 'usage' ? 'usage'
+            : id === 'settings' ? 'model-config'
+              : 'tts-synthesis';
     handleTabClick(nextTab);
   };
 
@@ -357,6 +360,8 @@ function AppContent() {
   const hiddenNavIds: GlobalNavId[] = [
     ...(!capabilities.features.speech_to_text || isAnonymous ? ['subtitles' as GlobalNavId] : []),
     ...(isAnonymous ? ['voice-design' as GlobalNavId] : []),
+    // 用量端点 workers 模式匿名 401（voice-design 同款先例）
+    ...(isAnonymous ? ['usage' as GlobalNavId] : []),
     // 在线部署（workers）：模型凭据由服务端环境变量管理，设置页无可配置项，隐藏入口
     ...(capabilities.deploy_target !== 'local' ? ['settings' as GlobalNavId] : []),
   ];
@@ -422,6 +427,9 @@ function AppContent() {
                   />
                 )}
                 {activeTab === 'admin' && <Admin />}
+                {activeTab === 'usage' && (
+                  isAnonymous ? <LoginRequired onLogin={handleOpenAuth} /> : <Usage />
+                )}
                 <div style={{ display: activeTab === 'voice-clone' ? 'block' : 'none' }}>
                   {isAnonymous ? <LoginRequired onLogin={handleOpenAuth} /> : <VoiceClone />}
                 </div>

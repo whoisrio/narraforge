@@ -59,9 +59,11 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
             ref={textareaRef}
             className={styles.textarea}
             value={localText}
+            maxLength={80}
             onChange={(e) => { setLocalText(e.target.value); setDirty(true); onUpdateText(segment.id, e.target.value); }}
             rows={3}
           />
+          <div className={styles.charCount}>{t('segmentEdit.charCounter', { n: localText.length })}</div>
 
           {isCosyVoice && (
             <>

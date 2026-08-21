@@ -30,6 +30,7 @@ _PRIMARY_KEYS = {
     "daily_stats": ("date", "metric"),
     "daily_active_users": ("date", "user_id"),
     "operation_logs": "id",
+    "usage_events": "id",
 }
 
 

@@ -1,6 +1,6 @@
 """字幕 LLM 服务 API — 校准 + 双语翻译"""
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel, Field
 from typing import Any, Optional
 
@@ -17,6 +17,9 @@ from app.services.llm_subtitle_service import (
 )
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.repositories.deps import get_usage_repo
+from app.core.repositories.usage import UsageRepository
+from app.api._usage_helpers import build_llm_usage_sink
 
 router = APIRouter()
 
@@ -66,7 +69,12 @@ class TranslationResponse(BaseModel):
 # ---- Endpoints ----
 
 @router.post("/correct", response_model=CorrectionResponse)
-async def subtitle_correct(req: CorrectionRequest, db: Session = Depends(get_db)):
+async def subtitle_correct(
+    req: CorrectionRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
+):
     """LLM 字幕校准 — 对比原始文稿，找出 ASR 识别的错别字，返回修改建议。
 
     只改错别字，不改变内容意思，不破坏时间轴。
@@ -82,6 +90,7 @@ async def subtitle_correct(req: CorrectionRequest, db: Session = Depends(get_db)
             language=req.language,
             mode=req.mode,
             db=db,
+            usage_sink=build_llm_usage_sink(http_request, usage_repo, chars=len(req.srt_content)),
         )
         return CorrectionResponse(
             suggestions=[
@@ -105,7 +114,12 @@ async def subtitle_correct(req: CorrectionRequest, db: Session = Depends(get_db)
 
 
 @router.post("/translate", response_model=TranslationResponse)
-async def subtitle_translate(req: TranslationRequest, db: Session = Depends(get_db)):
+async def subtitle_translate(
+    req: TranslationRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
+):
     """双语字幕翻译 — 将 SRT 字幕翻译为目标语言，返回双语结果。"""
     if not req.srt_content.strip():
         raise HTTPException(status_code=400, detail="SRT 内容不能为空")
@@ -115,6 +129,7 @@ async def subtitle_translate(req: TranslationRequest, db: Session = Depends(get_
             target_language=req.target_language,
             source_language=req.source_language,
             db=db,
+            usage_sink=build_llm_usage_sink(http_request, usage_repo, chars=len(req.srt_content)),
         )
         bilingual_srt = build_bilingual_srt(result)
         return TranslationResponse(

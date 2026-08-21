@@ -27,8 +27,9 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.asset_store import AssetStore, get_asset_store
 from app.core.auth_deps import is_workers_anonymous
-from app.core.repositories.deps import get_tts_results_repo, get_voice_repo
+from app.core.repositories.deps import get_tts_results_repo, get_usage_repo, get_voice_repo
 from app.core.repositories.tts_results import TTSResultRepository
+from app.core.repositories.usage import UsageRepository
 from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.tts import TTSResultOut
@@ -96,6 +97,7 @@ async def _save_and_respond(
     store: AssetStore,
     *,
     force_frontend: bool = False,
+    usage_repo: UsageRepository | None = None,
 ):
     """根据存储模式保存音频并返回响应
 
@@ -139,6 +141,9 @@ async def _save_and_respond(
         "language": "Chinese",
         "source": None,
     })
+    # Phase 3 用量计量：workers 匿名走 force_frontend 到不了这里（best-effort）
+    if usage_repo is not None:
+        usage_repo.record_event(kind="tts", chars=len(text))
 
     return {
         "audio_id": audio_id,
@@ -168,6 +173,7 @@ async def synthesize_preset(
     db: Session = Depends(get_db),
     tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
     store: AssetStore = Depends(get_asset_store),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
 ):
     """使用预置音色进行语音合成"""
     try:
@@ -188,6 +194,7 @@ async def synthesize_preset(
             repo=tts_repo,
             store=store,
             force_frontend=is_workers_anonymous(http_request),
+            usage_repo=usage_repo,
         )
     except RuntimeError as e:
         logger.error(f"MiMo preset TTS failed: {e}")
@@ -204,6 +211,7 @@ async def synthesize_voice_design(
     db: Session = Depends(get_db),
     tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
     store: AssetStore = Depends(get_asset_store),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
 ):
     """使用文本描述设计音色进行语音合成"""
     try:
@@ -229,6 +237,7 @@ async def synthesize_voice_design(
             repo=tts_repo,
             store=store,
             force_frontend=is_workers_anonymous(http_request),
+            usage_repo=usage_repo,
         )
     except RuntimeError as e:
         logger.error(f"MiMo voice design TTS failed: {e}")
@@ -246,6 +255,7 @@ async def synthesize_voice_clone(
     repo: VoiceProfileRepository = Depends(get_voice_repo),
     tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
     store: AssetStore = Depends(get_asset_store),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
 ):
     """使用已上传的音频文件进行音色复刻合成"""
     # 查找本地声音记录
@@ -290,6 +300,7 @@ async def synthesize_voice_clone(
                     repo=tts_repo,
                     store=store,
                     force_frontend=is_workers_anonymous(http_request),
+                    usage_repo=usage_repo,
                 )
             except Exception as e:
                 if tmp_path and os.path.exists(tmp_path):
@@ -317,6 +328,7 @@ async def synthesize_voice_clone(
             repo=tts_repo,
             store=store,
             force_frontend=is_workers_anonymous(http_request),
+            usage_repo=usage_repo,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -335,6 +347,7 @@ async def synthesize_voice_clone_direct(
     db: Session = Depends(get_db),
     tts_repo: TTSResultRepository = Depends(get_tts_results_repo),
     store: AssetStore = Depends(get_asset_store),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
 ):
     """直接使用 Base64 音频数据进行音色复刻合成"""
     try:
@@ -356,6 +369,7 @@ async def synthesize_voice_clone_direct(
             repo=tts_repo,
             store=store,
             force_frontend=is_workers_anonymous(http_request),
+            usage_repo=usage_repo,
         )
     except RuntimeError as e:
         logger.error(f"MiMo direct voice clone TTS failed: {e}")
@@ -379,8 +393,6 @@ def synthesize_mimo_internal(
     context: list[dict] | None = None,
 ) -> tuple[bytes, str]:
     """Synthesize for the segmented editor. Returns (audio_bytes, native_format)."""
-    import asyncio
-
     async def _run() -> bytes:
         service = await get_mimo_tts_service(db)
         ctx = _extract_context(context)
@@ -450,4 +462,8 @@ def synthesize_mimo_internal(
             format="wav",
         )
 
-    return asyncio.run(_run()), "wav"
+    # 当前线程可能已有 running event loop（FastAPI async 端点直接调同步
+    # service 链），直接 asyncio.run 会炸——复用 tts._run_async 的线程桥接。
+    from app.api.tts import _run_async
+
+    return _run_async(_run()), "wav"

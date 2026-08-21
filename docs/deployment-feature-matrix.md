@@ -21,6 +21,7 @@
 | 角色/源文档/配置 | `/api/roles`、`/api/sources`、`/api/config/*`、`/api/model-config/*` | PostgREST；model-config 用 RSA 加密（cryptography 为 base 依赖） |
 | 管理后台统计 | `GET /api/admin/stats/overview`、`/api/admin/users`、`/api/admin/logs` | Supabase 统计表（profiles/daily_stats/operation_logs/daily_active_users）+ `increment_metric` RPC；仅 admin |
 | Try 页（/try 获客页） | 前端静态页 + `POST /api/tts/synthesize`（edge_tts）+ `GET /api/tts/edge-voices`；匿名按 IP 限流（`rate_limit_counters` 表 + `hit_rate_limit` RPC） | 纯前端 IndexedDB 存储历史，零项目持久化 |
+| 用量计量与用量页 | `GET /api/segmented-projects/{id}/usage`、`GET /api/me/usage`；前端全局 Usage 页（nav id `usage`，匿名隐藏）+ ProjectOverview 项目用量卡（仅 backend 存储项目） | `usage_events` 表（Supabase 侧带 Postgres-only `user_id` 列与索引）；TTS/LLM 事件在合成与 LLM 端点写入，LLM token 优先取 API 返回、无返回时按字符估算（`estimated=true`）；workers 匿名调用不计量，`/api/me/usage` 匿名 401 |
 
 > workers 模式的认证语义（2026-08 起）：A 类端点中，仅匿名 allowlist
 > （`GET /health`、`GET /`、`GET /api/config/capabilities`、`GET /api/config/storage-mode`、
@@ -28,6 +29,9 @@
 > `POST /api/subtitle-llm/*`、`POST /api/text-analysis/*`）对匿名放行；
 > 其余一律要求 Supabase 用户 JWT 或 legacy admin 凭证，且按用户隔离数据。
 > 详见 `docs/api-reference.md`「认证与数据隔离」。
+>
+> 约束与配额：segment 文本长度上限（`MAX_SEGMENT_CHARS`，默认 `80`）是内容质量约束，local 与 workers 两种模式都生效（拆分超长自动截断 + 写入/合成覆盖 422 `segment_too_long`）。
+> 每项目章节上限（`MAX_CHAPTERS_PER_PROJECT`，默认 `3`）是 free tier 配额，仅 workers 模式对普通登录用户生效（增长式拦截，409 `chapter_limit_reached`；存量超上限项目可保存不可加章）。
 | MiMo 克隆 | `POST /api/clone/create-clone-mimo`、`/create-from-design`、`/upload-from-url`、`/upload-from-storage` | httpx + Supabase Storage presigned 上传 |
 
 ## B. 本质是云端 API，但因 SDK 依赖暂只能在 local 跑（后续可改造）

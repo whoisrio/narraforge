@@ -219,6 +219,7 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     from app.api import (
         clone,
         config,
+        me,
         mimo_tts,
         model_config,
         roles,
@@ -259,6 +260,8 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
         app.include_router(voxcpm.router, prefix="/api/voxcpm", tags=["voxcpm"])
     app.include_router(sources.router, prefix="/api", tags=["sources"])
     app.include_router(roles.router, prefix="/api", tags=["roles"])
+    # 用量计量（Phase 3）：两种部署目标都挂载；workers 匿名由 auth 中间件 401
+    app.include_router(me.router, prefix="/api", tags=["me"])
     if not is_local:
         # 管理后台（M5）：全端点 require_admin，仅 workers 挂载
         from app.api import admin

@@ -612,3 +612,111 @@ class TestTryAnonRateLimit:
                 assert self._synthesize(client, headers=AUTH_A).status_code == 200
         # 已认证请求不写限流计数
         assert store.tables.get("rate_limit_counters", []) == []
+
+
+class TestChapterQuota:
+    """free 用户每项目章节上限（workers 模式，仅普通登录用户）。
+
+    只在"增长"时拦截：incoming 章节数 > 上限 且 > 项目现有章节数 → 409
+    chapter_limit_reached；已超上限的存量项目仍可保存。legacy admin /
+    admin_emails 豁免；0 = 不限制。豁免顺序与 TestProjectQuota 一致。
+    """
+
+    def _chapters(self, pid: str, n: int) -> list[dict]:
+        return [
+            {"id": f"{pid}-c{i}", "position": i, "name": f"第{i}章", "segments": []}
+            for i in range(n)
+        ]
+
+    def _create(self, client, headers, pid: str, n: int):
+        return client.post(
+            "/api/segmented-projects",
+            json={"id": pid, "name": "项目", "schema_version": 2,
+                  "chapters": self._chapters(pid, n)},
+            headers=headers,
+        )
+
+    def _put(self, client, headers, pid: str, n: int):
+        return client.put(
+            f"/api/segmented-projects/{pid}",
+            json={"id": pid, "name": "项目", "schema_version": 2,
+                  "chapters": self._chapters(pid, n)},
+            headers=headers,
+        )
+
+    def test_regular_user_capped_at_limit(self, workers_client, monkeypatch):
+        client, store, _ = workers_client
+        monkeypatch.setattr(settings, "max_chapters_per_project", 3)
+
+        # 新建 4 章 → 409，不落库
+        resp = self._create(client, AUTH_A, "p1", 4)
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "chapter_limit_reached"
+        assert resp.json()["detail"]["limit"] == 3
+        assert store.tables["segmented_projects"] == []
+
+        # 3 章合法
+        assert self._create(client, AUTH_A, "p1", 3).status_code == 201
+
+        # 增长到 4 章 → 409
+        resp = self._put(client, AUTH_A, "p1", 4)
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "chapter_limit_reached"
+
+        # 不增长的保存（3 章）放行
+        assert self._put(client, AUTH_A, "p1", 3).status_code == 200
+
+    def test_batch_growth_blocked(self, workers_client, monkeypatch):
+        client, _, _ = workers_client
+        monkeypatch.setattr(settings, "max_chapters_per_project", 3)
+
+        assert self._create(client, AUTH_A, "p1", 3).status_code == 201
+        resp = client.post(
+            "/api/segmented-projects/p1/chapters:batch",
+            json={"chapters": [
+                {"chapter_title": f"第{i}章", "segments": []} for i in range(4)
+            ]},
+            headers=AUTH_A,
+        )
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "chapter_limit_reached"
+        # 不增长的 batch（3 章）放行
+        resp = client.post(
+            "/api/segmented-projects/p1/chapters:batch",
+            json={"chapters": [
+                {"chapter_title": f"第{i}章", "segments": []} for i in range(3)
+            ]},
+            headers=AUTH_A,
+        )
+        assert resp.status_code == 200, resp.text
+
+    def test_over_cap_project_can_save_but_not_grow(self, workers_client, monkeypatch):
+        """存量超上限项目：保存放行（不增长），继续增长 409。"""
+        client, _, _ = workers_client
+        monkeypatch.setattr(settings, "max_chapters_per_project", 100)
+        assert self._create(client, AUTH_A, "p1", 4).status_code == 201
+
+        monkeypatch.setattr(settings, "max_chapters_per_project", 3)
+        # 4 章 > 上限 3，但不超过现有 4 章 → 放行
+        assert self._put(client, AUTH_A, "p1", 4).status_code == 200
+        # 缩到 3 章也放行
+        assert self._put(client, AUTH_A, "p1", 3).status_code == 200
+        # 再增长 → 409
+        assert self._put(client, AUTH_A, "p1", 4).status_code == 409
+
+    def test_legacy_admin_unlimited(self, workers_client, monkeypatch):
+        client, _, _ = workers_client
+        monkeypatch.setattr(settings, "max_chapters_per_project", 3)
+        assert self._create(client, ADMIN, "p1", 5).status_code == 201
+
+    def test_admin_email_unlimited(self, workers_client, monkeypatch):
+        client, _, _ = workers_client
+        monkeypatch.setattr(settings, "max_chapters_per_project", 3)
+        monkeypatch.setattr(settings, "admin_emails", "admin@example.com")
+        admin_auth = _auth(USER_A, "admin@example.com")
+        assert self._create(client, admin_auth, "p1", 5).status_code == 201
+
+    def test_quota_disabled_when_zero(self, workers_client, monkeypatch):
+        client, _, _ = workers_client
+        monkeypatch.setattr(settings, "max_chapters_per_project", 0)
+        assert self._create(client, AUTH_A, "p1", 5).status_code == 201

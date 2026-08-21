@@ -29,6 +29,10 @@ interface ProjectShellProps {
   activeChapterId?: string;
   onSelectChapter?: (chapterId: string) => void;
   onAddChapter?: () => void;
+  /** 章节配额已满：禁用新建章节入口（backend 存储 + 普通登录用户 + 已达上限） */
+  createChapterDisabled?: boolean;
+  /** createChapterDisabled 时新建章节按钮的提示文案 */
+  createChapterDisabledHint?: string;
   onRenameChapter?: (chapterId: string, name: string) => void;
   onDeleteChapter?: (chapterId: string) => void;
   onMoveChapter?: (chapterId: string, direction: 'up' | 'down') => void;
@@ -71,6 +75,8 @@ export function ProjectShell({
   activeChapterId,
   onSelectChapter,
   onAddChapter,
+  createChapterDisabled = false,
+  createChapterDisabledHint,
   onRenameChapter,
   onDeleteChapter,
   onMoveChapter,
@@ -317,7 +323,13 @@ export function ProjectShell({
               ))}
             </ul>
             {onAddChapter && (
-              <button type="button" className={styles.newChapterBtn} onClick={onAddChapter}>
+              <button
+                type="button"
+                className={styles.newChapterBtn}
+                onClick={onAddChapter}
+                disabled={createChapterDisabled}
+                title={createChapterDisabled ? createChapterDisabledHint : undefined}
+              >
                 {!collapsed ? '+ 新建章节' : '+'}
               </button>
             )}

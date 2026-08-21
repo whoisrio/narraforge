@@ -135,6 +135,20 @@ create table if not exists tts_results (
     created_at timestamptz default now()
 );
 
+-- 用量计量事件（Phase 3）：TTS/LLM 计费原料。kind='tts' 时 token 恒 0；
+-- estimated=true 表示 token 为字符估算（非 API 返回）。project_id 可空
+-- （无项目上下文的 LLM 调用归 NULL 桶）。
+create table if not exists usage_events (
+    id text primary key,
+    project_id text,
+    kind text not null,
+    chars integer not null default 0,
+    input_tokens integer not null default 0,
+    output_tokens integer not null default 0,
+    estimated boolean not null default false,
+    created_at timestamptz default now()
+);
+
 -- 环状 FK：segmented_projects.default_narrator_role_id → roles(id)
 -- （roles 在 segmented_projects 之后建表，只能后置补约束）
 alter table segmented_projects
@@ -155,12 +169,15 @@ alter table voice_profiles add column if not exists user_id uuid;
 alter table roles add column if not exists user_id uuid;
 alter table source_documents add column if not exists user_id uuid;
 alter table tts_results add column if not exists user_id uuid;
+alter table usage_events add column if not exists user_id uuid;
 
 create index if not exists idx_segmented_projects_user_id on segmented_projects (user_id);
 create index if not exists idx_voice_profiles_user_id on voice_profiles (user_id);
 create index if not exists idx_roles_user_id on roles (user_id);
 create index if not exists idx_source_documents_user_id on source_documents (user_id);
 create index if not exists idx_tts_results_user_id on tts_results (user_id);
+create index if not exists idx_usage_events_user_id on usage_events (user_id);
+create index if not exists idx_usage_events_project_id on usage_events (project_id);
 
 -- ---------------------------------------------------------------------------
 -- 用户档案与使用统计（M2/M5，Supabase Auth 用户体系）

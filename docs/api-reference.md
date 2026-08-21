@@ -1001,6 +1001,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | POST | `/api/segmented-projects/{id}/export-all-chapters` | 一键导出全部章节 mp3+srt 到项目导出目录 |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/split` | 文本分段 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/sync-status` | 章节分层文本陈旧检测（L1/L2/L3 脏标记） |
+| GET | `/api/segmented-projects/{id}/usage` | 项目级用量合计（TTS 次数/字符/LLM token） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/adjust-audio` | 合成后音频调整（速度/音量，ffmpeg 批处理） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/resplit-from-script` | 以 L2 改写稿重新拆分 segments（丢弃旧段配置） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/rewrite-script-from-segments` | 以 L3 分段定位合并回写 L2 改写稿 |
@@ -1014,6 +1015,14 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 > **多用户配额（workers 模式）**：普通登录用户名下项目数达到 `MAX_PROJECTS_PER_USER`（默认 `1`）后，POST 创建 / PUT 新建（upsert 到不存在的 id）返回 `409 project_limit_reached`；更新已有项目不受限。legacy admin（旧凭证通道）与 `ADMIN_EMAILS` 管理员豁免。local 模式不启用。
 >
 > **设计音色配额（workers 模式）**：普通登录用户名下设计音色数（`voice.voice_type == "design"`，全局 + 项目内合并）达到 `MAX_DESIGNED_VOICES_PER_USER`（默认 `1`）后，`POST /clone/create-from-design`（engine 为 `mimo`/`voxcpm`）返回 `409 designed_voice_limit_reached`；预置音色保存（engine=`preset`）与克隆上传不受限。legacy admin 与 `ADMIN_EMAILS` 管理员豁免。
+>
+> **章节配额（workers 模式）**：普通登录用户的项目章节数超过 `MAX_CHAPTERS_PER_PROJECT`（默认 `3`）且超过项目现有章节数（增长）时，POST 创建 / PUT 全量保存 / `chapters:batch` 返回 `409 chapter_limit_reached`（detail 为 `{code, limit}`）。
+> 已超上限的存量项目仍可保存，但不能继续加章。
+> `0` = 不限制；legacy admin 与 `ADMIN_EMAILS` 管理员豁免；local 模式不启用。
+>
+> **segment 文本长度上限（两种部署模式都生效）**：`MAX_SEGMENT_CHARS`（默认 `80`）是内容质量约束而非计费配额。
+> 拆分结果超长时自动在限制内最近标点处截断（无标点则硬切）；POST/PUT 全量保存、`chapters:batch` 与分片合成的 text 覆盖携带超长文本时返回 `422 segment_too_long`（detail 为 `{code, max, chapter_id, segment_id}`）。
+> `0` 或负数 = 不限制。
 
 ### ProjectIn Schema
 
@@ -1059,6 +1068,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | `configs.export_directory` | string | — | 导出目录。绝对路径（含 `~`）时独立于 Remotion 直接使用；相对路径则相对于 `remotion_project_path`，默认 `public/audio` |
 | `configs.split_voice_mode` | string | — | 拆分默认模式：`narration` \| `dialogue` |
 | `configs.underscore_to_space` | boolean | — | 项目级全局开关：TTS 合成时把下划线 `_` 替换为空格（只影响合成文本，显示/字幕保持原文）；与章节级 `params.underscore_to_space` 任一开启即生效 |
+| `configs.skip_parenthesized` | boolean | — | 项目级全局开关：TTS 合成时移除成对括号及其内容（半角 `()` 与全角 `（）`，不含嵌套，未配对括号保留）；只影响合成文本；与章节级 `params.skip_parenthesized` 任一开启即生效 |
 | `chapters` | array | `[]` | 章节列表 |
 
 ### ChapterIn Schema
@@ -1189,6 +1199,8 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 `recorded_discard` = 将被丢弃的用户录音（`origin=="recorded"`）段数。
 `dry_run=true` 时 `chapters` 为 `[]`，`per_chapter[].chapter_id` 缺省。
 
+**错误:** 409 `chapter_limit_reached`（workers 模式章节配额，仅增长时拦截，detail 为 `{code, limit}`）；422 `segment_too_long`（segment 文本超过 `MAX_SEGMENT_CHARS`，detail 为 `{code, max, chapter_id, segment_id}`，`chapter_id` 处为 `chapter_title`）。
+
 > 项目级长文档（源文档 `source.md`、旁白稿 `narration.md`）的内容一律存文件，DB 仅存 `source_document_path` / `narration_document_path`；`GET /segmented-projects/{id}` 的 `source_document` / `narration_script` 字段读穿返回内容。旧 `source_document` TEXT 列仅作遗留回退。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize`
@@ -1211,8 +1223,15 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
   项目级全局开关 `configs.underscore_to_space`（项目设置）与此参数任一开启即生效。
   转换是瞬态的：分片显示文本、字幕导出与历史记录均保持原文。
   在 `prepare_text_for_engine` 中于风格 tag 适配之后执行。
+- `params.skip_parenthesized`：默认 `false`。
+  为 `true` 时，传入 TTS 引擎前移除文本中成对的半角 `()` / 全角 `（）` 括号及其内容（不含嵌套；未配对括号原样保留）。
+  项目级全局开关 `configs.skip_parenthesized`（项目设置）与此参数任一开启即生效。
+  转换是瞬态的：分片显示文本、字幕导出与历史记录均保持原文。
+  在 `prepare_text_for_engine` 中于风格 tag 适配之前执行（避免吃掉引擎新加的 `(情绪)` 前导标签）。
 
 **Response:** 完整 `ProjectDetail` 对象。
+
+**错误:** 404 `segment_not_found`；422 `segment_too_long`（`text` 覆盖文本超过 `MAX_SEGMENT_CHARS`，detail 为 `{code, max, chapter_id, segment_id}`）。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/audio`
 
@@ -1273,6 +1292,26 @@ Layer-sync Phase A：返回章节三层文本（L1 原文 / L2 改写稿 / L3 �
 ```
 
 某层 hash 未设置（未拆分/旧章节）时对应 `false`。前端章节头据此显示 badge。
+
+### GET `/api/segmented-projects/{id}/usage`
+
+项目级用量合计：该项目归属的 `usage_events`（TTS 合成次数、字符数、LLM input/output token）聚合。
+归属校验复用仓储作用域：workers 模式下他人项目返回 404（不泄露存在性）；local 单租户直接聚合。
+
+**Response:**
+```json
+{
+  "project_id": "project-uuid",
+  "tts_count": 12,
+  "chars": 3456,
+  "input_tokens": 789,
+  "output_tokens": 123
+}
+```
+
+**错误:** 404 `project_not_found`。
+
+前端在 ProjectOverview 的项目用量卡展示（仅 backend 存储模式的项目）。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/adjust-audio`
 
@@ -1547,6 +1586,40 @@ Layer-sync Phase B：把 L3 分段文本的改动定位合并回写 L2。
 
 ---
 
+## 当前用户用量 (`/api/me`)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/me/usage` | 当前用户用量：按项目分桶 + 总计 |
+
+### GET `/api/me/usage`
+
+两种部署模式都可用：workers 模式经仓储作用域只见本人数据；local 单租户返回全量用量。
+`/api/me/*` 不在 workers 匿名 allowlist 中，匿名请求由认证中间件返回 `401 auth_required`。
+
+**Response:**
+```json
+{
+  "projects": [
+    {
+      "project_id": "project-uuid",
+      "project_name": "项目名称",
+      "tts_count": 12,
+      "chars": 3456,
+      "input_tokens": 789,
+      "output_tokens": 123
+    }
+  ],
+  "totals": { "tts_count": 12, "chars": 3456, "input_tokens": 789, "output_tokens": 123 }
+}
+```
+
+- `projects` 按 `project_id` 分桶；`project_id` 为 `null` 的桶是无项目上下文的 LLM 调用（字幕校准/翻译、文本拆分）。
+- `project_name` 从 `segmented_projects` 解析；已删除或无归属的项目为 `null`。
+- `estimated=true` 的字符估算 token 与 API 返回 token 混合合计（不区分）。
+
+前端有全局 Usage 页（导航 id `usage`，workers 匿名时隐藏），数据来自本端点。
+
 ## 通用响应格式
 
 ### VoiceProfile 响应对象
@@ -1593,7 +1666,7 @@ or `/api/clone/audio/{id}?field=source` when `has_source` is true.
 - `401` — 未认证（workers 模式匿名访问非 allowlist 端点，`auth_required`）
 - `403` — 权限不足（workers 模式非管理员访问 `/api/admin/*`，`admin_required`）
 - `404` — 资源不存在（workers 模式下也用于跨用户访问，不泄露存在性）
-- `409` — 资源冲突（如重复描述、项目已存在）
-- `422` — 请求体验证失败
+- `409` — 资源冲突（如重复描述、项目已存在、配额上限 `project_limit_reached` / `chapter_limit_reached`）
+- `422` — 请求体验证失败（含内容约束 `segment_too_long`）
 - `500` — 服务器内部错误
 - `502` — 外部服务调用失败（如 LLM API）

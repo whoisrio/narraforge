@@ -14,7 +14,7 @@ import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi, apiErrorCode } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/authContext';
 import { isAuthRequired } from '../services/auth';
 import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
+import { applyEngineTextCleaning } from '../services/styleTags';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/useToast';
 import { useConfirm } from '../components/ui/useConfirm';
@@ -53,6 +54,9 @@ type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
 
 /** 将角色 voice (EngineParams) 转换为 old flat 字段名，供 handleRegenerate 内部使用 */
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
+
+// 免费额度每项目章节上限（对应后端 MAX_CHAPTERS_PER_PROJECT；前端无设置端点，硬编码）
+const MAX_CHAPTERS_PER_PROJECT = 3;
 
 function toEdgeFormat(value: number) {
   return value >= 0 ? `+${value}%` : `${value}%`;
@@ -150,6 +154,11 @@ export function TTSSynthesis({
   // 合成时把下划线转为空格（随 chapter.voice 持久化，透传 SynthesizeParams.underscore_to_space；
   // 只影响合成语音，不影响显示/字幕文本）
   const [underscoreToSpace, setUnderscoreToSpace] = useState(false);
+  // 合成时忽略括号内容（随 chapter.voice 持久化，透传 SynthesizeParams.skip_parenthesized；
+  // 只影响合成语音，不影响显示/字幕文本）
+  const [skipParenthesized, setSkipParenthesized] = useState(false);
+  // 侧栏「合成忽略选项」组默认收起
+  const [ignoreOptionsOpen, setIgnoreOptionsOpen] = useState(false);
 
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
 
@@ -457,6 +466,12 @@ export function TTSSynthesis({
     storage: projectStorage,
     // 自动保存成功后，当前内存章节全部已落库
     onSaved: (saved) => setServerChapterIds(saved.chapters.map((c) => c.id)),
+    // 后端校验兜底：分段 80 字上限（422）与章节配额（409）在自动保存 PUT 时被拒
+    onSaveError: (error) => {
+      const code = apiErrorCode(error);
+      if (code === 'segment_too_long') showToast(t('segmentEdit.segmentTooLong'), 'error');
+      else if (code === 'chapter_limit_reached') showToast(t('projectShell.chapterQuotaReached'), 'error');
+    },
   });
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
@@ -471,6 +486,7 @@ export function TTSSynthesis({
     setEngine(engine);
     setMuteTags(v?.mute_tags ?? false);
     setUnderscoreToSpace(v?.underscore_to_space ?? false);
+    setSkipParenthesized(v?.skip_parenthesized ?? false);
     if (engine === 'edge_tts') {
       setEdgeVoice((v as EdgeTTSParams).voice || '');
       setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
@@ -501,12 +517,28 @@ export function TTSSynthesis({
     if (ch) restoreChapterSettings(ch);
   }, [project.chapters, dispatch, restoreChapterSettings]);
 
+  // 每项目章节配额（免费额度，workers 模式）：backend 存储 + auth 开启 + 登录用户
+  // （非管理员）+ 已达上限 → 禁用新建章节入口。管理员豁免；后端 409 兜底。
+  const addChapterBlocked = useMemo(
+    () => storageMode === 'backend'
+      && isAuthRequired()
+      && !!user
+      && !isAdmin
+      && project.chapters.length >= MAX_CHAPTERS_PER_PROJECT,
+    [storageMode, user, isAdmin, project.chapters.length],
+  );
+
   const handleAddChapter = useCallback((requestedName?: string) => {
+    // 双保险：后端 409 chapter_limit_reached 由 draftSync.onSaveError 兜底提示
+    if (addChapterBlocked) {
+      showToast(t('projectShell.chapterQuotaReached'), 'error');
+      return;
+    }
     const fallbackName = t('tts.newChapterName', { n: project.chapters.length + 1 });
     const name = requestedName?.trim() || fallbackName;
     dispatch({ type: 'ADD_CHAPTER', name });
     // New chapter inherits settings from previous active chapter, so no need to reset global state
-  }, [project.chapters.length, dispatch]);
+  }, [addChapterBlocked, project.chapters.length, dispatch, showToast, t]);
 
   const doDeleteChapter = useCallback(async (chapterId: string) => {
     const ch = project.chapters.find(c => c.id === chapterId);
@@ -543,13 +575,13 @@ export function TTSSynthesis({
   /** Build EngineParams from current global state */
   const buildCurrentParams = useCallback((): EngineParams => {
     if (engine === 'edge_tts') {
-      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume), mute_tags: muteTags, underscore_to_space: underscoreToSpace } as EdgeTTSParams;
+      return { engine: 'edge_tts', voice: edgeVoice, rate: toEdgeFormat(edgeRate), volume: toEdgeFormat(edgeVolume), mute_tags: muteTags, underscore_to_space: underscoreToSpace, skip_parenthesized: skipParenthesized } as EdgeTTSParams;
     }
     if (engine === 'mimo_tts') {
-      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction, mute_tags: muteTags, underscore_to_space: underscoreToSpace } as MiMoParams;
+      return { engine: 'mimo_tts', mode: mimoMode, voice_id: mimoMode === 'preset' ? mimoPresetVoice : mimoCloneVoiceId, instruction: mimoInstruction, mute_tags: muteTags, underscore_to_space: underscoreToSpace, skip_parenthesized: skipParenthesized } as MiMoParams;
     }
     if (engine === 'voxcpm') {
-      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags, underscore_to_space: underscoreToSpace } as VoxCPMParams;
+      return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags, underscore_to_space: underscoreToSpace, skip_parenthesized: skipParenthesized } as VoxCPMParams;
     }
     return {
       engine: 'cosyvoice', voice_id: selectedVoiceId,
@@ -558,8 +590,9 @@ export function TTSSynthesis({
       enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false,
       mute_tags: muteTags,
       underscore_to_space: underscoreToSpace,
+      skip_parenthesized: skipParenthesized,
     };
-  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags, underscoreToSpace]);
+  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags, underscoreToSpace, skipParenthesized]);
 
   // 构建当前全局音色的 VoiceRef（用于新创建的 segment）
   const buildGlobalVoiceRef = useCallback((): import('../types').VoiceRef => {
@@ -1166,6 +1199,8 @@ export function TTSSynthesis({
         if (effectiveParams.mute_tags) requestParams.mute_tags = true;
         // 下划线转空格：透传后端 SynthesizeParams.underscore_to_space
         if (effectiveParams.underscore_to_space) requestParams.underscore_to_space = true;
+        // 忽略括号内容：透传后端 SynthesizeParams.skip_parenthesized
+        if (effectiveParams.skip_parenthesized) requestParams.skip_parenthesized = true;
         if (effectiveEngine === 'edge_tts') {
           requestParams.edge_voice = effectiveEdgeVoice;
           requestParams.edge_rate = effectiveEdgeRate;
@@ -1237,11 +1272,15 @@ export function TTSSynthesis({
       }
 
       // frontend 存储模式直调引擎端点，不经过后端 prepare_text_for_engine，
-      // 下划线转空格在本地完成（只影响合成语音；seg.text、历史记录、字幕保持原文）。
+      // 忽略括号内容、下划线/斜杠转空格在本地完成（只影响合成语音；seg.text、历史记录、字幕保持原文）。
       // 章节开关（effectiveParams）与项目设置里的全局开关（project.configs）任一开启即生效；
       // backend 存储模式由后端 synthesize_segment 做同样的 OR 兜底。
       const underscoreToSpaceEffective = Boolean(effectiveParams.underscore_to_space) || Boolean(project.configs?.underscore_to_space);
-      const textForEngine = underscoreToSpaceEffective ? textToSend.replaceAll('_', ' ') : textToSend;
+      const skipParenthesizedEffective = Boolean(effectiveParams.skip_parenthesized) || Boolean(project.configs?.skip_parenthesized);
+      const textForEngine = applyEngineTextCleaning(textToSend, {
+        skipParenthesized: skipParenthesizedEffective,
+        underscoreToSpace: underscoreToSpaceEffective,
+      });
 
       if (effectiveEngine === 'edge_tts') {
         resp = await ttsApi.synthesize({ text: textForEngine, engine: 'edge_tts', voice_id: '', edge_voice: effectiveEdgeVoice ?? '', edge_rate: effectiveEdgeRate ?? '+0%', edge_volume: effectiveEdgeVolume ?? '+0%', format: 'mp3' });
@@ -1853,6 +1892,8 @@ export function TTSSynthesis({
             handleSelectChapter(id);
           }}
           onAddChapter={handleAddChapter}
+          createChapterDisabled={addChapterBlocked}
+          createChapterDisabledHint={addChapterBlocked ? t('projectShell.chapterQuotaHint') : undefined}
           onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
           onDeleteChapter={handleDeleteChapter}
           onMoveChapter={(id, direction) => dispatch({ type: 'MOVE_CHAPTER', id, direction })}
@@ -1956,14 +1997,37 @@ export function TTSSynthesis({
                       />
                       禁用风格 tag（clone 音色建议开启）
                     </label>
-                    <label className={styles.sidebarMuteTags} title="开启后传给 TTS 的文本中下划线会替换为空格，显示与字幕保持原文">
-                      <input
-                        type="checkbox"
-                        checked={underscoreToSpace}
-                        onChange={e => setUnderscoreToSpace(e.target.checked)}
-                      />
-                      合成时把下划线转为空格（不影响字幕显示）
-                    </label>
+                    <div className={`${styles.sidebarIgnoreGroup} ${ignoreOptionsOpen ? styles.open : ''}`}>
+                      <button
+                        type="button"
+                        className={styles.sidebarIgnoreGroupHeader}
+                        aria-expanded={ignoreOptionsOpen}
+                        onClick={() => setIgnoreOptionsOpen(open => !open)}
+                      >
+                        <span>{t('projectSettings.ignoreOptions')}</span>
+                        <span className={styles.sidebarIgnoreGroupCaret}>›</span>
+                      </button>
+                      <div className={styles.sidebarIgnoreGroupBody}>
+                        <div className={styles.sidebarIgnoreGroupBodyInner}>
+                          <label className={styles.sidebarMuteTags} title={t('projectSettings.underscoreToSpaceHint')}>
+                            <input
+                              type="checkbox"
+                              checked={underscoreToSpace}
+                              onChange={e => setUnderscoreToSpace(e.target.checked)}
+                            />
+                            {t('projectSettings.underscoreToSpace')}
+                          </label>
+                          <label className={styles.sidebarMuteTags} title={t('projectSettings.skipParenthesizedHint')}>
+                            <input
+                              type="checkbox"
+                              checked={skipParenthesized}
+                              onChange={e => setSkipParenthesized(e.target.checked)}
+                            />
+                            {t('projectSettings.skipParenthesized')}
+                          </label>
+                        </div>
+                      </div>
+                    </div>
                     <button
                       type="button"
                       className={styles.sidebarApplyBtn}
@@ -2195,6 +2259,8 @@ export function TTSSynthesis({
             onUpdateSourceDocument={(text) => dispatch({ type: 'SET_SOURCE_DOCUMENT', text })}
             onUpdateNarrationScript={(text) => dispatch({ type: 'SET_NARRATION_SCRIPT', text })}
             onAddChapter={handleAddChapter}
+            createChapterDisabled={addChapterBlocked}
+            createChapterDisabledHint={addChapterBlocked ? t('projectShell.chapterQuotaHint') : undefined}
             onDeleteChapter={handleDeleteChapter}
             onProjectChanged={() => { void reloadProjectData(); }}
             onEnterStudio={(chapterId) => {
@@ -2213,6 +2279,7 @@ export function TTSSynthesis({
         ) : projectSection === 'overview' ? (
           <ProjectOverview
             projectName={project.name}
+            projectId={storageMode === 'backend' && !isScratchpadProject ? project.id : undefined}
             chapters={project.chapters}
             activeChapterId={project.active_chapter_id}
             remotionPath={project.remotion_project_path}
@@ -2233,6 +2300,7 @@ export function TTSSynthesis({
             projectDescription={project.configs?.description ?? null}
             exportDirectory={project.configs?.export_directory ?? null}
             underscoreToSpace={project.configs?.underscore_to_space ?? null}
+            skipParenthesized={project.configs?.skip_parenthesized ?? null}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

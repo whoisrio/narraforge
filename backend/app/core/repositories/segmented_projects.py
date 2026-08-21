@@ -28,6 +28,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from app.core.supabase_client import SupabaseClient
 from app.core.time_utils import utcnow
+from app.core.config import settings
 from app.core.repositories.user_scope import UserScope
 from app.schemas.segmented_project import (
     ChapterIn,
@@ -75,12 +76,18 @@ _DEFAULT_SPLIT_CONFIG = {"delimiters": ["，", "。", "！", "？", "；"], "mod
 _DEFAULT_VOICE = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
 
 
+def _max_segment_len() -> int | None:
+    """max_segment_chars > 0 → 上限；否则 None（不限制）。local+workers 都生效。"""
+    return settings.max_segment_chars if settings.max_segment_chars > 0 else None
+
+
 @runtime_checkable
 class SegmentedProjectRepository(Protocol):
     def list_projects(self) -> list[ProjectSummary]: ...
     def get_project(self, project_id: str) -> ProjectDetail | None: ...
     def project_exists(self, project_id: str) -> bool: ...
     def count_owned(self) -> int: ...
+    def count_chapters(self, project_id: str) -> int: ...
     def save_project(self, project: ProjectIn) -> ProjectDetail: ...
     def delete_project(self, project_id: str) -> bool: ...
     def batch_create_structure(
@@ -121,6 +128,11 @@ class LocalSegmentedProjectRepository:
     def count_owned(self) -> int:
         """local 单租户无用户概念：配额检查不生效（路由层只在 workers 模式调用），返回 0。"""
         return 0
+
+    def count_chapters(self, project_id: str) -> int:
+        """项目章节数（章节配额用；不存在的项目返回 0）。"""
+        proj = svc.get_project_row(self._db, project_id)
+        return len(proj.chapters) if proj is not None else 0
 
     def save_project(self, project: ProjectIn) -> ProjectDetail:
         return svc.save_project(self._db, project)
@@ -444,6 +456,16 @@ class SupabaseSegmentedProjectRepository(UserScope):
         """
         return len(self._client.select(PROJECTS, params=self._scope_params({"select": "id"})))
 
+    def count_chapters(self, project_id: str) -> int:
+        """项目章节数（章节配额用；不存在的项目返回 0）。
+
+        chapters 表无 user_id 列，按 project_id 过滤即可——配额检查只在
+        路由层校验过归属后调用。
+        """
+        return len(self._client.select(
+            CHAPTERS, params={"project_id": f"eq.{project_id}", "select": "id"}
+        ))
+
     # ----- 全量保存 -----
 
     def save_project(self, project: ProjectIn) -> ProjectDetail:
@@ -617,7 +639,7 @@ class SupabaseSegmentedProjectRepository(UserScope):
                 if split_segments or (preserve_audio and snapshot_has_segments(snapshot)):
                     body = ch_data.get("narration_script") or ch_data.get("original_text") or ""
                     delimiters = resolve_split_delimiters(ch_data.get("split_config"), snapshot)
-                    seg_payloads = [{"text": t} for t in rule_split(body, delimiters)]
+                    seg_payloads = [{"text": t} for t in rule_split(body, delimiters, max_len=_max_segment_len())]
             resolved_chapters.append({**ch_data, "segments": seg_payloads})
 
         plan = plan_batch_reuse(old_chapters, resolved_chapters, preserve_audio=preserve_audio)
@@ -794,7 +816,7 @@ class SupabaseSegmentedProjectRepository(UserScope):
         delimiters = (ch_row.get("split_config") or {}).get(
             "delimiters", _DEFAULT_SPLIT_CONFIG["delimiters"]
         )
-        items = rule_split(ch_row.get("narration_script") or "", delimiters)
+        items = rule_split(ch_row.get("narration_script") or "", delimiters, max_len=_max_segment_len())
 
         self._client.delete(SEGMENTS, params={"chapter_id": f"eq.{chapter_id}"})
         new_segs = [

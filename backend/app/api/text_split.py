@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
@@ -13,6 +13,10 @@ except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
 
 from app.core.database import get_db
+from app.core.config import settings
+from app.core.repositories.deps import get_usage_repo
+from app.core.repositories.usage import UsageRepository
+from app.api._usage_helpers import build_llm_usage_sink
 from app.services.text_split_service import (
     rule_split,
     llm_split,
@@ -97,6 +101,7 @@ async def split_rule(req: RuleSplitRequest):
             req.delimiters,
             min_len_to_merge=req.min_len_to_merge,
             next_max_len_to_merge=req.next_max_len_to_merge,
+            max_len=settings.max_segment_chars if settings.max_segment_chars > 0 else None,
         )
         return RuleSplitResponse(segments=segments)
     except Exception as e:
@@ -105,10 +110,18 @@ async def split_rule(req: RuleSplitRequest):
 
 
 @router.post("/llm", response_model=LLMSplitResponse)
-async def split_llm(req: LLMSplitRequest, db: Session = Depends(get_db)):
+async def split_llm(
+    req: LLMSplitRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
+):
     """LLM 智能语义拆分。"""
     try:
-        result = llm_split(req.text, req.delimiters, db=db)
+        result = llm_split(
+            req.text, req.delimiters, db=db,
+            usage_sink=build_llm_usage_sink(http_request, usage_repo, chars=len(req.text)),
+        )
         return LLMSplitResponse(
             segments=[LLMSplitSegmentItem(**s) for s in result.segments],
             model=result.model,
@@ -123,10 +136,21 @@ async def split_llm(req: LLMSplitRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/ssml-annotate", response_model=SSMLAnnotateResponse)
-async def annotate_ssml(req: SSMLAnnotateRequest, db: Session = Depends(get_db)):
+async def annotate_ssml(
+    req: SSMLAnnotateRequest,
+    http_request: Request,
+    db: Session = Depends(get_db),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
+):
     """LLM 为每段加 SSML 标签。"""
     try:
-        result = ssml_annotate(req.texts, req.style_hint, db=db)
+        result = ssml_annotate(
+            req.texts, req.style_hint, db=db,
+            usage_sink=build_llm_usage_sink(
+                http_request, usage_repo,
+                chars=sum(len(t) for t in req.texts),
+            ),
+        )
         return SSMLAnnotateResponse(
             annotations=[SSMLAnnotationItem(**a) for a in result.annotations],
             model=result.model,

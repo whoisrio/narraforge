@@ -251,6 +251,9 @@ class SynthesizeParams(BaseModel):
     # 合成前把下划线替换为空格（只影响合成文本，不影响显示/字幕）
     underscore_to_space: bool = False
 
+    # 合成前移除成对括号及其内容（只影响合成文本，不影响显示/字幕）
+    skip_parenthesized: bool = False
+
     # Metadata
     role_id: str | None = None
     segment_kind: str = "narration"

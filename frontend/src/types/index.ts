@@ -64,6 +64,8 @@ export interface EdgeTTSParams {
   mute_tags?: boolean;
   /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
   underscore_to_space?: boolean;
+  /** 合成前移除成对括号及其内容（只影响合成语音，不影响显示/字幕文本）。 */
+  skip_parenthesized?: boolean;
 }
 
 export interface MiMoParams {
@@ -76,6 +78,8 @@ export interface MiMoParams {
   mute_tags?: boolean;
   /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
   underscore_to_space?: boolean;
+  /** 合成前移除成对括号及其内容（只影响合成语音，不影响显示/字幕文本）。 */
+  skip_parenthesized?: boolean;
 }
 
 export interface CosyVoiceParams {
@@ -93,6 +97,8 @@ export interface CosyVoiceParams {
   mute_tags?: boolean;
   /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
   underscore_to_space?: boolean;
+  /** 合成前移除成对括号及其内容（只影响合成语音，不影响显示/字幕文本）。 */
+  skip_parenthesized?: boolean;
 }
 
 export interface VoxCPMParams {
@@ -108,6 +114,8 @@ export interface VoxCPMParams {
   mute_tags?: boolean;
   /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
   underscore_to_space?: boolean;
+  /** 合成前移除成对括号及其内容（只影响合成语音，不影响显示/字幕文本）。 */
+  skip_parenthesized?: boolean;
 }
 
 export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams;
@@ -362,6 +370,8 @@ export interface RoleSnapshot {
   avatar?: string | null;
   description?: string | null;
   role_kind?: 'narrator' | 'cast' | null;
+  /** 归属项目；null/缺省 = 全局角色（新建草稿必须带，否则会出现在所有项目） */
+  project_id?: string | null;
   voice?: EngineParams;
   favorite_styles: FavoriteStyle[];
 
@@ -545,6 +555,8 @@ export interface SegmentedProject {
     split_voice_mode?: 'narration' | 'dialogue';
     /** 项目级全局开关：TTS 合成时把下划线转为空格（不影响显示/字幕） */
     underscore_to_space?: boolean | null;
+    /** 项目级全局开关：TTS 合成时移除成对括号及其内容（不影响显示/字幕） */
+    skip_parenthesized?: boolean | null;
     [key: string]: unknown;
   } | null;
   created_at: string;

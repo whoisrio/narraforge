@@ -117,6 +117,13 @@
   border-color: var(--color-primary);
 }
 
+.charCount {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* SSML bar */
 .ssmlBar {
   display: flex;

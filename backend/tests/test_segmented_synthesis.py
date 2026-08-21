@@ -126,6 +126,39 @@ def test_mimo_internal_uses_real_service(monkeypatch):
     assert audio_bytes == expected
 
 
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_mimo_internal_inside_running_event_loop(monkeypatch):
+    """回归：FastAPI async 端点直接调同步 service 链时，当前线程已有 running
+    event loop，synthesize_mimo_internal 内部 asyncio.run 必炸（生产 500）。
+
+    修复后应复用 tts._run_async 的线程桥接，在 running loop 下也能跑通。
+    """
+    from app.api import mimo_tts
+
+    expected = _silent_wav_bytes(duration_ms=300)
+
+    class FakeMiMoService:
+        async def synthesize_preset(self, text, voice, instruction, format):
+            return expected
+
+    async def fake_get_mimo_tts_service(db=None):
+        return FakeMiMoService()
+
+    monkeypatch.setattr(mimo_tts, "get_mimo_tts_service", fake_get_mimo_tts_service)
+
+    audio_bytes, audio_format = mimo_tts.synthesize_mimo_internal(
+        text="hello",
+        mimo_mode="preset",
+        preset_voice="冰糖",
+    )
+
+    assert audio_format == "wav"
+    assert audio_bytes == expected
+
+
 def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkeypatch):
     """Role.voice from DB query is used when segment references a role."""
     from unittest.mock import patch
@@ -310,6 +343,38 @@ def test_synth_underscore_to_space_via_project_configs(db_session, tmp_path, mon
         project_configs={"underscore_to_space": True},
     )
     assert captured["text"] == "你好 世界"
+
+
+def test_synth_skip_parenthesized_via_request_params(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好(注释)世界（再注）", seg_emotion=None,
+        request_params={"skip_parenthesized": True},
+    )
+    assert captured["text"] == "你好世界"
+    assert captured["params"].skip_parenthesized is True
+
+
+def test_synth_parenthesized_kept_when_flag_off(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好(注释)世界", seg_emotion=None,
+    )
+    assert captured["text"] == "你好(注释)世界"
+
+
+def test_synth_skip_parenthesized_via_project_configs(db_session, tmp_path, monkeypatch):
+    # 项目级全局开关（项目设置）：configs.skip_parenthesized=True 时，
+    # 即使 request params 不带该开关也生效
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好（注释）世界", seg_emotion=None,
+        project_configs={"skip_parenthesized": True},
+    )
+    assert captured["text"] == "你好世界"
 
 
 def test_synth_text_override_also_cleaned(db_session, tmp_path, monkeypatch):

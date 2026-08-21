@@ -2,6 +2,9 @@
 
 > [English](README.md)
 
+> **[在线 Demo → https://narraforge.rio-dong.workers.dev/](https://narraforge.rio-dong.workers.dev/)**
+> 云端演示版不含本地引擎能力（VoxCPM 克隆、语音转写、CosyVoice、Remotion 脚手架），完整功能请本地部署。
+
 一站式 AI 叙事工坊，集成声音克隆、文字转语音、语音转字幕。专为旁白与对话制作设计，支持多角色音色项目管理。
 
 ![NarraForge 首页](docs/uiscreenshots/narraforge-landing-page-screenshots.png)
@@ -9,10 +12,12 @@
 ## 亮点
 
 - **旁白 + 对话** — 分段编辑器，角色分配、感情标签、逐段音色覆盖
+- **AI 旁白工作流** — LangGraph 智能体流水线：源文档 → 脚本 → 审校 → 章节拆分 → 合成
 - **免费离线 TTS** — Edge-TTS 和 VoxCPM 开箱即用，无需 API Key
 - **声音克隆** — 上传样本即可获得可复用的克隆音色（VoxCPM 免费本地 / CosyVoice 付费 / MiMo 付费）
 - **语音转字幕** — Whisper（多语言）或 FunASR（中文优化，CPU 比实时快 30 倍）
 - **LLM 驱动** — 智能分句、感情分析、字幕校准、双语翻译
+- **本地或云端** — 本地部署功能完整；云端托管多用户模式（Supabase + Vercel + Cloudflare Workers）带用户配额与用量统计
 
 ## 截图
 
@@ -62,18 +67,21 @@
 
 专业级长文本旁白时间轴：
 
-- **智能拆分** — LLM 语义分析或标点规则拆分
+- **智能拆分** — LLM 语义分析或标点规则拆分（单段自动按最近标点截断至 80 字以内）
 - **逐段感情** — 自动识别（欣喜 / 激昂 / 沉稳 / 中性 / 沉重 / 愤怒），支持手动调整
 - **角色分配** — 旁白和台词角色，各自独立音色配置
 - **音色覆盖** — 全局音色 + 逐段自定义，已生成段落不受全局切换影响
+- **合成忽略选项** — 可展开的忽略规则组：下划线/斜杠转空格、忽略括号内容（只影响送引擎文本，显示与字幕保持原文）
 - **过期检测** — 全局音色变更后自动标记旧段落
 - **全部播放** — 顺序播放，逐字高亮同步
 - **导出** — 音频（WAV/MP3）和 SRT 字幕
+- **用量统计** — 项目级与全局看板，展示 TTS 次数与字数消耗
 
 ## 技术栈
 
 - **前端：** React 19 + TypeScript + Vite + IndexedDB
-- **后端：** Python 3.12+ / FastAPI / SQLAlchemy / SQLite
+- **后端：** Python 3.12+ / FastAPI / SQLAlchemy / SQLite（可选 Supabase 多用户模式）
+- **智能体：** LangGraph 旁白工作流服务
 - **TTS：** Edge-TTS、VoxCPM、CosyVoice、MiMo
 - **STT：** Faster-Whisper、FunASR
 - **LLM：** MiMo-v2.5-pro（分句、感情、校准、翻译）
