@@ -17,15 +17,18 @@
 
 .title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--color-text-primary);
+  font-family: var(--font-family-heading);
+  font-size: var(--font-size-2xl);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.02em;
+  color: var(--color-primary-dark);
 }
 
 .subtitle {
-  margin: 0;
-  font-size: 13px;
-  color: var(--color-text-muted);
+  margin: 4px 0 0;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
 }
 
 .section {
