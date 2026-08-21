@@ -7,6 +7,7 @@ from app.services.engine_capabilities import (
     prepare_text_for_engine,
     strip_inline_tags,
     strip_leading_style_tag,
+    strip_parenthesized,
     voxcpm_supports,
 )
 
@@ -198,3 +199,68 @@ def test_prepare_underscore_to_space_applies_after_leading_tag():
         "你好_世界", engine="mimo_tts", emotion="happy", underscore_to_space=True
     )
     assert out == "(开心)你好 世界"
+
+
+# ----- skip_parenthesized -----
+
+def test_strip_parenthesized_half_width():
+    assert strip_parenthesized("你好(注释)世界") == "你好世界"
+
+
+def test_strip_parenthesized_full_width():
+    assert strip_parenthesized("你好（注释）世界") == "你好世界"
+
+
+def test_strip_parenthesized_multiple_pairs():
+    assert strip_parenthesized("他(真的)来了（很快）") == "他来了"
+
+
+def test_strip_parenthesized_unmatched_kept():
+    assert strip_parenthesized("你好(世界") == "你好(世界"
+    assert strip_parenthesized("你好)世界(") == "你好)世界("
+
+
+def test_strip_parenthesized_collapses_whitespace():
+    # 与 strip_inline_tags 同款空白清理：双空格合并、标点前空格去掉
+    assert strip_parenthesized("alpha (note) beta") == "alpha beta"
+    assert strip_parenthesized("你好 (注释)，世界") == "你好，世界"
+
+
+def test_strip_parenthesized_empty():
+    assert strip_parenthesized("") == ""
+
+
+def test_prepare_skip_parenthesized():
+    out = prepare_text_for_engine(
+        "你好(注释)世界（再注）", engine="edge_tts", skip_parenthesized=True
+    )
+    assert out == "你好世界"
+
+
+def test_prepare_parenthesized_kept_by_default():
+    out = prepare_text_for_engine("你好(注释)世界", engine="edge_tts")
+    assert out == "你好(注释)世界"
+
+
+def test_prepare_skip_parenthesized_before_underscore_to_space():
+    out = prepare_text_for_engine(
+        "你好(_)世界_测试", engine="edge_tts",
+        skip_parenthesized=True, underscore_to_space=True,
+    )
+    assert out == "你好世界 测试"
+
+
+def test_prepare_skip_parenthesized_keeps_applied_leading_tag():
+    # 先移除原文括号内容，再加开头风格标签——新加的标签不被误删
+    out = prepare_text_for_engine(
+        "你好(注释)世界", engine="mimo_tts", emotion="happy", skip_parenthesized=True
+    )
+    assert out == "(开心)你好世界"
+
+
+def test_prepare_skip_parenthesized_with_mute_tags():
+    out = prepare_text_for_engine(
+        "(旧风格)你好[笑]世界(注释)", engine="voxcpm", emotion="happy",
+        style="磁性", voxcpm_mode="clone", mute_tags=True, skip_parenthesized=True,
+    )
+    assert out == "你好世界"

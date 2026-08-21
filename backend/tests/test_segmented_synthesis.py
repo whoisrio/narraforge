@@ -345,6 +345,38 @@ def test_synth_underscore_to_space_via_project_configs(db_session, tmp_path, mon
     assert captured["text"] == "你好 世界"
 
 
+def test_synth_skip_parenthesized_via_request_params(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好(注释)世界（再注）", seg_emotion=None,
+        request_params={"skip_parenthesized": True},
+    )
+    assert captured["text"] == "你好世界"
+    assert captured["params"].skip_parenthesized is True
+
+
+def test_synth_parenthesized_kept_when_flag_off(db_session, tmp_path, monkeypatch):
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好(注释)世界", seg_emotion=None,
+    )
+    assert captured["text"] == "你好(注释)世界"
+
+
+def test_synth_skip_parenthesized_via_project_configs(db_session, tmp_path, monkeypatch):
+    # 项目级全局开关（项目设置）：configs.skip_parenthesized=True 时，
+    # 即使 request params 不带该开关也生效
+    captured = _run_synth_capture_text(
+        db_session, tmp_path, monkeypatch,
+        chapter_voice={"engine": "edge_tts", "voice_id": "v1"},
+        seg_text="你好（注释）世界", seg_emotion=None,
+        project_configs={"skip_parenthesized": True},
+    )
+    assert captured["text"] == "你好世界"
+
+
 def test_synth_text_override_also_cleaned(db_session, tmp_path, monkeypatch):
     captured = _run_synth_capture_text(
         db_session, tmp_path, monkeypatch,

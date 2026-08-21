@@ -310,12 +310,13 @@ describe('segmentedReducer', () => {
     // remotion_project_path stays top-level; description/export_directory go into configs.
     const step1 = segmentedReducer({ project: base }, {
       type: 'SET_PROJECT_META',
-      meta: { remotion_project_path: '/tmp/remotion', description: 'hello', export_directory: 'public/audio', underscore_to_space: true },
+      meta: { remotion_project_path: '/tmp/remotion', description: 'hello', export_directory: 'public/audio', underscore_to_space: true, skip_parenthesized: true },
     });
     expect(step1.project.remotion_project_path).toBe('/tmp/remotion');
     expect(step1.project.configs?.description).toBe('hello');
     expect(step1.project.configs?.export_directory).toBe('public/audio');
     expect(step1.project.configs?.underscore_to_space).toBe(true);
+    expect(step1.project.configs?.skip_parenthesized).toBe(true);
     // No legacy top-level fields leak through.
     expect((step1.project as unknown as Record<string, unknown>).description).toBeUndefined();
     expect((step1.project as unknown as Record<string, unknown>).export_directory).toBeUndefined();
@@ -328,6 +329,7 @@ describe('segmentedReducer', () => {
     expect(step2.project.configs?.description).toBeNull();
     expect(step2.project.configs?.export_directory).toBe('public/audio');
     expect(step2.project.configs?.underscore_to_space).toBe(true);
+    expect(step2.project.configs?.skip_parenthesized).toBe(true);
     expect(step2.project.remotion_project_path).toBe('/tmp/remotion');
   });
 

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useTranslation } from '../../i18n';
 import styles from './ProjectSettings.module.css';
 
@@ -6,6 +7,7 @@ export type ProjectSettingsMeta = {
   description?: string | null;
   export_directory?: string | null;
   underscore_to_space?: boolean | null;
+  skip_parenthesized?: boolean | null;
 };
 
 interface ProjectSettingsProps {
@@ -16,6 +18,7 @@ interface ProjectSettingsProps {
   projectDescription?: string | null;
   exportDirectory?: string | null;
   underscoreToSpace?: boolean | null;
+  skipParenthesized?: boolean | null;
   onRenameProject: (name: string) => void;
   onUpdateRemotionPath: (path: string | null) => void;
   onUpdateProjectMeta: (meta: ProjectSettingsMeta) => void;
@@ -30,12 +33,15 @@ export function ProjectSettings({
   projectDescription,
   exportDirectory,
   underscoreToSpace,
+  skipParenthesized,
   onRenameProject,
   onUpdateRemotionPath,
   onUpdateProjectMeta,
   onBackToOverview,
 }: ProjectSettingsProps) {
   const { t } = useTranslation();
+  // 合成忽略选项组默认收起
+  const [ignoreOptionsOpen, setIgnoreOptionsOpen] = useState(false);
 
   const storageLabel = storageMode === 'backend' ? t('settings.backend') : t('settings.frontend');
   return (
@@ -98,16 +104,41 @@ export function ProjectSettings({
 
         <section className={styles.card}>
           <span className={styles.kicker}>{t('projectSettings.synthesis')}</span>
-          <label className={styles.toggleField}>
-            <input
-              type="checkbox"
-              aria-label={t('projectSettings.underscoreToSpace')}
-              checked={underscoreToSpace ?? false}
-              onChange={(event) => onUpdateProjectMeta({ underscore_to_space: event.target.checked })}
-            />
-            <span>{t('projectSettings.underscoreToSpace')}</span>
-          </label>
-          <p className={styles.toggleHint}>{t('projectSettings.underscoreToSpaceHint')}</p>
+          <div className={`${styles.ignoreGroup} ${ignoreOptionsOpen ? styles.open : ''}`}>
+            <button
+              type="button"
+              className={styles.ignoreGroupHeader}
+              aria-expanded={ignoreOptionsOpen}
+              onClick={() => setIgnoreOptionsOpen(open => !open)}
+            >
+              <span>{t('projectSettings.ignoreOptions')}</span>
+              <span className={styles.ignoreGroupCaret}>›</span>
+            </button>
+            <div className={styles.ignoreGroupBody}>
+              <div className={styles.ignoreGroupBodyInner}>
+                <label className={styles.toggleField}>
+                  <input
+                    type="checkbox"
+                    aria-label={t('projectSettings.underscoreToSpace')}
+                    checked={underscoreToSpace ?? false}
+                    onChange={(event) => onUpdateProjectMeta({ underscore_to_space: event.target.checked })}
+                  />
+                  <span>{t('projectSettings.underscoreToSpace')}</span>
+                </label>
+                <p className={styles.toggleHint}>{t('projectSettings.underscoreToSpaceHint')}</p>
+                <label className={styles.toggleField}>
+                  <input
+                    type="checkbox"
+                    aria-label={t('projectSettings.skipParenthesized')}
+                    checked={skipParenthesized ?? false}
+                    onChange={(event) => onUpdateProjectMeta({ skip_parenthesized: event.target.checked })}
+                  />
+                  <span>{t('projectSettings.skipParenthesized')}</span>
+                </label>
+                <p className={styles.toggleHint}>{t('projectSettings.skipParenthesizedHint')}</p>
+              </div>
+            </div>
+          </div>
         </section>
       </div>
     </section>

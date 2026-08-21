@@ -358,6 +358,61 @@
   cursor: pointer;
 }
 
+.sidebarIgnoreGroup {
+  margin-top: 10px;
+}
+
+.sidebarIgnoreGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.sidebarIgnoreGroupHeader:hover {
+  color: var(--color-primary-dark);
+}
+
+.sidebarIgnoreGroupCaret {
+  font-size: 9px;
+  color: var(--color-text-disabled);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sidebarIgnoreGroup.open .sidebarIgnoreGroupCaret {
+  transform: rotate(90deg);
+}
+
+.sidebarIgnoreGroupBody {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--transition-normal);
+}
+
+.sidebarIgnoreGroup.open .sidebarIgnoreGroupBody {
+  grid-template-rows: 1fr;
+}
+
+.sidebarIgnoreGroupBodyInner {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebarIgnoreGroupBodyInner .sidebarMuteTags {
+  margin-top: 8px;
+}
+
 .sidebarModeSwitch {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

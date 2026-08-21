@@ -155,6 +155,54 @@
   line-height: 1.5;
 }
 
+.ignoreGroup {
+  margin-top: 10px;
+}
+
+.ignoreGroupHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 4px 0;
+  border: none;
+  background: none;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.ignoreGroupHeader:hover {
+  color: var(--color-primary-dark);
+}
+
+.ignoreGroupCaret {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  transition: transform var(--transition-fast);
+}
+
+.ignoreGroup.open .ignoreGroupCaret {
+  transform: rotate(90deg);
+}
+
+.ignoreGroupBody {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--transition-normal);
+}
+
+.ignoreGroup.open .ignoreGroupBody {
+  grid-template-rows: 1fr;
+}
+
+.ignoreGroupBodyInner {
+  overflow: hidden;
+}
+
 @media (max-width: 900px) {
   .header,
   .grid {

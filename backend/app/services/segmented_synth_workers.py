@@ -136,6 +136,7 @@ async def synthesize_segment_workers(
         style=style,
         mute_tags=bool(getattr(sp, "mute_tags", False)),
         underscore_to_space=bool(getattr(sp, "underscore_to_space", False)),
+        skip_parenthesized=bool(getattr(sp, "skip_parenthesized", False)),
     )
     if ssml_override:
         text_to_speak = ssml_override

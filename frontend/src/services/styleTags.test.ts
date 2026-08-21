@@ -4,12 +4,14 @@ import {
   EMOTION_LEADING_TAG,
   STYLE_TAG_CATEGORIES,
   VOXCPM_INLINE_TAGS,
+  applyEngineTextCleaning,
   buildLeadingStyleTag,
   describeEngineCapability,
   getStyleCapability,
   normalizeVoxcpmMode,
   stripInlineTags,
   stripLeadingStyleTag,
+  stripParenthesized,
   stripStyleTags,
 } from './styleTags';
 
@@ -109,5 +111,42 @@ describe('stripStyleTags', () => {
   it('removes both leading and inline tags', () => {
     expect(stripStyleTags('(开心)今天[laughing]天气真好')).toBe('今天天气真好');
     expect(stripStyleTags('（平静）嗯 [Uhm] 好吧[sigh]')).toBe('嗯 好吧');
+  });
+});
+
+describe('stripParenthesized', () => {
+  it('removes matched half-width and full-width pairs including brackets', () => {
+    expect(stripParenthesized('你好(注释)世界')).toBe('你好世界');
+    expect(stripParenthesized('你好（注释）世界')).toBe('你好世界');
+  });
+
+  it('removes multiple pairs in one segment', () => {
+    expect(stripParenthesized('他(真的)来了（很快）')).toBe('他来了');
+  });
+
+  it('keeps unmatched brackets untouched', () => {
+    expect(stripParenthesized('你好(世界')).toBe('你好(世界');
+    expect(stripParenthesized('你好)世界(')).toBe('你好)世界(');
+  });
+
+  it('collapses whitespace artifacts like the backend mirror', () => {
+    expect(stripParenthesized('alpha (note) beta')).toBe('alpha beta');
+    expect(stripParenthesized('你好 (注释)，世界')).toBe('你好，世界');
+  });
+});
+
+describe('applyEngineTextCleaning', () => {
+  it('returns the original text when both switches are off', () => {
+    expect(applyEngineTextCleaning('你好(注释)_世界', {})).toBe('你好(注释)_世界');
+  });
+
+  it('applies skipParenthesized before underscoreToSpace (backend order)', () => {
+    expect(
+      applyEngineTextCleaning('你好(_)世界_测试', { skipParenthesized: true, underscoreToSpace: true }),
+    ).toBe('你好世界 测试');
+  });
+
+  it('underscoreToSpace also replaces slashes (backend parity)', () => {
+    expect(applyEngineTextCleaning('a/b_c', { underscoreToSpace: true })).toBe('a b c');
   });
 });

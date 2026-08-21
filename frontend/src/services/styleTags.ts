@@ -110,3 +110,36 @@ export function stripLeadingStyleTag(text: string): string {
 export function stripStyleTags(text: string): string {
   return stripInlineTags(stripLeadingStyleTag(text));
 }
+
+/** 成对的非嵌套括号：半角 (...) 或全角 （...）（与后端 engine_capabilities.py 同规则）。 */
+const PAREN_PAIR_RE = /\([^()（）]*\)|（[^()（）]*）/g;
+
+/**
+ * 移除成对的半角 (...) / 全角 （...）括号及其内容，并清理多余空白。
+ * 只处理非嵌套的成对括号；不匹配的括号原样保留。
+ * 与后端 strip_parenthesized 互为镜像（双空格合并、标点前空格去掉）。
+ */
+export function stripParenthesized(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(PAREN_PAIR_RE, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/ +(?=[，。！？；：、,.!?;:])/g, '')
+    .trim();
+}
+
+/**
+ * 合成前文本清洗（frontend 存储模式直调引擎端点时用，只影响合成语音，
+ * seg.text、历史记录、字幕保持原文）。规则与后端 prepare_text_for_engine
+ * 的 skip_parenthesized / underscore_to_space 一致，顺序相同：
+ * 先移除括号内容，再把下划线/斜杠替换为空格。
+ */
+export function applyEngineTextCleaning(
+  text: string,
+  opts: { skipParenthesized?: boolean; underscoreToSpace?: boolean },
+): string {
+  let out = text;
+  if (opts.skipParenthesized) out = stripParenthesized(out);
+  if (opts.underscoreToSpace) out = out.replaceAll('_', ' ').replaceAll('/', ' ');
+  return out;
+}
