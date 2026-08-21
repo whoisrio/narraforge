@@ -126,6 +126,39 @@ def test_mimo_internal_uses_real_service(monkeypatch):
     assert audio_bytes == expected
 
 
+import pytest
+
+
+@pytest.mark.asyncio
+async def test_mimo_internal_inside_running_event_loop(monkeypatch):
+    """回归：FastAPI async 端点直接调同步 service 链时，当前线程已有 running
+    event loop，synthesize_mimo_internal 内部 asyncio.run 必炸（生产 500）。
+
+    修复后应复用 tts._run_async 的线程桥接，在 running loop 下也能跑通。
+    """
+    from app.api import mimo_tts
+
+    expected = _silent_wav_bytes(duration_ms=300)
+
+    class FakeMiMoService:
+        async def synthesize_preset(self, text, voice, instruction, format):
+            return expected
+
+    async def fake_get_mimo_tts_service(db=None):
+        return FakeMiMoService()
+
+    monkeypatch.setattr(mimo_tts, "get_mimo_tts_service", fake_get_mimo_tts_service)
+
+    audio_bytes, audio_format = mimo_tts.synthesize_mimo_internal(
+        text="hello",
+        mimo_mode="preset",
+        preset_voice="冰糖",
+    )
+
+    assert audio_format == "wav"
+    assert audio_bytes == expected
+
+
 def test_synthesize_segment_uses_role_voice_from_db(db_session, tmp_path, monkeypatch):
     """Role.voice from DB query is used when segment references a role."""
     from unittest.mock import patch

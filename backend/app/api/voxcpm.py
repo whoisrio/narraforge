@@ -208,7 +208,6 @@ def synthesize_voxcpm_internal(
     db: Session | None = None,
 ) -> tuple[bytes, str]:
     """Synchronous bridge used by segmented-project synthesis."""
-    import asyncio
     from app.core.database import SessionLocal
 
     async def _run(session: Session) -> bytes:
@@ -279,12 +278,15 @@ def synthesize_voxcpm_internal(
             inference_timesteps=inference_timesteps,
         )
 
+    # 与 mimo 相同：调用链可能处于 running event loop 中，走 _run_async 线程桥接
+    from app.api.tts import _run_async
+
     if db is not None:
-        return asyncio.run(_run(db)), "wav"
+        return _run_async(_run(db)), "wav"
 
     session = SessionLocal()
     try:
-        return asyncio.run(_run(session)), "wav"
+        return _run_async(_run(session)), "wav"
     finally:
         session.close()
 

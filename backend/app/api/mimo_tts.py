@@ -393,8 +393,6 @@ def synthesize_mimo_internal(
     context: list[dict] | None = None,
 ) -> tuple[bytes, str]:
     """Synthesize for the segmented editor. Returns (audio_bytes, native_format)."""
-    import asyncio
-
     async def _run() -> bytes:
         service = await get_mimo_tts_service(db)
         ctx = _extract_context(context)
@@ -464,4 +462,8 @@ def synthesize_mimo_internal(
             format="wav",
         )
 
-    return asyncio.run(_run()), "wav"
+    # 当前线程可能已有 running event loop（FastAPI async 端点直接调同步
+    # service 链），直接 asyncio.run 会炸——复用 tts._run_async 的线程桥接。
+    from app.api.tts import _run_async
+
+    return _run_async(_run()), "wav"
