@@ -153,7 +153,7 @@ export function Usage() {
                 )}
                 {pageItems.map((p) => (
                   <tr key={p.project_id || p.project_name}>
-                    <td>{p.project_name || p.project_id}</td>
+                    <td>{p.project_name || p.project_id || t('usage.unattributed')}</td>
                     <td>{p.tts_count}</td>
                     <td>{p.chars}</td>
                     <td>{p.input_tokens}</td>

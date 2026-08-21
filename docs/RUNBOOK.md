@@ -548,6 +548,19 @@ curl -H "Authorization: Bearer $ACCESS_TOKEN" https://<project>.vercel.app/api/s
    delete from operation_logs where created_at < now() - interval '90 days';
    ```
 
+### usage_events 存量回填（一次性）
+
+用量计量上线前的历史数据不在 `usage_events` 里。
+本地 SQLite 环境可用回填脚本把存量折算成 kind='tts' 事件（已合成 segment 每段 1 次、
+tts_results 历史每行 1 次，chars=文本字数；LLM 调用无历史记录，无法回填）。
+幂等（uuid5 确定性主键），--apply 前自动用 SQLite 在线备份 API 落一个 DB 副本（WAL 安全，无需停服）：
+
+```bash
+cd backend
+uv run python -m scripts.backfill_usage_events            # dry-run（默认）
+uv run python -m scripts.backfill_usage_events --apply    # 备份 + 执行
+```
+
 ### 可选加固：自有域名 + Access + CF Worker 网关
 
 有自有域名时可在直连方案上加固：Pages 的 `VITE_API_BASE_URL` 改指 `https://api.<域名>/api`，

@@ -319,6 +319,7 @@ export const zhCN = {
     usageBar: '用量占比',
     tokenEstimateNote: 'Token 来自模型 API 返回值；API 未提供时按字符数估算。',
     empty: '暂无用量数据',
+    unattributed: '未归属（历史合成）',
     loading: '加载中…',
     loadFailed: '加载失败，请稍后重试',
     retry: '重试',

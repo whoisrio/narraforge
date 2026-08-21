@@ -321,6 +321,7 @@ export const enUS: Messages = {
     usageBar: 'Share',
     tokenEstimateNote: 'Tokens come from the model API when available; otherwise they are estimated from character counts.',
     empty: 'No usage data yet',
+    unattributed: 'Unattributed (history)',
     loading: 'Loading…',
     loadFailed: 'Failed to load. Please try again later.',
     retry: 'Retry',
