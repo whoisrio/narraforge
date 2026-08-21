@@ -247,11 +247,40 @@ def markdown_split(
 # rule_split
 # ---------------------------------------------------------------------------
 
+# 超长段截断的兜底标点集（在调用方 delimiters 之外补充）
+_CAP_SECONDARY_PUNCT = "，、；：,;:"
+
+
+def _cap_overlong(segments: list[str], max_len: int | None, delimiters: list[str]) -> list[str]:
+    """把超过 max_len 的段截断：优先在 max_len 内最后一个标点后切（标点留在
+    前段），没有标点则硬切在 max_len；余下部分递归同样处理。max_len<=0 不截断。"""
+    if max_len is None or max_len <= 0:
+        return segments
+    punct = set(delimiters or []) | set(_CAP_SECONDARY_PUNCT)
+    capped: list[str] = []
+    for seg in segments:
+        capped.extend(_cap_one(seg, max_len, punct))
+    return capped
+
+
+def _cap_one(seg: str, max_len: int, punct: set[str]) -> list[str]:
+    if len(seg) <= max_len:
+        return [seg]
+    cut = max_len  # 兜底：硬切
+    for i in range(min(max_len, len(seg)) - 1, 0, -1):
+        if seg[i] in punct:
+            cut = i + 1  # 标点留在前段
+            break
+    head, rest = seg[:cut], seg[cut:].strip()
+    return [head] + (_cap_one(rest, max_len, punct) if rest else [])
+
+
 def rule_split(
     text: str,
     delimiters: list[str],
     min_len_to_merge: int = 5,
     next_max_len_to_merge: int = 15,
+    max_len: int | None = None,
 ) -> list[str]:
     """按指定标点切分文本。保留标点在段尾。过滤空白段和纯标点段。
 
@@ -260,6 +289,9 @@ def rule_split(
       将下一段并入该段。贪心从左至右扫描，合并后若仍短继续吸并后续段。
     - 传入 ``min_len_to_merge <= 0`` 可关闭合并，保留原始细粒度切分。
 
+    ``max_len``：拆分+合并完成后，对仍超长的段按标点截断（无标点硬切），
+    保证每段 <= max_len；None 或 <=0 不限制。
+
     长度以段内字符数（Unicode codepoint 数，含末尾标点）计。
     """
     if not text or not text.strip():
@@ -267,7 +299,7 @@ def rule_split(
 
     if not delimiters:
         stripped = text.strip()
-        return [stripped] if stripped else []
+        return _cap_overlong([stripped] if stripped else [], max_len, delimiters)
 
     # 构造正则：在标点之后切分（保留标点在前段）
     escaped = [re.escape(d) for d in delimiters]
@@ -285,7 +317,7 @@ def rule_split(
         segments.append(s)
 
     if min_len_to_merge <= 0 or not segments:
-        return segments
+        return _cap_overlong(segments, max_len, delimiters)
 
     # 短段合并：当前段 < min_len_to_merge 且下一段 < next_max_len_to_merge → 合并
     merged: list[str] = []
@@ -298,7 +330,7 @@ def rule_split(
             merged[-1] = merged[-1] + seg
         else:
             merged.append(seg)
-    return merged
+    return _cap_overlong(merged, max_len, delimiters)
 
 
 # ---------------------------------------------------------------------------
@@ -356,8 +388,14 @@ _SPLIT_PROMPT_TEMPLATE = """你是中文文本分句助手。请将下面这段�
 """
 
 
-def llm_split(text: str, delimiters: list[str] | None = None, db=None) -> SplitResult:
-    """调 LLM 智能拆分。失败抛 ValueError / RuntimeError / LLMValidationError。"""
+def llm_split(text: str, delimiters: list[str] | None = None, db=None, max_len: int | None = None,
+              usage_sink=None) -> SplitResult:
+    """调 LLM 智能拆分。失败抛 ValueError / RuntimeError / LLMValidationError。
+
+    ``max_len``：不信任 LLM 输出长度，返回的每段同样按标点截断到 max_len
+    （无标点硬切）；None 或 <=0 不限制。
+    ``usage_sink``：用量计量回调（Phase 3），透传给 call_llm_structured。
+    """
     if not text or not text.strip():
         raise ValueError("文本不能为空")
 
@@ -374,6 +412,7 @@ def llm_split(text: str, delimiters: list[str] | None = None, db=None) -> SplitR
         max_tokens=4096,
         db=db,
         timeout=30,
+        usage_sink=usage_sink,
     )
 
     # Pydantic 已经把 emotion 限制在白名单内，无需再做枚举校验
@@ -384,6 +423,13 @@ def llm_split(text: str, delimiters: list[str] | None = None, db=None) -> SplitR
     ]
     if not segments:
         raise ValueError("LLM 返回了空的拆分结果")
+
+    if max_len is not None and max_len > 0:
+        capped: list[dict] = []
+        for s in segments:
+            for piece in _cap_overlong([s["text"]], max_len, delimiters or []):
+                capped.append({"text": piece, "reason": s["reason"], "emotion": s["emotion"]})
+        segments = capped
 
     return SplitResult(segments=segments, model=model)
 
@@ -443,8 +489,11 @@ _SSML_PROMPT_TEMPLATE = """你是 SSML 标注助手。请为下面的若干段�
 """
 
 
-def ssml_annotate(texts: list[str], style_hint: str = "", db=None) -> SSMLAnnotateResult:
-    """调 LLM 为每段加 SSML 标签。带白名单与原文一致性校验。"""
+def ssml_annotate(texts: list[str], style_hint: str = "", db=None, usage_sink=None) -> SSMLAnnotateResult:
+    """调 LLM 为每段加 SSML 标签。带白名单与原文一致性校验。
+
+    ``usage_sink``：用量计量回调（Phase 3），透传给 call_llm_structured。
+    """
     if not texts:
         raise ValueError("texts 不能为空")
 
@@ -463,6 +512,7 @@ def ssml_annotate(texts: list[str], style_hint: str = "", db=None) -> SSMLAnnota
         max_tokens=8192,
         db=db,
         timeout=60,
+        usage_sink=usage_sink,
     )
 
     # LLM 可能漏返回某些段；按原文顺序对齐

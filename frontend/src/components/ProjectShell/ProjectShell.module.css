@@ -382,6 +382,16 @@
   border-color: rgba(196, 122, 58, 0.55);
 }
 
+.newChapterBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.newChapterBtn:disabled:hover {
+  background: transparent;
+  border-color: rgba(196, 122, 58, 0.35);
+}
+
 .contactAdmin {
   /* 有邮箱时把自身 + 收起按钮一起推到底部；无邮箱时收起按钮靠自身 margin-top:auto 沉底 */
   margin-top: auto;

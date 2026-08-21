@@ -1,11 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { Chapter, Role } from '../../types';
 import { useTranslation } from '../../i18n';
 import { apiUrl } from '../../services/apiBase';
+import { usageApi, type ProjectUsage } from '../../services/usageApi';
 import styles from './ProjectOverview.module.css';
 
 interface ProjectOverviewProps {
   projectName: string;
+  /** 后端存储项目 id；提供时展示用量卡（前端存储/草稿项目后端无计量，不展示） */
+  projectId?: string;
   chapters: Chapter[];
   activeChapterId?: string;
   remotionPath?: string | null;
@@ -17,6 +20,11 @@ interface ProjectOverviewProps {
 }
 
 type ChapterStatus = 'ready' | 'synthesizing' | 'draft';
+
+type UsageState =
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'ready'; data: ProjectUsage };
 
 const ENGINE_LABELS: Record<string, string> = {
   edge_tts: 'Edge-TTS',
@@ -169,6 +177,7 @@ function RolePreviewButton({ role }: { role: Role }) {
 export function ProjectOverview(props: ProjectOverviewProps) {
   const { t } = useTranslation();
   const {
+    projectId,
     chapters,
     activeChapterId,
     remotionPath,
@@ -177,6 +186,18 @@ export function ProjectOverview(props: ProjectOverviewProps) {
     onEnterStudio,
     onOpenVoices,
   } = props;
+  const [usage, setUsage] = useState<UsageState>({ kind: 'loading' });
+
+  // 加载函数只做异步取数（loading 态由初始值 / 重试处理器设置），
+  // 避免在 effect 里同步 setState（react-hooks/set-state-in-effect）。
+  const loadUsage = useCallback(() => {
+    if (!projectId) return;
+    usageApi.getProjectUsage(projectId)
+      .then((data) => setUsage({ kind: 'ready', data }))
+      .catch(() => setUsage({ kind: 'error' }));
+  }, [projectId]);
+
+  useEffect(() => { loadUsage(); }, [loadUsage]);
   const segmentCount = chapters.reduce((sum, ch) => sum + ch.segments.length, 0);
   const generatedCount = chapters.reduce(
     (sum, ch) => sum + ch.segments.filter(s => s.status === 'ready').length,
@@ -326,6 +347,53 @@ export function ProjectOverview(props: ProjectOverviewProps) {
           </div>
         </div>
       </section>
+      {/* Project Usage（仅后端存储项目；前端存储/草稿项目后端无计量） */}
+      {projectId && (
+        <section className={styles.usageCard} data-testid="project-usage-card">
+          <div className={styles.sectionHeader}>
+            <div className={styles.sectionTitle}>
+              <span className={styles.sectionIcon}>▦</span>
+              <span>{t('usage.projectTitle')}</span>
+            </div>
+          </div>
+          {usage.kind !== 'ready' ? (
+            <div className={styles.usageState}>
+              <p className={styles.emptyHint}>{usage.kind === 'loading' ? t('usage.loading') : t('usage.loadFailed')}</p>
+              {usage.kind === 'error' && (
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => { setUsage({ kind: 'loading' }); loadUsage(); }}
+                >
+                  {t('usage.retry')}
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className={styles.usageGrid}>
+                <div className={styles.techField}>
+                  <span className={styles.techLabel}>{t('usage.statTts')}</span>
+                  <span className={styles.usageValue} data-testid="usage-tts-count">{usage.data.tts_count}</span>
+                </div>
+                <div className={styles.techField}>
+                  <span className={styles.techLabel}>{t('usage.statChars')}</span>
+                  <span className={styles.usageValue} data-testid="usage-chars">{usage.data.chars}</span>
+                </div>
+                <div className={styles.techField}>
+                  <span className={styles.techLabel}>{t('usage.statInputTokens')}</span>
+                  <span className={styles.usageValue} data-testid="usage-input-tokens">{usage.data.input_tokens}</span>
+                </div>
+                <div className={styles.techField}>
+                  <span className={styles.techLabel}>{t('usage.statOutputTokens')}</span>
+                  <span className={styles.usageValue} data-testid="usage-output-tokens">{usage.data.output_tokens}</span>
+                </div>
+              </div>
+              <p className={styles.usageFootnote}>{t('usage.tokenEstimateNote')}</p>
+            </>
+          )}
+        </section>
+      )}
     </section>
   );
 }

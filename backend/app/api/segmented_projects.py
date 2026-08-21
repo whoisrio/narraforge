@@ -32,8 +32,11 @@ from app.core import segmented_assets as assets
 from app.core.audio_encoder import AudioEncoderError
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.repositories.deps import get_segmented_repo
+from app.core.limits import validate_segment_lengths, validate_synthesis_text
+from app.core.repositories.deps import get_segmented_repo, get_usage_repo
 from app.core.repositories.segmented_projects import SegmentedProjectRepository
+from app.core.repositories.usage import UsageRepository
+from app.api._usage_helpers import build_llm_usage_sink
 from app.core.asset_store import AssetStore, get_asset_store
 from app.core.segmented_assets import project_dir
 from app.schemas.common import ItemsOut
@@ -103,6 +106,36 @@ def _enforce_project_quota(request: Request, repo: SegmentedProjectRepository) -
         )
 
 
+def _enforce_chapter_quota(
+    request: Request,
+    repo: SegmentedProjectRepository,
+    project_id: str,
+    incoming_count: int,
+) -> None:
+    """free 用户每项目章节上限（workers 模式，仅普通登录用户）。
+
+    incoming_count > max_chapters_per_project 且超过项目现有章节数（增长）
+    时拒绝 → 409 chapter_limit_reached。已超上限的存量项目仍可保存（只
+    不能继续增长）。豁免顺序同 _enforce_project_quota：local 模式、
+    limit <= 0（不限制）、legacy admin、admin_emails 管理员。
+    """
+    if settings.deploy_target != "workers":
+        return
+    limit = settings.max_chapters_per_project
+    if limit <= 0:
+        return
+    if getattr(request.state, "legacy_admin", False):
+        return
+    user = getattr(request.state, "user", None)
+    if user and (user.get("email") or "").lower() in settings.admin_email_list:
+        return
+    if incoming_count > limit and incoming_count > repo.count_chapters(project_id):
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "chapter_limit_reached", "limit": limit},
+        )
+
+
 # ----- project CRUD (metadata) -----
 
 @router.get("/segmented-projects", response_model=ItemsOut[ProjectSummary])
@@ -121,6 +154,8 @@ async def create_project(
     if repo.project_exists(project.id):
         raise HTTPException(status_code=409, detail="project_already_exists")
     _enforce_project_quota(request, repo)
+    _enforce_chapter_quota(request, repo, project.id, len(project.chapters))
+    validate_segment_lengths(project.chapters)
     try:
         return repo.save_project(project)
     except LookupError:
@@ -150,6 +185,8 @@ async def put_project(
     # PUT 是 upsert 语义：已有项目（更新）不触发配额；对他人 id 按不存在处理
     if not repo.project_exists(project_id):
         _enforce_project_quota(request, repo)
+    _enforce_chapter_quota(request, repo, project_id, len(project.chapters))
+    validate_segment_lengths(project.chapters)
     try:
         return repo.save_project(project)
     except LookupError:
@@ -180,7 +217,9 @@ async def synthesize_segment(
     db: Session = Depends(get_db),
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
     store: AssetStore = Depends(get_asset_store),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
 ):
+    validate_synthesis_text(body.text, chapter_id=chapter_id, segment_id=segment_id)
     if settings.deploy_target == "workers":
         # workers（Vercel/CF）：无 ORM/ffmpeg，走仓储 + asset store 的轻量实现
         from app.services.segmented_synth_workers import synthesize_segment_workers
@@ -196,6 +235,7 @@ async def synthesize_segment(
                 ssml_override=body.ssml,
                 keep_previous=body.keep_previous,
                 force=body.force,
+                usage_repo=usage_repo,
             )
         except LookupError:
             raise HTTPException(status_code=404, detail="segment_not_found")
@@ -336,8 +376,11 @@ class BatchResponse(BaseModel):
 async def batch_create_chapters(
     project_id: str,
     body: BatchRequest,
+    request: Request,
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
 ):
+    _enforce_chapter_quota(request, repo, project_id, len(body.chapters))
+    validate_segment_lengths(body.chapters)
     try:
         result = repo.batch_create_structure(
             project_id,
@@ -576,6 +619,22 @@ async def get_sync_status(
     return status
 
 
+@router.get("/segmented-projects/{project_id}/usage")
+async def get_project_usage(
+    project_id: str,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
+):
+    """Phase 3：项目级用量合计（TTS 次数、字符、LLM input/output token）。
+
+    归属校验复用仓储作用域：workers 下他人项目 get_project 返回 None → 404
+    （不泄露存在性）；local 单租户直接聚合。
+    """
+    if repo.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    return usage_repo.usage_for_project(project_id)
+
+
 class AdjustAudioRequest(BaseModel):
     tempo: float | None = None
     volume_db: float | None = None
@@ -663,7 +722,9 @@ async def split_chapter(
     project_id: str,
     chapter_id: str,
     body: SplitRequest,
+    http_request: Request,
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
 ):
     detail = repo.get_project(project_id)
     chapter = next(
@@ -678,14 +739,21 @@ async def split_chapter(
         raise HTTPException(status_code=422, detail="invalid_replace_strategy")
 
     from app.services.text_split_service import rule_split, llm_split
+    max_len = settings.max_segment_chars if settings.max_segment_chars > 0 else None
     if body.mode == "rule":
         items = rule_split(
             body.text,
             body.delimiters or chapter.split_config.get("delimiters", ["，", "。", "！", "？", "；"]),
+            max_len=max_len,
         )
     else:
-        items_raw = llm_split(body.text)
-        items = [it["text"] for it in items_raw]
+        result = llm_split(
+            body.text, max_len=max_len,
+            usage_sink=build_llm_usage_sink(
+                http_request, usage_repo, chars=len(body.text), project_id=project_id,
+            ),
+        )
+        items = [s["text"] for s in result.segments]
 
     if body.replace_strategy == "preview_only":
         return SplitResponse(items=[SplitItem(text=t) for t in items])

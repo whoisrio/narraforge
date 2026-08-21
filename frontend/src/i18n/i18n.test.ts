@@ -77,11 +77,12 @@ describe('i18n', () => {
   });
 
   it('exposes stable route metadata for global nav', () => {
-    expect(navItems.map(item => item.path)).toEqual(['/projects', '/subtitles', '/voice-design', '/settings']);
+    expect(navItems.map(item => item.path)).toEqual(['/projects', '/subtitles', '/voice-design', '/usage', '/settings']);
     expect(navItems.map(item => item.labelKey)).toEqual([
       'nav.projects',
       'nav.subtitles',
       'nav.voiceDesign',
+      'nav.usage',
       'nav.settings',
     ]);
   });

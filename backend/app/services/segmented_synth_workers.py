@@ -83,10 +83,12 @@ async def synthesize_segment_workers(
     ssml_override: str | None,
     keep_previous: bool,
     force: bool,
+    usage_repo: Any | None = None,
 ) -> dict[str, Any]:
     """workers 版合成：edge-tts → store.put → repo 保存（全量写回）。
 
     无 ffmpeg：不 trim/不转码/不 adjust；音频原样存（mp3）；时长不探测（None）。
+    usage_repo（Phase 3）：合成成功后记录一条 kind='tts' 用量（best-effort）。
     """
     detail = repo.get_project(project_id)
     if detail is None:
@@ -177,6 +179,13 @@ async def synthesize_segment_workers(
 
     # 全量写回（Supabase 仓储 save_project 语义）
     saved = repo.save_project(_to_project_in(project))
+    if usage_repo is not None:
+        # Phase 3 用量计量：kind='tts'，chars=合成文本字符数（best-effort）
+        usage_repo.record_event(
+            kind="tts",
+            chars=len(text_override or seg.get("text") or ""),
+            project_id=project_id,
+        )
     return saved.model_dump(mode="json") if hasattr(saved, "model_dump") else saved
 
 

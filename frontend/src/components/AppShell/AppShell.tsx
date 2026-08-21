@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { useTranslation, navItems } from '../../i18n';
 import styles from './AppShell.module.css';
 
-export type GlobalNavId = 'projects' | 'subtitles' | 'voice-design' | 'settings';
+export type GlobalNavId = 'projects' | 'subtitles' | 'voice-design' | 'usage' | 'settings';
 
 interface AppShellProps {
   activeNavId: GlobalNavId;
@@ -20,6 +20,7 @@ const NAV_ICONS: Record<GlobalNavId, string> = {
   projects: '▦',
   subtitles: '▤',
   'voice-design': '◉',
+  usage: '◧',
   settings: '⚙',
 };
 

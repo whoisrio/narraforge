@@ -219,6 +219,7 @@ def correct_subtitles(
     model: str | None = None,
     mode: str = "smart",
     db=None,
+    usage_sink=None,
 ) -> CorrectionResult:
     """对比原始文档和 ASR 字幕，找出识别错误（错别字）并返回修改建议。
 
@@ -295,6 +296,7 @@ def correct_subtitles(
             model=model,
             temperature=0.1,
             db=db,
+            usage_sink=usage_sink,
         )
     except LLMValidationError as e:
         logger.warning(f"LLM 校准返回无法解析: {e}; last_raw[:300]={e.last_raw[:300]!r}")
@@ -325,7 +327,8 @@ def correct_subtitles(
 # ---------------------------------------------------------------------------
 def translate_subtitles(srt_content: str, target_language: str = "English",
                         source_language: str = "Chinese",
-                        model: str | None = None, db=None) -> BilingualResult:
+                        model: str | None = None, db=None,
+                        usage_sink=None) -> BilingualResult:
     """将 SRT 字幕翻译为目标语言，返回双语字幕结构。"""
     blocks = _parse_srt_blocks(srt_content)
     if not blocks:
@@ -365,6 +368,7 @@ def translate_subtitles(srt_content: str, target_language: str = "English",
                 schema=_TranslationResponse,
                 model=model,
                 db=db,
+                usage_sink=usage_sink,
             )
             trans_map = {item.index: item.translated for item in response.segments}
         except LLMValidationError as e:

@@ -14,7 +14,7 @@ import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi, apiErrorCode } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
@@ -53,6 +53,9 @@ type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
 
 /** 将角色 voice (EngineParams) 转换为 old flat 字段名，供 handleRegenerate 内部使用 */
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
+
+// 免费额度每项目章节上限（对应后端 MAX_CHAPTERS_PER_PROJECT；前端无设置端点，硬编码）
+const MAX_CHAPTERS_PER_PROJECT = 3;
 
 function toEdgeFormat(value: number) {
   return value >= 0 ? `+${value}%` : `${value}%`;
@@ -457,6 +460,12 @@ export function TTSSynthesis({
     storage: projectStorage,
     // 自动保存成功后，当前内存章节全部已落库
     onSaved: (saved) => setServerChapterIds(saved.chapters.map((c) => c.id)),
+    // 后端校验兜底：分段 80 字上限（422）与章节配额（409）在自动保存 PUT 时被拒
+    onSaveError: (error) => {
+      const code = apiErrorCode(error);
+      if (code === 'segment_too_long') showToast(t('segmentEdit.segmentTooLong'), 'error');
+      else if (code === 'chapter_limit_reached') showToast(t('projectShell.chapterQuotaReached'), 'error');
+    },
   });
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
@@ -501,12 +510,28 @@ export function TTSSynthesis({
     if (ch) restoreChapterSettings(ch);
   }, [project.chapters, dispatch, restoreChapterSettings]);
 
+  // 每项目章节配额（免费额度，workers 模式）：backend 存储 + auth 开启 + 登录用户
+  // （非管理员）+ 已达上限 → 禁用新建章节入口。管理员豁免；后端 409 兜底。
+  const addChapterBlocked = useMemo(
+    () => storageMode === 'backend'
+      && isAuthRequired()
+      && !!user
+      && !isAdmin
+      && project.chapters.length >= MAX_CHAPTERS_PER_PROJECT,
+    [storageMode, user, isAdmin, project.chapters.length],
+  );
+
   const handleAddChapter = useCallback((requestedName?: string) => {
+    // 双保险：后端 409 chapter_limit_reached 由 draftSync.onSaveError 兜底提示
+    if (addChapterBlocked) {
+      showToast(t('projectShell.chapterQuotaReached'), 'error');
+      return;
+    }
     const fallbackName = t('tts.newChapterName', { n: project.chapters.length + 1 });
     const name = requestedName?.trim() || fallbackName;
     dispatch({ type: 'ADD_CHAPTER', name });
     // New chapter inherits settings from previous active chapter, so no need to reset global state
-  }, [project.chapters.length, dispatch]);
+  }, [addChapterBlocked, project.chapters.length, dispatch, showToast, t]);
 
   const doDeleteChapter = useCallback(async (chapterId: string) => {
     const ch = project.chapters.find(c => c.id === chapterId);
@@ -1853,6 +1878,8 @@ export function TTSSynthesis({
             handleSelectChapter(id);
           }}
           onAddChapter={handleAddChapter}
+          createChapterDisabled={addChapterBlocked}
+          createChapterDisabledHint={addChapterBlocked ? t('projectShell.chapterQuotaHint') : undefined}
           onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
           onDeleteChapter={handleDeleteChapter}
           onMoveChapter={(id, direction) => dispatch({ type: 'MOVE_CHAPTER', id, direction })}
@@ -2195,6 +2222,8 @@ export function TTSSynthesis({
             onUpdateSourceDocument={(text) => dispatch({ type: 'SET_SOURCE_DOCUMENT', text })}
             onUpdateNarrationScript={(text) => dispatch({ type: 'SET_NARRATION_SCRIPT', text })}
             onAddChapter={handleAddChapter}
+            createChapterDisabled={addChapterBlocked}
+            createChapterDisabledHint={addChapterBlocked ? t('projectShell.chapterQuotaHint') : undefined}
             onDeleteChapter={handleDeleteChapter}
             onProjectChanged={() => { void reloadProjectData(); }}
             onEnterStudio={(chapterId) => {
@@ -2213,6 +2242,7 @@ export function TTSSynthesis({
         ) : projectSection === 'overview' ? (
           <ProjectOverview
             projectName={project.name}
+            projectId={storageMode === 'backend' && !isScratchpadProject ? project.id : undefined}
             chapters={project.chapters}
             activeChapterId={project.active_chapter_id}
             remotionPath={project.remotion_project_path}

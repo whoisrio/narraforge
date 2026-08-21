@@ -14,6 +14,7 @@ from app.core.repositories import deps
 from app.core.repositories.roles import SupabaseRoleRepository
 from app.core.repositories.segmented_projects import SupabaseSegmentedProjectRepository
 from app.core.repositories.source_documents import SupabaseSourceDocumentRepository
+from app.core.repositories.usage import SupabaseUsageRepository
 from tests.fixtures.postgrest_fake import make_fake_supabase_client
 
 
@@ -31,6 +32,7 @@ def workers_client(monkeypatch):
     app.dependency_overrides[deps.get_source_document_repo] = (
         lambda: SupabaseSourceDocumentRepository(client)
     )
+    app.dependency_overrides[deps.get_usage_repo] = lambda: SupabaseUsageRepository(client)
     with TestClient(app) as test_client:
         yield test_client, store
     app.dependency_overrides.clear()

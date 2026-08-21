@@ -197,9 +197,10 @@ export function SegmentEditPanel({
           inlineSupported={getStyleCapability(chapterEngine ?? segEngine(segment)).inline}
         />
 
-        {/* Text */}
-        <textarea ref={textareaRef} className={styles.textarea} value={localText}
+        {/* Text（后端上限 80 字，超限 PUT 422 segment_too_long） */}
+        <textarea ref={textareaRef} className={styles.textarea} value={localText} maxLength={80}
           onChange={e => handleTextChange(e.target.value)} />
+        <div className={styles.charCount}>{t('segmentEdit.charCounter', { n: localText.length })}</div>
 
         {/* Split at cursor */}
         {onSplit && localText.length > 1 && (

@@ -951,6 +951,15 @@ def synthesize_segment(
         current_origin="tts",
         previous_origin=prev_origin,
     )
+    # Phase 3 用量计量：kind='tts'，chars=合成文本字符数（best-effort，不抛出）。
+    # local 单租户，service 只有 db，直接用 Local 实现（workers 走
+    # segmented_synth_workers 的 usage_repo 注入路径）。
+    from app.core.repositories.usage import LocalUsageRepository
+    LocalUsageRepository(db).record_event(
+        kind="tts",
+        chars=len(text_override or seg.text or ""),
+        project_id=project_id,
+    )
     return seg
 
 
@@ -1515,6 +1524,9 @@ def batch_create_structure(
     old_index = build_reuse_index(old_chapters) if old_chapters else {}
 
     from app.services.text_split_service import rule_split
+    from app.core.config import settings
+
+    max_len = settings.max_segment_chars if settings.max_segment_chars > 0 else None
 
     # 解析每章 segments：payload 自带 > split_segments 规则拆分 > A2 保留即重建
     resolved_chapters: list[dict[str, Any]] = []
@@ -1526,7 +1538,7 @@ def batch_create_structure(
             if split_segments or (preserve_audio and snapshot_has_segments(snapshot)):
                 body = ch_data.get("narration_script") or ch_data.get("original_text") or ""
                 delimiters = resolve_split_delimiters(ch_data.get("split_config"), snapshot)
-                seg_payloads = [{"text": t} for t in rule_split(body, delimiters)]
+                seg_payloads = [{"text": t} for t in rule_split(body, delimiters, max_len=max_len)]
         resolved_chapters.append({**ch_data, "segments": seg_payloads})
 
     plan = plan_batch_reuse(old_chapters, resolved_chapters, preserve_audio=preserve_audio)
@@ -1813,6 +1825,7 @@ def resplit_from_script(db: Session, project_id: str, chapter_id: str):
     """
     from uuid import uuid4
 
+    from app.core.config import settings
     from app.services.layer_sync_service import mark_split
     from app.services.text_split_service import rule_split
 
@@ -1820,7 +1833,8 @@ def resplit_from_script(db: Session, project_id: str, chapter_id: str):
     if chapter is None:
         raise LookupError("chapter_not_found")
     delimiters = (chapter.split_config or {}).get("delimiters", ["，", "。", "！", "？", "；"])
-    items = rule_split(chapter.narration_script or "", delimiters)
+    max_len = settings.max_segment_chars if settings.max_segment_chars > 0 else None
+    items = rule_split(chapter.narration_script or "", delimiters, max_len=max_len)
     for s in list(chapter.segments):
         db.delete(s)
     db.flush()

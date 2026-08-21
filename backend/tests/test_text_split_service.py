@@ -119,6 +119,65 @@ def test_rule_split_custom_thresholds():
     assert result == ["你好，", "世界。"]
 
 
+# ------- rule_split max_len 超长段截断 -------
+
+def test_rule_split_max_len_cuts_at_nearest_punctuation():
+    """超长段在 max_len 内最后一个标点后截断（标点留在前段）。"""
+    from app.services.text_split_service import rule_split
+    text = "我" * 70 + "，" + "我" * 79 + "。"  # 151 字，逗号在 offset 70
+    result = rule_split(text, ["。"], max_len=80)
+    assert result == ["我" * 70 + "，", "我" * 79 + "。"]
+    assert all(len(s) <= 80 for s in result)
+
+
+def test_rule_split_max_len_recurses_on_remainder():
+    """余下部分仍然超长 → 递归截断出多段。"""
+    from app.services.text_split_service import rule_split
+    text = "我" * 70 + "，" + "我" * 70 + "，" + "我" * 50 + "。"  # 193 字
+    result = rule_split(text, ["。"], max_len=80)
+    assert [len(s) for s in result] == [71, 71, 51]
+
+
+def test_rule_split_max_len_hard_cut_when_no_punctuation():
+    """前 max_len 字内没有任何标点 → 硬切在 max_len。"""
+    from app.services.text_split_service import rule_split
+    text = "我" * 150  # 无标点
+    result = rule_split(text, ["。"], max_len=80)
+    assert result == ["我" * 80, "我" * 70]
+
+
+def test_rule_split_max_len_hard_cut_when_punctuation_beyond_limit():
+    """标点都在 max_len 之外 → 同样硬切。"""
+    from app.services.text_split_service import rule_split
+    text = "我" * 90 + "，" + "我" * 60  # 逗号在 offset 90 > 80
+    result = rule_split(text, ["。"], max_len=80)
+    assert result == ["我" * 80, "我" * 10 + "，" + "我" * 60]
+
+
+def test_rule_split_max_len_exact_limit_untouched():
+    """恰好等于 max_len 的段不动。"""
+    from app.services.text_split_service import rule_split
+    text = "我" * 79 + "。"  # 恰好 80 字
+    result = rule_split(text, ["。"], max_len=80)
+    assert result == ["我" * 79 + "。"]
+
+
+def test_rule_split_max_len_none_keeps_old_behavior():
+    """max_len=None → 不截断，行为与旧版一致。"""
+    from app.services.text_split_service import rule_split
+    text = "我" * 150
+    assert rule_split(text, ["。"], max_len=None) == ["我" * 150]
+    assert rule_split(text, ["。"]) == ["我" * 150]
+
+
+def test_rule_split_max_len_uses_secondary_punctuation():
+    """候选标点 = 调用方 delimiters ∪ 兜底集（，、；：,;:）。"""
+    from app.services.text_split_service import rule_split
+    text = "我" * 60 + "：" + "我" * 69 + "。"  # 冒号不在 delimiters 里
+    result = rule_split(text, ["。"], max_len=80)
+    assert result == ["我" * 60 + "：", "我" * 69 + "。"]
+
+
 # ------- llm_split -------
 
 
@@ -167,6 +226,24 @@ def test_llm_split_raises_on_empty_text():
         llm_split("")
     with pytest.raises(ValueError, match="文本"):
         llm_split("   ")
+
+
+def test_llm_split_caps_overlong_segments(monkeypatch):
+    """不信任 LLM 输出长度：max_len 截断 LLM 返回的超长段，emotion 沿承。"""
+    from app.services import text_split_service
+    fake_resp = _make_split_response([
+        {"text": "我" * 70 + "，" + "我" * 50 + "。", "reason": "长段", "emotion": "calm"},
+    ])
+    monkeypatch.setattr(text_split_service, "call_llm_structured",
+                        lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(text_split_service, "get_llm_config",
+                        lambda db=None: ("k", "u", "test-model"))
+
+    result = text_split_service.llm_split("原文", delimiters=["。"], max_len=80)
+    assert [s["text"] for s in result.segments] == ["我" * 70 + "，", "我" * 50 + "。"]
+    assert all(len(s["text"]) <= 80 for s in result.segments)
+    assert result.segments[0]["emotion"] == "calm"
+    assert result.segments[1]["emotion"] == "calm"
 
 
 # ------- ssml_annotate -------

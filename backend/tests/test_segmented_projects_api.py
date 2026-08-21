@@ -227,3 +227,119 @@ def test_chapter_narration_script_round_trips(client):
     assert r.status_code == 200
     r = client.get(f"/api/segmented-projects/{project_id}")
     assert r.json()["chapters"][0]["narration_script"] == "改写 v2"
+
+
+# ===== segment 长度上限（max_segment_chars，local+workers 都生效）=====
+
+LONG_SEGMENT_TEXT = "这" * 81  # 超默认 80 上限 1 字
+
+
+def test_create_project_rejects_overlong_segment(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p-long")
+    payload["chapters"][0]["segments"][0]["text"] = LONG_SEGMENT_TEXT
+    r = client.post("/api/segmented-projects", json=payload)
+    assert r.status_code == 422
+    detail = r.json()["detail"]
+    assert detail["code"] == "segment_too_long"
+    assert detail["max"] == 80
+    assert detail["chapter_id"] == "c1"
+    assert detail["segment_id"] == "s1"
+
+
+def test_put_project_rejects_overlong_segment(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    payload = _payload("p1")
+    payload["chapters"][0]["segments"][0]["text"] = LONG_SEGMENT_TEXT
+    r = client.put("/api/segmented-projects/p1", json=payload)
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "segment_too_long"
+
+
+def test_batch_chapters_rejects_overlong_segment(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"] = []
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+    r = client.post(
+        "/api/segmented-projects/p1/chapters:batch",
+        json={"chapters": [
+            {"chapter_title": "第一章", "segments": [{"text": LONG_SEGMENT_TEXT}]},
+        ]},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "segment_too_long"
+
+
+def test_synthesize_text_override_rejects_overlong(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    r = client.post(
+        "/api/segmented-projects/p1/chapters/c1/segments/s1/synthesize",
+        json={"text": LONG_SEGMENT_TEXT},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "segment_too_long"
+
+
+def test_overlong_segment_allowed_when_limit_zero(client, tmp_path, monkeypatch):
+    """max_segment_chars=0 → 不限制。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    monkeypatch.setattr(config.settings, "max_segment_chars", 0)
+    payload = _payload("p-nolimit")
+    payload["chapters"][0]["segments"][0]["text"] = LONG_SEGMENT_TEXT
+    r = client.post("/api/segmented-projects", json=payload)
+    assert r.status_code == 201, r.text
+
+
+def test_exactly_max_chars_segment_ok(client, tmp_path, monkeypatch):
+    """恰好等于上限的段放行。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p-exact")
+    payload["chapters"][0]["segments"][0]["text"] = "这" * 80
+    r = client.post("/api/segmented-projects", json=payload)
+    assert r.status_code == 201, r.text
+
+
+def test_split_endpoint_caps_segments_to_max_len(client, tmp_path, monkeypatch):
+    """/split 规则拆分调用点传入 max_len：超长段在拆分阶段被截断。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    text = "我" * 70 + "，" + "我" * 79 + "。"  # 规则切（delimiters=["。"]）出 151 字段
+    r = client.post(
+        "/api/segmented-projects/p1/chapters/c1/split",
+        json={"text": text, "mode": "rule", "replace_strategy": "preview_only"},
+    )
+    assert r.status_code == 200, r.text
+    items = [i["text"] for i in r.json()["items"]]
+    assert items == ["我" * 70 + "，", "我" * 79 + "。"]
+
+
+def test_resplit_from_script_caps_segments(client, tmp_path, monkeypatch):
+    """resplit-from-script 调用点同样截断到 max_len。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p-resplit")
+    payload["chapters"][0]["narration_script"] = "我" * 150 + "。"
+    payload["chapters"][0]["segments"] = []
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+    r = client.post("/api/segmented-projects/p-resplit/chapters/c1/resplit-from-script")
+    assert r.status_code == 200, r.text
+    segs = r.json()["chapters"][0]["segments"]
+    assert segs
+    assert all(len(s["text"]) <= 80 for s in segs)
+
+
+# ===== 章节配额豁免：local 模式不启用 =====
+
+def test_local_mode_has_no_chapter_quota(client, tmp_path, monkeypatch):
+    """local 模式无章节上限：>3 章的项目照常创建。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p-many-ch")
+    payload["chapters"] = [
+        {"id": f"c{i}", "position": i, "name": f"第{i}章",
+         "split_config": {"delimiters": ["。"], "mode": "rule"}, "segments": []}
+        for i in range(4)
+    ]
+    r = client.post("/api/segmented-projects", json=payload)
+    assert r.status_code == 201, r.text

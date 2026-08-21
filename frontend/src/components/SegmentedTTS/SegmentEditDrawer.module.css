@@ -33,6 +33,12 @@
   border-color: var(--color-primary);
   box-shadow: 0 0 0 2px var(--glow-primary);
 }
+.charCount {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-xs);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 .ssmlHeader { display: flex; justify-content: space-between; align-items: center; }
 .annotateBtn {
   background: none; border: 1px solid var(--color-primary); color: var(--color-primary);

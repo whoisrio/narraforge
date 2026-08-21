@@ -18,8 +18,9 @@ import aiofiles
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.asset_store import AssetStore, get_asset_store
-from app.core.repositories.deps import get_tts_results_repo, get_voice_repo
+from app.core.repositories.deps import get_tts_results_repo, get_usage_repo, get_voice_repo
 from app.core.repositories.tts_results import TTSResultRepository
+from app.core.repositories.usage import UsageRepository
 from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.schemas.common import ItemsOut
 from app.schemas.tts import TTSResultOut, TTSResultRecordOut
@@ -121,6 +122,7 @@ async def synthesize_speech(
     db: Session = Depends(get_db),
     repo: TTSResultRepository = Depends(get_tts_results_repo),
     store: AssetStore = Depends(get_asset_store),
+    usage_repo: UsageRepository = Depends(get_usage_repo),
 ):
     """合成语音 - 支持多引擎"""
     # workers 模式只有 edge_tts（cosyvoice 依赖 local-only SDK，挂载即 500）；
@@ -134,7 +136,9 @@ async def synthesize_speech(
         # Try 页获客：匿名 edge_tts 合成按 IP 限流（每日 try_anon_daily_limit 次）
         if force_frontend:
             enforce_try_rate_limit(http_request)
-        return await _synthesize_edge_tts(request, db, repo, store, force_frontend=force_frontend)
+        return await _synthesize_edge_tts(
+            request, db, repo, store, force_frontend=force_frontend, usage_repo=usage_repo,
+        )
     else:
         # cosyvoice 依赖 dashscope/qwen SDK，workers 模式不挂载/不支持，保持原逻辑
         return await _synthesize_cosyvoice(request, db)
@@ -249,6 +253,7 @@ async def _synthesize_edge_tts(
     store: AssetStore,
     *,
     force_frontend: bool = False,
+    usage_repo: UsageRepository | None = None,
 ):
     """Edge-TTS 引擎合成
 
@@ -310,6 +315,10 @@ async def _synthesize_edge_tts(
             "language": "Chinese",
             "source": None,
         })
+        # Phase 3 用量计量：workers 匿名走 force_frontend 到不了这里；
+        # local 单租户与 workers 已认证都记录（best-effort）
+        if usage_repo is not None:
+            usage_repo.record_event(kind="tts", chars=len(request.text))
 
         return {
             "audio_id": audio_id,
