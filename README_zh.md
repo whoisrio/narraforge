@@ -3,6 +3,7 @@
 > [English](README.md)
 
 > **[在线 Demo → https://narraforge.rio-dong.workers.dev/](https://narraforge.rio-dong.workers.dev/)**
+> 云端演示版不含本地引擎能力（VoxCPM 克隆、语音转写、CosyVoice、Remotion 脚手架），完整功能请本地部署。
 
 一站式 AI 叙事工坊，集成声音克隆、文字转语音、语音转字幕。专为旁白与对话制作设计，支持多角色音色项目管理。
 

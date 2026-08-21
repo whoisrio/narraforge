@@ -3,6 +3,7 @@
 > [中文说明](README_zh.md)
 
 > **[Live Demo → https://narraforge.rio-dong.workers.dev/](https://narraforge.rio-dong.workers.dev/)**
+> Cloud demo build — local-only engines (VoxCPM cloning, speech-to-text, CosyVoice, Remotion scaffolding) are not available there; run locally for the full feature set.
 
 One-stop AI narration workshop for voice cloning, text-to-speech, and speech-to-subtitle. Designed for narrators and dialogue production with multi-voice project management.
 
