@@ -183,6 +183,36 @@ describe('segmentedReducer', () => {
     expect(seg.audio.duration_sec).toBe(3.2);
   });
 
+  it('GENERATE_SUCCESS updates a segment in a NON-active chapter (backend mode)', () => {
+    // 回归：合成可以发生在任意章节（全项目查找），此前 GENERATE_SUCCESS 只更新
+    // active chapter，非活动章节的合成结果不进 state → 自动保存 PUT 用旧值覆盖
+    // 后端并删除磁盘文件（"合成成功但播放 404"）。
+    const mk = (id: string): Segment => ({ id, text: id, voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'pending', created_at: '', updated_at: '' });
+    const ch1 = makeChapter({ id: 'ch-a', segments: [mk('active-seg')] });
+    const ch2 = makeChapter({ id: 'ch-b', segments: [mk('other-seg')] });
+    const p = makeProject({ chapters: [ch1, ch2], active_chapter_id: 'ch-a' });
+    const next = segmentedReducer({ project: p }, {
+      type: 'GENERATE_SUCCESS', id: 'other-seg',
+      current_audio_path: 'projects/p1/ch-b/segments/other-seg.mp3', duration_sec: 2.5, origin: 'tts',
+    });
+    // 非活动章节的 segment 被正确更新（修复前静默丢失）
+    const seg = next.project.chapters.find(c => c.id === 'ch-b')!.segments[0];
+    expect(seg.status).toBe('ready');
+    expect(seg.audio.current).toEqual({ path: 'projects/p1/ch-b/segments/other-seg.mp3', origin: 'tts', duration_sec: 2.5 });
+    // 活动章节不受影响
+    const activeSeg = next.project.chapters.find(c => c.id === 'ch-a')!.segments[0];
+    expect(activeSeg.status).toBe('pending');
+    // project 被重建（updated_at 由 updateChapter 重新生成，触发自动保存的前提）
+    expect(next.project).not.toBe(p);
+  });
+
+  it('GENERATE_SUCCESS with unknown id returns project unchanged (no empty save)', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'pending', created_at: '', updated_at: '' };
+    const p = makeProject({}, { segments: [s] });
+    const next = segmentedReducer({ project: p }, { type: 'GENERATE_SUCCESS', id: 'no-such-seg', current_audio_path: 'x.mp3' });
+    expect(next.project).toBe(p);
+  });
+
   it('UNDO_REGENERATE swaps current and previous audio', () => {
     const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3', current: { id: 'c' }, previous: { id: 'p' } }, segment_kind: 'narration', status: 'ready',
       created_at: '', updated_at: '' };
@@ -291,6 +321,29 @@ describe('segmentedReducer', () => {
     const next = segmentedReducer({ project: makeProject({}, { segments: [s] }) }, { type: 'GENERATE_FAIL', id: 's1', error: 'timeout' });
     expect(ac(next.project).segments[0].status).toBe('failed');
     expect(ac(next.project).segments[0].error).toBe('timeout');
+  });
+
+  it('GENERATE_FAIL marks a NON-active chapter segment as failed', () => {
+    const mk = (id: string): Segment => ({ id, text: id, voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'pending', created_at: '', updated_at: '' });
+    const ch1 = makeChapter({ id: 'ch-a', segments: [mk('active-seg')] });
+    const ch2 = makeChapter({ id: 'ch-b', segments: [mk('other-seg')] });
+    const p = makeProject({ chapters: [ch1, ch2], active_chapter_id: 'ch-a' });
+    const next = segmentedReducer({ project: p }, { type: 'GENERATE_FAIL', id: 'other-seg', error: 'boom' });
+    const seg = next.project.chapters.find(c => c.id === 'ch-b')!.segments[0];
+    expect(seg.status).toBe('failed');
+    expect(seg.error).toBe('boom');
+  });
+
+  it('MARK_QUEUED marks idle segments across chapters (not just active)', () => {
+    const mk = (id: string, status: Segment['status']): Segment => ({ id, text: id, voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status, created_at: '', updated_at: '' });
+    const ch1 = makeChapter({ id: 'ch-a', segments: [mk('a1', 'idle')] });
+    const ch2 = makeChapter({ id: 'ch-b', segments: [mk('b1', 'idle'), mk('b2', 'ready')] });
+    const p = makeProject({ chapters: [ch1, ch2], active_chapter_id: 'ch-a' });
+    const next = segmentedReducer({ project: p }, { type: 'MARK_QUEUED', ids: ['a1', 'b1', 'b2'] });
+    expect(next.project.chapters.find(c => c.id === 'ch-a')!.segments[0].status).toBe('queued');
+    expect(next.project.chapters.find(c => c.id === 'ch-b')!.segments[0].status).toBe('queued');
+    // 非 idle 的 segment 不受影响
+    expect(next.project.chapters.find(c => c.id === 'ch-b')!.segments[1].status).toBe('ready');
   });
 
   it('SELECT_SEGMENT sets selected_segment_id', () => {

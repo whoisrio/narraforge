@@ -249,6 +249,31 @@ function updateSegment(
   }));
 }
 
+/**
+ * 按 segment id 全局查找所在章节并更新（不局限 active chapter）。
+ *
+ * 合成/录音/撤销/解锁/清除音频等"音频生命周期"操作可能作用于任意章节
+ * （如批量合成、章节面板直接合成非活动章节的 segment）。用 updateActive
+ * 会让非活动章节的更新静默丢失：合成的 audio 元数据不进前端 state，随后
+ * 整包 PUT 自动保存会用合成前的旧值（无 current.path）覆盖后端 DB 并删除
+ * 磁盘音频文件 —— 表现即"合成成功但播放 404"。
+ *
+ * 找不到 segment 时返回原 project（不 bump updated_at，避免空保存）。
+ */
+function updateSegmentById(
+  p: SegmentedProject,
+  segmentId: string,
+  updater: (segment: Segment) => Segment,
+): SegmentedProject {
+  const ch = p.chapters.find(c => c.segments.some(s => s.id === segmentId));
+  if (!ch) return p;
+  return updateChapter(p, ch.id, ch2 => ({
+    ...ch2,
+    segments: ch2.segments.map(s => (s.id === segmentId ? updater({ ...s }) : s)),
+    updated_at: new Date().toISOString(),
+  }));
+}
+
 export function segmentedReducer(state: State, action: Action): State {
   const p = state.project;
 
@@ -489,83 +514,86 @@ export function segmentedReducer(state: State, action: Action): State {
       })};
     }
     case 'MARK_QUEUED': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        for (const id of action.ids) { const seg = s.find(x => x.id === id); if (seg && seg.status === 'idle') seg.status = 'queued'; }
-        return { ...ch, segments: s };
-      })};
+      // 批量合成可能覆盖多个章节（"合成未合成"遍历全项目），
+      // 按 id 全局标记，避免非活动章节的 segment 丢失 queued 状态。
+      const ids = new Set(action.ids);
+      let touched = false;
+      const chapters = p.chapters.map(ch => {
+        let chChanged = false;
+        const segs = ch.segments.map(seg => {
+          if (ids.has(seg.id) && seg.status === 'idle') {
+            touched = true;
+            chChanged = true;
+            return { ...seg, status: 'queued' as const };
+          }
+          return seg;
+        });
+        return chChanged ? { ...ch, segments: segs } : ch;
+      });
+      return { project: touched ? { ...p, chapters, updated_at: new Date().toISOString() } : p };
     }
     case 'GENERATE_START': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (seg) { seg.status = 'pending'; seg.error = undefined; }
-        return { ...ch, segments: s };
+      return { project: updateSegmentById(p, action.id, seg => {
+        seg.status = 'pending';
+        seg.error = undefined;
+        return seg;
       })};
     }
     case 'GENERATE_SUCCESS': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (seg) {
-          // Frontend mode: audio stored in IndexedDB via audio_id
-          if (action.audio_id) {
-            seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
-            seg.audio.current = {
-              id: action.audio_id,
-              ...(action.origin ? { origin: action.origin } : {}),
-              ...(action.duration_sec != null ? { duration_sec: action.duration_sec } : {}),
-            };
-          }
-          // Backend mode: audio stored on filesystem via audio_path
-          if (action.current_audio_path !== undefined) {
-            seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
-            seg.audio.current = {
-              path: action.current_audio_path,
-              ...(action.origin ? { origin: action.origin } : {}),
-              ...(action.duration_sec != null ? { duration_sec: action.duration_sec } : {}),
-            };
-          }
-          if (action.previous_audio_path !== undefined) {
-            // previous 即旧的 current（force 重合成时被降级的录音），origin 随之一并保留
-            seg.audio.previous = {
-              path: action.previous_audio_path,
-              ...(seg.audio.previous?.origin ? { origin: seg.audio.previous.origin } : {}),
-            };
-          }
-          if (action.audio_format) seg.audio.format = action.audio_format;
-          seg.audio.duration_sec = action.duration_sec ?? seg.audio.duration_sec;
-          seg.status = 'ready';
-          seg.error = undefined;
-          seg.updated_at = new Date().toISOString();
-          // Update segment voice with actually-used engine/voice
-          if (action.updated_params) {
-            const p = action.updated_params as Record<string, unknown>;
-            if (seg.voice.source === 'custom') {
-              seg.voice = { ...seg.voice, params: { ...seg.voice.params, ...p } };
-            }
-            // role/chapter segments: keep their source; generated_params handles staleness
-          }
-          if (action.generated_params) {
-            seg.generated_params = action.generated_params as Partial<EngineParams>;
-          }
+      return { project: updateSegmentById(p, action.id, seg => {
+        // Frontend mode: audio stored in IndexedDB via audio_id
+        if (action.audio_id) {
+          seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+          seg.audio.current = {
+            id: action.audio_id,
+            ...(action.origin ? { origin: action.origin } : {}),
+            ...(action.duration_sec != null ? { duration_sec: action.duration_sec } : {}),
+          };
         }
-        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+        // Backend mode: audio stored on filesystem via audio_path
+        if (action.current_audio_path !== undefined) {
+          seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+          seg.audio.current = {
+            path: action.current_audio_path,
+            ...(action.origin ? { origin: action.origin } : {}),
+            ...(action.duration_sec != null ? { duration_sec: action.duration_sec } : {}),
+          };
+        }
+        if (action.previous_audio_path !== undefined) {
+          // previous 即旧的 current（force 重合成时被降级的录音），origin 随之一并保留
+          seg.audio.previous = {
+            path: action.previous_audio_path,
+            ...(seg.audio.previous?.origin ? { origin: seg.audio.previous.origin } : {}),
+          };
+        }
+        if (action.audio_format) seg.audio.format = action.audio_format;
+        seg.audio.duration_sec = action.duration_sec ?? seg.audio.duration_sec;
+        seg.status = 'ready';
+        seg.error = undefined;
+        seg.updated_at = new Date().toISOString();
+        // Update segment voice with actually-used engine/voice
+        if (action.updated_params) {
+          const p = action.updated_params as Record<string, unknown>;
+          if (seg.voice.source === 'custom') {
+            seg.voice = { ...seg.voice, params: { ...seg.voice.params, ...p } };
+          }
+          // role/chapter segments: keep their source; generated_params handles staleness
+        }
+        if (action.generated_params) {
+          seg.generated_params = action.generated_params as Partial<EngineParams>;
+        }
+        return seg;
       })};
     }
     case 'GENERATE_FAIL': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (seg) { seg.status = 'failed'; seg.error = action.error; }
-        return { ...ch, segments: s };
+      return { project: updateSegmentById(p, action.id, seg => {
+        seg.status = 'failed';
+        seg.error = action.error;
+        return seg;
       })};
     }
     case 'UNDO_REGENERATE': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (!seg) return ch;
+      return { project: updateSegmentById(p, action.id, seg => {
         // Swap current/previous audio
         if (seg.audio.previous) {
           const tmp = seg.audio.current;
@@ -576,54 +604,44 @@ export function segmentedReducer(state: State, action: Action): State {
         // (enrichSegment treats audio.current.duration_sec as authoritative).
         seg.audio.duration_sec = seg.audio.current?.duration_sec;
         seg.updated_at = new Date().toISOString();
-        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+        return seg;
       })};
     }
     case 'RECORD_SUCCESS': {
       // 用户自录入音频（录音/上传）落库成功 —— 与 GENERATE_SUCCESS 同构，
       // 但 audio.current.origin 标记为 'recorded'（锁定该片段，跳过 TTS）
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (seg) {
-          const entry: NonNullable<Segment['audio']['current']> = { origin: 'recorded' };
-          if (action.audio_id) entry.id = action.audio_id;
-          if (action.audio_path) entry.path = action.audio_path;
-          if (action.duration_sec != null) entry.duration_sec = action.duration_sec;
-          seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
-          seg.audio.current = entry;
-          if (action.audio_format) seg.audio.format = action.audio_format;
-          seg.audio.duration_sec = action.duration_sec ?? seg.audio.duration_sec;
-          seg.status = 'ready';
-          seg.error = undefined;
-          seg.updated_at = new Date().toISOString();
-        }
-        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+      return { project: updateSegmentById(p, action.id, seg => {
+        const entry: NonNullable<Segment['audio']['current']> = { origin: 'recorded' };
+        if (action.audio_id) entry.id = action.audio_id;
+        if (action.audio_path) entry.path = action.audio_path;
+        if (action.duration_sec != null) entry.duration_sec = action.duration_sec;
+        seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+        seg.audio.current = entry;
+        if (action.audio_format) seg.audio.format = action.audio_format;
+        seg.audio.duration_sec = action.duration_sec ?? seg.audio.duration_sec;
+        seg.status = 'ready';
+        seg.error = undefined;
+        seg.updated_at = new Date().toISOString();
+        return seg;
       })};
     }
     case 'UNLOCK_SEGMENT_AUDIO': {
       // 解锁 = 清除 audio.current 的 origin 标记，之后可重新合成（force）
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (seg?.audio.current?.origin) {
+      return { project: updateSegmentById(p, action.id, seg => {
+        if (seg.audio.current?.origin) {
           seg.audio.current = { ...seg.audio.current, origin: undefined };
           seg.updated_at = new Date().toISOString();
         }
-        return { ...ch, segments: s, updated_at: new Date().toISOString() };
+        return seg;
       })};
     }
     case 'CLEAR_SEGMENT_AUDIO': {
-      return { project: updateActive(p, ch => {
-        const s = cloneSegments(ch.segments);
-        const seg = s.find(x => x.id === action.id);
-        if (seg) {
-          seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
-          seg.audio.current = undefined;
-          seg.audio.duration_sec = undefined;
-          seg.status = 'idle';
-        }
-        return { ...ch, segments: s };
+      return { project: updateSegmentById(p, action.id, seg => {
+        seg.audio.previous = seg.audio.current ? { ...seg.audio.current } : undefined;
+        seg.audio.current = undefined;
+        seg.audio.duration_sec = undefined;
+        seg.status = 'idle';
+        return seg;
       })};
     }
     case 'TOGGLE_INDEPENDENT_VOICE': {
