@@ -21,6 +21,7 @@ describe('ENGINE_CAPABILITIES', () => {
     expect(ENGINE_CAPABILITIES.voxcpm).toEqual({ inline: true, leading: true, instruction: true });
     expect(ENGINE_CAPABILITIES.cosyvoice).toEqual({ inline: false, leading: false, instruction: true });
     expect(ENGINE_CAPABILITIES.edge_tts).toEqual({ inline: false, leading: false, instruction: false });
+    expect(ENGINE_CAPABILITIES.indextts).toEqual({ inline: false, leading: false, instruction: false });
   });
 
   it('getStyleCapability falls back to all-false for unknown engines', () => {

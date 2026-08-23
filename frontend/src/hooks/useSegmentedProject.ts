@@ -146,12 +146,21 @@ function getActiveChapter(p: SegmentedProject): Chapter | undefined {
   return p.chapters.find(c => c.id === p.active_chapter_id) || p.chapters[0];
 }
 
-function updateChapter(p: SegmentedProject, chapterId: string, updater: (ch: Chapter) => Chapter): SegmentedProject {
+function updateChapter(
+  p: SegmentedProject,
+  chapterId: string,
+  updater: (ch: Chapter) => Chapter,
+  opts?: { touch?: boolean },
+): SegmentedProject {
   const now = new Date().toISOString();
   return {
     ...p,
     chapters: p.chapters.map(c => c.id === chapterId ? updater(c) : c),
-    updated_at: now,
+    // touch=false：纯 UI 状态变更（如 GENERATE_START 的 pending 标记）不 bump
+    // 项目 updated_at —— 自动保存以 project.updated_at 判脏，此类变更不值得
+    // 触发整包 PUT（过期 PUT 会被 SQLite 写锁序列化到合成提交之后落库，覆盖
+    // 新音频元数据，曾表现为"合成成功但播放 404"）。
+    updated_at: opts?.touch === false ? p.updated_at : now,
   };
 }
 
@@ -264,6 +273,7 @@ function updateSegmentById(
   p: SegmentedProject,
   segmentId: string,
   updater: (segment: Segment) => Segment,
+  opts?: { touch?: boolean },
 ): SegmentedProject {
   const ch = p.chapters.find(c => c.segments.some(s => s.id === segmentId));
   if (!ch) return p;
@@ -271,7 +281,7 @@ function updateSegmentById(
     ...ch2,
     segments: ch2.segments.map(s => (s.id === segmentId ? updater({ ...s }) : s)),
     updated_at: new Date().toISOString(),
-  }));
+  }), opts);
 }
 
 export function segmentedReducer(state: State, action: Action): State {
@@ -533,11 +543,13 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: touched ? { ...p, chapters, updated_at: new Date().toISOString() } : p };
     }
     case 'GENERATE_START': {
+      // pending 是纯 UI 状态（后端不存 status）：不 bump 项目 updated_at，
+      // 避免触发无意义的自动保存 PUT（见 updateChapter 的 touch 说明）
       return { project: updateSegmentById(p, action.id, seg => {
         seg.status = 'pending';
         seg.error = undefined;
         return seg;
-      })};
+      }, { touch: false })};
     }
     case 'GENERATE_SUCCESS': {
       return { project: updateSegmentById(p, action.id, seg => {

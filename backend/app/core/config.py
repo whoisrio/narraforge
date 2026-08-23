@@ -183,6 +183,10 @@ class Settings(BaseSettings):
     voxcpm_inference_timesteps: int = 10           # 去噪步数（越高质量越好，越慢）
     voxcpm_cfg_value: float = 2.0                  # Classifier-Free Guidance 强度
 
+    # IndexTTS 本地 sidecar 服务（IndexTTS-2.5，独立进程 HTTP 调用）
+    indextts_sidecar_url: str = "http://127.0.0.1:8310"  # sidecar 服务地址
+    indextts_timeout_sec: float = 300                    # 合成请求超时（秒）
+
     # 配置加密密钥（Fernet 对称加密，首次启动自动生成）
     config_encryption_key: str = ""
 

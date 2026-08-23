@@ -15,7 +15,7 @@ describe('LOCAL_CAPABILITIES', () => {
   it('matches the local backend full-capability contract', () => {
     expect(LOCAL_CAPABILITIES).toEqual({
       deploy_target: 'local',
-      engines: ['edge_tts', 'mimo_tts', 'cosyvoice', 'voxcpm'],
+      engines: ['edge_tts', 'mimo_tts', 'cosyvoice', 'voxcpm', 'indextts'],
       clone_engines: ['qwen', 'mimo', 'voxcpm'],
       features: { speech_to_text: true, agent_workflow: true, backend_storage: true, direct_storage_upload: false },
     });

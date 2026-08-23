@@ -1,9 +1,11 @@
 """Unit tests for app.services.engine_capabilities (style tag engine adaptation)."""
 from app.services.engine_capabilities import (
     EMOTION_LEADING_TAG,
+    EMOTION_TO_EMO_VECTOR,
     ENGINE_CAPABILITIES,
     VOXCPM_MODE_CAPS,
     apply_leading_tag,
+    emo_vector_for_emotion,
     prepare_text_for_engine,
     strip_inline_tags,
     strip_leading_style_tag,
@@ -30,6 +32,10 @@ def test_engine_capabilities_matrix():
     assert ENGINE_CAPABILITIES["edge_tts"].inline_tags is False
     assert ENGINE_CAPABILITIES["edge_tts"].leading_style_tag is False
     assert ENGINE_CAPABILITIES["edge_tts"].instruction is False
+
+    assert ENGINE_CAPABILITIES["indextts"].inline_tags is False
+    assert ENGINE_CAPABILITIES["indextts"].leading_style_tag is False
+    assert ENGINE_CAPABILITIES["indextts"].instruction is False
 
 
 def test_voxcpm_supports_by_mode():
@@ -119,6 +125,38 @@ def test_emotion_leading_tag_mapping():
         "excited": "兴奋",
     }
     assert "neutral" not in EMOTION_LEADING_TAG
+
+
+# ----- IndexTTS emo_vector 映射 -----
+
+def test_emo_vector_for_emotion_known():
+    # 维度顺序：[happy, angry, sad, afraid, disgusted, melancholic, surprised, calm]
+    assert emo_vector_for_emotion("happy") == [1, 0, 0, 0, 0, 0, 0, 0]
+    assert emo_vector_for_emotion("angry") == [0, 1, 0, 0, 0, 0, 0, 0]
+    assert emo_vector_for_emotion("sad") == [0, 0, 1, 0, 0, 0, 0, 0]
+    assert emo_vector_for_emotion("calm") == [0, 0, 0, 0, 0, 0, 0, 1]
+    assert emo_vector_for_emotion("excited") == [0.6, 0, 0, 0, 0, 0, 0.6, 0]
+
+
+def test_emo_vector_for_emotion_neutral_and_unknown():
+    assert emo_vector_for_emotion("neutral") is None
+    assert emo_vector_for_emotion("unknown_emotion") is None
+    assert emo_vector_for_emotion(None) is None
+    assert emo_vector_for_emotion("") is None
+
+
+def test_emo_vector_mapping_covers_exactly_five():
+    assert set(EMOTION_TO_EMO_VECTOR) == {"happy", "angry", "sad", "calm", "excited"}
+    for vec in EMOTION_TO_EMO_VECTOR.values():
+        assert len(vec) == 8
+
+
+def test_prepare_indextts_strips_everything():
+    # indextts 能力全 False：任何文本 tag 都被清洗，情绪由 emo_vector 单独传递
+    out = prepare_text_for_engine(
+        "(开心)你好[笑]世界", engine="indextts", emotion="happy", style="磁性"
+    )
+    assert out == "你好世界"
 
 
 # ----- prepare_text_for_engine -----

@@ -385,3 +385,121 @@ def test_synth_text_override_also_cleaned(db_session, tmp_path, monkeypatch):
         text_override="(旧)临时改的[笑]文本",
     )
     assert captured["text"] == "(悲伤)临时改的文本"
+
+
+# ----- indextts 引擎接入 -----
+
+
+def test_flatten_voice_indextts():
+    flat = svc._flatten_voice_for_synthesis({
+        "engine": "indextts",
+        "voice_id": "v1",
+        "lang": "EN",
+        "emo_alpha": 0.5,
+        "duration_factor": 1.5,
+    })
+    assert flat == {
+        "engine": "indextts",
+        "voice_id": "v1",
+        "indextts_lang": "EN",
+        "indextts_emo_alpha": 0.5,
+        "indextts_duration_factor": 1.5,
+    }
+
+
+def test_flatten_voice_indextts_defaults():
+    flat = svc._flatten_voice_for_synthesis({"engine": "indextts", "voice_id": "v1"})
+    assert flat["indextts_lang"] == "ZH"
+    assert flat["indextts_emo_alpha"] == 1.0
+    assert flat["indextts_duration_factor"] == 1.0
+
+
+def test_synthesize_with_engine_indextts_dispatch(monkeypatch):
+    """indextts 分发到 synthesize_indextts_internal，参数逐个透传。"""
+    from app.api import indextts as indextts_api
+    from app.schemas.segmented_project import SynthesizeParams
+
+    captured: dict[str, object] = {}
+
+    def fake_internal(**kwargs):
+        captured.update(kwargs)
+        return b"wav-bytes", "wav"
+
+    monkeypatch.setattr(indextts_api, "synthesize_indextts_internal", fake_internal)
+
+    p = SynthesizeParams(
+        engine="indextts",
+        voice_id="v1",
+        indextts_lang="JA",
+        indextts_emo_alpha=0.8,
+        indextts_duration_factor=1.2,
+    )
+    out = svc.synthesize_with_engine(
+        "你好", p, db=None, indextts_emo_vector=[1, 0, 0, 0, 0, 0, 0, 0]
+    )
+
+    assert out == (b"wav-bytes", "wav")
+    assert captured["text"] == "你好"
+    assert captured["voice_id"] == "v1"
+    assert captured["lang"] == "JA"
+    assert captured["emo_vector"] == [1, 0, 0, 0, 0, 0, 0, 0]
+    assert captured["emo_alpha"] == 0.8
+    assert captured["duration_factor"] == 1.2
+
+
+def test_synth_indextts_emotion_maps_to_emo_vector(db_session, tmp_path, monkeypatch):
+    """indextts 段落 emotion 经 emo_vector_for_emotion 映射后传给引擎，文本 tag 全部清洗。"""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    _seed(db_session, tmp_path, monkeypatch)
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    seg.chapter.voice = {"engine": "indextts", "voice_id": "v1", "lang": "ZH"}
+    seg.text = "(旧风格)你好[笑]世界"
+    seg.emotion = "happy"
+    db_session.commit()
+
+    captured: dict[str, object] = {}
+
+    def fake_synth(text, p, db=None, indextts_emo_vector=None):
+        captured["text"] = text
+        captured["params"] = p
+        captured["indextts_emo_vector"] = indextts_emo_vector
+        return b"RIFF\x00\x00\x00\x00WAVEfmt ", "wav"
+
+    with patch("app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
+        "app.services.segmented_project_service.synthesize_with_engine",
+        side_effect=fake_synth,
+    ):
+        svc.synthesize_segment(db_session, "p1", "c1", "s1")
+
+    # 能力全 False：文本 tag 全部清洗
+    assert captured["text"] == "你好世界"
+    # happy → [1,0,0,0,0,0,0,0]
+    assert captured["indextts_emo_vector"] == [1, 0, 0, 0, 0, 0, 0, 0]
+    assert captured["params"].engine == "indextts"
+    assert captured["params"].voice_id == "v1"
+
+
+def test_synth_indextts_neutral_emotion_passes_none(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    _seed(db_session, tmp_path, monkeypatch)
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    seg.chapter.voice = {"engine": "indextts", "voice_id": "v1"}
+    seg.text = "你好"
+    seg.emotion = "neutral"
+    db_session.commit()
+
+    captured: dict[str, object] = {}
+
+    def fake_synth(text, p, db=None, indextts_emo_vector=None):
+        captured["indextts_emo_vector"] = indextts_emo_vector
+        return b"RIFF\x00\x00\x00\x00WAVEfmt ", "wav"
+
+    with patch("app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
+        "app.services.segmented_project_service.synthesize_with_engine",
+        side_effect=fake_synth,
+    ):
+        svc.synthesize_segment(db_session, "p1", "c1", "s1")
+
+    assert captured["indextts_emo_vector"] is None

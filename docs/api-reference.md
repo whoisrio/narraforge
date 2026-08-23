@@ -697,6 +697,56 @@ Ultimate Clone -- 参考音频 + 转录文本，最高保真克隆。
 
 ---
 
+## IndexTTS-2.5 TTS (`/api/indextts`)
+
+IndexTTS-2.5 本地语音合成（bilibili，0.8B 参数，中/英/日/西/阿多语言，zero-shot 克隆 + 情绪向量 + 语速控制）。
+模型运行在独立 sidecar 进程中（`third_party/index-tts` 的独立 uv 环境，Python 3.11 + torch 2.8 cu128），
+backend 通过 HTTP 调用，规避与 backend（Python>=3.12）的依赖冲突。仅 local 模式挂载。
+
+sidecar 启动方式：
+
+```bash
+cd third_party/index-tts
+uv run ../../backend/scripts/indextts_sidecar_server.py   # 默认端口 8310
+# 或一键拉起（随 npm run dev 同启）：INDEXTTS_SIDECAR=1 npm run dev
+```
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/indextts/status` | sidecar 与模型加载状态 |
+| POST | `/api/indextts/load` | 加载模型到 GPU（懒加载，幂等） |
+| POST | `/api/indextts/unload` | 释放 GPU 显存 |
+| POST | `/api/indextts/tts` | 参考音频克隆合成 |
+
+### POST `/api/indextts/tts`
+
+```json
+{
+  "text": "要合成的文字",
+  "voice_id": "已上传声音ID",
+  "lang": "ZH",
+  "emo_alpha": 1.0,
+  "duration_factor": 1.0
+}
+```
+
+**字段说明:**
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `text` | string | 必填 | 待合成的文本 |
+| `voice_id` | string | 必填 | 本地数据库中已上传的声音 ID（zero-shot，直接取参考音频） |
+| `lang` | string | `"ZH"` | 语言：`ZH`/`EN`/`JA`/`ES`/`AR` |
+| `emo_alpha` | float | `1.0` | 情绪强度（0.0-1.0，配合段落 emotion 映射的 emo_vector） |
+| `duration_factor` | float | `1.0` | 语速控制（0.5-2.0，>1 变慢，<1 变快） |
+
+分段项目使用该引擎时，`voice.engine = "indextts"`，voice 参数结构为
+`{engine, voice_id, lang, emo_alpha, duration_factor}`；段落 `emotion` 由后端映射为
+IndexTTS 8 维情绪向量（happy/angry/sad/afraid/disgusted/melancholic/surprised/calm），
+映射表见 `backend/app/services/engine_capabilities.py` 的 `EMOTION_TO_EMO_VECTOR`。
+
+---
+
 ## 文本拆分 (`/api/text-split`)
 
 | 方法 | 路径 | 说明 |
@@ -1162,7 +1212,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | `chapters[].chapter_title` | string | 必填 | 章节标题 |
 | `chapters[].narration_script` | string | `null` | 本章旁白稿正文（L2，不含标题行），持久化到章节的 `narration_script` 字段；未传则为 `null` |
 | `chapters[].original_text` | string | `null` | 本章旁白稿正文，持久化到章节的 `original_text` 字段（章节卡片显示与工作室拆分源文本）；未传则为 `null` |
-| `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`cosyvoice`/`mimo_tts`/`voxcpm`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
+| `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`cosyvoice`/`mimo_tts`/`voxcpm`/`indextts`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
 | `chapters[].split_config` | object | `null` | 本章分段规则（`delimiters` + `mode`）。优先级：payload 显式值 > 匹配旧章节的沿承值 > 默认 |
 | `chapters[].segments[].text` | string | 必填 | 分片文本 |
 | `chapters[].segments[].emotion` | string | `null` | 分片情绪 |

@@ -23,6 +23,8 @@ ENGINE_CAPABILITIES: dict[str, EngineCapability] = {
     "voxcpm": EngineCapability(inline_tags=True, leading_style_tag=True, instruction=True),
     "cosyvoice": EngineCapability(inline_tags=False, leading_style_tag=False, instruction=True),
     "edge_tts": EngineCapability(inline_tags=False, leading_style_tag=False, instruction=False),
+    # indextts 情绪不走文本 tag，经 EMOTION_TO_EMO_VECTOR 映射为 emo_vector 传给 sidecar
+    "indextts": EngineCapability(inline_tags=False, leading_style_tag=False, instruction=False),
 }
 
 # voxcpm 按合成 mode 细分能力：ultimate 高保真克隆不支持任何 tag/style
@@ -48,6 +50,25 @@ EMOTION_LEADING_TAG: dict[str, str] = {
     "calm": "平静",
     "excited": "兴奋",
 }
+
+# 段落 emotion -> IndexTTS 8 维 emo_vector
+# 维度顺序：[happy, angry, sad, afraid, disgusted, melancholic, surprised, calm]
+# indextts 不支持任何文本 tag，情绪经该映射直接传给 sidecar；neutral/未知不映射
+EMOTION_TO_EMO_VECTOR: dict[str, list[float]] = {
+    "happy": [1, 0, 0, 0, 0, 0, 0, 0],
+    "angry": [0, 1, 0, 0, 0, 0, 0, 0],
+    "sad": [0, 0, 1, 0, 0, 0, 0, 0],
+    "calm": [0, 0, 0, 0, 0, 0, 0, 1],
+    "excited": [0.6, 0, 0, 0, 0, 0, 0.6, 0],
+}
+
+
+def emo_vector_for_emotion(emotion: str | None) -> list[float] | None:
+    """项目 emotion -> IndexTTS emo_vector；neutral/未知情绪返回 None（sidecar 默认情绪）。"""
+    if not emotion:
+        return None
+    vec = EMOTION_TO_EMO_VECTOR.get(emotion.strip())
+    return list(vec) if vec is not None else None
 
 _INLINE_TAG_RE = re.compile(r"\[[^\[\]]*\]")
 _LEADING_TAG_RE = re.compile(r"^\s*[\(（][^\)）]*[\)）]\s*")

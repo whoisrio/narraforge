@@ -76,6 +76,7 @@ vi.mock('../../services/api', () => ({
   },
   mimoTtsApi: { synthesizePreset: vi.fn(), synthesizeVoiceClone: vi.fn() },
   voxcpmApi: { design: vi.fn(), clone: vi.fn(), ultimateClone: vi.fn(), tts: vi.fn() },
+  indexttsApi: { tts: vi.fn(), getStatus: vi.fn(), loadModel: vi.fn(), unloadModel: vi.fn() },
   roleApi: {
     listRoles: vi.fn().mockResolvedValue([]),
     createRole: vi.fn(),
@@ -103,6 +104,9 @@ vi.mock('../../components/TTSSynthesis/MiMoTTSPanel', () => ({
 }));
 vi.mock('../../components/TTSSynthesis/VoxCPMPanel', () => ({
   VoxCPMPanel: () => <div data-testid="voxcpm-panel" />,
+}));
+vi.mock('../../components/TTSSynthesis/IndexTTSPanel', () => ({
+  IndexTTSPanel: () => <div data-testid="indextts-panel" />,
 }));
 
 vi.mock('../../components/VoiceStudio/VoiceStudioLayout', () => ({

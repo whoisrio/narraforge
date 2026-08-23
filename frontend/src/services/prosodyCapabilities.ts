@@ -8,6 +8,7 @@ const SSML_SUPPORT: Record<EngineParams['engine'], boolean> = {
   cosyvoice: true,
   mimo_tts: false,
   voxcpm: false,
+  indextts: false,
 };
 
 const CAPABILITIES: Record<EngineParams['engine'], ProsodyCapability> = Object.fromEntries(

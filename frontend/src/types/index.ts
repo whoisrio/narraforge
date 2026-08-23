@@ -118,7 +118,23 @@ export interface VoxCPMParams {
   skip_parenthesized?: boolean;
 }
 
-export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams;
+export interface IndexTTSParams {
+  engine: 'indextts';
+  voice_id: string;
+  lang?: 'ZH' | 'EN' | 'JA' | 'ES' | 'AR';
+  /** 情绪强度（0-1，配合段落 emotion 由后端映射的 emo_vector）。 */
+  emo_alpha?: number;
+  /** 语速控制（0.5-2.0，>1 变慢，<1 变快）。 */
+  duration_factor?: number;
+  /** 合成前移除文本中的风格 tag（clone 音色建议开启）。 */
+  mute_tags?: boolean;
+  /** 合成前把下划线替换为空格（只影响合成语音，不影响显示/字幕文本）。 */
+  underscore_to_space?: boolean;
+  /** 合成前移除成对括号及其内容（只影响合成语音，不影响显示/字幕文本）。 */
+  skip_parenthesized?: boolean;
+}
+
+export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams | IndexTTSParams;
 
 // ── Voice source for segments ──
 
@@ -205,6 +221,19 @@ export interface TTSRequest {
 
 // VoxCPM 模型状态
 export interface VoxCPMStatus {
+  loaded: boolean;
+  loading: boolean;
+  device: string;
+  model_path: string;
+  sample_rate: number;
+  vram_used_mb: number;
+  gpu_total_mb: number;
+  gpu_free_mb: number;
+  load_time_sec: number;
+}
+
+// IndexTTS-2.5 sidecar 模型状态（字段与 VoxCPMStatus 对齐）
+export interface IndexTTSStatus {
   loaded: boolean;
   loading: boolean;
   device: string;

@@ -216,6 +216,7 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     # Import and include routers
     # 注意：speech_to_text / voxcpm 模块间接 import faster_whisper/torch，
     # workers 模式连 import 都不能发生，故 import 放在条件分支内。
+    # indextts 虽只依赖 httpx，但属本地 sidecar 专属引擎，同样仅 local 挂载。
     from app.api import (
         clone,
         config,
@@ -231,7 +232,7 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
         tts,
     )
     if is_local:
-        from app.api import speech_to_text, voxcpm
+        from app.api import indextts, speech_to_text, voxcpm
 
     if is_local:
         # qwen/dashscope/voxcpm 专属端点（依赖 dashscope/qiniu SDK 或本地 GPU），workers 不挂载。
@@ -258,6 +259,7 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     app.include_router(segmented_projects.router, prefix="/api", tags=["segmented-projects"])
     if is_local:
         app.include_router(voxcpm.router, prefix="/api/voxcpm", tags=["voxcpm"])
+        app.include_router(indextts.router, prefix="/api/indextts", tags=["indextts"])
     app.include_router(sources.router, prefix="/api", tags=["sources"])
     app.include_router(roles.router, prefix="/api", tags=["roles"])
     # 用量计量（Phase 3）：两种部署目标都挂载；workers 匿名由 auth 中间件 401

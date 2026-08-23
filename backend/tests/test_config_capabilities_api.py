@@ -10,7 +10,7 @@ import main as main_module
 # Cloudflare Access 中间件要求 workers 请求带邮箱头（见 access_middleware）
 _ACCESS_HEADERS = {"cf-access-authenticated-user-email": "tester@example.com"}
 
-LOCAL_ENGINES = ["edge_tts", "mimo_tts", "cosyvoice", "voxcpm"]
+LOCAL_ENGINES = ["edge_tts", "mimo_tts", "cosyvoice", "voxcpm", "indextts"]
 LOCAL_CLONE_ENGINES = ["qwen", "mimo", "voxcpm"]
 
 WORKERS_ENGINES = ["edge_tts", "mimo_tts"]
