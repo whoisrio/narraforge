@@ -97,6 +97,26 @@ VoxCPM is an optional local GPU-based voice cloning model from OpenBMB.
 | `VOXCPM_INFERENCE_TIMESTEPS` | No | Denoising steps (higher = better quality, slower) | `10` |
 | `VOXCPM_CFG_VALUE` | No | Classifier-Free Guidance strength | `2.0` |
 
+## IndexTTS-2.5 (Local GPU TTS, Sidecar)
+
+IndexTTS-2.5 runs in a separate sidecar process (`third_party/index-tts`, its own uv
+environment with Python 3.11 + torch 2.8 cu128). The backend only talks to it over HTTP.
+
+Backend-side variables (go in `backend/.env`):
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `INDEXTTS_SIDECAR_URL` | No | Sidecar base URL | `http://127.0.0.1:8310` |
+| `INDEXTTS_TIMEOUT_SEC` | No | Synthesize HTTP timeout (seconds) | `300` |
+
+Sidecar-side variables (read by `backend/scripts/indextts_sidecar_server.py`):
+
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `INDEXTTS_SIDECAR_PORT` | No | Sidecar listen port | `8310` |
+| `INDEXTTS_MODEL_DIR` | No | Model weights directory | `<index-tts repo>/checkpoints` |
+| `INDEXTTS_REPO_DIR` | No | index-tts repo path | auto-inferred (`third_party/index-tts`) |
+
 ## Public URL / Object Storage
 
 Used for CosyVoice voice registration, which requires a publicly accessible audio URL.

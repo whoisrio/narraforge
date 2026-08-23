@@ -26,6 +26,7 @@ export const ENGINE_CAPABILITIES: Record<StyleTagEngine, EngineStyleCapability> 
   voxcpm: { inline: true, leading: true, instruction: true },
   cosyvoice: { inline: false, leading: false, instruction: true },
   edge_tts: { inline: false, leading: false, instruction: false },
+  indextts: { inline: false, leading: false, instruction: false },
 };
 
 export function getStyleCapability(engine: string): EngineStyleCapability {

@@ -213,6 +213,26 @@ describe('segmentedReducer', () => {
     expect(next.project).toBe(p);
   });
 
+  it('GENERATE_START 不 bump 项目 updated_at（纯 UI 状态，不触发自动保存）', () => {
+    // 回归：pending 是纯 UI 状态（后端不存 status），若 bump updated_at 会触发
+    // 整包自动保存 PUT，该 PUT 被后端写锁序列化到合成提交之后落库，用合成前
+    // 旧值覆盖新音频元数据（"合成成功但播放 404"）。
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
+    const p = makeProject({ updated_at: '2026-01-01T00:00:00.000Z' }, { segments: [s] });
+    const next = segmentedReducer({ project: p }, { type: 'GENERATE_START', id: 's1' });
+    expect(ac(next.project).segments[0].status).toBe('pending');
+    expect(next.project.updated_at).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('GENERATE_SUCCESS bump 项目 updated_at（新音频需要自动保存）', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'pending', created_at: '', updated_at: '' };
+    const p = makeProject({ updated_at: '2026-01-01T00:00:00.000Z' }, { segments: [s] });
+    const next = segmentedReducer({ project: p }, {
+      type: 'GENERATE_SUCCESS', id: 's1', current_audio_path: 'x/s1.mp3', duration_sec: 1.5,
+    });
+    expect(next.project.updated_at).not.toBe('2026-01-01T00:00:00.000Z');
+  });
+
   it('UNDO_REGENERATE swaps current and previous audio', () => {
     const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3', current: { id: 'c' }, previous: { id: 'p' } }, segment_kind: 'narration', status: 'ready',
       created_at: '', updated_at: '' };

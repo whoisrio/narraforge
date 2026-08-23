@@ -6,7 +6,8 @@ workers 清单必须保持为 local 清单的子集。
 """
 from __future__ import annotations
 
-LOCAL_ENGINES = ["edge_tts", "mimo_tts", "cosyvoice", "voxcpm"]
+LOCAL_ENGINES = ["edge_tts", "mimo_tts", "cosyvoice", "voxcpm", "indextts"]
+# indextts 不进 clone_engines：zero-shot 直接引用已有 VoiceProfile 音频，无克隆注册流程
 LOCAL_CLONE_ENGINES = ["qwen", "mimo", "voxcpm"]
 
 WORKERS_ENGINES = ["edge_tts", "mimo_tts"]

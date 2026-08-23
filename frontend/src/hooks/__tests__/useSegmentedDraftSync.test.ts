@@ -111,4 +111,57 @@ describe('useSegmentedDraftSync', () => {
     await act(async () => { await result.current.flush(); });
     expect(onSaved).not.toHaveBeenCalled();
   });
+
+  it('flush 保存期间出现更新的 markDirty 时不覆盖新草稿（回归：合成后音频 404）', async () => {
+    // 场景还原：GENERATE_SUCCESS 的 markDirty 写入带音频新草稿后，慢保存
+    // （被后端锁序列化）的旧 flush 收尾时不得把新草稿整份覆盖成旧草稿。
+    let resolveSave!: () => void;
+    storageCalls.save.mockImplementationOnce(
+      () => new Promise<void>((r) => { resolveSave = r; }),
+    );
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, debounceMs: 60_000 }),
+    );
+    const oldProj = { ...makeProject('p1'), updated_at: '2026-01-01T00:00:00.000Z' };
+    const newProj = { ...makeProject('p1'), updated_at: '2026-02-02T00:00:00.000Z' };
+    await act(async () => { await result.current.markDirty(oldProj); });
+    let flushPromise!: Promise<void>;
+    await act(async () => { flushPromise = result.current.flush(); });
+    // 等 flush 读到旧草稿并卡在 saveProject（模拟慢后端）
+    await new Promise((r) => setTimeout(r, 10));
+    await act(async () => { await result.current.markDirty(newProj); });
+    await act(async () => { resolveSave(); await flushPromise; });
+    // 旧 flush 收尾不得覆盖：新草稿原样保留且仍为 dirty
+    let draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(true);
+    expect(draft?.draft.updated_at).toBe('2026-02-02T00:00:00.000Z');
+    // 新草稿的下一次 flush 正常保存并收尾
+    await act(async () => { await result.current.flush(); });
+    expect(storageCalls.save).toHaveBeenLastCalledWith(newProj);
+    draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(false);
+    expect(draft?.draft.updated_at).toBe('2026-02-02T00:00:00.000Z');
+  });
+
+  it('flush 失败收尾同样不覆盖保存期间写入的更新草稿', async () => {
+    let rejectSave!: (e: Error) => void;
+    storageCalls.save.mockImplementationOnce(
+      () => new Promise<void>((_r, rej) => { rejectSave = rej; }),
+    );
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, debounceMs: 60_000 }),
+    );
+    const oldProj = { ...makeProject('p1'), updated_at: '2026-01-01T00:00:00.000Z' };
+    const newProj = { ...makeProject('p1'), updated_at: '2026-02-02T00:00:00.000Z' };
+    await act(async () => { await result.current.markDirty(oldProj); });
+    let flushPromise!: Promise<void>;
+    await act(async () => { flushPromise = result.current.flush(); });
+    await new Promise((r) => setTimeout(r, 10));
+    await act(async () => { await result.current.markDirty(newProj); });
+    await act(async () => { rejectSave(new Error('boom')); await flushPromise; });
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(true);
+    expect(draft?.draft.updated_at).toBe('2026-02-02T00:00:00.000Z');
+    expect(draft?.last_save_error).toBeUndefined();
+  });
 });

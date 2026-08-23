@@ -6,6 +6,7 @@ import { EngineSelect } from '../components/TTSSynthesis/EngineSelect';
 import type { EngineId } from '../components/TTSSynthesis/engineOptions';
 import { MiMoTTSPanel, type MiMoMode } from '../components/TTSSynthesis/MiMoTTSPanel';
 import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMPanel';
+import { IndexTTSPanel } from '../components/TTSSynthesis/IndexTTSPanel';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
 import { BatchSynthesizeMenu, type BatchSynthesizeMode } from '../components/SegmentedTTS/BatchSynthesizeMenu';
@@ -14,7 +15,7 @@ import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, roleApi, segmentedProjectApi, apiErrorCode } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
@@ -32,7 +33,7 @@ import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useAuth } from '../hooks/authContext';
 import { isAuthRequired } from '../services/auth';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, Role, RoleSnapshot, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { applyEngineTextCleaning } from '../services/styleTags';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -50,7 +51,7 @@ import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
 import styles from './TTSSynthesis.module.css';
 
-type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm';
+type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm' | 'indextts';
 
 /** 将角色 voice (EngineParams) 转换为 old flat 字段名，供 handleRegenerate 内部使用 */
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
@@ -149,6 +150,10 @@ export function TTSSynthesis({
   const [voxcpmPromptText, setVoxcpmPromptText] = useState('');
   const [voxcpmCfgValue, setVoxcpmCfgValue] = useState(2.0);
   const [voxcpmInferenceTimesteps, setVoxcpmInferenceTimesteps] = useState(10);
+  // IndexTTS state（zero-shot 克隆：voice_id 复用 selectedVoiceId；情绪由后端按段落 emotion 映射）
+  const [indexttsLang, setIndexttsLang] = useState<NonNullable<IndexTTSParams['lang']>>('ZH');
+  const [indexttsEmoAlpha, setIndexttsEmoAlpha] = useState(1.0);
+  const [indexttsDurationFactor, setIndexttsDurationFactor] = useState(1.0);
   // 禁用风格 tag（随 chapter.voice 持久化，合成时透传后端 SynthesizeParams.mute_tags）
   const [muteTags, setMuteTags] = useState(false);
   // 合成时把下划线转为空格（随 chapter.voice 持久化，透传 SynthesizeParams.underscore_to_space；
@@ -438,11 +443,13 @@ export function TTSSynthesis({
         voxcpm_mode: voxcpmMode,
         voxcpm_style_control: voxcpmStyleControl, voxcpm_prompt_text: voxcpmPromptText,
         voxcpm_cfg_value: voxcpmCfgValue, voxcpm_inference_timesteps: voxcpmInferenceTimesteps,
+        indextts_lang: indexttsLang, indextts_emo_alpha: indexttsEmoAlpha,
+        indextts_duration_factor: indexttsDurationFactor,
         language: params.language, speed: params.speed,
         volume: params.volume, pitch: params.pitch, panel_open: panelOpen,
       },
     });
-  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
+  }, [engine, selectedVoiceId, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoInstruction, mimoCloneVoiceId, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, indexttsLang, indexttsEmoAlpha, indexttsDurationFactor, params.language, params.speed, params.volume, params.pitch, panelOpen, dispatch]);
 
   const showToast = useCallback((message: string, type: 'error' | 'success' | 'info' = 'success') => {
     if (type === 'error') toast.error(message);
@@ -506,6 +513,11 @@ export function TTSSynthesis({
       setVoxcpmPromptText((v as VoxCPMParams).prompt_text || '');
       setVoxcpmCfgValue((v as VoxCPMParams).cfg_value ?? 2.0);
       setVoxcpmInferenceTimesteps((v as VoxCPMParams).inference_timesteps ?? 10);
+    } else if (engine === 'indextts') {
+      setSelectedVoiceId((v as IndexTTSParams).voice_id || '');
+      setIndexttsLang((v as IndexTTSParams).lang || 'ZH');
+      setIndexttsEmoAlpha((v as IndexTTSParams).emo_alpha ?? 1.0);
+      setIndexttsDurationFactor((v as IndexTTSParams).duration_factor ?? 1.0);
     }
   }, []);
 
@@ -583,6 +595,9 @@ export function TTSSynthesis({
     if (engine === 'voxcpm') {
       return { engine: 'voxcpm', mode: voxcpmMode, voice_id: selectedVoiceId, style_control: voxcpmStyleControl, prompt_text: voxcpmPromptText, cfg_value: voxcpmCfgValue, inference_timesteps: voxcpmInferenceTimesteps, mute_tags: muteTags, underscore_to_space: underscoreToSpace, skip_parenthesized: skipParenthesized } as VoxCPMParams;
     }
+    if (engine === 'indextts') {
+      return { engine: 'indextts', voice_id: selectedVoiceId, lang: indexttsLang, emo_alpha: indexttsEmoAlpha, duration_factor: indexttsDurationFactor, mute_tags: muteTags, underscore_to_space: underscoreToSpace, skip_parenthesized: skipParenthesized } as IndexTTSParams;
+    }
     return {
       engine: 'cosyvoice', voice_id: selectedVoiceId,
       instruction: params.instruction || '', speed: params.speed ?? 1.0, volume: params.volume ?? 80,
@@ -592,7 +607,7 @@ export function TTSSynthesis({
       underscore_to_space: underscoreToSpace,
       skip_parenthesized: skipParenthesized,
     };
-  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, muteTags, underscoreToSpace, skipParenthesized]);
+  }, [engine, selectedVoiceId, params, edgeVoice, edgeRate, edgeVolume, mimoMode, mimoPresetVoice, mimoCloneVoiceId, mimoInstruction, voxcpmMode, voxcpmStyleControl, voxcpmPromptText, voxcpmCfgValue, voxcpmInferenceTimesteps, indexttsLang, indexttsEmoAlpha, indexttsDurationFactor, muteTags, underscoreToSpace, skipParenthesized]);
 
   // 构建当前全局音色的 VoiceRef（用于新创建的 segment）
   const buildGlobalVoiceRef = useCallback((): import('../types').VoiceRef => {
@@ -614,6 +629,11 @@ export function TTSSynthesis({
     if (engine === 'voxcpm') {
       const vObj = voices.find(v => v.id === selectedVoiceId);
       return { name: vObj?.name || t('tts.voxcpmVoice'), source: 'global', voice_id: selectedVoiceId, engine: 'voxcpm' };
+    }
+    // IndexTTS
+    if (engine === 'indextts') {
+      const vObj = voices.find(v => v.id === selectedVoiceId);
+      return { name: vObj?.name || t('tts.indexttsVoice'), source: 'global', voice_id: selectedVoiceId, engine: 'indextts' };
     }
     // CosyVoice (default)
     const vObj = voices.find(v => {
@@ -1122,6 +1142,9 @@ export function TTSSynthesis({
       let effectiveVoxcpmDesc = '';
       let effectiveVoxcpmStyle = '';
       let effectiveVoxcpmPrompt = '';
+      let effectiveIndexttsLang: NonNullable<IndexTTSParams['lang']> = 'ZH';
+      let effectiveIndexttsEmoAlpha = 1.0;
+      let effectiveIndexttsDurationFactor = 1.0;
 
       if (effectiveEngine === 'edge_tts') {
         const e = effectiveParams as EdgeTTSParams;
@@ -1144,6 +1167,12 @@ export function TTSSynthesis({
         effectiveVoxcpmDesc = v.voice_description || '';
         effectiveVoxcpmStyle = v.style_control || '';
         effectiveVoxcpmPrompt = v.prompt_text || '';
+      } else if (effectiveEngine === 'indextts') {
+        const x = effectiveParams as IndexTTSParams;
+        voiceId = x.voice_id || '';
+        effectiveIndexttsLang = x.lang || 'ZH';
+        effectiveIndexttsEmoAlpha = x.emo_alpha ?? 1.0;
+        effectiveIndexttsDurationFactor = x.duration_factor ?? 1.0;
       } else {
         const c = effectiveParams as CosyVoiceParams;
         voiceId = c.voice_id || '';
@@ -1219,6 +1248,11 @@ export function TTSSynthesis({
           requestParams.voxcpm_voice_description = effectiveVoxcpmDesc;
           requestParams.voxcpm_style_control = effectiveVoxcpmStyle;
           requestParams.voxcpm_prompt_text = effectiveVoxcpmPrompt;
+        } else if (effectiveEngine === 'indextts') {
+          requestParams.voice_id = voiceId;
+          requestParams.lang = effectiveIndexttsLang;
+          requestParams.emo_alpha = effectiveIndexttsEmoAlpha;
+          requestParams.duration_factor = effectiveIndexttsDurationFactor;
         } else {
           requestParams.voice_id = voiceId;
           requestParams.speed = speed;
@@ -1302,6 +1336,8 @@ export function TTSSynthesis({
         } else {
           resp = await voxcpmApi.tts({ text: textForEngine, cfg_value: effectiveVoxcpmCfg, inference_timesteps: effectiveVoxcpmTimesteps, format: 'wav' });
         }
+      } else if (effectiveEngine === 'indextts') {
+        resp = await indexttsApi.tts({ text: textForEngine, voice_id: voiceId ?? '', lang: effectiveIndexttsLang, emo_alpha: effectiveIndexttsEmoAlpha, duration_factor: effectiveIndexttsDurationFactor, format: 'wav' });
       } else {
         // 原代码引用了未定义的 sp；按上下文恢复为 cosyvoice 的 effectiveParams（该分支原本会因 ReferenceError 崩溃）
         const sp = effectiveParams as CosyVoiceParams;
@@ -1977,7 +2013,7 @@ export function TTSSynthesis({
                       <EdgeTTSPanel selectedVoice={edgeVoice} onVoiceSelect={setEdgeVoice} rate={edgeRate} volume={edgeVolume} onRateChange={setEdgeRate} onVolumeChange={setEdgeVolume} />
                     ) : engine === 'mimo_tts' ? (
                       <MiMoTTSPanel mode={mimoMode} onModeChange={setMimoMode} onPresetVoiceSelect={setMimoPresetVoice} selectedPresetVoice={mimoPresetVoice} onInstructionChange={setMimoInstruction} instruction={mimoInstruction} onCloneVoiceSelect={setMimoCloneVoiceId} selectedCloneVoiceId={mimoCloneVoiceId} excludeCloneEngines={excludeQwen} projectId={project.id} />
-                    ) : (
+                    ) : engine === 'voxcpm' ? (
                       <VoxCPMPanel
                         mode={voxcpmMode} onModeChange={setVoxcpmMode}
                         styleControl={voxcpmStyleControl} onStyleControlChange={setVoxcpmStyleControl}
@@ -1986,6 +2022,14 @@ export function TTSSynthesis({
                         cfgValue={voxcpmCfgValue} onCfgValueChange={setVoxcpmCfgValue}
                         inferenceTimesteps={voxcpmInferenceTimesteps} onInferenceTimestepsChange={setVoxcpmInferenceTimesteps}
                         allowedCloneEngines={allowVoxcpm}
+                        projectId={project.id}
+                      />
+                    ) : (
+                      <IndexTTSPanel
+                        selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
+                        lang={indexttsLang} onLangChange={setIndexttsLang}
+                        emoAlpha={indexttsEmoAlpha} onEmoAlphaChange={setIndexttsEmoAlpha}
+                        durationFactor={indexttsDurationFactor} onDurationFactorChange={setIndexttsDurationFactor}
                         projectId={project.id}
                       />
                     )}

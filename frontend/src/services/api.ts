@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus, IndexTTSStatus } from '../types';
 import { API_BASE_URL, apiUrl } from './apiBase';
 import { applyAuthInterceptors } from './auth';
 
@@ -899,6 +899,41 @@ export const voxcpmApi = {
     format?: string;
   }): Promise<TTSResult> => {
     const { data } = await api.post<TTSResult>('/voxcpm/ultimate-clone', params);
+    return data;
+  },
+};
+
+// ============ IndexTTS-2.5 本地 sidecar TTS ============
+
+export const indexttsApi = {
+  /** 获取 sidecar 与模型加载状态 */
+  getStatus: async (): Promise<IndexTTSStatus> => {
+    const { data } = await api.get<IndexTTSStatus>('/indextts/status');
+    return data;
+  },
+
+  /** 加载模型到 GPU（懒加载，幂等） */
+  loadModel: async (): Promise<IndexTTSStatus> => {
+    const { data } = await api.post<IndexTTSStatus>('/indextts/load', {});
+    return data;
+  },
+
+  /** 释放 GPU 显存 */
+  unloadModel: async (): Promise<{ success: boolean; freed_mb: number }> => {
+    const { data } = await api.post('/indextts/unload');
+    return data;
+  },
+
+  /** 参考音频克隆合成（zero-shot；情绪由后端按段落 emotion 映射为 emo_vector） */
+  tts: async (params: {
+    text: string;
+    voice_id: string;
+    lang?: 'ZH' | 'EN' | 'JA' | 'ES' | 'AR';
+    emo_alpha?: number;
+    duration_factor?: number;
+    format?: string;
+  }): Promise<TTSResult> => {
+    const { data } = await api.post<TTSResult>('/indextts/tts', params);
     return data;
   },
 };

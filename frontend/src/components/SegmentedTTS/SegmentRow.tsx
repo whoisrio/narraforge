@@ -72,7 +72,7 @@ function fmtTime(sec: number): string {
 }
 
 const ENGINE_LABELS: Record<string, string> = {
-  cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM',
+  cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM', indextts: 'IndexTTS-2.5',
 };
 
 const EMOTION_LABELS: Record<EmotionType, string> = {

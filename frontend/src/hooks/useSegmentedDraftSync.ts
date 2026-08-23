@@ -51,6 +51,12 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     if (!rec || !rec.dirty) return;
     try {
       await storageRef.current.saveProject(rec.draft);
+      // 保存耗时期间若有更新的 markDirty 写入（记录 updated_at 已变），本份草稿
+      // 已过期：直接返回，保留新草稿与 dirty 标记（新草稿的 flush 已由该次
+      // markDirty 排程）。否则收尾 putDraft 会把新草稿整份覆盖成旧草稿，
+      // 导致新状态的保存永远丢失（曾表现为"合成成功但音频 404"）。
+      const latest = await getDraft(pid);
+      if (!latest || latest.updated_at !== rec.updated_at) return;
       const next: ProjectDraftRecord = {
         ...rec,
         base_updated_at: rec.draft.updated_at,
@@ -62,13 +68,18 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
       dirtyRef.current = false;
       onSavedRef.current?.(rec.draft);
     } catch (error: unknown) {
-      const next: ProjectDraftRecord = {
-        ...rec,
-        dirty: true,
-        last_save_error: error instanceof Error ? error.message : String(error),
-        last_save_attempt_at: new Date().toISOString(),
-      };
-      await putDraft(next);
+      // 与成功路径同理：仅当草稿记录仍是本份时才回写错误状态，
+      // 避免覆盖保存期间写入的更新草稿（其 dirty 与排程 flush 保留）。
+      const latest = await getDraft(pid);
+      if (latest && latest.updated_at === rec.updated_at) {
+        const next: ProjectDraftRecord = {
+          ...rec,
+          dirty: true,
+          last_save_error: error instanceof Error ? error.message : String(error),
+          last_save_attempt_at: new Date().toISOString(),
+        };
+        await putDraft(next);
+      }
       onSaveErrorRef.current?.(error);
     }
   }, []);

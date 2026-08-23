@@ -114,3 +114,5 @@ agent/.langgraph_api
 .kimi-code/
 backend/*-backup-*.tgz
 .hf-space-clone/
+# 外部克隆的 IndexTTS sidecar 仓库（含独立 uv venv 与模型权重）
+third_party/

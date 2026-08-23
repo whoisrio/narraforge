@@ -20,6 +20,7 @@ const ENGINE_COLORS: Record<string, string> = {
   cosyvoice: '#f59e0b',
   mimo_tts: '#10b981',
   voxcpm: '#ec4899',
+  indextts: '#14b8a6',
 };
 
 /**

@@ -19,6 +19,7 @@ function hasUsableVoice(params: EngineParams): boolean {
     if (mode === 'clone' || mode === 'ultimate') return Boolean(params.voice_id?.trim());
     return Boolean((params as VoxCPMParams).voice_description?.trim());
   }
+  if (params.engine === 'indextts') return Boolean(params.voice_id?.trim());
   return false;
 }
 

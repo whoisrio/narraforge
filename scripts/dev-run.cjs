@@ -122,5 +122,18 @@ start('frontend', 'npm', [
   '--port', FE_PORT,
 ], { cwd: join(ROOT, 'frontend') });
 
+// IndexTTS-2.5 sidecar（可选：INDEXTTS_SIDECAR=1 时启动；需先 clone
+// third_party/index-tts 并 uv sync + 下载权重，见 docs/api-reference.md）
+if (process.env.INDEXTTS_SIDECAR === '1') {
+  const indexttsRoot = join(ROOT, 'third_party', 'index-tts');
+  if (!existsSync(indexttsRoot)) {
+    console.log('[dev] INDEXTTS_SIDECAR=1 但 third_party/index-tts 不存在，跳过 sidecar 启动');
+  } else {
+    start('indextts', 'uv', [
+      'run', join(ROOT, 'backend', 'scripts', 'indextts_sidecar_server.py'),
+    ], { cwd: indexttsRoot });
+  }
+}
+
 // Keep alive
 process.stdin.resume();

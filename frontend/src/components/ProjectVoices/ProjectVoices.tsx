@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import type { Role, RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, CosyVoiceParams, VoxCPMParams, VoiceProfile, MiMoPresetVoice } from '../../types';
+import type { Role, RoleSnapshot, EngineParams, EdgeTTSParams, MiMoParams, CosyVoiceParams, VoxCPMParams, IndexTTSParams, VoiceProfile, MiMoPresetVoice } from '../../types';
 import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../../types';
 import { ttsApi, voiceApi, mimoTtsApi, voxcpmApi, apiErrorCode } from '../../services/api';
 import { fetchVoiceRolePreview, synthesizeVoiceRolePreview } from '../../services/voiceRolePreview';
@@ -36,13 +36,14 @@ const COMMON_EDGE_VOICES: { short_name: string; display_name: string; gender: st
   { short_name: 'zh-CN-XiaoxiaoNeural', display_name: 'Xiaoxiao', gender: 'Female' },
 ];
 
-type EngineKey = 'edge_tts' | 'cosyvoice' | 'mimo_tts' | 'voxcpm';
+type EngineKey = 'edge_tts' | 'cosyvoice' | 'mimo_tts' | 'voxcpm' | 'indextts';
 
 const ENGINE_META: Record<EngineKey, { label: string; avatarClass: string }> = {
   edge_tts: { label: 'Edge-TTS', avatarClass: styles.avatarEdge },
   cosyvoice: { label: 'CosyVoice', avatarClass: styles.avatarCosy },
   mimo_tts: { label: 'MiMo', avatarClass: styles.avatarMimo },
   voxcpm: { label: 'VoxCPM', avatarClass: styles.avatarVoxcpm },
+  indextts: { label: 'IndexTTS-2.5', avatarClass: styles.avatarIndextts },
 };
 
 /* ------------------------------------------------------------------ */
@@ -70,7 +71,7 @@ function isConfigured(role: Role): boolean {
   const v = role.voice;
   if (!v) return false;
   if (v.engine === 'edge_tts') return !!((v as { voice?: string }).voice);
-  if (v.engine === 'mimo_tts' || v.engine === 'cosyvoice' || v.engine === 'voxcpm') return !!((v as { voice_id?: string }).voice_id);
+  if (v.engine === 'mimo_tts' || v.engine === 'cosyvoice' || v.engine === 'voxcpm' || v.engine === 'indextts') return !!((v as { voice_id?: string }).voice_id);
   return false;
 }
 
@@ -82,7 +83,7 @@ function roleVoiceDisplayName(role: Role): string {
     const m = v as { mode?: string; voice_id?: string; voice_description?: string };
     return m.voice_description || m.voice_id || '';
   }
-  if (v.engine === 'cosyvoice' || v.engine === 'voxcpm') {
+  if (v.engine === 'cosyvoice' || v.engine === 'voxcpm' || v.engine === 'indextts') {
     const c = v as { voice_id?: string; voice_description?: string };
     return c.voice_description || c.voice_id || '';
   }
@@ -167,19 +168,22 @@ function VoiceRoleEditor({
   const vox = draft.voice;
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>(COMMON_EDGE_VOICES);
   const [mimoPresetVoices, setMimoPresetVoices] = useState<MiMoPresetVoice[]>([]);
+  // 语音库已有克隆音色（indextts zero-shot 直接引用，无需训练/注册）
+  const [cloneVoiceOptions, setCloneVoiceOptions] = useState<VoiceProfile[]>([]);
   const { triggerRefresh } = useVoiceRefresh();
 
   // 音色来源分类
   const [voiceCategory, setVoiceCategory] = useState<VoiceSourceCategory>(() => detectCategory(draft));
 
   // 克隆流程状态
-  const initCloneSubEngine = (): 'cosyvoice' | 'mimo' | 'voxcpm' => {
+  const initCloneSubEngine = (): 'cosyvoice' | 'mimo' | 'voxcpm' | 'indextts' => {
     const eng = draft.voice?.engine;
     if (eng === 'cosyvoice') return 'cosyvoice';
     if (eng === 'voxcpm') return 'voxcpm';
+    if (eng === 'indextts') return 'indextts';
     return 'mimo';
   };
-  const [cloneSubEngine, setCloneSubEngine] = useState<'cosyvoice' | 'mimo' | 'voxcpm'>(initCloneSubEngine);
+  const [cloneSubEngine, setCloneSubEngine] = useState<'cosyvoice' | 'mimo' | 'voxcpm' | 'indextts'>(initCloneSubEngine);
   const [voxcpmCloneMode, setVoxcpmCloneMode] = useState<'clone' | 'ultimate'>(() =>
     (draft.voice?.engine === 'voxcpm' && (draft.voice as VoxCPMParams).mode === 'ultimate') ? 'ultimate' : 'clone',
   );
@@ -326,6 +330,11 @@ function VoiceRoleEditor({
       console.error('加载 MiMo 预置音色列表失败:', err);
       setVoiceOptionsWarning(t('projectVoices.voiceOptionsLoadFailed'));
     });
+    voiceApi.list(projectId).then(list => {
+      setCloneVoiceOptions(list.filter(v => v.has_preview || v.has_source));
+    }).catch((err) => {
+      console.error('加载克隆音色列表失败:', err);
+    });
   }, []);
 
   // 当已保存的角色有 clone voice id 时，按 ID 查询对应的 VoiceProfile
@@ -333,7 +342,7 @@ function VoiceRoleEditor({
   const voiceEngineAppliedRef = useRef(false);
   const lastVoiceIdRef = useRef('');
   useEffect(() => {
-    const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : '') || '';
+    const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : vox?.engine === 'indextts' ? (vox as IndexTTSParams).voice_id : '') || '';
     if (!voiceId) { setClonePreviewAudioSrc(''); setCloneOriginalAudioSrc(''); setCloneVoiceDescription(''); setClonePromptText(''); return; }
     if (voiceId === lastVoiceIdRef.current) return;
     let cancelled = false;
@@ -370,7 +379,9 @@ function VoiceRoleEditor({
         setVoiceCategory('preset');
       } else {
         setVoiceCategory('clone');
-        if (model === 'cosyvoice') setCloneSubEngine('cosyvoice');
+        // indextts 的 voice_id 可指向任意引擎的克隆音色（zero-shot），sub-engine 以 draft.voice.engine 为准
+        if (vox?.engine === 'indextts') setCloneSubEngine('indextts');
+        else if (model === 'cosyvoice') setCloneSubEngine('cosyvoice');
         else if (model === 'mimo_tts') setCloneSubEngine('mimo');
         else if (model === 'voxcpm') setCloneSubEngine('voxcpm');
       }
@@ -404,6 +415,11 @@ function VoiceRoleEditor({
       case 'voxcpm': {
         const existing = current?.engine === 'voxcpm' ? current as VoxCPMParams : undefined;
         voice = { engine: 'voxcpm', mode: existing?.mode || 'clone', voice_id: existing?.voice_id || '', voice_description: existing?.voice_description, style_control: existing?.style_control, cfg_value: existing?.cfg_value, inference_timesteps: existing?.inference_timesteps } as VoxCPMParams;
+        break;
+      }
+      case 'indextts': {
+        const existing = current?.engine === 'indextts' ? current as IndexTTSParams : undefined;
+        voice = { engine: 'indextts', voice_id: existing?.voice_id || '', lang: existing?.lang || 'ZH', emo_alpha: existing?.emo_alpha ?? 1.0, duration_factor: existing?.duration_factor ?? 1.0 } as IndexTTSParams;
         break;
       }
       default:
@@ -459,6 +475,15 @@ function VoiceRoleEditor({
           ...(next.voxcpm_inference_timesteps !== undefined ? { inference_timesteps: next.voxcpm_inference_timesteps as number } : {}),
         } as VoxCPMParams;
         break;
+      case 'indextts':
+        updated = {
+          ...v,
+          ...(next.voice_id !== undefined ? { voice_id: next.voice_id as string } : {}),
+          ...(next.lang !== undefined ? { lang: next.lang as IndexTTSParams['lang'] } : {}),
+          ...(next.emo_alpha !== undefined ? { emo_alpha: next.emo_alpha as number } : {}),
+          ...(next.duration_factor !== undefined ? { duration_factor: next.duration_factor as number } : {}),
+        } as IndexTTSParams;
+        break;
       default:
         return;
     }
@@ -474,6 +499,7 @@ function VoiceRoleEditor({
       const eng = draft.voice?.engine;
       if (eng === 'cosyvoice') setCloneSubEngine('cosyvoice');
       else if (eng === 'voxcpm') setCloneSubEngine('voxcpm');
+      else if (eng === 'indextts') setCloneSubEngine('indextts');
       else setCloneSubEngine('mimo');
     } else if (cat === 'design') {
       const eng = draft.voice?.engine;
@@ -612,7 +638,7 @@ function VoiceRoleEditor({
 
       // Save preview audio to VoiceProfile (only for clone/design voices with a UUID voice_id;
       // MiMo preset voice_id is a name like "白桦", not a VoiceProfile UUID)
-      const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : '') || '';
+      const voiceId = (vox?.engine === 'mimo_tts' ? (vox as MiMoParams).voice_id : vox?.engine === 'cosyvoice' ? (vox as CosyVoiceParams).voice_id : vox?.engine === 'voxcpm' ? (vox as VoxCPMParams).voice_id : vox?.engine === 'indextts' ? (vox as IndexTTSParams).voice_id : '') || '';
       const isPresetVoice = vox?.engine === 'mimo_tts' && ((vox as MiMoParams).mode ?? 'preset') === 'preset';
       if (voiceId && !isPresetVoice) {
         const saveResult = await voiceApi.savePreviewAudio(voiceId, base64, format);
@@ -833,6 +859,17 @@ function VoiceRoleEditor({
                           voice: { engine: 'voxcpm', mode: 'clone' as const, voice_id: keepVid || '' } as VoxCPMParams,
                         });
                       }}>VoxCPM</button>
+                      <button type="button" className={`${styles.enginePill} ${cloneSubEngine === 'indextts' ? styles.enginePillActive : ''}`} onClick={() => {
+                        setCloneSubEngine('indextts');
+                        setCloneInputMethod('record');
+                        setClonePendingFile(null);
+                        // indextts 为 zero-shot：不做录音/上传克隆流程，直接引用语音库已有克隆音色
+                        const keepVid = vox?.engine === 'indextts' ? (vox as IndexTTSParams).voice_id : undefined;
+                        onChange({
+                          ...draft,
+                          voice: { engine: 'indextts', voice_id: keepVid || '', lang: 'ZH', emo_alpha: 1.0, duration_factor: 1.0 } as IndexTTSParams,
+                        });
+                      }}>IndexTTS</button>
                     </div>
                   </div>
 
@@ -1084,6 +1121,37 @@ function VoiceRoleEditor({
                       </label>
                     </>
                   )}
+
+                  {/* IndexTTS 克隆（zero-shot：直接引用语音库已有克隆音色，情绪由后端按段落 emotion 映射） */}
+                  {cloneSubEngine === 'indextts' && (
+                    <>
+                      <label className={styles.paramField} style={{ gridColumn: '1 / -1' }}>{t('projectVoices.voice')}
+                        <select className={styles.paramSelect} value={(vox?.engine === 'indextts' ? (vox as IndexTTSParams).voice_id : undefined) ?? ''} onChange={(event) => setParams({ voice_id: event.target.value })}>
+                          <option value="">{t('indextts.selectVoice')}</option>
+                          {cloneVoiceOptions.map(v => (
+                            <option key={v.id} value={v.id}>{v.name || v.description || v.id.slice(0, 8)}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className={styles.paramField}>{t('tts.language')}
+                        <select className={styles.paramSelect} value={(vox?.engine === 'indextts' ? (vox as IndexTTSParams).lang : undefined) || 'ZH'} onChange={(event) => setParams({ lang: event.target.value })}>
+                          <option value="ZH">中文</option>
+                          <option value="EN">English</option>
+                          <option value="JA">日本語</option>
+                          <option value="ES">Español</option>
+                          <option value="AR">العربية</option>
+                        </select>
+                      </label>
+                      <label className={styles.paramField}>{t('indextts.durationFactor')}
+                        <input className={styles.range} aria-label={t('indextts.durationFactor')} type="range" min={0.5} max={2.0} step={0.1} value={(vox?.engine === 'indextts' ? (vox as IndexTTSParams).duration_factor : undefined) ?? 1.0} onChange={(event) => setParams({ duration_factor: Number(event.target.value) })} />
+                        <span className={styles.sliderVal}>{((vox?.engine === 'indextts' ? (vox as IndexTTSParams).duration_factor : undefined) ?? 1.0).toFixed(1)}×</span>
+                      </label>
+                      <label className={styles.paramField}>{t('indextts.emotionStrength')}
+                        <input className={styles.range} aria-label={t('indextts.emotionStrength')} type="range" min={0} max={1} step={0.1} value={(vox?.engine === 'indextts' ? (vox as IndexTTSParams).emo_alpha : undefined) ?? 1.0} onChange={(event) => setParams({ emo_alpha: Number(event.target.value) })} />
+                        <span className={styles.sliderVal}>{((vox?.engine === 'indextts' ? (vox as IndexTTSParams).emo_alpha : undefined) ?? 1.0).toFixed(1)}</span>
+                      </label>
+                    </>
+                  )}
                 </>
               )}
 
@@ -1310,7 +1378,7 @@ export function ProjectVoices({
     if (v) {
       if (v.engine === 'mimo_tts') voiceId = (v as { voice_id?: string }).voice_id ?? '';
       else if (v.engine === 'edge_tts') voiceId = (v as EdgeTTSParams).voice_id ?? '';
-      else if (v.engine === 'cosyvoice' || v.engine === 'voxcpm') voiceId = (v as { voice_id?: string }).voice_id ?? '';
+      else if (v.engine === 'cosyvoice' || v.engine === 'voxcpm' || v.engine === 'indextts') voiceId = (v as { voice_id?: string }).voice_id ?? '';
     }
     if (voiceId) {
       try {
@@ -1359,6 +1427,7 @@ export function ProjectVoices({
             <option value="cosyvoice">CosyVoice</option>
             <option value="mimo_tts">MiMo</option>
             <option value="voxcpm">VoxCPM</option>
+            <option value="indextts">IndexTTS-2.5</option>
           </select>
           <button type="button" className={styles.ghostButton} onClick={onManageRoles}>{t('projectVoices.roleLibrary')}</button>
         </div>

@@ -14,6 +14,7 @@ const ENGINE_LABELS: Record<string, string> = {
   cosyvoice: 'CosyVoice',
   mimo_tts: 'MiMo TTS',
   voxcpm: 'VoxCPM',
+  indextts: 'IndexTTS-2.5',
 };
 
 /**

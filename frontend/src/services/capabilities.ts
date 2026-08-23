@@ -24,7 +24,7 @@ export interface Capabilities {
 /** 本地全量能力：探测失败或未包 Provider 时的默认值（本地开发体验不变）。 */
 export const LOCAL_CAPABILITIES: Capabilities = {
   deploy_target: 'local',
-  engines: ['edge_tts', 'mimo_tts', 'cosyvoice', 'voxcpm'],
+  engines: ['edge_tts', 'mimo_tts', 'cosyvoice', 'voxcpm', 'indextts'],
   clone_engines: ['qwen', 'mimo', 'voxcpm'],
   features: { speech_to_text: true, agent_workflow: true, backend_storage: true, direct_storage_upload: false },
 };

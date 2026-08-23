@@ -48,6 +48,7 @@
 | 功能 | 端点/入口 | 依赖 |
 |---|---|---|
 | VoxCPM 合成/克隆/音色设计 | `/api/voxcpm/*`（status/load/unload/tts/design/clone/ultimate-clone） | 2B 参数本地模型，ModelScope 下载权重，GPU/CPU 推理 |
+| IndexTTS-2.5 合成/克隆 | `/api/indextts/*`（status/load/unload/tts） | 0.8B 本地模型（HF/ModelScope 权重）+ 独立 sidecar 进程（`third_party/index-tts`，Python 3.11 + torch 2.8 cu128，与 backend 依赖硬冲突不可合并），GPU 推理 |
 | 语音转写 | `POST /api/speech-to-text/transcribe`、`/multi-transcribe` 及历史/下载 | faster-whisper（HF 模型下载）/ FunASR（paraformer-zh + fsmn-vad + ct-punc）；多音频合并用 ffmpeg |
 | 克隆音频上传转码 | `POST /api/clone/upload` | ffmpeg（libmp3lame） |
 | 章节音频导出/调整 | segmented local_router：`export-audio`、`export-all-chapters`、`adjust-audio(-all)`、项目 ZIP `export` | ffmpeg/ffprobe（拼接、调速调音量、响度探测） |

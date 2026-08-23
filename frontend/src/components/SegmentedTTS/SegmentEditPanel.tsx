@@ -10,7 +10,7 @@ import styles from './SegmentEditPanel.module.css';
 
 // keyof EngineParams 在判别联合上只会得到公共键（engine/voice_id），
 // 这里需要的是「任意引擎参数键」，故显式列举
-type SegmentParamField = 'engine' | 'voice' | 'voice_id' | 'mode' | 'speed' | 'volume' | 'pitch' | 'instruction' | 'style_control' | 'language';
+type SegmentParamField = 'engine' | 'voice' | 'voice_id' | 'mode' | 'speed' | 'volume' | 'pitch' | 'instruction' | 'style_control' | 'language' | 'lang' | 'emo_alpha' | 'duration_factor';
 type SegmentParamValue = string | number | boolean | undefined;
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
@@ -122,6 +122,7 @@ export function SegmentEditPanel({
       if (value === 'edge_tts') { params.voice = ''; }
       else if (value === 'mimo_tts') { params.mode = 'preset'; params.voice_id = t('tts.defaultMimoPresetVoice'); }
       else if (value === 'voxcpm') { params.mode = 'clone'; }
+      else if (value === 'indextts') { params.voice_id = ''; params.lang = 'ZH'; params.emo_alpha = 1.0; params.duration_factor = 1.0; }
       else { params.voice_id = ''; }
     }
     else if (field === 'speed') params.speed = value as number;
@@ -133,6 +134,9 @@ export function SegmentEditPanel({
     else if (field === 'instruction') params.instruction = value as string;
     else if (field === 'style_control') params.style_control = value as string;
     else if (field === 'language') params.language = value as string;
+    else if (field === 'lang') params.lang = value as string;
+    else if (field === 'emo_alpha') params.emo_alpha = value as number;
+    else if (field === 'duration_factor') params.duration_factor = value as number;
 
     // All edits accumulate locally; only confirm button commits
     setLocalParams(prev => ({ ...prev, ...params }));
@@ -150,6 +154,7 @@ export function SegmentEditPanel({
   const isEdgeTTS = eff.engine === 'edge_tts';
   const isMiMo = eff.engine === 'mimo_tts';
   const isVoxCPM = eff.engine === 'voxcpm';
+  const isIndexTTS = eff.engine === 'indextts';
   const hasOverrides = segOverrideFields(segment).length > 0;
 
   // Build override summary
@@ -159,7 +164,7 @@ export function SegmentEditPanel({
       overrideSummary.push(`${t('segmentEdit.voice')}: ${(eff.voice as string) || t('segmentEdit.custom')}`);
     } else if (isMiMo) {
       overrideSummary.push(`${t('segmentEdit.voice')}: ${(eff.voice_id as string) || t('segmentEdit.custom')}`);
-    } else if (isVoxCPM) {
+    } else if (isVoxCPM || isIndexTTS) {
       const v = voices.find(v => v.id === eff.voice_id);
       overrideSummary.push(`${t('segmentEdit.voice')}: ${v?.name || t('segmentEdit.custom')}`);
     } else {
@@ -274,10 +279,10 @@ export function SegmentEditPanel({
             <div className={styles.engineRow}>
               <span className={styles.paramLabel}>{t('segmentEdit.model')}</span>
               <div className={styles.enginePills}>
-                {(['cosyvoice', 'edge_tts', 'mimo_tts', 'voxcpm'] as const).map(eng => (
+                {(['cosyvoice', 'edge_tts', 'mimo_tts', 'voxcpm', 'indextts'] as const).map(eng => (
                   <button key={eng} className={`${styles.enginePill} ${eff.engine === eng ? styles.enginePillActive : ''}`}
                     onClick={() => handleParamChange('engine', eng)}>
-                    {eng === 'cosyvoice' ? 'CosyVoice' : eng === 'edge_tts' ? 'Edge-TTS' : eng === 'mimo_tts' ? 'MiMo' : 'VoxCPM'}
+                    {eng === 'cosyvoice' ? 'CosyVoice' : eng === 'edge_tts' ? 'Edge-TTS' : eng === 'mimo_tts' ? 'MiMo' : eng === 'voxcpm' ? 'VoxCPM' : 'IndexTTS'}
                   </button>
                 ))}
               </div>
@@ -392,6 +397,49 @@ export function SegmentEditPanel({
                           <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
                         ))}
                     </select>
+                  </div>
+                </>
+              )}
+
+              {/* IndexTTS: zero-shot 克隆音色 + 语言 + 语速/情绪强度（情绪由后端按段落 emotion 映射） */}
+              {isIndexTTS && (
+                <>
+                  <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                    <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
+                    <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
+                      onChange={e => handleParamChange('voice_id', e.target.value)}>
+                      {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
+                      {voices.filter(v => v.has_preview || v.has_source).map(v => (
+                          <option key={v.id} value={v.id}>⭐ {v.name || v.id}</option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className={styles.paramField}>
+                    <div className={styles.paramLabel}>{t('tts.language')}</div>
+                    <select className={styles.paramSelect} value={(eff.lang as string) || 'ZH'}
+                      onChange={e => handleParamChange('lang', e.target.value)}>
+                      <option value="ZH">中文</option>
+                      <option value="EN">English</option>
+                      <option value="JA">日本語</option>
+                      <option value="ES">Español</option>
+                      <option value="AR">العربية</option>
+                    </select>
+                  </div>
+                  <div className={styles.paramField}>
+                    <div className={styles.paramLabel}>{t('indextts.durationFactor')}</div>
+                    <div className={styles.sliderRow}>
+                      <input type="range" min={0.5} max={2.0} step={0.1} className={styles.range}
+                        value={(eff.duration_factor as number) ?? 1.0} onChange={e => handleParamChange('duration_factor', parseFloat(e.target.value))} />
+                      <span className={styles.sliderVal}>{((eff.duration_factor as number) ?? 1.0).toFixed(1)}×</span>
+                    </div>
+                  </div>
+                  <div className={styles.paramField}>
+                    <div className={styles.paramLabel}>{t('indextts.emotionStrength')}</div>
+                    <div className={styles.sliderRow}>
+                      <input type="range" min={0} max={1} step={0.1} className={styles.range}
+                        value={(eff.emo_alpha as number) ?? 1.0} onChange={e => handleParamChange('emo_alpha', parseFloat(e.target.value))} />
+                      <span className={styles.sliderVal}>{((eff.emo_alpha as number) ?? 1.0).toFixed(1)}</span>
+                    </div>
                   </div>
                 </>
               )}

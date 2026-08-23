@@ -31,7 +31,7 @@ from app.models.segmented_project import (
     SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
-from app.services.engine_capabilities import prepare_text_for_engine
+from app.services.engine_capabilities import emo_vector_for_emotion, prepare_text_for_engine
 from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
@@ -157,6 +157,11 @@ def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
         flat["voxcpm_style_control"] = voice.get("style_control", "")
         flat["voxcpm_cfg_value"] = voice.get("cfg_value", 2.0)
         flat["voxcpm_inference_timesteps"] = voice.get("inference_timesteps", 10)
+    elif engine == "indextts":
+        flat["voice_id"] = voice.get("voice_id", "")
+        flat["indextts_lang"] = voice.get("lang", "ZH")
+        flat["indextts_emo_alpha"] = voice.get("emo_alpha", 1.0)
+        flat["indextts_duration_factor"] = voice.get("duration_factor", 1.0)
     if voice.get("mute_tags") is not None:
         flat["mute_tags"] = voice.get("mute_tags")
     return flat
@@ -683,9 +688,16 @@ def _merge_params(*sources: dict[str, Any] | None) -> dict[str, Any]:
 
 
 def synthesize_with_engine(
-    text: str, p: SynthesizeParams, db: Session | None = None
+    text: str,
+    p: SynthesizeParams,
+    db: Session | None = None,
+    indextts_emo_vector: list[float] | None = None,
 ) -> tuple[bytes, str]:
-    """Dispatch to the existing TTS service. Returns (audio_bytes, native_format)."""
+    """Dispatch to the existing TTS service. Returns (audio_bytes, native_format).
+
+    ``indextts_emo_vector`` 仅 indextts 引擎使用：情绪不走文本 tag，
+    由调用方（synthesize_segment）按段落 emotion 映射后传入。
+    """
     engine = p.engine
     logger.info(
         "[synthesize_with_engine] engine=%s mimo_mode=%s mimo_clone=%s voxcpm_mode=%s voice_id=%s",
@@ -735,6 +747,17 @@ def synthesize_with_engine(
             prompt_text=p.voxcpm_prompt_text,
             cfg_value=p.voxcpm_cfg_value,
             inference_timesteps=p.voxcpm_inference_timesteps,
+            db=db,
+        )
+    if engine == "indextts":
+        from app.api.indextts import synthesize_indextts_internal
+        return synthesize_indextts_internal(
+            text=text,
+            voice_id=p.voice_id,
+            lang=p.indextts_lang,
+            emo_vector=indextts_emo_vector,
+            emo_alpha=p.indextts_emo_alpha,
+            duration_factor=p.indextts_duration_factor,
             db=db,
         )
     raise ValueError(f"Unsupported engine: {engine}")
@@ -806,6 +829,10 @@ def synthesize_segment(
         style = sp.mimo_instruction or None
     elif sp.engine == "cosyvoice":
         style = sp.instruction or None
+    # indextts 不支持文本 tag，情绪经 emo_vector 传递（neutral/未知为 None）
+    indextts_emo_vector: list[float] | None = None
+    if sp.engine == "indextts":
+        indextts_emo_vector = emo_vector_for_emotion(getattr(seg, "emotion", None))
     # 项目级全局开关（项目设置 configs.underscore_to_space / configs.skip_parenthesized）：
     # 与请求/章节参数任一开启即生效；只影响合成文本，不影响显示/字幕
     project_configs = chapter.project.configs if isinstance(chapter.project.configs, dict) else {}
@@ -825,7 +852,12 @@ def synthesize_segment(
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)
 
-    audio_bytes, _native_fmt = synthesize_with_engine(text_to_speak, sp, db=db)
+    if sp.engine == "indextts":
+        audio_bytes, _native_fmt = synthesize_with_engine(
+            text_to_speak, sp, db=db, indextts_emo_vector=indextts_emo_vector
+        )
+    else:
+        audio_bytes, _native_fmt = synthesize_with_engine(text_to_speak, sp, db=db)
     chapter_title = chapter.name or ""
     project_name = chapter.project.name
     assets.ensure_chapter_layout(

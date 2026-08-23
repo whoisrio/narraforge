@@ -1,9 +1,9 @@
 import type { RoleSnapshot, TTSResult } from '../types';
-import { mimoTtsApi, ttsApi, voxcpmApi } from './api';
+import { mimoTtsApi, ttsApi, voxcpmApi, indexttsApi } from './api';
 import { createTranslator } from '../i18n';
 
 function previewFormat(role: RoleSnapshot): 'mp3' | 'wav' {
-  return role.default_engine === 'voxcpm' ? 'wav' : 'mp3';
+  return role.default_engine === 'voxcpm' || role.default_engine === 'indextts' ? 'wav' : 'mp3';
 }
 
 export async function synthesizeVoiceRolePreview(
@@ -66,6 +66,17 @@ export async function synthesizeVoiceRolePreview(
       text: sampleText,
       voice: (params.voice_id as string) || role.default_voice || _t('voiceRolePreview.defaultMiMoVoice'),
       instruction: (params.instruction as string),
+      format,
+    });
+  }
+
+  if (engine === 'indextts') {
+    return indexttsApi.tts({
+      text: sampleText,
+      voice_id: (params.voice_id as string) || role.default_voice || '',
+      lang: (params.lang as 'ZH' | 'EN' | 'JA' | 'ES' | 'AR') ?? 'ZH',
+      emo_alpha: (params.emo_alpha as number) ?? 1.0,
+      duration_factor: (params.duration_factor as number) ?? 1.0,
       format,
     });
   }

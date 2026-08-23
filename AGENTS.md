@@ -63,6 +63,23 @@ uv run --extra test pytest -q        # Run agent tests
 The agent needs `agent/.env` with `BACKEND_API_URL`, `AGENT_LLM_API_KEY`, `AGENT_LLM_BASE_URL`, `AGENT_LLM_MODEL`.
 Optional: `LANGSMITH_API_KEY` for prompt hot-reload (falls back to code defaults).
 
+### IndexTTS-2.5 sidecar (optional, local-only)
+
+```bash
+# First time: clone + install + download weights
+git clone --depth 1 https://github.com/index-tts/index-tts.git third_party/index-tts
+cd third_party/index-tts && uv sync --extra webui     # do NOT use --all-extras (skip deepspeed/accel on Windows)
+uvx --from huggingface-hub hf download IndexTeam/IndexTTS-2.5 --local-dir checkpoints
+
+# Run the sidecar (default port 8310)
+cd third_party/index-tts && uv run ../../backend/scripts/indextts_sidecar_server.py
+# Or start it together with dev: INDEXTTS_SIDECAR=1 npm run dev
+```
+
+The sidecar lives in its own uv environment (Python 3.11 + torch 2.8 cu128) because
+index-tts requires Python <3.12 while the backend requires >=3.12 — the two cannot
+share a venv. The backend talks to it over HTTP (`INDEXTTS_SIDECAR_URL`).
+
 ### API Testing
 
 ```bash
@@ -83,9 +100,9 @@ curl http://127.0.0.1:8002/health
 
 ### Backend: FastAPI + Python 3.12+
 
-- `app/api/` — Route handlers: clone, tts, mimo_tts, text_split, speech_to_text, subtitle_llm, config, model_config, and related APIs.
+- `app/api/` — Route handlers: clone, tts, mimo_tts, indextts, text_split, speech_to_text, subtitle_llm, config, model_config, and related APIs.
 - `app/models/` — SQLAlchemy ORM models: voice_profile, tts_config, tts_result, transcription_record, system_config, segmented_project, and related models.
-- `app/services/` — Business logic: cosyvoice_service, edge_tts_service, llm_client, text_split_service, whisper_service, funasr_service, and related services.
+- `app/services/` — Business logic: cosyvoice_service, edge_tts_service, indextts_service (httpx client for the IndexTTS-2.5 sidecar), llm_client, text_split_service, whisper_service, funasr_service, and related services.
 - `app/core/` — Configuration, database setup, model_config_service, storage mode utilities, and shared core helpers.
 - Workers (Supabase) mode adds multi-user auth and isolation: `app/core/auth_middleware.py` verifies Supabase Auth JWTs (ES256, JWKS) with a stateless anonymous allowlist; `app/core/repositories/user_scope.py` enforces per-user `user_id` scoping at the repository layer (local SQLite stays single-tenant); `app/core/stats_middleware.py` collects usage stats (best-effort); admin endpoints live at `/api/admin/*` (see `docs/api-reference.md`).
 - Dependencies are managed with `uv`, not pip. Use `uv sync` or `uv pip install --python .venv/bin/python`.

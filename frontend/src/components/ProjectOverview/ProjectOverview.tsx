@@ -31,6 +31,7 @@ const ENGINE_LABELS: Record<string, string> = {
   cosyvoice: 'CosyVoice',
   mimo_tts: 'MiMo',
   voxcpm: 'VoxCPM',
+  indextts: 'IndexTTS-2.5',
 };
 
 function getChapterStatus(chapter: Chapter): ChapterStatus {
@@ -100,7 +101,7 @@ function RolePreviewButton({ role }: { role: Role }) {
       const v = role.voice as unknown as Record<string, unknown>;
       const engine = (v?.engine as string) ?? 'edge_tts';
       let voiceId = '';
-      if (engine === 'cosyvoice' || engine === 'mimo_tts' || engine === 'voxcpm') {
+      if (engine === 'cosyvoice' || engine === 'mimo_tts' || engine === 'voxcpm' || engine === 'indextts') {
         voiceId = (v as { voice_id?: string }).voice_id ?? '';
       }
 

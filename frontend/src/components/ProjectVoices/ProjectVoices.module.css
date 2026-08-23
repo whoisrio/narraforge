@@ -191,6 +191,10 @@
   background: linear-gradient(135deg, var(--color-info), var(--color-info));
 }
 
+.avatarIndextts {
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+}
+
 .avatarDefault {
   background: linear-gradient(135deg, var(--color-text-secondary), var(--color-text-secondary));
 }

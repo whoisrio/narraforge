@@ -242,6 +242,11 @@ class SynthesizeParams(BaseModel):
     voxcpm_cfg_value: float = 2.0
     voxcpm_inference_timesteps: int = 10
 
+    # IndexTTS（sidecar HTTP 调用，情绪走 emo_vector 不走文本 tag）
+    indextts_lang: str = "ZH"
+    indextts_emo_alpha: float = 1.0
+    indextts_duration_factor: float = 1.0
+
     # Context (MiMo voice design)
     context: list[dict[str, str]] | None = None
 
