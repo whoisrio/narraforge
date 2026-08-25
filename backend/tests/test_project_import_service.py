@@ -110,6 +110,25 @@ def test_import_rejects_bad_bundle_version(db_session, tmp_path, monkeypatch):
         import_project(db_session, buf.getvalue())
 
 
+def test_import_carries_segment_text_transforms(db_session, tmp_path, monkeypatch):
+    """segment.text_transforms（用户 authored 的变换记录）随导出→导入往返保留。"""
+    _build_source_project(db_session, tmp_path, monkeypatch)
+    tt = {"applied_map_ids": ["pm_x1"], "lowercase_latin": True}
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    seg.text_transforms = tt
+    db_session.commit()
+    data, _ = export_project(db_session, "p1")
+
+    detail = import_project(db_session, data)
+
+    new_seg = detail.chapters[0].segments[0]
+    assert new_seg.id != "s1"
+    assert new_seg.text_transforms == tt
+    # DB 层确认（非仅序列化）
+    orm_seg = db_session.query(SegmentedProjectSegment).filter_by(id=new_seg.id).one()
+    assert orm_seg.text_transforms == tt
+
+
 def test_import_preserves_role_and_segment_role_link(db_session, tmp_path, monkeypatch):
     _build_source_project(db_session, tmp_path, monkeypatch)
     # link segment to role

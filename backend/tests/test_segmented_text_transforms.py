@@ -49,3 +49,18 @@ def test_text_transforms_absent_defaults_to_none(db_session, tmp_path, monkeypat
     _seed(db_session, tmp_path, monkeypatch)
     detail = svc.get_project_detail(db_session, "p1")
     assert detail.chapters[0].segments[0].text_transforms is None
+
+
+def test_text_transforms_preserved_when_payload_omits(db_session, tmp_path, monkeypatch):
+    """payload 不带 text_transforms 时保留 DB 现值（与 generated_params 同语义）。"""
+    tt = {"applied_map_ids": ["pm_x1"], "lowercase_latin": True}
+    _seed(db_session, tmp_path, monkeypatch, text_transforms=tt)
+
+    # 再保存一次：payload 不含 text_transforms
+    detail = svc.get_project_detail(db_session, "p1")
+    payload = ProjectIn(**detail.model_dump())
+    payload.chapters[0].segments[0].text_transforms = None
+    svc.save_project(db_session, payload)
+
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    assert seg.text_transforms == tt
