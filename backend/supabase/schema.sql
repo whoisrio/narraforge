@@ -116,7 +116,7 @@ create table if not exists segmented_project_segments (
     constraint uq_segment_chapter_position unique (chapter_id, position)
 );
 
-create index if not exists idx_segments_chapter_id on segmented_project_segments (chapter_id);
+create index if not exists ix_segments_chapter_id on segmented_project_segments (chapter_id);
 
 -- 既有部署的增量列（create table 块已含；此处为已建表环境补列，幂等）
 alter table segmented_project_segments add column if not exists text_transforms jsonb;
