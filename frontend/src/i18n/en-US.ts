@@ -1154,6 +1154,16 @@ export const enUS: Messages = {
     skipParenthesized: 'Skip parenthesized content when synthesizing',
     skipParenthesizedHint: 'When enabled, matched pairs of parentheses (half-width () and full-width （）) and their contents are removed from the text sent to the TTS engine so they are not read aloud; display text and subtitles keep the original. Effective when either this switch or the chapter sidebar switch is on.',
   },
+  segmentSearch: {
+    placeholder: 'Search all segments…',
+    uppercaseFilter: 'Has UPPERCASE words',
+    results: 'Search results',
+    hitCount: '{count} matches',
+    noResults: 'No matches',
+    lowerFollow: 'Follow project',
+    lowerOn: 'Lowercase',
+    lowerOff: 'Keep uppercase',
+  },
   projectVoices: {
     roleSampleText: 'Hello, I am this character\'s voice. Please confirm if the tone, rhythm, and voice suit the current scene.',
     newRole: 'New Role',

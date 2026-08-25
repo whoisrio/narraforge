@@ -33,6 +33,8 @@ interface SegmentListProps {
   selectedIds?: Set<string>;
   /** Toggle a segment's multi-select state */
   onToggleSelect?: (id: string) => void;
+  /** 搜索结果跳转后闪烁高亮的段 id（父组件负责 ~1.6s 后清除） */
+  flashId?: string | null;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -99,6 +101,7 @@ export function SegmentList(props: SegmentListProps) {
   const rowProps = (seg: Segment, i: number) => ({
     segment: seg, index: i + 1, isSelected: seg.id === selectedId,
     isPlaying: seg.id === playingId, isPaused: !!(isPaused && seg.id === playingId),
+    flash: props.flashId === seg.id,
     compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine: props.engine,
     globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,

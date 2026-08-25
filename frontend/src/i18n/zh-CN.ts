@@ -1152,6 +1152,16 @@ export const zhCN = {
     skipParenthesized: '合成时忽略括号内容',
     skipParenthesizedHint: '开启后，传给 TTS 引擎的文本中成对的括号（半角 () 与全角 （））连同其中内容会被移除，不读出来；显示文本与字幕保持原文。与章节侧栏的同名开关任一开启即生效。',
   },
+  segmentSearch: {
+    placeholder: '搜索全项目片段…',
+    uppercaseFilter: '含全大写词',
+    results: '搜索结果',
+    hitCount: '{count} 处命中',
+    noResults: '无命中',
+    lowerFollow: '跟随项目',
+    lowerOn: '小写',
+    lowerOff: '保持大写',
+  },
   projectVoices: {
     roleSampleText: '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。',
     newRole: '新角色',

@@ -9,6 +9,8 @@ import { VoxCPMPanel, type VoxCPMMode } from '../components/TTSSynthesis/VoxCPMP
 import { IndexTTSPanel } from '../components/TTSSynthesis/IndexTTSPanel';
 import { TextInputPanel } from '../components/SegmentedTTS/TextInputPanel';
 import { SegmentList } from '../components/SegmentedTTS/SegmentList';
+import { SegmentSearchBar } from '../components/SegmentedTTS/SegmentSearchBar';
+import type { SegmentSearchHit } from '../hooks/useSegmentSearch';
 import { BatchSynthesizeMenu, type BatchSynthesizeMode } from '../components/SegmentedTTS/BatchSynthesizeMenu';
 import { chaptersNeedingSplit, selectProduceAllSegments, type ProduceAllRun } from '../services/produceAll';
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
@@ -33,7 +35,7 @@ import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useAuth } from '../hooks/authContext';
 import { isAuthRequired } from '../services/auth';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { applyEngineTextCleaning } from '../services/styleTags';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
@@ -187,6 +189,8 @@ export function TTSSynthesis({
   const [, setPreviewingRoleId] = useState<string | null>(null);
   const [roleLibraryOpen, setRoleLibraryOpen] = useState(false);
   const [compactMode, setCompactMode] = useState(true);
+  // 搜索结果跳转后的闪烁高亮目标段
+  const [flashSegmentId, setFlashSegmentId] = useState<string | null>(null);
   // Multi-select mode for batch operations (batch delete)
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
@@ -528,6 +532,30 @@ export function TTSSynthesis({
     const ch = project.chapters.find(c => c.id === chapterId);
     if (ch) restoreChapterSettings(ch);
   }, [project.chapters, dispatch, restoreChapterSettings]);
+
+  // 搜索结果跳转：切章节 → 选中段 → 滚动定位 + 闪烁高亮
+  const handleSearchNavigate = useCallback((hit: SegmentSearchHit) => {
+    if (hit.chapterId !== activeChapter.id) {
+      dispatch({ type: 'SELECT_CHAPTER', id: hit.chapterId });
+    }
+    dispatch({ type: 'SELECT_SEGMENT', id: hit.segmentId });
+    setFlashSegmentId(hit.segmentId);
+  }, [activeChapter.id, dispatch]);
+
+  useEffect(() => {
+    if (!flashSegmentId) return;
+    const el = document.querySelector(`[data-segment-id="${flashSegmentId}"]`);
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    const timer = setTimeout(() => setFlashSegmentId(null), 1600);
+    return () => clearTimeout(timer);
+  }, [flashSegmentId, activeChapter.id]);
+
+  // 「含全大写词」过滤器 / 编辑面板的段级小写化三态写回
+  const handleSetSegmentLowercase = useCallback((segmentId: string, value: boolean | null) => {
+    const seg = project.chapters.flatMap(c => c.segments).find(s => s.id === segmentId);
+    const prev: SegmentTextTransforms = seg?.text_transforms ?? {};
+    dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms: { ...prev, lowercase_latin: value } });
+  }, [project.chapters, dispatch]);
 
   // 每项目章节配额（免费额度，workers 模式）：backend 存储 + auth 开启 + 登录用户
   // （非管理员）+ 已达上限 → 禁用新建章节入口。管理员豁免；后端 409 兜底。
@@ -2122,6 +2150,12 @@ export function TTSSynthesis({
             />
 
             <div className={styles.sourceProductionBar} aria-label="Source Text production controls">
+              <SegmentSearchBar
+                project={project}
+                onNavigate={handleSearchNavigate}
+                onSetSegmentLowercase={handleSetSegmentLowercase}
+                projectLowercaseLatin={Boolean(project.configs?.lowercase_latin)}
+              />
               <div className={styles.productionActions}>
                 <BatchSynthesizeMenu disabled={generating} onSelect={(mode) => void handleRegenerateAll(mode)} />
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
@@ -2194,6 +2228,7 @@ export function TTSSynthesis({
                 globalMimoCloneVoiceId={mimoCloneVoiceId}
                 chapterStartOffset={effectiveTimeOffset}
                 chapterVoice={activeChapter.voice}
+                flashId={flashSegmentId}
                 selectionMode={selectionMode}
                 selectedIds={selectedSegmentIds}
                 onToggleSelect={handleToggleSelect}
