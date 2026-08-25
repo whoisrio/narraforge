@@ -17,6 +17,7 @@ class SegmentIn(BaseModel):
     voice: dict[str, Any] = Field(default_factory=lambda: {"source": "chapter"})
     generated_params: dict[str, Any] | None = None
     audio: dict[str, Any] | None = None
+    text_transforms: dict[str, Any] | None = None
     generated_at: str | None = None
     animation_spec: dict[str, Any] | None = None
     created_at: str | None = None

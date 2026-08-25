@@ -292,6 +292,7 @@ def _to_project_in(project: dict[str, Any]):
                         voice=s.get("voice") or {"source": "chapter"},
                         generated_params=s.get("generated_params"),
                         audio=s.get("audio"),
+                        text_transforms=s.get("text_transforms"),
                         animation_spec=s.get("animation_spec"),
                         created_at=s.get("created_at"),
                         updated_at=s.get("updated_at"),

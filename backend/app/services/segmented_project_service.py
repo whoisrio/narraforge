@@ -204,6 +204,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 voice=getattr(s, "voice", {}) or {"source": "chapter"},
                 generated_params=s.generated_params,
                 audio=_audio_with_file_exists(getattr(s, "audio", None)),
+                text_transforms=getattr(s, "text_transforms", None),
                 generated_at=_to_iso(s.generated_at),
                 animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
@@ -476,6 +477,8 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             setattr(seg, "voice", s_in.voice or {"source": "chapter"})
             if s_in.generated_params is not None:
                 seg.generated_params = s_in.generated_params
+            if s_in.text_transforms is not None:
+                setattr(seg, "text_transforms", s_in.text_transforms)
             if s_in.audio is not None:
                 _delete_dropped_audio_files(seg, s_in.audio)
                 setattr(seg, "audio", s_in.audio)
