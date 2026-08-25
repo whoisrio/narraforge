@@ -84,6 +84,8 @@ ANIMATION_ROOT_FOLDER_KEY = "animation_root_folder"
 
 NARRATION_GIT_REMOTE_KEY = "narration_git_remote"
 
+PRONUNCIATION_MAP_GLOBAL_KEY = "pronunciation_map_global"
+
 
 def get_narration_git_remote(db: Session) -> str | None:
     """读取 narration git 远端地址；未设置或空字符串返回 None。"""
