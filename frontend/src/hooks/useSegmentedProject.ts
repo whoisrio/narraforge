@@ -228,8 +228,7 @@ export type Action =
   | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down' }
   | { type: 'SPLIT_SEGMENT'; id: string; position: number }
   | { type: 'SELECT_SEGMENT'; id: string | undefined }
-  | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null }
-  | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
+  | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null }  | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
 export interface State { project: SegmentedProject }
 
@@ -772,7 +771,10 @@ export function segmentedReducer(state: State, action: Action): State {
     }
     case 'SET_SEGMENT_TEXT_TRANSFORMS': {
       // 跨章节按 id 更新（搜索/映射面板可作用于非活动章节的段）；
-      // updateSegmentById 找不到时原样返回（不 bump updated_at，不触发空保存）
+      // updateSegmentById 找不到时原样返回（不 bump updated_at，不触发空保存）。
+      // 清除约定：调用方写「中性 dict」（如 {applied_map_ids: []} 或
+      // {lowercase_latin: null}），不要传 null —— null 会被序列化丢键，
+      // 而后端对缺省字段是「保留现值」语义，backend 模式下清不掉。
       return { project: updateSegmentById(p, action.id, seg => ({
         ...seg,
         text_transforms: action.transforms ?? undefined,
