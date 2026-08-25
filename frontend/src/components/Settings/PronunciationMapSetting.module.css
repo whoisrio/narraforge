@@ -19,9 +19,19 @@
 .body { display: flex; flex-direction: column; gap: 8px; }
 .empty { color: var(--color-text-secondary, #666); font-size: 0.82rem; }
 
+/* 列表头：与 .row 同栅格（末列为删除按钮固定宽，保证列对齐），空列表时也展示 */
+.rowHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 24px;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #666);
+}
+
 .row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
+  /* 末列固定宽与 .rowHeader 对齐（删除按钮实测 19px + 余量） */
+  grid-template-columns: 1fr 1fr 1fr 24px;
   gap: 8px;
   align-items: center;
 }

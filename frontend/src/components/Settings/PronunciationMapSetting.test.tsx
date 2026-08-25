@@ -27,6 +27,15 @@ describe('PronunciationMapSetting', () => {
     expect(screen.getByDisplayValue('edge_tts 读错')).toBeTruthy();
   });
 
+  it('行上方有可见列表头说明三列含义', async () => {
+    render(<PronunciationMapSetting />);
+    await waitFor(() => expect(screen.getByDisplayValue('调动')).toBeTruthy());
+    // 表头为可见文本（aria-label 不计入 getByText），与行三列一一对应
+    expect(screen.getByText('映射原文')).toBeVisible();
+    expect(screen.getByText('替换为')).toBeVisible();
+    expect(screen.getByText('备注（可选）')).toBeVisible();
+  });
+
   it('新增一行并保存（id 带 gpm_ 前缀）；保存前提示影响范围', async () => {
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
     render(<PronunciationMapSetting />);

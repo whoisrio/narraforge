@@ -81,6 +81,12 @@ export function PronunciationMapSetting() {
       </header>
       <div className={styles.body}>
         {entries.length === 0 && <p className={styles.empty}>{t('settings.pronunciationMap.empty')}</p>}
+        <div className={styles.rowHeader}>
+          <span>{t('settings.pronunciationMap.source')}</span>
+          <span>{t('settings.pronunciationMap.target')}</span>
+          <span>{t('settings.pronunciationMap.note')}</span>
+          <span aria-hidden="true" />
+        </div>
         {entries.map((entry) => (
           <div key={entry.id} className={styles.row}>
             <input aria-label={t('settings.pronunciationMap.source')} value={entry.source}
