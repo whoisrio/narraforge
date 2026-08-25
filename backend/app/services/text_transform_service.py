@@ -32,13 +32,22 @@ def merge_maps(
         source = entry.get("source")
         if source:
             merged[source] = entry
+    # 输出顺序为 dict 插入序：先全局后项目；被项目覆盖的 key 保留全局时的原位。
+    # 等长重叠 source 的替换顺序依赖此顺序，前端镜像必须复现（JS 侧用同样两趟
+    # 循环写 Map 即可，Map 也是插入序）。
     return list(merged.values())
 
 
 def apply_pronunciation_map(text: str, entries: Iterable[dict[str, Any]]) -> str:
-    """按 source 长度降序做单次全量替换（不递归：target 含 source 也不循环）。
+    """按 source 长度降序逐条目做 str.replace 全量替换。
 
-    长度降序保证重叠 source（如「调动」与「调动工作」）行为确定。
+    - 单条目内不递归：某条目的 target 包含自己的 source 不会循环（replace 是单次的）。
+    - 但跨条目会链式：条目 A 的 target 若包含条目 B 的 source，且 B 排在 A 之后，
+      A 替换出的文本会被 B 再替换一次（a→b、b→c 时 "a" 最终变成 "c"）。
+    - 顺序确定：按 source 长度降序，同长度保持输入序（Python sorted 稳定排序）。
+      前端镜像必须复现同一顺序（JS Array.prototype.sort 也是稳定排序），否则
+      链式结果会分叉。
+    - 长度降序保证重叠 source（如「调动」与「调动工作」）行为确定。
     """
     ordered = sorted(entries, key=lambda e: len(e.get("source") or ""), reverse=True)
     for entry in ordered:

@@ -50,6 +50,16 @@ def test_apply_is_single_pass_not_recursive():
     assert apply_pronunciation_map("a", entries) == "aa"  # 不会循环成 aaaa...
 
 
+def test_apply_chains_across_entries_in_length_order():
+    # 跨条目链式替换（单条目内不递归）：A 的 target 含 B 的 source 时会被 B 再替换。
+    # 两侧镜像必须一致：Python sorted 与 JS Array.prototype.sort 均为稳定排序。
+    entries = [
+        {"id": "pm_a", "source": "a", "target": "b"},
+        {"id": "pm_b", "source": "b", "target": "c"},
+    ]
+    assert apply_pronunciation_map("a", entries) == "c"
+
+
 # ---- lowercase_latin_words ----
 
 def test_lowercase_mixed_text():
