@@ -2380,6 +2380,8 @@ export function TTSSynthesis({
             exportDirectory={project.configs?.export_directory ?? null}
             underscoreToSpace={project.configs?.underscore_to_space ?? null}
             skipParenthesized={project.configs?.skip_parenthesized ?? null}
+            pronunciationApplyAll={project.configs?.pronunciation_apply_all ?? null}
+            lowercaseLatin={project.configs?.lowercase_latin ?? null}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

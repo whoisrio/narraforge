@@ -1151,6 +1151,10 @@ export const zhCN = {
     underscoreToSpaceHint: '开启后，传给 TTS 引擎的文本中下划线会替换为空格（部分引擎会把下划线读出来）；显示文本与字幕保持原文。与章节侧栏的同名开关任一开启即生效。',
     skipParenthesized: '合成时忽略括号内容',
     skipParenthesizedHint: '开启后，传给 TTS 引擎的文本中成对的括号（半角 () 与全角 （））连同其中内容会被移除，不读出来；显示文本与字幕保持原文。与章节侧栏的同名开关任一开启即生效。',
+    pronunciationApplyAll: '全量应用发音映射',
+    pronunciationApplyAllHint: '开启后，生效发音字典（全局 + 项目）对所有段生效，无需在映射面板逐段勾选；不含映射原文的段不受影响。',
+    lowercaseLatin: '大写英文词转小写',
+    lowercaseLatinHint: '开启后，合成时把全大写拉丁词（如 REST API）转为小写再送引擎，避免逐字母朗读；仅影响合成语音，显示文本与字幕保持原文。段编辑面板可逐段覆盖。',
   },
   segmentSearch: {
     placeholder: '搜索全项目片段…',

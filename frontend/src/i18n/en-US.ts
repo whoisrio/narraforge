@@ -1153,6 +1153,10 @@ export const enUS: Messages = {
     underscoreToSpaceHint: 'When enabled, underscores in the text sent to the TTS engine are replaced with spaces (some engines read underscores aloud); display text and subtitles keep the original. Effective when either this switch or the chapter sidebar switch is on.',
     skipParenthesized: 'Skip parenthesized content when synthesizing',
     skipParenthesizedHint: 'When enabled, matched pairs of parentheses (half-width () and full-width （）) and their contents are removed from the text sent to the TTS engine so they are not read aloud; display text and subtitles keep the original. Effective when either this switch or the chapter sidebar switch is on.',
+    pronunciationApplyAll: 'Apply pronunciation map to all segments',
+    pronunciationApplyAllHint: 'When on, the effective pronunciation map (global + project) applies to every segment; no per-segment selection needed. Segments without a mapped word are unaffected.',
+    lowercaseLatin: 'Lowercase ALL-CAPS latin words',
+    lowercaseLatinHint: 'When on, ALL-CAPS latin words (e.g. REST API) are lowercased before synthesis to avoid letter-by-letter reading. Display text and subtitles keep the original. Per-segment override available in the segment editor.',
   },
   segmentSearch: {
     placeholder: 'Search all segments…',
