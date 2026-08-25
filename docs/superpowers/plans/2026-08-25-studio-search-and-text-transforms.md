@@ -71,7 +71,7 @@
 - Create: `backend/app/services/text_transform_service.py`
 - Test: `backend/tests/unit/test_text_transform_service.py`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `backend/tests/unit/test_text_transform_service.py`：
 
@@ -191,12 +191,12 @@ def test_empty_text_noop():
     assert apply_text_transforms("", merged_map=MAP, apply_all=True) == ""
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run --extra test pytest tests/unit/test_text_transform_service.py -q`
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.services.text_transform_service'`
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 创建 `backend/app/services/text_transform_service.py`：
 
@@ -294,12 +294,12 @@ def apply_text_transforms(
     return text
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `cd backend && uv run --extra test pytest tests/unit/test_text_transform_service.py -q`
 Expected: PASS (14 tests)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/text_transform_service.py backend/tests/unit/test_text_transform_service.py
@@ -318,7 +318,7 @@ git commit -m "feat(backend): add text_transform_service pure functions (pronunc
 - Modify: `backend/app/services/segmented_synth_workers.py:284-299`
 - Test: `backend/tests/test_segmented_text_transforms.py`（新增，本任务先只放往返测试；Task 4 继续追加）
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `backend/tests/test_segmented_text_transforms.py`：
 
@@ -376,12 +376,12 @@ def test_text_transforms_absent_defaults_to_none(db_session, tmp_path, monkeypat
     assert detail.chapters[0].segments[0].text_transforms is None
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run --extra test pytest tests/test_segmented_text_transforms.py -q`
 Expected: FAIL — `TypeError: SegmentIn.__init__() got an unexpected keyword argument 'text_transforms'`（或断言 None != dict）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `backend/app/models/segmented_project.py` — 在 `split_anchor` 行（:122）后加：
 
@@ -432,12 +432,12 @@ _P19_TEXT_TRANSFORMS_ALTER_STMTS = (
                         text_transforms=s.get("text_transforms"),
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && uv run --extra test pytest tests/test_segmented_text_transforms.py tests/test_migration_idempotency.py tests/integration/test_workers_segmented_api.py -q`
 Expected: PASS（幂等迁移测试自动覆盖新 ALTER 组）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/models/segmented_project.py backend/app/core/database.py backend/app/schemas/segmented_project.py backend/app/services/segmented_project_service.py backend/app/services/segmented_synth_workers.py backend/tests/test_segmented_text_transforms.py
@@ -453,7 +453,7 @@ git commit -m "feat(backend): persist segment text_transforms (column + schema +
 - Modify: `backend/app/api/config.py`（文件尾部追加）
 - Test: `backend/tests/test_config_pronunciation_map_api.py`（新增）
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `backend/tests/test_config_pronunciation_map_api.py`：
 
@@ -508,12 +508,12 @@ def test_put_replaces_previous(client):
     assert client.get("/api/config/pronunciation-map-global").json() == {"entries": []}
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && uv run --extra test pytest tests/test_config_pronunciation_map_api.py -q`
 Expected: FAIL — 404（路由不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `backend/app/core/system_config_service.py` — 在 `NARRATION_GIT_REMOTE_KEY`（:85）后加：
 
@@ -576,12 +576,12 @@ async def set_pronunciation_map_global_endpoint(
     return {"entries": entries}
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && uv run --extra test pytest tests/test_config_pronunciation_map_api.py tests/test_config_animation_root_api.py -q`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/core/system_config_service.py backend/app/api/config.py backend/tests/test_config_pronunciation_map_api.py
@@ -596,7 +596,7 @@ git commit -m "feat(backend): global pronunciation map config endpoints"
 - Modify: `backend/app/services/segmented_project_service.py:36-42`（import 区）、`:824-850`（文本清洗段）
 - Test: `backend/tests/test_segmented_text_transforms.py`（追加）
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 在 `backend/tests/test_segmented_text_transforms.py` 追加（文件头部 import 区补 `from app.core.system_config_service import PRONUNCIATION_MAP_GLOBAL_KEY, set_config`）：
 
@@ -743,12 +743,12 @@ def test_synth_effective_text_recorded(db_session, tmp_path, monkeypatch):
     assert seg.text == "他调动了队伍"
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd backend && uv run --extra test pytest tests/test_segmented_text_transforms.py -q`
 Expected: 新用例 FAIL（文本未变换、generated_params 无 effective_text）；Task 2 的两个往返用例仍 PASS
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/services/segmented_project_service.py`：
 
@@ -816,12 +816,12 @@ def _load_global_pronunciation_map(db: Session) -> list[dict[str, Any]]:
 
 （`sp = SynthesizeParams(**effective)` 在 :821 已构造，此处后加 key 不影响 sp；`effective` 在 :984 作为 `generated_params` 落库。）
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && uv run --extra test pytest tests/test_segmented_text_transforms.py tests/test_segmented_synthesis.py -q`
 Expected: PASS（旧合成测试全绿 = 无回归）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/segmented_project_service.py backend/tests/test_segmented_text_transforms.py
@@ -836,7 +836,7 @@ git commit -m "feat(backend): apply text transforms in local synthesize_segment 
 - Modify: `backend/app/services/segmented_synth_workers.py:13-23`（import 区）、`:124-142`（文本构造段）、`:179`（generated_params）
 - Test: `backend/tests/unit/test_segmented_synth_workers.py`（追加）
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 在 `backend/tests/unit/test_segmented_synth_workers.py` 追加：
 
@@ -926,12 +926,12 @@ async def test_synthesize_workers_preserves_text_transforms_on_save(monkeypatch)
     assert saved.chapters[0].segments[0].text_transforms == tt
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd backend && uv run --extra test pytest tests/unit/test_segmented_synth_workers.py -q`
 Expected: 3 个新用例 FAIL（`_load_global_map` 不存在 / 文本未变换）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `backend/app/services/segmented_synth_workers.py`：
 
@@ -995,12 +995,12 @@ def _load_global_map() -> list[dict[str, Any]]:
     effective["effective_text"] = text_to_speak  # 实际合成文本（随 generated_params 写回）
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd backend && uv run --extra test pytest tests/unit/test_segmented_synth_workers.py -q`
 Expected: PASS（含既有 7 个用例无回归）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/app/services/segmented_synth_workers.py backend/tests/unit/test_segmented_synth_workers.py
@@ -1016,7 +1016,7 @@ git commit -m "feat(backend): apply text transforms in workers synthesis path + 
 - Create: `frontend/src/services/textTransforms.ts`
 - Test: `frontend/src/services/textTransforms.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `frontend/src/services/textTransforms.test.ts`（用例与后端 `test_text_transform_service.py` 一一对应，作为两侧同步的共享夹具）：
 
@@ -1121,12 +1121,12 @@ describe('resolveSegmentEngineText', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/services/textTransforms.test.ts`
 Expected: FAIL（模块不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. `frontend/src/types/index.ts` — `Segment` 接口前（:470 附近）加类型：
 
@@ -1265,12 +1265,12 @@ export function resolveSegmentEngineText(
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd frontend && npx vitest run src/services/textTransforms.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/types/index.ts frontend/src/services/textTransforms.ts frontend/src/services/textTransforms.test.ts
@@ -1285,7 +1285,7 @@ git commit -m "feat(frontend): textTransforms mirror module + pronunciation/tran
 - Modify: `frontend/src/hooks/useSegmentedProject.ts:54-88`（enrichSegment）、`:180-229`（Action 联合）、`:183 + 305-319`（SET_PROJECT_META）、`:287-770`（reducer 末尾新 case）
 - Test: `frontend/src/hooks/useSegmentedProject.test.ts`（追加）
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 在 `frontend/src/hooks/useSegmentedProject.test.ts` 追加（若文件已有 `import` 则复用；所需导入：`segmentedReducer, createInitialProject, migrateV1, type State`，`type { Chapter, SegmentedProject }` from '../types'）：
 
@@ -1371,12 +1371,12 @@ describe('enrichSegment text_transforms passthrough', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/hooks/useSegmentedProject.test.ts`
 Expected: 新 describe 块 FAIL（action 类型不存在 / text_transforms 丢失）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `frontend/src/hooks/useSegmentedProject.ts`：
 
@@ -1438,12 +1438,12 @@ Expected: 新 describe 块 FAIL（action 类型不存在 / text_transforms 丢�
     }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd frontend && npx vitest run src/hooks/useSegmentedProject.test.ts`
 Expected: PASS（含既有用例无回归）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/hooks/useSegmentedProject.ts frontend/src/hooks/useSegmentedProject.test.ts
@@ -1458,7 +1458,7 @@ git commit -m "feat(frontend): reducer wiring for text_transforms + pronunciatio
 - Create: `frontend/src/hooks/useSegmentSearch.ts`
 - Test: `frontend/src/hooks/useSegmentSearch.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `frontend/src/hooks/useSegmentSearch.test.ts`：
 
@@ -1556,12 +1556,12 @@ describe('findUppercaseSegments', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/hooks/useSegmentSearch.test.ts`
 Expected: FAIL（模块不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 创建 `frontend/src/hooks/useSegmentSearch.ts`：
 
@@ -1673,12 +1673,12 @@ export function useSegmentSearch(project: SegmentedProject, query: string): Segm
 }
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd frontend && npx vitest run src/hooks/useSegmentSearch.test.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/hooks/useSegmentSearch.ts frontend/src/hooks/useSegmentSearch.test.ts
@@ -1698,7 +1698,7 @@ git commit -m "feat(frontend): project-wide segment search hook + uppercase-word
 - Modify: `frontend/src/i18n/zh-CN.ts`、`frontend/src/i18n/en-US.ts`
 - Test: `frontend/src/components/SegmentedTTS/SegmentSearchBar.test.tsx`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `frontend/src/components/SegmentedTTS/SegmentSearchBar.test.tsx`（setup 已钉 zh-CN，直接断言中文）：
 
@@ -1787,12 +1787,12 @@ describe('SegmentSearchBar', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/components/SegmentedTTS/SegmentSearchBar.test.tsx`
 Expected: FAIL（组件不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. i18n —— `zh-CN.ts` 顶层（`projectSettings` 节后）加 `segmentSearch` 节；`en-US.ts` 同步：
 
@@ -2135,12 +2135,12 @@ state 区（`const [compactMode, setCompactMode]...` 附近）加：
                 flashId={flashSegmentId}
 ```
 
-- [ ] **Step 4: Run tests + lint**
+- [x] **Step 4: Run tests + lint**
 
 Run: `cd frontend && npx vitest run src/components/SegmentedTTS/SegmentSearchBar.test.tsx src/hooks/useSegmentSearch.test.ts && npm run lint`
 Expected: PASS，lint 无新错误
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/SegmentedTTS/SegmentSearchBar.tsx frontend/src/components/SegmentedTTS/SegmentSearchBar.module.css frontend/src/components/SegmentedTTS/SegmentSearchBar.test.tsx frontend/src/components/SegmentedTTS/SegmentList.tsx frontend/src/components/SegmentedTTS/SegmentRow.tsx frontend/src/components/SegmentedTTS/SegmentRow.module.css frontend/src/pages/TTSSynthesis.tsx frontend/src/i18n/zh-CN.ts frontend/src/i18n/en-US.ts
@@ -2157,7 +2157,7 @@ git commit -m "feat(frontend): project-wide segment search bar with navigation +
 - Modify: `frontend/src/i18n/zh-CN.ts`、`frontend/src/i18n/en-US.ts`
 - Test: `frontend/src/components/ProjectSettings/ProjectSettings.test.tsx`（追加）
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 在 `ProjectSettings.test.tsx` 追加（复用文件现有 render helper 的 props 风格；若 helper 是固定 props 对象，直接扩展）：
 
@@ -2187,12 +2187,12 @@ describe('文本变换开关', () => {
 
 （`renderSettings` 为该文件现有的渲染辅助名；若实际名字不同（如内联 render），按现有测试的写法适配，断言逻辑不变。）
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/components/ProjectSettings/ProjectSettings.test.tsx`
 Expected: FAIL（label 不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. i18n —— `zh-CN.ts` 的 `projectSettings` 节（:1153 `skipParenthesizedHint` 行后）加：
 
@@ -2260,12 +2260,12 @@ en-US 对应节加：
             lowercaseLatin={project.configs?.lowercase_latin ?? null}
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `cd frontend && npx vitest run src/components/ProjectSettings src/i18n`
 Expected: PASS（含 missing-keys 守门）
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/ProjectSettings/ProjectSettings.tsx frontend/src/components/ProjectSettings/ProjectSettings.test.tsx frontend/src/pages/TTSSynthesis.tsx frontend/src/i18n/zh-CN.ts frontend/src/i18n/en-US.ts
@@ -2285,7 +2285,7 @@ git commit -m "feat(frontend): project settings toggles for pronunciation_apply_
 - Modify: `frontend/src/i18n/zh-CN.ts`、`frontend/src/i18n/en-US.ts`
 - Test: `frontend/src/components/SegmentedTTS/SegmentEditPanel.test.tsx`（新建）、`frontend/src/components/SegmentedTTS/SegmentRow.test.tsx`（新建）
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 创建 `SegmentEditPanel.test.tsx`：
 
@@ -2397,12 +2397,12 @@ describe('SegmentRow 发音映射 badge', () => {
 
 （SegmentRow props 以实际接口为准微调：若必填 prop 比上面多，按 `:9-63` 的接口补齐 noop/默认值；断言逻辑不变。）
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/components/SegmentedTTS/SegmentEditPanel.test.tsx src/components/SegmentedTTS/SegmentRow.test.tsx`
 Expected: FAIL（prop 不存在 / badge 不存在 / data 属性不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. i18n —— `zh-CN.ts` 的 `segmentEdit` 节（现有，含 `followGlobal` 等 key）加：
 
@@ -2541,12 +2541,12 @@ compact badges 区（:469-495）加同款（类名相同）。
 
 （`pronunciationPreviews` memo 在 Task 12 与全局字典 state 一起加；本任务先加一个临时 `const pronunciationPreviews = useMemo(() => ({} as Record<string, { source: string; target: string }[]>), []);` 占位，Task 12 替换为真实计算。）
 
-- [ ] **Step 4: Run tests + lint**
+- [x] **Step 4: Run tests + lint**
 
 Run: `cd frontend && npx vitest run src/components/SegmentedTTS && npm run lint`
 Expected: PASS，lint 无新错误
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/SegmentedTTS/SegmentEditPanel.tsx frontend/src/components/SegmentedTTS/SegmentEditPanel.test.tsx frontend/src/components/SegmentedTTS/SegmentList.tsx frontend/src/components/SegmentedTTS/SegmentRow.tsx frontend/src/components/SegmentedTTS/SegmentRow.module.css frontend/src/components/SegmentedTTS/SegmentRow.test.tsx frontend/src/pages/TTSSynthesis.tsx frontend/src/i18n/zh-CN.ts frontend/src/i18n/en-US.ts
@@ -2564,7 +2564,7 @@ git commit -m "feat(frontend): segment lowercase tri-state + pronunciation badge
 - Modify: `frontend/src/i18n/zh-CN.ts`、`frontend/src/i18n/en-US.ts`
 - Test: `frontend/src/components/SegmentedTTS/PronunciationMapPanel.test.tsx`（新建）
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 创建 `PronunciationMapPanel.test.tsx`：
 
@@ -2687,12 +2687,12 @@ describe('PronunciationMapPanel', () => {
 });
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `cd frontend && npx vitest run src/components/SegmentedTTS/PronunciationMapPanel.test.tsx`
 Expected: FAIL（组件不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. i18n —— `zh-CN.ts` 顶层加 `pronunciationMap` 节：
 
@@ -3129,12 +3129,12 @@ frontend 存储模式合成挂接（:1308-1317 区块）——把：
 
 （确认该区块作用域里当前段变量名是 `seg`；若实际是别的名字（如 `segment`），以现有代码为准替换。）
 
-- [ ] **Step 4: Run tests + lint**
+- [x] **Step 4: Run tests + lint**
 
 Run: `cd frontend && npx vitest run src/components/SegmentedTTS src/i18n && npm run lint && npm run build`
 Expected: PASS；lint/typecheck 无新错误
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/services/api.ts frontend/src/components/SegmentedTTS/PronunciationMapPanel.tsx frontend/src/components/SegmentedTTS/PronunciationMapPanel.module.css frontend/src/components/SegmentedTTS/PronunciationMapPanel.test.tsx frontend/src/pages/TTSSynthesis.tsx frontend/src/i18n/zh-CN.ts frontend/src/i18n/en-US.ts
@@ -3151,7 +3151,7 @@ git commit -m "feat(frontend): pronunciation map panel + global map fetch + fron
 - Modify: `frontend/src/i18n/zh-CN.ts`、`frontend/src/i18n/en-US.ts`
 - Test: `frontend/src/components/Settings/PronunciationMapSetting.test.tsx`（新建）
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 创建 `PronunciationMapSetting.test.tsx`（mock 模式照 `AnimationRootSetting.test.tsx`）：
 
@@ -3225,12 +3225,12 @@ describe('PronunciationMapSetting', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cd frontend && npx vitest run src/components/Settings/PronunciationMapSetting.test.tsx`
 Expected: FAIL（组件不存在）
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 1. i18n —— `zh-CN.ts` 的 `settings` 节加 `pronunciationMap` 子节：
 
@@ -3428,12 +3428,12 @@ export function PronunciationMapSetting() {
 
 （import 区加 `import { PronunciationMapSetting } from '../components/Settings/PronunciationMapSetting';`）
 
-- [ ] **Step 4: Run tests + lint**
+- [x] **Step 4: Run tests + lint**
 
 Run: `cd frontend && npx vitest run src/components/Settings src/i18n && npm run lint`
 Expected: PASS，lint 无新错误
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add frontend/src/components/Settings/PronunciationMapSetting.tsx frontend/src/components/Settings/PronunciationMapSetting.module.css frontend/src/components/Settings/PronunciationMapSetting.test.tsx frontend/src/pages/ModelConfig.tsx frontend/src/i18n/zh-CN.ts frontend/src/i18n/en-US.ts
@@ -3454,7 +3454,7 @@ git commit -m "feat(frontend): global pronunciation map editor on settings page"
 - 真实 edge_tts 合成，轮询 60s。
 - 双读校验：UI 操作 → API 读数据 → 关键行 DB/回显。
 
-- [ ] **Step 1: 编写 spec**
+- [x] **Step 1: 编写 spec**
 
 创建 `tests/e2e/specs/studio-text-transforms.spec.ts`：
 
@@ -3725,18 +3725,18 @@ test.describe('Studio 搜索 + 文本变换', () => {
 });
 ```
 
-- [ ] **Step 2: 运行 E2E**
+- [x] **Step 2: 运行 E2E**
 
 Run: `npx playwright test tests/e2e/specs/studio-text-transforms.spec.ts`
 Expected: 4 个用例 PASS（真实 edge_tts 合成，单用例最长 ~60s 轮询）
 
 若 UI 选择器与实现有出入（按钮文案/类名），以 Task 9-13 的实际实现为准微调 spec，不改断言语义。
 
-- [ ] **Step 3: 登记 e2e-test-guide**
+- [x] **Step 3: 登记 e2e-test-guide**
 
 `docs/e2e-test-guide.md` 的用例清单中追加一行：`studio-text-transforms.spec.ts` — Studio 全项目搜索跳转、发音映射（逐段勾选 + apply_all）、大写转小写（项目默认 + 段级三态覆盖）。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add tests/e2e/specs/studio-text-transforms.spec.ts docs/e2e-test-guide.md
@@ -3754,25 +3754,25 @@ git commit -m "test(e2e): studio search + pronunciation map + latin lowercase"
 - Modify: `backend/tests/TEST_MAP.md`
 - Modify: `docs/deployment-feature-matrix.md`
 
-- [ ] **Step 1: feature-spec.md**
+- [x] **Step 1: feature-spec.md**
 
 新增三节（Studio 章节内）：
 - **全项目搜索**：工具栏搜索框，输入即搜（大小写不敏感子串），跨章节分组结果（章节名 + 段号 + 高亮片段 + 总命中数），↑/↓/Enter/Esc 键盘导航，点击结果切章节 + 滚动定位 + 闪烁高亮；「含全大写词」快捷过滤器（`[A-Z]{2,}`），过滤器内每段带小写化三态。
 - **发音映射**：`{id, source, target, note}`；全局（`gpm_` 前缀，`/settings` 维护）+ 项目（`pm_` 前缀，Studio 发音映射面板维护）双层，同 source 项目覆盖全局；段级 `applied_map_ids` 引用（面板搜索命中段后勾选/全选，含替换后效果预览）；`configs.pronunciation_apply_all` 全量生效开关（项目设置）；合成时长度降序单次替换，只改送引擎文本；删除被引用映射时确认并清理引用，悬空 id 合成忽略；`SegmentRow` 🗣 badge。
 - **大写词转小写**：`configs.lowercase_latin` 项目默认 + `segment.text_transforms.lowercase_latin` 三态覆盖（跟随项目/开/关，SegmentEditPanel）；仅 `[A-Z]{2,}`；解析顺序段级 → 项目 → false；映射之后、`prepare_text_for_engine` 之前执行。
 
-- [ ] **Step 2: api-reference.md**
+- [x] **Step 2: api-reference.md**
 
 - 新增端点：`GET /api/config/pronunciation-map-global` → `{"entries": [{id, source, target, note?}]}`；`PUT /api/config/pronunciation-map-global`（全量替换；400 `pronunciation_source_empty` / `pronunciation_source_duplicate`）。
 - segment 对象新增 `text_transforms: {applied_map_ids?: string[], lowercase_latin?: boolean|null} | null` 字段说明；`generated_params.effective_text` 记录实际合成文本。
 
-- [ ] **Step 3: database-schema.md**
+- [x] **Step 3: database-schema.md**
 
 - `segmented_project_segments` 新增 `text_transforms JSON`（幂等迁移 P19）。
 - `system_configs` 新增 key `pronunciation_map_global`（JSON 数组字符串）。
 - `project.configs` 新增键：`pronunciation_map` / `pronunciation_apply_all` / `lowercase_latin`。
 
-- [ ] **Step 4: TEST_MAP.md**
+- [x] **Step 4: TEST_MAP.md**
 
 追加一行：
 
@@ -3780,11 +3780,11 @@ git commit -m "test(e2e): studio search + pronunciation map + latin lowercase"
 | Synthesis text transforms (pronunciation map + latin lowercase) | app/services/text_transform_service.py, app/services/segmented_project_service.py, app/services/segmented_synth_workers.py, app/api/config.py | tests/unit/test_text_transform_service.py, tests/test_segmented_text_transforms.py, tests/test_config_pronunciation_map_api.py, tests/unit/test_segmented_synth_workers.py | 纯函数 + local/workers 双路径捕获文本断言 + effective_text 记录；全局字典 API 校验 |
 ```
 
-- [ ] **Step 5: deployment-feature-matrix.md**
+- [x] **Step 5: deployment-feature-matrix.md**
 
 发音映射 / 大写转小写标注为 **A（workers-capable）**：workers 合成路径经 `system_configs`（Supabase）读全局字典，项目字典/段级引用随项目 JSON 走 PostgREST，纯函数无本地依赖。
 
-- [ ] **Step 6: 全量回归 + Commit**
+- [x] **Step 6: 全量回归 + Commit**
 
 Run: `cd backend && uv run --extra test --extra local-ml --extra local-services pytest -q && cd ../frontend && npx vitest run && npm run lint && npm run build`
 Expected: 全绿
