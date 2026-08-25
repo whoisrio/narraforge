@@ -28,6 +28,11 @@ describe('mergePronunciationMaps', () => {
     );
     expect(merged.map(e => e.id).sort()).toEqual(['gpm_1', 'pm_1']);
   });
+
+  // 对应后端 test_merge_ignores_empty_source
+  it('ignores empty-source entries', () => {
+    expect(mergePronunciationMaps([{ id: 'gpm_1', source: '', target: 'x' }], null)).toEqual([]);
+  });
 });
 
 describe('applyPronunciationMap', () => {
@@ -91,6 +96,11 @@ describe('applyTextTransforms', () => {
       applyAll: true,
       lowercaseLatin: true,
     })).toBe('这个api');
+  });
+
+  // 对应后端 test_empty_text_noop
+  it('returns empty text unchanged', () => {
+    expect(applyTextTransforms('', { mergedMap: MAP, applyAll: true })).toBe('');
   });
 });
 
