@@ -6,6 +6,7 @@ import { useCapabilities } from '../hooks/useCapabilities';
 import { useToast } from '../components/ui/useToast';
 import { AnimationRootSetting } from '../components/Settings/AnimationRootSetting';
 import { NarrationGitSetting } from '../components/Settings/NarrationGitSetting';
+import { PronunciationMapSetting } from '../components/Settings/PronunciationMapSetting';
 import styles from './ModelConfig.module.css';
 
 /** 每个 provider 对应的图标文件名（放在 frontend/public/ 下） */
@@ -278,6 +279,7 @@ export function ModelConfig() {
       </div>
 
       <AnimationRootSetting />
+      <PronunciationMapSetting />
       <NarrationGitSetting />
     </div>
   );
