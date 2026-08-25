@@ -228,7 +228,8 @@ export type Action =
   | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down' }
   | { type: 'SPLIT_SEGMENT'; id: string; position: number }
   | { type: 'SELECT_SEGMENT'; id: string | undefined }
-  | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null }  | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
+  | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null }
+  | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
 export interface State { project: SegmentedProject }
 
