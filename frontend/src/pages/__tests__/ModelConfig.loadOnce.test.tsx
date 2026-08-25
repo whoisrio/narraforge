@@ -17,6 +17,9 @@ vi.mock('../../components/Settings/AnimationRootSetting', () => ({
 vi.mock('../../components/Settings/NarrationGitSetting', () => ({
   NarrationGitSetting: () => null,
 }));
+vi.mock('../../components/Settings/PronunciationMapSetting', () => ({
+  PronunciationMapSetting: () => null,
+}));
 
 // 关键：这两个 mock 每次渲染都返回全新引用的 t/toast，模拟上下文值不稳定的
 // 病态场景（#53 ToastProvider 未 memo 时正是这样导致加载 effect 以 ~200/s

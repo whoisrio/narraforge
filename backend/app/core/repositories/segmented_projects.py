@@ -249,6 +249,7 @@ def _seg_row_to_in(row: dict) -> SegmentIn:
         voice=row.get("voice") or {"source": "chapter"},
         generated_params=row.get("generated_params"),
         audio=row.get("audio"),
+        text_transforms=row.get("text_transforms"),
         generated_at=row.get("generated_at"),
         animation_spec=_parse_animation_spec(row.get("animation_spec_json")),
         created_at=row.get("created_at"),
@@ -568,6 +569,11 @@ class SupabaseSegmentedProjectRepository(UserScope):
                         else prev_seg.get("generated_params")
                     ),
                     "audio": s_in.audio if s_in.audio is not None else prev_seg.get("audio"),
+                    "text_transforms": (
+                        s_in.text_transforms
+                        if s_in.text_transforms is not None
+                        else prev_seg.get("text_transforms")
+                    ),
                     "generated_at": s_in.generated_at,
                     "animation_spec_json": (
                         _dump_animation_spec(s_in.animation_spec)

@@ -1,4 +1,4 @@
-import type { Segment, EngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind } from '../../types';
+import type { Segment, EngineParams, VoiceProfile, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms } from '../../types';
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import { inferSpeakerName } from '../../services/segmentKindInference';
 import { useTranslation } from '../../i18n';
@@ -33,6 +33,12 @@ interface SegmentListProps {
   selectedIds?: Set<string>;
   /** Toggle a segment's multi-select state */
   onToggleSelect?: (id: string) => void;
+  /** 搜索结果跳转后闪烁高亮的段 id（父组件负责 ~1.6s 后清除） */
+  flashId?: string | null;
+  /** 每段已应用的发音映射（🗣 badge tooltip）：segmentId -> 生效条目 */
+  pronunciationPreviews?: Record<string, { source: string; target: string }[]>;
+  /** 段级合成文本变换写回（编辑面板三态） */
+  onUpdateTextTransforms?: (id: string, transforms: SegmentTextTransforms | null) => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -99,6 +105,8 @@ export function SegmentList(props: SegmentListProps) {
   const rowProps = (seg: Segment, i: number) => ({
     segment: seg, index: i + 1, isSelected: seg.id === selectedId,
     isPlaying: seg.id === playingId, isPaused: !!(isPaused && seg.id === playingId),
+    flash: props.flashId === seg.id,
+    pronunciationPreview: props.pronunciationPreviews?.[seg.id],
     compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine: props.engine,
     globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
     timeStart: timeRanges[i]?.start, timeEnd: timeRanges[i]?.end,
@@ -192,6 +200,7 @@ export function SegmentList(props: SegmentListProps) {
                   onRegenerate={props.onRegenerate}
                   onAnnotateSSML={(id) => props.onAnnotateSSML?.(id)}
                   onSplit={props.onSplit}
+                  onUpdateTextTransforms={props.onUpdateTextTransforms}
                 />
               </div>
             )}

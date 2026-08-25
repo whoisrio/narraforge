@@ -22,6 +22,7 @@
 | 管理后台统计 | `GET /api/admin/stats/overview`、`/api/admin/users`、`/api/admin/logs` | Supabase 统计表（profiles/daily_stats/operation_logs/daily_active_users）+ `increment_metric` RPC；仅 admin |
 | Try 页（/try 获客页） | 前端静态页 + `POST /api/tts/synthesize`（edge_tts）+ `GET /api/tts/edge-voices`；匿名按 IP 限流（`rate_limit_counters` 表 + `hit_rate_limit` RPC） | 纯前端 IndexedDB 存储历史，零项目持久化 |
 | 用量计量与用量页 | `GET /api/segmented-projects/{id}/usage`、`GET /api/me/usage`；前端全局 Usage 页（nav id `usage`，匿名隐藏）+ ProjectOverview 项目用量卡（仅 backend 存储项目） | `usage_events` 表（Supabase 侧带 Postgres-only `user_id` 列与索引）；TTS/LLM 事件在合成与 LLM 端点写入，LLM token 优先取 API 返回、无返回时按字符估算（`estimated=true`）；workers 匿名调用不计量，`/api/me/usage` 匿名 401 |
+| 合成时文本变换（发音映射 + 大写转小写） | `GET/PUT /api/config/pronunciation-map-global`（全局字典）；项目字典/段级引用随 `/api/segmented-projects/*` 项目 JSON 走 PostgREST；两条合成路径（local `synthesize_segment` / workers `synthesize_segment_workers`）共用 `text_transform_service.py` 纯函数 | workers 路径经 `system_configs`（Supabase `get_config(None, ...)` -> SupabaseSystemConfigRepository）读全局字典，读取失败降级空表；纯函数无本地依赖 |
 
 > workers 模式的认证语义（2026-08 起）：A 类端点中，仅匿名 allowlist
 > （`GET /health`、`GET /`、`GET /api/config/capabilities`、`GET /api/config/storage-mode`、

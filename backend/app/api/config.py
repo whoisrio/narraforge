@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import Any, List, Optional
+import json
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
@@ -22,6 +23,7 @@ from app.core.system_config_service import (
     STORAGE_MODE_FRONTEND,
     ANIMATION_ROOT_FOLDER_KEY,
     NARRATION_GIT_REMOTE_KEY,
+    PRONUNCIATION_MAP_GLOBAL_KEY,
     normalize_animation_root_folder,
     get_narration_git_remote,
 )
@@ -304,3 +306,55 @@ async def narration_git_snapshot_endpoint(db: Session = Depends(get_db)):
         "push_error": result.push_error,
         "remote_configured": bool(remote),
     }
+
+
+# ---------------------------------------------------------------------------
+# 全局发音映射字典（合成时文本替换，所有项目共享；项目字典存 project.configs）
+# ---------------------------------------------------------------------------
+
+class PronunciationMapEntryIn(BaseModel):
+    id: str           # 全局条目 gpm_ 前缀（项目条目 pm_ 前缀，两层 id 不冲突）
+    source: str
+    target: str
+    note: Optional[str] = None
+
+
+class PronunciationMapGlobalRequest(BaseModel):
+    entries: List[PronunciationMapEntryIn]
+
+
+def _validate_pronunciation_entries(entries: List[PronunciationMapEntryIn]) -> str | None:
+    """校验：source 去空白后非空，且同一字典内唯一。返回错误码或 None。"""
+    seen: set[str] = set()
+    for e in entries:
+        source = e.source.strip()
+        if not source:
+            return "pronunciation_source_empty"
+        if source in seen:
+            return "pronunciation_source_duplicate"
+        seen.add(source)
+    return None
+
+
+@router.get("/pronunciation-map-global")
+async def get_pronunciation_map_global_endpoint(
+    repo: SystemConfigRepository = Depends(get_system_config_repo),
+):
+    """读取全局发音映射字典（system_configs 里 JSON 数组字符串）。"""
+    raw = repo.get(PRONUNCIATION_MAP_GLOBAL_KEY).strip()
+    entries = json.loads(raw) if raw else []
+    return {"entries": entries}
+
+
+@router.put("/pronunciation-map-global")
+async def set_pronunciation_map_global_endpoint(
+    data: PronunciationMapGlobalRequest,
+    repo: SystemConfigRepository = Depends(get_system_config_repo),
+):
+    """全量替换全局发音映射字典。改动对所有项目生效（前端保存前提示）。"""
+    error = _validate_pronunciation_entries(data.entries)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    entries = [e.model_dump(exclude_none=True) for e in data.entries]
+    repo.set(PRONUNCIATION_MAP_GLOBAL_KEY, json.dumps(entries, ensure_ascii=False))
+    return {"entries": entries}

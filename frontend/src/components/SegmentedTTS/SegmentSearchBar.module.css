@@ -1,0 +1,36 @@
+.root { position: relative; display: flex; gap: 6px; align-items: center; margin-right: auto; }
+.input {
+  width: 220px; padding: 5px 10px; border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border, #d0d0d0); background: var(--color-bg, #fff);
+  color: var(--color-text, #222); font-size: 0.85rem;
+}
+.filterChip {
+  padding: 4px 10px; border-radius: 999px; font-size: 0.78rem; cursor: pointer;
+  border: 1px solid var(--color-border, #d0d0d0); background: transparent;
+  color: var(--color-text-secondary, #666);
+}
+.filterChipActive { background: var(--color-primary, #4a6cf7); color: #fff; border-color: transparent; }
+.results {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 40;
+  width: 420px; max-height: 320px; overflow-y: auto;
+  background: var(--color-bg, #fff); border: 1px solid var(--color-border, #d0d0d0);
+  border-radius: var(--radius-md, 10px); box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+}
+.summary { padding: 6px 12px; font-size: 0.75rem; color: var(--color-text-secondary, #666); }
+.groupName { padding: 4px 12px; font-size: 0.75rem; font-weight: 600; color: var(--color-text-secondary, #666); }
+.hit {
+  display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer;
+  font-size: 0.85rem;
+}
+.hitActive { background: var(--color-bg-hover, #f0f2ff); }
+.hitPos { color: var(--color-text-secondary, #666); font-size: 0.75rem; flex-shrink: 0; }
+.hitSnippet { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hitSnippet mark { background: #ffe58f; border-radius: 2px; }
+.hitCount { font-size: 0.72rem; color: var(--color-text-secondary, #666); }
+.lowerTri { display: flex; gap: 2px; flex-shrink: 0; }
+.lowerBtn {
+  padding: 2px 6px; font-size: 0.7rem; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--color-border, #d0d0d0); background: transparent;
+  color: var(--color-text-secondary, #666);
+}
+.lowerBtnActive { background: var(--color-primary, #4a6cf7); color: #fff; border-color: transparent; }

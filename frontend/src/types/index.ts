@@ -468,6 +468,22 @@ export interface VoiceRef {
   role_id?: string;
 }
 
+/** 发音映射条目：全局字典（gpm_ 前缀 id）与项目字典（pm_ 前缀 id）同构 */
+export interface PronunciationMapEntry {
+  id: string;
+  source: string;
+  target: string;
+  note?: string;
+}
+
+/** 段级合成文本变换记录（只存 id 引用，不存替换内容副本） */
+export interface SegmentTextTransforms {
+  /** 对该段生效的发音映射 id 列表（可跨全局/项目两层引用） */
+  applied_map_ids?: string[];
+  /** 大写词转小写：true/false 覆盖项目默认，null/缺省 = 跟随项目 */
+  lowercase_latin?: boolean | null;
+}
+
 export interface Segment {
   id: string;
   text: string;
@@ -483,6 +499,8 @@ export interface Segment {
   segment_kind: SegmentKind;
   /** 动画分镜 brief（knowledge_video 工作流经 apply-animation-spec 写入的任意字段） */
   animation_spec?: Record<string, unknown> | null;
+  /** 合成时文本变换（发音映射段级引用 + 小写化覆盖）；不影响原文/字幕 */
+  text_transforms?: SegmentTextTransforms | null;
   created_at: string;
   updated_at: string;
 
@@ -586,6 +604,12 @@ export interface SegmentedProject {
     underscore_to_space?: boolean | null;
     /** 项目级全局开关：TTS 合成时移除成对括号及其内容（不影响显示/字幕） */
     skip_parenthesized?: boolean | null;
+    /** 项目级发音映射字典（与全局字典合并，同 source 项目覆盖全局） */
+    pronunciation_map?: PronunciationMapEntry[] | null;
+    /** 无脑全局生效：整个生效字典对本项目所有段生效，无需逐段勾选 */
+    pronunciation_apply_all?: boolean | null;
+    /** 项目级默认：全大写拉丁词转小写（段级 text_transforms.lowercase_latin 可覆盖） */
+    lowercase_latin?: boolean | null;
     [key: string]: unknown;
   } | null;
   created_at: string;

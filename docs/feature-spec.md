@@ -259,7 +259,34 @@ Segments are compared against `Chapter.voice` (the applied/saved voice), NOT the
 | Export All (导出全部) | One-click export of **all chapters**' mp3 + chapter-local SRT to the project export directory (`configs.export_directory`; absolute path works without a Remotion path). Backend storage mode only. Pre-checks every chapter first: any segment missing audio aborts the whole export with a 409 listing the incomplete chapters and per-chapter `missing_counts`. The check is strict on purpose — the "export always reports incomplete" symptom was traced to a UI false-ready: segments showed ready based on DB `audio.current` alone, without verifying the mp3 exists on disk. Fix: the backend now returns `audio.current.file_exists` (stat) and the frontend marks a segment ready only when `current.path && current.file_exists !== false`, so file-lost segments drop to idle and become produce-all / unsynthesized targets. |
 | Batch delete (批量删除) | 「选择」toggle in the toolbar enters selection mode: every row (compact + expanded) gets a leading checkbox, with 全选/取消全选 and a danger 「删除选中 (N)」 button. Confirm dialog warns how many selected segments have audio; deletion removes IndexedDB blobs (frontend mode) / relies on save_project reconcile (backend mode) and dispatches one `DELETE_SEGMENTS` action. |
 
-### 4.5 Library — Doc-First Views
+#### Project-Wide Search (全项目搜索)
+
+A search box in the Studio toolbar searches across **all chapters** (pure frontend - all segment data is already in memory).
+
+- Case-insensitive substring match; results grouped by chapter with chapter name (design title preferred), segment number, highlighted snippet (16 chars of context per side, ellipsized), and total hit count.
+- Keyboard navigation: ↑/↓ move, Enter jump, Esc close. Clicking a result switches chapter, selects the segment, scrolls it into view (`data-segment-id` anchor), and flashes a highlight for ~1.6s.
+- 「含全大写词」 quick filter lists only segments containing ALL-CAPS latin words (`[A-Z]{2,}` with non-alphanumeric boundaries); in this mode each result row carries a lowercase tri-state (跟随项目 / 小写 / 保持大写) that writes `segment.text_transforms.lowercase_latin` directly.
+
+#### Pronunciation Map (发音映射)
+
+Fixes mispronunciations by replacing source text before it is sent to the TTS engine; `segment.text`, subtitles, and SRT exports always keep the original.
+
+- Entry shape `{id, source, target, note?}` in two layers: **global** (`gpm_` id prefix, edited on `/settings`, shared by all projects) and **project** (`pm_` prefix, edited in the Studio 发音映射 panel). Same-source project entries fully override global ones (including id).
+- Effective map = global ∪ project (source-keyed). Per-segment application via `segment.text_transforms.applied_map_ids` (references only, no copies): the panel lists all matching segments project-wide (via the search logic) with checkboxes, select-all, and a per-segment "after replacement" preview computed by the frontend mirror of the transform rules.
+- Project-level `configs.pronunciation_apply_all` (project settings toggle) makes the whole effective map apply to every segment with no per-segment selection.
+- At synthesis, replacements are applied longest-source-first in a single pass (no recursion); both local and workers pipelines run the same pure functions (`backend/app/services/text_transform_service.py`), and the frontend mirror (`frontend/src/services/textTransforms.ts`) covers preview + frontend-storage local synthesis. The final engine text is recorded in `generated_params.effective_text`.
+- Deleting a referenced entry asks for confirmation, then cleans up `applied_map_ids` on the referencing segments (regular auto-save); dangling ids are simply ignored at synthesis.
+- Applied segments show a 🗣 badge with count and source->target tooltip (SegmentRow).
+
+#### ALL-CAPS Latin Lowercase (大写词转小写)
+
+Avoids letter-by-letter reading of ALL-CAPS latin words (e.g. `REST API` -> `rest api`).
+
+- Project default `configs.lowercase_latin` (project settings); per-segment tri-state override `segment.text_transforms.lowercase_latin` (跟随项目 / 开 / 关) in the segment edit panel and in the search's uppercase filter.
+- Only `[A-Z]{2,}` words with non-alphanumeric boundaries are lowercased (single letters like `I`, TitleCase like `Http`, and identifiers like `HTTP2` are untouched).
+- Resolution order: segment override (non-null first) -> project default -> false. Runs after the pronunciation map and before `prepare_text_for_engine`, so map targets containing ALL-CAPS words are lowercased as well. Display text and subtitles keep the original.
+
+### 4.5 Library - Doc-First Views
 
 The Library is organized into three first-class views plus an immersive chapter editor, switched from a persistent header switcher:
 

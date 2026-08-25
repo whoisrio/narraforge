@@ -20,6 +20,9 @@ vi.mock('../../components/Settings/AnimationRootSetting', () => ({
 vi.mock('../../components/Settings/NarrationGitSetting', () => ({
   NarrationGitSetting: () => null,
 }));
+vi.mock('../../components/Settings/PronunciationMapSetting', () => ({
+  PronunciationMapSetting: () => null,
+}));
 vi.mock('../../components/ui/useToast', () => ({
   useToast: () => ({ error: vi.fn(), success: vi.fn() }),
 }));

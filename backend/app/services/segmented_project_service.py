@@ -32,6 +32,15 @@ from app.models.segmented_project import (
     SegmentedProjectSegment,
 )
 from app.services.engine_capabilities import emo_vector_for_emotion, prepare_text_for_engine
+from app.core.system_config_service import (
+    PRONUNCIATION_MAP_GLOBAL_KEY,
+    get_config,
+)
+from app.services.text_transform_service import (
+    apply_text_transforms,
+    merge_maps,
+    resolve_lowercase_latin,
+)
 from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
@@ -204,6 +213,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 voice=getattr(s, "voice", {}) or {"source": "chapter"},
                 generated_params=s.generated_params,
                 audio=_audio_with_file_exists(getattr(s, "audio", None)),
+                text_transforms=getattr(s, "text_transforms", None),
                 generated_at=_to_iso(s.generated_at),
                 animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
@@ -476,6 +486,8 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             setattr(seg, "voice", s_in.voice or {"source": "chapter"})
             if s_in.generated_params is not None:
                 seg.generated_params = s_in.generated_params
+            if s_in.text_transforms is not None:
+                setattr(seg, "text_transforms", s_in.text_transforms)
             if s_in.audio is not None:
                 _delete_dropped_audio_files(seg, s_in.audio)
                 setattr(seg, "audio", s_in.audio)
@@ -677,6 +689,22 @@ def update_segment_after_synth(
 # ----- synthesis orchestration -----
 
 
+def _load_global_pronunciation_map(db: Session) -> list[dict[str, Any]]:
+    """读取全局发音字典（system_configs.pronunciation_map_global，JSON 数组字符串）。
+
+    读取/解析失败一律返回空表（防御性：合成不能因字典损坏而失败）。
+    """
+    try:
+        raw = get_config(db, PRONUNCIATION_MAP_GLOBAL_KEY, default="[]")
+        data = json.loads(raw) if raw else []
+        if not isinstance(data, list):
+            return []
+        return [e for e in data if isinstance(e, dict)]
+    except Exception:  # noqa: BLE001
+        logger.warning("[synthesize_segment] global pronunciation map unreadable; ignored")
+        return []
+
+
 def _merge_params(*sources: dict[str, Any] | None) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for s in sources:
@@ -838,6 +866,31 @@ def synthesize_segment(
     project_configs = chapter.project.configs if isinstance(chapter.project.configs, dict) else {}
     underscore_to_space = bool(sp.underscore_to_space) or bool(project_configs.get("underscore_to_space"))
     skip_parenthesized = bool(sp.skip_parenthesized) or bool(project_configs.get("skip_parenthesized"))
+    # 合成时文本变换（发音映射 + 大写转小写）：只改送引擎文本，不改原文。
+    # 生效字典 = 全局 ∪ 项目（同 source 项目覆盖）；段级 applied_map_ids 选子集，
+    # 项目级 configs.pronunciation_apply_all 开启则全量生效；小写化解析顺序：
+    # 段级覆盖（非 None 优先）→ configs.lowercase_latin → False。
+    tt = seg.text_transforms if isinstance(getattr(seg, "text_transforms", None), dict) else {}
+    applied_ids = tt.get("applied_map_ids")
+    if not isinstance(applied_ids, list):
+        applied_ids = None
+    apply_all = bool(project_configs.get("pronunciation_apply_all"))
+    project_map = project_configs.get("pronunciation_map")
+    # 短路：apply_all 关且段无 applied_map_ids 时合并字典不可能有生效条目，
+    # 跳过全局字典的 SELECT。
+    global_map = _load_global_pronunciation_map(db) if apply_all or applied_ids else []
+    text_to_speak = apply_text_transforms(
+        text_to_speak,
+        merged_map=merge_maps(
+            global_map,
+            project_map if isinstance(project_map, list) else [],
+        ),
+        apply_all=apply_all,
+        applied_map_ids=applied_ids,
+        lowercase_latin=resolve_lowercase_latin(
+            tt.get("lowercase_latin"), project_configs.get("lowercase_latin"),
+        ),
+    )
     text_to_speak = prepare_text_for_engine(
         text_to_speak,
         engine=sp.engine,
@@ -848,6 +901,7 @@ def synthesize_segment(
         underscore_to_space=underscore_to_space,
         skip_parenthesized=skip_parenthesized,
     )
+    effective["effective_text"] = text_to_speak  # 实际合成文本（可追溯；e2e 双读断言用）
 
     if not is_ffmpeg_available():
         logger.warning("ffmpeg unavailable; writing wav fallback for segment %s", seg.id)

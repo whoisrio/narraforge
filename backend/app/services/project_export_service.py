@@ -113,6 +113,7 @@ def _segment_row(seg, files: dict[str, bytes]) -> dict:
         "segment_kind": seg.segment_kind,
         "voice": seg.voice or {},
         "generated_params": seg.generated_params,
+        "text_transforms": getattr(seg, "text_transforms", None),
         "generated_at": seg.generated_at.isoformat() if seg.generated_at else None,
         "animation_spec_json": seg.animation_spec_json,
         "audio": _rewrite_segment_audio(seg, files),
