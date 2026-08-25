@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus, IndexTTSStatus } from '../types';
+import type { VoiceProfile, TTSConfig, TTSRequest, TTSResult, TTSResultRecord, EdgeVoice, MiMoPresetVoice, ModelConfigs, LLMSplitSegmentItem, SSMLAnnotationItem, VoxCPMStatus, IndexTTSStatus, PronunciationMapEntry } from '../types';
 import { API_BASE_URL, apiUrl } from './apiBase';
 import { applyAuthInterceptors } from './auth';
 
@@ -331,6 +331,16 @@ export const configApi = {
     commit_sha: string | null; projects: number; pushed: boolean; push_error: string | null; remote_configured: boolean;
   }> => {
     const { data } = await api.post('/config/narration-git/snapshot');
+    return data;
+  },
+
+  getPronunciationMapGlobal: async (): Promise<{ entries: PronunciationMapEntry[] }> => {
+    const { data } = await api.get<{ entries: PronunciationMapEntry[] }>('/config/pronunciation-map-global');
+    return data;
+  },
+
+  setPronunciationMapGlobal: async (entries: PronunciationMapEntry[]): Promise<{ entries: PronunciationMapEntry[] }> => {
+    const { data } = await api.put<{ entries: PronunciationMapEntry[] }>('/config/pronunciation-map-global', { entries });
     return data;
   },
 };

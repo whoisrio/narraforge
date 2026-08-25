@@ -17,7 +17,7 @@ import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode, configApi } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
@@ -35,9 +35,11 @@ import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useAuth } from '../hooks/authContext';
 import { isAuthRequired } from '../services/auth';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms, PronunciationMapEntry } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { applyEngineTextCleaning } from '../services/styleTags';
+import { mergePronunciationMaps, resolveSegmentEngineText } from '../services/textTransforms';
+import { PronunciationMapPanel } from '../components/SegmentedTTS/PronunciationMapPanel';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/useToast';
 import { useConfirm } from '../components/ui/useConfirm';
@@ -191,6 +193,9 @@ export function TTSSynthesis({
   const [compactMode, setCompactMode] = useState(true);
   // 搜索结果跳转后的闪烁高亮目标段
   const [flashSegmentId, setFlashSegmentId] = useState<string | null>(null);
+  // 发音映射：全局字典（/settings 维护）与项目面板开关
+  const [globalPronunciationMap, setGlobalPronunciationMap] = useState<PronunciationMapEntry[]>([]);
+  const [pronunciationPanelOpen, setPronunciationPanelOpen] = useState(false);
   // Multi-select mode for batch operations (batch delete)
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
@@ -562,9 +567,38 @@ export function TTSSynthesis({
     dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms });
   }, [dispatch]);
 
-  // 每段已应用的发音映射预览（SegmentRow 🗣 badge）；真实计算在 Task 12 接入
-  // 全局/项目字典后补齐，先占位为空表。
-  const pronunciationPreviews = useMemo(() => ({}) as Record<string, { source: string; target: string }[]>, []);
+  // 发音映射生效字典 = 全局 ∪ 项目（同 source 项目覆盖全局）；badge 预览与
+  // frontend 存储模式合成共用（悬空 id 在 merged 里查不到，自然被滤掉）
+  const mergedPronunciationMap = useMemo(
+    () => mergePronunciationMaps(
+      globalPronunciationMap,
+      (project.configs?.pronunciation_map as PronunciationMapEntry[] | null | undefined) ?? [],
+    ),
+    [globalPronunciationMap, project.configs?.pronunciation_map],
+  );
+
+  // 每段已应用映射的 source->target（SegmentRow 🗣 badge tooltip；悬空 id 已被 filter 掉）
+  const pronunciationPreviews = useMemo(() => {
+    const out: Record<string, { source: string; target: string }[]> = {};
+    for (const ch of project.chapters) {
+      for (const seg of ch.segments) {
+        const ids = seg.text_transforms?.applied_map_ids ?? [];
+        const entries = mergedPronunciationMap.filter(e => ids.includes(e.id));
+        if (entries.length > 0) out[seg.id] = entries.map(e => ({ source: e.source, target: e.target }));
+      }
+    }
+    return out;
+  }, [project.chapters, mergedPronunciationMap]);
+
+  // 打开面板时重新拉取全局字典（/settings 可能刚改过）；失败按空表处理
+  useEffect(() => {
+    if (!pronunciationPanelOpen) return;
+    let alive = true;
+    configApi.getPronunciationMapGlobal()
+      .then(res => { if (alive) setGlobalPronunciationMap(res.entries ?? []); })
+      .catch(() => { /* 全局字典不可用时按空表处理 */ });
+    return () => { alive = false; };
+  }, [pronunciationPanelOpen]);
 
   // 每项目章节配额（免费额度，workers 模式）：backend 存储 + auth 开启 + 登录用户
   // （非管理员）+ 已达上限 → 禁用新建章节入口。管理员豁免；后端 409 兜底。
@@ -1348,7 +1382,17 @@ export function TTSSynthesis({
       // backend 存储模式由后端 synthesize_segment 做同样的 OR 兜底。
       const underscoreToSpaceEffective = Boolean(effectiveParams.underscore_to_space) || Boolean(project.configs?.underscore_to_space);
       const skipParenthesizedEffective = Boolean(effectiveParams.skip_parenthesized) || Boolean(project.configs?.skip_parenthesized);
-      const textForEngine = applyEngineTextCleaning(textToSend, {
+      // 合成时文本变换（发音映射 + 大写转小写）：backend 模式由后端合成管道执行，
+      // frontend 模式在此镜像执行（规则与后端 text_transform_service.py 一致）；
+      // 先于引擎文本清洗，只影响送引擎文本，seg.text/字幕保持原文。
+      const transformedText = resolveSegmentEngineText(textToSend, {
+        globalMap: globalPronunciationMap,
+        projectMap: (project.configs?.pronunciation_map as PronunciationMapEntry[] | null | undefined) ?? [],
+        applyAll: Boolean(project.configs?.pronunciation_apply_all),
+        segmentTransforms: seg.text_transforms ?? null,
+        projectLowercaseLatin: project.configs?.lowercase_latin ?? null,
+      });
+      const textForEngine = applyEngineTextCleaning(transformedText, {
         skipParenthesized: skipParenthesizedEffective,
         underscoreToSpace: underscoreToSpaceEffective,
       });
@@ -2199,6 +2243,13 @@ export function TTSSynthesis({
               <div className={styles.productionRight}>
                 <button
                   type="button"
+                  className={styles.toolbarPill}
+                  onClick={() => setPronunciationPanelOpen(true)}
+                >
+                  {t('pronunciationMap.title')}
+                </button>
+                <button
+                  type="button"
                   className={`${styles.toolbarPill} ${selectionMode ? styles.toolbarPillActive : ''}`}
                   onClick={handleToggleSelectionMode}
                 >
@@ -2311,6 +2362,14 @@ export function TTSSynthesis({
                   onClose={() => setExportOpen(false)}
                 />
               )}
+              <PronunciationMapPanel
+                open={pronunciationPanelOpen}
+                project={project}
+                globalMap={globalPronunciationMap}
+                onClose={() => setPronunciationPanelOpen(false)}
+                onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}
+                onSetSegmentTransforms={(id, transforms) => dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id, transforms })}
+              />
               {recordSegmentId && (() => {
                 const recordSeg = activeChapter.segments.find(s => s.id === recordSegmentId);
                 if (!recordSeg) return null;
