@@ -838,6 +838,11 @@ export const zhCN = {
     female: '女',
     male: '男',
     globalVoice: '全局音色',
+    lowercaseLatin: '大写词转小写',
+    lowercaseLatinFollow: '跟随项目',
+    lowercaseLatinOn: '开',
+    lowercaseLatinOff: '关',
+    lowercaseLatinHint: '合成时把全大写拉丁词（如 REST API）转小写，避免逐字母朗读；默认跟随项目设置。',
     emotion: {
       happy: '欣喜',
       sad: '沉重',
@@ -942,6 +947,7 @@ export const zhCN = {
       pause: '暂停',
       moveUp: '上移段落',
       moveDown: '下移段落',
+      pronunciationBadgeTooltip: '合成时应用的发音映射',
     },
     segmentRecord: {
       record: '录入',

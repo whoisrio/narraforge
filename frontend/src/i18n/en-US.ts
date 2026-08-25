@@ -840,6 +840,11 @@ export const enUS: Messages = {
     female: 'Female',
     male: 'Male',
     globalVoice: 'Global Voice',
+    lowercaseLatin: 'Lowercase ALL-CAPS words',
+    lowercaseLatinFollow: 'Follow project',
+    lowercaseLatinOn: 'On',
+    lowercaseLatinOff: 'Off',
+    lowercaseLatinHint: 'Lowercase ALL-CAPS latin words (e.g. REST API) before synthesis to avoid letter-by-letter reading; follows project setting by default.',
     emotion: {
       happy: 'Happy',
       sad: 'Sad',
@@ -944,6 +949,7 @@ export const enUS: Messages = {
       pause: 'Pause',
       moveUp: 'Move segment up',
       moveDown: 'Move segment down',
+      pronunciationBadgeTooltip: 'Pronunciation map applied at synthesis',
     },
     segmentRecord: {
       record: 'Record',

@@ -557,6 +557,15 @@ export function TTSSynthesis({
     dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms: { ...prev, lowercase_latin: value } });
   }, [project.chapters, dispatch]);
 
+  // 段级合成文本变换写回（编辑面板三态）
+  const handleUpdateTextTransforms = useCallback((segmentId: string, transforms: SegmentTextTransforms | null) => {
+    dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms });
+  }, [dispatch]);
+
+  // 每段已应用的发音映射预览（SegmentRow 🗣 badge）；真实计算在 Task 12 接入
+  // 全局/项目字典后补齐，先占位为空表。
+  const pronunciationPreviews = useMemo(() => ({}) as Record<string, { source: string; target: string }[]>, []);
+
   // 每项目章节配额（免费额度，workers 模式）：backend 存储 + auth 开启 + 登录用户
   // （非管理员）+ 已达上限 → 禁用新建章节入口。管理员豁免；后端 409 兜底。
   const addChapterBlocked = useMemo(
@@ -2229,6 +2238,8 @@ export function TTSSynthesis({
                 chapterStartOffset={effectiveTimeOffset}
                 chapterVoice={activeChapter.voice}
                 flashId={flashSegmentId}
+                pronunciationPreviews={pronunciationPreviews}
+                onUpdateTextTransforms={handleUpdateTextTransforms}
                 selectionMode={selectionMode}
                 selectedIds={selectedSegmentIds}
                 onToggleSelect={handleToggleSelect}
