@@ -12,6 +12,7 @@ local 模式不走本模块（svc 保持现状，ffmpeg 转码/trim/adjust 不�
 """
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from typing import Any
@@ -19,7 +20,16 @@ from typing import Any
 from app.core.asset_store import AssetStore
 from app.core.config import settings
 from app.core.repositories.segmented_projects import SegmentedProjectRepository
+from app.core.system_config_service import (
+    PRONUNCIATION_MAP_GLOBAL_KEY,
+    get_config,
+)
 from app.services.engine_capabilities import prepare_text_for_engine
+from app.services.text_transform_service import (
+    apply_text_transforms,
+    merge_maps,
+    resolve_lowercase_latin,
+)
 from app.schemas.segmented_project import SynthesizeParams
 
 logger = logging.getLogger(__name__)
@@ -69,6 +79,20 @@ def _find_segment(
 
 def _audio_key(project_id: str, chapter_id: str, segment_id: str, fmt: str) -> str:
     return f"{SEGMENT_AUDIO_PREFIX}/{project_id}/{chapter_id}/{segment_id}.{fmt}"
+
+
+def _load_global_map() -> list[dict[str, Any]]:
+    """读取全局发音字典（workers 模式经 Supabase system_configs；local 测试可
+    monkeypatch 本函数）。读取/解析失败一律返回空表。"""
+    try:
+        raw = get_config(None, PRONUNCIATION_MAP_GLOBAL_KEY, default="[]")
+        data = json.loads(raw) if raw else []
+        if not isinstance(data, list):
+            return []
+        return [e for e in data if isinstance(e, dict)]
+    except Exception:  # noqa: BLE001
+        logger.warning("[workers] global pronunciation map unreadable; ignored")
+        return []
 
 
 async def synthesize_segment_workers(
@@ -129,6 +153,24 @@ async def synthesize_segment_workers(
     # 风格 tag 引擎适配（与 svc 同约定）：mimo 用 instruction
     style = sp.mimo_instruction if engine == "mimo_tts" else None
     text_to_speak = text_override or seg.get("text") or ""
+    # 合成时文本变换（与 svc 同规则）：发音映射 + 大写转小写，只改送引擎文本
+    project_configs = project.get("configs") if isinstance(project.get("configs"), dict) else {}
+    tt = seg.get("text_transforms") if isinstance(seg.get("text_transforms"), dict) else {}
+    project_map = project_configs.get("pronunciation_map")
+    apply_all = bool(project_configs.get("pronunciation_apply_all"))
+    applied_ids = tt.get("applied_map_ids") if isinstance(tt.get("applied_map_ids"), list) else None
+    text_to_speak = apply_text_transforms(
+        text_to_speak,
+        merged_map=merge_maps(
+            _load_global_map() if (apply_all or applied_ids) else [],
+            project_map if isinstance(project_map, list) else [],
+        ),
+        apply_all=apply_all,
+        applied_map_ids=applied_ids,
+        lowercase_latin=resolve_lowercase_latin(
+            tt.get("lowercase_latin"), project_configs.get("lowercase_latin"),
+        ),
+    )
     text_to_speak = prepare_text_for_engine(
         text_to_speak,
         engine=engine,
@@ -140,6 +182,7 @@ async def synthesize_segment_workers(
     )
     if ssml_override:
         text_to_speak = ssml_override
+    effective["effective_text"] = text_to_speak  # 实际合成文本（随 generated_params 写回）
 
     if engine == "edge_tts":
         # edge-tts 合成（与 svc synthesize_with_engine 的 edge 分支同路径）
