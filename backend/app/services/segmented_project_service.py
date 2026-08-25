@@ -871,15 +871,22 @@ def synthesize_segment(
     # 项目级 configs.pronunciation_apply_all 开启则全量生效；小写化解析顺序：
     # 段级覆盖（非 None 优先）→ configs.lowercase_latin → False。
     tt = seg.text_transforms if isinstance(getattr(seg, "text_transforms", None), dict) else {}
+    applied_ids = tt.get("applied_map_ids")
+    if not isinstance(applied_ids, list):
+        applied_ids = None
+    apply_all = bool(project_configs.get("pronunciation_apply_all"))
     project_map = project_configs.get("pronunciation_map")
+    # 短路：apply_all 关且段无 applied_map_ids 时合并字典不可能有生效条目，
+    # 跳过全局字典的 SELECT。
+    global_map = _load_global_pronunciation_map(db) if apply_all or applied_ids else []
     text_to_speak = apply_text_transforms(
         text_to_speak,
         merged_map=merge_maps(
-            _load_global_pronunciation_map(db),
+            global_map,
             project_map if isinstance(project_map, list) else [],
         ),
-        apply_all=bool(project_configs.get("pronunciation_apply_all")),
-        applied_map_ids=tt.get("applied_map_ids"),
+        apply_all=apply_all,
+        applied_map_ids=applied_ids,
         lowercase_latin=resolve_lowercase_latin(
             tt.get("lowercase_latin"), project_configs.get("lowercase_latin"),
         ),

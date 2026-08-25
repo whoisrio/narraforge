@@ -207,3 +207,27 @@ def test_synth_effective_text_recorded(db_session, tmp_path, monkeypatch):
     assert seg.generated_params["effective_text"] == captured["text"]
     # 原文不变（显示/字幕/SRT 不受影响）
     assert seg.text == "他调动了队伍"
+
+
+def test_synth_skips_global_map_load_when_nothing_applies(db_session, tmp_path, monkeypatch):
+    _seed(db_session, tmp_path, monkeypatch, seg_text="你好")
+    with patch("app.services.segmented_project_service._load_global_pronunciation_map") as loader, patch(
+        "app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
+        "app.services.segmented_project_service.synthesize_with_engine",
+        return_value=(b"RIFF\x00\x00\x00\x00WAVEfmt ", "wav"),
+    ):
+        svc.synthesize_segment(db_session, "p1", "c1", "s1")
+    loader.assert_not_called()
+
+
+def test_synth_loads_global_map_when_apply_all(db_session, tmp_path, monkeypatch):
+    _seed(db_session, tmp_path, monkeypatch, seg_text="你好",
+          configs={"pronunciation_apply_all": True})
+    with patch("app.services.segmented_project_service._load_global_pronunciation_map",
+               return_value=[]) as loader, patch(
+        "app.services.segmented_project_service.is_ffmpeg_available", return_value=False), patch(
+        "app.services.segmented_project_service.synthesize_with_engine",
+        return_value=(b"RIFF\x00\x00\x00\x00WAVEfmt ", "wav"),
+    ):
+        svc.synthesize_segment(db_session, "p1", "c1", "s1")
+    loader.assert_called_once()
