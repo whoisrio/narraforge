@@ -44,7 +44,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs (66 tests; main app in zh-CN locale, Try page spec in en-US) |
+| `tests/e2e/specs/` | Automated browser E2E specs (71 tests; main app in zh-CN locale, Try page spec in en-US) |
 | `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
 | `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
 | `tests/e2e/global-setup.ts` | Seed data before all tests |
@@ -53,7 +53,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 ```text
 tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (66 tests)
+├── specs/                  ← Automated Playwright browser specs (71 tests)
 ├── fixtures/               ← Stable E2E input fixtures (audio, images)
 ├── helpers/                ← Shared utilities
 │   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
@@ -176,7 +176,7 @@ CSS Modules hash class names. Use partial match selectors:
 
 ## Pending E2E Coverage (Gap Analysis)
 
-All 66 current tests pass. The following scenarios are not yet covered.
+All 71 current tests pass. The following scenarios are not yet covered.
 
 **Verification standard for new tests**: Every test must verify both API and DB layers
 against their own contracts (API → `docs/api-reference.md` + Pydantic schema; DB →
@@ -196,6 +196,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G10 | **重拆保留真实 UI 路径** | S1 默认路径（不碰勾选框）重拆文档不改 → 音频全保留；S3 章节重组（加标题、文本逐字未动）→ 全局兜底保留；含 dry_run 诚实确认文案与 UI->API->DB->FS 四层验证 | `chapter-split-preserve-audio.spec.ts` | High | ✅ Done |
 | G12 | **Try 页（/try 获客页）** | SEO 静态内容、3000 字上限、真实 edge_tts 合成链路、历史记录（重复下载/删除/清空）、全部下载打包 zip、下载推荐弹窗每 5 次下载一次（页面停留计数、刷新归零）、「试用完整功能」内容接力进主应用 | `try-page.spec.ts` | High | ✅ Done |
 | G11 | **Library 文档优先 IA** | 默认落 doc 视图、形态 A 粘贴 CTA + 去源文档、拆分后留在 doc + 结果反馈跳转、源文档视图可访问、视图记忆；章节/段落逐字段 API + DB 双读 | `library-doc-first.spec.ts` | High | ✅ Done |
+| G13 | **Studio 搜索 + 合成时文本变换** | 全项目搜索跳转（切章节/定位/闪烁）、发音映射（逐段勾选 + apply_all）、大写转小写（项目默认 + 段级三态覆盖）；`generated_params.effective_text` 双读断言 | `studio-text-transforms.spec.ts` | High | ✅ Done |
 
 **Additional rules**:
 - G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;

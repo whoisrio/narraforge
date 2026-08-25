@@ -1,7 +1,9 @@
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* 与同层级手写 overlay（ExportDialog/SegmentEditDrawer）一致：侧栏 aside
+     z-index 为 260/299，模态必须在具上；F-P1-5 迁移后统一走 --z-modal */
+  z-index: 1000;
   background: rgb(0 0 0 / 0.35);
   display: flex;
   align-items: center;
