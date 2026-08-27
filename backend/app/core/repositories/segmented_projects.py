@@ -32,7 +32,9 @@ from app.core.time_utils import utcnow
 from app.core.config import settings
 from app.core.repositories.user_scope import UserScope
 from app.schemas.segmented_project import (
+    ChapterCreateIn,
     ChapterIn,
+    ChapterPatchIn,
     ProjectDetail,
     ProjectIn,
     ProjectSummary,
@@ -116,6 +118,36 @@ class SegmentedProjectRepository(Protocol):
         章节不存在（或跨用户）→ None → 路由 404。
         """
         ...
+    def create_chapter(
+        self, project_id: str, body: ChapterCreateIn,
+    ) -> tuple[ChapterIn, str] | None:
+        """新建章节（position 追加到末尾）；返回 (新章节, 项目最新 updated_at)。
+
+        项目不存在（或跨用户）→ None → 路由 404。
+        """
+        ...
+    def patch_chapter(
+        self, project_id: str, chapter_id: str, patch: ChapterPatchIn,
+    ) -> tuple[ChapterIn, str] | None:
+        """章节部分更新（name/voice/split_config/design_title，tri-state）；
+        返回 (更新后的章节, 项目最新 updated_at)。章节不存在（或跨用户）→ None → 路由 404。"""
+        ...
+    def delete_chapter(self, project_id: str, chapter_id: str) -> str | None:
+        """删章（段行级联删除，音频文件保留在盘上）；返回项目最新 updated_at。
+
+        章节不存在（或跨用户）→ None → 路由 404。
+        """
+        ...
+    def reorder_chapters(
+        self, project_id: str, chapter_ids: list[str],
+    ) -> tuple[list[dict[str, Any]], str] | None:
+        """按数组顺序重排章节 position；返回 (全章按新序的 [{id, name, position}],
+        项目最新 updated_at)。
+
+        项目不存在（或跨用户）→ None → 路由 404；chapter_ids 未恰好覆盖项目
+        全部章节 id → ValueError("chapter_ids_mismatch") → 路由 422。
+        """
+        ...
     def delete_project(self, project_id: str) -> bool: ...
     def batch_create_structure(
         self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
@@ -180,6 +212,24 @@ class LocalSegmentedProjectRepository:
         self, project_id: str, chapter_id: str, segments: list[StructureSegmentIn],
     ) -> tuple[list[SegmentIn], str] | None:
         return svc.reconcile_chapter_structure(self._db, project_id, chapter_id, segments)
+
+    def create_chapter(
+        self, project_id: str, body: ChapterCreateIn,
+    ) -> tuple[ChapterIn, str] | None:
+        return svc.create_chapter(self._db, project_id, name=body.name)
+
+    def patch_chapter(
+        self, project_id: str, chapter_id: str, patch: ChapterPatchIn,
+    ) -> tuple[ChapterIn, str] | None:
+        return svc.patch_chapter(self._db, project_id, chapter_id, patch)
+
+    def delete_chapter(self, project_id: str, chapter_id: str) -> str | None:
+        return svc.delete_chapter(self._db, project_id, chapter_id)
+
+    def reorder_chapters(
+        self, project_id: str, chapter_ids: list[str],
+    ) -> tuple[list[dict[str, Any]], str] | None:
+        return svc.reorder_chapters(self._db, project_id, chapter_ids)
 
     def delete_project(self, project_id: str) -> bool:
         return svc.delete_project(self._db, project_id)
@@ -837,6 +887,112 @@ class SupabaseSegmentedProjectRepository(UserScope):
         )
         result_rows.sort(key=lambda r: r.get("position") or 0)
         return [_seg_row_to_in(r) for r in result_rows], now
+
+    # ----- 章节操作端点（C 类） -----
+
+    def create_chapter(
+        self, project_id: str, body: ChapterCreateIn,
+    ) -> tuple[ChapterIn, str] | None:
+        """新建章节（与 svc.create_chapter 同语义）。跨用户/项目不存在 → None → 404。"""
+        if not self._owns_project(project_id):
+            return None
+        ch_rows = self._list_chapter_rows(project_id)
+        position = max((r.get("position") or 0) for r in ch_rows) + 1 if ch_rows else 0
+        now = utcnow().isoformat()
+        row: dict[str, Any] = {
+            "id": str(uuid.uuid4()),
+            "project_id": project_id,
+            "position": position,
+            "name": body.name,
+            # 默认字段对齐 svc.create_chapter_for_project 惯例
+            "voice": {},
+            "split_config": dict(_DEFAULT_SPLIT_CONFIG),
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._client.insert(CHAPTERS, [row])
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        return _ch_row_to_in(row, []), now
+
+    def patch_chapter(
+        self, project_id: str, chapter_id: str, patch: ChapterPatchIn,
+    ) -> tuple[ChapterIn, str] | None:
+        """章节部分更新（与 svc.patch_chapter 同语义）。跨用户/不存在 → None → 404。"""
+        if not self._owns_project(project_id):
+            return None
+        ch_row = self._get_chapter_row(project_id, chapter_id)
+        if ch_row is None:
+            return None
+        updates: dict[str, Any] = {}
+        fields = patch.model_fields_set
+        if "name" in fields:
+            updates["name"] = patch.name or ""
+        if "voice" in fields:
+            updates["voice"] = patch.voice or {}
+        if "split_config" in fields:
+            updates["split_config"] = patch.split_config or {}
+        if "design_title" in fields:
+            updates["design_title"] = patch.design_title
+        now = utcnow().isoformat()
+        updates["updated_at"] = now
+        self._client.update(CHAPTERS, updates, params={"id": f"eq.{chapter_id}"})
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        seg_rows = self._list_segment_rows([chapter_id])
+        return _ch_row_to_in({**ch_row, **updates}, seg_rows), now
+
+    def delete_chapter(self, project_id: str, chapter_id: str) -> str | None:
+        """删章（与 svc.delete_chapter 同语义）：段行一并删除；workers 音频在客户端
+        IndexedDB / Storage，本就不按状态 diff 清理。跨用户/不存在 → None → 404。"""
+        if not self._owns_project(project_id):
+            return None
+        ch_row = self._get_chapter_row(project_id, chapter_id)
+        if ch_row is None:
+            return None
+        self._client.delete(SEGMENTS, params={"chapter_id": f"eq.{chapter_id}"})
+        self._client.delete(CHAPTERS, params={"id": f"eq.{chapter_id}"})
+        now = utcnow().isoformat()
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        return now
+
+    def reorder_chapters(
+        self, project_id: str, chapter_ids: list[str],
+    ) -> tuple[list[dict[str, Any]], str] | None:
+        """章节重排（与 svc.reorder_chapters 同语义）。跨用户/项目不存在 → None → 404；
+        chapter_ids 未恰好覆盖全部章节 → ValueError("chapter_ids_mismatch") → 422。
+        PostgREST 无事务：先全部置负哨兵，再逐行赋终值（防 (project_id, position)
+        唯一约束冲突）。
+        """
+        if not self._owns_project(project_id):
+            return None
+        ch_rows = self._list_chapter_rows(project_id)
+        existing = {r["id"]: r for r in ch_rows}
+        if len(chapter_ids) != len(existing) or set(chapter_ids) != set(existing):
+            raise ValueError("chapter_ids_mismatch")
+        now = utcnow().isoformat()
+        # Phase 1: 负哨兵，腾出正整数位
+        for idx, row in enumerate(ch_rows):
+            self._client.update(
+                CHAPTERS, {"position": -(idx + 1)}, params={"id": f"eq.{row['id']}"}
+            )
+        # Phase 2: 按 payload 顺序赋终值
+        result: list[dict[str, Any]] = []
+        for pos, cid in enumerate(chapter_ids):
+            self._client.update(
+                CHAPTERS,
+                {"position": pos, "updated_at": now},
+                params={"id": f"eq.{cid}"},
+            )
+            result.append({"id": cid, "name": existing[cid].get("name"), "position": pos})
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        return result, now
 
     def delete_project(self, project_id: str) -> bool:
         if not self.project_exists(project_id):

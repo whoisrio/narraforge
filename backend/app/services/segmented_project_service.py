@@ -35,6 +35,7 @@ from app.services.engine_capabilities import emo_vector_for_emotion, prepare_tex
 from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
+    ChapterPatchIn,
     ProjectDetail,
     ProjectIn,
     ProjectSummary,
@@ -211,25 +212,23 @@ def _segment_to_in(s: SegmentedProjectSegment) -> SegmentIn:
     )
 
 
+def _chapter_to_in(ch: SegmentedProjectChapter) -> ChapterIn:
+    return ChapterIn(
+        id=ch.id, position=ch.position, name=ch.name,
+        voice=getattr(ch, "voice", None) or {},
+        split_config=ch.split_config or {},
+        original_text=ch.original_text,
+        narration_script=getattr(ch, "narration_script", None),
+        design_title=getattr(ch, "design_title", None),
+        audio_adjust=getattr(ch, "audio_adjust", None),
+        created_at=_to_iso(ch.created_at),
+        updated_at=_to_iso(ch.updated_at),
+        segments=[_segment_to_in(s) for s in ch.segments],
+    )
+
+
 def project_to_detail(p: SegmentedProject) -> ProjectDetail:
-    chapters = []
-    for ch in p.chapters:
-        voice = getattr(ch, "voice", None) or {}
-        segs = [_segment_to_in(s) for s in ch.segments]
-        chapters.append(
-            ChapterIn(
-                id=ch.id, position=ch.position, name=ch.name,
-                voice=voice,
-                split_config=ch.split_config or {},
-                original_text=ch.original_text,
-                narration_script=getattr(ch, "narration_script", None),
-                design_title=getattr(ch, "design_title", None),
-                audio_adjust=getattr(ch, "audio_adjust", None),
-                created_at=_to_iso(ch.created_at),
-                updated_at=_to_iso(ch.updated_at),
-                segments=segs,
-            )
-        )
+    chapters = [_chapter_to_in(ch) for ch in p.chapters]
     return ProjectDetail(
         id=p.id, name=p.name, schema_version=p.schema_version,
         layout=p.layout, active_chapter_id=p.active_chapter_id,
@@ -863,6 +862,124 @@ def reconcile_chapter_structure(
     db.commit()
     final.sort(key=lambda s: s.position)
     return [_segment_to_in(s) for s in final], _to_iso(ch.project.updated_at)
+
+
+# ----- 章节操作端点（C 类：章节 CRUD + reorder，2026-08-27 粒度重构 Phase 4） -----
+
+
+def create_chapter(
+    db: Session,
+    project_id: str,
+    *,
+    name: str,
+) -> tuple[ChapterIn, str] | None:
+    """新建章节：position 追加到项目末尾（现有最大 position + 1）。
+
+    默认字段对齐 create_chapter_for_project 惯例（voice={}、默认 split_config）。
+    返回 (新章节, 项目最新 updated_at)；项目不存在 → None。
+    """
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    position = max((c.position or 0) for c in p.chapters) + 1 if p.chapters else 0
+    now = utcnow()
+    ch = SegmentedProjectChapter(
+        id=str(uuid.uuid4()), project_id=p.id, position=position, name=name,
+        voice={},
+        split_config={"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"},
+        created_at=now, updated_at=now,
+    )
+    db.add(ch)
+    p.updated_at = now
+    db.commit()
+    db.refresh(ch)
+    return _chapter_to_in(ch), _to_iso(p.updated_at)
+
+
+def patch_chapter(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    patch: ChapterPatchIn,
+) -> tuple[ChapterIn, str] | None:
+    """章节部分更新（name/voice/split_config/design_title）：tri-state，
+    只应用请求体中出现的字段。纯字段更新，不碰段的音频。
+    返回 (更新后的章节, 项目最新 updated_at)；章节不存在 → None。
+    """
+    ch = get_chapter_row(db, project_id, chapter_id)
+    if ch is None:
+        return None
+    fields = patch.model_fields_set
+    if "name" in fields:
+        ch.name = patch.name or ""
+    if "voice" in fields:
+        ch.voice = patch.voice or {}
+    if "split_config" in fields:
+        ch.split_config = patch.split_config or {}
+    if "design_title" in fields:
+        setattr(ch, "design_title", patch.design_title)
+    now = utcnow()
+    ch.updated_at = now
+    ch.project.updated_at = now
+    db.commit()
+    db.refresh(ch)
+    return _chapter_to_in(ch), _to_iso(ch.project.updated_at)
+
+
+def delete_chapter(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+) -> str | None:
+    """删章：段行随 ORM cascade 一并删除；**音频文件保留在盘上**
+    （绝不在这里删文件，孤儿文件由显式 sweep 回收——Phase 6）。
+    返回项目最新 updated_at；章节不存在 → None。
+    """
+    ch = get_chapter_row(db, project_id, chapter_id)
+    if ch is None:
+        return None
+    p = ch.project
+    db.delete(ch)
+    p.updated_at = utcnow()
+    db.commit()
+    return _to_iso(p.updated_at)
+
+
+def reorder_chapters(
+    db: Session,
+    project_id: str,
+    chapter_ids: list[str],
+) -> tuple[list[dict[str, Any]], str] | None:
+    """按数组顺序重排章节 position（0..n-1）。
+
+    chapter_ids 必须恰好覆盖项目全部章节 id；缺/多/未知（含重复）
+    → ValueError("chapter_ids_mismatch")；项目不存在 → None。
+    position 重排沿用负哨兵两阶段手法防 uq_chapter_project_position 冲突，
+    事务内单次 commit。返回 (全章按新序的 [{id, name, position}], 项目最新 updated_at)。
+    """
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    existing = {c.id: c for c in p.chapters}
+    if len(chapter_ids) != len(existing) or set(chapter_ids) != set(existing):
+        raise ValueError("chapter_ids_mismatch")
+
+    # Phase 1: 负哨兵，腾出正整数位（与 save_project 章节重排同手法）
+    for tmp_idx, ch in enumerate(p.chapters):
+        ch.position = -(tmp_idx + 1)
+    db.flush()
+
+    # Phase 2: 按 payload 顺序赋终值
+    now = utcnow()
+    result: list[dict[str, Any]] = []
+    for pos, cid in enumerate(chapter_ids):
+        ch = existing[cid]
+        ch.position = pos
+        ch.updated_at = now
+        result.append({"id": ch.id, "name": ch.name, "position": pos})
+    p.updated_at = now
+    db.commit()
+    return result, _to_iso(p.updated_at)
 
 
 # ----- synthesis orchestration -----

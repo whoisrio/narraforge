@@ -1044,6 +1044,10 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | PUT | `/api/segmented-projects/{id}` | 全量替换（reconcile）。只更新 DB 状态，**不删除任何音频文件**——payload 中消失的路径/分片只删 DB 行，文件留盘变孤儿，由显式清理回收（陈旧快照与合成并发时不得误删资产）。乐观锁见 `base_updated_at`。**服务端自产字段保护**：已存在分片的 `audio`/`generated_params`/`generated_at` 忽略 payload 值、保留 DB 现值（仅合成/录音/adjust-audio 端点可写）；新建分片照常接收 |
 | DELETE | `/api/segmented-projects/{id}` | 删除项目 + 资产目录 |
 | POST | `/api/segmented-projects/{id}/chapters:batch` | 批量重建章节+分片（agent split_segment） |
+| POST | `/api/segmented-projects/{id}/chapters` | 新建章节（position 追加到末尾；workers 模式受章节配额约束；201 响应 `{chapter, project_updated_at}`） |
+| PATCH | `/api/segmented-projects/{id}/chapters/{cid}` | 章节部分更新（name/voice/split_config/design_title，tri-state：只更新出现的字段，显式 null = 清空；纯字段更新不碰分片音频；响应 `{chapter, project_updated_at}`） |
+| DELETE | `/api/segmented-projects/{id}/chapters/{cid}` | 删除章节（该章分片行级联删除，**音频文件保留在盘上**待 sweep；200 响应 `{project_updated_at}` 供前端推进乐观锁 base） |
+| POST | `/api/segmented-projects/{id}/chapters:reorder` | 章节重排（`chapter_ids` 须恰好覆盖项目全部章节 id，缺/多/未知 → 422 `chapter_ids_mismatch`；按数组顺序赋 position 0..n-1；响应 `{chapters: [{id, name, position}], project_updated_at}`） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` | 生成分片音频（`force` 可强制覆盖已录入音频） |
 | PATCH | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}` | 段级部分更新（text/emotion/role_id/segment_kind/voice/unlock_audio，tri-state：只更新出现的字段，显式 null = 清空；voice 变更会把旧音频降级为 previous、清空 current 但保留文件；`unlock_audio=true` 清除录音 origin 锁；audio/generated_params/generated_at 为服务端自产字段不接受写入；响应为 `{segment, project_updated_at}`，后者供前端推进乐观锁 base） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments` | 新建分片（`after_id` 锚点插入 / 缺省追加章末；响应含章内全量 position 列表 + `project_updated_at`） |
@@ -1344,6 +1348,85 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 ```
 
 **错误:** 404 `chapter_not_found`（章节或项目不存在，workers 模式跨用户同此）；422 `segment_too_long`（任一分片 text 超过 `MAX_SEGMENT_CHARS`）。
+
+### POST `/api/segmented-projects/{id}/chapters`
+
+新建章节（2026-08-27 粒度重构 Phase 4，C 类章节操作端点之一）。
+
+**Request Body:**
+```json
+{ "name": "第三章" }
+```
+
+`position` 由服务端追加到项目末尾（现有最大 position + 1）。
+新章节的默认字段对齐建章惯例：`voice={}`、`split_config={"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"}`。
+
+**Response (201):**
+```json
+{
+  "chapter": { "id": "新章节 uuid", "name": "第三章", "position": 2, "...": "ChapterIn 其余字段" },
+  "project_updated_at": "2026-08-27T06:00:00"
+}
+```
+
+`project_updated_at` 供前端推进整量 PUT 的乐观锁 base。
+
+**错误:** 404 `project_not_found`（项目不存在，workers 模式跨用户同此）；409 `chapter_limit_reached`（workers 模式章节配额，见上文配额说明；单章新增按「现有数+1」做增长式拦截）。
+
+### PATCH `/api/segmented-projects/{id}/chapters/{cid}`
+
+章节部分更新（2026-08-27 粒度重构 Phase 4，C 类章节操作端点之一）。
+
+**Request Body（全部可选，tri-state：只更新出现的字段，显式 `null` = 清空，缺省 = 不动）：**
+```json
+{
+  "name": "...", "voice": { "engine": "...", "...": "..." },
+  "split_config": { "delimiters": ["。"], "mode": "rule" }, "design_title": "..."
+}
+```
+
+纯字段更新，不触碰分片的音频等自产字段。
+
+**Response (200):** `{ "chapter": { "...": "ChapterIn" }, "project_updated_at": "服务端项目最新 updated_at" }`
+
+**错误:** 404 `chapter_not_found`（章节或项目不存在，workers 模式跨用户同此）。
+
+### DELETE `/api/segmented-projects/{id}/chapters/{cid}`
+
+删除章节（2026-08-27 粒度重构 Phase 4，C 类章节操作端点之一）。
+
+该章的分片 DB 行级联删除；**音频文件保留在盘上**（绝不在这里删文件，孤儿文件由 Phase 6 显式 sweep 统一回收）。
+
+**Response (200):** `{ "project_updated_at": "服务端项目最新 updated_at" }`（200 带体而非 204——前端需要新 base 推进乐观锁）。
+
+**错误:** 404 `chapter_not_found`（章节或项目不存在，workers 模式跨用户同此）。
+
+### POST `/api/segmented-projects/{id}/chapters:reorder`
+
+章节重排（2026-08-27 粒度重构 Phase 4，C 类章节操作端点之一）。
+
+**Request Body:**
+```json
+{ "chapter_ids": ["c-b", "c-a", "c-c"] }
+```
+
+`chapter_ids` 必须恰好覆盖项目全部章节 id（缺/多/未知/重复均拒绝），服务端按数组顺序赋 position 0..n-1。
+position 重排用「负哨兵两阶段」手法防 `(project_id, position)` 唯一约束冲突；local 模式事务内单次 commit，workers（PostgREST）先全部置负再逐行赋终值。
+
+**Response (200):**
+```json
+{
+  "chapters": [
+    { "id": "c-b", "name": "第二章", "position": 0 },
+    { "id": "c-a", "name": "第一章", "position": 1 }
+  ],
+  "project_updated_at": "2026-08-27T06:00:00"
+}
+```
+
+`chapters` 为全章按新序的 `{id, name, position}` 终态列表。
+
+**错误:** 404 `project_not_found`（项目不存在，workers 模式跨用户同此）；422 `chapter_ids_mismatch`（集合未恰好覆盖）。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize`
 

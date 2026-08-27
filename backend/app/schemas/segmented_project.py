@@ -170,6 +170,57 @@ class ChapterStructureOut(BaseModel):
     project_updated_at: str
 
 
+# ----- 章节操作（C 类：章节 CRUD + reorder） -----
+
+
+class ChapterCreateIn(BaseModel):
+    """新建章节请求（POST .../chapters）：position 追加到项目末尾。"""
+    name: str
+
+
+class ChapterPatchIn(BaseModel):
+    """章节部分更新（PATCH .../chapters/{cid}）。tri-state：仅更新请求体中
+    出现的字段（model_fields_set），显式 null = 清空，字段缺省 = 不动。
+    纯字段更新，不触碰段的音频等自产字段。
+    """
+    name: str | None = None
+    voice: dict[str, Any] | None = None
+    split_config: dict[str, Any] | None = None
+    design_title: str | None = None
+
+
+class ChapterMutationOut(BaseModel):
+    """章节新建/PATCH 响应：更新后的章节 + 项目最新 updated_at
+    （后者供前端推进乐观锁 base）。"""
+    chapter: ChapterIn
+    project_updated_at: str
+
+
+class ChapterDeleteOut(BaseModel):
+    """删章响应：只携带项目最新 updated_at（前端用它推进乐观锁 base）。
+    200 带体而非 204——前端需要新 base。"""
+    project_updated_at: str
+
+
+class ChapterReorderIn(BaseModel):
+    """章节重排请求（POST .../chapters:reorder）：chapter_ids 必须恰好覆盖
+    项目全部章节 id（缺/多/未知 → 422），按数组顺序赋 position 0..n-1。"""
+    chapter_ids: list[str] = Field(default_factory=list)
+
+
+class ChapterReorderItemOut(BaseModel):
+    """重排后单章的 {id, name, position} 终态。"""
+    id: str
+    name: str
+    position: int
+
+
+class ChapterReorderOut(BaseModel):
+    """章节重排响应：全章按新序的 {id, name, position} + 项目最新 updated_at。"""
+    chapters: list[ChapterReorderItemOut]
+    project_updated_at: str
+
+
 class ExportTextFileRequest(BaseModel):
     filename: str
     content: str

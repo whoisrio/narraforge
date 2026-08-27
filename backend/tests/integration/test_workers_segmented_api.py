@@ -351,6 +351,142 @@ class TestSegmentStructure:
         ).status_code == 404
 
 
+class TestChapterCrud:
+    """Phase 4 章节操作端点（C 类）：workers 模式走 PostgREST 的同语义实现。"""
+
+    def test_create_chapter_appends(self, workers_client):
+        client, _ = workers_client
+        _create_project(client)
+
+        resp = client.post("/api/segmented-projects/proj-1/chapters", json={"name": "第二章"})
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["chapter"]["name"] == "第二章"
+        assert body["chapter"]["position"] == 1
+        assert body["chapter"]["segments"] == []
+        assert body["chapter"]["split_config"]["mode"] == "rule"
+        assert body["project_updated_at"]
+
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        assert [c["name"] for c in detail["chapters"]] == ["第一章", "第二章"]
+        assert [c["position"] for c in detail["chapters"]] == [0, 1]
+
+    def test_patch_chapter_partial_update(self, workers_client):
+        client, _ = workers_client
+        _create_project(client)
+
+        resp = client.patch("/api/segmented-projects/proj-1/chapters/ch-1",
+                            json={"name": "改名章"})
+        assert resp.status_code == 200, resp.text
+        ch = resp.json()["chapter"]
+        assert ch["name"] == "改名章"
+        # 缺省字段不动
+        assert ch["voice"] == {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural"}
+        assert ch["split_config"] == {"delimiters": ["，", "。"], "mode": "rule"}
+
+        resp = client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1",
+            json={"design_title": "分镜标题", "voice": {"engine": "cosyvoice"}},
+        )
+        assert resp.status_code == 200
+        ch = resp.json()["chapter"]
+        assert ch["design_title"] == "分镜标题"
+        assert ch["voice"] == {"engine": "cosyvoice"}
+        assert ch["name"] == "改名章"
+
+        got = client.get("/api/segmented-projects/proj-1").json()
+        assert got["chapters"][0]["name"] == "改名章"
+        assert got["chapters"][0]["design_title"] == "分镜标题"
+
+        # 不存在 → 404
+        assert client.patch(
+            "/api/segmented-projects/proj-1/chapters/nope", json={"name": "x"}
+        ).status_code == 404
+
+    def test_delete_chapter_cascades_segments(self, workers_client):
+        client, store = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-a", 0, "A", [_segment("s-a1", 0, "甲。")]),
+            _chapter("ch-b", 1, "B", [_segment("s-b1", 0, "乙。")]),
+        ])
+
+        resp = client.delete("/api/segmented-projects/proj-1/chapters/ch-a")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["project_updated_at"]
+
+        # store 层断言：章行 + 该章段行删除，另一章不受影响
+        assert [r["id"] for r in store.tables["segmented_project_chapters"]] == ["ch-b"]
+        assert [r["id"] for r in store.tables["segmented_project_segments"]] == ["s-b1"]
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        assert [c["id"] for c in detail["chapters"]] == ["ch-b"]
+
+        assert client.delete("/api/segmented-projects/proj-1/chapters/nope").status_code == 404
+
+    def test_reorder_chapters_two_phase(self, workers_client):
+        """PostgREST 两阶段重排（先负哨兵再赋终值），交换两章顺序。"""
+        client, _ = workers_client
+        _create_project(client, chapters=[
+            _chapter("ch-a", 0, "A", []),
+            _chapter("ch-b", 1, "B", []),
+        ])
+
+        resp = client.post("/api/segmented-projects/proj-1/chapters:reorder",
+                           json={"chapter_ids": ["ch-b", "ch-a"]})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert [(c["id"], c["position"]) for c in body["chapters"]] == [("ch-b", 0), ("ch-a", 1)]
+        assert body["project_updated_at"]
+
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        assert [c["id"] for c in detail["chapters"]] == ["ch-b", "ch-a"]
+        assert [c["position"] for c in detail["chapters"]] == [0, 1]
+
+    def test_reorder_chapters_mismatch_422(self, workers_client):
+        client, _ = workers_client
+        _create_project(client, chapters=[_chapter("ch-a", 0, "A", []),
+                                          _chapter("ch-b", 1, "B", [])])
+        for bad in (["ch-a"], ["ch-a", "ch-b", "ghost"], ["ch-a", "ch-a"]):
+            resp = client.post("/api/segmented-projects/proj-1/chapters:reorder",
+                               json={"chapter_ids": bad})
+            assert resp.status_code == 422, bad
+            assert resp.json()["detail"]["code"] == "chapter_ids_mismatch"
+        # 校验失败后原序保持
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        assert [c["id"] for c in detail["chapters"]] == ["ch-a", "ch-b"]
+
+    def test_chapter_endpoints_missing_project_404(self, workers_client):
+        client, _ = workers_client
+        assert client.post("/api/segmented-projects/nope/chapters",
+                           json={"name": "x"}).status_code == 404
+        assert client.post("/api/segmented-projects/nope/chapters:reorder",
+                           json={"chapter_ids": []}).status_code == 404
+
+    def test_cross_user_404(self, workers_client):
+        """跨用户：他人项目的四个章节端点都按不存在处理（不泄露存在性）。"""
+        import httpx
+
+        from app.core.repositories import deps
+        from app.core.supabase_client import SupabaseClient
+
+        client, store = workers_client
+        _create_project(client)  # 未归属行（user_id 为 None）
+
+        sb_client = SupabaseClient(
+            "https://fake.supabase.co", "service-key",
+            transport=httpx.MockTransport(store.handle),
+        )
+        client.app.dependency_overrides[deps.get_segmented_repo] = (
+            lambda: SupabaseSegmentedProjectRepository(sb_client, owner_id="user-b")
+        )
+        assert client.post("/api/segmented-projects/proj-1/chapters",
+                           json={"name": "x"}).status_code == 404
+        assert client.patch("/api/segmented-projects/proj-1/chapters/ch-1",
+                            json={"name": "x"}).status_code == 404
+        assert client.delete("/api/segmented-projects/proj-1/chapters/ch-1").status_code == 404
+        assert client.post("/api/segmented-projects/proj-1/chapters:reorder",
+                           json={"chapter_ids": ["ch-1"]}).status_code == 404
+
+
 class TestAudioIdWrite:
     def test_segment_audio_id_round_trip(self, workers_client):
         """frontend 存储模式：音频在 IndexedDB，分段只存 audio_id 引用。"""

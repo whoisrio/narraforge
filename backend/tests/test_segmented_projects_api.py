@@ -728,3 +728,158 @@ def test_structure_reconcile_404_and_422(client, tmp_path, monkeypatch):
     )
     assert r.status_code == 422
     assert r.json()["detail"]["code"] == "segment_too_long"
+
+
+# ── 章节操作端点（2026-08-27 粒度重构 Phase 4）──
+
+
+def test_create_chapter_appends_and_reads_back(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    created = client.post("/api/segmented-projects", json=_payload("p1"))
+    assert created.status_code == 201, created.text
+    old_updated_at = created.json()["updated_at"]
+
+    r = client.post("/api/segmented-projects/p1/chapters", json={"name": "第二章"})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["chapter"]["name"] == "第二章"
+    assert body["chapter"]["position"] == 1
+    assert body["chapter"]["segments"] == []
+    assert body["chapter"]["split_config"]["mode"] == "rule"
+    assert body["project_updated_at"] != old_updated_at
+
+    got = client.get("/api/segmented-projects/p1").json()
+    assert [c["name"] for c in got["chapters"]] == ["第一章", "第二章"]
+    assert [c["position"] for c in got["chapters"]] == [0, 1]
+
+
+def test_create_chapter_404_on_missing_project(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    r = client.post("/api/segmented-projects/nope/chapters", json={"name": "x"})
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "project_not_found"
+
+
+def test_patch_chapter_partial_update(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    created = client.post("/api/segmented-projects", json=_payload("p1"))
+    assert created.status_code == 201, created.text
+    old_updated_at = created.json()["updated_at"]
+
+    r = client.patch("/api/segmented-projects/p1/chapters/c1", json={"name": "改名章"})
+    assert r.status_code == 200, r.text
+    ch = r.json()["chapter"]
+    assert ch["name"] == "改名章"
+    assert ch["voice"] == {"engine": "edge_tts", "voice_id": "v1"}  # 缺省字段不动
+    assert ch["split_config"] == {"delimiters": ["。"], "mode": "rule"}
+    assert r.json()["project_updated_at"] != old_updated_at
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1",
+        json={"design_title": "分镜标题", "voice": {"engine": "cosyvoice"}},
+    )
+    assert r.status_code == 200
+    ch = r.json()["chapter"]
+    assert ch["design_title"] == "分镜标题"
+    assert ch["voice"] == {"engine": "cosyvoice"}
+    assert ch["name"] == "改名章"  # 上轮结果保持
+
+    # 显式 null 清空 design_title
+    r = client.patch("/api/segmented-projects/p1/chapters/c1", json={"design_title": None})
+    assert r.status_code == 200
+    assert r.json()["chapter"]["design_title"] is None
+
+    # GET 回读一致
+    got = client.get("/api/segmented-projects/p1").json()
+    assert got["chapters"][0]["name"] == "改名章"
+    assert got["chapters"][0]["voice"] == {"engine": "cosyvoice"}
+
+
+def test_patch_chapter_404_on_missing(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    r = client.patch("/api/segmented-projects/p1/chapters/nope", json={"name": "x"})
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "chapter_not_found"
+    assert client.patch(
+        "/api/segmented-projects/nope/chapters/c1", json={"name": "x"}
+    ).status_code == 404
+
+
+def test_delete_chapter_cascades_segments_and_returns_base(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"].append({
+        "id": "c2", "position": 1, "name": "第二章", "engine": "edge_tts",
+        "voice": {"engine": "edge_tts"},
+        "split_config": {"delimiters": ["。"], "mode": "rule"},
+        "segments": [{"id": "s2", "position": 0, "text": "二", "voice": {"source": "chapter"}}],
+    })
+    created = client.post("/api/segmented-projects", json=payload)
+    assert created.status_code == 201, created.text
+    old_updated_at = created.json()["updated_at"]
+
+    r = client.delete("/api/segmented-projects/p1/chapters/c1")
+    assert r.status_code == 200, r.text
+    assert r.json()["project_updated_at"] != old_updated_at
+
+    got = client.get("/api/segmented-projects/p1").json()
+    assert [c["id"] for c in got["chapters"]] == ["c2"]
+    # 该章段行级联删除；其余章节不受影响
+    assert got["chapters"][0]["segments"][0]["id"] == "s2"
+
+
+def test_delete_chapter_404_on_missing(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    assert client.delete("/api/segmented-projects/p1/chapters/nope").status_code == 404
+    assert client.delete("/api/segmented-projects/nope/chapters/c1").status_code == 404
+
+
+def test_reorder_chapters_endpoint(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"].append({
+        "id": "c2", "position": 1, "name": "第二章", "engine": "edge_tts",
+        "voice": {"engine": "edge_tts"},
+        "split_config": {"delimiters": ["。"], "mode": "rule"},
+        "segments": [],
+    })
+    created = client.post("/api/segmented-projects", json=payload)
+    assert created.status_code == 201, created.text
+    old_updated_at = created.json()["updated_at"]
+
+    r = client.post("/api/segmented-projects/p1/chapters:reorder",
+                    json={"chapter_ids": ["c2", "c1"]})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [(c["id"], c["position"]) for c in body["chapters"]] == [("c2", 0), ("c1", 1)]
+    assert body["project_updated_at"] != old_updated_at
+
+    got = client.get("/api/segmented-projects/p1").json()
+    assert [c["id"] for c in got["chapters"]] == ["c2", "c1"]
+    assert [c["position"] for c in got["chapters"]] == [0, 1]
+
+
+def test_reorder_chapters_422_on_mismatch(client, tmp_path, monkeypatch):
+    """缺/多/未知/重复 id → 422 chapter_ids_mismatch。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+
+    for bad in ([], ["c1", "ghost"], ["c1", "c1"]):
+        r = client.post("/api/segmented-projects/p1/chapters:reorder",
+                        json={"chapter_ids": bad})
+        assert r.status_code == 422, bad
+        assert r.json()["detail"]["code"] == "chapter_ids_mismatch"
+
+    # 校验失败后原序保持
+    got = client.get("/api/segmented-projects/p1").json()
+    assert [c["id"] for c in got["chapters"]] == ["c1"]
+
+
+def test_reorder_chapters_404_on_missing_project(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    r = client.post("/api/segmented-projects/nope/chapters:reorder",
+                    json={"chapter_ids": []})
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "project_not_found"

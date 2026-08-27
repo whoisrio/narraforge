@@ -859,3 +859,178 @@ def test_structure_reconcile_bumps_chapter_and_project_updated_at(db_session, tm
     assert ch_after > ch_before
     assert proj_after > proj_before
     assert project_updated_at == _to_iso(proj_after)
+
+
+# ── 章节操作端点 service（2026-08-27 粒度重构 Phase 4）──
+
+from app.schemas.segmented_project import ChapterPatchIn
+from app.services.segmented_project_service import (
+    create_chapter,
+    patch_chapter,
+    delete_chapter,
+    reorder_chapters,
+)
+
+
+def test_create_chapter_appends_position_and_defaults(db_session, tmp_path, monkeypatch):
+    """建章追加到末尾（现有最大 position + 1），默认字段对齐建章惯例
+    （voice={}、默认 split_config），项目 updated_at 推进。"""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    detail = save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+
+    result = create_chapter(db_session, "p1", name="第三章")
+    assert result is not None
+    ch_in, project_updated_at = result
+    assert ch_in.name == "第三章"
+    assert ch_in.position == 2
+    assert ch_in.id  # 服务端 uuid4
+    assert ch_in.voice == {}
+    assert ch_in.split_config == {"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"}
+    assert ch_in.segments == []
+    assert project_updated_at != detail.updated_at
+
+    db_session.expire_all()
+    rows = (
+        db_session.query(SegmentedProjectChapter)
+        .filter_by(project_id="p1").order_by(SegmentedProjectChapter.position).all()
+    )
+    assert [c.id for c in rows] == ["c-a-p1", "c-b-p1", ch_in.id]
+    assert [c.position for c in rows] == [0, 1, 2]
+
+
+def test_create_chapter_missing_project_returns_none(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert create_chapter(db_session, "p-nope", name="x") is None
+
+
+def test_patch_chapter_partial_update_leaves_others_untouched(db_session, tmp_path, monkeypatch):
+    """tri-state：只更新出现的字段；缺省字段（voice/split_config/design_title）不动。"""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+
+    ch_in, project_updated_at = patch_chapter(
+        db_session, "p1", "c-a-p1", ChapterPatchIn(name="甲章（改）"),
+    )
+    assert ch_in.name == "甲章（改）"
+    assert ch_in.voice == {"engine": "edge_tts"}  # 缺省不动
+    assert ch_in.split_config == {"delimiters": ["。"], "mode": "rule"}
+    assert ch_in.design_title is None
+    assert project_updated_at
+
+    # voice / split_config / design_title 可各自独立更新；显式 null 清空 design_title
+    ch_in, _ = patch_chapter(
+        db_session, "p1", "c-a-p1",
+        ChapterPatchIn(voice={"engine": "cosyvoice", "voice_id": "v9"},
+                       design_title="分镜标题"),
+    )
+    assert ch_in.name == "甲章（改）"  # 上轮结果保持
+    assert ch_in.voice == {"engine": "cosyvoice", "voice_id": "v9"}
+    assert ch_in.design_title == "分镜标题"
+    ch_in, _ = patch_chapter(db_session, "p1", "c-a-p1", ChapterPatchIn(design_title=None))
+    assert ch_in.design_title is None
+
+    db_session.expire_all()
+    row = db_session.query(SegmentedProjectChapter).filter_by(id="c-a-p1").one()
+    assert row.name == "甲章（改）"
+    assert row.voice == {"engine": "cosyvoice", "voice_id": "v9"}
+    assert row.design_title is None
+    # 其他章节不受影响
+    other = db_session.query(SegmentedProjectChapter).filter_by(id="c-b-p1").one()
+    assert other.name == "B"
+
+
+def test_patch_chapter_missing_returns_none(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+    assert patch_chapter(db_session, "p1", "c-nope", ChapterPatchIn(name="x")) is None
+    assert patch_chapter(db_session, "p-nope", "c-a-p1", ChapterPatchIn(name="x")) is None
+
+
+def test_delete_chapter_cascades_segments_but_keeps_audio_files(db_session, tmp_path, monkeypatch):
+    """删章：段行级联删除，**音频文件保留在盘上**（Phase 6 sweep 回收），
+    项目 updated_at 推进。"""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    detail = save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+
+    audio_file = tmp_path / "p1/chapters/c-a-p1/audio/s-a1-p1.mp3"
+    audio_file.parent.mkdir(parents=True, exist_ok=True)
+    audio_file.write_bytes(b"fake-mp3")
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-a1-p1").one()
+    seg.audio = {"current": {"path": "p1/chapters/c-a-p1/audio/s-a1-p1.mp3", "format": "mp3"}}
+    db_session.commit()
+
+    project_updated_at = delete_chapter(db_session, "p1", "c-a-p1")
+    assert project_updated_at is not None
+    assert project_updated_at != detail.updated_at
+
+    db_session.expire_all()
+    assert db_session.query(SegmentedProjectChapter).filter_by(id="c-a-p1").first() is None
+    assert db_session.query(SegmentedProjectSegment).filter_by(chapter_id="c-a-p1").count() == 0
+    assert audio_file.exists()  # 文件保留，绝不在这里删
+    # 其余章节不受影响
+    assert db_session.query(SegmentedProjectChapter).filter_by(id="c-b-p1").one().name == "B"
+    assert db_session.query(SegmentedProjectSegment).filter_by(chapter_id="c-b-p1").count() == 2
+
+
+def test_delete_chapter_missing_returns_none(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+    assert delete_chapter(db_session, "p1", "c-nope") is None
+    assert delete_chapter(db_session, "p-nope", "c-a-p1") is None
+
+
+def test_reorder_chapters_swaps_positions(db_session, tmp_path, monkeypatch):
+    """交换重排：负哨兵两阶段防 uq_chapter_project_position 唯一约束冲突。"""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    detail = save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+
+    result, project_updated_at = reorder_chapters(db_session, "p1", ["c-b-p1", "c-a-p1"])
+    assert [(c["id"], c["position"]) for c in result] == [("c-b-p1", 0), ("c-a-p1", 1)]
+    assert [c["name"] for c in result] == ["B", "A"]
+    assert project_updated_at != detail.updated_at
+
+    db_session.expire_all()
+    rows = (
+        db_session.query(SegmentedProjectChapter)
+        .filter_by(project_id="p1").order_by(SegmentedProjectChapter.position).all()
+    )
+    assert [c.id for c in rows] == ["c-b-p1", "c-a-p1"]
+    assert [c.position for c in rows] == [0, 1]
+    # GET 回读一致
+    assert [c.id for c in get_project_detail(db_session, "p1").chapters] == ["c-b-p1", "c-a-p1"]
+
+
+def test_reorder_chapters_mismatch_raises(db_session, tmp_path, monkeypatch):
+    """chapter_ids 缺/多/未知/重复 → ValueError（路由映射 422 chapter_ids_mismatch）。"""
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_two_chapter_project())
+    db_session.commit()
+
+    # 校验在任何写操作之前抛出，无需 rollback
+    for bad in (["c-a-p1"], ["c-a-p1", "c-b-p1", "c-ghost"],
+                ["c-a-p1", "c-a-p1"], ["c-a-p1", "c-ghost"], []):
+        with pytest.raises(ValueError, match="chapter_ids_mismatch"):
+            reorder_chapters(db_session, "p1", bad)
+
+    # 校验失败后原序保持
+    assert [c.id for c in get_project_detail(db_session, "p1").chapters] == ["c-a-p1", "c-b-p1"]
+
+
+def test_reorder_chapters_missing_project_returns_none(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert reorder_chapters(db_session, "p-nope", []) is None

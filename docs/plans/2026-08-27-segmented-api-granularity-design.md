@@ -144,7 +144,7 @@
 | 1（已完成） | 大 PUT 乐观锁 + 自产字段忽略 + 前端 409 恢复 | ✅ 已实现并通过测试，待提交 |
 | 2（已完成） | 段内容 PATCH + 前端切换（reducer touch 透传 + useSegmentPatchSync 段级防抖 + APPLY_SERVER_SEGMENT 回写 + noteServerVersion 推进 base） | ✅ 已实现并通过测试，待提交 |
 | 3 | 段结构端点（新建 + structure reconcile） | ✅ 已实现并通过测试，待提交 |
-| 4 | 章节 CRUD + reorder | ✅ |
+| 4（已完成） | 章节 CRUD + reorder | ✅ 已实现并通过测试，待提交 |
 | 5 | 项目 PATCH + 文档 PUT | ✅ |
 | 6 | 孤儿文件 sweep（脚本或管理端点，dry-run 默认） | ✅ |
 | 7 | 清理：reducer 冗余 action、draftSync 瘦身、docs/e2e 更新 | — |

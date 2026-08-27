@@ -44,6 +44,12 @@ from app.schemas.segmented_project import (
     AnimationSpecItem,
     ApplyAnimationSpecRequest,
     ApplyAnimationSpecResult,
+    ChapterCreateIn,
+    ChapterDeleteOut,
+    ChapterMutationOut,
+    ChapterPatchIn,
+    ChapterReorderIn,
+    ChapterReorderOut,
     ChapterStructureIn,
     ChapterStructureOut,
     ExportTextFileRequest,
@@ -361,6 +367,105 @@ async def reconcile_chapter_structure(
         raise HTTPException(status_code=404, detail="chapter_not_found")
     segments, project_updated_at = result
     return ChapterStructureOut(segments=segments, project_updated_at=project_updated_at)
+
+
+# ----- 章节操作端点（C 类：章节 CRUD + reorder，2026-08-27 粒度重构 Phase 4） -----
+# 注意：chapters:reorder / chapters:batch 是字面量路径段（两节路径），
+# 与 chapters/{chapter_id}（三节路径）无匹配冲突；仍保持注册在前以防遮蔽。
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters",
+    response_model=ChapterMutationOut,
+    status_code=201,
+)
+async def create_chapter(
+    project_id: str,
+    body: ChapterCreateIn,
+    request: Request,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """新建章节：position 追加到项目末尾。
+
+    workers 模式受章节配额约束（单章新增按「现有数+1」做增长式拦截）。
+    响应携带新章节与项目最新 updated_at（供前端推进乐观锁 base）。
+    """
+    _reject_scratchpad(project_id)
+    _enforce_chapter_quota(request, repo, project_id, repo.count_chapters(project_id) + 1)
+    result = repo.create_chapter(project_id, body)
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    chapter, project_updated_at = result
+    return ChapterMutationOut(chapter=chapter, project_updated_at=project_updated_at)
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters:reorder",
+    response_model=ChapterReorderOut,
+)
+async def reorder_chapters(
+    project_id: str,
+    body: ChapterReorderIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """章节重排：chapter_ids 按数组顺序赋 position 0..n-1。
+
+    chapter_ids 必须恰好覆盖项目全部章节 id（缺/多/未知 → 422
+    chapter_ids_mismatch）。position 重排用「负哨兵两阶段」手法防
+    (project_id, position) 唯一约束冲突。
+    """
+    _reject_scratchpad(project_id)
+    try:
+        result = repo.reorder_chapters(project_id, body.chapter_ids)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="chapter_ids_mismatch")
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    chapters, project_updated_at = result
+    return ChapterReorderOut(chapters=chapters, project_updated_at=project_updated_at)
+
+
+@router.patch(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}",
+    response_model=ChapterMutationOut,
+)
+async def patch_chapter(
+    project_id: str,
+    chapter_id: str,
+    body: ChapterPatchIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """章节部分更新（name/voice/split_config/design_title）。
+
+    tri-state：只更新请求体中出现的字段，显式 null = 清空。
+    纯字段更新，不触碰段的音频等自产字段。
+    """
+    _reject_scratchpad(project_id)
+    result = repo.patch_chapter(project_id, chapter_id, body)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    chapter, project_updated_at = result
+    return ChapterMutationOut(chapter=chapter, project_updated_at=project_updated_at)
+
+
+@router.delete(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}",
+    response_model=ChapterDeleteOut,
+)
+async def delete_chapter(
+    project_id: str,
+    chapter_id: str,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """删章：该章段行级联删除，**音频文件保留在盘上**（Phase 6 sweep 统一回收）。
+
+    200 带体（非 204）：响应携带项目最新 updated_at，供前端推进乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    project_updated_at = repo.delete_chapter(project_id, chapter_id)
+    if project_updated_at is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    return ChapterDeleteOut(project_updated_at=project_updated_at)
 
 
 @router.post(
