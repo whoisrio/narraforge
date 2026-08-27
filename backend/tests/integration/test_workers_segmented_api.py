@@ -835,6 +835,7 @@ class TestLocalOnlyEndpointsNotMounted:
             ("post", "/api/segmented-projects/p/export-text-file-to-remotion",
              {"json": {"filename": "a.txt", "content": "x"}}),
             ("post", "/api/segmented-projects/p/scaffold-remotion", {"json": {}}),
+            ("post", "/api/segmented-projects/sweep-orphan-audio", {"json": {}}),
         ]
         for method, url, kwargs in cases:
             resp = getattr(client, method)(url, **kwargs)

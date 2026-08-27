@@ -1219,3 +1219,134 @@ def test_put_project_document_missing_project_returns_none(db_session, tmp_path,
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     assert put_source_document(db_session, "p-nope", "x") is None
     assert put_narration_script(db_session, "p-nope", "x") is None
+
+
+# ----- 孤儿音频文件 sweep（粒度重构 Phase 6） -----
+
+
+def _plant_segment_audio(
+    db_session, pid: str, seg_id: str, *, prefix: str,
+    current: str | None, previous: str | None = None,
+) -> None:
+    """把段行挂上音频引用（current/previous 为 segmented_dir 相对路径）。"""
+    audio: dict = {}
+    if current:
+        audio["current"] = {"path": current, "format": "mp3"}
+    if previous:
+        audio["previous"] = {"path": previous, "format": "mp3"}
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id=seg_id).one()
+    seg.audio = audio or None
+    db_session.commit()
+
+
+def test_sweep_orphan_audio_dry_run_reports_but_keeps_files(db_session, tmp_path, monkeypatch):
+    """dry-run 默认：只报告，不删任何文件。引用文件（current/previous/.prev）
+    绝不上报；孤儿 mp3/wav 上报；.txt 镜像等非音频不动。"""
+    from app.core import config
+    from app.services.segmented_project_service import sweep_orphan_audio
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+    prefix = project_dir("p1", "Test").name
+
+    segs_dir = project_dir("p1", "Test") / "chapters" / "c-p1" / "segments"
+    segs_dir.mkdir(parents=True, exist_ok=True)
+    # 被引用：current + previous（.prev.mp3 命名惯例）
+    (segs_dir / "s-p1.mp3").write_bytes(b"cur")
+    (segs_dir / "s-p1.prev.mp3").write_bytes(b"prev")
+    _plant_segment_audio(
+        db_session, "p1", "s-p1",
+        prefix=prefix,
+        current=f"{prefix}/chapters/c-p1/segments/s-p1.mp3",
+        previous=f"{prefix}/chapters/c-p1/segments/s-p1.prev.mp3",
+    )
+    # 孤儿：段已删/无引用的音频 + 文本镜像
+    (segs_dir / "s-ghost.mp3").write_bytes(b"orphan-1")
+    (segs_dir / "s-ghost.wav").write_bytes(b"orphan-2")
+    (segs_dir / "s-ghost.txt").write_text("text mirror", encoding="utf-8")
+    # 别的章目录下的孤儿（删章遗留）
+    other = project_dir("p1", "Test") / "chapters" / "c-deleted" / "segments"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / "s-x.mp3").write_bytes(b"orphan-3")
+
+    report = sweep_orphan_audio(db_session, execute=False)
+    assert report["dry_run"] is True
+    got = {o["path"] for o in report["orphans"]}
+    assert got == {
+        f"{prefix}/chapters/c-p1/segments/s-ghost.mp3",
+        f"{prefix}/chapters/c-p1/segments/s-ghost.wav",
+        f"{prefix}/chapters/c-deleted/segments/s-x.mp3",
+    }
+    assert report["total_count"] == 3
+    assert report["total_size_bytes"] == len(b"orphan-1") + len(b"orphan-2") + len(b"orphan-3")
+    # dry-run 不删文件
+    assert (segs_dir / "s-ghost.mp3").exists()
+    assert (other / "s-x.mp3").exists()
+    assert "deleted_count" not in report or report["deleted_count"] == 0
+
+
+def test_sweep_orphan_audio_execute_deletes_orphans_only(db_session, tmp_path, monkeypatch):
+    """execute=True：删孤儿文件，引用文件（含 previous）与非音频文件保留。"""
+    from app.core import config
+    from app.services.segmented_project_service import sweep_orphan_audio
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+    prefix = project_dir("p1", "Test").name
+
+    segs_dir = project_dir("p1", "Test") / "chapters" / "c-p1" / "segments"
+    segs_dir.mkdir(parents=True, exist_ok=True)
+    (segs_dir / "s-p1.mp3").write_bytes(b"cur")
+    (segs_dir / "s-p1.prev.mp3").write_bytes(b"prev")
+    _plant_segment_audio(
+        db_session, "p1", "s-p1", prefix=prefix,
+        current=f"{prefix}/chapters/c-p1/segments/s-p1.mp3",
+        previous=f"{prefix}/chapters/c-p1/segments/s-p1.prev.mp3",
+    )
+    (segs_dir / "s-ghost.mp3").write_bytes(b"orphan")
+    (segs_dir / "s-ghost.txt").write_text("mirror", encoding="utf-8")
+
+    report = sweep_orphan_audio(db_session, execute=True)
+    assert report["dry_run"] is False
+    assert report["deleted_count"] == 1
+    # 孤儿已删；引用与非音频保留
+    assert not (segs_dir / "s-ghost.mp3").exists()
+    assert (segs_dir / "s-p1.mp3").exists()
+    assert (segs_dir / "s-p1.prev.mp3").exists()
+    assert (segs_dir / "s-ghost.txt").exists()
+
+
+def test_sweep_orphan_audio_absolute_referenced_path_kept(db_session, tmp_path, monkeypatch):
+    """引用路径为绝对路径（adjust-audio 等历史写入）时同样视为被引用。"""
+    from app.core import config
+    from app.services.segmented_project_service import sweep_orphan_audio
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+
+    segs_dir = project_dir("p1", "Test") / "chapters" / "c-p1" / "segments"
+    segs_dir.mkdir(parents=True, exist_ok=True)
+    abs_path = segs_dir / "s-p1.mp3"
+    abs_path.write_bytes(b"cur")
+    _plant_segment_audio(db_session, "p1", "s-p1", prefix="", current=str(abs_path))
+
+    report = sweep_orphan_audio(db_session, execute=True)
+    assert report["deleted_count"] == 0
+    assert abs_path.exists()
+
+
+def test_sweep_orphan_audio_empty_and_missing_root(db_session, tmp_path, monkeypatch):
+    """无孤儿时报告为空；segmented_dir 不存在时不炸。"""
+    from app.core import config
+    from app.services.segmented_project_service import sweep_orphan_audio
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_project())
+    db_session.commit()
+
+    report = sweep_orphan_audio(db_session, execute=True)
+    assert report["total_count"] == 0
+    assert report["orphans"] == []
+
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path / "nope-root")
+    report = sweep_orphan_audio(db_session, execute=False)
+    assert report["total_count"] == 0

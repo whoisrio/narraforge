@@ -1011,3 +1011,52 @@ def test_document_put_404_and_scratchpad(client, tmp_path, monkeypatch):
                       json={"text": "x"}).status_code == 403
     assert client.put("/api/segmented-projects/__scratchpad__/narration-script",
                       json={"text": "x"}).status_code == 403
+
+
+# ----- 孤儿音频文件 sweep（粒度重构 Phase 6，local-only） -----
+
+
+def test_sweep_orphan_audio_endpoint_dry_run_default(client, db_session, tmp_path, monkeypatch):
+    """POST /segmented-projects/sweep-orphan-audio：缺省 dry-run 只报告；
+    execute=true 才删。"""
+    from app.models.segmented_project import SegmentedProjectSegment
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p-sw")).status_code == 201
+    from app.core.segmented_assets import project_dir
+    prefix = project_dir("p-sw", "Test").name
+    segs_dir = project_dir("p-sw", "Test") / "chapters" / "c1" / "segments"
+    segs_dir.mkdir(parents=True, exist_ok=True)
+    (segs_dir / "s1.mp3").write_bytes(b"cur")
+    (segs_dir / "s-ghost.mp3").write_bytes(b"orphan")
+    # 把 s1.mp3 挂上引用（服务端自产字段，只能直写 DB）
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    seg.audio = {"current": {"path": f"{prefix}/chapters/c1/segments/s1.mp3",
+                             "format": "mp3"}}
+    db_session.commit()
+
+    # 干跑（缺省）
+    r = client.post("/api/segmented-projects/sweep-orphan-audio", json={})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["dry_run"] is True
+    assert len(body["orphans"]) == 1
+    assert body["orphans"][0]["path"].endswith("s-ghost.mp3")
+    assert body["orphans"][0]["size_bytes"] == len(b"orphan")
+    assert body["total_count"] == 1
+    assert (segs_dir / "s-ghost.mp3").exists()  # 未删
+
+    # 明确 dry-run
+    r = client.post("/api/segmented-projects/sweep-orphan-audio",
+                    json={"execute": False})
+    assert r.status_code == 200
+    assert r.json()["dry_run"] is True
+
+    # 执行
+    r = client.post("/api/segmented-projects/sweep-orphan-audio",
+                    json={"execute": True})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["dry_run"] is False
+    assert body["deleted_count"] == 1
+    assert not (segs_dir / "s-ghost.mp3").exists()
+    assert (segs_dir / "s1.mp3").exists()  # 引用文件保留

@@ -71,6 +71,8 @@ from app.schemas.segmented_project import (
     SplitRequest,
     SplitResponse,
     StalePayloadError,
+    SweepOrphanAudioOut,
+    SweepOrphanAudioRequest,
     SynthesizeSegmentRequest,
 )
 from app.core.time_utils import utcnow
@@ -1040,6 +1042,28 @@ async def split_chapter(
 
 
 # ----- migration (local-only: 音频 blob 落盘；workers 固定 frontend 存储，用不到) -----
+
+
+@local_router.post(
+    "/segmented-projects/sweep-orphan-audio",
+    response_model=SweepOrphanAudioOut,
+)
+def sweep_orphan_audio_endpoint(
+    body: SweepOrphanAudioRequest,
+    db: Session = Depends(get_db),
+):
+    """孤儿音频文件 sweep（粒度重构 Phase 6，local-only）。
+
+    自 Phase 0 起文件删除只由显式意图触发（删段/删章只删 DB 行、音频留盘），
+    孤儿文件由此端点统一回收。**dry-run 默认**：缺省只报告孤儿清单（路径为
+    segmented_dir 相对路径 + 字节数）；``execute=true`` 才真正删除。判据：
+    文件位于段级音频布局（``*/chapters/*/segments/*.mp3|wav``）且未被任何段
+    的 ``audio.current``/``audio.previous`` 引用；非音频文件（.txt 镜像等）
+    绝不在扫描范围。
+    """
+    result = svc.sweep_orphan_audio(db, execute=body.execute)
+    return SweepOrphanAudioOut(**result)
+
 
 @local_router.post("/segmented-projects/migrate", response_model=MigrateResponse)
 def migrate(request: MigrateRequest, db: Session = Depends(get_db)):

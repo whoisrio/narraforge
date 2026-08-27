@@ -250,6 +250,27 @@ class DocumentPutOut(BaseModel):
     project_updated_at: str
 
 
+class SweepOrphanAudioRequest(BaseModel):
+    """孤儿音频 sweep 请求：缺省 dry-run（只报告不删）；``execute=true`` 才真正
+    删除（粒度重构 Phase 6 的唯一显式文件回收入口，local-only）。"""
+    execute: bool = False
+
+
+class SweepOrphanItem(BaseModel):
+    """单个孤儿文件报告项（path 为 segmented_dir 相对路径）。"""
+    path: str
+    size_bytes: int
+
+
+class SweepOrphanAudioOut(BaseModel):
+    """sweep 响应：孤儿清单 + 汇总；execute=true 时 deleted_count 为实际删除数。"""
+    dry_run: bool
+    orphans: list[SweepOrphanItem]
+    total_count: int
+    total_size_bytes: int
+    deleted_count: int = 0
+
+
 class ExportTextFileRequest(BaseModel):
     filename: str
     content: str

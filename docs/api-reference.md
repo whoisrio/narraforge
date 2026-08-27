@@ -1071,6 +1071,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | GET | `/api/segmented-projects/{id}/export` | 导出项目为自包含 ZIP 包（文本+角色+音色+音频） |
 | POST | `/api/segmented-projects/import` | 从 ZIP 包导入为新项目（ID 重映射，不覆盖） |
 | POST | `/api/segmented-projects/migrate` | 批量迁移 IndexedDB 项目 |
+| POST | `/api/segmented-projects/sweep-orphan-audio` | 孤儿音频文件 sweep（local-only；**dry-run 默认**只报告 `*/chapters/*/segments/*.mp3\|wav` 中未被任何段 audio.current/previous 引用的文件，`execute=true` 才真正删除；响应 `{dry_run, orphans: [{path, size_bytes}], total_count, total_size_bytes, deleted_count}`） |
 
 > **多用户配额（workers 模式）**：普通登录用户名下项目数达到 `MAX_PROJECTS_PER_USER`（默认 `1`）后，POST 创建 / PUT 新建（upsert 到不存在的 id）返回 `409 project_limit_reached`；更新已有项目不受限。legacy admin（旧凭证通道）与 `ADMIN_EMAILS` 管理员豁免。local 模式不启用。
 >
@@ -1789,6 +1790,34 @@ Layer-sync Phase B：把 L3 分段文本的改动定位合并回写 L2。
   ]
 }
 ```
+
+### POST `/api/segmented-projects/sweep-orphan-audio`
+
+孤儿音频文件 sweep（2026-08-27 粒度重构 Phase 6；local-only，workers 模式不挂载）。
+
+自 Phase 0 起文件删除只由显式意图触发（删段/删章/重拆只删 DB 行，音频文件留盘），孤儿文件由此端点统一回收。
+
+**Request Body:**
+```json
+{ "execute": false }
+```
+
+**dry-run 默认**（缺省或 `execute=false`）：只报告不删；`execute=true` 才真正 unlink。
+
+判据：文件位于段级音频固定布局 `{slug}/chapters/{chapter-id}/segments/*.{mp3,wav}`（含 `.prev` 变体），且未被任何段行的 `audio.current`/`audio.previous` 引用（相对/绝对路径均可）。非音频文件（`.txt` 镜像、manifest、文档）绝不在扫描范围。
+
+**Response (200):**
+```json
+{
+  "dry_run": true,
+  "orphans": [{ "path": "slug/chapters/c1/segments/s-ghost.mp3", "size_bytes": 12345 }],
+  "total_count": 1,
+  "total_size_bytes": 12345,
+  "deleted_count": 0
+}
+```
+
+`path` 为 `segmented_dir` 相对路径；dry-run 时 `deleted_count` 恒 0。
 
 ---
 

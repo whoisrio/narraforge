@@ -26,6 +26,7 @@ from app.core.audio_encoder import (
     transcode_to_mp3,
     trim_audio_silence_bytes,
 )
+from app.core.config import settings
 from app.models.segmented_project import (
     SegmentedProject,
     SegmentedProjectChapter,
@@ -563,6 +564,75 @@ def delete_project(db: Session, project_id: str) -> bool:
     db.commit()
     assets.remove_project_dir(project_id, p.name)
     return True
+
+
+# 孤儿音频文件 sweep 的扫描范围：项目资产目录下段级音频的固定布局
+# {slug}/chapters/{chapter-id}/segments/{segment-id}.{mp3|wav}（含 .prev 变体）
+_SWEEP_AUDIO_SUFFIXES = {".mp3", ".wav"}
+_SWEEP_GLOB_PATTERN = "*/chapters/*/segments/*"
+
+
+def sweep_orphan_audio(db: Session, *, execute: bool = False) -> dict[str, Any]:
+    """扫描 ``segmented_dir`` 下未被任何段引用的孤儿音频文件（粒度重构 Phase 6）。
+
+    自 Phase 0 起文件删除只由显式意图触发（删段/删章/重拆只删 DB 行，音频
+    留盘），孤儿文件累积；本端点是唯一的显式回收入口。判据：文件位于段级
+    音频布局（``*/chapters/*/segments/*.mp3|wav``）且未被任何段行的
+    ``audio.current``/``audio.previous`` 引用（相对/绝对路径均可）。
+
+    ``execute=False``（缺省）为 dry-run：只报告不删；``execute=True`` 才真正
+    unlink。非音频文件（.txt 镜像 / manifest / 文档）绝不在扫描范围。返回
+    ``{dry_run, orphans: [{path, size_bytes}], total_count, total_size_bytes,
+    deleted_count}``（dry-run 时 deleted_count 恒 0，path 为 segmented_dir
+    相对路径，便于运维核对）。
+    """
+    referenced: set[Path] = set()
+    for seg in db.query(SegmentedProjectSegment).all():
+        audio = seg.audio
+        if not isinstance(audio, dict):
+            continue
+        for key in ("current", "previous"):
+            path_str = _audio_path_str(audio.get(key))
+            if not path_str:
+                continue
+            fp = Path(path_str)
+            if not fp.is_absolute():
+                fp = settings.segmented_dir / fp
+            try:
+                referenced.add(fp.resolve())
+            except OSError:
+                continue
+
+    root = settings.segmented_dir
+    orphans: list[dict[str, Any]] = []
+    deleted_count = 0
+    if root.exists():
+        for p in sorted(root.glob(_SWEEP_GLOB_PATTERN)):
+            if not p.is_file() or p.suffix.lower() not in _SWEEP_AUDIO_SUFFIXES:
+                continue
+            try:
+                resolved = p.resolve()
+            except OSError:
+                continue
+            if resolved in referenced:
+                continue
+            size = p.stat().st_size
+            rel = p.relative_to(root).as_posix()
+            orphans.append({"path": rel, "size_bytes": size})
+            if execute:
+                try:
+                    p.unlink()
+                    deleted_count += 1
+                except OSError as e:
+                    logger.warning("[sweep] failed to delete %s: %s", p, e)
+
+    return {
+        "dry_run": not execute,
+        "orphans": orphans,
+        "total_count": len(orphans),
+        "total_size_bytes": sum(o["size_bytes"] for o in orphans),
+        "deleted_count": deleted_count,
+    }
 
 
 def apply_animation_spec(

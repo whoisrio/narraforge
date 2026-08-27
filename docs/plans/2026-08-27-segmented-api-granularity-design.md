@@ -146,7 +146,7 @@
 | 3 | 段结构端点（新建 + structure reconcile） | ✅ 已实现并通过测试，待提交 |
 | 4（已完成） | 章节 CRUD + reorder | ✅ 已实现并通过测试，待提交 |
 | 5 | 项目 PATCH + 文档 PUT | ✅ 已实现并通过测试（服务层 6 + API 7 + workers 6；实现后修订：项目级 narration-script PUT 不动章节级 sync_state——两套机制，章节层置脏由 chapters:batch/resplit 等端点管理） |
-| 6 | 孤儿文件 sweep（脚本或管理端点，dry-run 默认） | - |
+| 6 | 孤儿文件 sweep（脚本或管理端点，dry-run 默认） | ✅ 已实现并通过测试（`POST /segmented-projects/sweep-orphan-audio`，local-only；dry-run 默认，execute=true 才删；service 4 + API 1 + workers 未挂载断言） |
 | 7 | 清理：reducer 冗余 action、draftSync 瘦身、docs/e2e 更新 | — |
 
 每阶段保持双写兼容：旧路径（全量 PUT autosave）在新端点上线、前端切换并回归后才下线对应 action 的 autosave 触发。
