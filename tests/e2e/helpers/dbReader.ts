@@ -330,12 +330,13 @@ export function validateDbProjectRow(bundle: DbProjectBundle): void {
     const voice = parseJson(s.voice, `db segment ${s.id} voice`);
     validateVoiceSource(voice, `db segment ${s.id}.voice`);
     if (s.audio !== null) {
-      const audio = parseJson(s.audio, `db segment ${s.id} audio`);
-      validateAudioMeta(audio, `db segment ${s.id}.audio`);
+      const audio = parseJson(s.audio, `db segment ${s.id} audio`) as unknown;
+      // 历史行可能是文本 'null'（JSON 列 none_as_null=False 时期写入），视为无值
+      if (audio !== null) validateAudioMeta(audio as Record<string, unknown>, `db segment ${s.id}.audio`);
     }
     if (s.generated_params !== null) {
-      const gp = parseJson(s.generated_params, `db segment ${s.id} generated_params`);
-      validateGeneratedParams(gp, `db segment ${s.id}.generated_params`);
+      const gp = parseJson(s.generated_params, `db segment ${s.id} generated_params`) as unknown;
+      if (gp !== null) validateGeneratedParams(gp as Record<string, unknown>, `db segment ${s.id}.generated_params`);
     }
   }
 

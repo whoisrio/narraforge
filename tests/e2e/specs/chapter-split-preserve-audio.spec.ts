@@ -2,7 +2,7 @@
  * 重拆保留已合成音频 + 同时拆分 segment E2E.
  *
  * 完整旁白文档 -> 文本库「按标题拆分章节」勾选「同时拆分 segment」-> 首轮拆分；
- * 给部分 segment 挂载假音频（写盘 + PUT 落库）模拟已合成状态；
+ * 给部分 segment 挂载假音频（写盘 + DB 直写落库）模拟已合成状态；
  * 小改文档后重拆 -> 文本未变的 segment 保留音频（文件 move 到新路径），
  * 变化的 segment 为未合成态，旧文件被 GC。
  * 验证 UI（toast 报告）+ API + DB（双读）+ 文件系统。
@@ -16,6 +16,7 @@ import * as path from 'node:path';
 import { E2E_BACKEND_URL } from '../helpers/ports';
 import { collectErrors, setLocaleToZhCN, enterWorkspace } from '../helpers';
 import { readDbProject } from '../helpers/dbReader';
+import { attachSegmentAudio } from '../helpers/dbWriter';
 import { projectDirNameForId } from '../helpers/fsAssertions';
 
 const BACKEND = E2E_BACKEND_URL;
@@ -119,7 +120,9 @@ test.describe('重拆保留已合成音频', () => {
 
       // ── 3. 挂载假音频：第一章全部 4 段 + 第二章第 1/2 段（模拟已合成）──
       const withAudio = new Set([...ch1.segments.map((s) => s.id), ch2.segments[0].id, ch2.segments[1].id]);
-      // save_project 会写 manifest，先 PUT 一次再解析 slug
+      // save_project 会写 manifest，先 PUT 一次再解析 slug。
+      // 注意：payload 不带 audio/generated_params —— PUT 契约变化后已存在段的
+      // 这些字段为服务端自产字段，PUT 会被忽略，只能直写 DB（attachSegmentAudio）。
       const buildPut = (narration: string, chapters: Ch[]) => ({
         id: PROJECT_ID,
         name: PROJECT_NAME,
@@ -142,16 +145,6 @@ test.describe('重拆保留已合成音频', () => {
             role_id: null,
             segment_kind: 'narration',
             voice: { source: 'chapter' },
-            ...(withAudio.has(s.id) && (s as unknown as { _rel?: string })._rel
-              ? {
-                  audio: {
-                    format: 'mp3',
-                    duration_sec: 0.4,
-                    current: { path: (s as unknown as { _rel: string })._rel, format: 'mp3', origin: 'tts', duration_sec: 0.4 },
-                  },
-                  generated_params: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural' },
-                }
-              : {}),
           })),
         })),
       });
@@ -161,15 +154,16 @@ test.describe('重拆保留已合成音频', () => {
       const dirName = projectDirNameForId(PROJECT_ID);
       expect(dirName, 'project asset dir (manifest) should exist after save').toBeTruthy();
 
-      // 写音频文件 + 重新 PUT 挂上 audio/generated_params，同时把文档改成 V2
+      // 写假音频文件 + DB 直写挂上 audio/generated_params
       for (const c of detail1.chapters as Ch[]) {
         for (const s of c.segments) {
           if (!withAudio.has(s.id)) continue;
           const rel = writeFakeAudio(dirName!, c.id, s.id);
-          (s as unknown as { _rel: string })._rel = rel;
+          attachSegmentAudio(s.id, rel);
           oldAudioPaths.push(rel);
         }
       }
+      // 这个 PUT 只承担把 narration_script 改成 V2 的正当用途（不再带 audio 字段）
       putResp = await page.request.put(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`, { data: buildPut(NARRATION_V2, detail1.chapters) });
       expect(putResp.status()).toBe(200, await putResp.text());
 
@@ -247,7 +241,9 @@ test.describe('重拆保留已合成音频', () => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────
-// 共用：给项目全部 segment 挂载假音频（写盘 + PUT 落库），返回旧相对路径
+// 共用：给项目全部 segment 挂载假音频（写盘 + DB 直写落库），返回旧相对路径
+// PUT 契约变化后，已存在段的 audio/generated_params 为服务端自产字段，
+// PUT 会被忽略 —— 挂音频只能直写 DB；PUT 仅保留 narration_script 更新等正当用途。
 // ────────────────────────────────────────────────────────────────────────────
 
 interface FullSeg extends Seg { emotion?: string | null }
@@ -267,7 +263,6 @@ async function attachFakeAudioToAll(
 ): Promise<{ chapters: FullCh[]; oldPaths: string[] }> {
   const detail = await (await page.request.get(`${BACKEND}/api/segmented-projects/${projectId}`)).json();
   const chapters = detail.chapters as FullCh[];
-  const relById = new Map<string, string>();
   const buildPut = () => ({
     id: projectId,
     name: projectName,
@@ -290,16 +285,6 @@ async function attachFakeAudioToAll(
         role_id: null,
         segment_kind: 'narration',
         voice: { source: 'chapter' },
-        ...(relById.has(s.id)
-          ? {
-              audio: {
-                format: 'mp3',
-                duration_sec: 0.4,
-                current: { path: relById.get(s.id), format: 'mp3', origin: 'tts', duration_sec: 0.4 },
-              },
-              generated_params: { engine: 'edge_tts', voice: 'zh-CN-YunxiNeural' },
-            }
-          : {}),
       })),
     })),
   });
@@ -308,14 +293,16 @@ async function attachFakeAudioToAll(
   expect(resp.status()).toBe(200, await resp.text());
   const dirName = projectDirNameForId(projectId);
   expect(dirName, 'project asset dir (manifest) should exist after save').toBeTruthy();
+  // 写假音频文件 + DB 直写挂上 audio/generated_params（PUT 已无法挂已存在段的 audio）
   const oldPaths: string[] = [];
   for (const c of chapters) {
     for (const s of c.segments) {
       const rel = writeFakeAudio(dirName!, c.id, s.id);
-      relById.set(s.id, rel);
+      attachSegmentAudio(s.id, rel);
       oldPaths.push(rel);
     }
   }
+  // 第二个 PUT 只承担 narration_script 更新（如 V1→V2），payload 不带 audio 字段
   resp = await page.request.put(`${BACKEND}/api/segmented-projects/${projectId}`, { data: buildPut() });
   expect(resp.status()).toBe(200, await resp.text());
   return { chapters, oldPaths };

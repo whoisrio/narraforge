@@ -27,8 +27,9 @@ import {
   seedTestProject,
 } from '../helpers';
 import { verifyDbWithScreenshot } from '../helpers/dualReadSnapshot';
-import { expectSegmentFileGone, projectDirNameForId } from '../helpers/fsAssertions';
+import { expectSegmentFileExists, projectDirNameForId } from '../helpers/fsAssertions';
 import { readDbProject } from '../helpers/dbReader';
+import { attachSegmentAudio } from '../helpers/dbWriter';
 
 test.describe('段落操作', () => {
   test.beforeAll(async ({ browser }) => {
@@ -280,6 +281,20 @@ test.describe('段落操作', () => {
     const segTextsBefore = activeChapterBefore!.segments.map((s) => s.text);
     const lastSegText = segTextsBefore[segTextsBefore.length - 1];
 
+    // ── Step 1.5: 给被删段挂假音频（写盘 + DB 直写）──
+    // 新契约下要验证「删段不再删文件」，被删段必须真有文件在盘上。
+    // PUT 已无法给已存在段挂 audio（服务端自产字段），只能直写 DB。
+    const deletedSegId = activeChapterBefore!.segments[activeChapterBefore!.segments.length - 1].id;
+    const dirName = projectDirNameForId('test-e2e-project');
+    expect(dirName, 'project asset dir should exist after seed').toBeTruthy();
+    const segDir = path.resolve(
+      __dirname, '..', '..', '..', 'backend', 'data', 'projects',
+      dirName!, 'chapters', activeChapterBefore!.id, 'segments',
+    );
+    fs.mkdirSync(segDir, { recursive: true });
+    fs.writeFileSync(path.join(segDir, `${deletedSegId}.mp3`), Buffer.from('fake-mp3'));
+    attachSegmentAudio(deletedSegId, `${dirName}/chapters/${activeChapterBefore!.id}/segments/${deletedSegId}.mp3`);
+
     // ── Step 2: Click delete → confirm dialog appears ──
 
     const lastRow = segmentRows.last();
@@ -333,9 +348,9 @@ test.describe('段落操作', () => {
 
     await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-segment-operations-dbProject3');
 
-    // Filesystem: deleted segment's audio file must be removed
-    const deletedSegId = activeChapterBefore!.segments[activeChapterBefore!.segments.length - 1].id;
-    expectSegmentFileGone(projectDirNameForId('test-e2e-project')!, activeChapterBefore!.id, deletedSegId);
+    // Filesystem: 新契约——删段不再删除音频文件，被删段的文件保留在盘上
+    // （孤儿文件待后续 sweep 回收），这里断言文件仍存在。
+    expectSegmentFileExists(dirName!, activeChapterBefore!.id, deletedSegId);
 
     expect(errors).toEqual([]);
   });
@@ -422,14 +437,14 @@ test.describe('段落操作', () => {
     expect(errors).toEqual([]);
   });
 
-  // @feature §4.4 Per-Segment features — merge with audio: confirm dialog + audio cleanup
-  test('向上合并带音频段落：确认弹窗出现，合并后保留段音频文件被清理', async ({ page }) => {
+  // @feature §4.4 Per-Segment features — merge with audio: confirm dialog + audio downgrade (file kept on disk)
+  test('向上合并带音频段落：确认弹窗出现，合并后保留段音频降级且文件保留', async ({ page }) => {
     await setLocaleToZhCN(page);
     const errors = collectErrors(page);
 
     // ── Step 0: give the first segment a REAL audio file + DB audio.current ──
-    // (fix: hasAudio used the deprecated current_audio_id, so the confirm dialog
-    // and the audio cleanup never fired; and the kept segment's file was orphaned)
+    // PUT 契约变化后，已存在段的 audio 为服务端自产字段（PUT 会忽略），
+    // 模拟「已合成」只能写假文件到盘上 + attachSegmentAudio 直写 DB。
     const BACKEND = E2E_BACKEND_URL;
     const CHAPTER_ID = 'test-chapter-1';
     const relAudioPath = `test-e2e-project/chapters/${CHAPTER_ID}/segments/seg-audio-kept.mp3`;
@@ -443,6 +458,7 @@ test.describe('段落操作', () => {
     const project = await getResp.json();
     const chapter = project.chapters.find((c: { id: string }) => c.id === CHAPTER_ID)!;
     // Prior tests in this file shrink chapter 1; restore a second segment if needed.
+    // （克隆段是新建段，payload 里的 audio 占位对新建段仍有效）
     if (chapter.segments.length < 2) {
       const clone = JSON.parse(JSON.stringify(chapter.segments[0]));
       clone.id = `${CHAPTER_ID}-seg-merge-e2e`;
@@ -454,10 +470,11 @@ test.describe('段落操作', () => {
     expect(chapter.segments.length).toBeGreaterThan(1);
     const keptSeg = chapter.segments[0];
     const removedSeg = chapter.segments[1];
-    keptSeg.audio = { current: { path: relAudioPath, format: 'mp3' }, format: 'mp3' };
     const putResp = await page.request.put(`${BACKEND}/api/segmented-projects/test-e2e-project`, { data: project });
     expect(putResp.ok()).toBeTruthy();
 
+    // 挂 DB 音频（直写）+ 写假音频文件到盘上
+    attachSegmentAudio(keptSeg.id, relAudioPath);
     fs.mkdirSync(path.dirname(absAudioPath), { recursive: true });
     fs.writeFileSync(absAudioPath, Buffer.from('fake-mp3'));
     expect(fs.existsSync(absAudioPath)).toBe(true);
@@ -485,18 +502,22 @@ test.describe('段落操作', () => {
     const chapterAfter = projectAfter!.chapters.find((c) => c.id === CHAPTER_ID)!;
     const merged = chapterAfter.segments[0];
     expect(merged.text).toBe(`${keptSeg.text}${removedSeg.text}`);
-    // kept segment's audio state cleared (text changed)
+    // 合并走 structure 端点，文本变化触发音频降级：
+    // current 清空，旧音频降级到 previous（文件保留在盘上，可撤销）
     expect(merged.audio?.current).toBeFalsy();
+    expect(merged.audio?.previous?.path).toBe(relAudioPath);
     for (const seg of chapterAfter.segments) validateSegment(seg);
 
-    // ── Step 4: DB dual-read — audio cleared in the raw row too ──
+    // ── Step 4: DB dual-read — raw row 同样是 current 空、previous 在 ──
     const dbBundle = await readDbProject('test-e2e-project');
     const dbSeg = dbBundle!.segments.find((s) => s.id === keptSeg.id)!;
     const dbAudio = typeof dbSeg.audio === 'string' ? JSON.parse(dbSeg.audio) : dbSeg.audio;
     expect(dbAudio?.current).toBeFalsy();
+    expect(dbAudio?.previous?.path).toBe(relAudioPath);
 
-    // ── Step 5: filesystem — the kept segment's dropped audio file is gone ──
-    expect(fs.existsSync(absAudioPath)).toBe(false);
+    // ── Step 5: filesystem — 新契约：被降级的音频文件保留在盘上
+    //    （可撤销；孤儿文件的清理归后续 sweep）──
+    expect(fs.existsSync(absAudioPath)).toBe(true);
 
     expect(errors).toEqual([]);
   });

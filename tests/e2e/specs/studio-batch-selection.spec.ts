@@ -2,7 +2,7 @@
  * Studio 段落多选批量删除 + 批量合成菜单 E2E.
  *
  * 批量删除：独立项目 4 段 -> 选择模式勾选 2 段（含 1 段有音频）-> 删除选中
- * -> 行数/DB 双读 -2、被删段音频文件消失。
+ * -> 行数/DB 双读 -2、被删段音频文件保留在盘上（新契约：孤儿文件待 sweep 回收）。
  *
  * 合成菜单：独立项目 4 段（2 idle + 2 录入音频）-> 「批量合成」弹出两选项
  * -> 「仅合成未合成」-> idle 段合成出音频（origin tts）、录入段路径不变。
@@ -92,13 +92,12 @@ test.describe('段落批量操作', () => {
         return bundle!.segments.map((s) => s.id).sort();
       }, { timeout: 15_000, intervals: [500, 1000, 2000] }).toEqual([`${ID}-s2`, `${ID}-s3`]);
 
-      // ── 磁盘: 被删段的录入音频文件已清理 ──
+      // ── 磁盘: 新契约——批量删段不再删除音频文件，被删段的录入音频保留在盘上
+      //    （孤儿文件待后续 sweep 回收），断言文件仍存在 ──
       const dirName = projectDirNameForId(ID);
       expect(dirName).toBeTruthy();
-      await expect.poll(() => {
-        const files = listSegmentFiles(dirName!, `${ID}-ch1`, `${ID}-s0`);
-        return files.filter((f) => f.endsWith('.mp3'));
-      }, { timeout: 15_000, intervals: [500, 1000] }).toEqual([]);
+      const remainingFiles = listSegmentFiles(dirName!, `${ID}-ch1`, `${ID}-s0`).filter((f) => f.endsWith('.mp3'));
+      expect(remainingFiles.length, '被删段的音频文件应保留在盘上（孤儿文件待 sweep 回收）').toBeGreaterThan(0);
 
       expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
     } finally {

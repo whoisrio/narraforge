@@ -4,11 +4,8 @@
  */
 import type { Page } from '@playwright/test';
 import { E2E_BACKEND_URL } from './ports';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 
 const BASE_URL = E2E_BACKEND_URL;
-const ROOT = path.resolve(__dirname, '..', '..', '..');
 
 /** Delete all roles with the given name to avoid duplicates from prior runs. */
 async function deleteRolesByName(page: Page, name: string): Promise<void> {
@@ -46,10 +43,16 @@ async function createRole(page: Page, id: string, name: string, voice: Record<st
 }
 
 /**
- * Create or update a project with chapters via the backend API.
- * Uses PUT to upsert — if the project already exists, it will be updated.
+ * Recreate the project from scratch via the backend API.
+ *
+ * DELETE first (404 ignored), then POST. An upsert via PUT is NOT enough:
+ * the big-PUT contract no longer writes server-owned fields (audio /
+ * generated_params / generated_at) on EXISTING segments, so a stale
+ * project would keep audio synthesized by a prior spec run and leak
+ * "ready" state across specs. New segments in the POST payload still
+ * accept the full field set (idle placeholders included).
  */
-async function upsertProject(
+async function recreateProject(
   page: Page,
   projectId: string,
   name: string,
@@ -71,10 +74,11 @@ async function upsertProject(
     })),
   };
 
-  // Try PUT first (upsert), fall back to POST
-  let resp = await page.request.put(`${BASE_URL}/api/segmented-projects/${projectId}`, { data });
-  if (resp.status() === 404) {
-    resp = await page.request.post(`${BASE_URL}/api/segmented-projects`, { data });
+  // delete_project also cleans the asset dir under backend/data/projects/
+  await page.request.delete(`${BASE_URL}/api/segmented-projects/${projectId}`).catch(() => {});
+  const resp = await page.request.post(`${BASE_URL}/api/segmented-projects`, { data });
+  if (!resp.ok()) {
+    console.warn(`[seed] Project "${projectId}" creation failed with ${resp.status()}: ${await resp.text()}`);
   }
 }
 
@@ -93,13 +97,10 @@ export async function seedTestProject(page: Page): Promise<{
   const chapter1Id = 'test-chapter-1';
   const chapter2Id = 'test-chapter-2';
 
-  // Clean up stale audio files from prior test runs (avoids false positives
-  // when tests assert that deleted segments have their files removed).
-  const segDir = path.join(ROOT, 'backend', 'uploads', 'segmented', projectId);
-  try { fs.rmSync(segDir, { recursive: true, force: true }); } catch { /* ignore */ }
-
-  // Create project with chapters (each chapter has sample segments for studio tests)
-  await upsertProject(page, projectId, 'test', [
+  // Recreate the project from scratch (see recreateProject for why DELETE+POST
+  // replaced the old PUT upsert). The delete endpoint also removes the project
+  // asset dir under backend/data/projects/, so no manual fs cleanup is needed.
+  await recreateProject(page, projectId, 'test', [
     {
       id: chapter1Id,
       name: '第1章 夜路',
