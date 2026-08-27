@@ -137,7 +137,7 @@ describe('useSegmentedDraftSync', () => {
     expect(draft?.draft.updated_at).toBe('2026-02-02T00:00:00.000Z');
     // 新草稿的下一次 flush 正常保存并收尾
     await act(async () => { await result.current.flush(); });
-    expect(storageCalls.save).toHaveBeenLastCalledWith(newProj);
+    expect(storageCalls.save).toHaveBeenLastCalledWith(newProj, { base_updated_at: null });
     draft = await getDraft('p1');
     expect(draft?.dirty).toBe(false);
     expect(draft?.draft.updated_at).toBe('2026-02-02T00:00:00.000Z');
@@ -163,5 +163,85 @@ describe('useSegmentedDraftSync', () => {
     expect(draft?.dirty).toBe(true);
     expect(draft?.draft.updated_at).toBe('2026-02-02T00:00:00.000Z');
     expect(draft?.last_save_error).toBeUndefined();
+  });
+
+  it('flush 携带 base_updated_at，保存成功后以服务端响应的 updated_at 作为新 base', async () => {
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, debounceMs: 20 }),
+    );
+    const serverVersion = makeProject('p1');
+    serverVersion.updated_at = '2026-08-27T01:00:00';
+    await act(async () => { await result.current.adoptBackendVersion(serverVersion); });
+
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    storageCalls.save.mockResolvedValue({ ...edited, updated_at: '2026-08-27T02:00:00' });
+    await act(async () => { await result.current.markDirty(edited); });
+    await new Promise(r => setTimeout(r, 80));
+
+    expect(storageCalls.save).toHaveBeenCalledWith(
+      edited, { base_updated_at: '2026-08-27T01:00:00' },
+    );
+    const draft = await getDraft('p1');
+    // 新 base 是服务端权威值（响应），不是客户端草稿的时间戳
+    expect(draft?.base_updated_at).toBe('2026-08-27T02:00:00');
+    expect(draft?.dirty).toBe(false);
+  });
+
+  it('saveProject 无返回值时 base_updated_at 回退为草稿时间戳（兼容旧 storage）', async () => {
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, debounceMs: 20 }),
+    );
+    const proj = makeProject('p1');
+    proj.updated_at = '2026-08-27T03:00:00';
+    storageCalls.save.mockResolvedValue(undefined);
+    await act(async () => { await result.current.markDirty(proj); });
+    await new Promise(r => setTimeout(r, 80));
+    const draft = await getDraft('p1');
+    expect(draft?.base_updated_at).toBe('2026-08-27T03:00:00');
+  });
+
+  it('noteServerVersion 推进 base_updated_at，下次 flush 携带新 base（合成/PATCH 后的服务端版本）', async () => {
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, debounceMs: 20 }),
+    );
+    const serverVersion = makeProject('p1');
+    serverVersion.updated_at = '2026-08-27T01:00:00';
+    await act(async () => { await result.current.adoptBackendVersion(serverVersion); });
+
+    // 服务端被合成端点推进（不经过 draftSync），前端收到响应后 note
+    await act(async () => { await result.current.noteServerVersion('2026-08-27T01:30:00'); });
+
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    await act(async () => { await result.current.markDirty(edited); });
+    await new Promise(r => setTimeout(r, 80));
+    expect(storageCalls.save).toHaveBeenCalledWith(
+      edited, { base_updated_at: '2026-08-27T01:30:00' },
+    );
+  });
+});
+
+describe('refreshDraft', () => {
+  it('刷新已有 dirty 草稿的内容（不重新排程、不清 dirty），防陈旧快照被 PUT 回写', async () => {
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, debounceMs: 10_000 }),
+    );
+    const stale = makeProject('p1');
+    await act(async () => { await result.current.markDirty(stale); });
+
+    // touch=false 的后续变更（如 PATCH 已远端持久化的 kind 切换）
+    const fresh = { ...makeProject('p1'), name: 'dialogue-now' };
+    await act(async () => { await result.current.refreshDraft(fresh); });
+
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(true);            // 仍待冲刷
+    expect(draft?.draft.name).toBe('dialogue-now'); // 内容已是最新
+  });
+
+  it('无草稿记录时不创建（初始加载等场景不制造草稿）', async () => {
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage }),
+    );
+    await act(async () => { await result.current.refreshDraft(makeProject('p1')); });
+    expect(await getDraft('p1')).toBeUndefined();
   });
 });

@@ -21,6 +21,7 @@ workers 模式已知取舍（写进设计缺口，非 bug）：
 """
 from __future__ import annotations
 
+import copy
 import logging
 import uuid
 from types import SimpleNamespace
@@ -35,7 +36,11 @@ from app.schemas.segmented_project import (
     ProjectDetail,
     ProjectIn,
     ProjectSummary,
+    SegmentCreateIn,
     SegmentIn,
+    SegmentPatchIn,
+    StalePayloadError,
+    StructureSegmentIn,
 )
 
 # workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化。
@@ -89,6 +94,28 @@ class SegmentedProjectRepository(Protocol):
     def count_owned(self) -> int: ...
     def count_chapters(self, project_id: str) -> int: ...
     def save_project(self, project: ProjectIn) -> ProjectDetail: ...
+    def patch_segment(
+        self, project_id: str, chapter_id: str, segment_id: str, patch: SegmentPatchIn,
+    ) -> tuple[SegmentIn, str] | None:
+        """段级部分更新；返回 (更新后的段, 项目最新 updated_at)，不存在 → None。..."""
+        ...
+    def create_segment(
+        self, project_id: str, chapter_id: str, body: SegmentCreateIn,
+    ) -> tuple[SegmentIn, list[dict[str, Any]], str] | None:
+        """新建段；返回 (新段, 章内 [{id, position}], 项目最新 updated_at)。
+
+        章节不存在（或跨用户）→ None → 路由 404；after_id 在章内无对应段
+        → ValueError("after_segment_not_found") → 路由 404 segment_not_found。
+        """
+        ...
+    def reconcile_chapter_structure(
+        self, project_id: str, chapter_id: str, segments: list[StructureSegmentIn],
+    ) -> tuple[list[SegmentIn], str] | None:
+        """章内结构 reconcile（删除/合并/拆段/排序）；返回 (该章全部段, 项目最新 updated_at)。
+
+        章节不存在（或跨用户）→ None → 路由 404。
+        """
+        ...
     def delete_project(self, project_id: str) -> bool: ...
     def batch_create_structure(
         self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
@@ -136,6 +163,23 @@ class LocalSegmentedProjectRepository:
 
     def save_project(self, project: ProjectIn) -> ProjectDetail:
         return svc.save_project(self._db, project)
+
+    def patch_segment(
+        self, project_id: str, chapter_id: str, segment_id: str, patch: SegmentPatchIn,
+    ) -> tuple[SegmentIn, str] | None:
+        return svc.patch_segment(self._db, project_id, chapter_id, segment_id, patch)
+
+    def create_segment(
+        self, project_id: str, chapter_id: str, body: SegmentCreateIn,
+    ) -> tuple[SegmentIn, list[dict[str, Any]], str] | None:
+        return svc.create_segment(
+            self._db, project_id, chapter_id, text=body.text, after_id=body.after_id,
+        )
+
+    def reconcile_chapter_structure(
+        self, project_id: str, chapter_id: str, segments: list[StructureSegmentIn],
+    ) -> tuple[list[SegmentIn], str] | None:
+        return svc.reconcile_chapter_structure(self._db, project_id, chapter_id, segments)
 
     def delete_project(self, project_id: str) -> bool:
         return svc.delete_project(self._db, project_id)
@@ -471,6 +515,12 @@ class SupabaseSegmentedProjectRepository(UserScope):
     def save_project(self, project: ProjectIn) -> ProjectDetail:
         now = utcnow().isoformat()
         existing_p = self._get_project_row(project.id)
+        if existing_p is not None and project.base_updated_at is not None:
+            # 乐观锁：与 local svc.save_project 同语义（None = 老客户端放行）。
+            # PostgREST 原样返回存储字符串，客户端经 GET 回显，可直接比较。
+            current = existing_p.get("updated_at")
+            if project.base_updated_at != current:
+                raise StalePayloadError(server_updated_at=current)
         if existing_p is None and not self._see_all:
             # 跨用户抢占防护：无作用域视角下项目已存在 → 属于他人，
             # 按不存在处理（LookupError → 路由 404，不泄露存在性、不覆盖他人行）
@@ -586,6 +636,207 @@ class SupabaseSegmentedProjectRepository(UserScope):
         detail = self.get_project(project.id)
         assert detail is not None
         return detail
+
+    def patch_segment(
+        self, project_id: str, chapter_id: str, segment_id: str, patch: SegmentPatchIn,
+    ) -> tuple[SegmentIn, str] | None:
+        """段级部分更新（与 svc.patch_segment 同语义）。跨用户/不存在 → None → 404。"""
+        if not self._owns_project(project_id):
+            return None
+        ch_row = self._get_chapter_row(project_id, chapter_id)
+        if ch_row is None:
+            return None
+        seg = self._client.select_one(
+            SEGMENTS, params={"id": f"eq.{segment_id}", "chapter_id": f"eq.{chapter_id}"}
+        )
+        if seg is None:
+            return None
+        updates: dict[str, Any] = {}
+        fields = patch.model_fields_set
+        if "text" in fields:
+            updates["text"] = patch.text or ""
+        if "emotion" in fields:
+            updates["emotion"] = patch.emotion
+        if "role_id" in fields:
+            updates["role_id"] = patch.role_id
+        if "segment_kind" in fields:
+            updates["segment_kind"] = patch.segment_kind or "narration"
+        if "voice" in fields:
+            old_voice = seg.get("voice") or {"source": "chapter"}
+            new_voice = patch.voice or {"source": "chapter"}
+            if new_voice != old_voice:
+                # 音色变更 → 音频降级（与 local svc.patch_segment 同语义）
+                audio = dict(seg.get("audio") or {})
+                current = audio.get("current")
+                if isinstance(current, dict) and (
+                    current.get("path") or current.get("id") or current.get("audio_id")
+                ):
+                    audio["previous"] = current
+                    audio["current"] = None
+                    audio.pop("duration_sec", None)
+                    updates["audio"] = audio
+                updates["generated_params"] = None
+                updates["generated_at"] = None
+            updates["voice"] = new_voice
+        if "unlock_audio" in fields and patch.unlock_audio:
+            # 显式解锁录音：清除 audio.current.origin（与 local svc.patch_segment 同语义）
+            audio = copy.deepcopy(seg.get("audio")) if isinstance(seg.get("audio"), dict) else None
+            current = (audio or {}).get("current")
+            if isinstance(current, dict) and current.get("origin"):
+                current.pop("origin", None)
+                updates["audio"] = audio
+        now = utcnow().isoformat()
+        updates["updated_at"] = now
+        self._client.update(SEGMENTS, updates, params={"id": f"eq.{segment_id}"})
+        self._client.update(CHAPTERS, {"updated_at": now}, params={"id": f"eq.{chapter_id}"})
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        return _seg_row_to_in({**seg, **updates}), now
+
+    # ----- 段结构端点（B 类） -----
+
+    def create_segment(
+        self, project_id: str, chapter_id: str, body: SegmentCreateIn,
+    ) -> tuple[SegmentIn, list[dict[str, Any]], str] | None:
+        """新建段（与 svc.create_segment 同语义）。跨用户/章节不存在 → None → 404。
+
+        PostgREST 无事务：插入位置的后续段按 position 降序逐行 +1 平移
+        （每步目标位总是空位），规避 (chapter_id, position) 唯一约束冲突。
+        """
+        if not self._owns_project(project_id):
+            return None
+        ch_row = self._get_chapter_row(project_id, chapter_id)
+        if ch_row is None:
+            return None
+        seg_rows = self._list_segment_rows([chapter_id])  # position 升序
+        if body.after_id is not None:
+            idx = next((i for i, r in enumerate(seg_rows) if r["id"] == body.after_id), None)
+            if idx is None:
+                raise ValueError("after_segment_not_found")
+            insert_at = idx + 1
+        else:
+            insert_at = len(seg_rows)
+
+        now = utcnow().isoformat()
+        shifted = seg_rows[insert_at:]
+        for row in sorted(shifted, key=lambda r: r.get("position") or 0, reverse=True):
+            row["position"] = (row.get("position") or 0) + 1
+            self._client.update(
+                SEGMENTS,
+                {"position": row["position"], "updated_at": now},
+                params={"id": f"eq.{row['id']}"},
+            )
+        new_row: dict[str, Any] = {
+            "id": str(uuid.uuid4()),
+            "chapter_id": chapter_id,
+            "position": insert_at,
+            "text": body.text or "",
+            "segment_kind": "narration",
+            "voice": {"source": "chapter"},
+            "created_at": now,
+            "updated_at": now,
+        }
+        self._client.insert(SEGMENTS, [new_row])
+        self._client.update(CHAPTERS, {"updated_at": now}, params={"id": f"eq.{chapter_id}"})
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        final_rows = seg_rows[:insert_at] + [new_row] + shifted
+        positions = [
+            {"id": r["id"], "position": r.get("position") or 0} for r in final_rows
+        ]
+        return _seg_row_to_in(new_row), positions, now
+
+    def reconcile_chapter_structure(
+        self, project_id: str, chapter_id: str, segments: list[StructureSegmentIn],
+    ) -> tuple[list[SegmentIn], str] | None:
+        """章内结构 reconcile（与 svc.reconcile_chapter_structure 同语义）。
+
+        跨用户/章节不存在 → None → 404。已存在段只更新 text/position；**文本
+        发生变化时**（合并等）旧音频失效降级（current→previous，文件保留），
+        其余自产字段保留；被删段只删 DB 行（workers 音频在客户端 IndexedDB /
+        Storage，本就不按状态 diff 清理）。
+        position 重排两阶段：现存行先全部置负哨兵，再逐行赋最终值。
+        """
+        if not self._owns_project(project_id):
+            return None
+        ch_row = self._get_chapter_row(project_id, chapter_id)
+        if ch_row is None:
+            return None
+        existing_rows = self._list_segment_rows([chapter_id])
+        existing_by_id = {r["id"]: r for r in existing_rows}
+        now = utcnow().isoformat()
+
+        # Phase 1: 现存行全部置负哨兵，腾出正整数位
+        for idx, row in enumerate(existing_rows):
+            self._client.update(
+                SEGMENTS, {"position": -(idx + 1)}, params={"id": f"eq.{row['id']}"}
+            )
+
+        keep_ids: set[str] = set()
+        result_rows: list[dict[str, Any]] = []
+        for s_in in segments:
+            prev = existing_by_id.get(s_in.id) if s_in.id else None
+            if prev is None:
+                # id 缺省 → 服务端分配；id 存在但该章无此行 → 按新建播种（给定 id）
+                row = {
+                    "id": s_in.id or str(uuid.uuid4()),
+                    "chapter_id": chapter_id,
+                    "position": s_in.position,
+                    "text": s_in.text or "",
+                    "segment_kind": "narration",
+                    "voice": {"source": "chapter"},
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                self._client.insert(SEGMENTS, [row])
+            else:
+                updates: dict[str, Any] = {
+                    "text": s_in.text or "", "position": s_in.position, "updated_at": now,
+                }
+                row = {
+                    **prev,
+                    "text": s_in.text or "",
+                    "position": s_in.position,
+                    "updated_at": now,
+                }
+                # 结构性文本变更（合并等）→ 旧音频失效降级（与 local 同语义：
+                # current→previous、文件保留、generated_* 置空）；纯重排不动
+                if (prev.get("text") or "") != (s_in.text or ""):
+                    audio = dict(prev.get("audio") or {})
+                    current = audio.get("current")
+                    if isinstance(current, dict) and (
+                    current.get("path") or current.get("id") or current.get("audio_id")
+                ):
+                        audio["previous"] = current
+                        audio["current"] = None
+                        audio.pop("duration_sec", None)
+                        updates["audio"] = audio
+                        row["audio"] = audio
+                    updates["generated_params"] = None
+                    updates["generated_at"] = None
+                    row["generated_params"] = None
+                    row["generated_at"] = None
+                self._client.update(
+                    SEGMENTS,
+                    updates,
+                    params={"id": f"eq.{prev['id']}"},
+                )
+            keep_ids.add(row["id"])
+            result_rows.append(row)
+
+        dropped = [r for r in existing_rows if r["id"] not in keep_ids]
+        if dropped:
+            self._client.delete(
+                SEGMENTS, params={"id": f"in.({','.join(r['id'] for r in dropped)})"}
+            )
+        self._client.update(CHAPTERS, {"updated_at": now}, params={"id": f"eq.{chapter_id}"})
+        self._client.update(
+            PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        result_rows.sort(key=lambda r: r.get("position") or 0)
+        return [_seg_row_to_in(r) for r in result_rows], now
 
     def delete_project(self, project_id: str) -> bool:
         if not self.project_exists(project_id):

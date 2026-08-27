@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { SegmentedProject } from '../types';
-import type { SegmentedProjectStorage } from './segmentedProjectStorage';
+import type { SaveOptions, SegmentedProjectStorage } from './segmentedProjectStorage';
 import { API_BASE_URL } from './apiBase';
 import { applyAuthInterceptors } from './auth';
 
@@ -37,9 +37,11 @@ export const backendStorage: SegmentedProjectStorage = {
     const { data } = await api.get<SegmentedProject>(`/segmented-projects/${id}`);
     return data;
   },
-  async saveProject(project: SegmentedProject) {
+  async saveProject(project: SegmentedProject, options?: SaveOptions) {
     const payload = {
       ...project,
+      // 乐观锁：草稿基于的服务端版本；undefined 会被 JSON 序列化丢弃（不校验）
+      base_updated_at: options?.base_updated_at ?? undefined,
       chapters: project.chapters.map((chapter) => ({
         ...chapter,
         segments: chapter.segments.map((segment) => ({
@@ -48,7 +50,8 @@ export const backendStorage: SegmentedProjectStorage = {
         })),
       })),
     };
-    await api.put(`/segmented-projects/${project.id}`, payload);
+    const { data } = await api.put(`/segmented-projects/${project.id}`, payload);
+    return data as SegmentedProject;
   },
   async deleteProject(id: string) {
     await api.delete(`/segmented-projects/${id}`);

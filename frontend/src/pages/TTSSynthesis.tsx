@@ -14,8 +14,8 @@ import { chaptersNeedingSplit, selectProduceAllSegments, type ProduceAllRun } fr
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
-import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode } from '../services/api';
+import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action, type ServerSegmentPatch } from '../hooks/useSegmentedProject';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode, type SegmentPatchBody } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
@@ -23,6 +23,8 @@ import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
 import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
+import { useSegmentPatchSync } from '../hooks/useSegmentPatchSync';
+import { recoverStaleProject } from '../hooks/recoverStaleProject';
 import { peekTryHandoffText, consumeTryHandoffText } from '../try/tryHandoff';
 import { applyTryHandoffToProject } from '../try/applyTryHandoff';
 import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segmentedDraftStore';
@@ -412,7 +414,12 @@ export function TTSSynthesis({
     // 初始加载期间不触发自动保存，避免 markDirty 导致误判冲突
     if (!initialLoadDoneRef.current) return;
     // 跳过纯 UI 状态变更（如 SELECT_SEGMENT 不 bump updated_at）
-    if (project.updated_at === lastSavedUpdatedAtRef.current) return;
+    if (project.updated_at === lastSavedUpdatedAtRef.current) {
+      // touch=false 的变更（PATCH/结构端点已远端持久化）：不触发整包 PUT，
+      // 但刷新草稿内容，防待冲刷的陈旧草稿把 PATCH 写入的字段覆盖回旧值
+      if (storageMode === 'backend') void draftSync.refreshDraft(project);
+      return;
+    }
     lastSavedUpdatedAtRef.current = project.updated_at;
     if (storageMode === 'backend') {
       void draftSync.markDirty(project);
@@ -478,8 +485,61 @@ export function TTSSynthesis({
       const code = apiErrorCode(error);
       if (code === 'segment_too_long') showToast(t('segmentEdit.segmentTooLong'), 'error');
       else if (code === 'chapter_limit_reached') showToast(t('projectShell.chapterQuotaReached'), 'error');
+      else if (code === 'stale_payload' && project?.id) {
+        // 乐观锁拒绝：本地草稿基于过期的服务端版本（他处已更新/合成端点已前进）。
+        // 恢复 = 拉后端权威态 + adoptBackendVersion，丢弃冲突草稿避免反复 409。
+        void recoverStaleProject({
+          projectId: project.id,
+          storage: projectStorage,
+          adoptBackendVersion: draftSync.adoptBackendVersion,
+          applyProject: (p) => {
+            setProject(p);
+            dispatch({ type: 'LOAD_PROJECT', project: p });
+          },
+          migrate: (p) => migrateV1(p, t),
+        }).then((recovered) => {
+          if (recovered) showToast(t('tts.staleSaveRecovered'), 'info');
+        }).catch(() => { /* 恢复失败等下一轮保存重试 */ });
+      }
     },
   });
+
+  // ---- 段级编辑远端同步（Phase 2：PATCH 取代整包 PUT autosave）----
+  const projectRef = useRef(project);
+  useEffect(() => { projectRef.current = project; });
+  const segmentPatchSync = useSegmentPatchSync({
+    projectId: project.id,
+    enabled: storageMode === 'backend' && project.id !== '__scratchpad__',
+    onPatched: (segmentId, segment, projectUpdatedAt) => {
+      // 以服务端段数据为准回写（含 voice 变更导致的音频降级）
+      dispatch({ type: 'APPLY_SERVER_SEGMENT', id: segmentId, segment: segment as ServerSegmentPatch });
+      void draftSync.noteServerVersion(projectUpdatedAt);
+    },
+    onError: (error) => {
+      console.warn('[segmentPatch] failed:', error);
+      showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+    },
+  });
+
+  /**
+   * 段内容编辑：本地 dispatch 立即生效 + 远端 PATCH 持久化。
+   * backend 模式下 action 带 touch=false —— 不 bump 项目 updated_at，
+   * 避免触发整包 PUT autosave（PATCH 已持久化）；frontend 模式照旧走 IndexedDB。
+   */
+  const editSegmentRemote = useCallback((
+    action: Action, segmentId: string,
+    buildBody: (seg: Segment) => SegmentPatchBody,
+  ) => {
+    const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+    if (!remote) { dispatch(action); return; }
+    // 先在 ref 态上跑一遍 reducer，拿到与本地一致的 PATCH 字段（voice 等派生值）
+    const next = segmentedReducer({ project: projectRef.current }, action).project;
+    const chapter = next.chapters.find(c => c.segments.some(s => s.id === segmentId));
+    const seg = chapter?.segments.find(s => s.id === segmentId);
+    dispatch({ ...action, touch: false });
+    if (seg && chapter) segmentPatchSync.queue(segmentId, chapter.id, buildBody(seg));
+  }, [storageMode, dispatch, segmentPatchSync]);
+
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
   const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: ProjectDraftRecord } | null>(null);
@@ -838,8 +898,9 @@ export function TTSSynthesis({
   }, [project.id, project, projectList, doDeleteProject, showToast]);
 
   const handleToggleIndependentVoice = useCallback((id: string) => {
-    dispatch({ type: 'TOGGLE_INDEPENDENT_VOICE', id });
-  }, [dispatch]);
+    editSegmentRemote({ type: 'TOGGLE_INDEPENDENT_VOICE', id }, id,
+      (updated) => ({ voice: updated.voice as unknown as Record<string, unknown> }));
+  }, [editSegmentRemote]);
 
   const handleConfirmCustom = useCallback((id: string, localParams: Record<string, unknown>) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -853,12 +914,19 @@ export function TTSSynthesis({
         // Take all params from the panel display (effective + local edits)
         const eff = segEffectiveParams(seg) as Record<string, unknown>;
         const fullParams = { ...eff, ...localParams };
-        dispatch({ type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true });
+        editSegmentRemote(
+          { type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true },
+          id, (updated) => ({ voice: updated.voice as unknown as Record<string, unknown> }),
+        );
         // Clear existing audio — was generated with old params
-        if (seg.status === 'ready') dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id });
+        // （remote 模式下 PATCH 已在服务端降级音频，本地 CLEAR 不再触发整包 PUT）
+        if (seg.status === 'ready') {
+          const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+          dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id, touch: !remote });
+        }
       },
     });
-  }, [activeChapter.segments, dispatch]);
+  }, [activeChapter.segments, dispatch, editSegmentRemote, storageMode]);
 
   const handleMerge = useCallback((id: string, direction: 'up' | 'down') => {
     const segs = activeChapter.segments;
@@ -880,7 +948,29 @@ export function TTSSynthesis({
     const doMerge = async () => {
       if (cur.audio.current?.id) { try { await deleteTTSResult(cur.audio.current.id); } catch { /* ignore */ } }
       if (nxt.audio.current?.id) { try { await deleteTTSResult(nxt.audio.current.id); } catch { /* ignore */ } }
-      dispatch({ type: 'MERGE_SEGMENTS', id, direction });
+      const action: Action = { type: 'MERGE_SEGMENTS', id, direction };
+      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+      if (!remote) { dispatch(action); return; }
+      // 结构操作走章级 reconcile 端点：合并改了保留段的文本，服务端借此触发
+      // 音频失效降级（整包 PUT 已忽略 audio，无法表达该意图）。
+      const next = segmentedReducer({ project: projectRef.current }, action).project;
+      const chapter = next.chapters.find(c => c.id === activeChapter.id);
+      dispatch({ ...action, touch: false });
+      if (!chapter) return;
+      try {
+        const resp = await segmentedProjectApi.reconcileChapterStructure(
+          projectRef.current.id, chapter.id,
+          chapter.segments.map((s, i) => ({ id: s.id, text: s.text, position: i })),
+        );
+        dispatch({ type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: chapter.id, segments: resp.segments });
+        void draftSync.noteServerVersion(resp.project_updated_at);
+      } catch (error) {
+        // 远端失败：本地已合并，回退整包 PUT 兜底（结构 reconcile 语义仍在，
+        // 仅音频降级丢失，文件始终在盘上）
+        console.warn('[structureSync] merge failed, fallback to full save:', error);
+        void draftSync.markDirty(projectRef.current);
+        showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+      }
     };
     if (hasAudio) {
       setConfirmDialog({
@@ -892,7 +982,7 @@ export function TTSSynthesis({
     } else {
       doMerge();
     }
-  }, [activeChapter.segments, dispatch]);
+  }, [activeChapter.id, activeChapter.segments, dispatch, storageMode, draftSync, showToast, t]);
 
   const handleSplit = useCallback((id: string, position: number) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -1301,6 +1391,9 @@ export function TTSSynthesis({
           generated_params: updatedSeg?.generated_params,
           origin: updatedSeg?.audio.current?.origin ?? 'tts',
         });
+        // 合成端点在服务端推进了项目 updated_at：前移乐观锁 base，
+        // 避免 GENERATE_SUCCESS 触发的整包 PUT 被 409（stale_payload）。
+        if (updated?.updated_at) void draftSync.noteServerVersion(updated.updated_at);
         unlockedRecordedRef.current.delete(id);
         return;
       }
@@ -1400,8 +1493,10 @@ export function TTSSynthesis({
     });
     if (!ok) return;
     unlockedRecordedRef.current.add(id);
-    dispatch({ type: 'UNLOCK_SEGMENT_AUDIO', id });
-  }, [confirm, dispatch, t]);
+    // remote：PATCH unlock_audio 在服务端清除 origin（整包 PUT 不再写 audio，
+    // 仅靠本地 dispatch 的话 DB 里的 recorded 锁会残留）
+    editSegmentRemote({ type: 'UNLOCK_SEGMENT_AUDIO', id }, id, () => ({ unlock_audio: true }));
+  }, [confirm, editSegmentRemote, t]);
 
   // 录入面板确认：前端模式存 IndexedDB，后端模式上传到项目资产目录
   const handleRecordConfirm = useCallback(async (audio: File | Blob, durationSec?: number) => {
@@ -1426,6 +1521,8 @@ export function TTSSynthesis({
           duration_sec: updatedSeg?.audio.current?.duration_sec ?? durationSec,
           audio_format: updatedSeg?.audio.format,
         });
+        // 录音上传同样推进了服务端 updated_at，前移乐观锁 base
+        if (updated?.updated_at) void draftSync.noteServerVersion(updated.updated_at);
       } else {
         const MIME_TO_FMT: Record<string, string> = {
           'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav',
@@ -1443,7 +1540,7 @@ export function TTSSynthesis({
     } finally {
       setRecordBusy(false);
     }
-  }, [recordSegmentId, activeChapter, storageMode, project?.id, dispatch, showToast, t]);
+  }, [recordSegmentId, activeChapter, storageMode, project?.id, dispatch, showToast, t, draftSync]);
 
   const handleRegenerateAll = useCallback(async (mode: BatchSynthesizeMode = 'all') => {
     if (generating) return;
@@ -1547,8 +1644,9 @@ export function TTSSynthesis({
       }
 
       // 暂停自动保存：逐段合成会 dispatch 状态更新，若中途触发全量 PUT，
-      // 会用陈旧内存态覆盖刚合成段的音频（reconcile 还会删掉刚写的文件）。
-      // 此时还未开始合成，状态与后端一致，暂停安全；最后 reload 恢复。
+      // 会用陈旧内存态覆盖刚合成段的 DB 音频元数据（文件本身已不再被 PUT
+      // 删除，但 DB 与文件仍会短暂脱节）。此时还未开始合成，状态与后端一致，
+      // 暂停安全；最后 reload 恢复。
       initialLoadDoneRef.current = false;
 
       // Phase 2: 拉最新项目态收集目标段。
@@ -2221,21 +2319,27 @@ export function TTSSynthesis({
                   if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text, voice_ref: seg.voice_ref || buildGlobalVoiceRef() });
                 }}
                 onAnnotateSSML={(id) => handleAnnotateSSML([id])}
-                onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
+                onUpdateText={(id, text) => editSegmentRemote({ type: 'UPDATE_TEXT', id, text }, id, () => ({ text }))}
                 onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
                 onUpdateParams={(id, params) => {
                   // Only apply params update for already-custom segments
                   const seg = activeChapter.segments.find(s => s.id === id);
                   if (seg?.voice.source === 'custom') {
-                    dispatch({ type: 'UPDATE_PARAMS', id, params });
+                    editSegmentRemote({ type: 'UPDATE_PARAMS', id, params }, id,
+                      (updated) => ({ voice: updated.voice as unknown as Record<string, unknown> }));
                   }
                   // Non-custom: ignored here; params accumulated locally in edit panel → confirm button handles conversion
                 }}
-                onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
-                onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
+                onUpdateEmotion={(id, emotion) => editSegmentRemote({ type: 'UPDATE_EMOTION', id, emotion }, id, () => ({ emotion }))}
+                onUpdateRole={(id, roleId, roleSnapshot) => editSegmentRemote(
+                  { type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot }, id,
+                  (updated) => ({ role_id: updated.role_id ?? null, voice: updated.voice as unknown as Record<string, unknown> }),
+                )}
                 onUpdateKind={(id, kind, roleSnapshot) => {
-                  dispatch({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind });
-                  dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot });
+                  editSegmentRemote({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind }, id,
+                    () => ({ segment_kind: kind }));
+                  editSegmentRemote({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot }, id,
+                    (updated) => ({ role_id: updated.role_id ?? null, voice: updated.voice as unknown as Record<string, unknown> }));
                 }}
                 onToggleIndependentVoice={handleToggleIndependentVoice}
                 onMerge={handleMerge}

@@ -128,6 +128,22 @@ class TestProjectCrud:
         resp = client.put("/api/segmented-projects/proj-1", json=_project(pid="proj-2"))
         assert resp.status_code == 400
 
+    def test_put_stale_base_updated_at_409(self, workers_client):
+        """workers 模式同样执行乐观锁：陈旧 base_updated_at → 409 stale_payload。"""
+        client, _ = workers_client
+        created = _create_project(client)
+
+        stale = _project()
+        stale["base_updated_at"] = "2000-01-01T00:00:00"
+        resp = client.put("/api/segmented-projects/proj-1", json=stale)
+        assert resp.status_code == 409
+        assert resp.json()["detail"]["code"] == "stale_payload"
+
+        fresh = _project(name="改名项目")
+        fresh["base_updated_at"] = created["updated_at"]
+        resp = client.put("/api/segmented-projects/proj-1", json=fresh)
+        assert resp.status_code == 200, resp.text
+
     def test_chapter_segment_reorder_and_drop(self, workers_client):
         """全量保存语义：重排序 + 删除章节/分段。"""
         client, _ = workers_client
@@ -156,6 +172,183 @@ class TestProjectCrud:
         assert client.post(
             "/api/segmented-projects", json=_project(pid="__scratchpad__")
         ).status_code == 403
+
+    def test_patch_segment_partial_update(self, workers_client):
+        client, _ = workers_client
+        _create_project(client)
+
+        resp = client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments/seg-1",
+            json={"text": "改过的第一段。"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["segment"]["text"] == "改过的第一段。"
+        assert body["segment"]["emotion"] is None  # 缺省字段不动
+        assert body["project_updated_at"]
+
+        # tri-state：先设置，再显式 null 清空 role_id
+        resp = client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments/seg-1",
+            json={"role_id": "role-a", "segment_kind": "dialogue"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["segment"]["role_id"] == "role-a"
+        assert resp.json()["segment"]["segment_kind"] == "dialogue"
+        resp = client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments/seg-1",
+            json={"role_id": None},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["segment"]["role_id"] is None
+
+        # GET 回读一致
+        got = client.get("/api/segmented-projects/proj-1").json()
+        assert got["chapters"][0]["segments"][0]["text"] == "改过的第一段。"
+
+        # 不存在 → 404
+        assert client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments/nope", json={"text": "x"}
+        ).status_code == 404
+
+    def test_patch_segment_unlock_audio(self, workers_client):
+        """unlock_audio=True 清除录音 origin（PostgREST 路径与 local 同语义）。"""
+        client, _ = workers_client
+        _create_project(client, chapters=[_chapter("ch-1", 0, "章", [
+            _segment("seg-1", 0, "一。",
+                     audio={"current": {"audio_id": "idb-1", "origin": "recorded"}}),
+        ])])
+
+        resp = client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments/seg-1",
+            json={"unlock_audio": True},
+        )
+        assert resp.status_code == 200, resp.text
+        current = resp.json()["segment"]["audio"]["current"]
+        assert current.get("origin") is None
+        assert current["audio_id"] == "idb-1"
+
+
+class TestSegmentStructure:
+    """Phase 3 段结构端点（B 类）：workers 模式走 PostgREST 的同语义实现。"""
+
+    def test_create_segment_append_and_insert(self, workers_client):
+        client, _ = workers_client
+        _create_project(client, chapters=[_chapter("ch-1", 0, "章", [
+            _segment("seg-1", 0, "一。"), _segment("seg-2", 1, "二。"),
+        ])])
+
+        # after_id 缺省 → 追加到章末
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments", json={"text": "三。"}
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["segment"]["text"] == "三。"
+        assert body["segment"]["position"] == 2
+        assert [p["position"] for p in body["positions"]] == [0, 1, 2]
+        assert body["project_updated_at"]
+        appended_id = body["segment"]["id"]
+
+        # after_id 命中 → 插到其后，后续段 position 平移（降序逐行 update 防唯一冲突）
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments",
+            json={"text": "插队。", "after_id": "seg-1"},
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["segment"]["position"] == 1
+        assert [p["id"] for p in body["positions"]] == [
+            "seg-1", body["segment"]["id"], "seg-2", appended_id,
+        ]
+
+        segs = client.get("/api/segmented-projects/proj-1").json()["chapters"][0]["segments"]
+        assert [s["text"] for s in segs] == ["一。", "插队。", "二。", "三。"]
+        assert [s["position"] for s in segs] == [0, 1, 2, 3]
+
+    def test_create_segment_404s(self, workers_client):
+        client, _ = workers_client
+        _create_project(client)
+        assert client.post(
+            "/api/segmented-projects/proj-1/chapters/nope/segments", json={"text": "x"}
+        ).status_code == 404
+        assert client.post(
+            "/api/segmented-projects/nope/chapters/ch-1/segments", json={"text": "x"}
+        ).status_code == 404
+        resp = client.post(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments",
+            json={"text": "x", "after_id": "seg-ghost"},
+        )
+        assert resp.status_code == 404
+
+    def test_structure_reconcile_add_update_delete_reorder(self, workers_client):
+        client, store = workers_client
+        _create_project(client, chapters=[_chapter("ch-1", 0, "章", [
+            _segment("seg-1", 0, "一。"),
+            _segment("seg-2", 1, "二。",
+                     audio={"current": {"audio_id": "idb-2", "origin": "tts"}},
+                     generated_params={"engine": "edge_tts"}),
+            _segment("seg-3", 2, "三。"),
+        ])])
+
+        resp = client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1/structure",
+            json={"segments": [
+                {"id": "seg-3", "text": "三。", "position": 0},
+                {"id": None, "text": "新段。", "position": 1},
+                {"id": "seg-2", "text": "二（改）。", "position": 2},
+            ]},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert [s["id"] for s in body["segments"]][0] == "seg-3"
+        assert [s["position"] for s in body["segments"]] == [0, 1, 2]
+        assert body["project_updated_at"]
+
+        # seg-1 行被删（store 层断言）；seg-2 文本变更 → 音频降级（current→previous，
+        # generated_params 置空，与 local 同语义）
+        store_ids = [r["id"] for r in store.tables["segmented_project_segments"]]
+        assert "seg-1" not in store_ids
+        detail = client.get("/api/segmented-projects/proj-1").json()
+        segs = detail["chapters"][0]["segments"]
+        assert [s["text"] for s in segs] == ["三。", "新段。", "二（改）。"]
+        assert [s["position"] for s in segs] == [0, 1, 2]
+        seg2 = next(s for s in segs if s["id"] == "seg-2")
+        assert seg2["audio"].get("current") is None
+        assert seg2["audio"]["previous"]["audio_id"] == "idb-2"
+        assert seg2["generated_params"] is None
+
+    def test_structure_reconcile_404(self, workers_client):
+        client, _ = workers_client
+        _create_project(client)
+        assert client.patch(
+            "/api/segmented-projects/proj-1/chapters/nope/structure", json={"segments": []}
+        ).status_code == 404
+
+    def test_cross_user_404(self, workers_client):
+        """跨用户：他人项目在两个端点都按不存在处理（不泄露存在性）。"""
+        import httpx
+
+        from app.core.repositories import deps
+        from app.core.supabase_client import SupabaseClient
+
+        client, store = workers_client
+        _create_project(client)  # 未归属行（user_id 为 None）
+
+        # 换成 user-b 作用域的仓储（同一 fake 库）：user_id=eq.user-b 过滤使项目不可见
+        sb_client = SupabaseClient(
+            "https://fake.supabase.co", "service-key",
+            transport=httpx.MockTransport(store.handle),
+        )
+        client.app.dependency_overrides[deps.get_segmented_repo] = (
+            lambda: SupabaseSegmentedProjectRepository(sb_client, owner_id="user-b")
+        )
+        assert client.post(
+            "/api/segmented-projects/proj-1/chapters/ch-1/segments", json={"text": "x"}
+        ).status_code == 404
+        assert client.patch(
+            "/api/segmented-projects/proj-1/chapters/ch-1/structure", json={"segments": []}
+        ).status_code == 404
 
 
 class TestAudioIdWrite:

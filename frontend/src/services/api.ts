@@ -620,7 +620,61 @@ export interface BatchCreateChaptersResult {
   reuse?: BatchReuseReport | null;
 }
 
+export interface SegmentPatchBody {
+  text?: string;
+  emotion?: string | null;
+  role_id?: string | null;
+  segment_kind?: string;
+  voice?: Record<string, unknown>;
+  /** true = 显式解锁录音（清除 audio.current.origin，音频引用保留） */
+  unlock_audio?: boolean;
+}
+
+export interface SegmentPatchResponse {
+  segment: import('../types').Segment;
+  /** 服务端项目最新 updated_at（推进整包 PUT 的乐观锁 base） */
+  project_updated_at: string;
+}
+
+export interface StructureSegmentPayload {
+  /** 缺省 = 新建段（服务端分配 id） */
+  id?: string | null;
+  text: string;
+  position: number;
+}
+
+export interface ChapterStructureResponse {
+  /** reconcile 后该章全部段（按 position 升序，服务端权威态） */
+  segments: import('../types').Segment[];
+  project_updated_at: string;
+}
+
 export const segmentedProjectApi = {
+  /** 段级部分更新（tri-state：只更新出现的字段，显式 null = 清空） */
+  patchSegment: async (
+    projectId: string,
+    chapterId: string,
+    segmentId: string,
+    body: SegmentPatchBody,
+  ): Promise<SegmentPatchResponse> => {
+    const { data } = await api.patch<SegmentPatchResponse>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/segments/${segmentId}`,
+      body,
+    );
+    return data;
+  },
+  /** 章内结构 reconcile（删除/合并/拆段/排序的远端入口） */
+  reconcileChapterStructure: async (
+    projectId: string,
+    chapterId: string,
+    segments: StructureSegmentPayload[],
+  ): Promise<ChapterStructureResponse> => {
+    const { data } = await api.patch<ChapterStructureResponse>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/structure`,
+      { segments },
+    );
+    return data;
+  },
   synthesizeSegment: async (
     projectId: string,
     chapterId: string,

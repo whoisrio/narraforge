@@ -310,6 +310,45 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments[0].text).toBe('new');
   });
 
+  it('APPLY_SERVER_SEGMENT 用服务端段数据覆盖本地字段且不 bump 项目 updated_at', () => {
+    const s: Segment = { id: 's1', text: 'local', voice: { source: 'chapter' }, audio: { format: 'mp3', current: { path: 'x.mp3' } }, segment_kind: 'narration' as const, status: 'ready', created_at: '', updated_at: '' };
+    const before = makeProject({ updated_at: '2026-08-27T00:00:00.000Z' }, { segments: [s] });
+    const serverSeg = {
+      id: 's1', text: 'server', emotion: 'happy', role_id: 'r1', segment_kind: 'dialogue',
+      voice: { source: 'role', role_id: 'r1' },
+      audio: { format: 'mp3', current: null, previous: { path: 'x.mp3' } },
+    };
+    const next = segmentedReducer({ project: before }, { type: 'APPLY_SERVER_SEGMENT', id: 's1', segment: serverSeg });
+    const seg = ac(next.project).segments[0];
+    expect(seg.text).toBe('server');
+    expect(seg.emotion).toBe('happy');
+    expect(seg.role_id).toBe('r1');
+    expect(seg.segment_kind).toBe('dialogue');
+    expect(seg.voice.source).toBe('role');
+    expect(seg.audio.current).toBeUndefined();
+    expect(seg.audio.previous).toEqual({ path: 'x.mp3' });
+    // 服务端清了音频 → 本地状态回 idle
+    expect(seg.status).toBe('idle');
+    expect(next.project.updated_at).toBe('2026-08-27T00:00:00.000Z');
+  });
+
+  it('UPDATE_TEXT with touch=false 不 bump 项目 updated_at（远端 PATCH 已持久化）', () => {
+    const s: Segment = { id: 's1', text: 'old', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
+    const before = makeProject({ updated_at: '2026-08-27T00:00:00.000Z' }, { segments: [s] });
+    const next = segmentedReducer({ project: before }, { type: 'UPDATE_TEXT', id: 's1', text: 'new', touch: false });
+    expect(ac(next.project).segments[0].text).toBe('new');
+    expect(next.project.updated_at).toBe('2026-08-27T00:00:00.000Z');
+  });
+
+  it('SET_SEGMENT_ROLE with touch=false 不 bump 项目 updated_at', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
+    const before = makeProject({ updated_at: '2026-08-27T00:00:00.000Z' }, { segments: [s] });
+    const roleSnapshot = { id: 'r1', name: '角色A', default_engine: 'edge_tts', default_voice: 'Yunyang', default_engine_params: { engine: 'edge_tts' }, favorite_styles: [] };
+    const next = segmentedReducer({ project: before }, { type: 'SET_SEGMENT_ROLE', id: 's1', roleId: 'r1', roleSnapshot, touch: false });
+    expect(ac(next.project).segments[0].role_id).toBe('r1');
+    expect(next.project.updated_at).toBe('2026-08-27T00:00:00.000Z');
+  });
+
   it('UPDATE_PARAMS sets voice to custom', () => {
     const s: Segment = {
       id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration',
@@ -722,5 +761,40 @@ describe('voice source transitions (V3)', () => {
       const down = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'b', direction: 'down' });
       expect(ac(down.project).segments).toHaveLength(2);
     });
+  });
+});
+
+describe('APPLY_SERVER_CHAPTER_SEGMENTS', () => {
+  it('以服务端段列表整章回写（含音频降级），且不 bump 项目 updated_at', () => {
+    const p = makeProject({}, {
+      segments: [
+        { id: 's1', text: '甲乙', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration', status: 'idle', created_at: '', updated_at: '' },
+      ],
+    });
+    const before = p.updated_at;
+    const next = segmentedReducer({ project: p }, {
+      type: 'APPLY_SERVER_CHAPTER_SEGMENTS',
+      chapterId: 'ch1',
+      segments: [{
+        id: 's1', text: '甲乙', position: 0,
+        voice: { source: 'chapter' },
+        audio: { format: 'mp3', current: null, previous: { path: 'p1/ch1/s1.mp3', format: 'mp3' } },
+        generated_params: null,
+      }],
+    });
+    const ch = next.project.chapters[0];
+    expect(ch.segments).toHaveLength(1);
+    expect(ch.segments[0].audio.current).toBeFalsy();
+    expect(ch.segments[0].audio.previous?.path).toBe('p1/ch1/s1.mp3');
+    expect(ch.segments[0].status).toBe('idle');
+    expect(next.project.updated_at).toBe(before); // touch=false：不触发整包 PUT
+  });
+
+  it('章节不存在时 no-op', () => {
+    const p = makeProject();
+    const next = segmentedReducer({ project: p }, {
+      type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: 'nope', segments: [],
+    });
+    expect(next.project).toBe(p);
   });
 });

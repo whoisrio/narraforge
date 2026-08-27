@@ -1041,10 +1041,13 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | GET | `/api/segmented-projects` | 列出所有项目（轻量摘要） |
 | POST | `/api/segmented-projects` | 创建项目（完整对象） |
 | GET | `/api/segmented-projects/{id}` | 获取完整项目（chapters + segments） |
-| PUT | `/api/segmented-projects/{id}` | 全量替换（reconcile） |
+| PUT | `/api/segmented-projects/{id}` | 全量替换（reconcile）。只更新 DB 状态，**不删除任何音频文件**——payload 中消失的路径/分片只删 DB 行，文件留盘变孤儿，由显式清理回收（陈旧快照与合成并发时不得误删资产）。乐观锁见 `base_updated_at`。**服务端自产字段保护**：已存在分片的 `audio`/`generated_params`/`generated_at` 忽略 payload 值、保留 DB 现值（仅合成/录音/adjust-audio 端点可写）；新建分片照常接收 |
 | DELETE | `/api/segmented-projects/{id}` | 删除项目 + 资产目录 |
 | POST | `/api/segmented-projects/{id}/chapters:batch` | 批量重建章节+分片（agent split_segment） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` | 生成分片音频（`force` 可强制覆盖已录入音频） |
+| PATCH | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}` | 段级部分更新（text/emotion/role_id/segment_kind/voice/unlock_audio，tri-state：只更新出现的字段，显式 null = 清空；voice 变更会把旧音频降级为 previous、清空 current 但保留文件；`unlock_audio=true` 清除录音 origin 锁；audio/generated_params/generated_at 为服务端自产字段不接受写入；响应为 `{segment, project_updated_at}`，后者供前端推进乐观锁 base） |
+| POST | `/api/segmented-projects/{id}/chapters/{cid}/segments` | 新建分片（`after_id` 锚点插入 / 缺省追加章末；响应含章内全量 position 列表 + `project_updated_at`） |
+| PATCH | `/api/segmented-projects/{id}/chapters/{cid}/structure` | 章内结构 reconcile（删除/合并/拆段/排序的唯一入口；已存在段文本变化时旧音频降级为 previous 并保留文件，被删分片只删 DB 行、音频文件留盘） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/audio` | 上传用户自行录入的分片音频（multipart） |
 | GET | `/api/segmented-projects/{id}/audio/{cid}/{sid}` | 读取分片 mp3 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |
@@ -1114,6 +1117,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | `default_narrator_role_id` | string | `null` | 默认旁白角色 ID |
 | `default_narrator_snapshot` | object | `null` | 旁白角色音色配置快照 |
 | `configs` | object \| null | `null` | 项目级自由配置 JSON 桶（可变 keys，无需数据库迁移） |
+| `base_updated_at` | string \| null | `null` | 乐观锁：payload 基于的服务端 `updated_at`。已存在的项目携带且不符时返回 `409 {"code": "stale_payload", "server_updated_at"}`；`null`/缺省 = 不校验（兼容老客户端与 agent） |
 | `configs.description` | string | — | 项目描述（UI 展示） |
 | `configs.export_directory` | string | — | 导出目录。绝对路径（含 `~`）时独立于 Remotion 直接使用；相对路径则相对于 `remotion_project_path`，默认 `public/audio` |
 | `configs.split_voice_mode` | string | — | 拆分默认模式：`narration` \| `dialogue` |
@@ -1252,6 +1256,94 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 **错误:** 409 `chapter_limit_reached`（workers 模式章节配额，仅增长时拦截，detail 为 `{code, limit}`）；422 `segment_too_long`（segment 文本超过 `MAX_SEGMENT_CHARS`，detail 为 `{code, max, chapter_id, segment_id}`，`chapter_id` 处为 `chapter_title`）。
 
 > 项目级长文档（源文档 `source.md`、旁白稿 `narration.md`）的内容一律存文件，DB 仅存 `source_document_path` / `narration_document_path`；`GET /segmented-projects/{id}` 的 `source_document` / `narration_script` 字段读穿返回内容。旧 `source_document` TEXT 列仅作遗留回退。
+
+### PATCH `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}`
+
+段级部分更新（2026-08-27 粒度重构 Phase 2，A 类段内容编辑入口）。
+
+**Request Body（全部可选，tri-state：只更新出现的字段，显式 `null` = 清空，缺省 = 不动）：**
+```json
+{
+  "text": "...", "emotion": "happy", "role_id": "role-xxx 或 null",
+  "segment_kind": "narration", "voice": { "source": "custom", "engine": "...", "params": {} },
+  "unlock_audio": true
+}
+```
+
+- `voice` 变更 → 旧音频降级：`audio.current` 降为 `previous`、`current` 与 `duration_sec` 清空、`generated_params`/`generated_at` 置空；**音频文件保留在盘上**（可撤销）。
+  `voice` 未变则不动音频。
+- `unlock_audio: true` → 清除 `audio.current.origin` 录音锁（之后批量/重新合成可覆盖）；音频引用本身保留。
+  这是唯一允许触碰 audio 元数据的字段，且只清 origin。
+- `text` 变更不影响音频（音画一致性由层同步/重新合成流程负责）。
+- `audio`/`generated_params`/`generated_at` 为服务端自产字段，本端点不接受写入。
+
+**Response (200):** `{ "segment": { "...": "SegmentIn" }, "project_updated_at": "服务端项目最新 updated_at" }`
+
+**错误:** 404 `segment_not_found`；422 `segment_too_long`（`text` 超过 `MAX_SEGMENT_CHARS`）。
+
+### POST `/api/segmented-projects/{id}/chapters/{cid}/segments`
+
+新建分片（2026-08-27 粒度重构 Phase 3，B 类段结构端点之一）。
+
+**Request Body:**
+```json
+{
+  "text": "新分片文本",
+  "after_id": "seg-anchor 或 null"
+}
+```
+
+- `text`：默认 `""`。
+  空文本合法（先建空段再编辑）；非空时受 `MAX_SEGMENT_CHARS` 上限约束。
+- `after_id`：默认 `null`。
+  为章内某分片 id 时插到它后面（后续分片 position 平移）；为 `null`/缺省时追加到章末。
+
+**Response (201):**
+```json
+{
+  "segment": { "id": "新分片 uuid", "position": 3, "text": "新分片文本", "...": "SegmentIn 其余字段" },
+  "positions": [{ "id": "s1", "position": 0 }, { "id": "s2", "position": 1 }],
+  "project_updated_at": "2026-08-27T06:00:00"
+}
+```
+
+`positions` 是插入后章内全部分片的 `{id, position}` 终态列表，前端按它收敛本地排序；`project_updated_at` 供前端推进整量 PUT 的乐观锁 base。
+
+**错误:** 404 `chapter_not_found`（章节或项目不存在，workers 模式跨用户同此）；404 `segment_not_found`（`after_id` 在章内无对应分片）；422 `segment_too_long`。
+
+### PATCH `/api/segmented-projects/{id}/chapters/{cid}/structure`
+
+章内结构 reconcile：删除/合并/拆段/排序的唯一入口（B 类段结构端点之一）。
+与整量 PUT 的分片 reconcile 同语义，但范围收敛到一章。
+
+**Request Body:**
+```json
+{
+  "segments": [
+    { "id": "s1", "text": "改后的文本", "position": 0 },
+    { "id": null, "text": "新分片", "position": 1 }
+  ]
+}
+```
+
+**语义：**
+
+- payload 带 `id` 且该章存在此行 → 只更新 `text`/`position`；**`text` 发生变化时**（合并等结构操作）旧音频失效：`audio.current` 降级为 `previous`、`duration_sec` 清空、`generated_params`/`generated_at` 置空，**音频文件保留在盘上**（可撤销/回放）。
+  `text` 未变（纯重排）时 `audio`/`generated_params`/`generated_at` 等服务端自产字段保留 DB 现值。
+- `id` 为 `null` → 新建分片（服务端 uuid4 生成 id）。
+- `id` 存在但该章无此行 → 按新建处理（用给定 id 播种，与整量 PUT 一致）。
+- 该章现存但 payload 未引用的分片 → 删 DB 行，**音频文件保留在盘上**（绝不按状态 diff 删文件，孤儿文件由显式 sweep 回收）。
+- position 重排用「负哨兵两阶段」手法防 `(chapter_id, position)` 唯一约束冲突；local 模式事务内单次 commit。
+
+**Response (200):**
+```json
+{
+  "segments": ["reconcile 后该章全部分片的 SegmentIn（按 position 升序）"],
+  "project_updated_at": "2026-08-27T06:00:00"
+}
+```
+
+**错误:** 404 `chapter_not_found`（章节或项目不存在，workers 模式跨用户同此）；422 `segment_too_long`（任一分片 text 超过 `MAX_SEGMENT_CHARS`）。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize`
 

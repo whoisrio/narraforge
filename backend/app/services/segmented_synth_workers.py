@@ -102,7 +102,7 @@ async def synthesize_segment_workers(
 
     # 录音锁定：除非 force，否则不覆盖
     audio = seg.get("audio") or {}
-    current = audio.get("current", {}) if isinstance(audio, dict) else {}
+    current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
     if not force and current.get("origin") == "recorded":
         return detail
 
@@ -249,7 +249,7 @@ async def get_segment_audio_workers(
         return None
     _ch, seg = found
     audio = seg.get("audio") or {}
-    current = audio.get("current", {}) if isinstance(audio, dict) else {}
+    current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
     ref = current.get("path")
     if not ref:
         return None

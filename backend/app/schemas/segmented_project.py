@@ -38,6 +38,17 @@ class ChapterIn(BaseModel):
     segments: list[SegmentIn] = Field(default_factory=list)
 
 
+class StalePayloadError(Exception):
+    """整量保存乐观锁拒绝：payload 的 base_updated_at 与服务端当前 updated_at 不符。
+
+    ``server_updated_at`` 携带服务端当前值，供 409 响应回传客户端做恢复。
+    """
+
+    def __init__(self, server_updated_at: str | None):
+        super().__init__("stale_payload")
+        self.server_updated_at = server_updated_at
+
+
 class ProjectIn(BaseModel):
     id: str
     name: str
@@ -54,6 +65,8 @@ class ProjectIn(BaseModel):
     configs: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None
+    # 乐观锁：本 payload 所基于的服务端 updated_at；None = 不校验（老客户端/agent）
+    base_updated_at: str | None = None
     chapters: list[ChapterIn] = Field(default_factory=list)
 
     @field_validator("schema_version")
@@ -87,6 +100,74 @@ class SynthesizeSegmentRequest(BaseModel):
     ssml: str | None = None
     keep_previous: bool = True
     force: bool = False
+
+
+class SegmentPatchIn(BaseModel):
+    """段级部分更新（PATCH）。tri-state：仅更新请求体中出现的字段
+    （model_fields_set），显式 null = 清空，字段缺省 = 不动。
+    audio/generated_params/generated_at 为服务端自产字段，不在此接受；
+    唯一的例外是 unlock_audio=True —— 清除录音 origin 锁（显式解锁意图），
+    不触碰音频路径本身。
+    """
+    text: str | None = None
+    emotion: str | None = None
+    role_id: str | None = None
+    segment_kind: str | None = None
+    voice: dict[str, Any] | None = None
+    unlock_audio: bool | None = None
+
+
+class SegmentPatchOut(BaseModel):
+    """PATCH 响应：更新后的段 + 服务端项目 updated_at（前端用它推进乐观锁 base）。"""
+    segment: SegmentIn
+    project_updated_at: str
+
+
+class SegmentCreateIn(BaseModel):
+    """新建段请求（POST .../segments）。
+
+    text 可为空（先建空段再补文本是合法场景）；after_id 指定插入锚点
+    （插到该段之后），null/缺省 = 追加到章末。
+    """
+    text: str = ""
+    after_id: str | None = None
+
+
+class SegmentPositionOut(BaseModel):
+    """段 id → 最终 position，结构变更后前端按此收敛本地排序。"""
+    id: str
+    position: int
+
+
+class SegmentCreateOut(BaseModel):
+    """新建段响应：新段 + 章内全部段的 position 列表 + 项目最新 updated_at。"""
+    segment: SegmentIn
+    positions: list[SegmentPositionOut]
+    project_updated_at: str
+
+
+class StructureSegmentIn(BaseModel):
+    """章节内结构 reconcile 的段项。
+
+    id 缺省/null → 新建段（服务端分配 id）；id 在该章存在 → 更新 text/position
+    （audio/generated_params/generated_at 等服务端自产字段不在此接受）；
+    id 存在但该章无此行 → 按新建处理（用给定 id 播种，对齐 save_project）。
+    """
+    id: str | None = None
+    text: str = ""
+    position: int
+
+
+class ChapterStructureIn(BaseModel):
+    """PATCH .../chapters/{cid}/structure 请求体：目标章段的期望终态。"""
+    segments: list[StructureSegmentIn] = Field(default_factory=list)
+
+
+class ChapterStructureOut(BaseModel):
+    """structure reconcile 响应：该章 reconcile 后的全部段（按 position 升序）
+    + 项目最新 updated_at。"""
+    segments: list[SegmentIn]
+    project_updated_at: str
 
 
 class ExportTextFileRequest(BaseModel):

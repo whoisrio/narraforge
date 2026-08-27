@@ -343,3 +343,388 @@ def test_local_mode_has_no_chapter_quota(client, tmp_path, monkeypatch):
     ]
     r = client.post("/api/segmented-projects", json=payload)
     assert r.status_code == 201, r.text
+
+
+def test_put_rejects_stale_base_updated_at(client, tmp_path, monkeypatch):
+    """陈旧 base_updated_at 的整量 PUT → 409 stale_payload（乐观锁）。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    r = client.post("/api/segmented-projects", json=_payload("p-stale"))
+    assert r.status_code == 201, r.text
+
+    stale = _payload("p-stale")
+    stale["base_updated_at"] = "2000-01-01T00:00:00"
+    r = client.put("/api/segmented-projects/p-stale", json=stale)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "stale_payload"
+
+
+def test_put_accepts_matching_base_updated_at(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    r = client.post("/api/segmented-projects", json=_payload("p-fresh"))
+    assert r.status_code == 201, r.text
+    server_updated_at = r.json()["updated_at"]
+
+    fresh = _payload("p-fresh")
+    fresh["name"] = "Fresh"
+    fresh["base_updated_at"] = server_updated_at
+    r = client.put("/api/segmented-projects/p-fresh", json=fresh)
+    assert r.status_code == 200, r.text
+    assert r.json()["name"] == "Fresh"
+
+
+# ── 段级 PATCH 端点（2026-08-27 粒度重构 Phase 2）──
+
+
+def test_patch_segment_updates_text_and_bumps_project_updated_at(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    created = client.post("/api/segmented-projects", json=_payload("p1"))
+    assert created.status_code == 201, created.text
+    old_project_updated_at = created.json()["updated_at"]
+
+    r = client.patch("/api/segmented-projects/p1/chapters/c1/segments/s1", json={"text": "改过的文本"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["segment"]["text"] == "改过的文本"
+    assert body["project_updated_at"] != old_project_updated_at
+
+    got = client.get("/api/segmented-projects/p1").json()
+    assert got["chapters"][0]["segments"][0]["text"] == "改过的文本"
+
+
+def test_patch_segment_clears_emotion_with_explicit_null(client, tmp_path, monkeypatch):
+    """tri-state：显式 null = 清空；字段缺省 = 不动。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"][0]["segments"][0]["emotion"] = "happy"
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    # 缺省 emotion → 保持
+    r = client.patch("/api/segmented-projects/p1/chapters/c1/segments/s1", json={"text": "x"})
+    assert r.status_code == 200
+    assert r.json()["segment"]["emotion"] == "happy"
+    # 显式 null → 清空
+    r = client.patch("/api/segmented-projects/p1/chapters/c1/segments/s1", json={"emotion": None})
+    assert r.status_code == 200
+    assert r.json()["segment"]["emotion"] is None
+
+
+def test_patch_segment_sets_role_kind_and_voice(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/segments/s1",
+        json={"role_id": "role-a", "segment_kind": "dialogue",
+              "voice": {"source": "role", "role_id": "role-a"}},
+    )
+    assert r.status_code == 200, r.text
+    seg = r.json()["segment"]
+    assert seg["role_id"] == "role-a"
+    assert seg["segment_kind"] == "dialogue"
+    assert seg["voice"]["source"] == "role"
+
+
+def test_patch_segment_preserves_server_owned_audio(client, tmp_path, monkeypatch):
+    """PATCH 内容字段不得触碰 audio/generated_params（服务端自产）。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"][0]["segments"][0]["audio"] = {
+        "current": {"path": "p1/c1/s1.mp3", "format": "mp3", "duration_sec": 1.5},
+    }
+    payload["chapters"][0]["segments"][0]["generated_params"] = {"engine": "edge_tts"}
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    r = client.patch("/api/segmented-projects/p1/chapters/c1/segments/s1",
+                     json={"text": "新文本", "audio": None})
+    assert r.status_code == 200, r.text
+    seg = r.json()["segment"]
+    assert seg["audio"]["current"]["path"] == "p1/c1/s1.mp3"
+    assert seg["generated_params"] == {"engine": "edge_tts"}
+
+
+def test_patch_segment_404_on_missing(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    r = client.patch("/api/segmented-projects/p1/chapters/c1/segments/nope", json={"text": "x"})
+    assert r.status_code == 404
+    r = client.patch("/api/segmented-projects/p1/chapters/nope/segments/s1", json={"text": "x"})
+    assert r.status_code == 404
+
+
+def test_patch_segment_rejects_too_long_text(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    r = client.patch("/api/segmented-projects/p1/chapters/c1/segments/s1",
+                     json={"text": "字" * 200})
+    assert r.status_code == 422
+
+
+def test_patch_segment_voice_change_demotes_audio(client, tmp_path, monkeypatch):
+    """voice 变更 → 旧音频降级为 previous、current 清空（文件保留），
+    与前端 CLEAR_SEGMENT_AUDIO 语义一致。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"][0]["segments"][0]["voice"] = {"source": "chapter"}
+    payload["chapters"][0]["segments"][0]["audio"] = {
+        "format": "mp3",
+        "duration_sec": 1.5,
+        "current": {"path": "p1/c1/s1.mp3", "format": "mp3", "duration_sec": 1.5},
+    }
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/segments/s1",
+        json={"voice": {"source": "custom", "engine": "edge_tts", "params": {"edge_voice": "zh-CN-XiaoxiaoNeural"}}},
+    )
+    assert r.status_code == 200, r.text
+    audio = r.json()["segment"]["audio"]
+    assert audio.get("current") is None
+    assert audio["previous"]["path"] == "p1/c1/s1.mp3"
+
+    # 回归（2026-08-27 e2e 全灭）：current=None 后项目列表/详情不得 500
+    assert client.get("/api/segmented-projects").status_code == 200
+    detail = client.get("/api/segmented-projects/p1")
+    assert detail.status_code == 200
+    summary = client.get("/api/segmented-projects").json()["items"][0]
+    assert summary["summary_stats"]["generated_count"] == 0
+
+    # voice 未变 → audio 不动（此时 current 已为空，再 PATCH 同值也不应再生 previous）
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/segments/s1",
+        json={"voice": {"source": "custom", "engine": "edge_tts", "params": {"edge_voice": "zh-CN-XiaoxiaoNeural"}}},
+    )
+    assert r.status_code == 200
+    audio = r.json()["segment"]["audio"]
+    assert audio.get("current") is None
+    assert audio["previous"]["path"] == "p1/c1/s1.mp3"
+
+
+def test_patch_segment_text_change_keeps_audio(client, tmp_path, monkeypatch):
+    """文本编辑不影响音频（与现有前端 UPDATE_TEXT 语义一致）。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"][0]["segments"][0]["audio"] = {
+        "current": {"path": "p1/c1/s1.mp3", "format": "mp3"},
+    }
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    r = client.patch("/api/segmented-projects/p1/chapters/c1/segments/s1", json={"text": "新文本"})
+    assert r.status_code == 200
+    assert r.json()["segment"]["audio"]["current"]["path"] == "p1/c1/s1.mp3"
+
+
+def test_patch_segment_unlock_audio_clears_origin(client, tmp_path, monkeypatch):
+    """unlock_audio=True：清除录音 origin 锁（显式解锁意图），音频引用本身保留。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p1")
+    payload["chapters"][0]["segments"][0]["audio"] = {
+        "current": {"path": "p1/c1/s1.webm", "format": "webm", "origin": "recorded"},
+    }
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/segments/s1",
+        json={"unlock_audio": True},
+    )
+    assert r.status_code == 200, r.text
+    current = r.json()["segment"]["audio"]["current"]
+    assert current.get("origin") is None
+    assert current["path"] == "p1/c1/s1.webm"  # 音频引用保留
+
+    # 无 origin 时 unlock 是 no-op
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/segments/s1",
+        json={"unlock_audio": True},
+    )
+    assert r.status_code == 200
+    assert r.json()["segment"]["audio"]["current"]["path"] == "p1/c1/s1.webm"
+
+
+# ── 段结构端点（2026-08-27 粒度重构 Phase 3）──
+
+
+def _three_segment_payload(pid: str = "p1") -> dict:
+    payload = _payload(pid)
+    payload["chapters"][0]["segments"] = [
+        {"id": "s1", "position": 0, "text": "一", "voice": {"source": "chapter"}},
+        {"id": "s2", "position": 1, "text": "二", "voice": {"source": "chapter"}},
+        {"id": "s3", "position": 2, "text": "三", "voice": {"source": "chapter"}},
+    ]
+    return payload
+
+
+def test_create_segment_appends_and_returns_positions(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    created = client.post("/api/segmented-projects", json=_three_segment_payload())
+    assert created.status_code == 201, created.text
+    old_updated_at = created.json()["updated_at"]
+
+    r = client.post("/api/segmented-projects/p1/chapters/c1/segments", json={"text": "新段"})
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["segment"]["text"] == "新段"
+    assert body["segment"]["position"] == 3
+    assert [p["id"] for p in body["positions"]] == ["s1", "s2", "s3", body["segment"]["id"]]
+    assert [p["position"] for p in body["positions"]] == [0, 1, 2, 3]
+    assert body["project_updated_at"] != old_updated_at
+
+    got = client.get("/api/segmented-projects/p1").json()
+    assert [s["text"] for s in got["chapters"][0]["segments"]] == ["一", "二", "三", "新段"]
+
+
+def test_create_segment_empty_body_is_legal(client, tmp_path, monkeypatch):
+    """空文本新建段是合法场景（先建段再编辑）。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    r = client.post("/api/segmented-projects/p1/chapters/c1/segments", json={})
+    assert r.status_code == 201, r.text
+    assert r.json()["segment"]["text"] == ""
+    assert r.json()["segment"]["position"] == 1
+
+
+def test_create_segment_inserts_after_anchor(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_three_segment_payload()).status_code == 201
+
+    r = client.post(
+        "/api/segmented-projects/p1/chapters/c1/segments",
+        json={"text": "插队", "after_id": "s1"},
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["segment"]["position"] == 1
+    assert [p["id"] for p in body["positions"]] == ["s1", body["segment"]["id"], "s2", "s3"]
+
+    got = client.get("/api/segmented-projects/p1").json()
+    assert [s["text"] for s in got["chapters"][0]["segments"]] == ["一", "插队", "二", "三"]
+
+
+def test_create_segment_404s(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    # 章节不存在 → 404 chapter_not_found
+    r = client.post("/api/segmented-projects/p1/chapters/nope/segments", json={"text": "x"})
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "chapter_not_found"
+    # 项目不存在 → 404
+    assert client.post(
+        "/api/segmented-projects/nope/chapters/c1/segments", json={"text": "x"}
+    ).status_code == 404
+    # after_id 在章内无对应段 → 404 segment_not_found
+    r = client.post(
+        "/api/segmented-projects/p1/chapters/c1/segments",
+        json={"text": "x", "after_id": "s-ghost"},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "segment_not_found"
+
+
+def test_create_segment_rejects_overlong_text(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    r = client.post(
+        "/api/segmented-projects/p1/chapters/c1/segments", json={"text": "字" * 200}
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "segment_too_long"
+
+
+def test_structure_reconcile_endpoint(client, tmp_path, monkeypatch):
+    """structure reconcile：更新 + 删除 + 新建 + 重排一次完成。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    created = client.post("/api/segmented-projects", json=_three_segment_payload())
+    assert created.status_code == 201, created.text
+    old_updated_at = created.json()["updated_at"]
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/structure",
+        json={"segments": [
+            {"id": "s3", "text": "三", "position": 0},
+            {"id": None, "text": "新段", "position": 1},
+            {"id": "s2", "text": "二（改）", "position": 2},
+        ]},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [s["position"] for s in body["segments"]] == [0, 1, 2]
+    assert body["segments"][0]["id"] == "s3"
+    assert body["segments"][1]["text"] == "新段"
+    assert body["segments"][2]["text"] == "二（改）"
+    assert body["project_updated_at"] != old_updated_at
+
+    got = client.get("/api/segmented-projects/p1").json()
+    segs = got["chapters"][0]["segments"]
+    assert [s["text"] for s in segs] == ["三", "新段", "二（改）"]
+    assert [s["position"] for s in segs] == [0, 1, 2]
+
+
+def test_structure_reconcile_preserves_server_owned_audio(client, tmp_path, monkeypatch):
+    """structure reconcile 不覆盖已存在段的 audio/generated_params（文本未变场景）。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _three_segment_payload()
+    payload["chapters"][0]["segments"][0]["audio"] = {
+        "current": {"path": "p1/c1/s1.mp3", "format": "mp3"},
+    }
+    payload["chapters"][0]["segments"][0]["generated_params"] = {"engine": "edge_tts"}
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/structure",
+        json={"segments": [
+            {"id": "s1", "text": "一", "position": 2},
+            {"id": "s2", "text": "二", "position": 0},
+            {"id": "s3", "text": "三", "position": 1},
+        ]},
+    )
+    assert r.status_code == 200, r.text
+    seg = next(s for s in r.json()["segments"] if s["id"] == "s1")
+    assert seg["position"] == 2
+    assert seg["audio"]["current"]["path"] == "p1/c1/s1.mp3"
+    assert seg["generated_params"] == {"engine": "edge_tts"}
+
+
+def test_structure_reconcile_text_change_demotes_audio(client, tmp_path, monkeypatch):
+    """结构性文本变更（合并等）→ 旧音频降级：current 清空、previous 保留、
+    generated_params 置空（原则 4）。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _three_segment_payload()
+    payload["chapters"][0]["segments"][0]["audio"] = {
+        "current": {"path": "p1/c1/s1.mp3", "format": "mp3", "duration_sec": 1.5},
+    }
+    payload["chapters"][0]["segments"][0]["generated_params"] = {"engine": "edge_tts"}
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/structure",
+        json={"segments": [
+            {"id": "s1", "text": "一（合并后）", "position": 0},
+            {"id": "s2", "text": "二", "position": 1},
+            {"id": "s3", "text": "三", "position": 2},
+        ]},
+    )
+    assert r.status_code == 200, r.text
+    seg = next(s for s in r.json()["segments"] if s["id"] == "s1")
+    assert seg["text"] == "一（合并后）"
+    assert seg["audio"].get("current") is None
+    assert seg["audio"]["previous"]["path"] == "p1/c1/s1.mp3"
+    assert seg["generated_params"] is None
+
+
+def test_structure_reconcile_404_and_422(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+    # 章节不存在 → 404
+    r = client.patch("/api/segmented-projects/p1/chapters/nope/structure", json={"segments": []})
+    assert r.status_code == 404
+    assert r.json()["detail"]["code"] == "chapter_not_found"
+    # 项目不存在 → 404
+    assert client.patch(
+        "/api/segmented-projects/nope/chapters/c1/structure", json={"segments": []}
+    ).status_code == 404
+    # 超长段文本 → 422
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/structure",
+        json={"segments": [{"id": "s1", "text": "字" * 200, "position": 0}]},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "segment_too_long"

@@ -44,6 +44,8 @@ from app.schemas.segmented_project import (
     AnimationSpecItem,
     ApplyAnimationSpecRequest,
     ApplyAnimationSpecResult,
+    ChapterStructureIn,
+    ChapterStructureOut,
     ExportTextFileRequest,
     MigrateAudioItem,
     MigrateRequest,
@@ -52,9 +54,14 @@ from app.schemas.segmented_project import (
     ProjectDetail,
     ProjectIn,
     ProjectSummary,
+    SegmentCreateIn,
+    SegmentCreateOut,
+    SegmentPatchIn,
+    SegmentPatchOut,
     SplitItem,
     SplitRequest,
     SplitResponse,
+    StalePayloadError,
     SynthesizeSegmentRequest,
 )
 from app.core.time_utils import utcnow
@@ -189,6 +196,11 @@ async def put_project(
     validate_segment_lengths(project.chapters)
     try:
         return repo.save_project(project)
+    except StalePayloadError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "stale_payload", "server_updated_at": e.server_updated_at},
+        )
     except LookupError:
         # workers 多用户：id 属于他人项目 → 按不存在处理（不泄露存在性）
         raise HTTPException(status_code=404, detail="project_not_found")
@@ -261,6 +273,94 @@ async def synthesize_segment(
     detail = svc.get_project_detail(db, project_id)
     assert detail is not None
     return detail
+
+
+@router.patch(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}",
+    response_model=SegmentPatchOut,
+)
+async def patch_segment(
+    project_id: str,
+    chapter_id: str,
+    segment_id: str,
+    body: SegmentPatchIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """段级部分更新（text/emotion/role_id/segment_kind/voice）。
+
+    tri-state：只更新请求体中出现的字段，显式 null = 清空。
+    audio/generated_params/generated_at 为服务端自产字段，本端点不接受。
+    响应携带项目最新 updated_at，供前端推进整量 PUT 的乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    if body.text is not None:
+        validate_synthesis_text(body.text, chapter_id=chapter_id, segment_id=segment_id)
+    result = repo.patch_segment(project_id, chapter_id, segment_id, body)
+    if result is None:
+        raise HTTPException(status_code=404, detail="segment_not_found")
+    segment, project_updated_at = result
+    return SegmentPatchOut(segment=segment, project_updated_at=project_updated_at)
+
+
+# ----- 段结构端点（B 类：新建段 + 章内结构 reconcile，2026-08-27 粒度重构 Phase 3） -----
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/segments",
+    response_model=SegmentCreateOut,
+    status_code=201,
+)
+async def create_segment(
+    project_id: str,
+    chapter_id: str,
+    body: SegmentCreateIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """新建段：after_id 为章内某段 id 时插到它后面，null/缺省时追加到章末。
+
+    空文本合法（先建空段再编辑）；非空文本受 max_segment_chars 上限约束。
+    响应携带章内全部段的 position 列表与项目最新 updated_at，
+    前端据此收敛本地排序并推进乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    validate_synthesis_text(body.text, chapter_id=chapter_id, segment_id="")
+    try:
+        result = repo.create_segment(project_id, chapter_id, body)
+    except ValueError:
+        # after_id 在章内无对应段
+        raise HTTPException(status_code=404, detail="segment_not_found")
+    if result is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    segment, positions, project_updated_at = result
+    return SegmentCreateOut(
+        segment=segment, positions=positions, project_updated_at=project_updated_at,
+    )
+
+
+@router.patch(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/structure",
+    response_model=ChapterStructureOut,
+)
+async def reconcile_chapter_structure(
+    project_id: str,
+    chapter_id: str,
+    body: ChapterStructureIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """章节内结构 reconcile：删除/合并/拆段/排序的唯一入口。
+
+    与整量 PUT 的段 reconcile 同语义、范围收敛到一章：payload 带 id 且该章
+    存在 → 更新 text/position（服务端自产字段不碰）；id 为 null → 新建；
+    该章现存但 payload 未引用的段 → 删 DB 行，音频文件保留在盘上。
+    """
+    _reject_scratchpad(project_id)
+    for s in body.segments:
+        validate_synthesis_text(s.text, chapter_id=chapter_id, segment_id=s.id or "")
+    result = repo.reconcile_chapter_structure(project_id, chapter_id, body.segments)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    segments, project_updated_at = result
+    return ChapterStructureOut(segments=segments, project_updated_at=project_updated_at)
 
 
 @router.post(
@@ -461,7 +561,7 @@ async def get_segment_audio(
     if seg is None:
         raise HTTPException(status_code=404, detail="audio_not_found")
     audio = seg.audio or {}
-    current = audio.get("current", {}) if isinstance(audio, dict) else {}
+    current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
     current_path = current.get("path")
     if not current_path:
         raise HTTPException(status_code=404, detail="audio_not_found")

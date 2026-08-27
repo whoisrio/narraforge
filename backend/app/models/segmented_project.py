@@ -20,6 +20,11 @@ from sqlalchemy.orm import relationship
 from app.core.database import Base
 from app.core.time_utils import utcnow
 
+# JSON 列统一 none_as_null=True：Python None 落库为 SQL NULL 而非文本 'null'。
+# 默认行为（False）会把 None 序列化成 JSON 字符串 'null'，ORM 读回来是 None
+# 无感，但裸 SQL 读者（e2e dbReader、迁移脚本）会看到 'null' 文本。
+# 仅影响序列化，无 DDL 变化，不需要迁移。
+
 
 class SegmentedProject(Base):
     __tablename__ = "segmented_projects"
@@ -40,7 +45,7 @@ class SegmentedProject(Base):
         ForeignKey("roles.id", ondelete="SET NULL"),
         nullable=True,
     )
-    configs = Column(JSON, nullable=True)
+    configs = Column(JSON(none_as_null=True), nullable=True)
     logo = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=utcnow)
@@ -73,13 +78,13 @@ class SegmentedProjectChapter(Base):
     )
     position = Column(Integer, nullable=False)
     name = Column(String, nullable=False)
-    voice = Column(JSON, nullable=False, default=dict)
-    split_config = Column(JSON, nullable=False, default=dict)
+    voice = Column(JSON(none_as_null=True), nullable=False, default=dict)
+    split_config = Column(JSON(none_as_null=True), nullable=False, default=dict)
     original_text = Column(String, nullable=True)
     narration_script = Column(Text, nullable=True)
     design_title = Column(String, nullable=True)
-    sync_state = Column(JSON, nullable=True)  # layer-sync Phase A: {l1_hash, l2_hash, segments_hash}
-    audio_adjust = Column(JSON, nullable=True)  # post-synthesis adjust record: {tempo, volume_db, applied_at, segments}
+    sync_state = Column(JSON(none_as_null=True), nullable=True)  # layer-sync Phase A: {l1_hash, l2_hash, segments_hash}
+    audio_adjust = Column(JSON(none_as_null=True), nullable=True)  # post-synthesis adjust record: {tempo, volume_db, applied_at, segments}
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -114,12 +119,12 @@ class SegmentedProjectSegment(Base):
     emotion = Column(String, nullable=True)
     role_id = Column(String, ForeignKey("roles.id", ondelete="SET NULL"), nullable=True)
     segment_kind = Column(String, nullable=False, default="narration")
-    voice = Column(JSON, nullable=False, default=lambda: {"source": "chapter"})
-    generated_params = Column(JSON, nullable=True)
-    audio = Column(JSON, nullable=True)
+    voice = Column(JSON(none_as_null=True), nullable=False, default=lambda: {"source": "chapter"})
+    generated_params = Column(JSON(none_as_null=True), nullable=True)
+    audio = Column(JSON(none_as_null=True), nullable=True)
     generated_at = Column(DateTime, nullable=True)
     animation_spec_json = Column(Text, nullable=True)
-    split_anchor = Column(JSON, nullable=True)  # layer-sync Phase B: {offset_start, offset_end, baseline_text}
+    split_anchor = Column(JSON(none_as_null=True), nullable=True)  # layer-sync Phase B: {offset_start, offset_end, baseline_text}
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
