@@ -38,6 +38,7 @@ from app.schemas.segmented_project import (
     ChapterPatchIn,
     ProjectDetail,
     ProjectIn,
+    ProjectPatchIn,
     ProjectSummary,
     SegmentIn,
     SegmentPatchIn,
@@ -980,6 +981,107 @@ def reorder_chapters(
     p.updated_at = now
     db.commit()
     return result, _to_iso(p.updated_at)
+
+
+# ----- 项目元信息 + 文档层（D/E 类：粒度重构 Phase 5） -----
+
+
+def patch_project(
+    db: Session,
+    project_id: str,
+    patch: ProjectPatchIn,
+) -> ProjectDetail | None:
+    """项目元信息部分更新（tri-state）：只应用请求体中出现的字段。
+
+    改名时在同一事务内搬迁资产目录并重写 audio/文档存储路径（复用
+    ``_relocate_project_assets``，与 save_project 改名同语义）；manifest
+    随后重写保持镜像新鲜。返回更新后的 ProjectDetail；项目不存在 -> None。
+    """
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    fields = patch.model_fields_set
+    rename_from = (
+        p.name if "name" in fields and patch.name and p.name and patch.name != p.name
+        else None
+    )
+    if "name" in fields:
+        p.name = patch.name or ""
+    if "layout" in fields:
+        p.layout = patch.layout or "vertical"
+    if "configs" in fields:
+        setattr(p, "configs", patch.configs)
+    if "default_narrator_role_id" in fields:
+        setattr(p, "default_narrator_role_id", patch.default_narrator_role_id)
+    if "logo" in fields:
+        setattr(p, "logo", patch.logo)
+    if "remotion_project_path" in fields:
+        setattr(p, "remotion_project_path", patch.remotion_project_path)
+    if "animation_theme" in fields:
+        setattr(p, "animation_theme", patch.animation_theme)
+    p.updated_at = utcnow()
+
+    # 改名搬迁放在 reconcile 之后（同 save_project：payload 携带的是旧路径，
+    # 重写的是落库终态）；失败时目录与 DB 路径双双保持旧值，降级不半迁移。
+    if rename_from:
+        _relocate_project_assets(p, rename_from, p.name)
+
+    db.flush()
+    db.refresh(p)
+    # manifest 镜像嵌入 name/configs/文档内容等，字段更新后重写保持新鲜
+    assets.write_manifest(
+        p.id, project_to_detail(p).model_dump(mode="json"), project_name=p.name,
+    )
+    db.commit()
+    return project_to_detail(p)
+
+
+def put_source_document(
+    db: Session, project_id: str, text: str,
+) -> tuple[str | None, str] | None:
+    """PUT source-document：写源文档文件、更新 ``source_document_path``，
+    并清空遗留 ``source_document`` 文本列。返回 (文件绝对路径, 项目最新
+    updated_at)；项目不存在 -> None。
+    """
+    return _put_project_document(db, project_id, kind="source", text=text)
+
+
+def put_narration_script(
+    db: Session, project_id: str, text: str,
+) -> tuple[str | None, str] | None:
+    """PUT narration-script：写完整旁白稿文件、更新 ``narration_document_path``。
+
+    项目级旁白稿与章节级 L1/L2/L3 层同步（sync_state）是两套机制：章节层的
+    置脏/重拆由 chapters:batch、resplit 等端点管理，本端点不动 sync_state。
+    返回 (文件绝对路径, 项目最新 updated_at)；项目不存在 -> None。
+    """
+    return _put_project_document(db, project_id, kind="narration", text=text)
+
+
+def _put_project_document(
+    db: Session, project_id: str, *, kind: str, text: str,
+) -> tuple[str | None, str] | None:
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    path = assets.write_project_document(
+        project_id, kind=kind, project_name=p.name, text=text,
+    )
+    if kind == "source":
+        p.source_document_path = path
+        # 遗留 TEXT 列仅作回退读源，新写入一律落文件
+        p.source_document = None
+    else:
+        p.narration_document_path = path
+    p.updated_at = utcnow()
+    db.flush()
+    db.refresh(p)
+    # manifest 镜像嵌入文档内容（project_to_detail 读文件），写入后重写保持新鲜
+    assets.write_manifest(
+        p.id, project_to_detail(p).model_dump(mode="json"), project_name=p.name,
+    )
+    db.commit()
+    return path, _to_iso(p.updated_at)
 
 
 # ----- synthesis orchestration -----

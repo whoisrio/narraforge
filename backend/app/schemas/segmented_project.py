@@ -221,6 +221,35 @@ class ChapterReorderOut(BaseModel):
     project_updated_at: str
 
 
+# ----- 项目元信息 + 文档层（D/E 类：粒度重构 Phase 5） -----
+
+
+class ProjectPatchIn(BaseModel):
+    """项目元信息部分更新（PATCH /segmented-projects/{id}）。tri-state：仅更新
+    请求体中出现的字段（model_fields_set），显式 null = 清空，字段缺省 = 不动。
+    改名时在同一事务内搬迁资产目录并重写存储路径（复用 _relocate_project_assets）。
+    """
+    name: str | None = None
+    layout: str | None = None
+    configs: dict[str, Any] | None = None
+    default_narrator_role_id: str | None = None
+    logo: str | None = None
+    remotion_project_path: str | None = None
+    animation_theme: str | None = None
+
+
+class DocumentPutIn(BaseModel):
+    """文档层 PUT（source-document / narration-script）请求体。"""
+    text: str
+
+
+class DocumentPutOut(BaseModel):
+    """文档层 PUT 响应：文件绝对路径（workers 模式无文件系统 -> None）
+    + 项目最新 updated_at（供前端推进乐观锁 base）。"""
+    path: str | None
+    project_updated_at: str
+
+
 class ExportTextFileRequest(BaseModel):
     filename: str
     content: str

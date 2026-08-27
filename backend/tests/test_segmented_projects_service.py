@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 
@@ -1034,3 +1035,187 @@ def test_reorder_chapters_missing_project_returns_none(db_session, tmp_path, mon
     from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     assert reorder_chapters(db_session, "p-nope", []) is None
+
+
+# ----- 项目元信息 + 文档层（D/E 类：粒度重构 Phase 5） -----
+
+
+def _seed_meta_project(pid: str = "p-meta") -> ProjectIn:
+    """带全部可 PATCH 元字段的种子项目。"""
+    return ProjectIn(
+        id=pid, name="元信息项目", schema_version=2, layout="vertical",
+        configs={"description": "旧描述", "export_directory": "/tmp/old"},
+        default_narrator_role_id="role-old",
+        logo="old-logo.png",
+        animation_theme="dark-gold",
+        remotion_project_path="/tmp/old-remotion",
+        chapters=[
+            {
+                "id": f"c-{pid}", "position": 0, "name": "第一章",
+                "voice": {"engine": "edge_tts"},
+                "split_config": {"delimiters": ["。"], "mode": "rule"},
+                "segments": [
+                    {"id": f"s-{pid}", "position": 0, "text": "hello",
+                     "voice": {"source": "chapter"}},
+                ],
+            }
+        ],
+    )
+
+
+def test_patch_project_partial_update_leaves_others_untouched(db_session, tmp_path, monkeypatch):
+    """tri-state：只更新出现的字段；缺省字段不动；显式 null 清空。"""
+    from app.core import config
+    from app.schemas.segmented_project import ProjectPatchIn
+    from app.services.segmented_project_service import patch_project
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    detail = save_project(db_session, _seed_meta_project())
+    db_session.commit()
+
+    # 只改 name：其余字段不动
+    result = patch_project(db_session, "p-meta", ProjectPatchIn(name="新名字"))
+    assert result is not None
+    assert result.name == "新名字"
+    assert result.layout == "vertical"
+    assert result.configs == {"description": "旧描述", "export_directory": "/tmp/old"}
+    assert result.default_narrator_role_id == "role-old"
+    assert result.logo == "old-logo.png"
+    assert result.animation_theme == "dark-gold"
+    assert result.remotion_project_path == "/tmp/old-remotion"
+    assert result.updated_at != detail.updated_at  # 项目版本推进
+
+    # layout/configs 独立更新
+    result = patch_project(
+        db_session, "p-meta",
+        ProjectPatchIn(layout="horizontal", configs={"description": "新描述"}),
+    )
+    assert result.layout == "horizontal"
+    assert result.configs == {"description": "新描述"}
+    assert result.name == "新名字"  # 上轮结果保持
+
+    # 显式 null 清空可空字段
+    result = patch_project(
+        db_session, "p-meta",
+        ProjectPatchIn(
+            logo=None, default_narrator_role_id=None,
+            animation_theme=None, remotion_project_path=None,
+        ),
+    )
+    assert result.logo is None
+    assert result.default_narrator_role_id is None
+    assert result.animation_theme is None
+    assert result.remotion_project_path is None
+
+    db_session.expire_all()
+    row = db_session.query(SegmentedProject).filter_by(id="p-meta").one()
+    assert row.name == "新名字"
+    assert row.layout == "horizontal"
+    assert row.logo is None
+    assert row.default_narrator_role_id is None
+
+
+def test_patch_project_rename_relocates_assets_and_rewrites_paths(db_session, tmp_path, monkeypatch):
+    """改名：资产目录搬迁、audio/文档路径前缀重写、manifest 随迁且内容刷新。"""
+    from app.core import config
+    from app.schemas.segmented_project import ProjectPatchIn
+    from app.services.segmented_project_service import patch_project
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_meta_project())
+    db_session.commit()
+
+    # 造资产：段音频文件 + 源文档
+    old_dir = project_dir("p-meta", "元信息项目")
+    audio_file = old_dir / "chapters" / "c-p-meta" / "audio" / "s-p-meta.mp3"
+    audio_file.parent.mkdir(parents=True, exist_ok=True)
+    audio_file.write_bytes(b"fake-mp3")
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p-meta").one()
+    old_prefix = old_dir.name
+    seg.audio = {"current": {"path": f"{old_prefix}/chapters/c-p-meta/audio/s-p-meta.mp3",
+                             "format": "mp3"}}
+    db_session.commit()
+
+    result = patch_project(db_session, "p-meta", ProjectPatchIn(name="搬迁后的项目"))
+    assert result is not None
+    assert result.name == "搬迁后的项目"
+
+    new_dir = project_dir("p-meta", "搬迁后的项目")
+    assert new_dir.exists() and not old_dir.exists()
+    # 音频文件随目录搬迁，且仍可经新路径读到
+    new_file = new_dir / "chapters" / "c-p-meta" / "audio" / "s-p-meta.mp3"
+    assert new_file.read_bytes() == b"fake-mp3"
+    # DB 内 audio 路径前缀已重写
+    db_session.expire_all()
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s-p-meta").one()
+    new_prefix = new_dir.name
+    assert seg.audio["current"]["path"] == f"{new_prefix}/chapters/c-p-meta/audio/s-p-meta.mp3"
+    # manifest 落在新目录且 name 已刷新
+    m = read_manifest("p-meta", "搬迁后的项目")
+    assert m is not None
+    assert m["name"] == "搬迁后的项目"
+
+
+def test_patch_project_missing_returns_none(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    from app.schemas.segmented_project import ProjectPatchIn
+    from app.services.segmented_project_service import patch_project
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert patch_project(db_session, "p-nope", ProjectPatchIn(name="x")) is None
+
+
+def test_put_source_document_writes_file_and_updates_path(db_session, tmp_path, monkeypatch):
+    """PUT source-document：写文件、更新 source_document_path、清空遗留文本列，
+    detail 回读新内容，manifest 同步刷新。"""
+    from app.core import config
+    from app.services.segmented_project_service import (
+        get_project_detail, put_source_document,
+    )
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    save_project(db_session, _seed_meta_project())
+    db_session.commit()
+
+    path, project_updated_at = put_source_document(db_session, "p-meta", "# 新源文档\n正文。")
+    assert path is not None
+    assert project_updated_at
+    p = Path(path)
+    assert p.exists()
+    assert p.read_text(encoding="utf-8") == "# 新源文档\n正文。"
+
+    db_session.expire_all()
+    row = db_session.query(SegmentedProject).filter_by(id="p-meta").one()
+    assert row.source_document_path == path
+    assert row.source_document is None  # 遗留列清空
+    detail = get_project_detail(db_session, "p-meta")
+    assert detail.source_document == "# 新源文档\n正文。"
+    assert detail.updated_at == project_updated_at
+    m = read_manifest("p-meta", "元信息项目")
+    assert m is not None and m["source_document"] == "# 新源文档\n正文。"
+
+
+def test_put_narration_script_writes_file_and_updates_path(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    from app.services.segmented_project_service import (
+        get_project_detail, put_narration_script,
+    )
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    detail = save_project(db_session, _seed_meta_project())
+    db_session.commit()
+
+    path, project_updated_at = put_narration_script(db_session, "p-meta", "完整旁白稿 v2")
+    assert path is not None
+    assert Path(path).read_text(encoding="utf-8") == "完整旁白稿 v2"
+    assert project_updated_at != detail.updated_at
+
+    db_session.expire_all()
+    row = db_session.query(SegmentedProject).filter_by(id="p-meta").one()
+    assert row.narration_document_path == path
+    assert get_project_detail(db_session, "p-meta").narration_script == "完整旁白稿 v2"
+
+
+def test_put_project_document_missing_project_returns_none(db_session, tmp_path, monkeypatch):
+    from app.core import config
+    from app.services.segmented_project_service import (
+        put_narration_script, put_source_document,
+    )
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert put_source_document(db_session, "p-nope", "x") is None
+    assert put_narration_script(db_session, "p-nope", "x") is None

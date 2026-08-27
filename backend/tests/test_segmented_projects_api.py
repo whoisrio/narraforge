@@ -883,3 +883,131 @@ def test_reorder_chapters_404_on_missing_project(client, tmp_path, monkeypatch):
                     json={"chapter_ids": []})
     assert r.status_code == 404
     assert r.json()["detail"]["code"] == "project_not_found"
+
+
+# ----- 项目元信息 + 文档层（D/E 类：粒度重构 Phase 5） -----
+
+
+def test_patch_project_endpoint_partial_update(client, tmp_path, monkeypatch):
+    """PATCH /segmented-projects/{id}：tri-state 部分更新，响应为完整 ProjectDetail。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    payload = _payload("p-meta")
+    payload["configs"] = {"description": "旧描述"}
+    payload["default_narrator_role_id"] = "role-1"
+    payload["logo"] = "logo.png"
+    assert client.post("/api/segmented-projects", json=payload).status_code == 201
+
+    r = client.patch("/api/segmented-projects/p-meta", json={"name": "改名项目"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["name"] == "改名项目"
+    # 缺省字段不动
+    assert body["layout"] == "vertical"
+    assert body["configs"] == {"description": "旧描述"}
+    assert body["default_narrator_role_id"] == "role-1"
+    assert body["logo"] == "logo.png"
+    assert body["updated_at"]
+
+    # layout/configs 更新 + 显式 null 清空
+    r = client.patch(
+        "/api/segmented-projects/p-meta",
+        json={"layout": "horizontal", "configs": {"description": None},
+              "logo": None, "default_narrator_role_id": None,
+              "animation_theme": "dark-gold", "remotion_project_path": "/tmp/rp"},
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "改名项目"
+    assert body["layout"] == "horizontal"
+    assert body["configs"] == {"description": None}
+    assert body["logo"] is None
+    assert body["default_narrator_role_id"] is None
+    assert body["animation_theme"] == "dark-gold"
+    assert body["remotion_project_path"] == "/tmp/rp"
+
+    # GET 回读一致
+    got = client.get("/api/segmented-projects/p-meta").json()
+    assert got["name"] == "改名项目"
+    assert got["layout"] == "horizontal"
+    assert got["animation_theme"] == "dark-gold"
+
+
+def test_patch_project_rename_relocates_dir(client, tmp_path, monkeypatch):
+    """改名走 PATCH：资产目录在同一事务内搬迁，音频文件随迁。"""
+    from app.core import segmented_assets as assets
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p-rn")).status_code == 201
+    old_dir = assets.project_dir("p-rn", "Test")
+    audio_file = old_dir / "chapters" / "c1" / "audio" / "s1.mp3"
+    audio_file.parent.mkdir(parents=True, exist_ok=True)
+    audio_file.write_bytes(b"fake")
+
+    r = client.patch("/api/segmented-projects/p-rn", json={"name": "改名了"})
+    assert r.status_code == 200, r.text
+    new_dir = assets.project_dir("p-rn", "改名了")
+    assert new_dir.exists()
+    assert not old_dir.exists()
+    assert (new_dir / "chapters" / "c1" / "audio" / "s1.mp3").read_bytes() == b"fake"
+
+
+def test_patch_project_404_and_scratchpad(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.patch("/api/segmented-projects/nope",
+                        json={"name": "x"}).status_code == 404
+    assert client.patch("/api/segmented-projects/__scratchpad__",
+                        json={"name": "x"}).status_code == 403
+
+
+def test_put_source_document_endpoint(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p-doc")).status_code == 201
+
+    r = client.put("/api/segmented-projects/p-doc/source-document",
+                   json={"text": "# 新源文档\n正文。"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["path"] and body["project_updated_at"]
+    from pathlib import Path
+    assert Path(body["path"]).exists()  # 绝对路径直接可读
+    assert Path(body["path"]).read_text(encoding="utf-8") == "# 新源文档\n正文。"
+
+    got = client.get("/api/segmented-projects/p-doc").json()
+    assert got["source_document"] == "# 新源文档\n正文。"
+    assert got["source_document_path"] == body["path"]
+    assert got["updated_at"] == body["project_updated_at"]
+
+    # 覆盖写入：再次 PUT 更新内容与版本
+    r2 = client.put("/api/segmented-projects/p-doc/source-document",
+                    json={"text": "第二次写入"})
+    assert r2.status_code == 200
+    assert Path(r2.json()["path"]).read_text(encoding="utf-8") == "第二次写入"
+    assert r2.json()["project_updated_at"] >= body["project_updated_at"]
+
+
+def test_put_narration_script_endpoint(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_payload("p-doc2")).status_code == 201
+
+    r = client.put("/api/segmented-projects/p-doc2/narration-script",
+                   json={"text": "完整旁白稿"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["path"] and body["project_updated_at"]
+    from pathlib import Path
+    assert Path(body["path"]).read_text(encoding="utf-8") == "完整旁白稿"
+
+    got = client.get("/api/segmented-projects/p-doc2").json()
+    assert got["narration_script"] == "完整旁白稿"
+    assert got["narration_document_path"] == body["path"]
+
+
+def test_document_put_404_and_scratchpad(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.put("/api/segmented-projects/nope/source-document",
+                      json={"text": "x"}).status_code == 404
+    assert client.put("/api/segmented-projects/nope/narration-script",
+                      json={"text": "x"}).status_code == 404
+    assert client.put("/api/segmented-projects/__scratchpad__/source-document",
+                      json={"text": "x"}).status_code == 403
+    assert client.put("/api/segmented-projects/__scratchpad__/narration-script",
+                      json={"text": "x"}).status_code == 403

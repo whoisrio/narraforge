@@ -37,6 +37,7 @@ from app.schemas.segmented_project import (
     ChapterPatchIn,
     ProjectDetail,
     ProjectIn,
+    ProjectPatchIn,
     ProjectSummary,
     SegmentCreateIn,
     SegmentIn,
@@ -148,6 +149,26 @@ class SegmentedProjectRepository(Protocol):
         全部章节 id → ValueError("chapter_ids_mismatch") → 路由 422。
         """
         ...
+    def patch_project(
+        self, project_id: str, patch: ProjectPatchIn,
+    ) -> ProjectDetail | None:
+        """项目元信息部分更新（tri-state，改名时事务内搬迁资产目录）；
+        返回更新后的 ProjectDetail。项目不存在（或跨用户）-> None -> 路由 404。"""
+        ...
+    def put_source_document(
+        self, project_id: str, text: str,
+    ) -> tuple[str | None, str] | None:
+        """写源文档（local：落文件+路径列；workers：文本列）；返回
+        (路径或 None, 项目最新 updated_at)。项目不存在（或跨用户）-> None。"""
+        ...
+    def put_narration_script(
+        self, project_id: str, text: str,
+    ) -> tuple[str | None, str] | None:
+        """写项目级完整旁白稿（local：落文件+路径列；workers：不持久化，
+        no-op 警告）；返回 (路径或 None, 项目最新 updated_at)。
+        项目不存在（或跨用户）-> None。
+        """
+        ...
     def delete_project(self, project_id: str) -> bool: ...
     def batch_create_structure(
         self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
@@ -230,6 +251,21 @@ class LocalSegmentedProjectRepository:
         self, project_id: str, chapter_ids: list[str],
     ) -> tuple[list[dict[str, Any]], str] | None:
         return svc.reorder_chapters(self._db, project_id, chapter_ids)
+
+    def patch_project(
+        self, project_id: str, patch: ProjectPatchIn,
+    ) -> ProjectDetail | None:
+        return svc.patch_project(self._db, project_id, patch)
+
+    def put_source_document(
+        self, project_id: str, text: str,
+    ) -> tuple[str | None, str] | None:
+        return svc.put_source_document(self._db, project_id, text)
+
+    def put_narration_script(
+        self, project_id: str, text: str,
+    ) -> tuple[str | None, str] | None:
+        return svc.put_narration_script(self._db, project_id, text)
 
     def delete_project(self, project_id: str) -> bool:
         return svc.delete_project(self._db, project_id)
@@ -993,6 +1029,72 @@ class SupabaseSegmentedProjectRepository(UserScope):
             PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
         )
         return result, now
+
+    def patch_project(
+        self, project_id: str, patch: ProjectPatchIn,
+    ) -> ProjectDetail | None:
+        """项目元信息部分更新（与 svc.patch_project 同语义，tri-state）。
+
+        workers 无本地文件系统：改名不做目录搬迁（workers 音频在 Storage，
+        无 slug 目录耦合）。跨用户/项目不存在 -> None -> 404。
+        """
+        if not self._owns_project(project_id):
+            return None
+        updates: dict[str, Any] = {}
+        fields = patch.model_fields_set
+        if "name" in fields:
+            updates["name"] = patch.name or ""
+        if "layout" in fields:
+            updates["layout"] = patch.layout or "vertical"
+        if "configs" in fields:
+            updates["configs"] = patch.configs
+        if "default_narrator_role_id" in fields:
+            updates["default_narrator_role_id"] = patch.default_narrator_role_id
+        if "logo" in fields:
+            updates["logo"] = patch.logo
+        if "remotion_project_path" in fields:
+            updates["remotion_project_path"] = patch.remotion_project_path
+        if "animation_theme" in fields:
+            updates["animation_theme"] = patch.animation_theme
+        now = utcnow().isoformat()
+        updates["updated_at"] = now
+        self._client.update(
+            PROJECTS, updates, params=self._scope_params({"id": f"eq.{project_id}"})
+        )
+        return self.get_project(project_id)
+
+    def put_source_document(
+        self, project_id: str, text: str,
+    ) -> tuple[str | None, str] | None:
+        """写源文档：workers 无文件系统，内容直接存 ``source_document`` 文本列
+        （对齐 save_project 的 workers 语义）。跨用户/项目不存在 -> None -> 404。
+        """
+        if not self._owns_project(project_id):
+            return None
+        now = utcnow().isoformat()
+        self._client.update(
+            PROJECTS,
+            {"source_document": text, "updated_at": now},
+            params=self._scope_params({"id": f"eq.{project_id}"}),
+        )
+        return None, now
+
+    def put_narration_script(
+        self, project_id: str, text: str,
+    ) -> tuple[str | None, str] | None:
+        """写项目级完整旁白稿：workers 模式本就不持久化该字段（对齐
+        save_project 的忽略语义），no-op 警告并返回当前版本，不报错。
+        跨用户/项目不存在 -> None -> 404。
+        """
+        if not self._owns_project(project_id):
+            return None
+        logger.warning(
+            "[supabase] project-level narration_script is not persisted in workers mode "
+            "(project %s)",
+            project_id,
+        )
+        row = self._get_project_row(project_id)
+        return None, (row or {}).get("updated_at") or utcnow().isoformat()
 
     def delete_project(self, project_id: str) -> bool:
         if not self.project_exists(project_id):

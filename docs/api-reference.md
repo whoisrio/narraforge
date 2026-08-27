@@ -1043,6 +1043,9 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | GET | `/api/segmented-projects/{id}` | 获取完整项目（chapters + segments） |
 | PUT | `/api/segmented-projects/{id}` | 全量替换（reconcile）。只更新 DB 状态，**不删除任何音频文件**——payload 中消失的路径/分片只删 DB 行，文件留盘变孤儿，由显式清理回收（陈旧快照与合成并发时不得误删资产）。乐观锁见 `base_updated_at`。**服务端自产字段保护**：已存在分片的 `audio`/`generated_params`/`generated_at` 忽略 payload 值、保留 DB 现值（仅合成/录音/adjust-audio 端点可写）；新建分片照常接收 |
 | DELETE | `/api/segmented-projects/{id}` | 删除项目 + 资产目录 |
+| PATCH | `/api/segmented-projects/{id}` | 项目元信息部分更新（name/layout/configs/default_narrator_role_id/logo/remotion_project_path/animation_theme，tri-state；改名同事务搬迁资产目录；响应为完整 ProjectDetail，其 `updated_at` 即新乐观锁 base） |
+| PUT | `/api/segmented-projects/{id}/source-document` | 写源文档（local：落 source.md 文件+路径列；workers：文本列；响应 `{path, project_updated_at}`） |
+| PUT | `/api/segmented-projects/{id}/narration-script` | 写项目级完整旁白稿（local：落 narration.md 文件+路径列；workers：不持久化，no-op 警告；不动章节级 sync_state） |
 | POST | `/api/segmented-projects/{id}/chapters:batch` | 批量重建章节+分片（agent split_segment） |
 | POST | `/api/segmented-projects/{id}/chapters` | 新建章节（position 追加到末尾；workers 模式受章节配额约束；201 响应 `{chapter, project_updated_at}`） |
 | PATCH | `/api/segmented-projects/{id}/chapters/{cid}` | 章节部分更新（name/voice/split_config/design_title，tri-state：只更新出现的字段，显式 null = 清空；纯字段更新不碰分片音频；响应 `{chapter, project_updated_at}`） |
@@ -1427,6 +1430,59 @@ position 重排用「负哨兵两阶段」手法防 `(project_id, position)` 唯
 `chapters` 为全章按新序的 `{id, name, position}` 终态列表。
 
 **错误:** 404 `project_not_found`（项目不存在，workers 模式跨用户同此）；422 `chapter_ids_mismatch`（集合未恰好覆盖）。
+
+### PATCH `/api/segmented-projects/{id}`
+
+项目元信息部分更新（2026-08-27 粒度重构 Phase 5，D 类项目元信息端点）。
+
+**Request Body（全部可选，tri-state：只更新出现的字段，显式 `null` = 清空，缺省 = 不动）：**
+```json
+{
+  "name": "新项目名",
+  "layout": "horizontal",
+  "configs": { "description": "..." },
+  "default_narrator_role_id": "role-xxx",
+  "logo": "logo.png",
+  "remotion_project_path": "/path/to/remotion",
+  "animation_theme": "dark-gold"
+}
+```
+
+改名时在同一事务内搬迁资产目录并重写 audio/文档存储路径（复用 `_relocate_project_assets`，与整量 PUT 改名同语义；搬迁失败时目录与 DB 路径双双保持旧值，降级不半迁移）；manifest 镜像随后重写保持新鲜。workers 模式无 slug 目录耦合，改名纯字段更新。
+
+**Response (200):** 完整 `ProjectDetail`（与 GET 同形），其 `updated_at` 即新乐观锁 base。
+
+**错误:** 404 `project_not_found`（项目不存在，workers 模式跨用户同此）；403 `forbidden_internal_project_id`（scratchpad）。
+
+### PUT `/api/segmented-projects/{id}/source-document`
+
+写源文档（2026-08-27 粒度重构 Phase 5，E 类文档层端点之一）。
+
+**Request Body:**
+```json
+{ "text": "# 源文档\n正文。" }
+```
+
+local 模式：写 `{项目目录}/source.md` 文件、更新 `source_document_path` 并清空遗留 `source_document` 文本列，manifest 镜像同步刷新。workers 模式：无文件系统，内容直接写 `source_document` 文本列。
+
+**Response (200):** `{ "path": "文件绝对路径或 null", "project_updated_at": "服务端项目最新 updated_at" }`（后者供前端推进乐观锁 base）。
+
+**错误:** 404 `project_not_found`；403 `forbidden_internal_project_id`（scratchpad）。
+
+### PUT `/api/segmented-projects/{id}/narration-script`
+
+写项目级完整旁白稿（2026-08-27 粒度重构 Phase 5，E 类文档层端点之一）。
+
+**Request Body:**
+```json
+{ "text": "完整旁白稿" }
+```
+
+local 模式：写 `{项目目录}/narration.md` 文件、更新 `narration_document_path`，manifest 镜像同步刷新。项目级旁白稿与章节级 L1/L2/L3 层同步（sync_state）是两套机制，本端点不动 sync_state（章节层的置脏/重拆由 `chapters:batch`、`resplit-from-script` 等端点管理）。workers 模式该字段本就不持久化（对齐整量 PUT 的忽略语义），no-op 警告不报错，返回当前版本。
+
+**Response (200):** `{ "path": "文件绝对路径或 null", "project_updated_at": "..." }`。
+
+**错误:** 404 `project_not_found`；403 `forbidden_internal_project_id`（scratchpad）。
 
 ### POST `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize`
 

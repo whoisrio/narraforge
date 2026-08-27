@@ -52,6 +52,8 @@ from app.schemas.segmented_project import (
     ChapterReorderOut,
     ChapterStructureIn,
     ChapterStructureOut,
+    DocumentPutIn,
+    DocumentPutOut,
     ExportTextFileRequest,
     MigrateAudioItem,
     MigrateRequest,
@@ -59,6 +61,7 @@ from app.schemas.segmented_project import (
     MigrateResultItem,
     ProjectDetail,
     ProjectIn,
+    ProjectPatchIn,
     ProjectSummary,
     SegmentCreateIn,
     SegmentCreateOut,
@@ -219,6 +222,72 @@ async def delete_project(project_id: str, repo: SegmentedProjectRepository = Dep
     if not ok:
         raise HTTPException(status_code=404, detail="project_not_found")
     return None
+
+
+# ----- 项目元信息 PATCH + 文档层 PUT（D/E 类：粒度重构 Phase 5） -----
+
+
+@router.patch("/segmented-projects/{project_id}", response_model=ProjectDetail)
+async def patch_project(
+    project_id: str,
+    body: ProjectPatchIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """项目元信息部分更新（name/layout/configs/default_narrator_role_id/logo/
+    remotion_project_path/animation_theme）：tri-state，只更新请求体中出现的
+    字段，显式 null = 清空。改名时在同一事务内搬迁资产目录并重写存储路径
+    （local 模式；workers 无 slug 目录耦合）。
+
+    响应为完整 ProjectDetail，其 ``updated_at`` 即新乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    detail = repo.patch_project(project_id, body)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    return detail
+
+
+@router.put(
+    "/segmented-projects/{project_id}/source-document",
+    response_model=DocumentPutOut,
+)
+async def put_source_document(
+    project_id: str,
+    body: DocumentPutIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """PUT 源文档：写 source.md 文件、更新 ``source_document_path`` 并清空遗留
+    文本列（workers 模式直接写文本列，无文件路径）。响应携带项目最新
+    ``updated_at``（供前端推进乐观锁 base）。
+    """
+    _reject_scratchpad(project_id)
+    result = repo.put_source_document(project_id, body.text)
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    path, project_updated_at = result
+    return DocumentPutOut(path=path, project_updated_at=project_updated_at)
+
+
+@router.put(
+    "/segmented-projects/{project_id}/narration-script",
+    response_model=DocumentPutOut,
+)
+async def put_narration_script(
+    project_id: str,
+    body: DocumentPutIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """PUT 完整旁白稿：写 narration.md 文件、更新 ``narration_document_path``。
+
+    项目级旁白稿与章节级 L1/L2/L3 层同步（sync_state）是两套机制，本端点
+    不动 sync_state。workers 模式该字段本就不持久化（no-op 警告，不报错）。
+    """
+    _reject_scratchpad(project_id)
+    result = repo.put_narration_script(project_id, body.text)
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    path, project_updated_at = result
+    return DocumentPutOut(path=path, project_updated_at=project_updated_at)
 
 
 # ----- segment synthesis & audio (local: TTS 引擎 + 音频落盘; workers: edge-tts + Supabase Storage) -----

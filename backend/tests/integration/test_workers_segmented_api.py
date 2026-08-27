@@ -995,3 +995,111 @@ class TestChaptersBatchPreservePlan:
 
         detail = client.get("/api/segmented-projects/proj-1").json()
         assert detail["chapters"][0]["segments"][0].get("audio") is None
+
+
+class TestProjectPatchAndDocuments:
+    """Phase 5 项目元信息 PATCH + 文档层 PUT（D/E 类）：workers 模式同语义实现。"""
+
+    def test_patch_project_partial_update(self, workers_client):
+        client, _ = workers_client
+        _create_project(client)
+
+        resp = client.patch("/api/segmented-projects/proj-1", json={"name": "改名项目"})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["name"] == "改名项目"
+        # 缺省字段不动
+        assert body["layout"] == "vertical"
+        assert body["updated_at"]
+
+        resp = client.patch(
+            "/api/segmented-projects/proj-1",
+            json={"layout": "horizontal", "animation_theme": "dark-gold",
+                  "configs": {"description": "d"}, "logo": None,
+                  "default_narrator_role_id": "role-9",
+                  "remotion_project_path": "/tmp/rp"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["name"] == "改名项目"
+        assert body["layout"] == "horizontal"
+        assert body["animation_theme"] == "dark-gold"
+        assert body["configs"] == {"description": "d"}
+        assert body["logo"] is None
+        assert body["default_narrator_role_id"] == "role-9"
+        assert body["remotion_project_path"] == "/tmp/rp"
+
+        got = client.get("/api/segmented-projects/proj-1").json()
+        assert got["name"] == "改名项目"
+        assert got["layout"] == "horizontal"
+        assert got["animation_theme"] == "dark-gold"
+
+    def test_patch_project_missing_404(self, workers_client):
+        client, _ = workers_client
+        assert client.patch("/api/segmented-projects/nope",
+                            json={"name": "x"}).status_code == 404
+
+    def test_put_source_document_updates_text_column(self, workers_client):
+        """workers：源文档存文本列（无文件系统），PUT 更新列并推进版本。"""
+        client, store = workers_client
+        _create_project(client)
+
+        resp = client.put("/api/segmented-projects/proj-1/source-document",
+                          json={"text": "# 新源文档"})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["path"] is None  # workers 无文件路径
+        assert body["project_updated_at"]
+
+        got = client.get("/api/segmented-projects/proj-1").json()
+        assert got["source_document"] == "# 新源文档"
+        # store 层断言：文本列已更新
+        assert store.tables["segmented_projects"][0]["source_document"] == "# 新源文档"
+
+    def test_put_narration_script_noop_with_warning(self, workers_client):
+        """workers：项目级旁白稿本就不持久化（对齐 save_project 的忽略语义），
+        PUT 为 no-op，返回当前版本，不报错。"""
+        client, _ = workers_client
+        _create_project(client)
+
+        resp = client.put("/api/segmented-projects/proj-1/narration-script",
+                          json={"text": "完整旁白稿"})
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["path"] is None
+        assert body["project_updated_at"]
+
+        got = client.get("/api/segmented-projects/proj-1").json()
+        assert got.get("narration_script") is None
+
+    def test_document_put_missing_404(self, workers_client):
+        client, _ = workers_client
+        assert client.put("/api/segmented-projects/nope/source-document",
+                          json={"text": "x"}).status_code == 404
+        assert client.put("/api/segmented-projects/nope/narration-script",
+                          json={"text": "x"}).status_code == 404
+
+    def test_cross_user_404(self, workers_client):
+        """跨用户：他人项目的 PATCH/文档 PUT 都按不存在处理（不泄露存在性）。"""
+        import httpx
+
+        from app.core.repositories import deps
+        from app.core.supabase_client import SupabaseClient
+
+        client, store = workers_client
+        _create_project(client)  # 未归属行（user_id 为 None）
+
+        # 换成 user-b 作用域的仓储（同一 fake 库）：user_id=eq.user-b 过滤使项目不可见
+        sb_client = SupabaseClient(
+            "https://fake.supabase.co", "service-key",
+            transport=httpx.MockTransport(store.handle),
+        )
+        client.app.dependency_overrides[deps.get_segmented_repo] = (
+            lambda: SupabaseSegmentedProjectRepository(sb_client, owner_id="user-b")
+        )
+        assert client.patch("/api/segmented-projects/proj-1",
+                            json={"name": "x"}).status_code == 404
+        assert client.put("/api/segmented-projects/proj-1/source-document",
+                          json={"text": "x"}).status_code == 404
+        assert client.put("/api/segmented-projects/proj-1/narration-script",
+                          json={"text": "x"}).status_code == 404
