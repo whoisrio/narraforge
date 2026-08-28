@@ -660,13 +660,10 @@ class SupabaseSegmentedProjectRepository(UserScope):
             )
         self._client.insert(PROJECTS, [p_row], upsert=True)
 
-        # 整体替换章节/分段（先删后插，绕开 position 唯一约束的行级冲突）
-        if old_ch_by_id:
-            self._client.delete(
-                SEGMENTS, params={"chapter_id": f"in.({','.join(old_ch_by_id)})"}
-            )
-            self._client.delete(CHAPTERS, params={"project_id": f"eq.{project.id}"})
-
+        # 非毁灭式替换：先 upsert 章节/分段（按 id 幂等更新；唯一约束已设为
+        # DEFERRABLE，批量 upsert 可安全处理重排序），再删除"库中存在、payload
+        # 未包含"的孤儿行。不再"先删全量再插入"——这样即便某次插入因字段/约束
+        # 失败，既有数据也不会被清空（修复保存失败即丢段的数据丢失 bug）。
         ch_rows: list[dict[str, Any]] = []
         seg_rows: list[dict[str, Any]] = []
         for ch_idx, ch_in in enumerate(project.chapters):
@@ -722,9 +719,25 @@ class SupabaseSegmentedProjectRepository(UserScope):
                     "updated_at": now,
                 })
         if ch_rows:
-            self._client.insert(CHAPTERS, ch_rows)
+            self._client.insert(CHAPTERS, ch_rows, upsert=True)
         if seg_rows:
-            self._client.insert(SEGMENTS, seg_rows)
+            self._client.insert(SEGMENTS, seg_rows, upsert=True)
+
+        # 删除孤儿：payload 未包含的章节（级联删其分段）与保留章节下被删的段落。
+        # 仅清理"用户真正删除的项"，不再清空全量，避免插入失败时数据丢失。
+        payload_chapter_ids = [c["id"] for c in ch_rows]
+        payload_segment_ids = [s["id"] for s in seg_rows]
+        chapter_delete_params: dict[str, str] = {"project_id": f"eq.{project.id}"}
+        if payload_chapter_ids:
+            chapter_delete_params["id"] = f"notin.({','.join(payload_chapter_ids)})"
+        self._client.delete(CHAPTERS, params=chapter_delete_params)
+        if payload_chapter_ids:
+            seg_delete_params: dict[str, str] = {
+                "chapter_id": f"in.({','.join(payload_chapter_ids)})"
+            }
+            if payload_segment_ids:
+                seg_delete_params["id"] = f"notin.({','.join(payload_segment_ids)})"
+            self._client.delete(SEGMENTS, params=seg_delete_params)
         detail = self.get_project(project.id)
         assert detail is not None
         return detail
