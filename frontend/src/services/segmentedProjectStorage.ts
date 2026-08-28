@@ -19,6 +19,6 @@ export interface SegmentedProjectStorage {
 export const indexedDBStorage: SegmentedProjectStorage = {
   async listProjects() { return segmentedProjectDB.listProjects(); },
   async getProject(id) { return segmentedProjectDB.getProject(id); },
-  async saveProject(project) { await segmentedProjectDB.saveProject(project); },
+  async saveProject(project, _options) { await segmentedProjectDB.saveProject(project); return undefined; },
   async deleteProject(id) { await segmentedProjectDB.deleteProject(id); },
 };
