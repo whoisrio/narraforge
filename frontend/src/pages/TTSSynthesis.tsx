@@ -37,6 +37,7 @@ import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useAuth } from '../hooks/authContext';
 import { isAuthRequired } from '../services/auth';
+import { getAccessToken } from '../services/authSession';
 import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms, PronunciationMapEntry } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { applyEngineTextCleaning } from '../services/styleTags';
@@ -1944,7 +1945,12 @@ export function TTSSynthesis({
       // Backend mode: fetch audio as blob, then play via blob URL
       if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
         const url = apiUrl(`/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`);
-        const resp = await fetch(url, { cache: 'no-store', credentials: 'include' });
+        const token = await getAccessToken();
+        const resp = await fetch(url, {
+          cache: 'no-store',
+          credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
         if (!resp.ok) {
           // Try to extract backend error detail (FastAPI's `detail` field)
           let detail = `HTTP ${resp.status}`;
@@ -2047,7 +2053,12 @@ export function TTSSynthesis({
         // Backend mode: fetch audio as blob, then play
         if (storageMode === 'backend' && project?.id && seg.audio.current?.path) {
           const url = apiUrl(`/segmented-projects/${project.id}/audio/${activeChapter.id}/${seg.id}`);
-          const resp = await fetch(url, { cache: 'no-store', credentials: 'include' });
+          const token = await getAccessToken();
+          const resp = await fetch(url, {
+            cache: 'no-store',
+            credentials: 'include',
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          });
           if (!resp.ok) {
             let detail = `HTTP ${resp.status}`;
             try { const b = await resp.clone().json(); if (b?.detail) detail = `${resp.status} ${b.detail}`; } catch { /* ignore */ }
