@@ -167,9 +167,12 @@ create table if not exists usage_events (
 
 -- 环状 FK：segmented_projects.default_narrator_role_id → roles(id)
 -- （roles 在 segmented_projects 之后建表，只能后置补约束）
+-- 注意：ALTER ADD CONSTRAINT 非幂等（重跑会 42710 already exists），
+-- 故用 DROP CONSTRAINT IF EXISTS + ADD，首次建库与既有库重跑均安全。
 alter table segmented_projects
-    add constraint fk_project_default_narrator_role
-    foreign key (default_narrator_role_id) references roles(id) on delete set null;
+  drop constraint if exists fk_project_default_narrator_role,
+  add constraint fk_project_default_narrator_role
+  foreign key (default_narrator_role_id) references roles(id) on delete set null;
 
 -- ---------------------------------------------------------------------------
 -- 多用户数据归属（M2）：user_id 归属列。
