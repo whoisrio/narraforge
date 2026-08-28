@@ -108,6 +108,7 @@
 - 非 remote（frontend 存储 / scratchpad）维持纯本地 reducer + IndexedDB/整包保存不变，故 SPLIT/DELETE/INSERT/REORDER/MERGE 等 reducer action 本体保留。
 - 后端模式下 `GENERATE_SUCCESS`/`GENERATE_FAIL` dispatch 带 `touch=false`（2026-08-28）：合成/失败事实已在服务端，触发整包 PUT 只会在批量合成并发时撞 409 stale_payload（produce-all e2e 实证）；frontend 模式保持 touch 以落 IndexedDB。`RECORD_SUCCESS` 暂保持 touch（studio-adjust-audio e2e 依赖录音后的草稿 PUT 收敛）。
 - 同理（2026-08-28 第二轮，用户报"重新 TTS 时反复弹检测到项目已在别处更新"）：`MARK_QUEUED` 不再 bump `updated_at`（queued 与 pending 同为纯 UI 状态）；`doRegenerateAll` 起始的 `CLEAR_SEGMENT_AUDIO` 在 backend 模式带 `touch=false`（清除只是本地 UI 态，合成端点会在服务端覆盖音频）。回归覆盖：studio-resynthesis e2e「重新合成全部跑完整流程：无 409 stale_payload 噪音」。
+- 第三轮（2026-08-28，用户反馈第二轮回路仍在）：409 恢复路径本身会再制造 PUT —— `recoverStaleProject` 的 `applyProject`（LOAD_PROJECT）不同步 `lastSavedUpdatedAtRef`，autosave effect 把恢复当成新变更再次 markDirty → PUT → 409 → toast 循环。修复：恢复时同步 `lastSavedUpdatedAtRef = 服务端 updated_at`（恢复回来的即权威态，无需回写）。同时所有合成入口（`handleRegenerate` 单段非 internal、`doRegenerateAll`、`handleProduceAll`）先 `await draftSync.flush()` 冲刷未落库草稿，消除"编辑后立刻合成"的滞后 PUT 撞 409 窗口。回归覆盖：studio-resynthesis e2e「编辑章节标题后立即重新合成全部」。
 - `INSERT_SEGMENT`/`APPEND_SEGMENT` 的 `voice_ref` 死参数已删（reducer 恒以章节音色建段，`makeSegment` 忽略该参；本地/远端行为本就一致），`makeSegment` 的 `_params` 死参一并移除。
 - 解锁录音走 PATCH `unlock_audio`（见 5.2）。
 - 新增 `useSegmentedDraftSync.refreshDraft`：touch=false 的变更（PATCH/结构端点已远端持久化）也要刷新已有草稿内容，否则待冲刷的陈旧草稿会把 PATCH 刚写入的字段整包 PUT 回旧值（dialogue-prosody e2e 实证：kind 切换 PATCH 被进入工作室时标记的陈旧 PUT 覆盖回 narration）。

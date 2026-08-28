@@ -493,6 +493,11 @@ export function TTSSynthesis({
           storage: projectStorage,
           adoptBackendVersion: draftSync.adoptBackendVersion,
           applyProject: (p) => {
+            // 关键：同步 lastSavedUpdatedAtRef —— 恢复回来的就是服务端权威态，
+            // 若不同步，autosave effect 会把这次 LOAD_PROJECT 当成新变更再次
+            // markDirty → PUT →（批量合成期间）409 → 恢复 → 再 PUT，形成
+            // "检测到项目已在别处更新"的 toast 循环（2026-08-28 用户反馈）。
+            lastSavedUpdatedAtRef.current = p.updated_at;
             setProject(p);
             dispatch({ type: 'LOAD_PROJECT', project: p });
           },
@@ -1274,6 +1279,9 @@ export function TTSSynthesis({
     }
     if (!seg || !segChapter) return;
     const segIdx = segChapter.segments.findIndex(s => s.id === id);
+    // 单段合成（非批量循环内部调用）前冲刷未落库草稿：合成端点会前进服务端
+    // updated_at，滞后的整包 PUT 会撞 409 stale_payload。批量入口已统一 flush。
+    if (!opts?.internal) await draftSync.flush();
     dispatch({ type: 'GENERATE_START', id });
     try {
       const hasVoiceLock = segHasOverride(seg);
@@ -1683,6 +1691,9 @@ export function TTSSynthesis({
   const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments) => {
     setGenerating(true);
     try {
+      // 先把未落库的草稿 PUT 冲刷掉：批量合成期间合成端点会持续前进服务端
+      // updated_at，任何滞后的整包 PUT 都会撞 409 stale_payload。
+      await draftSync.flush();
       // Step 1: Delete existing audio for segments that have it
       // backend 模式下清除只是本地 UI 态（合成端点会在服务端覆盖音频）：
       // touch=false 不触发整包 PUT，避免与合成端点并发撞 409 stale_payload。
@@ -1718,6 +1729,9 @@ export function TTSSynthesis({
     setGenerating(true);
     produceAllAbortRef.current = false;
     try {
+      // 先冲刷未落库草稿：补切/合成端点都会前进服务端 updated_at，
+      // 滞后的整包 PUT 会撞 409 stale_payload。
+      await draftSync.flush();
       // Phase 1: 补切--给无 segment 的章节按规则切分段落（复用 chapter 音色）。
       const toSplit = chaptersNeedingSplit(project.chapters);
       if (toSplit.length > 0) {
@@ -1772,7 +1786,7 @@ export function TTSSynthesis({
       // base，无需再暂停 autosave；initialLoadDoneRef 只保留加载防误标脏用途）。
       await reloadProjectData();
     }
-  }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t]);
+  }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t, draftSync]);
 
   const handleStopProduceAll = useCallback(() => {
     produceAllAbortRef.current = true;
