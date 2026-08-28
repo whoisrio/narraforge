@@ -649,6 +649,21 @@ export interface ChapterStructureResponse {
   project_updated_at: string;
 }
 
+export interface SegmentCreateBody {
+  /** 空文本合法（先建空段再编辑） */
+  text?: string;
+  /** 插入锚点：插到该段之后；null/缺省 = 追加到章末 */
+  after_id?: string | null;
+}
+
+export interface SegmentCreateResponse {
+  /** 服务端新建并持久化的段（服务端权威 id） */
+  segment: import('../types').Segment;
+  /** 插入后章内全部段的终态 position（前端据此收敛本地排序） */
+  positions: { id: string; position: number }[];
+  project_updated_at: string;
+}
+
 export const segmentedProjectApi = {
   /** 段级部分更新（tri-state：只更新出现的字段，显式 null = 清空） */
   patchSegment: async (
@@ -672,6 +687,18 @@ export const segmentedProjectApi = {
     const { data } = await api.patch<ChapterStructureResponse>(
       `/segmented-projects/${projectId}/chapters/${chapterId}/structure`,
       { segments },
+    );
+    return data;
+  },
+  /** 新建段（after_id 之后插入；null/缺省 = 追加到章末） */
+  createSegment: async (
+    projectId: string,
+    chapterId: string,
+    body: SegmentCreateBody,
+  ): Promise<SegmentCreateResponse> => {
+    const { data } = await api.post<SegmentCreateResponse>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}/segments`,
+      body,
     );
     return data;
   },

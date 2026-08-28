@@ -126,11 +126,6 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     clearTimer();
   }, [projectId, clearTimer]);
 
-  const loadDraft = useCallback(async (): Promise<ProjectDraftRecord | undefined> => {
-    if (!projectId) return undefined;
-    return getDraft(projectId);
-  }, [projectId]);
-
   const noteServerVersion = useCallback(async (serverUpdatedAt: string) => {
     // 服务端被细粒度端点（合成/PATCH/adjust 等）推进后，把乐观锁 base 前移，
     // 避免下一次整包 PUT 因 base 过期被 409。不动 draft 内容（本地编辑仍在）。
@@ -155,5 +150,5 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
-  return { markDirty, flush, adoptBackendVersion, loadDraft, noteServerVersion, refreshDraft };
+  return { markDirty, flush, adoptBackendVersion, noteServerVersion, refreshDraft };
 }

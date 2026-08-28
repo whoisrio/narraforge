@@ -200,10 +200,10 @@ export type Action =
   | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null; voice_ref?: import('../types').VoiceRef }[] }
-  | { type: 'APPEND_SEGMENT'; text?: string; voice_ref?: import('../types').VoiceRef }
-  | { type: 'INSERT_SEGMENT'; afterId: string; text?: string; voice_ref?: import('../types').VoiceRef }
-  | { type: 'DELETE_SEGMENT'; id: string }
-  | { type: 'DELETE_SEGMENTS'; ids: string[] }
+  | { type: 'APPEND_SEGMENT'; text?: string }
+  | { type: 'INSERT_SEGMENT'; afterId: string; text?: string }
+  | { type: 'DELETE_SEGMENT'; id: string; touch?: boolean }
+  | { type: 'DELETE_SEGMENTS'; ids: string[]; touch?: boolean }
   | { type: 'UPDATE_TEXT'; id: string; text: string; touch?: boolean }
   | { type: 'UPDATE_SSML'; id: string; ssml: string; by_llm?: boolean }
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
@@ -215,18 +215,18 @@ export type Action =
   | { type: 'UPDATE_PROSODY_MARKS'; id: string; prosodyMarks: ProsodyMark[] }
   | { type: 'APPLY_SERVER_SEGMENT'; id: string; segment: ServerSegmentPatch }
   | { type: 'APPLY_SERVER_CHAPTER_SEGMENTS'; chapterId: string; segments: RawSegment[] }
-  | { type: 'REORDER'; fromIndex: number; toIndex: number }
+  | { type: 'REORDER'; fromIndex: number; toIndex: number; touch?: boolean }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
-  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').EngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown>; origin?: 'tts' | 'recorded' }
-  | { type: 'GENERATE_FAIL'; id: string; error: string }
+  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').EngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown>; origin?: 'tts' | 'recorded'; touch?: boolean }
+  | { type: 'GENERATE_FAIL'; id: string; error: string; touch?: boolean }
   | { type: 'UNDO_REGENERATE'; id: string }
   | { type: 'RECORD_SUCCESS'; id: string; audio_id?: string; audio_path?: string; duration_sec?: number; audio_format?: string }
   | { type: 'UNLOCK_SEGMENT_AUDIO'; id: string; touch?: boolean }
   | { type: 'CLEAR_SEGMENT_AUDIO'; id: string; touch?: boolean }
   | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string; touch?: boolean }
   | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down'; touch?: boolean }
-  | { type: 'SPLIT_SEGMENT'; id: string; position: number }
+  | { type: 'SPLIT_SEGMENT'; id: string; position: number; touch?: boolean }
   | { type: 'SELECT_SEGMENT'; id: string | undefined }
   | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
@@ -249,7 +249,7 @@ export interface ServerSegmentPatch {
 
 export interface State { project: SegmentedProject }
 
-function makeSegment(text: string, _params?: unknown, segmentKind: SegmentKind = 'narration'): Segment {
+function makeSegment(text: string, segmentKind: SegmentKind = 'narration'): Segment {
   const now = new Date().toISOString();
   return {
     id: uid(),
@@ -392,7 +392,7 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPLY_SPLIT': {
       return { project: updateActive(p, ch => {
         const newSegs = action.items.map(item => {
-          const seg = makeSegment(item.text, ch.voice, item.segment_kind ?? 'narration');
+          const seg = makeSegment(item.text, item.segment_kind ?? 'narration');
           if (item.emotion && isEmotionType(item.emotion)) seg.emotion = item.emotion;
           if (item.role_id !== undefined) seg.role_id = item.role_id;
           // Build voice from role_snapshot or voice_ref
@@ -412,7 +412,7 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPEND_SEGMENT': {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
-        const seg = makeSegment(action.text ?? '', ch.voice);
+        const seg = makeSegment(action.text ?? '');
         s.push(seg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
@@ -422,7 +422,7 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const idx = s.findIndex(x => x.id === action.afterId);
         if (idx >= 0) {
-          const seg = makeSegment(action.text ?? '', ch.voice);
+          const seg = makeSegment(action.text ?? '');
           s.splice(idx + 1, 0, seg);
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
@@ -432,14 +432,14 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = ch.segments.filter(x => x.id !== action.id);
         return { ...ch, segments: s, selected_segment_id: ch.selected_segment_id === action.id ? undefined : ch.selected_segment_id, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'DELETE_SEGMENTS': {
       return { project: updateActive(p, ch => {
         const ids = new Set(action.ids);
         const s = ch.segments.filter(x => !ids.has(x.id));
         return { ...ch, segments: s, selected_segment_id: ch.selected_segment_id && ids.has(ch.selected_segment_id) ? undefined : ch.selected_segment_id, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'UPDATE_TEXT': {
       return { project: updateActive(p, ch => {
@@ -577,11 +577,14 @@ export function segmentedReducer(state: State, action: Action): State {
         // stale positions would silently revert the reorder.
         const renumbered = s.map((seg, i) => ({ ...seg, position: i }));
         return { ...ch, segments: renumbered, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'MARK_QUEUED': {
       // 批量合成可能覆盖多个章节（"合成未合成"遍历全项目），
       // 按 id 全局标记，避免非活动章节的 segment 丢失 queued 状态。
+      // queued 与 GENERATE_START 的 pending 同为纯 UI 状态（服务端不持久化 status）：
+      // 不 bump 项目 updated_at，否则批量合成起始的整包 PUT 会与合成端点并发撞
+      // 409 stale_payload，触发"检测到项目已在别处更新"的恢复 toast 循环。
       const ids = new Set(action.ids);
       let touched = false;
       const chapters = p.chapters.map(ch => {
@@ -596,7 +599,7 @@ export function segmentedReducer(state: State, action: Action): State {
         });
         return chChanged ? { ...ch, segments: segs } : ch;
       });
-      return { project: touched ? { ...p, chapters, updated_at: new Date().toISOString() } : p };
+      return { project: touched ? { ...p, chapters } : p };
     }
     case 'GENERATE_START': {
       // pending 是纯 UI 状态（后端不存 status）：不 bump 项目 updated_at，
@@ -651,14 +654,14 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.generated_params = action.generated_params as Partial<EngineParams>;
         }
         return seg;
-      })};
+      }, { touch: action.touch })};
     }
     case 'GENERATE_FAIL': {
       return { project: updateSegmentById(p, action.id, seg => {
         seg.status = 'failed';
         seg.error = action.error;
         return seg;
-      })};
+      }, { touch: action.touch })};
     }
     case 'UNDO_REGENERATE': {
       return { project: updateSegmentById(p, action.id, seg => {
@@ -784,13 +787,13 @@ export function segmentedReducer(state: State, action: Action): State {
         seg.error = undefined;
         seg.updated_at = new Date().toISOString();
         // Create new segment for second half
-        const newSeg = makeSegment(textAfter, {} as EngineParams);
+        const newSeg = makeSegment(textAfter);
         if (seg.emotion) newSeg.emotion = seg.emotion;
         // Inherit voice
         newSeg.voice = { ...seg.voice };
         s.splice(idx + 1, 0, newSeg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'SELECT_SEGMENT': {
       const activeCh = getActiveChapter(p);

@@ -101,12 +101,17 @@
 - `POST /api/segmented-projects/{pid}/chapters/{cid}/segments` — 新建段。body：`{text?, after_id?: string | null}`。返回 `{segment, positions: [{id, position}], project_updated_at}`（positions 为插入后章内全部段的终态；`after_id` 在章内无对应段 → 404 `segment_not_found`）。
 - `PATCH /api/segmented-projects/{pid}/chapters/{cid}/structure` — 章节内结构 reconcile（删除/合并/拆段/排序的唯一入口）。body：`{segments: [{id?, text, position}]}`，与现有 save_project 的段 reconcile 同语义但范围收敛到一章；被删段的 DB 行删除、音频文件保留（原则 2）；事务内完成 position 两阶段重排（沿用现有负哨兵手法）。返回 `{segments: 该章全部段（按 position 升序）, project_updated_at}`。**实现后修订**：已存在段的 `text` 发生变化时（合并等结构操作），旧音频在后端失效降级（`current`→`previous`、文件保留、`generated_params`/`generated_at` 置空）——原则 4 要求文本变更的音频失效由后端在意图明确的端点内完成；纯重排（text 未变）不动音频。
 
-### 5.3.1 前端切换现状（e2e 回归修复，2026-08-27）
+### 5.3.1 前端切换现状（e2e 回归修复 2026-08-27；Phase 7 收尾 2026-08-28）
 
-- 合并（`MERGE_SEGMENTS`）已切到 structure 端点：dispatch `touch=false` + `reconcileChapterStructure` + `APPLY_SERVER_CHAPTER_SEGMENTS` 回写 + `noteServerVersion`；远端失败回退整包 PUT 兜底。
-- 删除/拆段/插入/重排仍走整包 PUT（行 reconcile 语义不变，双写兼容）；后续阶段再统一切换。
+- 合并/删除/拆段/重排全部切到 structure 端点（Phase 7 完成）：本地 dispatch `touch=false` + `reconcileChapterStructure`（reducer 演算后的整章段列表）+ `APPLY_SERVER_CHAPTER_SEGMENTS` 回写 + `noteServerVersion`；远端失败回退整包 PUT 兜底（`syncChapterStructure` 统一承载，合并为同模式内联实现）。
+- 插入（含复制段、末尾追加）走 `POST .../segments`（非乐观：服务端分配权威 id 后用响应 segment + positions 回写整章排序；`after_id=null` 即追加章末）；失败时本地无变更，仅 toast，无兜底 PUT。
+- 非 remote（frontend 存储 / scratchpad）维持纯本地 reducer + IndexedDB/整包保存不变，故 SPLIT/DELETE/INSERT/REORDER/MERGE 等 reducer action 本体保留。
+- 后端模式下 `GENERATE_SUCCESS`/`GENERATE_FAIL` dispatch 带 `touch=false`（2026-08-28）：合成/失败事实已在服务端，触发整包 PUT 只会在批量合成并发时撞 409 stale_payload（produce-all e2e 实证）；frontend 模式保持 touch 以落 IndexedDB。`RECORD_SUCCESS` 暂保持 touch（studio-adjust-audio e2e 依赖录音后的草稿 PUT 收敛）。
+- 同理（2026-08-28 第二轮，用户报"重新 TTS 时反复弹检测到项目已在别处更新"）：`MARK_QUEUED` 不再 bump `updated_at`（queued 与 pending 同为纯 UI 状态）；`doRegenerateAll` 起始的 `CLEAR_SEGMENT_AUDIO` 在 backend 模式带 `touch=false`（清除只是本地 UI 态，合成端点会在服务端覆盖音频）。回归覆盖：studio-resynthesis e2e「重新合成全部跑完整流程：无 409 stale_payload 噪音」。
+- `INSERT_SEGMENT`/`APPEND_SEGMENT` 的 `voice_ref` 死参数已删（reducer 恒以章节音色建段，`makeSegment` 忽略该参；本地/远端行为本就一致），`makeSegment` 的 `_params` 死参一并移除。
 - 解锁录音走 PATCH `unlock_audio`（见 5.2）。
 - 新增 `useSegmentedDraftSync.refreshDraft`：touch=false 的变更（PATCH/结构端点已远端持久化）也要刷新已有草稿内容，否则待冲刷的陈旧草稿会把 PATCH 刚写入的字段整包 PUT 回旧值（dialogue-prosody e2e 实证：kind 切换 PATCH 被进入工作室时标记的陈旧 PUT 覆盖回 narration）。
+- 批量合成的 `initialLoadDoneRef` 暂停 hack 已删（Phase 7）：合成期 PUT 不再携带音频字段（阶段 1 自产字段忽略），无需防覆盖；ref 仅保留初始加载/项目重载的防误标脏用途。
 
 ### 5.4 章节操作（C 类）
 
@@ -147,7 +152,7 @@
 | 4（已完成） | 章节 CRUD + reorder | ✅ 已实现并通过测试，待提交 |
 | 5 | 项目 PATCH + 文档 PUT | ✅ 已实现并通过测试（服务层 6 + API 7 + workers 6；实现后修订：项目级 narration-script PUT 不动章节级 sync_state——两套机制，章节层置脏由 chapters:batch/resplit 等端点管理） |
 | 6 | 孤儿文件 sweep（脚本或管理端点，dry-run 默认） | ✅ 已实现并通过测试（`POST /segmented-projects/sweep-orphan-audio`，local-only；dry-run 默认，execute=true 才删；service 4 + API 1 + workers 未挂载断言） |
-| 7 | 清理：reducer 冗余 action、draftSync 瘦身、docs/e2e 更新 | — |
+| 7 | 清理：reducer 冗余 action、draftSync 瘦身、docs/e2e 更新 | ✅ 已完成（2026-08-28）：删除/拆段/重排切 structure 端点（reducer 四 action 加 `touch` 透传），插入切 `POST /segments`（`createSegment` 封装）；删 `handleProduceAll` 的 `initialLoadDoneRef` 暂停 hack；删 draftSync 无调用方的 `loadDraft`（`flush` 保留：防抖保存核心且有单测覆盖）；reducer action 本体因本地模式仍在用而全部保留；前端 621 单测全绿 |
 
 每阶段保持双写兼容：旧路径（全量 PUT autosave）在新端点上线、前端切换并回归后才下线对应 action 的 autosave 触发。
 

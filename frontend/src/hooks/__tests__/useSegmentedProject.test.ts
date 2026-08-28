@@ -403,6 +403,8 @@ describe('segmentedReducer', () => {
     expect(next.project.chapters.find(c => c.id === 'ch-b')!.segments[0].status).toBe('queued');
     // 非 idle 的 segment 不受影响
     expect(next.project.chapters.find(c => c.id === 'ch-b')!.segments[1].status).toBe('ready');
+    // queued 是纯 UI 状态：不 bump 项目 updated_at（不触发整包 PUT，避免与合成端点撞 409）
+    expect(next.project.updated_at).toBe(p.updated_at);
   });
 
   it('SELECT_SEGMENT sets selected_segment_id', () => {
@@ -796,5 +798,68 @@ describe('APPLY_SERVER_CHAPTER_SEGMENTS', () => {
       type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: 'nope', segments: [],
     });
     expect(next.project).toBe(p);
+  });
+});
+
+
+describe('结构操作 touch 透传（Phase 7：远端走结构端点，touch=false 不触发整包 PUT）', () => {
+  const mk = (id: string): Segment => ({
+    id, text: `text-${id}`, voice: { source: 'chapter' }, audio: { format: 'mp3' },
+    segment_kind: 'narration' as const, status: 'idle' as const, created_at: '', updated_at: '',
+  });
+  const BASE_TS = '2026-08-27T00:00:00.000Z';
+  const baseProject = () => makeProject({ updated_at: BASE_TS }, { segments: [mk('a'), mk('b'), mk('c')] });
+
+  it('SPLIT_SEGMENT touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const split = { type: 'SPLIT_SEGMENT', id: 'b', position: 2 } as const;
+    const noTouch = segmentedReducer({ project: baseProject() }, { ...split, touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.text)).toEqual(['text-a', 'te', 'xt-b', 'text-c']);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, split);
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('DELETE_SEGMENT touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const noTouch = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENT', id: 'b', touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.id)).toEqual(['a', 'c']);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENT', id: 'b' });
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('DELETE_SEGMENTS touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const noTouch = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENTS', ids: ['a', 'b'], touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.id)).toEqual(['c']);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENTS', ids: ['a', 'b'] });
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('REORDER touch=false 不 bump 项目 updated_at（纯重排不动音频），默认 bump', () => {
+    const noTouch = segmentedReducer({ project: baseProject() }, { type: 'REORDER', fromIndex: 2, toIndex: 0, touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.id)).toEqual(['c', 'a', 'b']);
+    expect(ac(noTouch.project).segments.map(s => s.position)).toEqual([0, 1, 2]);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, { type: 'REORDER', fromIndex: 2, toIndex: 0 });
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('GENERATE_SUCCESS touch=false 不 bump 项目 updated_at（后端合成端点已持久化），默认 bump', () => {
+    const success = { type: 'GENERATE_SUCCESS', id: 'b', current_audio_path: 'p1/ch1/b.mp3', duration_sec: 1.5 } as const;
+    const noTouch = segmentedReducer({ project: baseProject() }, { ...success, touch: false });
+    expect(ac(noTouch.project).segments[1].status).toBe('ready');
+    expect(ac(noTouch.project).segments[1].audio.current?.path).toBe('p1/ch1/b.mp3');
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, success);
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('GENERATE_FAIL touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const fail = { type: 'GENERATE_FAIL', id: 'b', error: 'boom' } as const;
+    const noTouch = segmentedReducer({ project: baseProject() }, { ...fail, touch: false });
+    expect(ac(noTouch.project).segments[1].status).toBe('failed');
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, fail);
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
   });
 });
