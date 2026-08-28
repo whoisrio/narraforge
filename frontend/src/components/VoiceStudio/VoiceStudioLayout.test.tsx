@@ -7,9 +7,6 @@ function renderStudio() {
   const onSidebarCollapseChange = vi.fn();
   render(
     <VoiceStudioLayout
-      segmentCount={12}
-      generatedCount={8}
-      durationSec={96}
       remotionPath="/tmp/remotion"
       onExport={onExport}
       onSidebarCollapseChange={onSidebarCollapseChange}
@@ -34,7 +31,6 @@ describe('VoiceStudioLayout', () => {
     expect(screen.getByText('Available Roles')).toBeInTheDocument();
     // Transport bar is collapsed by default — expand it first
     fireEvent.click(screen.getByRole('button', { name: '展开工具栏' }));
-    expect(screen.getByText('Master Transport')).toBeInTheDocument();
     expect(screen.getByText('/tmp/remotion')).toBeInTheDocument();
     expect(screen.getByTestId('studio-segment-content')).toBeInTheDocument();
   });
@@ -56,9 +52,6 @@ describe('VoiceStudioLayout', () => {
     const onExport = vi.fn();
     render(
       <VoiceStudioLayout
-        segmentCount={1}
-        generatedCount={1}
-        durationSec={10}
         remotionPath={null}
         onExport={onExport}
         onExportAll={onExportAll}
@@ -123,9 +116,6 @@ describe('VoiceStudioLayout', () => {
     const onProduceAll = vi.fn();
     render(
       <VoiceStudioLayout
-        segmentCount={5}
-        generatedCount={2}
-        durationSec={30}
         remotionPath={null}
         onExport={vi.fn()}
         onProduceAll={onProduceAll}

@@ -6,9 +6,6 @@ import styles from './VoiceStudioLayout.module.css';
 export type StudioViewMode = 'list' | 'dialogue';
 
 interface VoiceStudioLayoutProps {
-  segmentCount: number;
-  generatedCount: number;
-  durationSec: number;
   remotionPath?: string | null;
   children: ReactNode;
   sidebarContent?: ReactNode;
@@ -21,20 +18,7 @@ interface VoiceStudioLayoutProps {
   onAdjustAudio?: () => void;
 }
 
-function formatDuration(seconds: number): string {
-  const safe = Math.max(0, Math.round(seconds));
-  const hours = Math.floor(safe / 3600);
-  const minutes = Math.floor((safe % 3600) / 60);
-  const rest = safe % 60;
-  const mm = String(minutes).padStart(2, '0');
-  const ss = String(rest).padStart(2, '0');
-  return hours > 0 ? `${hours}:${mm}:${ss}` : `${minutes}:${ss}`;
-}
-
 export function VoiceStudioLayout({
-  segmentCount,
-  generatedCount,
-  durationSec,
   remotionPath,
   children,
   sidebarContent,
@@ -53,7 +37,6 @@ export function VoiceStudioLayout({
     setSidePanelCollapsed(next);
     onSidebarCollapseChange?.(next);
   };
-  const progress = segmentCount === 0 ? 0 : Math.round((generatedCount / segmentCount) * 100);
   const rightPanelWidth = sidePanelCollapsed ? '48px' : '300px';
   const transportBarStyle = { right: 'calc(var(--studio-right-panel-width) + 28px)' } as CSSProperties;
 
@@ -102,13 +85,6 @@ export function VoiceStudioLayout({
           {transportCollapsed && <span className={styles.transportToggleLabel}>工具栏</span>}
         </button>
         {!transportCollapsed && (
-        <div className={styles.masterTimeline}>
-          <span>Master Transport</span>
-          <div className={styles.masterTrack}><span style={{ width: `${progress}%` }} /></div>
-          <strong>{formatDuration(durationSec)}</strong>
-        </div>
-        )}
-        {!transportCollapsed && (
         <div className={styles.exportGroup}>
           <span className={styles.remotionPath}>{remotionPath || '未设置 Remotion 路径'}</span>
           {onProduceAll && (
@@ -116,6 +92,7 @@ export function VoiceStudioLayout({
               label={t('studio.produceAll')}
               disabled={produceAllDisabled}
               onSelect={onProduceAll}
+              placement="up"
             />
           )}
           {onAdjustAudio && (

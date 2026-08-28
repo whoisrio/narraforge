@@ -16,6 +16,7 @@ import { expect, test } from '@playwright/test';
 import {
   collectErrors,
   goToStudio,
+  readBackendProject,
   seedTestProject,
   setLocaleToZhCN,
 } from '../helpers';
@@ -62,5 +63,35 @@ test.describe('重新合成', () => {
     await expectNoRawI18nKey(page);
 
     expect(errors).toEqual([]);
+  });
+
+  test('重新合成全部跑完整流程：无 409 stale_payload 噪音（optimistic-lock 回归）', async ({ page }) => {
+    test.setTimeout(120_000);
+    await setLocaleToZhCN(page);
+    const errors = collectErrors(page);
+
+    await goToStudio(page);
+    await page.waitForTimeout(1_000);
+
+    // 批量合成 → 重新合成全部 → 确认（走 doRegenerateAll：CLEAR_SEGMENT_AUDIO + MARK_QUEUED + 逐段合成）
+    await page.getByRole('button', { name: /批量合成|Batch Synthesize/ }).click();
+    await page.getByRole('button', { name: /重新合成全部|Regenerate All/ }).click();
+    const confirmBtn = page.getByRole('alertdialog').locator('button').filter({ hasText: /重新生成|Regenerate/ }).first();
+    await expect(confirmBtn).toBeVisible({ timeout: 15_000 });
+    await confirmBtn.click();
+
+    // 等完成 toast（3 段 edge_tts 顺序合成）
+    await expect(page.getByText('全部生成完成')).toBeVisible({ timeout: 90_000 });
+
+    // 后端 3 段都有真实音频
+    await expect.poll(async () => {
+      const p = await readBackendProject(page, 'test-e2e-project');
+      return p?.chapters.flatMap((c) => c.segments)
+        .filter((s) => !!s.audio?.current?.path && s.audio.current.file_exists !== false)
+        .length ?? 0;
+    }, { timeout: 15_000 }).toBe(3);
+
+    // 核心断言：全程无 409 stale_payload 等 console 错误（旧实现反复弹"检测到项目已在别处更新"）
+    expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
   });
 });
