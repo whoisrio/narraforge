@@ -729,14 +729,14 @@ class SupabaseSegmentedProjectRepository(UserScope):
         payload_segment_ids = [s["id"] for s in seg_rows]
         chapter_delete_params: dict[str, str] = {"project_id": f"eq.{project.id}"}
         if payload_chapter_ids:
-            chapter_delete_params["id"] = f"notin.({','.join(payload_chapter_ids)})"
+            chapter_delete_params["id"] = f"not.in.({','.join(payload_chapter_ids)})"
         self._client.delete(CHAPTERS, params=chapter_delete_params)
         if payload_chapter_ids:
             seg_delete_params: dict[str, str] = {
                 "chapter_id": f"in.({','.join(payload_chapter_ids)})"
             }
             if payload_segment_ids:
-                seg_delete_params["id"] = f"notin.({','.join(payload_segment_ids)})"
+                seg_delete_params["id"] = f"not.in.({','.join(payload_segment_ids)})"
             self._client.delete(SEGMENTS, params=seg_delete_params)
         detail = self.get_project(project.id)
         assert detail is not None
