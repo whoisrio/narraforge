@@ -171,10 +171,10 @@ function renumberChapters(chapters: Chapter[]): Chapter[] {
   return chapters.map((c, i) => ({ ...c, position: i }));
 }
 
-function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter): SegmentedProject {
+function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter, opts?: { touch?: boolean }): SegmentedProject {
   const ch = getActiveChapter(p);
   if (!ch) return p;
-  return updateChapter(p, ch.id, updater);
+  return updateChapter(p, ch.id, updater, opts);
 }
 
 // ---- Actions ----
@@ -202,38 +202,57 @@ export type Action =
   | { type: 'SET_CHAPTER_META_BY_ID'; id: string; meta: Partial<Pick<Chapter, 'original_text' | 'design_title'>> }
   // Segment operations (on active chapter)
   | { type: 'APPLY_SPLIT'; items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null; voice_ref?: import('../types').VoiceRef }[] }
-  | { type: 'APPEND_SEGMENT'; text?: string; voice_ref?: import('../types').VoiceRef }
-  | { type: 'INSERT_SEGMENT'; afterId: string; text?: string; voice_ref?: import('../types').VoiceRef }
-  | { type: 'DELETE_SEGMENT'; id: string }
-  | { type: 'DELETE_SEGMENTS'; ids: string[] }
-  | { type: 'UPDATE_TEXT'; id: string; text: string }
+  | { type: 'APPEND_SEGMENT'; text?: string }
+  | { type: 'INSERT_SEGMENT'; afterId: string; text?: string }
+  | { type: 'DELETE_SEGMENT'; id: string; touch?: boolean }
+  | { type: 'DELETE_SEGMENTS'; ids: string[]; touch?: boolean }
+  | { type: 'UPDATE_TEXT'; id: string; text: string; touch?: boolean }
   | { type: 'UPDATE_SSML'; id: string; ssml: string; by_llm?: boolean }
   | { type: 'BATCH_SET_SSML'; updates: { id: string; ssml: string }[]; by_llm?: boolean }
-  | { type: 'UPDATE_PARAMS'; id: string; params: Partial<EngineParams>; convertFromRole?: boolean }
-  | { type: 'UPDATE_EMOTION'; id: string; emotion: string }
+  | { type: 'UPDATE_PARAMS'; id: string; params: Partial<EngineParams>; convertFromRole?: boolean; touch?: boolean }
+  | { type: 'UPDATE_EMOTION'; id: string; emotion: string; touch?: boolean }
   | { type: 'SET_PROJECT_NARRATOR'; roleId: string | null }
-  | { type: 'SET_SEGMENT_ROLE'; id: string; roleId: string | null; roleSnapshot: RoleSnapshot | null }
-  | { type: 'SET_SEGMENT_KIND'; id: string; segmentKind: SegmentKind }
+  | { type: 'SET_SEGMENT_ROLE'; id: string; roleId: string | null; roleSnapshot: RoleSnapshot | null; touch?: boolean }
+  | { type: 'SET_SEGMENT_KIND'; id: string; segmentKind: SegmentKind; touch?: boolean }
   | { type: 'UPDATE_PROSODY_MARKS'; id: string; prosodyMarks: ProsodyMark[] }
-  | { type: 'REORDER'; fromIndex: number; toIndex: number }
+  | { type: 'APPLY_SERVER_SEGMENT'; id: string; segment: ServerSegmentPatch }
+  | { type: 'APPLY_SERVER_CHAPTER_SEGMENTS'; chapterId: string; segments: RawSegment[] }
+  | { type: 'REORDER'; fromIndex: number; toIndex: number; touch?: boolean }
   | { type: 'MARK_QUEUED'; ids: string[] }
   | { type: 'GENERATE_START'; id: string }
-  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').EngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown>; origin?: 'tts' | 'recorded' }
-  | { type: 'GENERATE_FAIL'; id: string; error: string }
+  | { type: 'GENERATE_SUCCESS'; id: string; audio_id?: string; duration_sec?: number; generated_voice_id?: string; updated_params?: Partial<import('../types').EngineParams>; current_audio_path?: string; previous_audio_path?: string; audio_format?: string; generated_params?: Record<string, unknown>; origin?: 'tts' | 'recorded'; touch?: boolean }
+  | { type: 'GENERATE_FAIL'; id: string; error: string; touch?: boolean }
   | { type: 'UNDO_REGENERATE'; id: string }
   | { type: 'RECORD_SUCCESS'; id: string; audio_id?: string; audio_path?: string; duration_sec?: number; audio_format?: string }
-  | { type: 'UNLOCK_SEGMENT_AUDIO'; id: string }
-  | { type: 'CLEAR_SEGMENT_AUDIO'; id: string }
-  | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string }
-  | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down' }
-  | { type: 'SPLIT_SEGMENT'; id: string; position: number }
+  | { type: 'UNLOCK_SEGMENT_AUDIO'; id: string; touch?: boolean }
+  | { type: 'CLEAR_SEGMENT_AUDIO'; id: string; touch?: boolean }
+  | { type: 'TOGGLE_INDEPENDENT_VOICE'; id: string; touch?: boolean }
+  | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down'; touch?: boolean }
+  | { type: 'SPLIT_SEGMENT'; id: string; position: number; touch?: boolean }
   | { type: 'SELECT_SEGMENT'; id: string | undefined }
   | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null }
   | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
+/** PATCH /segments 响应里的服务端段形状（SegmentIn 子集；null 在入本地态时转 undefined） */
+export interface ServerSegmentPatch {
+  id: string;
+  text?: string;
+  emotion?: string | null;
+  role_id?: string | null;
+  segment_kind?: string;
+  voice?: Segment['voice'];
+  audio?: {
+    format?: string;
+    current?: Segment['audio']['current'] | null;
+    previous?: Segment['audio']['previous'] | null;
+    duration_sec?: number | null;
+  } | null;
+  generated_params?: Record<string, unknown> | null;
+}
+
 export interface State { project: SegmentedProject }
 
-function makeSegment(text: string, _params?: unknown, segmentKind: SegmentKind = 'narration'): Segment {
+function makeSegment(text: string, segmentKind: SegmentKind = 'narration'): Segment {
   const now = new Date().toISOString();
   return {
     id: uid(),
@@ -251,6 +270,7 @@ function updateSegment(
   p: SegmentedProject,
   segmentId: string,
   updater: (segment: Segment) => Segment,
+  opts?: { touch?: boolean },
 ): SegmentedProject {
   return updateActive(p, ch => ({
     ...ch,
@@ -258,7 +278,7 @@ function updateSegment(
       return segment.id === segmentId ? updater(segment) : segment;
     }),
     updated_at: new Date().toISOString(),
-  }));
+  }), opts);
 }
 
 /**
@@ -378,7 +398,7 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPLY_SPLIT': {
       return { project: updateActive(p, ch => {
         const newSegs = action.items.map(item => {
-          const seg = makeSegment(item.text, ch.voice, item.segment_kind ?? 'narration');
+          const seg = makeSegment(item.text, item.segment_kind ?? 'narration');
           if (item.emotion && isEmotionType(item.emotion)) seg.emotion = item.emotion;
           if (item.role_id !== undefined) seg.role_id = item.role_id;
           // Build voice from role_snapshot or voice_ref
@@ -398,7 +418,7 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'APPEND_SEGMENT': {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
-        const seg = makeSegment(action.text ?? '', ch.voice);
+        const seg = makeSegment(action.text ?? '');
         s.push(seg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
       })};
@@ -408,7 +428,7 @@ export function segmentedReducer(state: State, action: Action): State {
         const s = cloneSegments(ch.segments);
         const idx = s.findIndex(x => x.id === action.afterId);
         if (idx >= 0) {
-          const seg = makeSegment(action.text ?? '', ch.voice);
+          const seg = makeSegment(action.text ?? '');
           s.splice(idx + 1, 0, seg);
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
@@ -418,14 +438,14 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateActive(p, ch => {
         const s = ch.segments.filter(x => x.id !== action.id);
         return { ...ch, segments: s, selected_segment_id: ch.selected_segment_id === action.id ? undefined : ch.selected_segment_id, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'DELETE_SEGMENTS': {
       return { project: updateActive(p, ch => {
         const ids = new Set(action.ids);
         const s = ch.segments.filter(x => !ids.has(x.id));
         return { ...ch, segments: s, selected_segment_id: ch.selected_segment_id && ids.has(ch.selected_segment_id) ? undefined : ch.selected_segment_id, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'UPDATE_TEXT': {
       return { project: updateActive(p, ch => {
@@ -433,7 +453,7 @@ export function segmentedReducer(state: State, action: Action): State {
         const seg = s.find(x => x.id === action.id);
         if (seg) { seg.text = action.text; seg.updated_at = new Date().toISOString(); }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'UPDATE_SSML': {
       // SSML is no longer stored on Segment in V3
@@ -463,7 +483,7 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.updated_at = new Date().toISOString();
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'UPDATE_EMOTION': {
       return { project: updateActive(p, ch => {
@@ -471,7 +491,7 @@ export function segmentedReducer(state: State, action: Action): State {
         const seg = s.find(x => x.id === action.id);
         if (seg && isEmotionType(action.emotion)) { seg.emotion = action.emotion; seg.updated_at = new Date().toISOString(); }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'SET_PROJECT_NARRATOR':
       return {
@@ -499,7 +519,7 @@ export function segmentedReducer(state: State, action: Action): State {
             voice: { source: 'chapter' },
             updated_at: new Date().toISOString(),
           };
-        }),
+        }, { touch: action.touch }),
       };
     case 'SET_SEGMENT_KIND':
       return {
@@ -507,7 +527,7 @@ export function segmentedReducer(state: State, action: Action): State {
           ...seg,
           segment_kind: action.segmentKind,
           updated_at: new Date().toISOString(),
-        })),
+        }), { touch: action.touch }),
       };
     case 'UPDATE_PROSODY_MARKS':
       return {
@@ -517,6 +537,42 @@ export function segmentedReducer(state: State, action: Action): State {
           updated_at: new Date().toISOString(),
         })),
       };
+    case 'APPLY_SERVER_SEGMENT': {
+      // PATCH 响应回写：以服务端段数据为准（含 voice 变更导致的音频降级）。
+      // touch=false —— 数据已在服务端，不再触发整包 PUT。
+      const srv = action.segment;
+      return { project: updateSegmentById(p, action.id, seg => {
+        const audio = srv.audio === undefined ? seg.audio : {
+          format: srv.audio?.format ?? seg.audio.format,
+          current: srv.audio?.current ?? undefined,
+          previous: srv.audio?.previous ?? undefined,
+          duration_sec: srv.audio?.duration_sec ?? undefined,
+        };
+        return {
+          ...seg,
+          ...(srv.text !== undefined ? { text: srv.text } : {}),
+          ...(srv.emotion !== undefined ? { emotion: (srv.emotion ?? undefined) as Segment['emotion'] } : {}),
+          ...(srv.role_id !== undefined ? { role_id: srv.role_id ?? null } : {}),
+          ...(srv.segment_kind !== undefined ? { segment_kind: srv.segment_kind as Segment['segment_kind'] } : {}),
+          ...(srv.voice !== undefined ? { voice: srv.voice } : {}),
+          audio,
+          status: audio.current ? seg.status : 'idle',
+          updated_at: new Date().toISOString(),
+        };
+      }, { touch: false })};
+    }
+    case 'APPLY_SERVER_CHAPTER_SEGMENTS': {
+      // 结构端点（reconcileChapterStructure）响应回写：整章段以服务端为准
+      // （含合并文本变更触发的音频降级、服务端的 position 权威值）。
+      // touch=false —— 数据已在服务端，不再触发整包 PUT。
+      const ch = p.chapters.find(c => c.id === action.chapterId);
+      if (!ch) return state;
+      return { project: updateChapter(p, ch.id, ch2 => ({
+        ...ch2,
+        segments: action.segments.map(s => enrichSegment(s)),
+        updated_at: new Date().toISOString(),
+      }), { touch: false })};
+    }
     case 'REORDER': {
       return { project: updateActive(p, ch => {
         const s = cloneSegments(ch.segments);
@@ -527,11 +583,14 @@ export function segmentedReducer(state: State, action: Action): State {
         // stale positions would silently revert the reorder.
         const renumbered = s.map((seg, i) => ({ ...seg, position: i }));
         return { ...ch, segments: renumbered, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'MARK_QUEUED': {
       // 批量合成可能覆盖多个章节（"合成未合成"遍历全项目），
       // 按 id 全局标记，避免非活动章节的 segment 丢失 queued 状态。
+      // queued 与 GENERATE_START 的 pending 同为纯 UI 状态（服务端不持久化 status）：
+      // 不 bump 项目 updated_at，否则批量合成起始的整包 PUT 会与合成端点并发撞
+      // 409 stale_payload，触发"检测到项目已在别处更新"的恢复 toast 循环。
       const ids = new Set(action.ids);
       let touched = false;
       const chapters = p.chapters.map(ch => {
@@ -546,7 +605,7 @@ export function segmentedReducer(state: State, action: Action): State {
         });
         return chChanged ? { ...ch, segments: segs } : ch;
       });
-      return { project: touched ? { ...p, chapters, updated_at: new Date().toISOString() } : p };
+      return { project: touched ? { ...p, chapters } : p };
     }
     case 'GENERATE_START': {
       // pending 是纯 UI 状态（后端不存 status）：不 bump 项目 updated_at，
@@ -601,14 +660,14 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.generated_params = action.generated_params as Partial<EngineParams>;
         }
         return seg;
-      })};
+      }, { touch: action.touch })};
     }
     case 'GENERATE_FAIL': {
       return { project: updateSegmentById(p, action.id, seg => {
         seg.status = 'failed';
         seg.error = action.error;
         return seg;
-      })};
+      }, { touch: action.touch })};
     }
     case 'UNDO_REGENERATE': {
       return { project: updateSegmentById(p, action.id, seg => {
@@ -651,7 +710,7 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.updated_at = new Date().toISOString();
         }
         return seg;
-      })};
+      }, { touch: action.touch })};
     }
     case 'CLEAR_SEGMENT_AUDIO': {
       return { project: updateSegmentById(p, action.id, seg => {
@@ -660,7 +719,7 @@ export function segmentedReducer(state: State, action: Action): State {
         seg.audio.duration_sec = undefined;
         seg.status = 'idle';
         return seg;
-      })};
+      }, { touch: action.touch })};
     }
     case 'TOGGLE_INDEPENDENT_VOICE': {
       return { project: updateActive(p, ch => {
@@ -679,7 +738,7 @@ export function segmentedReducer(state: State, action: Action): State {
           seg.updated_at = new Date().toISOString();
         }
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'MERGE_SEGMENTS': {
       return { project: updateActive(p, ch => {
@@ -715,7 +774,7 @@ export function segmentedReducer(state: State, action: Action): State {
         // If selected segment was removed, select the kept one
         const sel = ch.selected_segment_id === nxt.id ? cur.id : ch.selected_segment_id;
         return { ...ch, segments: s, selected_segment_id: sel, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'SPLIT_SEGMENT': {
       return { project: updateActive(p, ch => {
@@ -734,13 +793,13 @@ export function segmentedReducer(state: State, action: Action): State {
         seg.error = undefined;
         seg.updated_at = new Date().toISOString();
         // Create new segment for second half
-        const newSeg = makeSegment(textAfter, {} as EngineParams);
+        const newSeg = makeSegment(textAfter);
         if (seg.emotion) newSeg.emotion = seg.emotion;
         // Inherit voice
         newSeg.voice = { ...seg.voice };
         s.splice(idx + 1, 0, newSeg);
         return { ...ch, segments: s, updated_at: new Date().toISOString() };
-      })};
+      }, { touch: action.touch })};
     }
     case 'SELECT_SEGMENT': {
       const activeCh = getActiveChapter(p);

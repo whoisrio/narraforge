@@ -16,8 +16,8 @@ import { chaptersNeedingSplit, selectProduceAllSegments, type ProduceAllRun } fr
 import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
-import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode, configApi } from '../services/api';
+import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action, type ServerSegmentPatch } from '../hooks/useSegmentedProject';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode, configApi, type SegmentPatchBody } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
@@ -25,6 +25,8 @@ import { trimBase64AudioSilence } from '../services/audioTrim';
 import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segmentedProjectStorage';
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
 import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
+import { useSegmentPatchSync } from '../hooks/useSegmentPatchSync';
+import { recoverStaleProject } from '../hooks/recoverStaleProject';
 import { peekTryHandoffText, consumeTryHandoffText } from '../try/tryHandoff';
 import { applyTryHandoffToProject } from '../try/applyTryHandoff';
 import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segmentedDraftStore';
@@ -421,7 +423,12 @@ export function TTSSynthesis({
     // 初始加载期间不触发自动保存，避免 markDirty 导致误判冲突
     if (!initialLoadDoneRef.current) return;
     // 跳过纯 UI 状态变更（如 SELECT_SEGMENT 不 bump updated_at）
-    if (project.updated_at === lastSavedUpdatedAtRef.current) return;
+    if (project.updated_at === lastSavedUpdatedAtRef.current) {
+      // touch=false 的变更（PATCH/结构端点已远端持久化）：不触发整包 PUT，
+      // 但刷新草稿内容，防待冲刷的陈旧草稿把 PATCH 写入的字段覆盖回旧值
+      if (storageMode === 'backend') void draftSync.refreshDraft(project);
+      return;
+    }
     lastSavedUpdatedAtRef.current = project.updated_at;
     if (storageMode === 'backend') {
       void draftSync.markDirty(project);
@@ -487,8 +494,66 @@ export function TTSSynthesis({
       const code = apiErrorCode(error);
       if (code === 'segment_too_long') showToast(t('segmentEdit.segmentTooLong'), 'error');
       else if (code === 'chapter_limit_reached') showToast(t('projectShell.chapterQuotaReached'), 'error');
+      else if (code === 'stale_payload' && project?.id) {
+        // 乐观锁拒绝：本地草稿基于过期的服务端版本（他处已更新/合成端点已前进）。
+        // 恢复 = 拉后端权威态 + adoptBackendVersion，丢弃冲突草稿避免反复 409。
+        void recoverStaleProject({
+          projectId: project.id,
+          storage: projectStorage,
+          adoptBackendVersion: draftSync.adoptBackendVersion,
+          applyProject: (p) => {
+            // 关键：同步 lastSavedUpdatedAtRef —— 恢复回来的就是服务端权威态，
+            // 若不同步，autosave effect 会把这次 LOAD_PROJECT 当成新变更再次
+            // markDirty → PUT →（批量合成期间）409 → 恢复 → 再 PUT，形成
+            // "检测到项目已在别处更新"的 toast 循环（2026-08-28 用户反馈）。
+            lastSavedUpdatedAtRef.current = p.updated_at;
+            setProject(p);
+            dispatch({ type: 'LOAD_PROJECT', project: p });
+          },
+          migrate: (p) => migrateV1(p, t),
+        }).then((recovered) => {
+          if (recovered) showToast(t('tts.staleSaveRecovered'), 'info');
+        }).catch(() => { /* 恢复失败等下一轮保存重试 */ });
+      }
     },
   });
+
+  // ---- 段级编辑远端同步（Phase 2：PATCH 取代整包 PUT autosave）----
+  const projectRef = useRef(project);
+  useEffect(() => { projectRef.current = project; });
+  const segmentPatchSync = useSegmentPatchSync({
+    projectId: project.id,
+    enabled: storageMode === 'backend' && project.id !== '__scratchpad__',
+    onPatched: (segmentId, segment, projectUpdatedAt) => {
+      // 以服务端段数据为准回写（含 voice 变更导致的音频降级）
+      dispatch({ type: 'APPLY_SERVER_SEGMENT', id: segmentId, segment: segment as ServerSegmentPatch });
+      void draftSync.noteServerVersion(projectUpdatedAt);
+    },
+    onError: (error) => {
+      console.warn('[segmentPatch] failed:', error);
+      showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+    },
+  });
+
+  /**
+   * 段内容编辑：本地 dispatch 立即生效 + 远端 PATCH 持久化。
+   * backend 模式下 action 带 touch=false —— 不 bump 项目 updated_at，
+   * 避免触发整包 PUT autosave（PATCH 已持久化）；frontend 模式照旧走 IndexedDB。
+   */
+  const editSegmentRemote = useCallback((
+    action: Extract<Action, { type: 'UPDATE_TEXT' | 'UPDATE_PARAMS' | 'UPDATE_EMOTION' | 'SET_SEGMENT_ROLE' | 'SET_SEGMENT_KIND' | 'TOGGLE_INDEPENDENT_VOICE' | 'UNLOCK_SEGMENT_AUDIO' }>, segmentId: string,
+    buildBody: (seg: Segment) => SegmentPatchBody,
+  ) => {
+    const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+    if (!remote) { dispatch(action); return; }
+    // 先在 ref 态上跑一遍 reducer，拿到与本地一致的 PATCH 字段（voice 等派生值）
+    const next = segmentedReducer({ project: projectRef.current }, action).project;
+    const chapter = next.chapters.find(c => c.segments.some(s => s.id === segmentId));
+    const seg = chapter?.segments.find(s => s.id === segmentId);
+    dispatch({ ...action, touch: false });
+    if (seg && chapter) segmentPatchSync.queue(segmentId, chapter.id, buildBody(seg));
+  }, [storageMode, dispatch, segmentPatchSync]);
+
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
   const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: ProjectDraftRecord } | null>(null);
@@ -909,8 +974,9 @@ export function TTSSynthesis({
   }, [project.id, project, projectList, doDeleteProject, showToast]);
 
   const handleToggleIndependentVoice = useCallback((id: string) => {
-    dispatch({ type: 'TOGGLE_INDEPENDENT_VOICE', id });
-  }, [dispatch]);
+    editSegmentRemote({ type: 'TOGGLE_INDEPENDENT_VOICE', id }, id,
+      (updated) => ({ voice: updated.voice as unknown as Record<string, unknown> }));
+  }, [editSegmentRemote]);
 
   const handleConfirmCustom = useCallback((id: string, localParams: Record<string, unknown>) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -924,12 +990,19 @@ export function TTSSynthesis({
         // Take all params from the panel display (effective + local edits)
         const eff = segEffectiveParams(seg) as Record<string, unknown>;
         const fullParams = { ...eff, ...localParams };
-        dispatch({ type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true });
+        editSegmentRemote(
+          { type: 'UPDATE_PARAMS', id, params: fullParams as Partial<EngineParams>, convertFromRole: true },
+          id, (updated) => ({ voice: updated.voice as unknown as Record<string, unknown> }),
+        );
         // Clear existing audio — was generated with old params
-        if (seg.status === 'ready') dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id });
+        // （remote 模式下 PATCH 已在服务端降级音频，本地 CLEAR 不再触发整包 PUT）
+        if (seg.status === 'ready') {
+          const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+          dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id, touch: !remote });
+        }
       },
     });
-  }, [activeChapter.segments, dispatch]);
+  }, [activeChapter.segments, dispatch, editSegmentRemote, storageMode]);
 
   const handleMerge = useCallback((id: string, direction: 'up' | 'down') => {
     const segs = activeChapter.segments;
@@ -951,7 +1024,29 @@ export function TTSSynthesis({
     const doMerge = async () => {
       if (cur.audio.current?.id) { try { await deleteTTSResult(cur.audio.current.id); } catch { /* ignore */ } }
       if (nxt.audio.current?.id) { try { await deleteTTSResult(nxt.audio.current.id); } catch { /* ignore */ } }
-      dispatch({ type: 'MERGE_SEGMENTS', id, direction });
+      const action: Action = { type: 'MERGE_SEGMENTS', id, direction };
+      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+      if (!remote) { dispatch(action); return; }
+      // 结构操作走章级 reconcile 端点：合并改了保留段的文本，服务端借此触发
+      // 音频失效降级（整包 PUT 已忽略 audio，无法表达该意图）。
+      const next = segmentedReducer({ project: projectRef.current }, action).project;
+      const chapter = next.chapters.find(c => c.id === activeChapter.id);
+      dispatch({ ...action, touch: false });
+      if (!chapter) return;
+      try {
+        const resp = await segmentedProjectApi.reconcileChapterStructure(
+          projectRef.current.id, chapter.id,
+          chapter.segments.map((s, i) => ({ id: s.id, text: s.text, position: i })),
+        );
+        dispatch({ type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: chapter.id, segments: resp.segments });
+        void draftSync.noteServerVersion(resp.project_updated_at);
+      } catch (error) {
+        // 远端失败：本地已合并，回退整包 PUT 兜底（结构 reconcile 语义仍在，
+        // 仅音频降级丢失，文件始终在盘上）
+        console.warn('[structureSync] merge failed, fallback to full save:', error);
+        void draftSync.markDirty(projectRef.current);
+        showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+      }
     };
     if (hasAudio) {
       setConfirmDialog({
@@ -963,7 +1058,34 @@ export function TTSSynthesis({
     } else {
       doMerge();
     }
-  }, [activeChapter.segments, dispatch]);
+  }, [activeChapter.id, activeChapter.segments, dispatch, storageMode, draftSync, showToast, t]);
+
+  /**
+   * 段结构操作远端同步（Phase 7，对齐 handleMerge 的模式）：本地 touch=false
+   * dispatch（不触发整包 PUT）→ structure reconcile → 服务端权威段回写 +
+   * 推进乐观锁 base；远端失败回退整包 PUT 兜底。仅 remote 模式调用。
+   */
+  const syncChapterStructure = useCallback(async (
+    action: Extract<Action, { type: 'SPLIT_SEGMENT' | 'DELETE_SEGMENT' | 'DELETE_SEGMENTS' | 'REORDER' }>,
+  ) => {
+    const next = segmentedReducer({ project: projectRef.current }, action).project;
+    const chapter = next.chapters.find(c => c.id === activeChapter.id);
+    dispatch({ ...action, touch: false });
+    if (!chapter) return;
+    try {
+      const resp = await segmentedProjectApi.reconcileChapterStructure(
+        projectRef.current.id, chapter.id,
+        chapter.segments.map((s, i) => ({ id: s.id, text: s.text, position: i })),
+      );
+      dispatch({ type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: chapter.id, segments: resp.segments });
+      void draftSync.noteServerVersion(resp.project_updated_at);
+    } catch (error) {
+      // 远端失败：本地已变更，回退整包 PUT 兜底（结构 reconcile 语义仍在）
+      console.warn('[structureSync] failed, fallback to full save:', error);
+      void draftSync.markDirty(projectRef.current);
+      showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+    }
+  }, [activeChapter.id, dispatch, draftSync, showToast, t]);
 
   const handleSplit = useCallback((id: string, position: number) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -971,7 +1093,12 @@ export function TTSSynthesis({
     const hasAudio = !!seg.audio.current;
     const doSplit = async () => {
       if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
-      dispatch({ type: 'SPLIT_SEGMENT', id, position });
+      const action = { type: 'SPLIT_SEGMENT', id, position } as const;
+      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+      if (!remote) { dispatch(action); return; }
+      // 结构操作走章级 reconcile 端点（同 handleMerge）：拆段改了原段文本，
+      // 服务端借此触发音频失效降级；新段 id 由后端按给定 id 播种。
+      void syncChapterStructure(action);
     };
     if (hasAudio) {
       setConfirmDialog({
@@ -983,7 +1110,7 @@ export function TTSSynthesis({
     } else {
       doSplit();
     }
-  }, [activeChapter.segments, dispatch]);
+  }, [activeChapter.segments, dispatch, storageMode, syncChapterStructure, t]);
 
   const handleDeleteSegment = useCallback((id: string) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -991,7 +1118,11 @@ export function TTSSynthesis({
     const doDelete = async () => {
       if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
       if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
-      dispatch({ type: 'DELETE_SEGMENT', id });
+      const action = { type: 'DELETE_SEGMENT', id } as const;
+      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+      if (!remote) { dispatch(action); return; }
+      // 结构操作走章级 reconcile 端点：DB 行删除、音频文件保留（待 sweep）。
+      void syncChapterStructure(action);
     };
     const preview = seg.text.length > 20 ? seg.text.slice(0, 20) + '…' : seg.text;
     const audioWarn = seg.audio.current ? t('tts.audioWillBeDeleted') : '';
@@ -1001,7 +1132,48 @@ export function TTSSynthesis({
       variant: 'danger', confirmLabel: t('common.delete'),
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDelete(); },
     });
-  }, [activeChapter.segments, dispatch]);
+  }, [activeChapter.segments, dispatch, storageMode, syncChapterStructure, t]);
+
+  /** 段重排：纯重排不动音频（§5.3），remote 走 structure 端点持久化 position */
+  const handleReorder = useCallback((from: number, to: number) => {
+    const action = { type: 'REORDER', fromIndex: from, toIndex: to } as const;
+    const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+    if (!remote) { dispatch(action); return; }
+    void syncChapterStructure(action);
+  }, [dispatch, storageMode, syncChapterStructure]);
+
+  /**
+   * 段插入（onInsertAfter / 复制段）：remote 走 POST /segments（服务端分配权威 id），
+   * 用响应的 segment + positions 回写整章排序；失败时本地无变更，仅提示（无兜底 PUT）。
+   */
+  const handleInsertAfter = useCallback((afterId: string | null, text?: string) => {
+    const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+    if (!remote) {
+      // afterId 为 null = 追加到章末（与后端 after_id=null 语义一致）
+      if (afterId == null) dispatch({ type: 'APPEND_SEGMENT', text });
+      else dispatch({ type: 'INSERT_SEGMENT', afterId, text });
+      return;
+    }
+    void (async () => {
+      try {
+        const resp = await segmentedProjectApi.createSegment(
+          projectRef.current.id, activeChapter.id, { text: text ?? '', after_id: afterId },
+        );
+        const chapter = projectRef.current.chapters.find(c => c.id === activeChapter.id);
+        if (!chapter) return;
+        const positions = new Map(resp.positions.map(p => [p.id, p.position]));
+        const merged = chapter.segments
+          .filter(s => s.id !== resp.segment.id)
+          .concat([resp.segment])
+          .sort((a, b) => (positions.get(a.id) ?? 0) - (positions.get(b.id) ?? 0));
+        dispatch({ type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: chapter.id, segments: merged });
+        void draftSync.noteServerVersion(resp.project_updated_at);
+      } catch (error) {
+        console.warn('[structureSync] insert failed:', error);
+        showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+      }
+    })();
+  }, [activeChapter.id, dispatch, storageMode, draftSync, showToast, t]);
 
   const handleToggleSelectionMode = useCallback(() => {
     setSelectionMode(prev => {
@@ -1049,11 +1221,16 @@ export function TTSSynthesis({
           if (seg.audio.current?.id) { try { await deleteTTSResult(seg.audio.current.id); } catch { /* ignore */ } }
           if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
         }
-        dispatch({ type: 'DELETE_SEGMENTS', ids });
+        const action = { type: 'DELETE_SEGMENTS', ids } as const;
+        const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+        if (!remote) { dispatch(action); } else {
+          // 结构操作走章级 reconcile 端点（同 handleMerge）。
+          void syncChapterStructure(action);
+        }
         setSelectedSegmentIds(new Set());
       },
     });
-  }, [generating, selectedSegmentIds, activeChapter.segments, dispatch, t]);
+  }, [generating, selectedSegmentIds, activeChapter.segments, dispatch, storageMode, syncChapterStructure, t]);
 
   /** Re-split: clean up existing segment audio before applying new split */
   const doApplySplit = useCallback((items: { text: string; emotion?: string; segment_kind?: SegmentKind; role_id?: string | null; role_snapshot?: RoleSnapshot | null }[], originalText: string) => {
@@ -1173,6 +1350,9 @@ export function TTSSynthesis({
     }
     if (!seg || !segChapter) return;
     const segIdx = segChapter.segments.findIndex(s => s.id === id);
+    // 单段合成（非批量循环内部调用）前冲刷未落库草稿：合成端点会前进服务端
+    // updated_at，滞后的整包 PUT 会撞 409 stale_payload。批量入口已统一 flush。
+    if (!opts?.internal) await draftSync.flush();
     dispatch({ type: 'GENERATE_START', id });
     try {
       const hasVoiceLock = segHasOverride(seg);
@@ -1371,7 +1551,14 @@ export function TTSSynthesis({
             duration_sec: updatedSeg?.audio.current?.duration_sec ?? updatedSeg?.audio.duration_sec,
           generated_params: updatedSeg?.generated_params,
           origin: updatedSeg?.audio.current?.origin ?? 'tts',
+          // 合成端点已在服务端持久化音频元数据：不回写、不触发整包 PUT
+          // （批量合成并发时 PUT 的 base 必然落后 → 409 stale_payload，
+          // 见 produce-all e2e；前端模式仍需 touch 以落 IndexedDB）
+          touch: false,
         });
+        // 合成端点在服务端推进了项目 updated_at：前移乐观锁 base，
+        // 避免后续其他写路径的整包 PUT 被 409（stale_payload）。
+        if (updated?.updated_at) void draftSync.noteServerVersion(updated.updated_at);
         unlockedRecordedRef.current.delete(id);
         return;
       }
@@ -1454,7 +1641,10 @@ export function TTSSynthesis({
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams, origin: 'tts' });
       unlockedRecordedRef.current.delete(id);
     } catch (error: unknown) {
-      dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error, t('common.generationFailed')) });
+      // 后端模式下失败状态无需整包 PUT（status 为前端态，服务端不持久化），
+      // 且批量合成并发时 PUT 必撞 409；frontend 模式保持 touch 以落 IndexedDB。
+      const remote = storageMode === 'backend' && !!project?.id && project.id !== '__scratchpad__';
+      dispatch({ type: 'GENERATE_FAIL', id, error: getErrorMessage(error, t('common.generationFailed')), touch: !remote });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.chapters, dispatch, buildCurrentParams, showToast, roles]);
@@ -1481,8 +1671,10 @@ export function TTSSynthesis({
     });
     if (!ok) return;
     unlockedRecordedRef.current.add(id);
-    dispatch({ type: 'UNLOCK_SEGMENT_AUDIO', id });
-  }, [confirm, dispatch, t]);
+    // remote：PATCH unlock_audio 在服务端清除 origin（整包 PUT 不再写 audio，
+    // 仅靠本地 dispatch 的话 DB 里的 recorded 锁会残留）
+    editSegmentRemote({ type: 'UNLOCK_SEGMENT_AUDIO', id }, id, () => ({ unlock_audio: true }));
+  }, [confirm, editSegmentRemote, t]);
 
   // 录入面板确认：前端模式存 IndexedDB，后端模式上传到项目资产目录
   const handleRecordConfirm = useCallback(async (audio: File | Blob, durationSec?: number) => {
@@ -1507,6 +1699,8 @@ export function TTSSynthesis({
           duration_sec: updatedSeg?.audio.current?.duration_sec ?? durationSec,
           audio_format: updatedSeg?.audio.format,
         });
+        // 录音上传同样推进了服务端 updated_at，前移乐观锁 base
+        if (updated?.updated_at) void draftSync.noteServerVersion(updated.updated_at);
       } else {
         const MIME_TO_FMT: Record<string, string> = {
           'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav',
@@ -1524,7 +1718,7 @@ export function TTSSynthesis({
     } finally {
       setRecordBusy(false);
     }
-  }, [recordSegmentId, activeChapter, storageMode, project?.id, dispatch, showToast, t]);
+  }, [recordSegmentId, activeChapter, storageMode, project?.id, dispatch, showToast, t, draftSync]);
 
   const handleRegenerateAll = useCallback(async (mode: BatchSynthesizeMode = 'all') => {
     if (generating) return;
@@ -1578,13 +1772,19 @@ export function TTSSynthesis({
   const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments) => {
     setGenerating(true);
     try {
+      // 先把未落库的草稿 PUT 冲刷掉：批量合成期间合成端点会持续前进服务端
+      // updated_at，任何滞后的整包 PUT 都会撞 409 stale_payload。
+      await draftSync.flush();
       // Step 1: Delete existing audio for segments that have it
+      // backend 模式下清除只是本地 UI 态（合成端点会在服务端覆盖音频）：
+      // touch=false 不触发整包 PUT，避免与合成端点并发撞 409 stale_payload。
+      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
       for (const seg of toRegenerate) {
         const audioId = segAudioId(seg);
         if (audioId) {
           try { await deleteTTSResult(audioId); } catch { /* ignore */ }
         }
-        dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id });
+        dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id, touch: !remote });
       }
 
       // Step 2: Mark all as queued
@@ -1610,6 +1810,9 @@ export function TTSSynthesis({
     setGenerating(true);
     produceAllAbortRef.current = false;
     try {
+      // 先冲刷未落库草稿：补切/合成端点都会前进服务端 updated_at，
+      // 滞后的整包 PUT 会撞 409 stale_payload。
+      await draftSync.flush();
       // Phase 1: 补切--给无 segment 的章节按规则切分段落（复用 chapter 音色）。
       const toSplit = chaptersNeedingSplit(project.chapters);
       if (toSplit.length > 0) {
@@ -1626,11 +1829,6 @@ export function TTSSynthesis({
         // 等 React 重渲染刷新 handleRegenerateRef，使新段可被全项目查找。
         await new Promise((r) => setTimeout(r, 0));
       }
-
-      // 暂停自动保存：逐段合成会 dispatch 状态更新，若中途触发全量 PUT，
-      // 会用陈旧内存态覆盖刚合成段的音频（reconcile 还会删掉刚写的文件）。
-      // 此时还未开始合成，状态与后端一致，暂停安全；最后 reload 恢复。
-      initialLoadDoneRef.current = false;
 
       // Phase 2: 拉最新项目态收集目标段。
       const raw = await projectStorage.getProject(project.id);
@@ -1665,10 +1863,11 @@ export function TTSSynthesis({
     } finally {
       setGenerating(false);
       setProduceAllRun(null);
-      // 恢复 autosave（reloadProjectData 内部置 ref=true）+ 拉回后端权威态。
+      // 拉回后端权威态（批量合成期间的合成/PATCH 已由 noteServerVersion 推进乐观锁
+      // base，无需再暂停 autosave；initialLoadDoneRef 只保留加载防误标脏用途）。
       await reloadProjectData();
     }
-  }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t]);
+  }, [generating, project.id, project.chapters, projectStorage, reloadProjectData, showToast, t, draftSync]);
 
   const handleStopProduceAll = useCallback(() => {
     produceAllAbortRef.current = true;
@@ -2022,9 +2221,6 @@ export function TTSSynthesis({
         >
         {projectSection === 'studio' ? (
         <VoiceStudioLayout
-          segmentCount={activeChapter.segments.length}
-          generatedCount={generatedSegmentCount}
-          durationSec={activeChapterDuration}
           remotionPath={project.remotion_project_path}
           onExport={() => setExportOpen(true)}
           onExportAll={storageMode === 'backend' && !isScratchpadProject ? () => { void handleExportAll(); } : undefined}
@@ -2299,9 +2495,9 @@ export function TTSSynthesis({
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
                 }}
                 onDelete={handleDeleteSegment}
-                onInsertAfter={(afterId) => dispatch({ type: 'INSERT_SEGMENT', afterId, voice_ref: buildGlobalVoiceRef() })}
-                onAppend={() => dispatch({ type: 'APPEND_SEGMENT', voice_ref: buildGlobalVoiceRef() })}
-                onReorder={(from, to) => dispatch({ type: 'REORDER', fromIndex: from, toIndex: to })}
+                onInsertAfter={(afterId) => handleInsertAfter(afterId)}
+                onAppend={() => handleInsertAfter(null)}
+                onReorder={handleReorder}
                 onEdit={(id) => {
                   const currentSelected = activeChapter.selected_segment_id;
                   dispatch({ type: 'SELECT_SEGMENT', id: currentSelected === id ? undefined : id });
@@ -2315,24 +2511,30 @@ export function TTSSynthesis({
                 onConfirmCustom={handleConfirmCustom}
                 onDuplicate={(id) => {
                   const seg = activeChapter.segments.find(s => s.id === id);
-                  if (seg) dispatch({ type: 'INSERT_SEGMENT', afterId: id, text: seg.text, voice_ref: seg.voice_ref || buildGlobalVoiceRef() });
+                  if (seg) handleInsertAfter(id, seg.text);
                 }}
                 onAnnotateSSML={(id) => handleAnnotateSSML([id])}
-                onUpdateText={(id, text) => dispatch({ type: 'UPDATE_TEXT', id, text })}
+                onUpdateText={(id, text) => editSegmentRemote({ type: 'UPDATE_TEXT', id, text }, id, () => ({ text }))}
                 onUpdateSSML={(id, ssml) => dispatch({ type: 'UPDATE_SSML', id, ssml })}
                 onUpdateParams={(id, params) => {
                   // Only apply params update for already-custom segments
                   const seg = activeChapter.segments.find(s => s.id === id);
                   if (seg?.voice.source === 'custom') {
-                    dispatch({ type: 'UPDATE_PARAMS', id, params });
+                    editSegmentRemote({ type: 'UPDATE_PARAMS', id, params }, id,
+                      (updated) => ({ voice: updated.voice as unknown as Record<string, unknown> }));
                   }
                   // Non-custom: ignored here; params accumulated locally in edit panel → confirm button handles conversion
                 }}
-                onUpdateEmotion={(id, emotion) => dispatch({ type: 'UPDATE_EMOTION', id, emotion })}
-                onUpdateRole={(id, roleId, roleSnapshot) => dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot })}
+                onUpdateEmotion={(id, emotion) => editSegmentRemote({ type: 'UPDATE_EMOTION', id, emotion }, id, () => ({ emotion }))}
+                onUpdateRole={(id, roleId, roleSnapshot) => editSegmentRemote(
+                  { type: 'SET_SEGMENT_ROLE', id, roleId, roleSnapshot }, id,
+                  (updated) => ({ role_id: updated.role_id ?? null, voice: updated.voice as unknown as Record<string, unknown> }),
+                )}
                 onUpdateKind={(id, kind, roleSnapshot) => {
-                  dispatch({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind });
-                  dispatch({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot });
+                  editSegmentRemote({ type: 'SET_SEGMENT_KIND', id, segmentKind: kind }, id,
+                    () => ({ segment_kind: kind }));
+                  editSegmentRemote({ type: 'SET_SEGMENT_ROLE', id, roleId: roleSnapshot?.id ?? null, roleSnapshot }, id,
+                    (updated) => ({ role_id: updated.role_id ?? null, voice: updated.voice as unknown as Record<string, unknown> }));
                 }}
                 onToggleIndependentVoice={handleToggleIndependentVoice}
                 onMerge={handleMerge}

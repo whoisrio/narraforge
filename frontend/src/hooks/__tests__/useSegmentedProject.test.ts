@@ -310,6 +310,45 @@ describe('segmentedReducer', () => {
     expect(ac(next.project).segments[0].text).toBe('new');
   });
 
+  it('APPLY_SERVER_SEGMENT 用服务端段数据覆盖本地字段且不 bump 项目 updated_at', () => {
+    const s: Segment = { id: 's1', text: 'local', voice: { source: 'chapter' }, audio: { format: 'mp3', current: { path: 'x.mp3' } }, segment_kind: 'narration' as const, status: 'ready', created_at: '', updated_at: '' };
+    const before = makeProject({ updated_at: '2026-08-27T00:00:00.000Z' }, { segments: [s] });
+    const serverSeg = {
+      id: 's1', text: 'server', emotion: 'happy', role_id: 'r1', segment_kind: 'dialogue',
+      voice: { source: 'role', role_id: 'r1' },
+      audio: { format: 'mp3', current: null, previous: { path: 'x.mp3' } },
+    };
+    const next = segmentedReducer({ project: before }, { type: 'APPLY_SERVER_SEGMENT', id: 's1', segment: serverSeg });
+    const seg = ac(next.project).segments[0];
+    expect(seg.text).toBe('server');
+    expect(seg.emotion).toBe('happy');
+    expect(seg.role_id).toBe('r1');
+    expect(seg.segment_kind).toBe('dialogue');
+    expect(seg.voice.source).toBe('role');
+    expect(seg.audio.current).toBeUndefined();
+    expect(seg.audio.previous).toEqual({ path: 'x.mp3' });
+    // 服务端清了音频 → 本地状态回 idle
+    expect(seg.status).toBe('idle');
+    expect(next.project.updated_at).toBe('2026-08-27T00:00:00.000Z');
+  });
+
+  it('UPDATE_TEXT with touch=false 不 bump 项目 updated_at（远端 PATCH 已持久化）', () => {
+    const s: Segment = { id: 's1', text: 'old', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
+    const before = makeProject({ updated_at: '2026-08-27T00:00:00.000Z' }, { segments: [s] });
+    const next = segmentedReducer({ project: before }, { type: 'UPDATE_TEXT', id: 's1', text: 'new', touch: false });
+    expect(ac(next.project).segments[0].text).toBe('new');
+    expect(next.project.updated_at).toBe('2026-08-27T00:00:00.000Z');
+  });
+
+  it('SET_SEGMENT_ROLE with touch=false 不 bump 项目 updated_at', () => {
+    const s: Segment = { id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration' as const, status: 'idle', created_at: '', updated_at: '' };
+    const before = makeProject({ updated_at: '2026-08-27T00:00:00.000Z' }, { segments: [s] });
+    const roleSnapshot = { id: 'r1', name: '角色A', default_engine: 'edge_tts', default_voice: 'Yunyang', default_engine_params: { engine: 'edge_tts' }, favorite_styles: [] };
+    const next = segmentedReducer({ project: before }, { type: 'SET_SEGMENT_ROLE', id: 's1', roleId: 'r1', roleSnapshot, touch: false });
+    expect(ac(next.project).segments[0].role_id).toBe('r1');
+    expect(next.project.updated_at).toBe('2026-08-27T00:00:00.000Z');
+  });
+
   it('UPDATE_PARAMS sets voice to custom', () => {
     const s: Segment = {
       id: 's1', text: 'x', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration',
@@ -364,6 +403,8 @@ describe('segmentedReducer', () => {
     expect(next.project.chapters.find(c => c.id === 'ch-b')!.segments[0].status).toBe('queued');
     // 非 idle 的 segment 不受影响
     expect(next.project.chapters.find(c => c.id === 'ch-b')!.segments[1].status).toBe('ready');
+    // queued 是纯 UI 状态：不 bump 项目 updated_at（不触发整包 PUT，避免与合成端点撞 409）
+    expect(next.project.updated_at).toBe(p.updated_at);
   });
 
   it('SELECT_SEGMENT sets selected_segment_id', () => {
@@ -722,5 +763,103 @@ describe('voice source transitions (V3)', () => {
       const down = segmentedReducer({ project: p }, { type: 'MERGE_SEGMENTS', id: 'b', direction: 'down' });
       expect(ac(down.project).segments).toHaveLength(2);
     });
+  });
+});
+
+describe('APPLY_SERVER_CHAPTER_SEGMENTS', () => {
+  it('以服务端段列表整章回写（含音频降级），且不 bump 项目 updated_at', () => {
+    const p = makeProject({}, {
+      segments: [
+        { id: 's1', text: '甲乙', voice: { source: 'chapter' }, audio: { format: 'mp3' }, segment_kind: 'narration', status: 'idle', created_at: '', updated_at: '' },
+      ],
+    });
+    const before = p.updated_at;
+    const next = segmentedReducer({ project: p }, {
+      type: 'APPLY_SERVER_CHAPTER_SEGMENTS',
+      chapterId: 'ch1',
+      segments: [{
+        id: 's1', text: '甲乙', position: 0,
+        voice: { source: 'chapter' },
+        audio: { format: 'mp3', current: null, previous: { path: 'p1/ch1/s1.mp3', format: 'mp3' } },
+        generated_params: null,
+      }],
+    });
+    const ch = next.project.chapters[0];
+    expect(ch.segments).toHaveLength(1);
+    expect(ch.segments[0].audio.current).toBeFalsy();
+    expect(ch.segments[0].audio.previous?.path).toBe('p1/ch1/s1.mp3');
+    expect(ch.segments[0].status).toBe('idle');
+    expect(next.project.updated_at).toBe(before); // touch=false：不触发整包 PUT
+  });
+
+  it('章节不存在时 no-op', () => {
+    const p = makeProject();
+    const next = segmentedReducer({ project: p }, {
+      type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: 'nope', segments: [],
+    });
+    expect(next.project).toBe(p);
+  });
+});
+
+
+describe('结构操作 touch 透传（Phase 7：远端走结构端点，touch=false 不触发整包 PUT）', () => {
+  const mk = (id: string): Segment => ({
+    id, text: `text-${id}`, voice: { source: 'chapter' }, audio: { format: 'mp3' },
+    segment_kind: 'narration' as const, status: 'idle' as const, created_at: '', updated_at: '',
+  });
+  const BASE_TS = '2026-08-27T00:00:00.000Z';
+  const baseProject = () => makeProject({ updated_at: BASE_TS }, { segments: [mk('a'), mk('b'), mk('c')] });
+
+  it('SPLIT_SEGMENT touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const split = { type: 'SPLIT_SEGMENT', id: 'b', position: 2 } as const;
+    const noTouch = segmentedReducer({ project: baseProject() }, { ...split, touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.text)).toEqual(['text-a', 'te', 'xt-b', 'text-c']);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, split);
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('DELETE_SEGMENT touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const noTouch = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENT', id: 'b', touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.id)).toEqual(['a', 'c']);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENT', id: 'b' });
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('DELETE_SEGMENTS touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const noTouch = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENTS', ids: ['a', 'b'], touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.id)).toEqual(['c']);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, { type: 'DELETE_SEGMENTS', ids: ['a', 'b'] });
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('REORDER touch=false 不 bump 项目 updated_at（纯重排不动音频），默认 bump', () => {
+    const noTouch = segmentedReducer({ project: baseProject() }, { type: 'REORDER', fromIndex: 2, toIndex: 0, touch: false });
+    expect(ac(noTouch.project).segments.map(s => s.id)).toEqual(['c', 'a', 'b']);
+    expect(ac(noTouch.project).segments.map(s => s.position)).toEqual([0, 1, 2]);
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, { type: 'REORDER', fromIndex: 2, toIndex: 0 });
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('GENERATE_SUCCESS touch=false 不 bump 项目 updated_at（后端合成端点已持久化），默认 bump', () => {
+    const success = { type: 'GENERATE_SUCCESS', id: 'b', current_audio_path: 'p1/ch1/b.mp3', duration_sec: 1.5 } as const;
+    const noTouch = segmentedReducer({ project: baseProject() }, { ...success, touch: false });
+    expect(ac(noTouch.project).segments[1].status).toBe('ready');
+    expect(ac(noTouch.project).segments[1].audio.current?.path).toBe('p1/ch1/b.mp3');
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, success);
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
+  });
+
+  it('GENERATE_FAIL touch=false 不 bump 项目 updated_at，默认 bump', () => {
+    const fail = { type: 'GENERATE_FAIL', id: 'b', error: 'boom' } as const;
+    const noTouch = segmentedReducer({ project: baseProject() }, { ...fail, touch: false });
+    expect(ac(noTouch.project).segments[1].status).toBe('failed');
+    expect(noTouch.project.updated_at).toBe(BASE_TS);
+    const touched = segmentedReducer({ project: baseProject() }, fail);
+    expect(touched.project.updated_at).not.toBe(BASE_TS);
   });
 });

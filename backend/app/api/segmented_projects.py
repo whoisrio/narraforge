@@ -44,6 +44,16 @@ from app.schemas.segmented_project import (
     AnimationSpecItem,
     ApplyAnimationSpecRequest,
     ApplyAnimationSpecResult,
+    ChapterCreateIn,
+    ChapterDeleteOut,
+    ChapterMutationOut,
+    ChapterPatchIn,
+    ChapterReorderIn,
+    ChapterReorderOut,
+    ChapterStructureIn,
+    ChapterStructureOut,
+    DocumentPutIn,
+    DocumentPutOut,
     ExportTextFileRequest,
     MigrateAudioItem,
     MigrateRequest,
@@ -51,10 +61,18 @@ from app.schemas.segmented_project import (
     MigrateResultItem,
     ProjectDetail,
     ProjectIn,
+    ProjectPatchIn,
     ProjectSummary,
+    SegmentCreateIn,
+    SegmentCreateOut,
+    SegmentPatchIn,
+    SegmentPatchOut,
     SplitItem,
     SplitRequest,
     SplitResponse,
+    StalePayloadError,
+    SweepOrphanAudioOut,
+    SweepOrphanAudioRequest,
     SynthesizeSegmentRequest,
 )
 from app.core.time_utils import utcnow
@@ -189,6 +207,11 @@ async def put_project(
     validate_segment_lengths(project.chapters)
     try:
         return repo.save_project(project)
+    except StalePayloadError as e:
+        raise HTTPException(
+            status_code=409,
+            detail={"code": "stale_payload", "server_updated_at": e.server_updated_at},
+        )
     except LookupError:
         # workers 多用户：id 属于他人项目 → 按不存在处理（不泄露存在性）
         raise HTTPException(status_code=404, detail="project_not_found")
@@ -201,6 +224,72 @@ async def delete_project(project_id: str, repo: SegmentedProjectRepository = Dep
     if not ok:
         raise HTTPException(status_code=404, detail="project_not_found")
     return None
+
+
+# ----- 项目元信息 PATCH + 文档层 PUT（D/E 类：粒度重构 Phase 5） -----
+
+
+@router.patch("/segmented-projects/{project_id}", response_model=ProjectDetail)
+async def patch_project(
+    project_id: str,
+    body: ProjectPatchIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """项目元信息部分更新（name/layout/configs/default_narrator_role_id/logo/
+    remotion_project_path/animation_theme）：tri-state，只更新请求体中出现的
+    字段，显式 null = 清空。改名时在同一事务内搬迁资产目录并重写存储路径
+    （local 模式；workers 无 slug 目录耦合）。
+
+    响应为完整 ProjectDetail，其 ``updated_at`` 即新乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    detail = repo.patch_project(project_id, body)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    return detail
+
+
+@router.put(
+    "/segmented-projects/{project_id}/source-document",
+    response_model=DocumentPutOut,
+)
+async def put_source_document(
+    project_id: str,
+    body: DocumentPutIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """PUT 源文档：写 source.md 文件、更新 ``source_document_path`` 并清空遗留
+    文本列（workers 模式直接写文本列，无文件路径）。响应携带项目最新
+    ``updated_at``（供前端推进乐观锁 base）。
+    """
+    _reject_scratchpad(project_id)
+    result = repo.put_source_document(project_id, body.text)
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    path, project_updated_at = result
+    return DocumentPutOut(path=path, project_updated_at=project_updated_at)
+
+
+@router.put(
+    "/segmented-projects/{project_id}/narration-script",
+    response_model=DocumentPutOut,
+)
+async def put_narration_script(
+    project_id: str,
+    body: DocumentPutIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """PUT 完整旁白稿：写 narration.md 文件、更新 ``narration_document_path``。
+
+    项目级旁白稿与章节级 L1/L2/L3 层同步（sync_state）是两套机制，本端点
+    不动 sync_state。workers 模式该字段本就不持久化（no-op 警告，不报错）。
+    """
+    _reject_scratchpad(project_id)
+    result = repo.put_narration_script(project_id, body.text)
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    path, project_updated_at = result
+    return DocumentPutOut(path=path, project_updated_at=project_updated_at)
 
 
 # ----- segment synthesis & audio (local: TTS 引擎 + 音频落盘; workers: edge-tts + Supabase Storage) -----
@@ -261,6 +350,193 @@ async def synthesize_segment(
     detail = svc.get_project_detail(db, project_id)
     assert detail is not None
     return detail
+
+
+@router.patch(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}",
+    response_model=SegmentPatchOut,
+)
+async def patch_segment(
+    project_id: str,
+    chapter_id: str,
+    segment_id: str,
+    body: SegmentPatchIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """段级部分更新（text/emotion/role_id/segment_kind/voice）。
+
+    tri-state：只更新请求体中出现的字段，显式 null = 清空。
+    audio/generated_params/generated_at 为服务端自产字段，本端点不接受。
+    响应携带项目最新 updated_at，供前端推进整量 PUT 的乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    if body.text is not None:
+        validate_synthesis_text(body.text, chapter_id=chapter_id, segment_id=segment_id)
+    result = repo.patch_segment(project_id, chapter_id, segment_id, body)
+    if result is None:
+        raise HTTPException(status_code=404, detail="segment_not_found")
+    segment, project_updated_at = result
+    return SegmentPatchOut(segment=segment, project_updated_at=project_updated_at)
+
+
+# ----- 段结构端点（B 类：新建段 + 章内结构 reconcile，2026-08-27 粒度重构 Phase 3） -----
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/segments",
+    response_model=SegmentCreateOut,
+    status_code=201,
+)
+async def create_segment(
+    project_id: str,
+    chapter_id: str,
+    body: SegmentCreateIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """新建段：after_id 为章内某段 id 时插到它后面，null/缺省时追加到章末。
+
+    空文本合法（先建空段再编辑）；非空文本受 max_segment_chars 上限约束。
+    响应携带章内全部段的 position 列表与项目最新 updated_at，
+    前端据此收敛本地排序并推进乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    validate_synthesis_text(body.text, chapter_id=chapter_id, segment_id="")
+    try:
+        result = repo.create_segment(project_id, chapter_id, body)
+    except ValueError:
+        # after_id 在章内无对应段
+        raise HTTPException(status_code=404, detail="segment_not_found")
+    if result is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    segment, positions, project_updated_at = result
+    return SegmentCreateOut(
+        segment=segment, positions=positions, project_updated_at=project_updated_at,
+    )
+
+
+@router.patch(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}/structure",
+    response_model=ChapterStructureOut,
+)
+async def reconcile_chapter_structure(
+    project_id: str,
+    chapter_id: str,
+    body: ChapterStructureIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """章节内结构 reconcile：删除/合并/拆段/排序的唯一入口。
+
+    与整量 PUT 的段 reconcile 同语义、范围收敛到一章：payload 带 id 且该章
+    存在 → 更新 text/position（服务端自产字段不碰）；id 为 null → 新建；
+    该章现存但 payload 未引用的段 → 删 DB 行，音频文件保留在盘上。
+    """
+    _reject_scratchpad(project_id)
+    for s in body.segments:
+        validate_synthesis_text(s.text, chapter_id=chapter_id, segment_id=s.id or "")
+    result = repo.reconcile_chapter_structure(project_id, chapter_id, body.segments)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    segments, project_updated_at = result
+    return ChapterStructureOut(segments=segments, project_updated_at=project_updated_at)
+
+
+# ----- 章节操作端点（C 类：章节 CRUD + reorder，2026-08-27 粒度重构 Phase 4） -----
+# 注意：chapters:reorder / chapters:batch 是字面量路径段（两节路径），
+# 与 chapters/{chapter_id}（三节路径）无匹配冲突；仍保持注册在前以防遮蔽。
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters",
+    response_model=ChapterMutationOut,
+    status_code=201,
+)
+async def create_chapter(
+    project_id: str,
+    body: ChapterCreateIn,
+    request: Request,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """新建章节：position 追加到项目末尾。
+
+    workers 模式受章节配额约束（单章新增按「现有数+1」做增长式拦截）。
+    响应携带新章节与项目最新 updated_at（供前端推进乐观锁 base）。
+    """
+    _reject_scratchpad(project_id)
+    _enforce_chapter_quota(request, repo, project_id, repo.count_chapters(project_id) + 1)
+    result = repo.create_chapter(project_id, body)
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    chapter, project_updated_at = result
+    return ChapterMutationOut(chapter=chapter, project_updated_at=project_updated_at)
+
+
+@router.post(
+    "/segmented-projects/{project_id}/chapters:reorder",
+    response_model=ChapterReorderOut,
+)
+async def reorder_chapters(
+    project_id: str,
+    body: ChapterReorderIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """章节重排：chapter_ids 按数组顺序赋 position 0..n-1。
+
+    chapter_ids 必须恰好覆盖项目全部章节 id（缺/多/未知 → 422
+    chapter_ids_mismatch）。position 重排用「负哨兵两阶段」手法防
+    (project_id, position) 唯一约束冲突。
+    """
+    _reject_scratchpad(project_id)
+    try:
+        result = repo.reorder_chapters(project_id, body.chapter_ids)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="chapter_ids_mismatch")
+    if result is None:
+        raise HTTPException(status_code=404, detail="project_not_found")
+    chapters, project_updated_at = result
+    return ChapterReorderOut(chapters=chapters, project_updated_at=project_updated_at)
+
+
+@router.patch(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}",
+    response_model=ChapterMutationOut,
+)
+async def patch_chapter(
+    project_id: str,
+    chapter_id: str,
+    body: ChapterPatchIn,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """章节部分更新（name/voice/split_config/design_title）。
+
+    tri-state：只更新请求体中出现的字段，显式 null = 清空。
+    纯字段更新，不触碰段的音频等自产字段。
+    """
+    _reject_scratchpad(project_id)
+    result = repo.patch_chapter(project_id, chapter_id, body)
+    if result is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    chapter, project_updated_at = result
+    return ChapterMutationOut(chapter=chapter, project_updated_at=project_updated_at)
+
+
+@router.delete(
+    "/segmented-projects/{project_id}/chapters/{chapter_id}",
+    response_model=ChapterDeleteOut,
+)
+async def delete_chapter(
+    project_id: str,
+    chapter_id: str,
+    repo: SegmentedProjectRepository = Depends(get_segmented_repo),
+):
+    """删章：该章段行级联删除，**音频文件保留在盘上**（Phase 6 sweep 统一回收）。
+
+    200 带体（非 204）：响应携带项目最新 updated_at，供前端推进乐观锁 base。
+    """
+    _reject_scratchpad(project_id)
+    project_updated_at = repo.delete_chapter(project_id, chapter_id)
+    if project_updated_at is None:
+        raise HTTPException(status_code=404, detail="chapter_not_found")
+    return ChapterDeleteOut(project_updated_at=project_updated_at)
 
 
 @router.post(
@@ -461,7 +737,7 @@ async def get_segment_audio(
     if seg is None:
         raise HTTPException(status_code=404, detail="audio_not_found")
     audio = seg.audio or {}
-    current = audio.get("current", {}) if isinstance(audio, dict) else {}
+    current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
     current_path = current.get("path")
     if not current_path:
         raise HTTPException(status_code=404, detail="audio_not_found")
@@ -766,6 +1042,28 @@ async def split_chapter(
 
 
 # ----- migration (local-only: 音频 blob 落盘；workers 固定 frontend 存储，用不到) -----
+
+
+@local_router.post(
+    "/segmented-projects/sweep-orphan-audio",
+    response_model=SweepOrphanAudioOut,
+)
+def sweep_orphan_audio_endpoint(
+    body: SweepOrphanAudioRequest,
+    db: Session = Depends(get_db),
+):
+    """孤儿音频文件 sweep（粒度重构 Phase 6，local-only）。
+
+    自 Phase 0 起文件删除只由显式意图触发（删段/删章只删 DB 行、音频留盘），
+    孤儿文件由此端点统一回收。**dry-run 默认**：缺省只报告孤儿清单（路径为
+    segmented_dir 相对路径 + 字节数）；``execute=true`` 才真正删除。判据：
+    文件位于段级音频布局（``*/chapters/*/segments/*.mp3|wav``）且未被任何段
+    的 ``audio.current``/``audio.previous`` 引用；非音频文件（.txt 镜像等）
+    绝不在扫描范围。
+    """
+    result = svc.sweep_orphan_audio(db, execute=body.execute)
+    return SweepOrphanAudioOut(**result)
+
 
 @local_router.post("/segmented-projects/migrate", response_model=MigrateResponse)
 def migrate(request: MigrateRequest, db: Session = Depends(get_db)):

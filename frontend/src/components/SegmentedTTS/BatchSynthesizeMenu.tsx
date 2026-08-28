@@ -9,9 +9,11 @@ interface BatchSynthesizeMenuProps {
   onSelect: (mode: BatchSynthesizeMode) => void;
   /** 触发按钮文案；默认「批量合成」，一键制作全本复用本组件时传「一键制作全本」 */
   label?: string;
+  /** 菜单弹出方向：默认向下；底部工具栏（VoiceStudio 传输条）传 'up' 向上弹出 */
+  placement?: 'down' | 'up';
 }
 
-export function BatchSynthesizeMenu({ disabled, onSelect, label }: BatchSynthesizeMenuProps) {
+export function BatchSynthesizeMenu({ disabled, onSelect, label, placement = 'down' }: BatchSynthesizeMenuProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -36,7 +38,7 @@ export function BatchSynthesizeMenu({ disabled, onSelect, label }: BatchSynthesi
         ⚡ {label ?? t('studio.batchSynthesize')} ▾
       </button>
       {open && (
-        <div className={styles.menu} onClick={(e) => e.stopPropagation()}>
+        <div className={`${styles.menu} ${placement === 'up' ? styles.menuUp : ''}`} onClick={(e) => e.stopPropagation()}>
           <button
             type="button"
             className={styles.item}

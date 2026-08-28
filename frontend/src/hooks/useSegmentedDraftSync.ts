@@ -50,7 +50,10 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     const rec = await getDraft(pid);
     if (!rec || !rec.dirty) return;
     try {
-      await storageRef.current.saveProject(rec.draft);
+      // 乐观锁：携带草稿基于的服务端版本；陈旧则被后端 409 拒绝（onSaveError 恢复）
+      const saved = await storageRef.current.saveProject(rec.draft, {
+        base_updated_at: rec.base_updated_at,
+      });
       // 保存耗时期间若有更新的 markDirty 写入（记录 updated_at 已变），本份草稿
       // 已过期：直接返回，保留新草稿与 dirty 标记（新草稿的 flush 已由该次
       // markDirty 排程）。否则收尾 putDraft 会把新草稿整份覆盖成旧草稿，
@@ -59,7 +62,8 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
       if (!latest || latest.updated_at !== rec.updated_at) return;
       const next: ProjectDraftRecord = {
         ...rec,
-        base_updated_at: rec.draft.updated_at,
+        // 新 base 取服务端权威 updated_at（响应）；存储不支持返回值时回退草稿时间戳
+        base_updated_at: saved?.updated_at ?? rec.draft.updated_at,
         dirty: false,
         last_save_error: undefined,
         last_save_attempt_at: new Date().toISOString(),
@@ -122,12 +126,29 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     clearTimer();
   }, [projectId, clearTimer]);
 
-  const loadDraft = useCallback(async (): Promise<ProjectDraftRecord | undefined> => {
-    if (!projectId) return undefined;
-    return getDraft(projectId);
+  const noteServerVersion = useCallback(async (serverUpdatedAt: string) => {
+    // 服务端被细粒度端点（合成/PATCH/adjust 等）推进后，把乐观锁 base 前移，
+    // 避免下一次整包 PUT 因 base 过期被 409。不动 draft 内容（本地编辑仍在）。
+    if (!projectId) return;
+    const rec = await getDraft(projectId);
+    if (!rec || rec.base_updated_at === serverUpdatedAt) return;
+    await putDraft({ ...rec, base_updated_at: serverUpdatedAt });
+  }, [projectId]);
+
+  const refreshDraft = useCallback(async (project: SegmentedProject) => {
+    // touch=false 的变更（PATCH/结构端点已远端持久化）不触发 markDirty，
+    // 但已有草稿（尤其 dirty 待冲刷的）内容必须随本地态刷新——否则冲刷时
+    // 会把陈旧快照整包 PUT 回去，覆盖 PATCH 刚写入的字段（2026-08-27
+    // dialogue-prosody e2e：kind 切换的 PATCH 被进入工作室时标记的
+    // 陈旧草稿 PUT 覆盖回 narration）。
+    // 只更新已有记录：无记录时不创建（初始加载等场景不制造草稿）。
+    if (!projectId) return;
+    const rec = await getDraft(projectId);
+    if (!rec) return;
+    await putDraft({ ...rec, draft: project });
   }, [projectId]);
 
   useEffect(() => () => clearTimer(), [clearTimer]);
 
-  return { markDirty, flush, adoptBackendVersion, loadDraft };
+  return { markDirty, flush, adoptBackendVersion, noteServerVersion, refreshDraft };
 }

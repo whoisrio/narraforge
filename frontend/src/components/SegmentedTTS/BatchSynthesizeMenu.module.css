@@ -48,6 +48,12 @@
   gap: 2px;
 }
 
+/* 向上弹出（底部工具栏场景，如 VoiceStudio 传输条） */
+.menuUp {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
 .item {
   display: flex;
   align-items: center;

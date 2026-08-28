@@ -39,4 +39,13 @@ describe('BatchSynthesizeMenu', () => {
     expect(screen.queryByText('仅合成未合成')).not.toBeInTheDocument();
     expect(onSelect).not.toHaveBeenCalled();
   });
+
+  it('placement="up" 时菜单带向上弹出类名（底部工具栏场景）', () => {
+    render(<BatchSynthesizeMenu onSelect={vi.fn()} placement="up" />);
+
+    fireEvent.click(screen.getByRole('button', { name: /批量合成/ }));
+
+    const menu = screen.getByText('仅合成未合成').closest('div');
+    expect(menu?.className).toMatch(/menuUp/);
+  });
 });

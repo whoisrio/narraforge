@@ -26,6 +26,7 @@ from app.core.audio_encoder import (
     transcode_to_mp3,
     trim_audio_silence_bytes,
 )
+from app.core.config import settings
 from app.models.segmented_project import (
     SegmentedProject,
     SegmentedProjectChapter,
@@ -44,10 +45,14 @@ from app.services.text_transform_service import (
 from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
+    ChapterPatchIn,
     ProjectDetail,
     ProjectIn,
+    ProjectPatchIn,
     ProjectSummary,
     SegmentIn,
+    SegmentPatchIn,
+    StalePayloadError,
 )
 
 logger = logging.getLogger(__name__)
@@ -113,9 +118,11 @@ def project_to_summary(p: SegmentedProject) -> ProjectSummary:
         segment_count += len(chapter.segments)
         for segment in chapter.segments:
             audio = segment.audio or {}
-            if audio.get("current", {}).get("path"):
+            # current 可能为显式 None（voice 变更降级后的状态），不能用 .get("current", {})
+            current = audio.get("current") or {}
+            if current.get("path"):
                 generated_count += 1
-            duration_sec += float(audio.get("current", {}).get("duration_sec", 0))
+            duration_sec += float(current.get("duration_sec") or 0)
     return ProjectSummary(
         id=p.id,
         name=p.name,
@@ -198,6 +205,37 @@ def _audio_with_file_exists(audio: dict[str, Any] | None) -> dict[str, Any] | No
         )
         out["current"] = current_out
     return out
+
+
+def _segment_to_in(s: SegmentedProjectSegment) -> SegmentIn:
+    return SegmentIn(
+        id=s.id, position=s.position, text=s.text,
+        emotion=s.emotion,
+        role_id=getattr(s, "role_id", None),
+        segment_kind=getattr(s, "segment_kind", None) or "narration",
+        voice=getattr(s, "voice", {}) or {"source": "chapter"},
+        generated_params=s.generated_params,
+        audio=_audio_with_file_exists(getattr(s, "audio", None)),
+        generated_at=_to_iso(s.generated_at),
+        animation_spec=_parse_animation_spec(s.animation_spec_json),
+        created_at=_to_iso(s.created_at),
+        updated_at=_to_iso(s.updated_at),
+    )
+
+
+def _chapter_to_in(ch: SegmentedProjectChapter) -> ChapterIn:
+    return ChapterIn(
+        id=ch.id, position=ch.position, name=ch.name,
+        voice=getattr(ch, "voice", None) or {},
+        split_config=ch.split_config or {},
+        original_text=ch.original_text,
+        narration_script=getattr(ch, "narration_script", None),
+        design_title=getattr(ch, "design_title", None),
+        audio_adjust=getattr(ch, "audio_adjust", None),
+        created_at=_to_iso(ch.created_at),
+        updated_at=_to_iso(ch.updated_at),
+        segments=[_segment_to_in(s) for s in ch.segments],
+    )
 
 
 def project_to_detail(p: SegmentedProject) -> ProjectDetail:
@@ -331,9 +369,12 @@ def _delete_segment_audio_files(seg: SegmentedProjectSegment) -> None:
 def _delete_dropped_audio_files(seg: SegmentedProjectSegment, new_audio: dict) -> None:
     """Delete audio files the incoming audio state no longer references.
 
-    Covers the merge flow: the frontend clears a kept segment's audio, and
-    without this the old file would be orphaned on disk. Paths still referenced
-    (e.g. old ``current`` demoted to ``previous`` after regeneration) are kept.
+    Used only by explicit-intent flows (synthesis replace / re-record):
+    the caller has just produced the replacement audio, so dropping the
+    unreferenced old file is safe. The big PUT (save_project) must NOT call
+    this — a stale payload would unlink files the live DB still references.
+    Paths still referenced (e.g. old ``current`` demoted to ``previous``
+    after regeneration) are kept.
     """
     old = seg.audio
     if isinstance(old, str):
@@ -406,6 +447,12 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     if p is None:
         p = SegmentedProject(id=project.id)
         db.add(p)
+    elif project.base_updated_at is not None:
+        # 乐观锁：payload 声明的服务端版本与当前不符 → 拒绝（409 stale_payload），
+        # 防陈旧快照整包覆盖较新的状态。None = 老客户端/agent，放行。
+        current = _to_iso(p.updated_at)
+        if project.base_updated_at != current:
+            raise StalePayloadError(server_updated_at=current)
 
     rename_from = p.name if p.name and p.name != project.name else None
 
@@ -473,6 +520,7 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
         keep_segment_ids: set[str] = set()
         for seg_idx, s_in in enumerate(ch_in.segments):
             seg = existing_segments.get(s_in.id)
+            is_new_segment = seg is None
             if seg is None:
                 seg = SegmentedProjectSegment(
                     id=s_in.id, chapter_id=ch.id,
@@ -484,14 +532,19 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             setattr(seg, "role_id", s_in.role_id)
             setattr(seg, "segment_kind", s_in.segment_kind or "narration")
             setattr(seg, "voice", s_in.voice or {"source": "chapter"})
-            if s_in.generated_params is not None:
-                seg.generated_params = s_in.generated_params
+            if is_new_segment:
+                # create/import 播种：接受 payload 完整字段
+                if s_in.generated_params is not None:
+                    seg.generated_params = s_in.generated_params
+                if s_in.audio is not None:
+                    _delete_dropped_audio_files(seg, s_in.audio)
+                    setattr(seg, "audio", s_in.audio)
+                seg.generated_at = _parse_iso(s_in.generated_at)
+            # 已存在的段：audio/generated_params/generated_at 是服务端自产字段
+            # （仅合成/录音/adjust-audio 端点可写），整量 PUT 一律忽略，
+            # 防陈旧 autosave 快照把刚合成完的元数据回退掉。
             if s_in.text_transforms is not None:
                 setattr(seg, "text_transforms", s_in.text_transforms)
-            if s_in.audio is not None:
-                _delete_dropped_audio_files(seg, s_in.audio)
-                setattr(seg, "audio", s_in.audio)
-            seg.generated_at = _parse_iso(s_in.generated_at)
             if s_in.animation_spec is not None:
                 setattr(seg, "animation_spec_json", _dump_animation_spec(s_in.animation_spec))
             if s_in.created_at:
@@ -499,32 +552,11 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             seg.updated_at = utcnow()
             keep_segment_ids.add(s_in.id)
 
-        # Remove orphan segments
+        # Remove orphan segments (DB rows only). 音频文件同样不在这里删：
+        # 全量保存的 payload 可能陈旧（与合成/录音端点并发），靠状态 diff
+        # 删文件会误删仍在引用的资产；孤儿文件由显式 sweep 回收。
         for seg in list(ch.segments):
             if seg.id not in keep_segment_ids:
-                # Clean up audio files from disk before removing the DB row.
-                # Prefer the DB-stored path (works for any historical layout);
-                # reconstructing the current-scheme path is only a fallback.
-                if seg.audio:
-                    try:
-                        audio_data = seg.audio if isinstance(seg.audio, dict) else json.loads(seg.audio)
-                        removed = False
-                        for slot in ("current", "previous"):
-                            entry = audio_data.get(slot)
-                            if isinstance(entry, dict) and isinstance(entry.get("path"), str):
-                                removed = assets.delete_audio_file(entry["path"]) or removed
-                        if not removed:
-                            current = audio_data.get('current')
-                            if current and isinstance(current, dict):
-                                fmt = current.get('format', 'mp3')
-                                assets.remove_segment_audio(
-                                    project.id, ch.id,
-                                    project_name=project.name,
-                                    segment_id=seg.id,
-                                    fmt=fmt,
-                                )
-                    except Exception:
-                        pass
                 db.delete(seg)
 
     # Remove orphan chapters
@@ -577,6 +609,75 @@ def delete_project(db: Session, project_id: str) -> bool:
     db.commit()
     assets.remove_project_dir(project_id, p.name)
     return True
+
+
+# 孤儿音频文件 sweep 的扫描范围：项目资产目录下段级音频的固定布局
+# {slug}/chapters/{chapter-id}/segments/{segment-id}.{mp3|wav}（含 .prev 变体）
+_SWEEP_AUDIO_SUFFIXES = {".mp3", ".wav"}
+_SWEEP_GLOB_PATTERN = "*/chapters/*/segments/*"
+
+
+def sweep_orphan_audio(db: Session, *, execute: bool = False) -> dict[str, Any]:
+    """扫描 ``segmented_dir`` 下未被任何段引用的孤儿音频文件（粒度重构 Phase 6）。
+
+    自 Phase 0 起文件删除只由显式意图触发（删段/删章/重拆只删 DB 行，音频
+    留盘），孤儿文件累积；本端点是唯一的显式回收入口。判据：文件位于段级
+    音频布局（``*/chapters/*/segments/*.mp3|wav``）且未被任何段行的
+    ``audio.current``/``audio.previous`` 引用（相对/绝对路径均可）。
+
+    ``execute=False``（缺省）为 dry-run：只报告不删；``execute=True`` 才真正
+    unlink。非音频文件（.txt 镜像 / manifest / 文档）绝不在扫描范围。返回
+    ``{dry_run, orphans: [{path, size_bytes}], total_count, total_size_bytes,
+    deleted_count}``（dry-run 时 deleted_count 恒 0，path 为 segmented_dir
+    相对路径，便于运维核对）。
+    """
+    referenced: set[Path] = set()
+    for seg in db.query(SegmentedProjectSegment).all():
+        audio = seg.audio
+        if not isinstance(audio, dict):
+            continue
+        for key in ("current", "previous"):
+            path_str = _audio_path_str(audio.get(key))
+            if not path_str:
+                continue
+            fp = Path(path_str)
+            if not fp.is_absolute():
+                fp = settings.segmented_dir / fp
+            try:
+                referenced.add(fp.resolve())
+            except OSError:
+                continue
+
+    root = settings.segmented_dir
+    orphans: list[dict[str, Any]] = []
+    deleted_count = 0
+    if root.exists():
+        for p in sorted(root.glob(_SWEEP_GLOB_PATTERN)):
+            if not p.is_file() or p.suffix.lower() not in _SWEEP_AUDIO_SUFFIXES:
+                continue
+            try:
+                resolved = p.resolve()
+            except OSError:
+                continue
+            if resolved in referenced:
+                continue
+            size = p.stat().st_size
+            rel = p.relative_to(root).as_posix()
+            orphans.append({"path": rel, "size_bytes": size})
+            if execute:
+                try:
+                    p.unlink()
+                    deleted_count += 1
+                except OSError as e:
+                    logger.warning("[sweep] failed to delete %s: %s", p, e)
+
+    return {
+        "dry_run": not execute,
+        "orphans": orphans,
+        "total_count": len(orphans),
+        "total_size_bytes": sum(o["size_bytes"] for o in orphans),
+        "deleted_count": deleted_count,
+    }
 
 
 def apply_animation_spec(
@@ -684,6 +785,418 @@ def update_segment_after_synth(
         text=seg.text or "",
     )
     db.commit()
+
+
+# ----- segment-level partial update (PATCH 端点) -----
+
+
+def _demote_current_audio(seg: SegmentedProjectSegment) -> None:
+    """音频失效降级：current → previous（文件保留在盘上，可撤销/回放），
+    清空 duration_sec 与 generated_params/generated_at（自产元数据随之失效）。
+    用于 voice 变更、结构性文本变更（合并）等"旧音频不再匹配"场景。"""
+    audio = dict(seg.audio) if isinstance(seg.audio, dict) else {}
+    current = audio.get("current")
+    if isinstance(current, dict) and (
+        current.get("path") or current.get("id") or current.get("audio_id")
+    ):
+        audio["previous"] = current
+        audio["current"] = None
+        audio.pop("duration_sec", None)
+        seg.audio = audio
+    seg.generated_params = None
+    seg.generated_at = None
+
+
+def patch_segment(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    segment_id: str,
+    patch: SegmentPatchIn,
+) -> tuple[SegmentIn, str] | None:
+    """段级部分更新：只应用请求体中出现的字段（tri-state）。
+
+    只写客户端字段（text/emotion/role_id/segment_kind/voice）；
+    audio/generated_params/generated_at 为服务端自产字段，这里一律不碰。
+    返回 (更新后的段, 项目最新 updated_at)，后者供前端推进乐观锁 base。
+    """
+    seg = get_segment_row(db, project_id, chapter_id, segment_id)
+    if seg is None:
+        return None
+    fields = patch.model_fields_set
+    if "text" in fields:
+        seg.text = patch.text or ""
+    if "emotion" in fields:
+        seg.emotion = patch.emotion
+    if "role_id" in fields:
+        setattr(seg, "role_id", patch.role_id)
+    if "segment_kind" in fields:
+        seg.segment_kind = patch.segment_kind or "narration"
+    if "voice" in fields:
+        old_voice = seg.voice or {"source": "chapter"}
+        new_voice = patch.voice or {"source": "chapter"}
+        if new_voice != old_voice:
+            # 音色参数变更 → 旧音频不再匹配：current 降级为 previous（文件保留，
+            # 可撤销/回放），与前端 CLEAR_SEGMENT_AUDIO 语义一致
+            _demote_current_audio(seg)
+        seg.voice = new_voice
+    if "unlock_audio" in fields and patch.unlock_audio:
+        # 显式解锁录音：清除 audio.current.origin 标记，之后批量/重新合成可覆盖。
+        # 只动 origin 元数据，音频引用本身保留。
+        audio = copy.deepcopy(seg.audio) if isinstance(seg.audio, dict) else None
+        current = (audio or {}).get("current")
+        if isinstance(current, dict) and current.get("origin"):
+            current.pop("origin", None)
+            seg.audio = audio
+    now = utcnow()
+    seg.updated_at = now
+    seg.chapter.updated_at = now
+    seg.chapter.project.updated_at = now
+    db.commit()
+    db.refresh(seg)
+    return _segment_to_in(seg), _to_iso(seg.chapter.project.updated_at)
+
+
+# ----- 段结构端点（B 类：新建段 + 章内结构 reconcile） -----
+
+
+def create_segment(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    *,
+    text: str = "",
+    after_id: str | None = None,
+) -> tuple[SegmentIn, list[dict[str, Any]], str] | None:
+    """新建段：after_id 为章内某段 id 时插到它后面，None 时追加到章末。
+
+    position 平移沿用 save_project 的负哨兵两阶段手法防 UNIQUE 冲突。
+    返回 (新段, 章内全部段的 [{id, position}], 项目最新 updated_at)；
+    章节不存在 → None；after_id 在章内无对应段 → ValueError("after_segment_not_found")。
+    """
+    ch = get_chapter_row(db, project_id, chapter_id)
+    if ch is None:
+        return None
+    segs = list(ch.segments)  # relationship 已按 position 排序
+    if after_id is not None:
+        idx = next((i for i, s in enumerate(segs) if s.id == after_id), None)
+        if idx is None:
+            raise ValueError("after_segment_not_found")
+        insert_at = idx + 1
+    else:
+        insert_at = len(segs)
+
+    # Phase 1: 现存段全部置负哨兵，腾出正整数位
+    for tmp_idx, seg in enumerate(segs):
+        seg.position = -(tmp_idx + 1)
+    db.flush()
+
+    new_seg = SegmentedProjectSegment(
+        id=str(uuid.uuid4()), chapter_id=ch.id,
+        text=text or "",
+        segment_kind="narration",
+        voice={"source": "chapter"},
+    )
+    db.add(new_seg)
+    # Phase 2: 按插入后顺序赋最终 position
+    final_order = segs[:insert_at] + [new_seg] + segs[insert_at:]
+    for pos, seg in enumerate(final_order):
+        seg.position = pos
+
+    now = utcnow()
+    new_seg.updated_at = now
+    ch.updated_at = now
+    ch.project.updated_at = now
+    db.commit()
+    db.refresh(new_seg)
+    positions = [{"id": seg.id, "position": seg.position} for seg in final_order]
+    return _segment_to_in(new_seg), positions, _to_iso(ch.project.updated_at)
+
+
+def reconcile_chapter_structure(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    segments: list[Any],
+) -> tuple[list[SegmentIn], str] | None:
+    """章节内结构 reconcile（删除/合并/拆段/排序的唯一入口）。
+
+    与 save_project 的段 reconcile 同语义、范围收敛到一章：
+    - payload 带 id 且该章存在此行 → 只更新 text/position；**文本发生变化时**
+      （合并等结构操作）旧音频失效：current 降级 previous、文件保留、
+      generated_params/generated_at 置空（原则 4）；文本未变（纯重排）不动音频；
+    - id 为 null → 新建段（服务端 uuid4）；id 存在但该章无此行 → 按新建播种；
+    - 该章现存但 payload 未引用的段 → 删 DB 行，音频文件保留在盘上（原则 2，
+      孤儿文件由显式 sweep 回收）；
+    - position 重排沿用负哨兵两阶段手法防 UNIQUE 冲突，事务内单次 commit。
+
+    返回 (该章 reconcile 后的全部段（按 position 升序）, 项目最新 updated_at)；
+    章节不存在 → None。
+    """
+    ch = get_chapter_row(db, project_id, chapter_id)
+    if ch is None:
+        return None
+    existing = {s.id: s for s in ch.segments}
+    # Phase 1: 负哨兵
+    for tmp_idx, seg in enumerate(ch.segments):
+        seg.position = -(tmp_idx + 1)
+    db.flush()
+
+    now = utcnow()
+    keep_ids: set[str] = set()
+    final: list[SegmentedProjectSegment] = []
+    for s_in in segments:
+        seg = existing.get(s_in.id) if s_in.id else None
+        is_existing = seg is not None
+        if seg is None:
+            seg = SegmentedProjectSegment(
+                id=s_in.id or str(uuid.uuid4()), chapter_id=ch.id,
+                segment_kind="narration",
+                voice={"source": "chapter"},
+            )
+            db.add(seg)
+        # 结构性文本变更（合并等）使旧音频失效：降级 current→previous、文件
+        # 保留（原则 4：失效由后端在意图明确的端点内完成，而非前端借全量 PUT 表达）。
+        # 纯重排/删除不动音频；PATCH 的击键级文本编辑不失效（层同步流程负责）。
+        new_text = s_in.text or ""
+        if is_existing and seg.text != new_text:
+            _demote_current_audio(seg)
+        # 已存在段仅更新 text/position（自产字段不碰）；新建段即播种 text
+        seg.text = new_text
+        seg.position = s_in.position
+        seg.updated_at = now
+        keep_ids.add(seg.id)
+        final.append(seg)
+
+    # 该章现存但 payload 未引用的段：删 DB 行，不删盘上音频文件
+    for seg in list(ch.segments):
+        if seg.id not in keep_ids:
+            db.delete(seg)
+
+    ch.updated_at = now
+    ch.project.updated_at = now
+    db.commit()
+    final.sort(key=lambda s: s.position)
+    return [_segment_to_in(s) for s in final], _to_iso(ch.project.updated_at)
+
+
+# ----- 章节操作端点（C 类：章节 CRUD + reorder，2026-08-27 粒度重构 Phase 4） -----
+
+
+def create_chapter(
+    db: Session,
+    project_id: str,
+    *,
+    name: str,
+) -> tuple[ChapterIn, str] | None:
+    """新建章节：position 追加到项目末尾（现有最大 position + 1）。
+
+    默认字段对齐 create_chapter_for_project 惯例（voice={}、默认 split_config）。
+    返回 (新章节, 项目最新 updated_at)；项目不存在 → None。
+    """
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    position = max((c.position or 0) for c in p.chapters) + 1 if p.chapters else 0
+    now = utcnow()
+    ch = SegmentedProjectChapter(
+        id=str(uuid.uuid4()), project_id=p.id, position=position, name=name,
+        voice={},
+        split_config={"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"},
+        created_at=now, updated_at=now,
+    )
+    db.add(ch)
+    p.updated_at = now
+    db.commit()
+    db.refresh(ch)
+    return _chapter_to_in(ch), _to_iso(p.updated_at)
+
+
+def patch_chapter(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+    patch: ChapterPatchIn,
+) -> tuple[ChapterIn, str] | None:
+    """章节部分更新（name/voice/split_config/design_title）：tri-state，
+    只应用请求体中出现的字段。纯字段更新，不碰段的音频。
+    返回 (更新后的章节, 项目最新 updated_at)；章节不存在 → None。
+    """
+    ch = get_chapter_row(db, project_id, chapter_id)
+    if ch is None:
+        return None
+    fields = patch.model_fields_set
+    if "name" in fields:
+        ch.name = patch.name or ""
+    if "voice" in fields:
+        ch.voice = patch.voice or {}
+    if "split_config" in fields:
+        ch.split_config = patch.split_config or {}
+    if "design_title" in fields:
+        setattr(ch, "design_title", patch.design_title)
+    now = utcnow()
+    ch.updated_at = now
+    ch.project.updated_at = now
+    db.commit()
+    db.refresh(ch)
+    return _chapter_to_in(ch), _to_iso(ch.project.updated_at)
+
+
+def delete_chapter(
+    db: Session,
+    project_id: str,
+    chapter_id: str,
+) -> str | None:
+    """删章：段行随 ORM cascade 一并删除；**音频文件保留在盘上**
+    （绝不在这里删文件，孤儿文件由显式 sweep 回收——Phase 6）。
+    返回项目最新 updated_at；章节不存在 → None。
+    """
+    ch = get_chapter_row(db, project_id, chapter_id)
+    if ch is None:
+        return None
+    p = ch.project
+    db.delete(ch)
+    p.updated_at = utcnow()
+    db.commit()
+    return _to_iso(p.updated_at)
+
+
+def reorder_chapters(
+    db: Session,
+    project_id: str,
+    chapter_ids: list[str],
+) -> tuple[list[dict[str, Any]], str] | None:
+    """按数组顺序重排章节 position（0..n-1）。
+
+    chapter_ids 必须恰好覆盖项目全部章节 id；缺/多/未知（含重复）
+    → ValueError("chapter_ids_mismatch")；项目不存在 → None。
+    position 重排沿用负哨兵两阶段手法防 uq_chapter_project_position 冲突，
+    事务内单次 commit。返回 (全章按新序的 [{id, name, position}], 项目最新 updated_at)。
+    """
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    existing = {c.id: c for c in p.chapters}
+    if len(chapter_ids) != len(existing) or set(chapter_ids) != set(existing):
+        raise ValueError("chapter_ids_mismatch")
+
+    # Phase 1: 负哨兵，腾出正整数位（与 save_project 章节重排同手法）
+    for tmp_idx, ch in enumerate(p.chapters):
+        ch.position = -(tmp_idx + 1)
+    db.flush()
+
+    # Phase 2: 按 payload 顺序赋终值
+    now = utcnow()
+    result: list[dict[str, Any]] = []
+    for pos, cid in enumerate(chapter_ids):
+        ch = existing[cid]
+        ch.position = pos
+        ch.updated_at = now
+        result.append({"id": ch.id, "name": ch.name, "position": pos})
+    p.updated_at = now
+    db.commit()
+    return result, _to_iso(p.updated_at)
+
+
+# ----- 项目元信息 + 文档层（D/E 类：粒度重构 Phase 5） -----
+
+
+def patch_project(
+    db: Session,
+    project_id: str,
+    patch: ProjectPatchIn,
+) -> ProjectDetail | None:
+    """项目元信息部分更新（tri-state）：只应用请求体中出现的字段。
+
+    改名时在同一事务内搬迁资产目录并重写 audio/文档存储路径（复用
+    ``_relocate_project_assets``，与 save_project 改名同语义）；manifest
+    随后重写保持镜像新鲜。返回更新后的 ProjectDetail；项目不存在 -> None。
+    """
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    fields = patch.model_fields_set
+    rename_from = (
+        p.name if "name" in fields and patch.name and p.name and patch.name != p.name
+        else None
+    )
+    if "name" in fields:
+        p.name = patch.name or ""
+    if "layout" in fields:
+        p.layout = patch.layout or "vertical"
+    if "configs" in fields:
+        setattr(p, "configs", patch.configs)
+    if "default_narrator_role_id" in fields:
+        setattr(p, "default_narrator_role_id", patch.default_narrator_role_id)
+    if "logo" in fields:
+        setattr(p, "logo", patch.logo)
+    if "remotion_project_path" in fields:
+        setattr(p, "remotion_project_path", patch.remotion_project_path)
+    if "animation_theme" in fields:
+        setattr(p, "animation_theme", patch.animation_theme)
+    p.updated_at = utcnow()
+
+    # 改名搬迁放在 reconcile 之后（同 save_project：payload 携带的是旧路径，
+    # 重写的是落库终态）；失败时目录与 DB 路径双双保持旧值，降级不半迁移。
+    if rename_from:
+        _relocate_project_assets(p, rename_from, p.name)
+
+    db.flush()
+    db.refresh(p)
+    # manifest 镜像嵌入 name/configs/文档内容等，字段更新后重写保持新鲜
+    assets.write_manifest(
+        p.id, project_to_detail(p).model_dump(mode="json"), project_name=p.name,
+    )
+    db.commit()
+    return project_to_detail(p)
+
+
+def put_source_document(
+    db: Session, project_id: str, text: str,
+) -> tuple[str | None, str] | None:
+    """PUT source-document：写源文档文件、更新 ``source_document_path``，
+    并清空遗留 ``source_document`` 文本列。返回 (文件绝对路径, 项目最新
+    updated_at)；项目不存在 -> None。
+    """
+    return _put_project_document(db, project_id, kind="source", text=text)
+
+
+def put_narration_script(
+    db: Session, project_id: str, text: str,
+) -> tuple[str | None, str] | None:
+    """PUT narration-script：写完整旁白稿文件、更新 ``narration_document_path``。
+
+    项目级旁白稿与章节级 L1/L2/L3 层同步（sync_state）是两套机制：章节层的
+    置脏/重拆由 chapters:batch、resplit 等端点管理，本端点不动 sync_state。
+    返回 (文件绝对路径, 项目最新 updated_at)；项目不存在 -> None。
+    """
+    return _put_project_document(db, project_id, kind="narration", text=text)
+
+
+def _put_project_document(
+    db: Session, project_id: str, *, kind: str, text: str,
+) -> tuple[str | None, str] | None:
+    p = get_project_row(db, project_id)
+    if p is None:
+        return None
+    path = assets.write_project_document(
+        project_id, kind=kind, project_name=p.name, text=text,
+    )
+    if kind == "source":
+        p.source_document_path = path
+        # 遗留 TEXT 列仅作回退读源，新写入一律落文件
+        p.source_document = None
+    else:
+        p.narration_document_path = path
+    p.updated_at = utcnow()
+    db.flush()
+    db.refresh(p)
+    # manifest 镜像嵌入文档内容（project_to_detail 读文件），写入后重写保持新鲜
+    assets.write_manifest(
+        p.id, project_to_detail(p).model_dump(mode="json"), project_name=p.name,
+    )
+    db.commit()
+    return path, _to_iso(p.updated_at)
 
 
 # ----- synthesis orchestration -----
@@ -820,7 +1333,7 @@ def synthesize_segment(
     # force=True; the recording is still demoted to `previous` for undo.
     existing_audio_check = seg.audio or {}
     current_check = (
-        existing_audio_check.get("current", {})
+        (existing_audio_check.get("current") or {})
         if isinstance(existing_audio_check, dict) else {}
     )
     if not force and current_check.get("origin") == "recorded":
@@ -920,7 +1433,7 @@ def synthesize_segment(
     )
 
     existing_audio = seg.audio or {}
-    prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
+    prev_current = (existing_audio.get("current") or {}) if isinstance(existing_audio, dict) else {}
     prev_rel: str | None = prev_current.get("path")
     prev_duration: float | None = prev_current.get("duration_sec")
     prev_origin: str | None = prev_current.get("origin")
@@ -1095,7 +1608,7 @@ def save_recorded_segment_audio(
     )
 
     existing_audio = seg.audio or {}
-    prev_current = existing_audio.get("current", {}) if isinstance(existing_audio, dict) else {}
+    prev_current = (existing_audio.get("current") or {}) if isinstance(existing_audio, dict) else {}
     prev_rel: str | None = prev_current.get("path")
     prev_duration: float | None = prev_current.get("duration_sec")
     prev_origin: str | None = prev_current.get("origin")
@@ -1177,7 +1690,7 @@ def _collect_chapter_audio_paths(db: Session, chapter: SegmentedProjectChapter) 
     base = assets.settings.segmented_dir.resolve()
     for seg in sorted(chapter.segments, key=lambda s: s.position):
         audio = seg.audio or {}
-        current = audio.get("current", {}) if isinstance(audio, dict) else {}
+        current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
         current_path = current.get("path")
         if not current_path:
             continue
@@ -1335,7 +1848,7 @@ def export_all_chapters(db: Session, project_id: str) -> dict[str, Any]:
         missing = 0
         for seg in segments:
             audio = seg.audio or {}
-            current = audio.get("current", {}) if isinstance(audio, dict) else {}
+            current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
             rel = current.get("path")
             if not rel or not (base / rel).exists():
                 missing += 1
@@ -1354,7 +1867,7 @@ def export_all_chapters(db: Session, project_id: str) -> dict[str, Any]:
         srt_segments = []
         for seg in sorted(ch.segments, key=lambda s: s.position):
             audio = seg.audio or {}
-            current = audio.get("current", {}) if isinstance(audio, dict) else {}
+            current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
             srt_segments.append({
                 "text": seg.text,
                 "duration_sec": current.get("duration_sec"),
@@ -1406,7 +1919,7 @@ def mark_silent_segments_as_missing(
 
     for seg in segs:
         audio_data = dict(seg.audio) if seg.audio else {}
-        current = audio_data.get("current", {}) if isinstance(audio_data, dict) else {}
+        current = (audio_data.get("current") or {}) if isinstance(audio_data, dict) else {}
         rel_path = current.get("path")
         if not rel_path:
             continue
