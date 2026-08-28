@@ -949,6 +949,8 @@ IndexTTS 8 维情绪向量（happy/angry/sad/afraid/disgusted/melancholic/surpri
 | GET | `/api/config/narration-git-remote` | 获取 narration git 远端地址 |
 | PUT | `/api/config/narration-git-remote` | 设置 narration git 远端地址（空=清除，只本地 commit） |
 | POST | `/api/config/narration-git/snapshot` | 手动触发 narration 快照（commit，remote 已配则 push） |
+| GET | `/api/config/pronunciation-map-global` | 获取全局发音映射字典 |
+| PUT | `/api/config/pronunciation-map-global` | 全量替换全局发音映射字典（对所有项目生效） |
 | GET | `/api/model-config` | 获取所有提供商配置 |
 | PUT | `/api/model-config/{provider}/{field}` | 更新配置值 |
 | POST | `/api/model-config/{provider}/{field}/clear` | 清除配置值 |
@@ -981,6 +983,13 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 - `POST /api/config/narration-git/snapshot` -> 手动触发一次 `snapshot_all`：`{ "commit_sha": str|null, "projects": int, "pushed": bool, "push_error": str|null, "remote_configured": bool }`。push 失败不抛（本地 commit 仍生效），错误进 `push_error`。
 
 远端鉴权：remote URL 内嵌凭证（`https://user:token@host/repo.git`）或 SSH key。多环境 push 同一远端会非快进冲突（普通 push，不 force）。
+
+### 全局发音映射 (`/api/config/pronunciation-map-global`)
+
+合成时文本替换的全局字典（所有项目共享；项目级字典存 `project.configs.pronunciation_map`，同 source 项目条目覆盖全局条目）。存于 `system_configs`（key=`pronunciation_map_global`，JSON 数组字符串）。全局条目 id 统一 `gpm_` 前缀，项目条目 `pm_` 前缀，两层 id 不冲突。
+
+- `GET /api/config/pronunciation-map-global` -> `{ "entries": [{ "id": str, "source": str, "target": str, "note": str | null }] }`，未配置时 `{ "entries": [] }`
+- `PUT /api/config/pronunciation-map-global` body 同上 -> 全量替换。校验：source 去空白后非空（400 `pronunciation_source_empty`）、同一字典内 source 唯一（400 `pronunciation_source_duplicate`）；成功返回替换后的 `{ "entries": [...] }`
 
 ---
 
@@ -1165,6 +1174,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
   "params": {},
   "locked_params": [],
   "voice_ref": null,
+  "text_transforms": null,
   "generated_params": null,
   "current_audio_path": null,
   "previous_audio_path": null,
@@ -1190,6 +1200,14 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 - `segment.segment_kind`：分片类型，`dialogue`（台词）或 `narration`（旁白）。
 - `segment.prosody_marks`：子句级局部语气标注，每项含 `start`、`end`、`emotion`、`style_tags`、`instruction`、`intensity`。
 - `segment.voice_ref`：当前分片激活的音色来源信息。含 `name`（显示名称）、`source`（`role`/`global`/`custom`）、`voice_id`、`engine`、`role_id`（可选）。`source=role` 表示来自角色分配，`source=global` 表示跟随全局参数，`source=custom` 表示分片自定义覆盖。
+
+#### 合成时文本变换字段（发音映射 + 大写词转小写）
+
+- `segment.text_transforms`：段级合成文本变换，`null` 或 `{ "applied_map_ids"?: string[], "lowercase_latin"?: boolean | null }`。
+  `applied_map_ids` 引用生效字典（全局 `gpm_` + 项目 `pm_` 两层）中对该段生效的条目 id，只存引用不存副本；悬空 id（被覆盖/已删除）在合成时自然忽略。
+  `lowercase_latin` 为三态覆盖：`true`/`false` 覆盖项目默认 `configs.lowercase_latin`，`null`/缺省跟随项目。
+  这些变换只影响送引擎文本；`segment.text` 原文、字幕、SRT 导出不受影响。
+- `segment.generated_params.effective_text`：合成后记录实际送引擎的最终文本（含发音映射替换与大写转小写），供追溯与双读断言。
 
 ### POST `/api/segmented-projects/{id}/chapters:batch`
 
@@ -1510,6 +1528,13 @@ local 模式：写 `{项目目录}/narration.md` 文件、更新 `narration_docu
   项目级全局开关 `configs.skip_parenthesized`（项目设置）与此参数任一开启即生效。
   转换是瞬态的：分片显示文本、字幕导出与历史记录均保持原文。
   在 `prepare_text_for_engine` 中于风格 tag 适配之前执行（避免吃掉引擎新加的 `(情绪)` 前导标签）。
+- **合成时文本变换（发音映射 + 大写词转小写）**：在上述清洗之前执行，同样只影响送引擎文本。
+  生效字典 = 全局（`system_configs.pronunciation_map_global`）∪ 项目（`configs.pronunciation_map`），同 source 项目条目整体覆盖全局；
+  `configs.pronunciation_apply_all` 开启时全量生效，否则只应用段级 `text_transforms.applied_map_ids` 引用的条目（悬空 id 忽略）；
+  替换按 source 长度降序单次执行（不递归）。
+  `configs.lowercase_latin`（项目默认）与段级 `text_transforms.lowercase_latin`（三态覆盖，非 null 优先）开启时，全大写拉丁词 `[A-Z]{2,}` 转小写。
+  纯函数实现于 `backend/app/services/text_transform_service.py`（local 与 workers 双路径共用），前端镜像 `frontend/src/services/textTransforms.ts`。
+  实际送引擎文本记入 `generated_params.effective_text`（可追溯/双读断言）。
 
 **Response:** 完整 `ProjectDetail` 对象。
 

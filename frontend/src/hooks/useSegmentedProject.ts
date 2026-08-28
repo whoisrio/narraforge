@@ -1,4 +1,4 @@
-import type { SegmentedProject, Chapter, Segment, EngineParams, SegmentKind, EmotionType, VoiceSource, RoleSnapshot, ProsodyMark } from '../types';
+import type { SegmentedProject, Chapter, Segment, EngineParams, SegmentKind, EmotionType, VoiceSource, RoleSnapshot, ProsodyMark, SegmentTextTransforms, PronunciationMapEntry } from '../types';
 import { createTranslator } from '../i18n';
 
 let _idCounter = 0;
@@ -81,6 +81,8 @@ function enrichSegment(raw: RawSegment): Segment {
     segment_kind: raw.segment_kind ?? 'narration',
     // 透传后端 animation_spec（分镜 brief），否则分镜视图拿不到数据
     animation_spec: raw.animation_spec ?? null,
+    // 合成时文本变换（发音映射段级引用 + 小写化覆盖），IndexedDB 透传
+    text_transforms: raw.text_transforms ?? undefined,
     created_at: raw.created_at || now,
     updated_at: raw.updated_at || now,
   };
@@ -180,7 +182,7 @@ function updateActive(p: SegmentedProject, updater: (ch: Chapter) => Chapter, op
 export type Action =
   | { type: 'LOAD_PROJECT'; project: SegmentedProject }
   | { type: 'RENAME_PROJECT'; name: string }
-  | { type: 'SET_PROJECT_META'; meta: { remotion_project_path?: string | null; description?: string | null; export_directory?: string | null; underscore_to_space?: boolean | null; skip_parenthesized?: boolean | null } }
+  | { type: 'SET_PROJECT_META'; meta: { remotion_project_path?: string | null; description?: string | null; export_directory?: string | null; underscore_to_space?: boolean | null; skip_parenthesized?: boolean | null; pronunciation_map?: PronunciationMapEntry[] | null; pronunciation_apply_all?: boolean | null; lowercase_latin?: boolean | null } }
   | { type: 'SET_SOURCE_DOCUMENT'; text: string }
   | { type: 'SET_NARRATION_SCRIPT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
@@ -228,6 +230,7 @@ export type Action =
   | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down'; touch?: boolean }
   | { type: 'SPLIT_SEGMENT'; id: string; position: number; touch?: boolean }
   | { type: 'SELECT_SEGMENT'; id: string | undefined }
+  | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null }
   | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
 /** PATCH /segments 响应里的服务端段形状（SegmentIn 子集；null 在入本地态时转 undefined） */
@@ -323,12 +326,15 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'RENAME_PROJECT':
       return { project: { ...p, name: action.name, updated_at: new Date().toISOString() } };
     case 'SET_PROJECT_META': {
-      const { remotion_project_path, description, export_directory, underscore_to_space, skip_parenthesized } = action.meta;
+      const { remotion_project_path, description, export_directory, underscore_to_space, skip_parenthesized, pronunciation_map, pronunciation_apply_all, lowercase_latin } = action.meta;
       const nextConfigs = { ...(p.configs ?? {}) };
       if ('description' in action.meta) nextConfigs.description = description ?? null;
       if ('export_directory' in action.meta) nextConfigs.export_directory = export_directory ?? null;
       if ('underscore_to_space' in action.meta) nextConfigs.underscore_to_space = underscore_to_space ?? null;
       if ('skip_parenthesized' in action.meta) nextConfigs.skip_parenthesized = skip_parenthesized ?? null;
+      if ('pronunciation_map' in action.meta) nextConfigs.pronunciation_map = pronunciation_map ?? null;
+      if ('pronunciation_apply_all' in action.meta) nextConfigs.pronunciation_apply_all = pronunciation_apply_all ?? null;
+      if ('lowercase_latin' in action.meta) nextConfigs.lowercase_latin = lowercase_latin ?? null;
       const next: SegmentedProject = {
         ...p,
         ...("remotion_project_path" in action.meta ? { remotion_project_path: remotion_project_path ?? null } : {}),
@@ -822,6 +828,18 @@ export function segmentedReducer(state: State, action: Action): State {
           updated_at: now,
         },
       };
+    }
+    case 'SET_SEGMENT_TEXT_TRANSFORMS': {
+      // 跨章节按 id 更新（搜索/映射面板可作用于非活动章节的段）；
+      // updateSegmentById 找不到时原样返回（不 bump updated_at，不触发空保存）。
+      // 清除约定：调用方写「中性 dict」（如 {applied_map_ids: []} 或
+      // {lowercase_latin: null}），不要传 null —— null 会被序列化丢键，
+      // 而后端对缺省字段是「保留现值」语义，backend 模式下清不掉。
+      return { project: updateSegmentById(p, action.id, seg => ({
+        ...seg,
+        text_transforms: action.transforms ?? undefined,
+        updated_at: new Date().toISOString(),
+      })) };
     }
     default:
       return state;

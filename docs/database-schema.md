@@ -147,9 +147,11 @@ Global key-value store for persistent system-wide settings.
 
 | Column | Type | Nullable | Default | Notes |
 |---|---|---|---|---|
-| `key` | String | No | — | **Primary Key** (string key) |
-| `value` | String | No | — | Configuration value |
+| `key` | String | No | - | **Primary Key** (string key) |
+| `value` | String | No | - | Configuration value |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update timestamp (auto-updates) |
+
+已知业务 key（非穷举）：`animation_root_folder`（Remotion 脚手架根目录）、`narration_git_remote`（narration git 远端）、`pronunciation_map_global`（全局发音映射字典，JSON 数组字符串 `[{id, source, target, note?}]`，id 统一 `gpm_` 前缀；`GET/PUT /api/config/pronunciation-map-global` 读写）。
 
 ---
 
@@ -189,7 +191,7 @@ Segmented TTS project containers (three-tier: project -> chapter -> segment).
 | `source_document_path` | String | Yes | `NULL` | Path of the source document file (content lives on disk under the project's assets dir) |
 | `narration_document_path` | String | Yes | `NULL` | Path of the full narration script file (workflow 产出的完整旁白稿) |
 | `default_narrator_role_id` | String | Yes | `NULL` | **FK** -> `roles.id` (SET NULL). Default narrator role |
-| `configs` | JSON | Yes | `NULL` | Project-level configuration (split_voice_mode, etc.) |
+| `configs` | JSON | Yes | `NULL` | Project-level configuration: `split_voice_mode`, `description`, `export_directory`, `underscore_to_space`, `skip_parenthesized`, `pronunciation_map`（项目发音映射字典 `[{id, source, target, note?}]`，id 统一 `pm_` 前缀，同 source 覆盖全局条目）, `pronunciation_apply_all`（bool，生效字典全量应用到所有段）, `lowercase_latin`（bool，全大写拉丁词转小写项目默认，段级 `text_transforms.lowercase_latin` 三态覆盖） |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation timestamp |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update timestamp (auto-updates) |
 
@@ -236,6 +238,7 @@ Individual text segments within a chapter. Each segment holds text, role, voice 
 | `generated_at` | DateTime | Yes | `NULL` | Last generation timestamp |
 | `animation_spec_json` | Text | Yes | `NULL` | Animation spec |
 | `split_anchor` | JSON | Yes | `NULL` | Layer-sync Phase B anchor in chapter `narration_script`: `{offset_start, offset_end, baseline_text}`; written at split, used for L3->L2 localisation merge |
+| `text_transforms` | JSON | Yes | `NULL` | Synthesis-time text transforms: `{applied_map_ids?: string[], lowercase_latin?: boolean \| null}`; id references into the effective pronunciation map (global `gpm_` + project `pm_`), lowercase tri-state override. Only affects engine text; `text`/subtitles keep the original (P19) |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update (auto) |
 
@@ -261,6 +264,10 @@ Individual text segments within a chapter. Each segment holds text, role, voice 
 `current` / `previous` 条目可带可选字段 `origin`：`"tts"`（引擎合成）或 `"recorded"`（用户自行录入/上传）。
 `origin === 'recorded'` 表示该分片音频处于锁定状态：批量/agent 合成自动跳过，手动重新生成需先解锁（前端清除标记）并以 `force: true` 调用合成端点。
 录入音频的文件名为 `{segment-id}.rec-{8位随机}.{ext}`，保证 `previous` 撤销指向真实旧文件。
+
+### `generated_params.effective_text`
+
+合成后记录实际送引擎的最终文本（发音映射替换 + 大写转小写 + 引擎清洗之后），供追溯与 e2e 双读断言；`segment.text` 原文不受影响。
 
 `path` 是相对于资产根（默认 `backend/data/projects/`，环境变量 `SEGMENTED_DIR` 可覆盖）的相对路径，也可能是绝对路径（历史数据）。读取端一律以 DB 存储路径为准；新写入的文件遵循统一布局（设计见 `docs/superpowers/specs/2026-07-25-unified-data-root-asset-naming-design.md`）。
 

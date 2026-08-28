@@ -1,0 +1,65 @@
+.card {
+  background: var(--color-bg, #fff);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: var(--radius-lg, 14px);
+  padding: 20px 24px;
+  margin-top: 16px;
+}
+
+.kicker {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  color: var(--color-text-secondary, #666);
+  text-transform: uppercase;
+}
+
+.title { margin: 4px 0; font-size: 1.05rem; }
+.desc { color: var(--color-text-secondary, #666); font-size: 0.82rem; }
+
+.body { display: flex; flex-direction: column; gap: 8px; }
+.empty { color: var(--color-text-secondary, #666); font-size: 0.82rem; }
+
+/* 列表头：与 .row 同栅格（末列为删除按钮固定宽，保证列对齐），空列表时也展示 */
+.rowHeader {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 24px;
+  gap: 8px;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary, #666);
+}
+
+.row {
+  display: grid;
+  /* 末列固定宽与 .rowHeader 对齐（删除按钮实测 19px + 余量） */
+  grid-template-columns: 1fr 1fr 1fr 24px;
+  gap: 8px;
+  align-items: center;
+}
+.row input {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border, #d0d0d0);
+  font-size: 0.85rem;
+}
+
+.deleteBtn { border: none; background: transparent; cursor: pointer; }
+
+.actions { display: flex; gap: 8px; margin-top: 8px; }
+.primary {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm, 6px);
+  border: none;
+  cursor: pointer;
+  background: var(--color-primary, #4a6cf7);
+  color: #fff;
+}
+.secondary {
+  padding: 6px 16px;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  border: 1px solid var(--color-border, #d0d0d0);
+  background: transparent;
+}
+
+.success { color: var(--color-success, #2a7); font-size: 0.82rem; }
+.error { color: var(--color-danger, #d33); font-size: 0.82rem; }

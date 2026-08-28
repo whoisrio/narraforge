@@ -119,6 +119,34 @@ class TestProjectCrud:
         client, _ = workers_client
         assert client.get("/api/segmented-projects/nope").status_code == 404
 
+    def test_text_transforms_round_trip(self, workers_client):
+        """text_transforms 经 workers 仓储 POST → PUT → GET 透传（删旧插新不丢列）。"""
+        client, _ = workers_client
+        tt = {"applied_map_ids": ["pm_1"], "lowercase_latin": True}
+        _create_project(client, chapters=[
+            _chapter("ch-1", 0, "第一章", [_segment("seg-1", 0, "第一段。", text_transforms=tt)]),
+        ])
+        seg = client.get("/api/segmented-projects/proj-1").json()["chapters"][0]["segments"][0]
+        assert seg["text_transforms"] == tt
+
+        # PUT 全量保存（删旧插新）：payload 未携带该字段 → 保留旧值（对齐 svc 语义）
+        payload = _project(chapters=[
+            _chapter("ch-1", 0, "第一章", [_segment("seg-1", 0, "改过的第一段。")]),
+        ])
+        resp = client.put("/api/segmented-projects/proj-1", json=payload)
+        assert resp.status_code == 200, resp.text
+        seg = client.get("/api/segmented-projects/proj-1").json()["chapters"][0]["segments"][0]
+        assert seg["text"] == "改过的第一段。"
+        assert seg["text_transforms"] == tt
+
+        # PUT 显式携带新值 → 覆盖
+        new_tt = {"applied_map_ids": ["pm_2"], "lowercase_latin": False}
+        payload["chapters"][0]["segments"][0]["text_transforms"] = new_tt
+        resp = client.put("/api/segmented-projects/proj-1", json=payload)
+        assert resp.status_code == 200, resp.text
+        seg = client.get("/api/segmented-projects/proj-1").json()["chapters"][0]["segments"][0]
+        assert seg["text_transforms"] == new_tt
+
     def test_delete_missing_404(self, workers_client):
         client, _ = workers_client
         assert client.delete("/api/segmented-projects/nope").status_code == 404

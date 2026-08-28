@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '../../i18n';
-import type { Segment, EngineParams, EmotionType, VoiceProfile, MiMoPresetVoice, Role } from '../../types';
+import type { Segment, EngineParams, EmotionType, VoiceProfile, MiMoPresetVoice, Role, SegmentTextTransforms } from '../../types';
 import { ttsApi, mimoTtsApi } from '../../services/api';
 import { StyleInstructionPicker } from '../TTSSynthesis/StyleInstructionPicker';
 import { StyleTagInserter } from './StyleTagInserter';
@@ -33,6 +33,8 @@ interface SegmentEditPanelProps {
   onConfirmCustom?: (id: string, localParams: Record<string, unknown>) => void;
   onAnnotateSSML: (id: string) => void;
   onSplit?: (id: string, position: number) => void;
+  /** 段级合成文本变换写回（大写词转小写三态）；即改即存 */
+  onUpdateTextTransforms?: (id: string, transforms: SegmentTextTransforms | null) => void;
 }
 
 const ALL_EMOTIONS: { key: string; label: string; color: string; bg: string }[] = [
@@ -46,7 +48,7 @@ const ALL_EMOTIONS: { key: string; label: string; color: string; bg: string }[] 
 
 export function SegmentEditPanel({
   segment, voices, roles, chapterEngine, onClose, onUpdateText,
-  onUpdateEmotion, onUndo, onRegenerate, onConfirmCustom, onAnnotateSSML, onSplit,
+  onUpdateEmotion, onUndo, onRegenerate, onConfirmCustom, onAnnotateSSML, onSplit, onUpdateTextTransforms,
 }: SegmentEditPanelProps) {
   const { t } = useTranslation();
   const [localText, setLocalText] = useState(segment?.text ?? '');
@@ -241,6 +243,27 @@ export function SegmentEditPanel({
             ))}
           </div>
         </div>
+
+        {/* 大写词转小写：三态（跟随项目 / 开 / 关），即改即存 */}
+        {onUpdateTextTransforms && (
+          <div className={styles.emotionPicker}>
+            <span className={styles.emotionPickerLabel}>{t('segmentEdit.lowercaseLatin')}</span>
+            <div className={styles.enginePills}>
+              {([null, true, false] as const).map((v) => (
+                <button key={String(v)}
+                  type="button"
+                  aria-pressed={(segment.text_transforms?.lowercase_latin ?? null) === v}
+                  className={`${styles.enginePill} ${(segment.text_transforms?.lowercase_latin ?? null) === v ? styles.enginePillActive : ''}`}
+                  aria-label={v === null ? t('segmentEdit.lowercaseLatinFollow') : v ? t('segmentEdit.lowercaseLatinOn') : t('segmentEdit.lowercaseLatinOff')}
+                  onClick={() => onUpdateTextTransforms(segment.id, { ...(segment.text_transforms ?? {}), lowercase_latin: v })}
+                >
+                  {v === null ? t('segmentEdit.lowercaseLatinFollow') : v ? t('segmentEdit.lowercaseLatinOn') : t('segmentEdit.lowercaseLatinOff')}
+                </button>
+              ))}
+            </div>
+            <p className={styles.paramsHint}>{t('segmentEdit.lowercaseLatinHint')}</p>
+          </div>
+        )}
 
         {/* Compact action bar */}
         <div className={styles.compactActions}>

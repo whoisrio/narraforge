@@ -192,3 +192,88 @@ async def test_get_audio_missing_ref_returns_none():
     )
     assert data is None
     store.get.assert_not_awaited()
+
+
+def _capture_edge_text(monkeypatch):
+    """patch edge-tts 合成，返回 captured dict（合成后读 captured["text"]）。"""
+    captured: dict = {}
+
+    def _synth_internal(**kwargs):
+        captured["text"] = kwargs["text"]
+        return b"MP3BYTES", "mp3"
+
+    monkeypatch.setattr("app.api.tts.synthesize_speech_internal", _synth_internal)
+    return captured
+
+
+@pytest.mark.asyncio
+async def test_synthesize_applies_transforms_apply_all(monkeypatch):
+    project = _project()
+    project["configs"] = {
+        "pronunciation_map": [{"id": "pm_1", "source": "调动", "target": "掉动"}],
+        "pronunciation_apply_all": True,
+        "lowercase_latin": True,
+    }
+    project["chapters"][0]["segments"][0]["text"] = "调动 REST API"
+    repo = _repo(project)
+    store = _store()
+    captured = _capture_edge_text(monkeypatch)
+    monkeypatch.setattr(w, "_load_global_map", lambda: [])
+
+    await w.synthesize_segment_workers(
+        repo, store,
+        project_id="p1", chapter_id="c1", segment_id="s1",
+        request_params=None, text_override=None, ssml_override=None,
+        keep_previous=True, force=False,
+    )
+
+    assert captured["text"] == "掉动 rest api"
+    saved = repo.save_project.call_args.args[0]
+    seg = saved.chapters[0].segments[0]
+    assert seg.generated_params["effective_text"] == "掉动 rest api"
+
+
+@pytest.mark.asyncio
+async def test_synthesize_applies_global_map_via_segment_ids(monkeypatch):
+    project = _project()  # seg text = "第一段"
+    project["chapters"][0]["segments"][0]["text_transforms"] = {
+        "applied_map_ids": ["gpm_1"],
+    }
+    repo = _repo(project)
+    store = _store()
+    captured = _capture_edge_text(monkeypatch)
+    monkeypatch.setattr(
+        w, "_load_global_map",
+        lambda: [{"id": "gpm_1", "source": "第一段", "target": "开篇"}],
+    )
+
+    await w.synthesize_segment_workers(
+        repo, store,
+        project_id="p1", chapter_id="c1", segment_id="s1",
+        request_params=None, text_override=None, ssml_override=None,
+        keep_previous=True, force=False,
+    )
+
+    assert captured["text"] == "开篇"
+
+
+@pytest.mark.asyncio
+async def test_synthesize_workers_preserves_text_transforms_on_save(monkeypatch):
+    """text_transforms 随 workers 全量写回透传（_to_project_in → SegmentIn）。"""
+    project = _project()
+    tt = {"applied_map_ids": ["pm_x"], "lowercase_latin": False}
+    project["chapters"][0]["segments"][0]["text_transforms"] = tt
+    repo = _repo(project)
+    store = _store()
+    _capture_edge_text(monkeypatch)
+    monkeypatch.setattr(w, "_load_global_map", lambda: [])
+
+    await w.synthesize_segment_workers(
+        repo, store,
+        project_id="p1", chapter_id="c1", segment_id="s1",
+        request_params=None, text_override=None, ssml_override=None,
+        keep_previous=True, force=False,
+    )
+
+    saved = repo.save_project.call_args.args[0]
+    assert saved.chapters[0].segments[0].text_transforms == tt

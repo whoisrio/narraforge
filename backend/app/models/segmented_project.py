@@ -125,6 +125,7 @@ class SegmentedProjectSegment(Base):
     generated_at = Column(DateTime, nullable=True)
     animation_spec_json = Column(Text, nullable=True)
     split_anchor = Column(JSON(none_as_null=True), nullable=True)  # layer-sync Phase B: {offset_start, offset_end, baseline_text}
+    text_transforms = Column(JSON(none_as_null=True), nullable=True)  # 合成时文本变换: {applied_map_ids, lowercase_latin}
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 

@@ -8,6 +8,8 @@ export type ProjectSettingsMeta = {
   export_directory?: string | null;
   underscore_to_space?: boolean | null;
   skip_parenthesized?: boolean | null;
+  pronunciation_apply_all?: boolean | null;
+  lowercase_latin?: boolean | null;
 };
 
 interface ProjectSettingsProps {
@@ -19,6 +21,8 @@ interface ProjectSettingsProps {
   exportDirectory?: string | null;
   underscoreToSpace?: boolean | null;
   skipParenthesized?: boolean | null;
+  pronunciationApplyAll?: boolean | null;
+  lowercaseLatin?: boolean | null;
   onRenameProject: (name: string) => void;
   onUpdateRemotionPath: (path: string | null) => void;
   onUpdateProjectMeta: (meta: ProjectSettingsMeta) => void;
@@ -34,6 +38,8 @@ export function ProjectSettings({
   exportDirectory,
   underscoreToSpace,
   skipParenthesized,
+  pronunciationApplyAll,
+  lowercaseLatin,
   onRenameProject,
   onUpdateRemotionPath,
   onUpdateProjectMeta,
@@ -139,6 +145,26 @@ export function ProjectSettings({
               </div>
             </div>
           </div>
+          <label className={styles.toggleField}>
+            <input
+              type="checkbox"
+              aria-label={t('projectSettings.pronunciationApplyAll')}
+              checked={pronunciationApplyAll ?? false}
+              onChange={(event) => onUpdateProjectMeta({ pronunciation_apply_all: event.target.checked })}
+            />
+            <span>{t('projectSettings.pronunciationApplyAll')}</span>
+          </label>
+          <p className={styles.toggleHint}>{t('projectSettings.pronunciationApplyAllHint')}</p>
+          <label className={styles.toggleField}>
+            <input
+              type="checkbox"
+              aria-label={t('projectSettings.lowercaseLatin')}
+              checked={lowercaseLatin ?? false}
+              onChange={(event) => onUpdateProjectMeta({ lowercase_latin: event.target.checked })}
+            />
+            <span>{t('projectSettings.lowercaseLatin')}</span>
+          </label>
+          <p className={styles.toggleHint}>{t('projectSettings.lowercaseLatinHint')}</p>
         </section>
       </div>
     </section>

@@ -107,6 +107,7 @@ create table if not exists segmented_project_segments (
     voice jsonb not null default '{"source": "chapter"}'::jsonb,
     generated_params jsonb,
     audio jsonb,
+    text_transforms jsonb,  -- 合成时文本变换: {applied_map_ids, lowercase_latin}
     generated_at timestamptz,
     animation_spec_json text,  -- 模型侧是 Text（JSON 字符串），对齐不用 jsonb
     split_anchor jsonb,        -- layer-sync Phase B: {offset_start, offset_end, baseline_text}
@@ -116,6 +117,9 @@ create table if not exists segmented_project_segments (
 );
 
 create index if not exists ix_segments_chapter_id on segmented_project_segments (chapter_id);
+
+-- 既有部署的增量列（create table 块已含；此处为已建表环境补列，幂等）
+alter table segmented_project_segments add column if not exists text_transforms jsonb;
 
 -- TTS 合成历史（后端存储模式）：workers 模式下音频存 Supabase Storage
 -- （audio_path 为 bucket key），记录存本表。

@@ -80,4 +80,42 @@ describe('ProjectSettings', () => {
     fireEvent.click(header);
     expect(header).toHaveAttribute('aria-expanded', 'false');
   });
+
+  describe('文本变换开关', () => {
+    function renderSettings(overrides: Partial<Parameters<typeof ProjectSettings>[0]> = {}) {
+      return render(
+        <ProjectSettings
+          projectName="草稿项目"
+          remotionPath={null}
+          storageMode="frontend"
+          chapterCount={1}
+          onRenameProject={vi.fn()}
+          onUpdateRemotionPath={vi.fn()}
+          onUpdateProjectMeta={vi.fn()}
+          onBackToOverview={vi.fn()}
+          {...overrides}
+        />,
+      );
+    }
+
+    it('点击「全量应用发音映射」回调 pronunciation_apply_all', () => {
+      const onUpdateProjectMeta = vi.fn();
+      renderSettings({ onUpdateProjectMeta });
+      fireEvent.click(screen.getByLabelText('全量应用发音映射'));
+      expect(onUpdateProjectMeta).toHaveBeenCalledWith({ pronunciation_apply_all: true });
+    });
+
+    it('点击「大写英文词转小写」回调 lowercase_latin', () => {
+      const onUpdateProjectMeta = vi.fn();
+      renderSettings({ onUpdateProjectMeta });
+      fireEvent.click(screen.getByLabelText('大写英文词转小写'));
+      expect(onUpdateProjectMeta).toHaveBeenCalledWith({ lowercase_latin: true });
+    });
+
+    it('回显 configs 里的已存值', () => {
+      renderSettings({ pronunciationApplyAll: true, lowercaseLatin: true });
+      expect((screen.getByLabelText('全量应用发音映射') as HTMLInputElement).checked).toBe(true);
+      expect((screen.getByLabelText('大写英文词转小写') as HTMLInputElement).checked).toBe(true);
+    });
+  });
 });

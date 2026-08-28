@@ -40,6 +40,10 @@ interface SegmentRowProps {
   selectionMode?: boolean;
   /** Multi-select checked state */
   selected?: boolean;
+  /** 搜索跳转后的闪烁高亮（data-segment-id 锚点 + flash 动画类） */
+  flash?: boolean;
+  /** 已应用的发音映射（🗣 badge；空/缺省不显示） */
+  pronunciationPreview?: { source: string; target: string }[];
   /** Toggle multi-select state for this segment */
   onToggleSelect?: (id: string) => void;
   onSelect: (id: string) => void;
@@ -98,7 +102,7 @@ export function SegmentRow({
   segment, index, isSelected, isPlaying, isPaused, compact, voices, globalVoiceId, globalVoiceName, globalEdgeVoice, engine,
   globalMimoMode, globalMimoPresetVoice, globalMimoCloneVoiceId,
   layout, timeStart, timeEnd, roles, roleSnapshot, chapterVoice,
-  selectionMode, selected, onToggleSelect,
+  selectionMode, selected, flash, pronunciationPreview, onToggleSelect,
   onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
   onRecord, onUnlockAudio,
   onMerge, onMove, isLast,
@@ -403,7 +407,8 @@ export function SegmentRow({
 
   if (layout === 'horizontal') {
     return (
-      <div className={`${styles.hBlock} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected ? styles.selH : ''}`}
+      <div className={`${styles.hBlock} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected ? styles.selH : ''}${flash ? ` ${styles.flash}` : ''}`}
+        data-segment-id={segment.id}
         onClick={() => onSelect(segment.id)} title={segment.text}>
         <span className={styles.hIdx}>#{idx}</span>
         <span className={styles.hDur}>
@@ -443,7 +448,8 @@ export function SegmentRow({
   if (compact) {
     return (
       <div
-        className={`${styles.compactCard} ${styles[`emo${emoCamel}`] || ''} ${isSelected || selected ? styles.selected : ''} ${isPlaying ? styles.playing : ''}`}
+        className={`${styles.compactCard} ${styles[`emo${emoCamel}`] || ''} ${isSelected || selected ? styles.selected : ''} ${isPlaying ? styles.playing : ''}${flash ? ` ${styles.flash}` : ''}`}
+        data-segment-id={segment.id}
         onClick={() => onSelect(segment.id)}
       >
         {renderSelectionCheckbox()}
@@ -458,6 +464,14 @@ export function SegmentRow({
         <span className={styles.compactIdx}>#{idx}</span>
         {segment.emotion && (
           <span className={`${styles.emoTag} ${styles[`tag${emoCamel}`]}`}>{t(EMOTION_LABELS[emotion])}</span>
+        )}
+        {pronunciationPreview && pronunciationPreview.length > 0 && (
+          <span
+            className={styles.pronunciationBadge}
+            title={`${t('segment.segmentRow.pronunciationBadgeTooltip')}\n${pronunciationPreview.map(p => `${p.source}->${p.target}`).join('\n')}`}
+          >
+            🗣 {pronunciationPreview.length}
+          </span>
         )}
         {timeStart != null && (
           <span className={styles.compactTime}>
@@ -528,7 +542,8 @@ export function SegmentRow({
   // ---- Expanded mode ----
   return (
     <div
-      className={`${styles.card} ${styles[`emo${emoCamel}`] || ''} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected || selected ? styles.selected : ''} ${isPlaying ? styles.playing : ''} ${isStale ? styles.stale : ''}`}
+      className={`${styles.card} ${styles[`emo${emoCamel}`] || ''} ${styles[`st${segment.status.charAt(0).toUpperCase() + segment.status.slice(1)}`] || ''} ${isSelected || selected ? styles.selected : ''} ${isPlaying ? styles.playing : ''} ${isStale ? styles.stale : ''}${flash ? ` ${styles.flash}` : ''}`}
+      data-segment-id={segment.id}
       onClick={() => onSelect(segment.id)}
     >
       <div className={styles.avatarCol}>
@@ -598,6 +613,14 @@ export function SegmentRow({
             {isFailed && <span className={styles.failMark}>✕ {segment.error || ''}</span>}
             {isIdle && <span className={styles.idleText}>{t('segment.segmentRow.idle')}</span>}
             {hasSSML && <span className={styles.ssmlMark}>SSML</span>}
+            {pronunciationPreview && pronunciationPreview.length > 0 && (
+              <span
+                className={styles.pronunciationBadge}
+                title={`${t('segment.segmentRow.pronunciationBadgeTooltip')}\n${pronunciationPreview.map(p => `${p.source}->${p.target}`).join('\n')}`}
+              >
+                🗣 {pronunciationPreview.length}
+              </span>
+            )}
             {isAudioRecorded && (
               <button
                 className={styles.recordedBadge}
