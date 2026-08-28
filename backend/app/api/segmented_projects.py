@@ -38,6 +38,7 @@ from app.core.repositories.segmented_projects import SegmentedProjectRepository
 from app.core.repositories.usage import UsageRepository
 from app.api._usage_helpers import build_llm_usage_sink
 from app.core.asset_store import AssetStore, get_asset_store
+from app.core.supabase_client import SupabaseError
 from app.core.segmented_assets import project_dir
 from app.schemas.common import ItemsOut
 from app.schemas.segmented_project import (
@@ -212,6 +213,13 @@ async def put_project(
             status_code=409,
             detail={"code": "stale_payload", "server_updated_at": e.server_updated_at},
         )
+    except SupabaseError as e:
+        # 透出 PostgREST 真实错误（含具体列名/约束原因），不再吞成无 body 的 500
+        status = e.status_code if 400 <= e.status_code < 600 else 502
+        raise HTTPException(
+            status_code=status,
+            detail={"code": "storage_error", "supabase_status": e.status_code, "message": e.message},
+        )
     except LookupError:
         # workers 多用户：id 属于他人项目 → 按不存在处理（不泄露存在性）
         raise HTTPException(status_code=404, detail="project_not_found")
@@ -326,8 +334,10 @@ async def synthesize_segment(
                 force=body.force,
                 usage_repo=usage_repo,
             )
-        except LookupError:
-            raise HTTPException(status_code=404, detail="segment_not_found")
+        except LookupError as e:
+            # 区分"项目找不到"与"段找不到"，便于排障（worker 分别抛不同 message）
+            code = "project_not_found" if str(e) == "project_not_found" else "segment_not_found"
+            raise HTTPException(status_code=404, detail=code)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         return detail
@@ -574,8 +584,10 @@ async def upload_segment_audio(
                 filename=file.filename or "",
                 duration_sec=duration_sec,
             )
-        except LookupError:
-            raise HTTPException(status_code=404, detail="segment_not_found")
+        except LookupError as e:
+            # 区分"项目找不到"与"段找不到"，便于排障（worker 分别抛不同 message）
+            code = "project_not_found" if str(e) == "project_not_found" else "segment_not_found"
+            raise HTTPException(status_code=404, detail=code)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         return detail

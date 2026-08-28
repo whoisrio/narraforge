@@ -91,7 +91,7 @@ create table if not exists segmented_project_chapters (
     audio_adjust jsonb, -- post-synthesis adjust record: {tempo, volume_db, applied_at, segments}
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    constraint uq_chapter_project_position unique (project_id, position)
+    constraint uq_chapter_project_position unique (project_id, position) deferrable initially deferred
 );
 
 create index if not exists ix_chapters_project_id on segmented_project_chapters (project_id);
@@ -113,13 +113,18 @@ create table if not exists segmented_project_segments (
     split_anchor jsonb,        -- layer-sync Phase B: {offset_start, offset_end, baseline_text}
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    constraint uq_segment_chapter_position unique (chapter_id, position)
+    constraint uq_segment_chapter_position unique (chapter_id, position) deferrable initially deferred
 );
 
 create index if not exists ix_segments_chapter_id on segmented_project_segments (chapter_id);
 
 -- 既有部署的增量列（create table 块已含；此处为已建表环境补列，幂等）
 alter table segmented_project_segments add column if not exists text_transforms jsonb;
+
+-- 既有部署：将排序唯一约束改为可延迟，使批量 upsert 能安全处理章节/段落重排序
+-- （save_project 改为 upsert + 删孤儿段，避免插入失败时清空既有数据）
+alter table segmented_project_chapters alter constraint uq_chapter_project_position deferrable initially deferred;
+alter table segmented_project_segments alter constraint uq_segment_chapter_position deferrable initially deferred;
 
 -- TTS 合成历史（后端存储模式）：workers 模式下音频存 Supabase Storage
 -- （audio_path 为 bucket key），记录存本表。
