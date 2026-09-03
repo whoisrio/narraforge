@@ -3,7 +3,7 @@
 > [中文说明](README_zh.md)
 
 > **[Live Demo → https://narraforge.rio-dong.workers.dev/](https://narraforge.rio-dong.workers.dev/)**
-> Cloud demo build — local-only engines (VoxCPM cloning, speech-to-text, CosyVoice, Remotion scaffolding) are not available there; run locally for the full feature set.
+> Cloud demo build — local-only engines (VoxCPM cloning, speech-to-text, CosyVoice, Remotion scaffolding) are not available there，excludes FFmpeg-dependent features as well; run locally for the full feature set.
 
 One-stop AI narration workshop for voice cloning, text-to-speech, and speech-to-subtitle. Designed for narrators and dialogue production with multi-voice project management.
 
@@ -82,9 +82,6 @@ Professional timeline for long-form narration:
 - **Frontend:** React 19 + TypeScript + Vite + IndexedDB
 - **Backend:** Python 3.12+ / FastAPI / SQLAlchemy / SQLite (Supabase multi-user mode optional)
 - **Agent:** LangGraph narration workflow service
-- **TTS:** Edge-TTS, CosyVoice, MiMo, VoxCPM
-- **STT:** Faster-Whisper, FunASR
-- **LLM:** MiMo-v2.5-pro (splitting, emotion, calibration, translation)
 
 ## Quick Start
 

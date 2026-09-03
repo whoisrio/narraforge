@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import type { ChangeEvent } from 'react';
 import { configApi } from '../../services/api';
 import { useTranslation } from '../../i18n';
 import styles from './AnimationRootSetting.module.css';
@@ -18,16 +19,29 @@ function extractDetail(err: unknown): string {
 
 export function AnimationRootSetting() {
   const [value, setValue] = useState('');
+  // Tracks the live input value so the initial server fetch can't clobber
+  // text the user has already typed. Without this guard, a slow settings
+  // load that resolves after the field is filled would overwrite it with
+  // the stale server value, and the save would persist the wrong path.
+  const valueRef = useRef('');
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState<'save' | 'test' | null>(null);
   const { t } = useTranslation();
+
+  const handleChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    valueRef.current = e.target.value;
+    setValue(e.target.value);
+  }, []);
 
   useEffect(() => {
     let alive = true;
     configApi
       .getAnimationRoot()
       .then((res) => {
-        if (alive) setValue(res.value ?? '');
+        // Only seed the field if the user hasn't typed anything yet. This
+        // closes the race where the async load resolves after the user has
+        // already filled the input and would otherwise wipe their input.
+        if (alive && valueRef.current === '') setValue(res.value ?? '');
       })
       .catch(() => {
         /* leave empty; user can still input */
@@ -84,7 +98,7 @@ export function AnimationRootSetting() {
             className={styles.input}
             value={value}
             placeholder={t('settings.animationRoot.placeholder')}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={handleChange}
           />
         </label>
         <div className={styles.actions}>

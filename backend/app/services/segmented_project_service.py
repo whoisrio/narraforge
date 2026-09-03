@@ -848,6 +848,10 @@ def patch_segment(
         if isinstance(current, dict) and current.get("origin"):
             current.pop("origin", None)
             seg.audio = audio
+    if "text_transforms" in fields:
+        # 整字典替换（含显式 null 键）：跟随项目 = lowercase_latin: null 等。
+        # 后端「字段缺省=不动、显式 null=清空」语义，与前端三态开关一致。
+        seg.text_transforms = patch.text_transforms
     now = utcnow()
     seg.updated_at = now
     seg.chapter.updated_at = now

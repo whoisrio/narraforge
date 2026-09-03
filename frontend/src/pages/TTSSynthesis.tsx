@@ -46,6 +46,7 @@ import { PronunciationMapPanel } from '../components/SegmentedTTS/PronunciationM
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/useToast';
 import { useConfirm } from '../components/ui/useConfirm';
+import { useLoading } from '../components/ui/useLoading';
 import { SegmentRecordPanel } from '../components/SegmentedTTS/SegmentRecordPanel';
 
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
@@ -189,6 +190,7 @@ export function TTSSynthesis({
   const [produceAllRun, setProduceAllRun] = useState<ProduceAllRun | null>(null);
   const toast = useToast();
   const confirm = useConfirm();
+  const { run } = useLoading();
   const [playingId, setPlayingId] = useState<string | undefined>();
   const [roles, setRoles] = useState<Role[]>([]);
   const [, setPreviewingRoleId] = useState<string | null>(null);
@@ -283,7 +285,7 @@ export function TTSSynthesis({
 
   // Load scratchpad project on mount, possibly surfacing migration prompt
   useEffect(() => {
-    (async () => {
+    const loadProject = async () => {
       console.log(`[TTSSynthesis] load effect: storageMode=${storageMode}, initialProjectId=${initialProjectId}`);
       // scratchpad 只在前端存储模式下使用，后端模式不需要创建/保存 scratchpad
       let scratchpad: SegmentedProject | undefined;
@@ -318,7 +320,12 @@ export function TTSSynthesis({
       let full: SegmentedProject | undefined;
       if (targetProjectId) {
         console.log(`[TTSSynthesis] loading project: ${targetProjectId}`);
-        full = await projectStorage.getProject(targetProjectId);
+        const targetName = rawList.find((p) => p.id === targetProjectId)?.name ?? '';
+        full = await run(
+          t('loading.openProject', { name: targetName }),
+          () => projectStorage.getProject(targetProjectId),
+          { retryable: true },
+        );
         console.log(`[TTSSynthesis] getProject result: ${full ? `found: ${full.name} (id=${full.id})` : 'null'}`);
       }
 
@@ -409,7 +416,8 @@ export function TTSSynthesis({
           setShowMigration(true);
         }
       }
-    })().catch((e) => {
+    };
+    run(t('loading.projectList'), loadProject).catch((e) => {
       console.error('Project load failed:', e);
       if (initialProjectId) {
         showToast(t('tts.projectLoadFailedRetry'), 'error');
@@ -417,7 +425,7 @@ export function TTSSynthesis({
       }
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storageMode, initialProjectId]);
+  }, [storageMode, initialProjectId, run, t]);
 
   // Auto-save: debounce PUT in backend mode; IndexedDB direct in frontend mode
   useEffect(() => {
@@ -625,13 +633,26 @@ export function TTSSynthesis({
   const handleSetSegmentLowercase = useCallback((segmentId: string, value: boolean | null) => {
     const seg = project.chapters.flatMap(c => c.segments).find(s => s.id === segmentId);
     const prev: SegmentTextTransforms = seg?.text_transforms ?? {};
-    dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms: { ...prev, lowercase_latin: value } });
-  }, [project.chapters, dispatch]);
+    const transforms: SegmentTextTransforms = { ...prev, lowercase_latin: value };
+    // backend 模式走 PATCH（显式携带 null），不触发整包 PUT autosave；frontend 模式照旧走 IndexedDB。
+    const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+    dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms, touch: remote ? false : true });
+    if (remote) {
+      const chapter = projectRef.current.chapters.find(c => c.segments.some(s => s.id === segmentId));
+      if (chapter) segmentPatchSync.queue(segmentId, chapter.id, { text_transforms: transforms });
+    }
+  }, [project.chapters, dispatch, storageMode, segmentPatchSync]);
 
   // 段级合成文本变换写回（编辑面板三态）
   const handleUpdateTextTransforms = useCallback((segmentId: string, transforms: SegmentTextTransforms | null) => {
-    dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms });
-  }, [dispatch]);
+    // backend 模式走 PATCH（显式携带 null，不被整包 PUT autosave 的 null 序列化丢弃）；frontend 模式照旧走 IndexedDB。
+    const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+    dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id: segmentId, transforms, touch: remote ? false : true });
+    if (remote) {
+      const chapter = projectRef.current.chapters.find(c => c.segments.some(s => s.id === segmentId));
+      if (chapter) segmentPatchSync.queue(segmentId, chapter.id, { text_transforms: transforms ?? {} });
+    }
+  }, [dispatch, storageMode, segmentPatchSync]);
 
   // 发音映射生效字典 = 全局 ∪ 项目（同 source 项目覆盖全局）；badge 预览与
   // frontend 存储模式合成共用（悬空 id 在 merged 里查不到，自然被滤掉）
@@ -820,7 +841,7 @@ export function TTSSynthesis({
   // project data without jumping to the overview section.
   const reloadProjectData = useCallback(async () => {
     if (!project?.id) return;
-    const p = await projectStorage.getProject(project.id);
+    const p = await run(t('loading.reloadProject'), () => projectStorage.getProject(project.id));
     if (!p) return;
     // sync-status 轮询基线：后端模式下服务端返回的章节才已落库
     setServerChapterIds(storageMode === 'backend' ? (p.chapters ?? []).map((c) => c.id) : []);
@@ -842,7 +863,7 @@ export function TTSSynthesis({
     }
     initialLoadDoneRef.current = true;
     lastSavedUpdatedAtRef.current = migrated.updated_at;
-  }, [project?.id, project?.active_chapter_id, projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
+  }, [project?.id, project?.active_chapter_id, projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync, run, t]);
 
   const handleAdjustAudio = useCallback(async (tempo: number, volumeDb: number) => {
     if (!project?.id || !activeChapter?.id) return;
@@ -2147,7 +2168,7 @@ export function TTSSynthesis({
   const handleExportAll = useCallback(async () => {
     if (storageMode !== 'backend' || !project?.id || isScratchpadProject) return;
     try {
-      const result = await segmentedProjectApi.exportAllChapters(project.id);
+      const result = await run(t('loading.exportAll'), () => segmentedProjectApi.exportAllChapters(project.id));
       const dir = result.exported[0]
         ? result.exported[0].audio_path.replace(/[/\\][^/\\]+$/, '')
         : '';

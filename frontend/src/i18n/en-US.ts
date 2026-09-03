@@ -1784,4 +1784,15 @@ export const enUS: Messages = {
   languageSwitcher: {
     tooltip: 'Switch language / 切换语言',
   },
+  loading: {
+    slowHint: 'Taking longer than expected…',
+    waitSeconds: '{sec}s elapsed',
+    retry: 'Retry',
+    projectList: 'Loading projects…',
+    openProject: 'Opening project {name}…',
+    reloadProject: 'Syncing project data…',
+    narrationScript: 'Loading narration script…',
+    exportAll: 'Exporting chapters…',
+    exportProject: 'Exporting project…',
+  },
 };

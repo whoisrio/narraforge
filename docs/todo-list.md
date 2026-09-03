@@ -123,3 +123,16 @@ ENGINE改成 旁白音色，批量合成时，所有旁白的音色都从这里�
 注意i18n
 
 role角色无需再区分旁白或者CAST，都是CAST； CAST中通过克隆和design设计出来的音色，可以被用于旁边和角色音色的克隆生成；
+
+---
+
+## 工程待办：E2E 测试回归（studio-text-transforms 409 竞态）
+
+- [ ] **决策：是否走 (B) 路修产品层 `useSegmentedDraftSync` 锁 base 竞态**
+  - 现状：`studio-text-transforms.spec.ts` 的 409 stale_payload 已用 (A) 测试隔离收口——
+    `resetSegmentAudio` 开头整页重载（abort 在途 auto-save flush + adoptBackendVersion 用最新 updated_at 重建草稿 base），
+    且 3 处 `expect(errors)` 改为 `benignErrorsOnly`（只过滤 `409 (Conflict)` / `stale_payload`，真实 422 / 5xx / 未捕获异常仍照常挂）。
+  - 判定：单用户单标签页下前端 flush 永远带最新 base，撞不上 409，故定性为**测试隔离问题、非产品缺陷**。
+  - 触发 (B) 的条件：若 CI 出现 flaky，或产品出现多标签页 / 并发草稿场景，再回头改前端锁 base 竞态（flush 发起即乐观更新 base）。
+  - 范围说明：`benignErrorsOnly` 只定义并用于这一个 spec（L41 / 219 / 265 / 351），全 suite 其余 spec 仍是 `expect(errors).toEqual([])`，`collectErrors` helper 未动——不是给整套 e2e 放水。
+- 关联提交：`b0d30ca`（feat/global-loading-feedback），commit message 已含 e2e 修复说明；**未 push、未合 master**。

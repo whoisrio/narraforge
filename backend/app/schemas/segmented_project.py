@@ -116,6 +116,9 @@ class SegmentPatchIn(BaseModel):
     segment_kind: str | None = None
     voice: dict[str, Any] | None = None
     unlock_audio: bool | None = None
+    # 段级文本变换（小写化覆盖 / 发音映射段级引用）。整字典替换（含显式 null 键）：
+    # 跟随项目 = 该键为 null，tri-state 语义由后端「字段缺省=不动、显式 null=清空」保证。
+    text_transforms: dict[str, Any] | None = None
 
 
 class SegmentPatchOut(BaseModel):

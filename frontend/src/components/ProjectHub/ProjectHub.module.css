@@ -477,6 +477,39 @@
   margin: 0;
 }
 
+/* ---- Loading skeleton (projects list first load) ---- */
+
+.skeletonHead {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  background: rgba(216, 194, 180, 0.42);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeletonBody {
+  display: grid;
+  gap: 9px;
+  margin-top: auto;
+  padding: 13px 15px 15px;
+}
+
+.skeletonLine {
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: rgba(216, 194, 180, 0.42);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeletonLine:nth-child(1) { width: 72%; }
+.skeletonLine:nth-child(2) { width: 92%; }
+.skeletonLine:nth-child(3) { width: 48%; }
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* ---- Create Dialog ---- */
 
 .dialogOverlay {

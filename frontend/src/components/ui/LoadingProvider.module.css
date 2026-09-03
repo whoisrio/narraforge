@@ -1,0 +1,4 @@
+/* 背景包裹层：布局零侵入（display:contents），仅用于模态可见时挂 inert。 */
+.background {
+  display: contents;
+}

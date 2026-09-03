@@ -3,7 +3,7 @@
 > [English](README.md)
 
 > **[在线 Demo → https://narraforge.rio-dong.workers.dev/](https://narraforge.rio-dong.workers.dev/)**
-> 云端演示版不含本地引擎能力（VoxCPM 克隆、语音转写、CosyVoice、Remotion 脚手架），完整功能请本地部署。
+> 云端演示版不含本地引擎能力（VoxCPM 克隆、语音转写、CosyVoice、Remotion 脚手架），不含依赖ffmpeg的能力，完整功能请本地部署。
 
 一站式 AI 叙事工坊，集成声音克隆、文字转语音、语音转字幕。专为旁白与对话制作设计，支持多角色音色项目管理。
 
@@ -53,8 +53,9 @@
 | 引擎 | 费用 | 机制 | 适用场景 |
 |------|------|------|----------|
 | **VoxCPM** | 免费 | 上传 → 本地高保真复刻 | 默认选择，无需 API Key |
-| **CosyVoice** | 付费 | 上传 → 云端注册 → 持久化 voice_id | 批量合成、反复使用 |
+| **indexTTS** | 免费 | 上传 → 即时复刻 | 本地免费|
 | **MiMo** | 付费 | 上传 → 即时复刻（无状态） | 快速试听、一次性使用 |
+| **CosyVoice** | 付费 | 上传 → 云端注册 → 持久化 voice_id | 批量合成、反复使用 |
 
 ### 语音识别
 
@@ -82,9 +83,6 @@
 - **前端：** React 19 + TypeScript + Vite + IndexedDB
 - **后端：** Python 3.12+ / FastAPI / SQLAlchemy / SQLite（可选 Supabase 多用户模式）
 - **智能体：** LangGraph 旁白工作流服务
-- **TTS：** Edge-TTS、VoxCPM、CosyVoice、MiMo
-- **STT：** Faster-Whisper、FunASR
-- **LLM：** MiMo-v2.5-pro（分句、感情、校准、翻译）
 
 ## 快速开始
 
