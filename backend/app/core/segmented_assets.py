@@ -290,8 +290,40 @@ def read_manifest(project_id: str, project_name: str | None = None) -> dict[str,
     return json.loads(p.read_text(encoding="utf-8"))
 
 
-def remove_project_dir(project_id: str, project_name: str | None = None) -> None:
+def _manifest_owner_id(dir_path) -> str | None:
+    """Best-effort read of the project id stored in a dir's manifest.json."""
+    manifest_file = dir_path / "manifest.json"
+    if not manifest_file.exists():
+        return None
+    try:
+        return (json.loads(manifest_file.read_text(encoding="utf-8")) or {}).get("id")
+    except (ValueError, OSError):
+        return None
+
+
+def remove_project_dir(project_id: str, project_name: str | None = None) -> bool:
+    """Remove the project's asset directory; return True if anything was removed.
+
+    Handles the case where the dir was hash-suffixed at create time because of a
+    name collision that has since been resolved (the colliding project deleted):
+    then the plain-slug derivation misses it, so we also try the deterministic
+    ``slug-{hash4(id)}`` variant — but only remove it if it belongs to this
+    project or is an orphan, never a dir owned by a different live project.
+    """
     d = project_dir(project_id, project_name)
+    removed = False
     if d.exists():
         shutil.rmtree(d, ignore_errors=True)
         logger.info("Removed segmented project dir %s", d)
+        removed = True
+    if not removed and project_name:
+        slug = project_slug(project_name)
+        if slug and slug != project_id:
+            suffixed = settings.segmented_dir / f"{slug}-{_hash4(project_id)}"
+            if suffixed.exists():
+                owner = _manifest_owner_id(suffixed)
+                if owner is None or owner == project_id:
+                    shutil.rmtree(suffixed, ignore_errors=True)
+                    logger.info("Removed suffixed segmented project dir %s", suffixed)
+                    removed = True
+    return removed

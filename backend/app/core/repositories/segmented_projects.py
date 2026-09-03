@@ -790,6 +790,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
             if isinstance(current, dict) and current.get("origin"):
                 current.pop("origin", None)
                 updates["audio"] = audio
+        if "text_transforms" in fields:
+            # 整字典替换（含显式 null 键），tri-state 语义与 local svc.patch_segment 一致
+            updates["text_transforms"] = patch.text_transforms
         now = utcnow().isoformat()
         updates["updated_at"] = now
         self._client.update(SEGMENTS, updates, params={"id": f"eq.{segment_id}"})

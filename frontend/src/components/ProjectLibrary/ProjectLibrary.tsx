@@ -9,6 +9,7 @@ import { DrawerIndicator } from '../Workflow/DrawerIndicator';
 import { ChapterSplitModal } from './ChapterSplitModal';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useToast } from '../ui/useToast';
+import { useLoading } from '../ui/useLoading';
 import { NarrationDocView } from './NarrationDocView';
 import { countTextChars, estimateDurationSec, formatSeconds } from './utils';
 import { agentClient } from '../../services/langgraph/client';
@@ -119,6 +120,7 @@ export function ProjectLibrary({
   onProjectChanged,
 }: ProjectLibraryProps) {
   const { t } = useTranslation();
+  const { run } = useLoading();
   const { features } = useCapabilities();
   const toast = useToast();
   const [view, setView] = useState<LibraryView>(() => loadStoredView(projectId));
@@ -166,7 +168,9 @@ export function ProjectLibrary({
     try {
       const fromProp = (narrationScript ?? '').trim();
       if (fromProp) { setSplitModal({ fullText: fromProp, diverged: divergedFrom(fromProp) }); return; }
-      const detail = await segmentedProjectApi.getProject(projectId) as unknown as { narration_script?: string | null };
+      const detail = await run(t('loading.narrationScript'), async () => {
+        return await segmentedProjectApi.getProject(projectId) as unknown as { narration_script?: string | null };
+      });
       const fromDetail = (detail.narration_script || '').trim();
       if (fromDetail) { setSplitModal({ fullText: fromDetail, diverged: divergedFrom(fromDetail) }); return; }
       const fallback = joinedChapterText || (sourceDocument ?? '');

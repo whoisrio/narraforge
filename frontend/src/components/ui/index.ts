@@ -35,6 +35,10 @@ export { ToastProvider } from './Toast';
 export { useToast } from './useToast';
 export type { ToastApi, ToastType, ToastItem } from './toastContext';
 
+export { LoadingProvider } from './LoadingProvider';
+export { useLoading } from './useLoading';
+export type { LoadingApi, LoadingRunCtx, LoadingRunOpts } from './loadingContext';
+
 export { ConfirmProvider } from './Confirm';
 export { useConfirm } from './useConfirm';
 export type { ConfirmOptions, ConfirmVariant, ConfirmFn } from './confirmContext';

@@ -1782,6 +1782,17 @@ export const zhCN = {
   languageSwitcher: {
     tooltip: 'Switch language / 切换语言',
   },
+  loading: {
+    slowHint: '耗时较长，请稍候…',
+    waitSeconds: '已等待 {sec} 秒',
+    retry: '重试',
+    projectList: '正在获取项目列表…',
+    openProject: '正在打开项目 {name}…',
+    reloadProject: '正在同步项目数据…',
+    narrationScript: '正在加载旁白稿…',
+    exportAll: '正在批量导出章节…',
+    exportProject: '正在导出项目…',
+  },
 };
 
 type WidenStrings<T> = {

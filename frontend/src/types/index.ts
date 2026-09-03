@@ -476,13 +476,20 @@ export interface PronunciationMapEntry {
   note?: string;
 }
 
-/** 段级合成文本变换记录（只存 id 引用，不存替换内容副本） */
-export interface SegmentTextTransforms {
+/**
+ * 段级合成文本变换记录（只存 id 引用，不存替换内容副本）
+ *
+ * 用 type 别名（对象字面量类型）而非 interface：只有 type 别名拥有隐式索引签名，
+ * 才能赋给 `Record<string, unknown>`（即 SegmentPatchBody.text_transforms 的类型）。
+ * interface 是开放类型，TS 不会授予其隐式索引签名，
+ * 若误用 interface，`tsc -b` 会报 TS2322 并挂掉 npm run build。
+ */
+export type SegmentTextTransforms = {
   /** 对该段生效的发音映射 id 列表（可跨全局/项目两层引用） */
   applied_map_ids?: string[];
   /** 大写词转小写：true/false 覆盖项目默认，null/缺省 = 跟随项目 */
   lowercase_latin?: boolean | null;
-}
+};
 
 export interface Segment {
   id: string;

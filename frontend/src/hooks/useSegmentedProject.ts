@@ -230,7 +230,7 @@ export type Action =
   | { type: 'MERGE_SEGMENTS'; id: string; direction?: 'up' | 'down'; touch?: boolean }
   | { type: 'SPLIT_SEGMENT'; id: string; position: number; touch?: boolean }
   | { type: 'SELECT_SEGMENT'; id: string | undefined }
-  | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null }
+  | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null; touch?: boolean }
   | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
 /** PATCH /segments 响应里的服务端段形状（SegmentIn 子集；null 在入本地态时转 undefined） */
@@ -835,11 +835,13 @@ export function segmentedReducer(state: State, action: Action): State {
       // 清除约定：调用方写「中性 dict」（如 {applied_map_ids: []} 或
       // {lowercase_latin: null}），不要传 null —— null 会被序列化丢键，
       // 而后端对缺省字段是「保留现值」语义，backend 模式下清不掉。
+      // touch=false 时（PATCH 已显式携带 text_transforms 落库）不 bump
+      // 项目 updated_at，避免整包 PUT autosave 把 null 重新丢键覆盖回去。
       return { project: updateSegmentById(p, action.id, seg => ({
         ...seg,
         text_transforms: action.transforms ?? undefined,
         updated_at: new Date().toISOString(),
-      })) };
+      }), { touch: action.touch }) };
     }
     default:
       return state;

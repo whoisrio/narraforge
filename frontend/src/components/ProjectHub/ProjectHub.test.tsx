@@ -211,4 +211,36 @@ describe('ProjectHub', () => {
     fireEvent.change(input, { target: { files: [file] } });
     expect(onImportProject).toHaveBeenCalledWith(file);
   });
+
+  it('loading=true 时渲染 6 个骨架卡片且不显示空状态（修复误导性空状态 P0）', () => {
+    const { container } = render(
+      <ProjectHub
+        projects={[]}
+        loading
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onRenameProject={vi.fn()}
+      />,
+    );
+    const skeletons = container.querySelectorAll('article[aria-hidden="true"]');
+    expect(skeletons.length).toBe(6);
+    expect(screen.queryByText('还没有项目')).toBeNull();
+  });
+
+  it('loading=false 且无项目时渲染空状态、不渲染骨架', () => {
+    const { container } = render(
+      <ProjectHub
+        projects={[]}
+        onOpenProject={vi.fn()}
+        onCreateProject={vi.fn()}
+        onDeleteProject={vi.fn()}
+        onRenameProject={vi.fn()}
+      />,
+    );
+    const skeletons = container.querySelectorAll('article[aria-hidden="true"]');
+    expect(skeletons.length).toBe(0);
+    expect(screen.getByText('还没有项目')).toBeInTheDocument();
+  });
+
 });

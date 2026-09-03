@@ -95,9 +95,11 @@ run<T>(message: string, fn: (ctx: { signal: AbortSignal }) => Promise<T>, opts?)
 
 ## 7. i18n
 
-zh-CN / en-US 双语，收敛在 `common.loading.*` 命名空间：
+zh-CN / en-US 双语，收敛在根级 `loading.*` 命名空间（**不是** `common.loading.*`）：
 
 `projectList` / `openProject`（{name}）/ `reloadProject` / `narrationScript` / `exportAll` / `exportProject` / `slowHint` / `retry` / `waitSeconds`（{sec}）。
+
+> 命名空间取舍说明：`common.loading` 在当前 i18n 中已是一个**字符串键**（`'加载中...'`，被 VoiceClone / ModelConfig / 各 TTS 面板等 9 处当作文案使用）。若按早期草案塞进 `common.loading.*`，会把这个字符串键变成对象，导致上述 9 处 `t('common.loading')` 调用全部失效。因此实现采用根级 `loading.*`，与既有 `common.loading` 字符串键互不干扰。接入点调用统一用 `t('loading.<key>')`。
 
 ## 8. 测试策略（TDD）
 

@@ -638,6 +638,8 @@ export interface SegmentPatchBody {
   voice?: Record<string, unknown>;
   /** true = 显式解锁录音（清除 audio.current.origin，音频引用保留） */
   unlock_audio?: boolean;
+  /** 段级文本变换（小写化覆盖 / 发音映射段级引用），整字典替换，含显式 null 键（跟随项目） */
+  text_transforms?: Record<string, unknown> | null;
 }
 
 export interface SegmentPatchResponse {

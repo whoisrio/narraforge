@@ -6,6 +6,7 @@ import styles from './ProjectHub.module.css';
 
 interface ProjectHubProps {
   projects: SegmentedProject[];
+  loading?: boolean;
   onOpenProject: (projectId: string) => void;
   onCreateProject: (name: string, logo?: string | null) => void;
   onDeleteProject: (projectId: string) => void;
@@ -47,7 +48,7 @@ function projectInitial(name: string) {
   return name.trim().slice(0, 1).toUpperCase() || 'N';
 }
 
-export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteProject, onRenameProject, onExportProject, onImportProject }: ProjectHubProps) {
+export function ProjectHub({ projects, loading = false, onOpenProject, onCreateProject, onDeleteProject, onRenameProject, onExportProject, onImportProject }: ProjectHubProps) {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [openMenuProjectId, setOpenMenuProjectId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -134,6 +135,17 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
           <strong>{t('projectHub.createCard.title')}</strong>
           <small>{t('projectHub.createCard.description')}</small>
         </button>
+
+        {loading && Array.from({ length: 6 }).map((_, i) => (
+          <article key={`skeleton-${i}`} className={styles.projectCard} aria-hidden="true">
+            <div className={styles.skeletonHead} />
+            <div className={styles.skeletonBody}>
+              <span className={styles.skeletonLine} />
+              <span className={styles.skeletonLine} />
+              <span className={styles.skeletonLine} />
+            </div>
+          </article>
+        ))}
 
         {projects.map(project => {
           const stats = projectStats(project);
@@ -257,7 +269,7 @@ export function ProjectHub({ projects, onOpenProject, onCreateProject, onDeleteP
         })}
       </div>
 
-      {projects.length === 0 && (
+      {!loading && projects.length === 0 && (
         <div className={styles.emptyState}>
           <h2>{t('projectHub.emptyState.title')}</h2>
           <p>{t('projectHub.emptyState.description')}</p>

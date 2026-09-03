@@ -19,6 +19,8 @@ import { TranslationProvider, useTranslation } from './i18n';
 import { ToastProvider } from './components/ui/Toast';
 import { useToast } from './components/ui/useToast';
 import { ConfirmProvider } from './components/ui/Confirm';
+import { LoadingProvider } from './components/ui/LoadingProvider';
+import { useLoading } from './components/ui/useLoading';
 import { useConfirm } from './components/ui/useConfirm';
 import { AppShell, type GlobalNavId } from './components/AppShell/AppShell';
 import { LanguageSwitcher } from './components/LanguageSwitcher';
@@ -124,6 +126,7 @@ function AppContent() {
   const [activeTab, setActiveTab] = useState<Tab>('tts-synthesis');
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<SegmentedProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
   const [storageMode, setStorageMode] = useState<StorageMode>('frontend');
   const [storageModeLoaded, setStorageModeLoaded] = useState(false);
   const [anonBannerDismissed, setAnonBannerDismissed] = useState(false);
@@ -137,6 +140,7 @@ function AppContent() {
   const projectStorage = storageForMode(effectiveStorageMode);
   const { t } = useTranslation();
   const toast = useToast();
+  const { run } = useLoading();
   const confirm = useConfirm();
 
   // 会话彻底失效（refresh 失败）→ 跳登录页
@@ -156,16 +160,17 @@ function AppContent() {
 
   useEffect(() => {
     let cancelled = false;
-    projectStorage.listProjects()
-      .then(list => {
-        if (!cancelled) {
-          const filtered = list.filter(p => p.id !== SCRATCHPAD_PROJECT_ID);
-          setProjects(filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
-        }
-      })
-      .catch(error => console.warn('Failed to load project hub list:', error));
+    setProjectsLoading(true);
+    run(t('loading.projectList'), async () => {
+      const list = await projectStorage.listProjects();
+      if (cancelled) return;
+      const filtered = list.filter(p => p.id !== SCRATCHPAD_PROJECT_ID);
+      setProjects(filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()));
+    })
+      .catch(error => console.warn('Failed to load project hub list:', error))
+      .finally(() => { if (!cancelled) setProjectsLoading(false); });
     return () => { cancelled = true; };
-  }, [projectStorage]);
+  }, [projectStorage, run, t]);
 
   const handleSetStorageMode = async (mode: StorageMode) => {
     if (mode === 'backend' && isAnonymous) return;
@@ -258,9 +263,9 @@ function AppContent() {
         // 前端模式：本地打包（与后端同构 .narraforge.zip），不依赖后端导出端点
         const project = await projectStorage.getProject(projectId);
         if (!project) throw new Error('project_not_found');
-        await downloadProjectBundle(project);
+        await run(t('loading.exportProject'), () => downloadProjectBundle(project));
       } else {
-        await segmentedProjectApi.exportProject(projectId);
+        await run(t('loading.exportProject'), () => segmentedProjectApi.exportProject(projectId));
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : t('projectHub.import.failed'));
@@ -409,6 +414,7 @@ function AppContent() {
                 {activeTab === 'tts-synthesis' && !activeProjectId && (
                   <ProjectHub
                     projects={projects}
+                    loading={projectsLoading}
                     onOpenProject={(projectId) => setActiveProjectId(projectId)}
                     onCreateProject={(name, logo) => { void handleCreateProject(name, logo); }}
                     onDeleteProject={(projectId) => { void handleDeleteProjectFromHub(projectId); }}
@@ -459,7 +465,9 @@ export default function App() {
           <ToastProvider>
             <ConfirmProvider>
               <CapabilitiesProvider>
-                <AppContent />
+                <LoadingProvider>
+                  <AppContent />
+                </LoadingProvider>
               </CapabilitiesProvider>
             </ConfirmProvider>
           </ToastProvider>
@@ -474,7 +482,9 @@ export default function App() {
           <ToastProvider>
             <ConfirmProvider>
               <CapabilitiesProvider>
-                <AppContent />
+                <LoadingProvider>
+                  <AppContent />
+                </LoadingProvider>
               </CapabilitiesProvider>
             </ConfirmProvider>
           </ToastProvider>
