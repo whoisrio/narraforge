@@ -137,4 +137,4 @@ See `docs/ENV.md` for the full list.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
