@@ -5,7 +5,7 @@
  * 「包含该词的 segment」列表（PronunciationMapPanel）——一份搜索逻辑两处用。
  */
 import { useMemo } from 'react';
-import type { SegmentedProject } from '../types';
+import type { PronunciationMapEntry, SegmentedProject } from '../types';
 import { UPPERCASE_WORD_RE } from '../services/textTransforms';
 
 export interface SegmentSearchHit {
@@ -102,4 +102,30 @@ export function splitSnippet(snippet: string, query: string): { text: string; ma
 /** hook 版：query 变化时重算（结果按 chapters 顺序稳定）。 */
 export function useSegmentSearch(project: SegmentedProject, query: string): SegmentSearchHit[] {
   return useMemo(() => searchSegments(project, query), [project, query]);
+}
+
+/**
+ * 发音映射变更后的「待重合成」段：命中 source、映射对该段生效
+ * （项目全量应用或段级勾选）、且已有合成音频。未合成的段之后正常合成即可生效，不在此列。
+ * 返回顺序按 chapters 稳定，供批量重新合成入口使用。
+ */
+export function findStaleMappedSegmentIds(
+  project: SegmentedProject,
+  entry: Pick<PronunciationMapEntry, 'id' | 'source'>,
+  applyAll: boolean,
+): string[] {
+  const hits = searchSegments(project, entry.source);
+  if (hits.length === 0) return [];
+  const hitIds = new Set(hits.map(h => h.segmentId));
+  const ids: string[] = [];
+  for (const ch of project.chapters) {
+    for (const seg of ch.segments) {
+      if (!hitIds.has(seg.id)) continue;
+      const applied = applyAll || (seg.text_transforms?.applied_map_ids ?? []).includes(entry.id);
+      if (!applied) continue;
+      if (!seg.audio?.current?.id && !seg.audio?.current?.path) continue;
+      ids.push(seg.id);
+    }
+  }
+  return ids;
 }

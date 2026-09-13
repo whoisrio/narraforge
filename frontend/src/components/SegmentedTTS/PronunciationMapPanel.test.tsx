@@ -29,18 +29,21 @@ const GLOBAL_MAP: PronunciationMapEntry[] = [
 function renderPanel(overrides: Partial<React.ComponentProps<typeof PronunciationMapPanel>> = {}) {
   const onUpdateProjectMeta = vi.fn();
   const onSetSegmentTransforms = vi.fn();
+  const onResynthesizeSegments = vi.fn();
+  const onClose = vi.fn();
   render(
     <PronunciationMapPanel
       open
       project={makeProject()}
       globalMap={GLOBAL_MAP}
-      onClose={() => {}}
+      onClose={onClose}
       onUpdateProjectMeta={onUpdateProjectMeta}
       onSetSegmentTransforms={onSetSegmentTransforms}
+      onResynthesizeSegments={onResynthesizeSegments}
       {...overrides}
     />,
   );
-  return { onUpdateProjectMeta, onSetSegmentTransforms };
+  return { onUpdateProjectMeta, onSetSegmentTransforms, onResynthesizeSegments, onClose };
 }
 
 describe('PronunciationMapPanel', () => {
@@ -112,5 +115,46 @@ describe('PronunciationMapPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /调动 -> 掉动/ }));
     expect(screen.getByText(/全量应用发音映射/)).toBeTruthy();
     expect((screen.getAllByLabelText('应用到该段')[0] as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it('选中映射后可一键重新合成「已应用且有音频」的命中段', () => {
+    const project = makeProject({ pronunciation_map: [{ id: 'pm_1', source: '调动', target: '掉动' }] });
+    // s1 命中且有音频但未应用 pm_1；s2 命中、已引用 pm_1 且有音频
+    const s1 = project.chapters[0].segments[0];
+    s1.audio = { format: 'mp3', current: { id: 'a_s1', path: '/x/s1.mp3', origin: 'tts' } };
+    s1.status = 'ready';
+    const s2 = project.chapters[1].segments[0];
+    s2.text_transforms = { applied_map_ids: ['pm_exist', 'pm_1'] };
+    s2.audio = { format: 'mp3', current: { id: 'a_s2', path: '/x/s2.mp3', origin: 'tts' } };
+    s2.status = 'ready';
+    const { onResynthesizeSegments, onClose } = renderPanel({ project });
+    fireEvent.click(screen.getByRole('button', { name: /调动 -> 掉动/ }));
+    fireEvent.click(screen.getByRole('button', { name: '重新合成已应用命中段（1）' }));
+    expect(onResynthesizeSegments).toHaveBeenCalledWith(['s2']);
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('没有「已应用且有音频」的命中段时重新合成按钮禁用', () => {
+    const { onResynthesizeSegments } = renderPanel({
+      project: makeProject({ pronunciation_map: [{ id: 'pm_1', source: '调动', target: '掉动' }] }),
+    });
+    fireEvent.click(screen.getByRole('button', { name: /调动 -> 掉动/ }));
+    const btn = screen.getByRole('button', { name: '重新合成已应用命中段（0）' }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    fireEvent.click(btn);
+    expect(onResynthesizeSegments).not.toHaveBeenCalled();
+  });
+
+  it('删除被引用映射后，对已合成的引用段触发重新合成入口', () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    const project = makeProject({ pronunciation_map: [{ id: 'pm_exist', source: '调动', target: '掉动' }] });
+    const s2 = project.chapters[1].segments[0];
+    s2.audio = { format: 'mp3', current: { id: 'a_s2', path: '/x/s2.mp3', origin: 'tts' } };
+    s2.status = 'ready';
+    const { onResynthesizeSegments, onClose } = renderPanel({ project });
+    fireEvent.click(screen.getAllByRole('button', { name: '删除映射' })[0]);
+    expect(onResynthesizeSegments).toHaveBeenCalledWith(['s2']);
+    expect(onClose).toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 });

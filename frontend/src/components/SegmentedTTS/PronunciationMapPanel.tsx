@@ -9,7 +9,7 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from '../../i18n';
 import type { PronunciationMapEntry, SegmentTextTransforms, SegmentedProject } from '../../types';
-import { useSegmentSearch } from '../../hooks/useSegmentSearch';
+import { findStaleMappedSegmentIds, useSegmentSearch } from '../../hooks/useSegmentSearch';
 import { applyPronunciationMap, mergePronunciationMaps } from '../../services/textTransforms';
 import styles from './PronunciationMapPanel.module.css';
 
@@ -25,10 +25,12 @@ interface PronunciationMapPanelProps {
   onClose: () => void;
   onUpdateProjectMeta: (meta: { pronunciation_map?: PronunciationMapEntry[] | null }) => void;
   onSetSegmentTransforms: (segmentId: string, transforms: SegmentTextTransforms | null) => void;
+  /** 批量重新合成受影响段（由宿主注入确认弹窗 + 顺序重合成；调用后面板自行关闭） */
+  onResynthesizeSegments: (segmentIds: string[]) => void;
 }
 
 export function PronunciationMapPanel({
-  open, project, globalMap, onClose, onUpdateProjectMeta, onSetSegmentTransforms,
+  open, project, globalMap, onClose, onUpdateProjectMeta, onSetSegmentTransforms, onResynthesizeSegments,
 }: PronunciationMapPanelProps) {
   const { t } = useTranslation();
   const projectMap = useMemo(
@@ -46,6 +48,11 @@ export function PronunciationMapPanel({
 
   const selectedEntry = merged.find(e => e.source === selectedSource) ?? null;
   const hits = useSegmentSearch(project, selectedEntry?.source ?? '');
+  // 选中条目的「待重合成」段：命中 + 映射生效 + 已有音频
+  const staleIds = useMemo(
+    () => (selectedEntry ? findStaleMappedSegmentIds(project, selectedEntry, applyAll) : []),
+    [project, selectedEntry, applyAll],
+  );
 
   const segmentById = useMemo(() => {
     const m = new Map<string, { id: string; text: string; text_transforms?: SegmentTextTransforms | null }>();
@@ -87,6 +94,14 @@ export function PronunciationMapPanel({
     }
     onUpdateProjectMeta({ pronunciation_map: projectMap.filter(e => e.id !== entry.id) });
     if (selectedSource === entry.source) setSelectedSource(null);
+    // 旧映射下已合成的音频读音已过期：引用过该映射且仍有音频的段，提供一次重合成
+    const stale = referencing
+      .filter(s => s.audio?.current?.id || s.audio?.current?.path)
+      .map(s => s.id);
+    if (stale.length > 0) {
+      onResynthesizeSegments(stale);
+      onClose();
+    }
   };
 
   const handleToggleHit = (segmentId: string) => {
@@ -165,6 +180,13 @@ export function PronunciationMapPanel({
                   <span>{t('pronunciationMap.hitCount', { count: hits.length })}</span>
                   <button type="button" disabled={applyAll} onClick={handleSelectAll}>
                     {t('pronunciationMap.selectAll')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={staleIds.length === 0}
+                    onClick={() => { onResynthesizeSegments(staleIds); onClose(); }}
+                  >
+                    {t('pronunciationMap.resynthesizeApplied', { count: staleIds.length })}
                   </button>
                 </div>
                 <ul>

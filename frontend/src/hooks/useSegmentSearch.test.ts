@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SegmentedProject } from '../types';
-import { findUppercaseSegments, searchSegments, splitSnippet } from './useSegmentSearch';
+import { findStaleMappedSegmentIds, findUppercaseSegments, searchSegments, splitSnippet } from './useSegmentSearch';
 
 function makeProject(): SegmentedProject {
   const voice = { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' };
@@ -87,5 +87,55 @@ describe('findUppercaseSegments', () => {
     const p = makeProject();
     p.chapters[0].segments[0].text = 'I think Http works';
     expect(findUppercaseSegments(p)).toEqual([]);
+  });
+});
+
+describe('findStaleMappedSegmentIds', () => {
+  const entry = { id: 'pm_1', source: '调动', target: '掉动' };
+
+  function makeMappedProject(): SegmentedProject {
+    const voice = { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' };
+    const seg = (
+      id: string, text: string,
+      opts?: { applied?: string[]; withAudio?: boolean },
+    ) => ({
+      id, text, position: 0, voice: { source: 'chapter' as const },
+      status: (opts?.withAudio ? 'ready' : 'idle') as 'ready' | 'idle',
+      audio: opts?.withAudio
+        ? { format: 'mp3', current: { id: `a_${id}`, path: `/x/${id}.mp3`, origin: 'tts' as const } }
+        : { format: 'mp3' },
+      segment_kind: 'narration' as const,
+      text_transforms: opts?.applied ? { applied_map_ids: opts.applied } : null,
+      created_at: 'x', updated_at: 'x',
+    });
+    return {
+      schema_version: 2, id: 'p', name: 'P', layout: 'vertical',
+      active_chapter_id: 'c1', created_at: 'x', updated_at: 'x',
+      chapters: [
+        { id: 'c1', name: 'c1', voice, split_config: { delimiters: ['。'], mode: 'rule' }, created_at: 'x', updated_at: 'x',
+          segments: [
+            // s1: 命中 + 已应用 + 有音频 → 待重合成
+            seg('s1', '他调动了队伍。', { applied: ['pm_1'], withAudio: true }),
+            // s2: 命中 + 有音频但未勾选应用 → 非全量时不重合成
+            seg('s2', '再次调动人马。', { withAudio: true }),
+            // s3: 命中 + 已应用但无音频 → 之后正常合成即生效
+            seg('s3', '他调动了队伍。', { applied: ['pm_1'] }),
+            // s4: 已应用 + 有音频但文本不命中 → 与该映射无关
+            seg('s4', '队伍整装待发。', { applied: ['pm_1'], withAudio: true }),
+          ] },
+      ],
+    };
+  }
+
+  it('只返回命中且映射已应用且已有音频的段', () => {
+    expect(findStaleMappedSegmentIds(makeMappedProject(), entry, false)).toEqual(['s1']);
+  });
+
+  it('applyAll 时命中且有音频即返回，无需段级勾选', () => {
+    expect(findStaleMappedSegmentIds(makeMappedProject(), entry, true)).toEqual(['s1', 's2']);
+  });
+
+  it('空/空白 source 返回空', () => {
+    expect(findStaleMappedSegmentIds(makeMappedProject(), { ...entry, source: '  ' }, false)).toEqual([]);
   });
 });

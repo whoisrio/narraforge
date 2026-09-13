@@ -1287,6 +1287,9 @@ export const zhCN = {
     deleteConfirmWithRefs: '{count} 个段正在引用该映射，删除后将同时清理这些引用。确认删除？',
     errorSourceEmpty: '映射原文不能为空',
     errorSourceDuplicate: '同一字典内映射原文必须唯一',
+    resynthesizeApplied: '重新合成已应用命中段（{count}）',
+    resynthesizeConfirmTitle: '重新合成受影响段',
+    noStaleSegments: '没有需要重新合成的已合成段',
   },
   projectVoices: {
     roleSampleText: '你好，我是这个角色的声音。请确认语气、节奏和音色是否符合当前场景。',

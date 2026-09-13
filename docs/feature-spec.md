@@ -276,6 +276,8 @@ Fixes mispronunciations by replacing source text before it is sent to the TTS en
 - Project-level `configs.pronunciation_apply_all` (project settings toggle) makes the whole effective map apply to every segment with no per-segment selection.
 - At synthesis, replacements are applied longest-source-first in a single pass (no recursion); both local and workers pipelines run the same pure functions (`backend/app/services/text_transform_service.py`), and the frontend mirror (`frontend/src/services/textTransforms.ts`) covers preview + frontend-storage local synthesis. The final engine text is recorded in `generated_params.effective_text`.
 - Deleting a referenced entry asks for confirmation, then cleans up `applied_map_ids` on the referencing segments (regular auto-save); dangling ids are simply ignored at synthesis.
+- Map changes never invalidate existing audio automatically.
+- The panel offers a "重新合成已应用命中段" entry (per selected entry, and once more after a delete) that re-triggers TTS for segments which match the source, have the mapping applied, and already hold audio; it reuses the batch regenerate pipeline (confirm dialog, sequential synthesis, progress bar) and skips recorded-locked segments.
 - Applied segments show a 🗣 badge with count and source->target tooltip (SegmentRow).
 
 #### ALL-CAPS Latin Lowercase (大写词转小写)
