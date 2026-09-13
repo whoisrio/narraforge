@@ -138,4 +138,4 @@ docker-compose up --build
 
 ## License
 
-MIT
+MIT，详见 [LICENSE](LICENSE)。
