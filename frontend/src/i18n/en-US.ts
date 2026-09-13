@@ -1289,6 +1289,9 @@ export const enUS: Messages = {
     deleteConfirmWithRefs: '{count} segments reference this mapping; deleting also removes those references. Continue?',
     errorSourceEmpty: 'Source text cannot be empty',
     errorSourceDuplicate: 'Source text must be unique within a dictionary',
+    resynthesizeApplied: 'Re-synthesize applied hits ({count})',
+    resynthesizeConfirmTitle: 'Re-synthesize affected segments',
+    noStaleSegments: 'No synthesized segments need re-synthesis',
   },
   projectVoices: {
     roleSampleText: 'Hello, I am this character\'s voice. Please confirm if the tone, rhythm, and voice suit the current scene.',

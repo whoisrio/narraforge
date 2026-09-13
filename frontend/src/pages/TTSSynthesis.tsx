@@ -1790,7 +1790,7 @@ export function TTSSynthesis({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating, activeChapter.segments, showToast]);
 
-  const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments, mode: BatchSynthesizeMode = 'all') => {
+  const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments, mode: BatchSynthesizeMode = 'all', progressLabel?: string) => {
     setGenerating(true);
     produceAllAbortRef.current = false;
     try {
@@ -1815,7 +1815,7 @@ export function TTSSynthesis({
       // Step 3: Generate sequentially to avoid rate-limiting external TTS services
       // 本章节批量与全本共用 produceAllRun 进度条/停止入口：contextBar 常显进度，
       // 段间停止——当前段跑完即停，已合成段保留、未合成段保持 queued/idle。
-      setProduceAllRun({ running: true, mode, total: toRegenerate.length, done: 0, currentChapterName: activeChapter.name, startedAt: Date.now() });
+      setProduceAllRun({ running: true, mode, total: toRegenerate.length, done: 0, currentChapterName: progressLabel ?? activeChapter.name, startedAt: Date.now() });
       let doneCount = 0;
       for (const seg of toRegenerate) {
         if (produceAllAbortRef.current) break;
@@ -1838,6 +1838,36 @@ export function TTSSynthesis({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, showToast]);
+
+  // 发音映射变更后的定向重合成入口（PronunciationMapPanel 注入）：
+  // 跨章节解析目标段，复用 doRegenerateAll 的草稿冲刷/清音频/排队/顺序合成/进度条。
+  const handleResynthesizeSegments = useCallback((segmentIds: string[]) => {
+    if (generating) return;
+    const idSet = new Set(segmentIds);
+    const matched = projectRef.current.chapters.flatMap(ch => ch.segments).filter(s => idSet.has(s.id));
+    // 与批量合成一致：已录入音频的锁定段跳过；无音频段之后正常合成即生效
+    const toRegenerate = matched.filter(s =>
+      s.audio.current?.origin !== 'recorded' && (s.audio.current?.id || s.audio.current?.path));
+    if (toRegenerate.length === 0) {
+      showToast(t('pronunciationMap.noStaleSegments'));
+      return;
+    }
+    const lockedCount = matched.length - toRegenerate.length;
+    const lines = [t('tts.willRegenerateN', { count: toRegenerate.length })];
+    if (lockedCount > 0) lines.push(t('tts.nLockedSegmentsUnchanged', { count: lockedCount }));
+    setConfirmDialog({
+      open: true,
+      title: t('pronunciationMap.resynthesizeConfirmTitle'),
+      message: lines.join('\n'),
+      variant: 'warning',
+      confirmLabel: t('tts.regenerate'),
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, open: false }));
+        await doRegenerateAll(toRegenerate, 'all', projectRef.current.name);
+      },
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generating, showToast, doRegenerateAll]);
 
   const handleProduceAll = useCallback(async (mode: BatchSynthesizeMode) => {
     if (generating) return;
@@ -2615,6 +2645,7 @@ export function TTSSynthesis({
                 onClose={() => setPronunciationPanelOpen(false)}
                 onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}
                 onSetSegmentTransforms={(id, transforms) => dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id, transforms })}
+                onResynthesizeSegments={handleResynthesizeSegments}
               />
               {recordSegmentId && (() => {
                 const recordSeg = activeChapter.segments.find(s => s.id === recordSegmentId);
