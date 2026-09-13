@@ -55,7 +55,7 @@ export function VoiceStudioLayout({
         {!sidePanelCollapsed && (
           <>
             <div className={styles.sidePanelHeader}>
-              <span className={styles.sidePanelTitle}>语音设置</span>
+              <span className={styles.sidePanelTitle}>{t('studio.sidePanelTitle')}</span>
             </div>
             <div className={styles.sidePanelBody}>
               {sidebarContent}
@@ -66,11 +66,11 @@ export function VoiceStudioLayout({
           type="button"
           className={styles.collapseButton}
           data-testid="voice-studio-side-panel-toggle"
-          aria-label={sidePanelCollapsed ? '展开右侧面板' : '收起右侧面板'}
+          aria-label={sidePanelCollapsed ? t('studio.expandSidePanel') : t('studio.collapseSidePanel')}
           onClick={() => toggleCollapsed(!sidePanelCollapsed)}
         >
           <span>{sidePanelCollapsed ? '‹' : '›'}</span>
-          {!sidePanelCollapsed && <span>收起</span>}
+          {!sidePanelCollapsed && <span>{t('studio.collapsePanel')}</span>}
         </button>
       </aside>
 
@@ -79,14 +79,14 @@ export function VoiceStudioLayout({
           type="button"
           className={styles.transportToggle}
           onClick={() => setTransportCollapsed(!transportCollapsed)}
-          aria-label={transportCollapsed ? '展开工具栏' : '收起工具栏'}
+          aria-label={transportCollapsed ? t('studio.expandToolbar') : t('studio.collapseToolbar')}
         >
           {transportCollapsed ? '▲' : '▼'}
-          {transportCollapsed && <span className={styles.transportToggleLabel}>工具栏</span>}
+          {transportCollapsed && <span className={styles.transportToggleLabel}>{t('studio.toolbar')}</span>}
         </button>
         {!transportCollapsed && (
         <div className={styles.exportGroup}>
-          <span className={styles.remotionPath}>{remotionPath || '未设置 Remotion 路径'}</span>
+          <span className={styles.remotionPath}>{remotionPath || t('studio.remotionPathNotSet')}</span>
           {onProduceAll && (
             <BatchSynthesizeMenu
               label={t('studio.produceAll')}

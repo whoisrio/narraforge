@@ -66,7 +66,7 @@ export function ProjectShell({
   projectSubtitle,
   projectId,
   activeSection,
-  chapterName = '未选择章节',
+  chapterName,
   segmentCount = 0,
   generatedCount = 0,
   durationSec = 0,
@@ -272,7 +272,7 @@ export function ProjectShell({
                       <button
                         type="button"
                         className={styles.chapterListSelect}
-                        aria-label={`选择章节 ${chapter.name}`}
+                        aria-label={t('projectShell.selectChapter', { name: chapter.name })}
                         onClick={() => onSelectChapter?.(chapter.id)}
                       >
                         <span className={styles.chapterListIndex}>{String(index + 1).padStart(2, '0')}</span>
@@ -304,14 +304,14 @@ export function ProjectShell({
                           <button
                             type="button"
                             className={styles.chapterItemAction}
-                            aria-label={`重命名 ${chapter.name}`}
+                            aria-label={t('projectShell.renameChapter', { name: chapter.name })}
                             onClick={() => startRename(chapter)}
                           >✎</button>
                           {chapters.length > 1 && (
                             <button
                               type="button"
                               className={styles.chapterItemActionDanger}
-                              aria-label={`删除 ${chapter.name}`}
+                              aria-label={t('projectShell.deleteChapter', { name: chapter.name })}
                               onClick={() => onDeleteChapter?.(chapter.id)}
                             >⌫</button>
                           )}
@@ -330,7 +330,7 @@ export function ProjectShell({
                 disabled={createChapterDisabled}
                 title={createChapterDisabled ? createChapterDisabledHint : undefined}
               >
-                {!collapsed ? '+ 新建章节' : '+'}
+                {!collapsed ? t('projectShell.newChapter') : '+'}
               </button>
             )}
           </div>
@@ -351,11 +351,11 @@ export function ProjectShell({
         <button
           type="button"
           className={styles.collapseButton}
-          aria-label={collapsed ? '展开项目导航' : '收起项目导航'}
+          aria-label={collapsed ? t('projectShell.expandNav') : t('projectShell.collapseNav')}
           onClick={() => setCollapsed(value => !value)}
         >
           <span>{collapsed ? '›' : '‹'}</span>
-          {!collapsed && <span>收起</span>}
+          {!collapsed && <span>{t('projectShell.collapse')}</span>}
         </button>
       </aside>
 
@@ -365,7 +365,7 @@ export function ProjectShell({
             <span>{projectName}</span>
             <span>/</span>
             <strong>{t(`projectNav.${activeSection}`)}</strong>
-            <span className={styles.inlineMeta}>/ {chapterName} · {segmentCount} 段 · {generatedCount} 已生成 · {formatDuration(durationSec)}</span>
+            <span className={styles.inlineMeta}>/ {t('projectShell.contextMeta', { chapter: chapterName ?? t('projectShell.noChapter'), segments: segmentCount, generated: generatedCount, duration: formatDuration(durationSec) })}</span>
           </div>
           {produceAllRun?.running && (
             <div className={styles.produceAllProgress} data-testid="produce-all-progress">

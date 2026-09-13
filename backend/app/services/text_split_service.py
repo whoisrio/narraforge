@@ -9,7 +9,7 @@
 
 import logging
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -59,7 +59,6 @@ def markdown_detect(
         return {"doc_title": None, "candidates": [], "chapters": [], "total_chars": 0}
 
     lines = text.splitlines(keepends=True)
-    n = len(lines)
     line_offsets: list[int] = [0]
     for ln in lines:
         line_offsets.append(line_offsets[-1] + len(ln))
@@ -124,6 +123,18 @@ def markdown_detect(
     }
 
 
+def _default_titles(text: str) -> dict[str, str]:
+    """按文稿主要文种选择默认章节标题（无标题整篇 / 引言）。
+
+    判定：CJK 表意字符数 >= 拉丁字母数视为中文文档，否则按英文文档给标题。
+    """
+    cjk = sum(1 for ch in text if "一" <= ch <= "鿿")
+    latin = sum(1 for ch in text if ch.isascii() and ch.isalpha())
+    if cjk > 0 and cjk >= latin:
+        return {"full": "全文", "intro": "引言", "intro_suffix": "(含引言)"}
+    return {"full": "Full Document", "intro": "Introduction", "intro_suffix": "(with introduction)"}
+
+
 def _build_chapters(
     text: str,
     candidates: list[dict],
@@ -150,7 +161,7 @@ def _build_chapters(
         # 无任何标题: 整篇当 1 章
         return [{
             "index": 0,
-            "title": "全文",
+            "title": _default_titles(text)["full"],
             "level": 0,
             "start_char": 0,
             "end_char": len(text),
@@ -176,13 +187,14 @@ def _build_chapters(
     if first_start > 0:
         fm_text = text[:first_start].strip()
         if fm_text:
+            titles = _default_titles(text)
             if front_matter_mode == "prepend_to_first":
                 raw_chapters[0]["start_char"] = 0
                 raw_chapters[0]["char_count"] = raw_chapters[0]["end_char"]
-                raw_chapters[0]["title"] = f"{raw_chapters[0]['title']} (含引言)"
+                raw_chapters[0]["title"] = f"{raw_chapters[0]['title']} {titles['intro_suffix']}"
             elif front_matter_mode == "own_chapter":
                 raw_chapters.insert(0, {
-                    "title": "引言",
+                    "title": titles["intro"],
                     "level": 0,
                     "start_char": 0,
                     "end_char": first_start,
@@ -266,12 +278,25 @@ def _cap_overlong(segments: list[str], max_len: int | None, delimiters: list[str
 def _cap_one(seg: str, max_len: int, punct: set[str]) -> list[str]:
     if len(seg) <= max_len:
         return [seg]
-    cut = max_len  # 兜底：硬切
-    for i in range(min(max_len, len(seg)) - 1, 0, -1):
+    window = range(min(max_len, len(seg)) - 1, 0, -1)
+    cut = 0
+    for i in window:
         if seg[i] in punct:
             cut = i + 1  # 标点留在前段
             break
-    head, rest = seg[:cut], seg[cut:].strip()
+    if not cut:
+        # 无标点：退到 max_len 内最后一个空白处切（英文等分词语言不拆单词）；
+        # 连空白都没有（长串中文/无空格文本）才硬切在 max_len。
+        for i in window:
+            if seg[i].isspace():
+                cut = i
+                break
+    if not cut:
+        cut = max_len
+    head, rest = seg[:cut].rstrip(), seg[cut:].strip()
+    if not head:
+        # 极端情况：空白恰好在开头，rstrip 后为空 → 硬切保证前进
+        head, rest = seg[:max_len], seg[max_len:].strip()
     return [head] + (_cap_one(rest, max_len, punct) if rest else [])
 
 
@@ -359,8 +384,7 @@ class SplitResult:
 
 
 # Re-export so monkeypatch in tests can target this module's binding.
-from app.services.llm_client import get_llm_config  # noqa: E402
-
+from app.services.llm_client import get_llm_config
 
 _SPLIT_PROMPT_TEMPLATE = """你是中文文本分句助手。请将下面这段文本按语义和语气节奏拆成多个短句，便于
 逐句进行语音合成。

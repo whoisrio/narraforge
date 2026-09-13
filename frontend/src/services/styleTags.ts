@@ -33,13 +33,15 @@ export function getStyleCapability(engine: string): EngineStyleCapability {
   return ENGINE_CAPABILITIES[engine as StyleTagEngine] ?? { inline: false, leading: false, instruction: false };
 }
 
+export type Translator = (key: string, variables?: Record<string, string | number>) => string;
+
 /** 引擎 tag 能力一句话描述（引擎选择面板用）。 */
-export function describeEngineCapability(engine: string): string {
+export function describeEngineCapability(engine: string, t: Translator): string {
   const cap = getStyleCapability(engine);
-  if (cap.inline && cap.leading) return '位置 tag + 开头风格';
-  if (cap.leading) return '开头风格标签';
-  if (cap.instruction) return '仅指令';
-  return '不支持';
+  if (cap.inline && cap.leading) return t('styleTags.capPosAndLeading');
+  if (cap.leading) return t('styleTags.capLeadingOnly');
+  if (cap.instruction) return t('styleTags.capInstructionOnly');
+  return t('styleTags.capNone');
 }
 
 /** emotion → 开头风格标签（mimo/voxcpm leading tag 用）。 */
@@ -71,16 +73,16 @@ export function normalizeVoxcpmMode(mode: string): 'tts_design' | 'clone' | 'ult
 /** voxcpm inline tag 白名单（分类菜单与清洗共用）。 */
 export interface StyleTagCategory {
   key: string;
-  label: string;
+  labelKey: string;
   tags: string[];
 }
 
 export const STYLE_TAG_CATEGORIES: StyleTagCategory[] = [
-  { key: 'laugh_cry', label: '哭笑', tags: ['[laughing]'] },
-  { key: 'sigh', label: '叹息', tags: ['[sigh]'] },
-  { key: 'pause', label: '停顿思考', tags: ['[Uhm]', '[Shh]'] },
-  { key: 'question', label: '疑问', tags: ['[Question-ah]', '[Question-ei]', '[Question-en]', '[Question-oh]'] },
-  { key: 'emotion', label: '情绪', tags: ['[Surprise-wa]', '[Surprise-yo]', '[Dissatisfaction-hnn]'] },
+  { key: 'laugh_cry', labelKey: 'styleTags.groupLaughCry', tags: ['[laughing]'] },
+  { key: 'sigh', labelKey: 'styleTags.groupSigh', tags: ['[sigh]'] },
+  { key: 'pause', labelKey: 'styleTags.groupPauseThink', tags: ['[Uhm]', '[Shh]'] },
+  { key: 'question', labelKey: 'styleTags.groupQuestion', tags: ['[Question-ah]', '[Question-ei]', '[Question-en]', '[Question-oh]'] },
+  { key: 'emotion', labelKey: 'styleTags.groupEmotion', tags: ['[Surprise-wa]', '[Surprise-yo]', '[Dissatisfaction-hnn]'] },
 ];
 
 export const VOXCPM_INLINE_TAGS: string[] = STYLE_TAG_CATEGORIES.flatMap((c) => c.tags);

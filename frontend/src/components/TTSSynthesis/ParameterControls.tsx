@@ -9,9 +9,9 @@ interface ParameterControlsProps {
 }
 
 const LANGUAGE_OPTIONS = [
-  { value: 'Chinese', label: '中文' },
+  { value: 'Chinese', labelKey: 'common.langZh' },
   { value: 'English', label: 'English' },
-  { value: 'Japanese', label: '日本語' },
+  { value: 'Japanese', labelKey: 'common.langJa' },
   { value: 'Korean', label: '한국어' },
 ] as const;
 
@@ -130,7 +130,7 @@ export function ParameterControls({ params, onParamChange }: ParameterControlsPr
               onChange={(e) => onParamChange({ ...params, language: e.target.value as TTSRequest['language'] })}
             >
               {LANGUAGE_OPTIONS.map(opt => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                <option key={opt.value} value={opt.value}>{'labelKey' in opt ? t(opt.labelKey) : opt.label}</option>
               ))}
             </select>
           </div>

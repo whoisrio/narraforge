@@ -178,6 +178,43 @@ def test_rule_split_max_len_uses_secondary_punctuation():
     assert result == ["我" * 60 + "：", "我" * 69 + "。"]
 
 
+def test_rule_split_max_len_english_cuts_at_word_boundary():
+    """英文段无标点可切时，在 max_len 内最后一个空格处切，不把单词拆开。"""
+    from app.services.text_split_service import rule_split
+    # 与真实事故语句同构：前 80 字内没有标点，硬切会把 audio 拆成 au/dio
+    text = (
+        "and you have to regenerate the TTS for that whole segment "
+        "which changes the audio length of the narration track"
+    )
+    result = rule_split(text, ["。"], max_len=80)
+    assert len(result) > 1
+    assert all(len(s) <= 80 for s in result)
+    # token 级校验：结果的每个词都必须完整出现在原文中（拆词会产生 "au"/"dio" 之类的碎片）
+    original_tokens = set(text.split())
+    for seg in result:
+        for token in seg.split():
+            assert token in original_tokens, f"fragmented token {token!r} in {seg!r}"
+    # 还原（空白归一）后必须等于原文
+    assert " ".join(" ".join(result).split()) == text
+
+
+def test_rule_split_max_len_english_prefers_punctuation_over_whitespace():
+    """窗口内既有标点又有空格时，仍优先最近的标点（旧语义不变）。"""
+    from app.services.text_split_service import rule_split
+    text = "hello world, " + "word " * 20  # 逗号在 offset 11，窗口内
+    result = rule_split(text, ["。"], max_len=40)
+    assert result[0] == "hello world,"
+
+
+def test_rule_split_max_len_no_whitespace_still_hard_cuts():
+    """无标点也无空格（长串英文/中文）→ 维持硬切兜底。"""
+    from app.services.text_split_service import rule_split
+    text = "a" * 150
+    result = rule_split(text, ["。"], max_len=80)
+    assert result == ["a" * 80, "a" * 70]
+
+
+
 # ------- llm_split -------
 
 
@@ -345,3 +382,43 @@ def test_ssml_annotate_allows_whitelisted_tags(monkeypatch):
     result = text_split_service.ssml_annotate(["你好"])
     assert "<prosody" in result.annotations[0]["ssml"]
     assert "<emphasis" in result.annotations[0]["ssml"]
+
+# ------- markdown 章节默认标题的多语言 -------
+
+def test_markdown_split_english_doc_uses_english_default_titles():
+    """英文文档：无标题整篇一章 → 'Full Document'；front matter 独立成章 → 'Introduction'。"""
+    from app.services.text_split_service import markdown_split
+    text = (
+        "This is an English narration document without any headings. "
+        "It should become a single chapter with an English default title."
+    )
+    chapters = markdown_split(text, levels=[2])
+    assert chapters[0]["title"] == "Full Document"
+
+
+def test_markdown_split_english_front_matter_titles():
+    """英文 front matter：prepend 模式标题带 '(with introduction)'；own_chapter 模式叫 'Introduction'。"""
+    from app.services.text_split_service import markdown_split
+    text = (
+        "An English introduction paragraph that sets the background for the document.\n\n"
+        "## First Chapter\n\n"
+        + "Body text of the first chapter. " * 10
+    )
+    prepended = markdown_split(text, levels=[2], min_chars=0, front_matter_mode="prepend_to_first")
+    assert "(with introduction)" in prepended[0]["title"]
+    own = markdown_split(text, levels=[2], min_chars=0, front_matter_mode="own_chapter")
+    assert own[0]["title"] == "Introduction"
+
+
+def test_markdown_split_chinese_doc_keeps_chinese_titles():
+    """中文文档行为不变：整篇 '全文'，front matter '引言' / '(含引言)'。"""
+    from app.services.text_split_service import markdown_split
+    text = "这是一段没有任何标题的中文旁白文档，应该整篇成为一个章节并使用中文默认标题。"
+    chapters = markdown_split(text, levels=[2])
+    assert chapters[0]["title"] == "全文"
+
+    text2 = "这是一段引言，说明本文背景。\n\n## 第一章\n\n" + "第一章正文内容。" * 20
+    prepended = markdown_split(text2, levels=[2], min_chars=0, front_matter_mode="prepend_to_first")
+    assert "含引言" in prepended[0]["title"]
+    own = markdown_split(text2, levels=[2], min_chars=0, front_matter_mode="own_chapter")
+    assert own[0]["title"] == "引言"

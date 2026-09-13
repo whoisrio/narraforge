@@ -1135,9 +1135,9 @@ function VoiceRoleEditor({
                       </label>
                       <label className={styles.paramField}>{t('tts.language')}
                         <select className={styles.paramSelect} value={(vox?.engine === 'indextts' ? (vox as IndexTTSParams).lang : undefined) || 'ZH'} onChange={(event) => setParams({ lang: event.target.value })}>
-                          <option value="ZH">中文</option>
+                          <option value="ZH">{t('common.langZh')}</option>
                           <option value="EN">English</option>
-                          <option value="JA">日本語</option>
+                          <option value="JA">{t('common.langJa')}</option>
                           <option value="ES">Español</option>
                           <option value="AR">العربية</option>
                         </select>

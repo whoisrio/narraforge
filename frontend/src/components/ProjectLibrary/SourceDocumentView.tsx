@@ -40,7 +40,7 @@ export function SourceDocumentView({
         />
       ) : (
         <div className={styles.previewArea}>
-          <Markdown>{content || '*（空文档）*'}</Markdown>
+          <Markdown>{content || t('projectLibrary.sourceDocEmpty')}</Markdown>
         </div>
       )}
     </div>

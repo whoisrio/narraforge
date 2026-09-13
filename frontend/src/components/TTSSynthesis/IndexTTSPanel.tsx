@@ -188,9 +188,9 @@ export function IndexTTSPanel({
             value={lang}
             onChange={e => onLangChange(e.target.value as NonNullable<IndexTTSParams['lang']>)}
           >
-            <option value="ZH">中文</option>
+            <option value="ZH">{t('common.langZh')}</option>
             <option value="EN">English</option>
-            <option value="JA">日本語</option>
+            <option value="JA">{t('common.langJa')}</option>
             <option value="ES">Español</option>
             <option value="AR">العربية</option>
           </select>

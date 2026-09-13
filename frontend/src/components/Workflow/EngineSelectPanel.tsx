@@ -90,7 +90,7 @@ export function EngineSelectPanel({ interrupt, onRespond }: Props) {
               {ENGINE_LABELS[engine] ?? engine}
               {engine === default_engine && <span className={styles.defaultBadge}>{t('workflow.engineSelect.defaultBadge')}</span>}
             </span>
-            <span className={styles.engineCap}>{describeEngineCapability(engine)}</span>
+            <span className={styles.engineCap}>{describeEngineCapability(engine, t)}</span>
           </button>
         ))}
       </div>

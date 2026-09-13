@@ -1,4 +1,5 @@
 import type { TextAnalysisSplitResult } from '../../services/api';
+import { useTranslation } from '../../i18n';
 import styles from './ApplyAnalysisDialog.module.css';
 
 interface ConflictInfo {
@@ -16,25 +17,26 @@ interface Props {
 }
 
 export function ApplyAnalysisDialog({ conflict, onCancel, onConfirm }: Props) {
+  const { t } = useTranslation();
   const hasChapterConflict = conflict.existingChapters > 0;
   const hasRoleConflict = conflict.existingRoles > 0;
 
-  let title = '应用分析结果';
+  let title = t('applyAnalysis.titleApply');
   let icon = '✅';
-  let message = `识别出 ${conflict.newChapters} 个章节、${conflict.newRoles.length} 个角色，将创建到项目中。`;
+  let message = t('applyAnalysis.newOnly', { chapters: conflict.newChapters, roles: conflict.newRoles.length });
 
   if (hasChapterConflict && hasRoleConflict) {
-    title = '覆盖已有内容？';
+    title = t('applyAnalysis.titleOverwriteAll');
     icon = '⚠️';
-    message = `已有 ${conflict.existingChapters} 个章节和 ${conflict.existingRoles} 个角色。\n\n当前分析结果：${conflict.newChapters} 个章节、${conflict.newRoles.length} 个角色。\n\n确认后将删除全部已有章节（含关联音频），覆盖同名角色，保留其余角色。`;
+    message = t('applyAnalysis.withExisting', { existingChapters: conflict.existingChapters, existingRoles: conflict.existingRoles, newChapters: conflict.newChapters, newRoles: conflict.newRoles.length });
   } else if (hasChapterConflict) {
-    title = '覆盖已有章节？';
+    title = t('applyAnalysis.titleOverwriteChapters');
     icon = '⚠️';
-    message = `已有 ${conflict.existingChapters} 个章节。\n\n分析结果识别出 ${conflict.newChapters} 个章节。\n\n确认后将清除已有章节，用分析结果替换。`;
+    message = t('applyAnalysis.chaptersOnly', { existingChapters: conflict.existingChapters, newChapters: conflict.newChapters });
   } else if (hasRoleConflict) {
-    title = '覆盖同名角色？';
+    title = t('applyAnalysis.titleOverwriteRoles');
     icon = '⚠️';
-    message = `已有 ${conflict.existingRoles} 个角色，其中与分析结果同名的将被替换。\n\n分析结果识别出 ${conflict.newRoles.length} 个新角色。\n\n将删除同名旧角色（含关联音频），保留其余角色，追加新角色。`;
+    message = t('applyAnalysis.rolesOnly', { existingRoles: conflict.existingRoles, newRoles: conflict.newRoles.length });
   }
 
   return (
@@ -51,9 +53,9 @@ export function ApplyAnalysisDialog({ conflict, onCancel, onConfirm }: Props) {
           </ul>
         )}
         <div className={styles.actions}>
-          <button className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>取消</button>
+          <button className={`${styles.btn} ${styles.btnCancel}`} onClick={onCancel}>{t('common.cancel')}</button>
           <button className={`${styles.btn} ${styles.btnConfirm}`} onClick={onConfirm}>
-            {hasChapterConflict ? '确认覆盖' : '确认应用'}
+            {hasChapterConflict ? t('applyAnalysis.confirmOverwrite') : t('applyAnalysis.confirmApply')}
           </button>
         </div>
       </div>

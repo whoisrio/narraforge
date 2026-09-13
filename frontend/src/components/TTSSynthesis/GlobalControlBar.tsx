@@ -72,7 +72,7 @@ export function GlobalControlBar({
   return (
     <div className={styles.panel}>
       {/* Voice Selector */}
-      <label className={styles.fieldLabel}>全局音色</label>
+      <label className={styles.fieldLabel}>{t('tts.globalVoice')}</label>
       <div className={styles.voiceSelectWrap} ref={dropdownRef}>
         <button className={styles.voiceSelect} onClick={() => setShowVoiceDropdown(!showVoiceDropdown)}>
           <VoiceAvatar name={selectedVoice?.name || '?'} size={24} />
@@ -89,10 +89,10 @@ export function GlobalControlBar({
                   className={styles.ctaCloneBtn}
                   onClick={(e) => { e.stopPropagation(); onNavigateToClone(); }}
                 >
-                  暂无音色，去复刻
+                  {t('tts.noVoicesGoClone')}
                 </button>
               ) : (
-                <div className={styles.dropdownEmpty}>暂无克隆声音</div>
+                <div className={styles.dropdownEmpty}>{t('tts.noCloneVoices')}</div>
               )
             )}
             {voices.map(v => {
@@ -107,7 +107,7 @@ export function GlobalControlBar({
                   <VoiceAvatar name={v.name} size={28} />
                   <div className={styles.dropdownInfo}>
                     <span className={styles.dropdownName}>{v.name}</span>
-                    <span className={styles.dropdownMeta}>克隆</span>
+                    <span className={styles.dropdownMeta}>{t('tts.cloneBadge')}</span>
                   </div>
                   {isSelected && <span className={styles.checkmark}>✓</span>}
                 </button>
@@ -120,7 +120,7 @@ export function GlobalControlBar({
       {/* Speed */}
       <div className={styles.sliderRow}>
         <div className={styles.sliderHeader}>
-          <span className={styles.fieldLabel}>语速</span>
+          <span className={styles.fieldLabel}>{t('tts.speed')}</span>
           <span className={styles.paramValue}>{speed.toFixed(1)}×</span>
         </div>
         <input
@@ -134,7 +134,7 @@ export function GlobalControlBar({
       {/* Volume */}
       <div className={styles.sliderRow}>
         <div className={styles.sliderHeader}>
-          <span className={styles.fieldLabel}>音量</span>
+          <span className={styles.fieldLabel}>{t('tts.volume')}</span>
           <span className={styles.paramValue}>{volume}</span>
         </div>
         <input
@@ -148,7 +148,7 @@ export function GlobalControlBar({
       {/* Pitch */}
       <div className={styles.sliderRow}>
         <div className={styles.sliderHeader}>
-          <span className={styles.fieldLabel}>语调</span>
+          <span className={styles.fieldLabel}>{t('tts.pitch')}</span>
           <span className={styles.paramValue}>{pitch.toFixed(1)}</span>
         </div>
         <input
@@ -160,15 +160,15 @@ export function GlobalControlBar({
       </div>
 
       {/* Language */}
-      <label className={styles.fieldLabel}>语言</label>
+      <label className={styles.fieldLabel}>{t('tts.language')}</label>
       <select
         className={styles.langSelect}
         value={language}
         onChange={e => onLanguageChange(e.target.value)}
       >
-        <option value="Chinese">中文</option>
+        <option value="Chinese">{t('common.langZh')}</option>
         <option value="English">English</option>
-        <option value="Japanese">日本語</option>
+        <option value="Japanese">{t('common.langJa')}</option>
         <option value="Korean">한국어</option>
       </select>
 
@@ -176,7 +176,7 @@ export function GlobalControlBar({
       {(onInstructionChange || onSsmlToggle || onMarkdownFilterToggle) && (
         <button className={styles.advancedToggle} onClick={() => setShowAdvanced(!showAdvanced)}>
           <span className={styles.advancedCaret}>{showAdvanced ? '▾' : '▸'}</span>
-          高级选项
+          {t('tts.advancedOptions')}
         </button>
       )}
 
@@ -187,7 +187,7 @@ export function GlobalControlBar({
             <StyleInstructionPicker
               value={instruction || ''}
               onChange={onInstructionChange}
-              label="风格指令"
+              label={t('voxcpm.styleInstruction')}
               placeholder={t("placeholders.presetOrInput")}
               dense
             />
@@ -207,7 +207,7 @@ export function GlobalControlBar({
                   className={`${styles.toggleChip} ${enableMarkdownFilter ? styles.toggleChipOn : ''}`}
                   onClick={onMarkdownFilterToggle}
                 >
-                  MD过滤 {enableMarkdownFilter ? t('common.on') : t('common.off')}
+                  {t('studio.markdownFilter')} {enableMarkdownFilter ? t('common.on') : t('common.off')}
                 </button>
               )}
             </div>
@@ -218,7 +218,7 @@ export function GlobalControlBar({
       {/* Hint */}
       <div className={styles.hint}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-        仅影响新段落
+        {t('tts.onlyAffectsNewSegments')}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useCallback, type RefObject } from 'react';
+import { useTranslation } from '../../i18n';
 import { STYLE_TAG_CATEGORIES } from '../../services/styleTags';
 import { insertTagAtSelection } from './styleTagInsert';
 import styles from './StyleTagInserter.module.css';
@@ -12,6 +13,7 @@ interface Props {
 
 /** voxcpm 位置 tag 分类插入菜单（哭笑/叹息/停顿思考/疑问/情绪）。 */
 export function StyleTagInserter({ textareaRef, onTextChange, inlineSupported }: Props) {
+  const { t } = useTranslation();
   const insertTag = useCallback(
     (tag: string) => {
       const ta = textareaRef.current;
@@ -33,7 +35,7 @@ export function StyleTagInserter({ textareaRef, onTextChange, inlineSupported }:
       <div className={styles.groups}>
         {STYLE_TAG_CATEGORIES.map((cat) => (
           <div key={cat.key} className={styles.group}>
-            <span className={styles.groupLabel}>{cat.label}</span>
+            <span className={styles.groupLabel}>{t(cat.labelKey)}</span>
             {cat.tags.map((tag) => (
               <button
                 key={tag}
@@ -48,7 +50,7 @@ export function StyleTagInserter({ textareaRef, onTextChange, inlineSupported }:
         ))}
       </div>
       {!inlineSupported && (
-        <div className={styles.hint}>当前引擎不支持位置 tag，合成时将自动移除</div>
+        <div className={styles.hint}>{t('styleTags.positionTagUnsupported')}</div>
       )}
     </div>
   );

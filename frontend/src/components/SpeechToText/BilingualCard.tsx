@@ -17,12 +17,12 @@ interface BilingualCardProps {
 
 const LANG_OPTIONS = [
   { value: 'English', label: 'English' },
-  { value: 'Japanese', label: '日本語' },
+  { value: 'Japanese', labelKey: 'common.langJa' },
   { value: 'Korean', label: '한국어' },
   { value: 'French', label: 'Français' },
   { value: 'German', label: 'Deutsch' },
   { value: 'Spanish', label: 'Español' },
-];
+] as const;
 
 export function BilingualCard({
   bilingualSegments, translating, targetLang, hasResult,
@@ -38,7 +38,7 @@ export function BilingualCard({
       <div className={styles.controls}>
         <Select
           label=""
-          options={LANG_OPTIONS}
+          options={LANG_OPTIONS.map(opt => ({ value: opt.value, label: 'labelKey' in opt ? t(opt.labelKey) : opt.label }))}
           value={targetLang}
           onChange={(e) => onTargetLangChange(e.target.value)}
         />

@@ -18,7 +18,7 @@ export const messages: Record<Locale, Messages> = {
 export const DEFAULT_LOCALE: Locale = 'en-US';
 
 /** 初始语言：用户已保存的选择优先，否则回退 DEFAULT_LOCALE */
-function detectInitialLocale(): Locale {
+export function detectInitialLocale(): Locale {
   if (typeof window === 'undefined') return DEFAULT_LOCALE;
   const saved = window.localStorage.getItem('narraforge-locale');
   return saved && isSupportedLocale(saved) ? saved : DEFAULT_LOCALE;

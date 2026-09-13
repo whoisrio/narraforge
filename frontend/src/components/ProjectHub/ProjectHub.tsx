@@ -153,7 +153,7 @@ export function ProjectHub({ projects, loading = false, onOpenProject, onCreateP
           const isEditing = editingProjectId === project.id;
           const isMenuOpen = openMenuProjectId === project.id;
           return (
-            <article key={project.id} className={styles.projectCard} aria-label={`项目 ${project.name}`} data-card-variant="compact-project-card">
+            <article key={project.id} className={styles.projectCard} aria-label={t('projectHub.ariaProject', { name: project.name })} data-card-variant="compact-project-card">
               <div className={styles.cardHead}>
                 {isEditing ? (
                   <div className={styles.cardOpenButton}>
@@ -185,7 +185,7 @@ export function ProjectHub({ projects, loading = false, onOpenProject, onCreateP
                   <button
                     type="button"
                     className={styles.cardOpenButton}
-                    aria-label={`打开 ${project.name}`}
+                    aria-label={t('projectHub.ariaOpen', { name: project.name })}
                     onClick={() => onOpenProject(project.id)}
                   >
                   {project.logo ? (
@@ -231,7 +231,7 @@ export function ProjectHub({ projects, loading = false, onOpenProject, onCreateP
                     <button
                       type="button"
                       className={styles.menuButton}
-                      aria-label={`项目操作 ${project.name}`}
+                      aria-label={t('projectHub.ariaActions', { name: project.name })}
                       aria-haspopup="menu"
                       aria-expanded={isMenuOpen}
                       onClick={() => setOpenMenuProjectId(isMenuOpen ? null : project.id)}

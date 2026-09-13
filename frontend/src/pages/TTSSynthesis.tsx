@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { createTranslator, useTranslation } from '../i18n';
+import { useTranslation } from '../i18n';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
 import { EngineSelect } from '../components/TTSSynthesis/EngineSelect';
@@ -89,14 +89,13 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : String(error || fallback);
 }
 
-function createScratchpadProject(): SegmentedProject {
-  const _t = createTranslator('zh-CN');
-  const project = createInitialProject();
+function createScratchpadProject(translate: (key: string) => string): SegmentedProject {
+  const project = createInitialProject(translate);
   const now = new Date().toISOString();
   return {
     ...project,
     id: SCRATCHPAD_PROJECT_ID,
-    name: _t('common.draftProject'),
+    name: translate('common.draftProject'),
     created_at: project.created_at || now,
     updated_at: project.updated_at || now,
   };
@@ -176,7 +175,7 @@ export function TTSSynthesis({
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
 
   // Project workbench state
-  const [project, setProject] = useState<SegmentedProject>(createScratchpadProject);
+  const [project, setProject] = useState<SegmentedProject>(() => createScratchpadProject(t));
   const [projectList, setProjectList] = useState<SegmentedProject[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -293,7 +292,7 @@ export function TTSSynthesis({
         const rawList = await indexedDBStorage.listProjects();
         scratchpad = rawList.find(p => p.id === SCRATCHPAD_PROJECT_ID);
         if (!scratchpad) {
-          scratchpad = createScratchpadProject();
+          scratchpad = createScratchpadProject(t);
           await indexedDBStorage.saveProject(scratchpad, { mode: 'immediate' });
         }
       }
@@ -1785,14 +1784,15 @@ export function TTSSynthesis({
       confirmLabel: t(mode === 'all' ? 'tts.regenerate' : 'segment.segmentRow.generate'),
       onConfirm: async () => {
         setConfirmDialog(prev => ({ ...prev, open: false }));
-        await doRegenerateAll(toRegenerate);
+        await doRegenerateAll(toRegenerate, mode);
       },
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating, activeChapter.segments, showToast]);
 
-  const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments) => {
+  const doRegenerateAll = useCallback(async (toRegenerate: typeof activeChapter.segments, mode: BatchSynthesizeMode = 'all') => {
     setGenerating(true);
+    produceAllAbortRef.current = false;
     try {
       // 先把未落库的草稿 PUT 冲刷掉：批量合成期间合成端点会持续前进服务端
       // updated_at，任何滞后的整包 PUT 都会撞 409 stale_payload。
@@ -1813,16 +1813,28 @@ export function TTSSynthesis({
       dispatch({ type: 'MARK_QUEUED', ids: toRegenerate.map(s => s.id) });
 
       // Step 3: Generate sequentially to avoid rate-limiting external TTS services
-      let i = 0;
-      while (i < toRegenerate.length) {
-        await handleRegenerateRef.current(toRegenerate[i++].id, { internal: true });
+      // 本章节批量与全本共用 produceAllRun 进度条/停止入口：contextBar 常显进度，
+      // 段间停止——当前段跑完即停，已合成段保留、未合成段保持 queued/idle。
+      setProduceAllRun({ running: true, mode, total: toRegenerate.length, done: 0, currentChapterName: activeChapter.name, startedAt: Date.now() });
+      let doneCount = 0;
+      for (const seg of toRegenerate) {
+        if (produceAllAbortRef.current) break;
+        setProduceAllRun(prev => prev ? { ...prev, currentSegmentId: seg.id } : prev);
+        await handleRegenerateRef.current(seg.id, { internal: true });
+        doneCount += 1;
+        setProduceAllRun(prev => prev ? { ...prev, done: doneCount } : prev);
       }
-      showToast(t('tts.allGenerationComplete'));
+      if (produceAllAbortRef.current) {
+        showToast(t('tts.produceAllStopped', { done: doneCount, total: toRegenerate.length }), 'info');
+      } else {
+        showToast(t('tts.allGenerationComplete'));
+      }
     } catch (e) {
       console.error('Regenerate all failed:', e);
       showToast(t('tts.partialGenerationFailed'), 'error');
     } finally {
       setGenerating(false);
+      setProduceAllRun(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, showToast]);
@@ -2184,8 +2196,8 @@ export function TTSSynthesis({
         const missingCounts = (detail as { missing_counts?: Record<string, number> }).missing_counts ?? {};
         // 章节名后附缺失段数（后端 missing_counts），让用户知道每章还差几段。
         const chaptersText = chapters
-          .map((c) => (missingCounts[c] ? `${c}(缺${missingCounts[c]}段)` : c))
-          .join('、');
+          .map((c) => (missingCounts[c] ? `${c}(${t('tts.missingSegmentsShort', { count: missingCounts[c] })})` : c))
+          .join(', ');
         showToast(t('studio.exportAllIncomplete', { chapters: chaptersText }), 'error');
       } else if (resp?.status === 409 && code === 'export_directory_not_configured') {
         showToast(t('studio.exportAllNoDir'), 'error');
@@ -2348,7 +2360,7 @@ export function TTSSynthesis({
                         checked={muteTags}
                         onChange={e => setMuteTags(e.target.checked)}
                       />
-                      禁用风格 tag（clone 音色建议开启）
+                      {t('tts.muteStyleTags')}
                     </label>
                     <div className={`${styles.sidebarIgnoreGroup} ${ignoreOptionsOpen ? styles.open : ''}`}>
                       <button

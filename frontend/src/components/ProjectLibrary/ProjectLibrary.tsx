@@ -86,8 +86,8 @@ function chapterProgress(chapter: Chapter) {
   return { total, ready, percent: total === 0 ? 0 : Math.round((ready / total) * 100) };
 }
 
-function initialForChapter(chapter: Chapter): string {
-  return chapter.name.trim().slice(0, 1) || '章';
+function initialForChapter(chapter: Chapter, fallback: string): string {
+  return chapter.name.trim().slice(0, 1) || fallback;
 }
 
 function navigateChapter(chapters: Chapter[], currentId: string, direction: 'prev' | 'next'): string {
@@ -198,7 +198,7 @@ export function ProjectLibrary({
       setDrawerCollapsed(false);
     } catch (e) {
       console.error('startWorkflow failed', e);
-      toast.error('启动工作流失败: ' + (e instanceof Error ? e.message : '未知错误'));
+      toast.error(t('projectLibrary.workflowLaunchFailed', { message: e instanceof Error ? e.message : t('common.error') }));
     }
   };
 
@@ -402,10 +402,10 @@ export function ProjectLibrary({
                 type="button"
                 className={styles.chapterCover}
                 aria-current={chapter.id === activeChapterId ? 'page' : undefined}
-                aria-label={`选择${chapter.name}`}
+                aria-label={t('projectLibrary.selectChapter', { name: chapter.name })}
                 onClick={() => onSelectChapter(chapter.id)}
               >
-                <span className={styles.chapterInitial}>{initialForChapter(chapter)}</span>
+                <span className={styles.chapterInitial}>{initialForChapter(chapter, t('projectLibrary.chapterInitial'))}</span>
                 <span className={styles.chapterBadge}>CH {String(index + 1).padStart(2, '0')}</span>
               </button>
               <div className={styles.chapterBody}>
@@ -571,16 +571,16 @@ export function ProjectLibrary({
               {projectId && features.agent_workflow && (
                 <div className={styles.workflowTrigger}>
                   <div>
-                    <strong>从源文档启动工作流</strong>
-                    <span>旁白：改写 → 审查 → 拆分 → 合成；知识视频：转写 → 审查 → 拆分 → 合成 → Remotion 工程 → 分镜 brief</span>
+                    <strong>{t('projectLibrary.workflowTitle')}</strong>
+                    <span>{t('projectLibrary.workflowDesc')}</span>
                   </div>
                   <button className={styles.workflowBtn} onClick={() => startWorkflow('narration')}>
                     <span className="material-symbols-outlined">auto_awesome</span>
-                    生成旁白
+                    {t('projectLibrary.workflowNarration')}
                   </button>
                   <button className={styles.workflowBtn} onClick={() => startWorkflow('knowledge_video')}>
                     <span className="material-symbols-outlined">movie</span>
-                    知识视频
+                    {t('projectLibrary.workflowKnowledge')}
                   </button>
                 </div>
               )}

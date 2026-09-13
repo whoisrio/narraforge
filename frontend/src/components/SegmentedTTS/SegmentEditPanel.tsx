@@ -441,9 +441,9 @@ export function SegmentEditPanel({
                     <div className={styles.paramLabel}>{t('tts.language')}</div>
                     <select className={styles.paramSelect} value={(eff.lang as string) || 'ZH'}
                       onChange={e => handleParamChange('lang', e.target.value)}>
-                      <option value="ZH">中文</option>
+                      <option value="ZH">{t('common.langZh')}</option>
                       <option value="EN">English</option>
-                      <option value="JA">日本語</option>
+                      <option value="JA">{t('common.langJa')}</option>
                       <option value="ES">Español</option>
                       <option value="AR">العربية</option>
                     </select>

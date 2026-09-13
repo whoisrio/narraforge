@@ -14,6 +14,7 @@ import {
   stripParenthesized,
   stripStyleTags,
 } from './styleTags';
+import { createTranslator } from '../i18n';
 
 describe('ENGINE_CAPABILITIES', () => {
   it('matches the backend engine_capabilities mirror', () => {
@@ -29,10 +30,11 @@ describe('ENGINE_CAPABILITIES', () => {
   });
 
   it('describeEngineCapability summarizes each engine', () => {
-    expect(describeEngineCapability('voxcpm')).toBe('位置 tag + 开头风格');
-    expect(describeEngineCapability('mimo_tts')).toBe('开头风格标签');
-    expect(describeEngineCapability('cosyvoice')).toBe('仅指令');
-    expect(describeEngineCapability('edge_tts')).toBe('不支持');
+    const t = createTranslator('zh-CN');
+    expect(describeEngineCapability('voxcpm', t)).toBe('位置 tag + 开头风格');
+    expect(describeEngineCapability('mimo_tts', t)).toBe('开头风格标签');
+    expect(describeEngineCapability('cosyvoice', t)).toBe('仅指令');
+    expect(describeEngineCapability('edge_tts', t)).toBe('不支持');
   });
 });
 
@@ -63,7 +65,7 @@ describe('normalizeVoxcpmMode', () => {
 
 describe('tag whitelist', () => {
   it('covers 5 categories and all whitelisted tags', () => {
-    expect(STYLE_TAG_CATEGORIES.map((c) => c.label)).toEqual(['哭笑', '叹息', '停顿思考', '疑问', '情绪']);
+    expect(STYLE_TAG_CATEGORIES.map((c) => c.labelKey)).toEqual(['styleTags.groupLaughCry', 'styleTags.groupSigh', 'styleTags.groupPauseThink', 'styleTags.groupQuestion', 'styleTags.groupEmotion']);
     expect(VOXCPM_INLINE_TAGS).toEqual([
       '[laughing]', '[sigh]', '[Uhm]', '[Shh]',
       '[Question-ah]', '[Question-ei]', '[Question-en]', '[Question-oh]',

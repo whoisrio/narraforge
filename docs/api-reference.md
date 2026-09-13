@@ -798,6 +798,8 @@ IndexTTS 8 维情绪向量（happy/angry/sad/afraid/disgusted/melancholic/surpri
 }
 ```
 
+> 默认章节标题（无标题整篇的「全文」、front matter 的「引言」/「(含引言)」后缀）按文稿主要文种自动选择中英文：英文文档返回 `Full Document` / `Introduction` / `(with introduction)`。
+
 ### POST `/api/text-split/rule`
 
 ```json
@@ -1091,7 +1093,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 > `0` = 不限制；legacy admin 与 `ADMIN_EMAILS` 管理员豁免；local 模式不启用。
 >
 > **segment 文本长度上限（两种部署模式都生效）**：`MAX_SEGMENT_CHARS`（默认 `80`）是内容质量约束而非计费配额。
-> 拆分结果超长时自动在限制内最近标点处截断（无标点则硬切）；POST/PUT 全量保存、`chapters:batch` 与分片合成的 text 覆盖携带超长文本时返回 `422 segment_too_long`（detail 为 `{code, max, chapter_id, segment_id}`）。
+> 拆分结果超长时自动在限制内最近标点处截断（无标点时退到最近空白词边界，避免拆开英文单词；连空白都没有才硬切）；POST/PUT 全量保存、`chapters:batch` 与分片合成的 text 覆盖携带超长文本时返回 `422 segment_too_long`（detail 为 `{code, max, chapter_id, segment_id}`）。
 > `0` 或负数 = 不限制。
 
 ### ProjectIn Schema

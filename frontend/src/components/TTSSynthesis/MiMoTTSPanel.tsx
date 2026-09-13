@@ -172,7 +172,7 @@ export function MiMoTTSPanel({
             <div className={styles.loading}>{t('mimoTts.loadingVoiceList')}</div>
           ) : cloneVoices.length === 0 ? (
             <div className={styles.empty}>
-              没有可用的声音，请先在「音色设计」页面上传或设计音色
+              {t('tts.mimoNoVoices')}
             </div>
           ) : (
             <div className={styles.cloneVoiceList}>

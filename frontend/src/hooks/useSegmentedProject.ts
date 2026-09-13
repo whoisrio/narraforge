@@ -1,5 +1,5 @@
 import type { SegmentedProject, Chapter, Segment, EngineParams, SegmentKind, EmotionType, VoiceSource, RoleSnapshot, ProsodyMark, SegmentTextTransforms, PronunciationMapEntry } from '../types';
-import { createTranslator } from '../i18n';
+import { createTranslator, detectInitialLocale } from '../i18n';
 
 let _idCounter = 0;
 function uid(): string {
@@ -22,7 +22,7 @@ function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
 }
 
 export function createInitialProject(translate?: (key: string) => string): SegmentedProject {
-  const _t = translate ?? createTranslator('zh-CN');
+  const _t = translate ?? createTranslator(detectInitialLocale());
   const now = new Date().toISOString();
   const ch = makeChapter(_t('segmentedProject.defaultChapterName'));
   return {
@@ -90,7 +90,7 @@ function enrichSegment(raw: RawSegment): Segment {
 }
 
 export function migrateV1(raw: RawSegmentedProject, translate?: (key: string) => string): SegmentedProject {
-  const _t = translate ?? createTranslator('zh-CN');
+  const _t = translate ?? createTranslator(detectInitialLocale());
   if (raw.schema_version === 2 && raw.chapters) {
     // Enrich segments with frontend-only fields that the backend doesn't return
     const chapters: Chapter[] = raw.chapters.map((ch) => {

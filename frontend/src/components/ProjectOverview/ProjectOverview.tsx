@@ -122,7 +122,7 @@ function RolePreviewButton({ role }: { role: Role }) {
       // 2) Fall back to real-time TTS synthesis
       if (!audioSrc) {
         const { ttsApi } = await import('../../services/api');
-        const text = t('voiceDesign.defaultSampleText') || '这是一段试听文本。';
+        const text = t('voiceDesign.defaultSampleText');
         let resp: { audio_base64: string; audio_format: string };
         if (engine === 'edge_tts') {
           const params = (v as { voice?: string; rate?: string; volume?: string }) || {};
