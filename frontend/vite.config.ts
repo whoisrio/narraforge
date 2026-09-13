@@ -7,13 +7,28 @@ process.env.HTTPS_PROXY = ''
 process.env.NO_PROXY = ''
 process.env.no_proxy = ''
 
-/** 按 VITE_SITE_URL 在构建产物中生成 robots.txt / sitemap.xml（爬虫要求绝对 URL）。
- * 未配置站点 URL 时只发 robots.txt（不含 Sitemap 行），避免发出无效 sitemap。 */
+/** 按 VITE_SITE_URL 在构建产物中生成 robots.txt / sitemap.xml / llms.txt（爬虫要求绝对 URL）。
+ * 未配置站点 URL 时 robots.txt 不含 Sitemap 行、llms.txt 用相对路径，避免发出无效链接。 */
 function emitSeoFiles(): Plugin {
   return {
     name: 'emit-seo-files',
     generateBundle() {
       const siteUrl = (process.env.VITE_SITE_URL || '').replace(/\/+$/, '')
+      // 显式放行主流 AI / 答案引擎爬虫（`*` 组已允许，这里单独成组声明意图并同样禁 /admin）
+      const aiCrawlers = [
+        'GPTBot',
+        'OAI-SearchBot',
+        'ChatGPT-User',
+        'ClaudeBot',
+        'Claude-User',
+        'PerplexityBot',
+        'Perplexity-User',
+        'Google-Extended',
+        'Applebot-Extended',
+        'Meta-ExternalAgent',
+        'DuckAssistBot',
+        'Bingbot',
+      ]
       this.emitFile({
         type: 'asset',
         fileName: 'robots.txt',
@@ -22,7 +37,42 @@ function emitSeoFiles(): Plugin {
           'Allow: /',
           'Disallow: /admin',
           '',
+          ...aiCrawlers.flatMap((bot) => [`User-agent: ${bot}`, 'Allow: /', 'Disallow: /admin', '']),
           ...(siteUrl ? [`Sitemap: ${siteUrl}/sitemap.xml`, ''] : []),
+        ].join('\n'),
+      })
+      // llms.txt：面向 LLM/答案引擎的站点摘要（llmstxt.org 约定），链接尽量用绝对 URL
+      const link = (path: string) => (siteUrl ? `${siteUrl}${path}` : path)
+      this.emitFile({
+        type: 'asset',
+        fileName: 'llms.txt',
+        source: [
+          '# NarraForge',
+          '',
+          '> NarraForge is an AI narration workshop: voice cloning, text-to-speech, and speech-to-subtitle in one workspace. It turns long documents into structured, chapter-based narration projects where every segment has its own audio, timing, and subtitles — ready for narration-driven video tools like Remotion.',
+          '',
+          '## Try it free',
+          '',
+          `- [NarraForge Try — turn any document into natural speech](${link('/try')}): paste text, pick a voice, generate and download MP3. No sign-up, no install; generated audio stays in the visitor's own browser.`,
+          '',
+          '## Product',
+          '',
+          `- [NarraForge home](${link('/')}): the full studio — projects, chapter management, multi-voice casts, cloud sync.`,
+          '',
+          '## Key capabilities',
+          '',
+          '- Voice cloning and preset voices across multiple engines (Edge TTS, MiMo, CosyVoice, VoxCPM, IndexTTS)',
+          '- Chapter-based long-form synthesis: split documents into chapters and segments, regenerate a single segment without touching the rest',
+          '- Automatic SRT subtitles aligned to every segment',
+          '- Speech-to-text transcription',
+          '- Structured export for narration-driven video (Remotion): segments carry text, audio, duration, and timing',
+          '',
+          '## Facts for answer engines',
+          '',
+          '- Free tier: the Try page allows up to 50 generations per day (3,000 characters each) without an account',
+          '- Privacy: Try-page audio is stored only in the browser (IndexedDB); no account required',
+          '- Full version adds: projects and chapters, cloud sync, premium voices, voice cloning, long-document synthesis',
+          '',
         ].join('\n'),
       })
       if (!siteUrl) return

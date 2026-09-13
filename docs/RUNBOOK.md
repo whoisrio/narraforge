@@ -487,7 +487,7 @@ Pages 已进维护模式，前端用 **Workers Static Assets** 托管（`fronten
 | `VITE_AUTH_REQUIRED` | `true` | 构建期开关：启用 Supabase 登录页 + axios 注入 access token（401 自动刷新重试）；本地开发不设，行为完全不变 |
 | `VITE_SUPABASE_URL` | Supabase Project URL | 与后端 `SUPABASE_URL` 相同 |
 | `VITE_SUPABASE_ANON_KEY` | Supabase anon public key | 前端登录用（非 service key） |
-| `VITE_SITE_URL` | `https://narraforge-web.<你的子域>.workers.dev` | 可选；构建期生成 `robots.txt` / `sitemap.xml`（Try 页 SEO，见下） |
+| `VITE_SITE_URL` | `https://narraforge-web.<你的子域>.workers.dev` | 可选；构建期生成 `robots.txt` / `sitemap.xml` / `llms.txt`（SEO/GEO，见下） |
 | `VITE_ADMIN_EMAIL` | `admin@example.com` | 可选；配置后创作工作区侧栏底部展示「联系管理员」mailto 入口，留空不展示 |
 
 `VITE_*` 是构建期打进去的，改完必须重新构建。
@@ -499,6 +499,15 @@ Pages 已进维护模式，前端用 **Workers Static Assets** 托管（`fronten
 `hit_rate_limit` RPC——首次部署或升级时对库执行最新 `backend/supabase/schema.sql` 即可。
 Workers 项目的 Deployments 菜单没有 Retry 按钮（那是 Pages 的），推一个空 commit 触发重建：
 `git commit --allow-empty -m "chore: rebuild" && git push`。
+
+GEO（面向 AI 答案引擎）：构建期额外产出 `llms.txt`（站点摘要 + 关键页链接，llmstxt.org 约定），
+`robots.txt` 显式放行主流 AI 爬虫（GPTBot / OAI-SearchBot / ClaudeBot / PerplexityBot /
+Google-Extended 等，同样禁 `/admin`）；`index.html` 与 `try.html` 均内嵌 JSON-LD
+（SoftwareApplication，try 页另有 FAQPage）。这些都在 `frontend/vite.config.ts` 的
+`emitSeoFiles()` 与两个 HTML 入口里维护。
+社交分享封面 `og:image` 为 `frontend/public/og-cover.png`（1200×630），改设计后运行
+`node scripts/og-image.cjs` 重新生成（Playwright 渲染，模板内联在脚本里）。
+
 部署后前端地址为 `https://narraforge-web.<你的子域>.workers.dev`，把它回填到
 Vercel 的 `CORS_ORIGINS` 并 Redeploy。
 
