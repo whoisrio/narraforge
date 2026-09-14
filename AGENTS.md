@@ -11,6 +11,8 @@ The **narration workflow** (4-stage: gen_script → script_review → split_segm
 ## key principles
 **MUST KEEP docs in Documentation updated**
 **THINK BEFORE CODE**
+**NEVER commit directly to `master`**: always create a feature branch and open a PR.
+**All commit messages and PR titles/descriptions must be written in English.**
 
 ## Documentation
 
