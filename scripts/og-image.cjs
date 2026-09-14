@@ -75,6 +75,17 @@ const HTML = `<!doctype html>
     margin-top: 20px;
     font-size: 19px; line-height: 1.5; color: #534439; max-width: 560px;
   }
+  /* 转化 CTA：社交预览里的可点击暗示 */
+  .cta {
+    margin-top: 30px;
+    align-self: flex-start;
+    display: flex; align-items: center; gap: 10px;
+    background: #8b4c0d; color: #fff8f1;
+    font-size: 18px; font-weight: 700; letter-spacing: 0.3px;
+    padding: 13px 24px; border-radius: 999px;
+    box-shadow: 0 4px 14px rgba(139,76,13,0.30);
+  }
+  .cta .arr { color: #e8a838; font-weight: 800; }
 
   /* 签名元素：波形 → 分段时间线 */
   .strip {
@@ -149,6 +160,7 @@ const HTML = `<!doctype html>
   <div class="kicker">AI Voice Studio</div>
   <h1>Every segment has<br />its own <em>voice</em>.</h1>
   <p class="sub">Voice cloning, text-to-speech &amp; speech-to-subtitle — chapter-based long-form synthesis where every segment keeps its own boundary, duration and timing.</p>
+  <div class="cta">Try it free — no sign-up <span class="arr">→</span></div>
 
   <div class="strip">
     <div class="stripLabel">SEGMENT TIMELINE · CH 01</div>
