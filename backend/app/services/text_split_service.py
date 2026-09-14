@@ -262,6 +262,66 @@ def markdown_split(
 # 超长段截断的兜底标点集（在调用方 delimiters 之外补充）
 _CAP_SECONDARY_PUNCT = "，、；：,;:"
 
+# 默认规则切分标点（中英双语）：中文全角 + 英文半角句读
+DEFAULT_RULE_DELIMITERS = ["，", "。", "！", "？", "；", ".", ",", "!", "?", ";"]
+
+# 段落边界：任何换行都是硬边界（旁白文稿一行一段；空行分段更不在话下）
+_PARAGRAPH_RE = re.compile(r"\n+")
+
+# 标点后紧跟的闭引号/闭括号归前段，避免落到下一段开头
+_CLOSING_CHARS = set("\"'”’」』）)】]》")
+
+
+def _is_protected_delimiter(text: str, i: int) -> bool:
+    """半角标点的免切场景：小数点 3.14、千分位 1,000、时间 12:30、缩写/文件名 app.ts。"""
+    ch = text[i]
+    if not ch.isascii():
+        return False
+    prev = text[i - 1] if i > 0 else ""
+    nxt = text[i + 1] if i + 1 < len(text) else ""
+    if ch in ".,:" and prev.isdigit() and nxt.isdigit():
+        return True
+    if ch == "." and prev.isascii() and prev.isalpha() and nxt.isascii() and nxt.isalpha():
+        return True
+    return False
+
+
+def _split_paragraph(paragraph: str, delim_set: set[str]) -> list[str]:
+    """单段内按标点切（标点留在前段），吸收紧跟的闭引号，跳过免切标点。"""
+    parts: list[str] = []
+    start = 0
+    i = 0
+    n = len(paragraph)
+    while i < n:
+        if paragraph[i] in delim_set and not _is_protected_delimiter(paragraph, i):
+            j = i + 1
+            while j < n and paragraph[j] in _CLOSING_CHARS:
+                j += 1
+            parts.append(paragraph[start:j])
+            start = j
+            i = j
+        else:
+            i += 1
+    parts.append(paragraph[start:])
+    return parts
+
+
+def _merge_short(
+    segments: list[str], min_len_to_merge: int, next_max_len_to_merge: int
+) -> list[str]:
+    """短段合并：当前段 < min_len_to_merge 且下一段 < next_max_len_to_merge → 合并。"""
+    merged: list[str] = []
+    for seg in segments:
+        if (
+            merged
+            and len(merged[-1]) < min_len_to_merge
+            and len(seg) < next_max_len_to_merge
+        ):
+            merged[-1] = merged[-1] + seg
+        else:
+            merged.append(seg)
+    return merged
+
 
 def _cap_overlong(segments: list[str], max_len: int | None, delimiters: list[str]) -> list[str]:
     """把超过 max_len 的段截断：优先在 max_len 内最后一个标点后切（标点留在
@@ -309,6 +369,13 @@ def rule_split(
 ) -> list[str]:
     """按指定标点切分文本。保留标点在段尾。过滤空白段和纯标点段。
 
+    段落边界：任何换行都是硬边界——先按行拆段，再在行内按标点切；
+    短段合并不跨行。段落末尾无标点也不会与下一段粘连。
+
+    半角标点免切：小数点（3.14）、千分位（1,000）、时间（12:30）、
+    letter.letter 形式的缩写/文件名点（app.ts）。标点后紧跟的闭引号/闭括号
+    归前段（"Hello." 或 「你好。」 不会把闭引号落到下一段开头）。
+
     合并规则（防止逗号密集时切出过多碎片段）：
     - 若某段长度 < ``min_len_to_merge`` 且下一段长度 < ``next_max_len_to_merge``，
       将下一段并入该段。贪心从左至右扫描，合并后若仍短继续吸并后续段。
@@ -322,40 +389,27 @@ def rule_split(
     if not text or not text.strip():
         return []
 
-    if not delimiters:
-        stripped = text.strip()
-        return _cap_overlong([stripped] if stripped else [], max_len, delimiters)
+    paragraphs = [p.strip() for p in _PARAGRAPH_RE.split(text) if p.strip()]
+    delim_set = set(delimiters or [])
 
-    # 构造正则：在标点之后切分（保留标点在前段）
-    escaped = [re.escape(d) for d in delimiters]
-    pattern = re.compile(f"(?<=[{''.join(escaped)}])")
-    parts = pattern.split(text)
+    if not delim_set:
+        return _cap_overlong(paragraphs, max_len, delimiters)
 
-    segments: list[str] = []
-    for p in parts:
-        s = p.strip()
-        if not s:
-            continue
-        # 过滤纯标点段（仅由 delimiters 中的字符组成）
-        if all(c in delimiters for c in s):
-            continue
-        segments.append(s)
-
-    if min_len_to_merge <= 0 or not segments:
-        return _cap_overlong(segments, max_len, delimiters)
-
-    # 短段合并：当前段 < min_len_to_merge 且下一段 < next_max_len_to_merge → 合并
-    merged: list[str] = []
-    for seg in segments:
-        if (
-            merged
-            and len(merged[-1]) < min_len_to_merge
-            and len(seg) < next_max_len_to_merge
-        ):
-            merged[-1] = merged[-1] + seg
-        else:
-            merged.append(seg)
-    return _cap_overlong(merged, max_len, delimiters)
+    all_segments: list[str] = []
+    for para in paragraphs:
+        segments: list[str] = []
+        for p in _split_paragraph(para, delim_set):
+            s = p.strip()
+            if not s:
+                continue
+            # 过滤纯标点段（仅由 delimiters 中的字符组成）
+            if all(c in delim_set for c in s):
+                continue
+            segments.append(s)
+        if min_len_to_merge > 0:
+            segments = _merge_short(segments, min_len_to_merge, next_max_len_to_merge)
+        all_segments.extend(segments)
+    return _cap_overlong(all_segments, max_len, delimiters)
 
 
 # ---------------------------------------------------------------------------

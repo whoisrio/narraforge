@@ -37,6 +37,7 @@ from app.core.system_config_service import (
     PRONUNCIATION_MAP_GLOBAL_KEY,
     get_config,
 )
+from app.services.text_split_service import DEFAULT_RULE_DELIMITERS
 from app.services.text_transform_service import (
     apply_text_transforms,
     merge_maps,
@@ -1006,7 +1007,7 @@ def create_chapter(
     ch = SegmentedProjectChapter(
         id=str(uuid.uuid4()), project_id=p.id, position=position, name=name,
         voice={},
-        split_config={"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"},
+        split_config={"delimiters": list(DEFAULT_RULE_DELIMITERS), "mode": "rule"},
         created_at=now, updated_at=now,
     )
     db.add(ch)
@@ -2437,7 +2438,7 @@ def resplit_from_script(db: Session, project_id: str, chapter_id: str):
     chapter = get_chapter_row(db, project_id, chapter_id)
     if chapter is None:
         raise LookupError("chapter_not_found")
-    delimiters = (chapter.split_config or {}).get("delimiters", ["，", "。", "！", "？", "；"])
+    delimiters = (chapter.split_config or {}).get("delimiters") or list(DEFAULT_RULE_DELIMITERS)
     max_len = settings.max_segment_chars if settings.max_segment_chars > 0 else None
     items = rule_split(chapter.narration_script or "", delimiters, max_len=max_len)
     for s in list(chapter.segments):
@@ -2479,7 +2480,7 @@ def create_chapter_for_project(
         position=position,
         name=chapter_name,
         voice=voice or {},
-        split_config={"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"},
+        split_config={"delimiters": list(DEFAULT_RULE_DELIMITERS), "mode": "rule"},
     )
     db.add(chapter)
     db.flush()

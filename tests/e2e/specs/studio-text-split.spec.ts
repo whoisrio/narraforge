@@ -275,6 +275,111 @@ test.describe('文本拆分', () => {
     expect(errors).toEqual([]);
   });
 
+  // @feature §4.4 Text Input & Split — Rule mode: bilingual delimiters, paragraph boundaries, punctuation protection
+  test('规则拆分英文/中英混排：段落硬边界 + 双语标点 + 免切保护', async ({ page }) => {
+    await setLocaleToZhCN(page);
+    const errors = collectErrors(page);
+
+    await goToStudio(page);
+    await page.waitForTimeout(1_000);
+
+    // ── Step 1: rule split via backend API, 不传 delimiters（走服务端双语默认值）──
+
+    // 覆盖：无标点结尾的段落不粘连 / 英文句读 / 小数点免切（2.5）/ 闭引号归前段 / 中英混排
+    const bilingualText =
+      'Para one ends without punctuation\n\n' +
+      'It started with one annoying loop. IndexTTS-2.5 is fast.\n\n' +
+      'He said "Hello." Then left.\n\n' +
+      '今天介绍 NarraForge。它支持 voice cloning 和字幕。';
+
+    const splitResult = await page.evaluate(async (text: string) => {
+      const resp = await fetch('/api/text-split/rule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      return resp.json();
+    }, bilingualText);
+
+    // 服务端默认 delimiters 必须能切英文 + 中文，且段落/免切/闭引号规则生效
+    const expected = [
+      'Para one ends without punctuation',
+      'It started with one annoying loop.',
+      'IndexTTS-2.5 is fast.',
+      'He said "Hello."',
+      'Then left.',
+      '今天介绍 NarraForge。',
+      '它支持 voice cloning 和字幕。',
+    ];
+    expect(splitResult.segments).toEqual(expected);
+
+    // ── Step 2: apply split result to the project（与 UI onSplit 后保存路径一致）──
+
+    await page.evaluate(async (segments: string[]) => {
+      const projResp = await fetch('/api/segmented-projects/test-e2e-project');
+      const project = await projResp.json();
+      const chapterId = project.active_chapter_id || project.chapters[0]?.id;
+      if (!chapterId) return;
+
+      const newSegments = segments.map((text: string, i: number) => ({
+        id: `bilingual-seg-${Date.now()}-${i}`,
+        text,
+        position: i,
+        segment_kind: 'narration',
+        emotion: 'neutral',
+        voice: { source: 'chapter' },
+        status: 'idle',
+        audio: { format: 'mp3', current: { id: `bilingual-audio-${Date.now()}-${i}` } },
+      }));
+
+      const chapter = project.chapters.find((c: { id: string }) => c.id === chapterId);
+      if (chapter) {
+        chapter.segments = newSegments;
+        await fetch(`/api/segmented-projects/test-e2e-project`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(project),
+        });
+      }
+    }, splitResult.segments);
+
+    await page.reload();
+    await goToStudio(page);
+
+    // ── Step 3: POST-COMMIT — UI 与后端数据双读一致 ──
+
+    const segmentRows = page.locator('[class*="compactCard"]');
+    const uiCount = await segmentRows.count();
+    expect(uiCount).toBe(expected.length);
+
+    await page.waitForTimeout(2_000); // wait for autosave
+    const project = await readBackendProject(page, 'test-e2e-project');
+    expect(project).toBeTruthy();
+    const activeChapter = project!.chapters.find(
+      (ch) => ch.id === (project!.active_chapter_id ?? project!.chapters[0]?.id),
+    );
+    expect(activeChapter).toBeTruthy();
+
+    validateChapter(activeChapter!);
+
+    // 逐字段验证：段数、顺序、每个段的完整文本
+    expect(activeChapter!.segments.length).toBe(expected.length);
+    activeChapter!.segments.forEach((seg, i) => {
+      assertSegmentHasText(seg);
+      validateSegment(seg);
+      expect(seg.text).toBe(expected[i]);
+    });
+
+    // 闭引号不得成为任何段的开头
+    for (const seg of activeChapter!.segments) {
+      expect(seg.text).not.toMatch(/^["'”’」』）)】]》]/);
+    }
+
+    await verifyDbWithScreenshot(page, 'test-e2e-project', 'studio-text-split-dbProject4');
+
+    expect(errors).toEqual([]);
+  });
+
   // @feature §4.4 Text Input & Split — re-split: clean up existing segment audio before applying new split
   test('重新拆分已有文本', async ({ page }) => {
     await setLocaleToZhCN(page);

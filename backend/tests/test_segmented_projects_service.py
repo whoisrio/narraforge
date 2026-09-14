@@ -888,7 +888,7 @@ def test_create_chapter_appends_position_and_defaults(db_session, tmp_path, monk
     assert ch_in.position == 2
     assert ch_in.id  # 服务端 uuid4
     assert ch_in.voice == {}
-    assert ch_in.split_config == {"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"}
+    assert ch_in.split_config == {"delimiters": ["，", "。", "！", "？", "；", ".", ",", "!", "?", ";"], "mode": "rule"}
     assert ch_in.segments == []
     assert project_updated_at != detail.updated_at
 

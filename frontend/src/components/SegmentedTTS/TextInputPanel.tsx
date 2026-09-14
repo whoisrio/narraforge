@@ -3,6 +3,7 @@ import { useTranslation } from '../../i18n';
 import { useToast } from '../ui/useToast';
 import { textSplitApi } from '../../services/api';
 import { stripMarkdownForTTS } from '../../utils/stripMarkdownForTTS';
+import { DELIMITER_OPTIONS } from '../../utils/splitConfig';
 import type { Chapter } from '../../types';
 import type { SplitVoiceMode } from '../../services/segmentKindInference';
 import styles from './TextInputPanel.module.css';
@@ -21,8 +22,6 @@ interface TextInputPanelProps {
   onSplitVoiceModeChange?: (mode: SplitVoiceMode) => void;
   showVoiceModeSwitch?: boolean;
 }
-
-const DELIMITER_OPTIONS = ['，', '。', '！', '？', '；', '、'];
 
 export function TextInputPanel({
   splitConfig,

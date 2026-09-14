@@ -75,7 +75,9 @@ def new_reuse_report() -> dict[str, Any]:
 # plan_batch_reuse：重拆保留的纯匹配规划器（A1）
 # ---------------------------------------------------------------------------
 
-DEFAULT_SPLIT_DELIMITERS = ["，", "。", "！", "？", "；"]
+from app.services.text_split_service import DEFAULT_RULE_DELIMITERS
+
+DEFAULT_SPLIT_DELIMITERS = DEFAULT_RULE_DELIMITERS
 
 _DEFAULT_VOICE = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
 

@@ -18,6 +18,7 @@ from app.core.repositories.deps import get_usage_repo
 from app.core.repositories.usage import UsageRepository
 from app.api._usage_helpers import build_llm_usage_sink
 from app.services.text_split_service import (
+    DEFAULT_RULE_DELIMITERS,
     rule_split,
     llm_split,
     ssml_annotate,
@@ -35,7 +36,7 @@ router = APIRouter()
 class RuleSplitRequest(BaseModel):
     text: str = Field(..., min_length=1, description="待拆分文本")
     delimiters: list[str] = Field(
-        default_factory=lambda: ["，", "。", "！", "？", "；"],
+        default_factory=lambda: list(DEFAULT_RULE_DELIMITERS),
         description="分隔符列表",
     )
     min_len_to_merge: int = Field(

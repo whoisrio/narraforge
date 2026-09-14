@@ -1,5 +1,6 @@
 import type { SegmentedProject, Chapter, Segment, EngineParams, SegmentKind, EmotionType, VoiceSource, RoleSnapshot, ProsodyMark, SegmentTextTransforms, PronunciationMapEntry } from '../types';
 import { createTranslator, detectInitialLocale } from '../i18n';
+import { DEFAULT_SPLIT_DELIMITERS } from '../utils/splitConfig';
 
 let _idCounter = 0;
 function uid(): string {
@@ -15,7 +16,7 @@ function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
     name,
     voice: defaultVoice,
     segments: [],
-    split_config: inheritFrom?.split_config || { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
+    split_config: inheritFrom?.split_config || { delimiters: [...DEFAULT_SPLIT_DELIMITERS], mode: 'rule' },
     created_at: now,
     updated_at: now,
   };
@@ -98,7 +99,7 @@ export function migrateV1(raw: RawSegmentedProject, translate?: (key: string) =>
       return {
         ...ch,
         voice: voice,
-        split_config: ch.split_config || { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
+        split_config: ch.split_config || { delimiters: [...DEFAULT_SPLIT_DELIMITERS], mode: 'rule' },
         design_title: ch.design_title ?? ch.name,
         segments: (ch.segments || []).map((s) => enrichSegment(s)),
       };
@@ -120,7 +121,7 @@ export function migrateV1(raw: RawSegmentedProject, translate?: (key: string) =>
     original_text: r.original_text,
     segments: r.segments || [],
     selected_segment_id: r.selected_segment_id,
-    split_config: r.split_config || { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
+    split_config: r.split_config || { delimiters: [...DEFAULT_SPLIT_DELIMITERS], mode: 'rule' },
     created_at: r.created_at || now,
     updated_at: r.updated_at || now,
   };

@@ -64,7 +64,7 @@ from app.services.animation_spec_codec import (
     _dump_animation_spec,
     _parse_animation_spec,
 )
-from app.services.text_split_service import rule_split
+from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split
 from app.services.batch_reuse import (
     build_reuse_index,
     new_reuse_report,
@@ -80,7 +80,7 @@ PROJECTS = "segmented_projects"
 CHAPTERS = "segmented_project_chapters"
 SEGMENTS = "segmented_project_segments"
 
-_DEFAULT_SPLIT_CONFIG = {"delimiters": ["，", "。", "！", "？", "；"], "mode": "rule"}
+_DEFAULT_SPLIT_CONFIG = {"delimiters": list(DEFAULT_RULE_DELIMITERS), "mode": "rule"}
 _DEFAULT_VOICE = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
 
 

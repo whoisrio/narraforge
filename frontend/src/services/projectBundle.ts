@@ -11,6 +11,7 @@
  * audio 引用改回 {id}，项目重建到 IndexedDB（新 ID，避免覆盖现有项目）。
  */
 import { strToU8, strFromU8, zipSync, unzipSync } from 'fflate';
+import { DEFAULT_SPLIT_DELIMITERS } from '../utils/splitConfig';
 import type { SegmentedProject, Chapter, Segment } from '../types';
 import { getTTSAudioBlob, saveTTSResult } from './indexedDB';
 import { indexedDBStorage } from './segmentedProjectStorage';
@@ -74,7 +75,7 @@ export async function exportProjectBundle(project: SegmentedProject): Promise<Bl
     name: ch.name,
     design_title: ch.design_title ?? null,
     voice: ch.voice ?? {},
-    split_config: ch.split_config ?? { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
+    split_config: ch.split_config ?? { delimiters: [...DEFAULT_SPLIT_DELIMITERS], mode: 'rule' },
     original_text: ch.original_text ?? null,
     narration_script: ch.narration_script ?? null,
   }));
@@ -232,7 +233,7 @@ export async function importProjectBundle(data: ArrayBuffer | Uint8Array): Promi
       name: (c.name as string) ?? 'Chapter',
       position: c.position as number,
       voice: (c.voice as Chapter['voice']) ?? { engine: 'edge_tts', voice: '', rate: '+0%', volume: '+0%' },
-      split_config: (c.split_config as Chapter['split_config']) ?? { delimiters: ['，', '。', '！', '？', '；'], mode: 'rule' },
+      split_config: (c.split_config as Chapter['split_config']) ?? { delimiters: [...DEFAULT_SPLIT_DELIMITERS], mode: 'rule' },
       original_text: (c.original_text as string | undefined) ?? undefined,
       narration_script: (c.narration_script as string | null | undefined) ?? null,
       design_title: (c.design_title as string | undefined) ?? (c.name as string | undefined),

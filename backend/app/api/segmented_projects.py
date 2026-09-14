@@ -1026,12 +1026,12 @@ async def split_chapter(
     if body.replace_strategy not in ("preview_only", "replace_chapter_segments"):
         raise HTTPException(status_code=422, detail="invalid_replace_strategy")
 
-    from app.services.text_split_service import rule_split, llm_split
+    from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split, llm_split
     max_len = settings.max_segment_chars if settings.max_segment_chars > 0 else None
     if body.mode == "rule":
         items = rule_split(
             body.text,
-            body.delimiters or chapter.split_config.get("delimiters", ["，", "。", "！", "？", "；"]),
+            body.delimiters or chapter.split_config.get("delimiters") or list(DEFAULT_RULE_DELIMITERS),
             max_len=max_len,
         )
     else:

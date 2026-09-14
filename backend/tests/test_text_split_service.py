@@ -214,6 +214,137 @@ def test_rule_split_max_len_no_whitespace_still_hard_cuts():
     assert result == ["a" * 80, "a" * 70]
 
 
+# ------- rule_split 段落边界 -------
+
+def test_rule_split_paragraph_without_delimiter_not_glued():
+    """段落（换行）是硬边界：上段没有标点结尾时，不得与下一段粘成一段。"""
+    from app.services.text_split_service import rule_split
+    text = "First paragraph has no terminator\n\nSecond paragraph also none"
+    result = rule_split(text, ["。"])
+    assert result == ["First paragraph has no terminator", "Second paragraph also none"]
+
+
+def test_rule_split_single_newline_is_boundary():
+    """单个换行同样是段落边界（中文网文一行一段的常见格式）。"""
+    from app.services.text_split_service import rule_split
+    text = "第一行没有标点\n第二行也没有\n第三行有句号。"
+    result = rule_split(text, ["。"])
+    assert result == ["第一行没有标点", "第二行也没有", "第三行有句号。"]
+
+
+def test_rule_split_no_merge_across_paragraphs():
+    """短段合并不得跨段落：段落边界的停顿语义必须保留。"""
+    from app.services.text_split_service import rule_split
+    text = "好。\n嗯。\n我们开始吧。"
+    result = rule_split(text, ["。", "，"])
+    assert result == ["好。", "嗯。", "我们开始吧。"]
+
+
+def test_rule_split_no_delimiters_splits_by_paragraph():
+    """delimiters 为空时按段落切分，而不是把全文揉成一段。"""
+    from app.services.text_split_service import rule_split
+    text = "段落一\n\n段落二"
+    result = rule_split(text, [])
+    assert result == ["段落一", "段落二"]
+
+
+# ------- rule_split 英文标点 -------
+
+def test_rule_split_english_sentence_punctuation():
+    """英文句读 . ! ? 正常切分。"""
+    from app.services.text_split_service import rule_split
+    text = "It started with one annoying loop. So I made the narration a structured project! Does it work? Yes it does."
+    result = rule_split(text, [".", "!", "?"])
+    assert result == [
+        "It started with one annoying loop.",
+        "So I made the narration a structured project!",
+        "Does it work?",
+        "Yes it does.",
+    ]
+
+
+def test_rule_split_english_decimal_not_split():
+    """小数点（digit.digit）不切：IndexTTS-2.5 / 3.14 保持完整。"""
+    from app.services.text_split_service import rule_split
+    text = "IndexTTS-2.5 is fast. Version 3.14 ships today."
+    result = rule_split(text, [".", ","])
+    assert result == ["IndexTTS-2.5 is fast.", "Version 3.14 ships today."]
+
+
+def test_rule_split_english_thousands_separator_not_split():
+    """千分位逗号（1,000）不切。"""
+    from app.services.text_split_service import rule_split
+    text = "Over 1,000 users tried it, and counting."
+    result = rule_split(text, [",", "."])
+    assert result == ["Over 1,000 users tried it,", "and counting."]
+
+
+def test_rule_split_english_dotted_token_not_split():
+    """letter.letter 形式的点（app.ts / e.g 的缩写点）不切。"""
+    from app.services.text_split_service import rule_split
+    text = "Edit app.ts first. Then reload."
+    result = rule_split(text, ["."])
+    assert result == ["Edit app.ts first.", "Then reload."]
+
+
+def test_rule_split_english_time_colon_not_split():
+    """时间格式 12:30 的冒号不切。"""
+    from app.services.text_split_service import rule_split
+    text = "We met at 12:30; it was late."
+    result = rule_split(text, [";", "."])
+    assert result == ["We met at 12:30;", "it was late."]
+
+
+# ------- rule_split 闭引号吸收 -------
+
+def test_rule_split_closing_quote_stays_with_segment():
+    """标点后紧跟的闭引号/闭括号归前段，不得落到下一段开头。"""
+    from app.services.text_split_service import rule_split
+    text = 'He said "Hello." Then left.'
+    result = rule_split(text, ["."])
+    assert result == ['He said "Hello."', "Then left."]
+
+
+def test_rule_split_chinese_closing_bracket_stays_with_segment():
+    from app.services.text_split_service import rule_split
+    text = "他说「你好。」然后走了。"
+    result = rule_split(text, ["。", "，"])
+    assert result == ["他说「你好。」", "然后走了。"]
+
+
+# ------- rule_split 中英混合 -------
+
+def test_rule_split_bilingual_delimiters_mixed_text():
+    """中英混合文本：全角半角标点都生效，各自切在正确位置。"""
+    from app.services.text_split_service import rule_split
+    text = "今天我们要介绍 NarraForge。It is an AI voice studio. 支持多引擎！Really? Yes!"
+    result = rule_split(text, ["，", "。", "！", "？", "；", ".", ",", "!", "?", ";"])
+    assert result == [
+        "今天我们要介绍 NarraForge。",
+        "It is an AI voice studio.",
+        "支持多引擎！",
+        "Really?",
+        "Yes!",
+    ]
+
+
+def test_rule_split_english_paragraphs_and_sentences():
+    """真实事故文本同构：英文多段落 + 逗号分句，段落不粘连、句子按标点切。"""
+    from app.services.text_split_service import rule_split
+    text = (
+        "It started with one annoying loop: change a line of subtitles, "
+        "and you have to regenerate the TTS for that whole segment.\n\n"
+        "So I made the narration a structured project instead of a text file. "
+        "Change a line and only that segment gets re-synthesized."
+    )
+    result = rule_split(text, [".", ",", "!"], min_len_to_merge=0)
+    assert result == [
+        "It started with one annoying loop: change a line of subtitles,",
+        "and you have to regenerate the TTS for that whole segment.",
+        "So I made the narration a structured project instead of a text file.",
+        "Change a line and only that segment gets re-synthesized.",
+    ]
+
 
 # ------- llm_split -------
 
