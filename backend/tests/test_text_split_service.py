@@ -272,11 +272,51 @@ def test_rule_split_english_decimal_not_split():
 
 
 def test_rule_split_english_thousands_separator_not_split():
-    """千分位逗号（1,000）不切。"""
+    """千分位逗号（1,000）不切；英文段中逗号整体不作切分点。"""
     from app.services.text_split_service import rule_split
     text = "Over 1,000 users tried it, and counting."
     result = rule_split(text, [",", "."])
-    assert result == ["Over 1,000 users tried it,", "and counting."]
+    assert result == ["Over 1,000 users tried it, and counting."]
+
+
+def test_rule_split_english_comma_does_not_split_clause():
+    """英文段落：逗号只是分句符，子句不得从句中拆出（按 . ! ? 句读切）。"""
+    from app.services.text_split_service import rule_split, DEFAULT_RULE_DELIMITERS
+    text = (
+        "It started with one annoying loop: change a line of subtitles, and you have to "
+        "regenerate the TTS for that whole segment — which changes the audio length, which "
+        "throws off every subtitle and animation keyframe aligned to it. "
+        "So I made the narration a structured project instead of a text file — every segment "
+        "is an object with its own text, voice and duration. Change a line and only that "
+        "segment gets re-synthesized and re-timed, instead of regenerating the chapter and "
+        "re-syncing everything after it."
+    )
+    result = rule_split(text, list(DEFAULT_RULE_DELIMITERS), min_len_to_merge=0)
+    assert result == [
+        "It started with one annoying loop: change a line of subtitles, and you have to "
+        "regenerate the TTS for that whole segment — which changes the audio length, which "
+        "throws off every subtitle and animation keyframe aligned to it.",
+        "So I made the narration a structured project instead of a text file — every segment "
+        "is an object with its own text, voice and duration.",
+        "Change a line and only that segment gets re-synthesized and re-timed, instead of "
+        "regenerating the chapter and re-syncing everything after it.",
+    ]
+
+
+def test_rule_split_chinese_paragraph_still_splits_on_comma():
+    """中文主导段落：全角逗号仍是切分点（语言感知不影响中文行为）。"""
+    from app.services.text_split_service import rule_split
+    text = "今天天气很好，我们出去散步，心情非常愉快。"
+    result = rule_split(text, ["，", "。"], min_len_to_merge=0)
+    assert result == ["今天天气很好，", "我们出去散步，", "心情非常愉快。"]
+
+
+def test_rule_split_cjk_dominant_mixed_paragraph_keeps_comma_split():
+    """中文为主、夹英文词的段落：仍按全角逗号切。"""
+    from app.services.text_split_service import rule_split
+    text = "旁白改了文字，TTS 只重新合成这一段，后面的字幕不用重排。"
+    result = rule_split(text, ["，", "。"], min_len_to_merge=0)
+    assert result == ["旁白改了文字，", "TTS 只重新合成这一段，", "后面的字幕不用重排。"]
 
 
 def test_rule_split_english_dotted_token_not_split():
@@ -329,7 +369,7 @@ def test_rule_split_bilingual_delimiters_mixed_text():
 
 
 def test_rule_split_english_paragraphs_and_sentences():
-    """真实事故文本同构：英文多段落 + 逗号分句，段落不粘连、句子按标点切。"""
+    """真实事故文本同构：英文多段落，段落不粘连、只按句读切，逗号分句不拆。"""
     from app.services.text_split_service import rule_split
     text = (
         "It started with one annoying loop: change a line of subtitles, "
@@ -339,7 +379,7 @@ def test_rule_split_english_paragraphs_and_sentences():
     )
     result = rule_split(text, [".", ",", "!"], min_len_to_merge=0)
     assert result == [
-        "It started with one annoying loop: change a line of subtitles,",
+        "It started with one annoying loop: change a line of subtitles, "
         "and you have to regenerate the TTS for that whole segment.",
         "So I made the narration a structured project instead of a text file.",
         "Change a line and only that segment gets re-synthesized.",
