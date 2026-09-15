@@ -281,9 +281,23 @@ def _is_protected_delimiter(text: str, i: int) -> bool:
     nxt = text[i + 1] if i + 1 < len(text) else ""
     if ch in ".,:" and prev.isdigit() and nxt.isdigit():
         return True
-    if ch == "." and prev.isascii() and prev.isalpha() and nxt.isascii() and nxt.isalpha():
-        return True
-    return False
+    return ch == "." and prev.isascii() and prev.isalpha() and nxt.isascii() and nxt.isalpha()
+
+
+def _effective_delims(paragraph: str, delim_set: set[str]) -> set[str]:
+    """拉丁字母主导的段落里，半角逗号只是分句符而非句读，不参与切分。
+
+    判定与 ``_default_titles`` 同构：CJK 表意字符数 >= 拉丁字母数视为中文段落，
+    保持全量标点切分；否则剔除 ","，只按 . ! ? 等句读切，避免把
+    "which changes the audio length, which throws off ..." 这类从句拆出句子。
+    """
+    if "," not in delim_set:
+        return delim_set
+    cjk = sum(1 for ch in paragraph if "一" <= ch <= "鿿")
+    latin = sum(1 for ch in paragraph if ch.isascii() and ch.isalpha())
+    if latin > cjk:
+        return delim_set - {","}
+    return delim_set
 
 
 def _split_paragraph(paragraph: str, delim_set: set[str]) -> list[str]:
@@ -376,6 +390,10 @@ def rule_split(
     letter.letter 形式的缩写/文件名点（app.ts）。标点后紧跟的闭引号/闭括号
     归前段（"Hello." 或 「你好。」 不会把闭引号落到下一段开头）。
 
+    语言感知：拉丁字母主导的段落里，半角逗号只是分句符而非句读，不参与切分
+    （英文只在 . ! ? 等句读处断句，不会把 "which ... , which ..." 从句拆出句子）；
+    中文主导段落（CJK 表意字符 >= 拉丁字母）保持全量标点切分，全角逗号照常生效。
+
     合并规则（防止逗号密集时切出过多碎片段）：
     - 若某段长度 < ``min_len_to_merge`` 且下一段长度 < ``next_max_len_to_merge``，
       将下一段并入该段。贪心从左至右扫描，合并后若仍短继续吸并后续段。
@@ -397,13 +415,14 @@ def rule_split(
 
     all_segments: list[str] = []
     for para in paragraphs:
+        para_delims = _effective_delims(para, delim_set)
         segments: list[str] = []
-        for p in _split_paragraph(para, delim_set):
+        for p in _split_paragraph(para, para_delims):
             s = p.strip()
             if not s:
                 continue
             # 过滤纯标点段（仅由 delimiters 中的字符组成）
-            if all(c in delim_set for c in s):
+            if all(c in para_delims for c in s):
                 continue
             segments.append(s)
         if min_len_to_merge > 0:
