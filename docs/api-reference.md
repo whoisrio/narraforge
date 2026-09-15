@@ -1097,7 +1097,7 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 > `0` = 不限制；legacy admin 与 `ADMIN_EMAILS` 管理员豁免；local 模式不启用。
 >
 > **segment 文本长度上限（两种部署模式都生效）**：`MAX_SEGMENT_CHARS`（默认 `80`）是内容质量约束而非计费配额。
-> 拆分结果超长时自动在限制内最近标点处截断（无标点时退到最近空白词边界，避免拆开英文单词；连空白都没有才硬切）；POST/PUT 全量保存、`chapters:batch` 与分片合成的 text 覆盖携带超长文本时返回 `422 segment_too_long`（detail 为 `{code, max, chapter_id, segment_id}`）。
+> 拆分结果超长时自动在限制内最近标点处截断；拉丁主导段常规拆分不用半角逗号，但超长兜底可按逗号/破折号等从句边界规划切点，无标点时退到最近空白词边界（避免拆开英文单词；连空白都没有才硬切）；POST/PUT 全量保存、`chapters:batch` 与分片合成的 text 覆盖携带超长文本时返回 `422 segment_too_long`（detail 为 `{code, max, chapter_id, segment_id}`）。
 > `0` 或负数 = 不限制。
 
 ### ProjectIn Schema
