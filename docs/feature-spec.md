@@ -180,7 +180,7 @@ The Studio section is a professional timeline editor for multi-segment synthesis
 
 | Mode | Description |
 |------|-------------|
-| **Rule** | Split by punctuation delimiters (default bilingual: `，`。`！`？`；` + `.` `,` `!` `?` `;`; newlines are hard paragraph boundaries; decimals like `3.14`, thousands separators, and letter.dots like `app.ts` are never split), customizable |
+| **Rule** | Split by punctuation delimiters (default bilingual: `，`。`！`？`；` + `.` `,` `!` `?` `;`; newlines are hard paragraph boundaries; decimals like `3.14`, thousands separators, and letter.dots like `app.ts` are never split; Latin-dominant text does not use half-width commas for regular splitting, while the overlength fallback can use clause punctuation such as commas and em dashes), customizable |
 | **LLM** | LLM-powered semantic splitting with emotion analysis per segment |
 
 #### Emotion System

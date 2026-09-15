@@ -199,11 +199,11 @@ def test_rule_split_max_len_english_cuts_at_word_boundary():
 
 
 def test_rule_split_max_len_english_prefers_punctuation_over_whitespace():
-    """窗口内既有标点又有空格时，仍优先最近的标点（旧语义不变）。"""
+    """英文超长截断仍优先句读标点，而不是空白；但半角逗号不是句读。"""
     from app.services.text_split_service import rule_split
-    text = "hello world, " + "word " * 20  # 逗号在 offset 11，窗口内
+    text = "hello world; " + "word " * 20  # 句读标点在 offset 11，窗口内
     result = rule_split(text, ["。"], max_len=40)
-    assert result[0] == "hello world,"
+    assert result[0] == "hello world;"
 
 
 def test_rule_split_max_len_no_whitespace_still_hard_cuts():
@@ -300,6 +300,51 @@ def test_rule_split_english_comma_does_not_split_clause():
         "is an object with its own text, voice and duration.",
         "Change a line and only that segment gets re-synthesized and re-timed, instead of "
         "regenerating the chapter and re-syncing everything after it.",
+    ]
+
+
+def test_rule_split_max_len_english_does_not_isolate_audio_length():
+    """真实事故：英文超长句兜底截断时，不得把 'audio length,' 单独拆段。"""
+    from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split
+
+    text = (
+        "It started with one annoying loop: change a line of subtitles, and you have to "
+        "regenerate the TTS for that whole segment — which changes the audio length, which "
+        "throws off every subtitle and animation keyframe aligned to it."
+    )
+    result = rule_split(text, list(DEFAULT_RULE_DELIMITERS), min_len_to_merge=0, max_len=80)
+
+    assert all(len(segment) <= 80 for segment in result)
+    assert "audio length," not in result
+    assert not any(segment.startswith("audio length") for segment in result)
+    assert "which changes the audio length," in result
+
+
+def test_rule_split_english_paragraphs_use_semantic_clause_boundaries():
+    """真实文本全链路：每段 30-80 字，且按冒号/逗号/破折号等语义断点拆分。"""
+    from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split
+
+    text = (
+        "It started with one annoying loop: change a line of subtitles, and you have to "
+        "regenerate the TTS for that whole segment — which changes the audio length, which "
+        "throws off every subtitle and animation keyframe aligned to it.\n"
+        "So I made the narration a structured project instead of a text file — every segment "
+        "is an object with its own text, voice and duration. Change a line and only that "
+        "segment gets re-synthesized and re-timed, instead of regenerating the chapter and "
+        "re-syncing everything after it."
+    )
+    result = rule_split(text, list(DEFAULT_RULE_DELIMITERS), max_len=80)
+
+    assert all(30 <= len(segment) <= 80 for segment in result)
+    assert result == [
+        "It started with one annoying loop: change a line of subtitles,",
+        "and you have to regenerate the TTS for that whole segment —",
+        "which changes the audio length,",
+        "which throws off every subtitle and animation keyframe aligned to it.",
+        "So I made the narration a structured project instead of a text file —",
+        "every segment is an object with its own text, voice and duration.",
+        "Change a line and only that segment gets re-synthesized and re-timed,",
+        "instead of regenerating the chapter and re-syncing everything after it.",
     ]
 
 

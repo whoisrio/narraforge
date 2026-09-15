@@ -260,7 +260,7 @@ def markdown_split(
 # ---------------------------------------------------------------------------
 
 # 超长段截断的兜底标点集（在调用方 delimiters 之外补充）
-_CAP_SECONDARY_PUNCT = "，、；：,;:"
+_CAP_SECONDARY_PUNCT = "，、；：,;:—"
 
 # 默认规则切分标点（中英双语）：中文全角 + 英文半角句读
 DEFAULT_RULE_DELIMITERS = ["，", "。", "！", "？", "；", ".", ",", "!", "?", ";"]
@@ -293,11 +293,15 @@ def _effective_delims(paragraph: str, delim_set: set[str]) -> set[str]:
     """
     if "," not in delim_set:
         return delim_set
-    cjk = sum(1 for ch in paragraph if "一" <= ch <= "鿿")
-    latin = sum(1 for ch in paragraph if ch.isascii() and ch.isalpha())
-    if latin > cjk:
+    if _latin_dominant(paragraph):
         return delim_set - {","}
     return delim_set
+
+
+def _latin_dominant(text: str) -> bool:
+    cjk = sum(1 for ch in text if "一" <= ch <= "鿿")
+    latin = sum(1 for ch in text if ch.isascii() and ch.isalpha())
+    return latin > cjk
 
 
 def _split_paragraph(paragraph: str, delim_set: set[str]) -> list[str]:
@@ -342,9 +346,9 @@ def _cap_overlong(segments: list[str], max_len: int | None, delimiters: list[str
     前段），没有标点则硬切在 max_len；余下部分递归同样处理。max_len<=0 不截断。"""
     if max_len is None or max_len <= 0:
         return segments
-    punct = set(delimiters or []) | set(_CAP_SECONDARY_PUNCT)
     capped: list[str] = []
     for seg in segments:
+        punct = set(delimiters or []) | set(_CAP_SECONDARY_PUNCT)
         capped.extend(_cap_one(seg, max_len, punct))
     return capped
 
@@ -390,9 +394,10 @@ def rule_split(
     letter.letter 形式的缩写/文件名点（app.ts）。标点后紧跟的闭引号/闭括号
     归前段（"Hello." 或 「你好。」 不会把闭引号落到下一段开头）。
 
-    语言感知：拉丁字母主导的段落里，半角逗号只是分句符而非句读，不参与切分
-    （英文只在 . ! ? 等句读处断句，不会把 "which ... , which ..." 从句拆出句子）；
-    中文主导段落（CJK 表意字符 >= 拉丁字母）保持全量标点切分，全角逗号照常生效。
+    语言感知：拉丁字母主导的段落里，半角逗号只是分句符而非句读，不参与常规切分
+    （英文只在 . ! ? 等句读处断句）。若整段仍超过 ``max_len``，兜底阶段才用逗号、
+    破折号等从句边界规划切点，避免硬凑词边界。中文主导段落（CJK 表意字符
+    >= 拉丁字母）保持全量标点切分，全角逗号照常生效。
 
     合并规则（防止逗号密集时切出过多碎片段）：
     - 若某段长度 < ``min_len_to_merge`` 且下一段长度 < ``next_max_len_to_merge``，
