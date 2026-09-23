@@ -26,12 +26,14 @@ import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segm
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
 import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
 import { useSegmentPatchSync } from '../hooks/useSegmentPatchSync';
-import { recoverStaleProject } from '../hooks/recoverStaleProject';
+import { handleStaleSave } from '../hooks/handleStaleSave';
 import { peekTryHandoffText, consumeTryHandoffText } from '../try/tryHandoff';
 import { applyTryHandoffToProject } from '../try/applyTryHandoff';
 import { getDraft, deleteDraft, type ProjectDraftRecord } from '../services/segmentedDraftStore';
+import { listConflictedDrafts, deleteConflictedDraft, putConflictedDraft, type ConflictedDraftEntry } from '../services/conflictedDraftStore';
 import { MigrationPrompt } from '../components/SegmentedTTS/MigrationPrompt';
 import { ConflictPrompt } from '../components/SegmentedTTS/ConflictPrompt';
+import { ConflictDraftsDialog } from '../components/SegmentedTTS/ConflictDraftsDialog';
 import { useStorageMode } from '../hooks/useStorageMode';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
@@ -370,7 +372,13 @@ export function TTSSynthesis({
           if (ch) restoreChapterSettings(ch);
           return;
         }
-        setConflictPrompt({ backend: full, draft: localDraft });
+        setConflictPrompt({ backend: full, draft: localDraft, archived: false });
+        // 冲突期间以后端权威态垫底渲染：裁决前 UI 显示权威内容，同时 draftSync
+        // 随 project.id 正确绑定（否则 resolveConflict 的 adopt/force-save 会落到
+        // 占位项目上）。autosave 保持暂停（initialLoadDoneRef=false），裁决时统一恢复。
+        const backendBaseline = migrateV1(full, t);
+        setProject(backendBaseline);
+        dispatch({ type: 'LOAD_PROJECT', project: backendBaseline });
         return;
       }
       const migrated = migrateV1(full, t);
@@ -503,25 +511,19 @@ export function TTSSynthesis({
       if (code === 'segment_too_long') showToast(t('segmentEdit.segmentTooLong'), 'error');
       else if (code === 'chapter_limit_reached') showToast(t('projectShell.chapterQuotaReached'), 'error');
       else if (code === 'stale_payload' && project?.id) {
-        // 乐观锁拒绝：本地草稿基于过期的服务端版本（他处已更新/合成端点已前进）。
-        // 恢复 = 拉后端权威态 + adoptBackendVersion，丢弃冲突草稿避免反复 409。
-        void recoverStaleProject({
+        // 真冲突（自愈已耗尽：服务端版本不属于本端任何写）。第二层：
+        // pause → 归档草稿（可找回）→ 拉后端权威态 → 弹模态裁决窗，绝不静默丢弃。
+        void handleStaleSave({
           projectId: project.id,
           storage: projectStorage,
-          adoptBackendVersion: draftSync.adoptBackendVersion,
-          applyProject: (p) => {
-            // 关键：同步 lastSavedUpdatedAtRef —— 恢复回来的就是服务端权威态，
-            // 若不同步，autosave effect 会把这次 LOAD_PROJECT 当成新变更再次
-            // markDirty → PUT →（批量合成期间）409 → 恢复 → 再 PUT，形成
-            // "检测到项目已在别处更新"的 toast 循环（2026-08-28 用户反馈）。
-            lastSavedUpdatedAtRef.current = p.updated_at;
-            setProject(p);
-            dispatch({ type: 'LOAD_PROJECT', project: p });
-          },
+          pause: draftSync.pause,
+          resume: draftSync.resume,
+          openPrompt: (backend, draft) => setConflictPrompt({ backend, draft, archived: true }),
           migrate: (p) => migrateV1(p, t),
-        }).then((recovered) => {
-          if (recovered) showToast(t('tts.staleSaveRecovered'), 'info');
-        }).catch(() => { /* 恢复失败等下一轮保存重试 */ });
+        }).then((status) => {
+          if (status === 'fetch-failed') showToast(t('tts.staleSaveRecoveryFailed'), 'error');
+          else if (status === 'prompted') void refreshConflictArchives();
+        }).catch(() => { /* 归档/拉取异常：草稿仍在，等下一轮保存重试 */ });
       }
     },
   });
@@ -564,7 +566,87 @@ export function TTSSynthesis({
 
   const [showMigration, setShowMigration] = useState(false);
   const [localCount, setLocalCount] = useState(0);
-  const [conflict, setConflictPrompt] = useState<{ backend: SegmentedProject; draft: ProjectDraftRecord } | null>(null);
+  // 冲突裁决：backend=后端权威态，draft=刚归档的本地草稿；archived=该草稿是否已归档
+  // （保存期 handleStaleSave 已归档；加载期检测到的冲突尚未归档，裁决放弃时补归档）。
+  const [conflict, setConflictPrompt] = useState<{
+    backend: SegmentedProject;
+    draft: ProjectDraftRecord;
+    archived: boolean;
+  } | null>(null);
+  // 冲突草稿归档（找回入口 + 对话框数据）
+  const [conflictArchives, setConflictArchives] = useState<ConflictedDraftEntry[]>([]);
+  const [conflictArchiveOpen, setConflictArchiveOpen] = useState(false);
+
+  const refreshConflictArchives = useCallback(async () => {
+    if (storageMode !== 'backend' || !project?.id || project.id === SCRATCHPAD_PROJECT_ID) {
+      setConflictArchives([]);
+      return;
+    }
+    try {
+      setConflictArchives(await listConflictedDrafts(project.id));
+    } catch {
+      setConflictArchives([]); // IndexedDB 不可用时静默：入口隐藏
+    }
+  }, [storageMode, project?.id]);
+
+  useEffect(() => { void refreshConflictArchives(); }, [refreshConflictArchives]);
+
+  /**
+   * 冲突裁决（加载期与保存期共用，归档恢复也复用）：
+   * - 用后端：adopt 权威态（被放弃的草稿保证已归档）；
+   * - 用草稿：force save（base_updated_at=null 绕过乐观锁——用户显式选择草稿胜出）
+   *   并以服务端响应收尾草稿记录；
+   * - 两种连径都恢复 autosave（initialLoadDoneRef + resume），修复加载期裁决后
+   *   autosave 永久暂停、"用草稿"从不落库的旧 bug。
+   */
+  const resolveConflict = useCallback(async (choice: 'backend' | 'draft') => {
+    if (!conflict) return;
+    const { backend, draft } = conflict;
+    // 防御：弹窗期间草稿记录又被更新（模态下理论不可能）→ 先归档再裁决
+    const current = await getDraft(draft.project_id);
+    if (current && current.updated_at !== draft.updated_at) {
+      try { await putConflictedDraft(draft.project_id, current); } catch { /* 归档失败不阻塞裁决 */ }
+    }
+    if (choice === 'backend') {
+      // 被放弃的本地草稿必须归档可找回（加载期冲突路径 handleStaleSave 未归档过）
+      if (!conflict.archived) {
+        try { await putConflictedDraft(draft.project_id, current ?? draft); } catch { /* 同上 */ }
+      }
+      await draftSync.adoptBackendVersion(backend);
+      // 关键：同步 lastSavedUpdatedAtRef —— 权威态灌回若不同步，autosave 会把
+      // LOAD_PROJECT 当成新变更再 markDirty → PUT → 再 409 的循环。
+      lastSavedUpdatedAtRef.current = backend.updated_at;
+      setProject(backend);
+      dispatch({ type: 'LOAD_PROJECT', project: backend });
+      const ch = getActiveChapter(backend);
+      if (ch) restoreChapterSettings(ch);
+    } else {
+      // 先同步 lastSavedUpdatedAtRef 防 LOAD_PROJECT 触发 markDirty 抢跑（带旧 base 的 PUT）
+      lastSavedUpdatedAtRef.current = draft.draft.updated_at;
+      setProject(draft.draft);
+      dispatch({ type: 'LOAD_PROJECT', project: draft.draft });
+      try {
+        // force save：不携带 base（后端 None=放行），把用户选择的草稿真正落库。
+        // 该通道仅限冲突裁决"用草稿"与归档恢复，不得新增其他调用点。
+        const saved = await projectStorage.saveProject(draft.draft, { base_updated_at: null });
+        const serverAt = saved?.updated_at ?? draft.draft.updated_at;
+        const adopted = { ...draft.draft, updated_at: serverAt };
+        await draftSync.adoptBackendVersion(adopted);
+        lastSavedUpdatedAtRef.current = serverAt;
+        setProject(adopted);
+        dispatch({ type: 'LOAD_PROJECT', project: adopted });
+        const ch = getActiveChapter(adopted);
+        if (ch) restoreChapterSettings(ch);
+      } catch {
+        showToast(t('common.saveFailed'), 'error');
+        // 草稿记录未动（仍 dirty、旧 base）：下次保存重走冲突流程，幂等不丢数据
+      }
+    }
+    setConflictPrompt(null);
+    initialLoadDoneRef.current = true; // 修复：加载期冲突裁决后 autosave 永久暂停的旧 bug
+    draftSync.resume();
+    void refreshConflictArchives();
+  }, [conflict, draftSync, projectStorage, dispatch, t, showToast, refreshConflictArchives]);
 
   // ---- Chapter management ----
 
@@ -2511,6 +2593,15 @@ export function TTSSynthesis({
                 )}
               </div>
               <div className={styles.productionRight}>
+                {storageMode === 'backend' && !isScratchpadProject && conflictArchives.length > 0 && (
+                  <button
+                    type="button"
+                    className={styles.toolbarPill}
+                    onClick={() => setConflictArchiveOpen(true)}
+                  >
+                    {t('segment.conflictArchive.entryWithCount', { count: conflictArchives.length })}
+                  </button>
+                )}
                 <button
                   type="button"
                   className={styles.toolbarPill}
@@ -2762,19 +2853,39 @@ export function TTSSynthesis({
         <ConflictPrompt
           backend={conflict.backend}
           draft={conflict.draft}
-          onUseBackend={async () => {
-            await draftSync.adoptBackendVersion(conflict.backend);
-            setProject(conflict.backend);
-            dispatch({ type: 'LOAD_PROJECT', project: conflict.backend });
-            setConflictPrompt(null);
-          }}
-          onUseDraft={async () => {
-            setProject(conflict.draft.draft);
-            dispatch({ type: 'LOAD_PROJECT', project: conflict.draft.draft });
-            setConflictPrompt(null);
-          }}
+          onUseBackend={() => void resolveConflict('backend')}
+          onUseDraft={() => void resolveConflict('draft')}
         />
       )}
+      <ConflictDraftsDialog
+        open={conflictArchiveOpen}
+        entries={conflictArchives}
+        onClose={() => setConflictArchiveOpen(false)}
+        onRestore={(entry) => {
+          setConflictArchiveOpen(false);
+          // 恢复归档：拉当前后端态进入同一套冲突裁决（不做静默覆盖服务器的捷径）；
+          // 恢复前若本地还有未保存草稿，先归档（不静默丢弃）。
+          void (async () => {
+            try {
+              const current = await getDraft(entry.project_id);
+              if (current?.dirty) {
+                try { await putConflictedDraft(entry.project_id, current); } catch { /* 归档失败不阻塞 */ }
+              }
+              const backend = await projectStorage.getProject(entry.project_id);
+              if (!backend) {
+                showToast(t('common.saveFailed'), 'error');
+                return;
+              }
+              setConflictPrompt({ backend: migrateV1(backend, t), draft: entry.record, archived: true });
+            } catch {
+              showToast(t('common.saveFailed'), 'error');
+            }
+          })();
+        }}
+        onDelete={(entry) => {
+          void deleteConflictedDraft(entry.id).then(() => void refreshConflictArchives());
+        }}
+      />
       <RoleLibraryPanel
         open={roleLibraryOpen}
         onClose={() => setRoleLibraryOpen(false)}

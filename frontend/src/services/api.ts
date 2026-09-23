@@ -16,6 +16,18 @@ export function apiErrorCode(err: unknown): string | undefined {
   return typeof detail === 'object' && detail !== null ? detail.code : undefined;
 }
 
+/**
+ * 409 stale_payload 时提取服务端当前 updated_at（detail.server_updated_at）。
+ * 供乐观锁冲突的自愈判定（真假冲突）与裁决提示使用；非该形状返回 undefined。
+ */
+export function apiStaleServerUpdatedAt(err: unknown): string | undefined {
+  const detail = (err as { response?: { data?: { detail?: { code?: string; server_updated_at?: unknown } } } })
+    ?.response?.data?.detail;
+  if (typeof detail !== 'object' || detail === null) return undefined;
+  if (detail.code !== 'stale_payload') return undefined;
+  return typeof detail.server_updated_at === 'string' ? detail.server_updated_at : undefined;
+}
+
 // Voice Clone API
 export const voiceApi = {
   upload: async (file: File, promptText?: string, projectId?: string): Promise<VoiceProfile> => {

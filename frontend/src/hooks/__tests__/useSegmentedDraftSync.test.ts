@@ -6,6 +6,18 @@ import { useSegmentedDraftSync } from '../useSegmentedDraftSync';
 import { deleteDraft, getDraft, listDrafts } from '../../services/segmentedDraftStore';
 import type { SegmentedProjectStorage } from '../../services/segmentedProjectStorage';
 
+/** 构造后端 409 stale_payload 形状的 axios 错误（带 detail.server_updated_at）。 */
+function staleError(serverUpdatedAt: string): Error {
+  const err = new Error('Request failed with status code 409') as Error & {
+    response?: { status: number; data: { detail: { code: string; server_updated_at: string } } };
+  };
+  err.response = {
+    status: 409,
+    data: { detail: { code: 'stale_payload', server_updated_at: serverUpdatedAt } },
+  };
+  return err;
+}
+
 function makeProject(id: string): SegmentedProject {
   const now = new Date().toISOString();
   return {
@@ -217,6 +229,167 @@ describe('useSegmentedDraftSync', () => {
     expect(storageCalls.save).toHaveBeenCalledWith(
       edited, { base_updated_at: '2026-08-27T01:30:00' },
     );
+  });
+});
+
+describe('useSegmentedDraftSync 409 自愈（第一层：假冲突零感知重试）', () => {
+  it('PUT 在途时自写推进服务端（S 已登记）→ 换 base 重试成功，不触发 onSaveError', async () => {
+    const onSaveError = vi.fn();
+    let rejectFirst!: (e: Error) => void;
+    storageCalls.save
+      .mockImplementationOnce(() => new Promise((_r, rej) => { rejectFirst = rej; }))
+      .mockResolvedValueOnce({ ...makeProject('p1'), updated_at: '2026-09-23T03:00:00' });
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, onSaveError, debounceMs: 60_000 }),
+    );
+    const base = { ...makeProject('p1'), updated_at: '2026-09-23T01:00:00' };
+    await act(async () => { await result.current.adoptBackendVersion(base); });
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    await act(async () => { await result.current.markDirty(edited); });
+
+    let flushPromise!: Promise<void>;
+    await act(async () => { flushPromise = result.current.flush(); });
+    // PUT 在途：本端细粒度端点完成，noteServerVersion 登记 T2 并推进 base
+    await new Promise(r => setTimeout(r, 10));
+    await act(async () => { await result.current.noteServerVersion('2026-09-23T02:00:00'); });
+    await act(async () => { rejectFirst(staleError('2026-09-23T02:00:00')); await flushPromise; });
+
+    // 自愈：第二次 PUT 以 409 报告的服务端当前值为 base，成功收尾
+    expect(storageCalls.save).toHaveBeenCalledTimes(2);
+    expect(storageCalls.save).toHaveBeenLastCalledWith(
+      edited, { base_updated_at: '2026-09-23T02:00:00' },
+    );
+    expect(onSaveError).not.toHaveBeenCalled();
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(false);
+    expect(draft?.base_updated_at).toBe('2026-09-23T03:00:00');
+    expect(draft?.last_save_error).toBeUndefined();
+  });
+
+  it('409 时 S 尚未登记、等待窗口内白写响应到达 → 重试成功，不触发 onSaveError', async () => {
+    const onSaveError = vi.fn();
+    storageCalls.save
+      .mockRejectedValueOnce(staleError('2026-09-23T02:00:00'))
+      .mockResolvedValueOnce({ ...makeProject('p1'), updated_at: '2026-09-23T03:00:00' });
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', {
+        storage, onSaveError, debounceMs: 60_000,
+        staleRetry: { pollIntervalMs: 10, maxWaitMs: 500 },
+      }),
+    );
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    await act(async () => { await result.current.markDirty(edited); });
+
+    // 409 先于本端在途自写响应到达（网络乱序）：100ms 后 note 登记服务端版本
+    await act(async () => {
+      const flushPromise = result.current.flush();
+      setTimeout(() => { void result.current.noteServerVersion('2026-09-23T02:00:00'); }, 100);
+      await flushPromise;
+    });
+
+    expect(storageCalls.save).toHaveBeenCalledTimes(2);
+    expect(storageCalls.save).toHaveBeenLastCalledWith(
+      edited, { base_updated_at: '2026-09-23T02:00:00' },
+    );
+    expect(onSaveError).not.toHaveBeenCalled();
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(false);
+  });
+
+  it('S 不属于本端任何写（真外部冲突）→ 等待窗口耗尽后 onSaveError 收到原错误', async () => {
+    const err = staleError('2026-09-23T09:00:00');
+    const onSaveError = vi.fn();
+    storageCalls.save.mockRejectedValueOnce(err);
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', {
+        storage, onSaveError, debounceMs: 60_000,
+        staleRetry: { pollIntervalMs: 5, maxWaitMs: 30 },
+      }),
+    );
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    await act(async () => { await result.current.markDirty(edited); });
+    await act(async () => { await result.current.flush(); });
+
+    expect(storageCalls.save).toHaveBeenCalledTimes(1);
+    expect(onSaveError).toHaveBeenCalledTimes(1);
+    expect(onSaveError).toHaveBeenCalledWith(err);
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(true);
+    expect(draft?.last_save_error).toBe(err.message);
+  });
+
+  it('PUT 在途草稿被取代 + 409 → 静默退出：无错误记录、不触发 onSaveError（新草稿的 flush 接手）', async () => {
+    const onSaveError = vi.fn();
+    let rejectFirst!: (e: Error) => void;
+    storageCalls.save
+      .mockImplementationOnce(() => new Promise((_r, rej) => { rejectFirst = rej; }));
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, onSaveError, debounceMs: 60_000 }),
+    );
+    const oldProj = { ...makeProject('p1'), updated_at: '2026-01-01T00:00:00.000Z' };
+    const newProj = { ...makeProject('p1'), updated_at: '2026-02-02T00:00:00.000Z' };
+    await act(async () => { await result.current.markDirty(oldProj); });
+    let flushPromise!: Promise<void>;
+    await act(async () => { flushPromise = result.current.flush(); });
+    await new Promise(r => setTimeout(r, 10));
+    await act(async () => { await result.current.markDirty(newProj); });
+    await act(async () => { rejectFirst(staleError('2026-09-23T02:00:00')); await flushPromise; });
+
+    expect(onSaveError).not.toHaveBeenCalled();
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(true);
+    expect(draft?.draft.updated_at).toBe('2026-02-02T00:00:00.000Z');
+    expect(draft?.last_save_error).toBeUndefined();
+  });
+
+  it('连续自撞超过重试上限（3 次）→ 按真冲突上抛 onSaveError', async () => {
+    const err = staleError('2026-09-23T02:00:00');
+    const onSaveError = vi.fn();
+    storageCalls.save.mockRejectedValue(err);
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, onSaveError, debounceMs: 60_000 }),
+    );
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    await act(async () => { await result.current.markDirty(edited); });
+    // 预登记 T2（服务端已推进到本端已知版本，每次 409 都报 T2）
+    await act(async () => { await result.current.noteServerVersion('2026-09-23T02:00:00'); });
+    await act(async () => { await result.current.flush(); });
+
+    // 首次 + 3 次重试 = 4 次 PUT，全部 409 后上抛
+    expect(storageCalls.save).toHaveBeenCalledTimes(4);
+    expect(onSaveError).toHaveBeenCalledTimes(1);
+    expect(onSaveError).toHaveBeenCalledWith(err);
+  });
+
+  it('noteServerVersion 乱序响应不回退 base（单调保护）', async () => {
+    const { result } = renderHook(() => useSegmentedDraftSync('p1', { storage }));
+    await act(async () => { await result.current.adoptBackendVersion({ ...makeProject('p1'), updated_at: '2026-09-23T01:00:00' }); });
+    await act(async () => { await result.current.noteServerVersion('2026-09-23T02:00:00'); });
+    // 乱序到达的旧响应不得把 base 拉回
+    await act(async () => { await result.current.noteServerVersion('2026-09-23T01:30:00'); });
+    const draft = await getDraft('p1');
+    expect(draft?.base_updated_at).toBe('2026-09-23T02:00:00');
+  });
+
+  it('pause 挂起 flush 排程，markDirty 照常写草稿；resume 后立即补发', async () => {
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, debounceMs: 30 }),
+    );
+    act(() => { result.current.pause(); });
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    await act(async () => { await result.current.markDirty(edited); });
+    // paused：草稿已写但排程被挂起
+    const mid = await getDraft('p1');
+    expect(mid?.dirty).toBe(true);
+    expect(mid?.draft.name).toBe('edited');
+    await new Promise(r => setTimeout(r, 100));
+    expect(storageCalls.save).not.toHaveBeenCalled();
+
+    act(() => { result.current.resume(); });
+    await new Promise(r => setTimeout(r, 100));
+    expect(storageCalls.save).toHaveBeenCalledTimes(1);
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(false);
   });
 });
 
