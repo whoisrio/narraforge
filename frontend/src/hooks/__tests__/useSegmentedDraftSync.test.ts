@@ -371,6 +371,42 @@ describe('useSegmentedDraftSync 409 自愈（第一层：假冲突零感知重�
     expect(draft?.base_updated_at).toBe('2026-09-23T02:00:00');
   });
 
+  it('自撞重试带上草稿最新内容：PUT 在途期间并入的细粒度写结果不被旧快照覆盖', async () => {
+    // 场景：整包 PUT 在途时段 PATCH 完成，refreshDraft 把 PATCH 结果并入草稿记录。
+    // 重试若沿用发起 flush 时捕获的旧快照，整包 PUT 会把 PATCH 写进服务端的字段
+    // 覆盖回旧值（后端对已存在段照写 text）。
+    const onSaveError = vi.fn();
+    let rejectFirst!: (e: Error) => void;
+    storageCalls.save
+      .mockImplementationOnce(() => new Promise((_r, rej) => { rejectFirst = rej; }))
+      .mockResolvedValueOnce({ ...makeProject('p1'), updated_at: '2026-09-23T03:00:00' });
+    const { result } = renderHook(() =>
+      useSegmentedDraftSync('p1', { storage, onSaveError, debounceMs: 60_000 }),
+    );
+    const base = { ...makeProject('p1'), updated_at: '2026-09-23T01:00:00' };
+    await act(async () => { await result.current.adoptBackendVersion(base); });
+    const edited = { ...makeProject('p1'), name: 'edited' };
+    await act(async () => { await result.current.markDirty(edited); });
+
+    let flushPromise!: Promise<void>;
+    await act(async () => { flushPromise = result.current.flush(); });
+    await new Promise(r => setTimeout(r, 10));
+    // PUT 在途：细粒度写完成 → 版本登记 + base 前移，结果并入草稿内容
+    await act(async () => { await result.current.noteServerVersion('2026-09-23T02:00:00'); });
+    const refreshed = { ...makeProject('p1'), name: 'edited-with-patch-result' };
+    await act(async () => { await result.current.refreshDraft(refreshed); });
+    await act(async () => { rejectFirst(staleError('2026-09-23T02:00:00')); await flushPromise; });
+
+    expect(storageCalls.save).toHaveBeenCalledTimes(2);
+    expect(storageCalls.save).toHaveBeenLastCalledWith(
+      refreshed, { base_updated_at: '2026-09-23T02:00:00' },
+    );
+    expect(onSaveError).not.toHaveBeenCalled();
+    const draft = await getDraft('p1');
+    expect(draft?.dirty).toBe(false);
+    expect(draft?.draft.name).toBe('edited-with-patch-result');
+  });
+
   it('pause 挂起 flush 排程，markDirty 照常写草稿；resume 后立即补发', async () => {
     const { result } = renderHook(() =>
       useSegmentedDraftSync('p1', { storage, debounceMs: 30 }),

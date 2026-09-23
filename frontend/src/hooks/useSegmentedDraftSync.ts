@@ -133,8 +133,9 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     if (pausedRef.current) return;
     const pid = projectIdRef.current;
     if (!pid) return;
-    const rec = await getDraft(pid);
-    if (!rec || !rec.dirty) return;
+    const rec0 = await getDraft(pid);
+    if (!rec0 || !rec0.dirty) return;
+    let rec = rec0;
     const { maxRetries } = staleRetryRef.current;
     try {
       let saved: SegmentedProject | undefined;
@@ -160,6 +161,12 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
             if (wait === 'timeout') throw error;
           }
           if (attempt >= maxRetries) throw error;
+          // 重试必须带上草稿的最新内容：PUT 在途期间 refreshDraft / noteServerVersion
+          // 可能已把细粒度写（段 PATCH、合成结果）并入草稿记录，沿用首次捕获的快照
+          // 会把那些结果整包覆盖回旧值——后端整包 PUT 对已存在段是照写 text 的。
+          const fresh = await getDraft(pid);
+          if (!fresh || fresh.updated_at !== rec.updated_at) return;
+          rec = fresh;
           base = serverAt;
           console.debug('[draftSync] stale_payload self-heal retry', { attempt: attempt + 1, serverAt });
         }
@@ -212,11 +219,16 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
   }, [clearTimer, projectId, debounceMs, flush]);
 
   const markDirty = useCallback(async (project: SegmentedProject) => {
-    if (!projectId) return;
+    // 草稿 key 取"被写项目自己的 id"，不能用闭包里的 projectId：TTSSynthesis 的
+    // project 初值是 scratchpad 项目，加载 effect 捕获的 draftSync 仍闭包着
+    // '__scratchpad__' —— 用它当 key，真实项目的草稿永远不会建立，首次 markDirty
+    // 只能得到 base_updated_at=null，整包 PUT 不带 base（后端按老客户端放行），
+    // 乐观锁直接失效、陈旧快照可静默覆盖他人写入。
+    if (!project.id) return;
     const now = new Date().toISOString();
-    const existing = (await getDraft(projectId)) ?? null;
+    const existing = (await getDraft(project.id)) ?? null;
     const rec: ProjectDraftRecord = {
-      project_id: projectId,
+      project_id: project.id,
       draft: project,
       base_updated_at: existing?.base_updated_at ?? null,
       updated_at: now,
@@ -225,12 +237,14 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     await putDraft(rec);
     dirtyRef.current = true;
     schedule();
-  }, [projectId, schedule]);
+  }, [schedule]);
 
   const adoptBackendVersion = useCallback(async (project: SegmentedProject) => {
-    if (!projectId) return;
+    // key 同样取被写项目的 id（见 markDirty 注释）：加载期调用点闭包的是
+    // scratchpad 的 projectId，用它会把草稿写到别的项目名下。
+    if (!project.id) return;
     const rec: ProjectDraftRecord = {
-      project_id: projectId,
+      project_id: project.id,
       draft: project,
       base_updated_at: project.updated_at,
       updated_at: project.updated_at,
@@ -239,22 +253,25 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     await putDraft(rec);
     dirtyRef.current = false;
     clearTimer();
-  }, [projectId, clearTimer]);
+  }, [clearTimer]);
 
   const noteServerVersion = useCallback(async (serverUpdatedAt: string) => {
     // 服务端被细粒度端点（合成/PATCH/adjust 等）推进后，把乐观锁 base 前移，
     // 避免下一次整包 PUT 因 base 过期被 409。不动 draft 内容（本地编辑仍在）。
-    if (!projectId) return;
+    // 用 ref 而不是闭包 projectId：调用点可能持有加载期创建的旧回调，闭包值会是
+    // scratchpad 的 id，导致登记与查草稿都落到别的项目名下（与 flush 保持一致）。
+    const pid = projectIdRef.current;
+    if (!pid) return;
     // 该版本由本端发起的写产生 → 登记进已知集合（409 自愈判定）
-    registerKnownVersion(projectId, serverUpdatedAt);
-    const rec = await getDraft(projectId);
+    registerKnownVersion(pid, serverUpdatedAt);
+    const rec = await getDraft(pid);
     if (!rec) return;
     // 单调保护：乱序到达的旧响应（如乱序完成的 PATCH）不得把 base 回退，
     // 否则会制造本可避免的 409。
     if (rec.base_updated_at && !isLaterVersion(serverUpdatedAt, rec.base_updated_at)) return;
     if (rec.base_updated_at === serverUpdatedAt) return;
     await putDraft({ ...rec, base_updated_at: serverUpdatedAt });
-  }, [projectId, registerKnownVersion]);
+  }, [registerKnownVersion]);
 
   const refreshDraft = useCallback(async (project: SegmentedProject) => {
     // touch=false 的变更（PATCH/结构端点已远端持久化）不触发 markDirty，
@@ -263,11 +280,11 @@ export function useSegmentedDraftSync(projectId: string | null, options: DraftSy
     // dialogue-prosody e2e：kind 切换的 PATCH 被进入工作室时标记的
     // 陈旧草稿 PUT 覆盖回 narration）。
     // 只更新已有记录：无记录时不创建（初始加载等场景不制造草稿）。
-    if (!projectId) return;
-    const rec = await getDraft(projectId);
+    if (!project.id) return;
+    const rec = await getDraft(project.id);
     if (!rec) return;
     await putDraft({ ...rec, draft: project });
-  }, [projectId]);
+  }, []);
 
   /** 暂停 autosave：挂起 flush 排程与执行（冲突裁决期间防 409 循环）。 */
   const pause = useCallback(() => {

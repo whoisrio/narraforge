@@ -375,6 +375,18 @@ When in the Studio sidebar, each engine has specific voice source restrictions:
 - Initial load does not trigger `markDirty` to prevent false conflicts
 - Chapter sync-status badges poll only backend-persisted chapters: the page tracks the server-known chapter id set (from GET on load/reload, expanded to all in-memory chapters after each successful autosave via the draft-sync `onSaved` callback), and `ProjectShell` skips polling for in-memory-only chapters — e.g. the default chapter injected when opening an empty project — which would otherwise 404 and spam the console.
 
+**409 stale_payload handling — two layers** (design: `docs/plans/2026-09-23-segmented-save-conflict-recovery-design.md`)
+
+The optimistic lock is project-level, but ~20 fine-grained endpoints (segment PATCH, synthesis, adjust-audio, chapter structure) all advance the same `updated_at`. Most 409s are therefore the client colliding with its own writes.
+
+- **Layer 1 — false-conflict self-heal, fully inside `useSegmentedDraftSync`.** It remembers the server versions its own writes produced (fine-grained endpoint responses via `noteServerVersion` plus successful PUT responses, 64 kept per project). A 409 whose `server_updated_at` is already in that set means no other writer touched the project, so it retries with that version as the new base — at most 3 retries, no toast, no dialog, no draft loss. When the 409 arrives before the in-flight self-write response, it polls for up to 1s for that version to register first.
+- Each retry re-reads the draft and sends its latest content, so a fine-grained write that landed while the PUT was in flight is not clobbered by the stale snapshot (the big PUT does write `text` on existing segments).
+- A 409 whose `server_updated_at` is unknown means a real external writer (agent, a second tab). Layer 2 stops autosave, archives the local draft into the IndexedDB `conflicted_drafts` store (10 most recent per project), fetches the authoritative state, and shows a modal prompt. "Use draft" force-saves with `base_updated_at: null` — the choice is actually persisted, not just loaded into the UI; "Use backend" adopts the server state. No path silently discards a draft.
+- `useSegmentedDraftSync.noteServerVersion` is monotonic, so an out-of-order response cannot regress the base and manufacture avoidable 409s.
+- The load-time conflict prompt is the same adjudication path, which also fixed two long-standing bugs: autosave stayed paused after adjudication, and "use draft" never reached the server (the prompt reappeared on reload).
+- Abandoned drafts stay retrievable from the studio toolbar's "conflicted drafts (N)" entry; restoring one re-enters the same adjudication prompt rather than silently overwriting the server.
+- The lock-bypass channel (`base_updated_at: null`) is restricted to the conflict-adjudication "use draft" action and archive restore — any new call site should be rejected in review.
+
 ---
 
 ## 5. Transcription Hub (`/speech-to-text`)
@@ -639,3 +651,11 @@ Tests verify UI state before/after operations and validate backend data (includi
 |------|----------------|------------------|
 | `transcription.spec.ts` — upload area | §5.1 Layout, §5.4 Input Methods | Two-column layout, AudioDropzone visible |
 | `transcription.spec.ts` — engine config | §5.2 Engine Support, §5.3 Parameters | Whisper/FunASR options, model size selector |
+
+### 12.6 Project Auto-Save & Conflict (§4.8)
+
+| Test | Feature Section | What It Verifies |
+|------|----------------|------------------|
+| `studio-save-conflict.spec.ts` — false-conflict self-heal | §4.8 409 handling, Layer 1 | Big PUT held in flight while a segment PATCH advances the server → PUT lands on a stale base and 409s → silently retried with the reported server version. Asserts a 409 really occurred, no dialog/toast appeared, and both the chapter rename and the segment text survived (API + DB dual read) |
+| `studio-save-conflict.spec.ts` — real conflict, "use draft" | §4.8 409 handling, Layer 2 | External writer advances the server → 409 → modal prompt + draft archived → "use draft" force-saves without `base_updated_at` and the server ends up with the local content, not the external one. Also asserts autosave works again after adjudication |
+| `studio-save-conflict.spec.ts` — real conflict, "use backend" + archive restore | §4.8 409 handling, Layer 2 | Adopting the backend state updates API + DB and the chapter-title UI, the abandoned draft stays in the "conflicted drafts (1)" archive, and restoring it re-enters the adjudication prompt so the archived content can still be persisted |

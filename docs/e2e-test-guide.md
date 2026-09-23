@@ -25,7 +25,7 @@ Each worktree has its own SQLite e2e DB (`backend/voice_clone_e2e.db` is per-wor
 Note: two e2e runs in the **same** worktree still share one stack — `webServer.reuseExistingServer` means the second run attaches to the first run's servers; run them serially.
 
 ```bash
-npm run e2e          # Full suite (67 tests, --workers=1, HTML report)
+npm run e2e          # Full suite (79 tests, --workers=1, HTML report)
 npm run e2e:ui       # Playwright visual test explorer
 npm run e2e:report   # Open latest HTML report
 npm run e2e:clean    # Remove all test-results/ and playwright-report/ dirs
@@ -44,7 +44,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs (81 tests; main app in zh-CN locale, Try page spec in en-US) |
+| `tests/e2e/specs/` | Automated browser E2E specs (79 tests; main app in zh-CN locale, Try page spec in en-US) |
 | `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
 | `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
 | `tests/e2e/global-setup.ts` | Seed data before all tests |
@@ -53,7 +53,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 ```text
 tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (81 tests)
+├── specs/                  ← Automated Playwright browser specs (79 tests)
 ├── fixtures/               ← Stable E2E input fixtures (audio, images)
 ├── helpers/                ← Shared utilities
 │   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
@@ -174,9 +174,26 @@ CSS Modules hash class names. Use partial match selectors:
 - `reuseExistingServer: !process.env.CI` — reuse local servers; CI always starts fresh
 - `DATABASE_URL` — connection string for dbReader, falls back to `backend/.env`
 
+## Testing Optimistic-Lock Conflicts
+
+`studio-save-conflict.spec.ts` (feature §4.8) needs a **deterministic** race between the
+debounced whole-project PUT and a concurrent write, so it never sleeps and hopes:
+
+- `gateProjectPuts(page)` installs a `page.route` handler that parks every
+  `PUT /api/segmented-projects/{id}` inside the browser until `release()` is called.
+  A parked request has **not** reached the backend yet, so it does **not** show up in the
+  webServer log until release — the backend log order does not reflect issue order.
+- With the PUT parked, the test performs the concurrent write and then releases the gate:
+  a segment PATCH through the UI produces a *false* conflict (the server version is one
+  this client produced), a raw API write produces a *real* one.
+- `page.request.*` bypasses `page.route` completely, which is exactly what makes the
+  "external writer" (agent / second tab) simulation possible from inside the same test.
+- Assert the PUT status sequence (e.g. a `409` followed by a `200`) rather than only the
+  end state — otherwise the test passes even when the self-heal path was never taken.
+
 ## Pending E2E Coverage (Gap Analysis)
 
-All 81 current tests pass. The following scenarios are not yet covered.
+All 79 current tests pass (count via `npx playwright test --list`). The following scenarios are not yet covered.
 
 **Verification standard for new tests**: Every test must verify both API and DB layers
 against their own contracts (API → `docs/api-reference.md` + Pydantic schema; DB →

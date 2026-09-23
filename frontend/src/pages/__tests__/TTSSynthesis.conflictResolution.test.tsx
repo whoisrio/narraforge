@@ -257,4 +257,24 @@ describe('TTSSynthesis 409 真冲突裁决（第二层）', () => {
     expect(rec?.dirty).toBe(false);
     expect(rec?.base_updated_at).toBe(T3);
   }, 40_000);
+
+  test('D. 干净加载后首次整包 PUT 必须携带 base_updated_at（乐观锁不能因草稿未建立而被绕过）', async () => {
+    // 回归：TTSSynthesis 的 project 初值是 scratchpad 项目，加载 effect 里 draftSync 仍
+    // 闭包着 '__scratchpad__'，adoptBackendVersion 会把草稿写到错的 key 下。结果：真实项目的
+    // 草稿从未建立 → 首次 markDirty 得到 base_updated_at=null → 整包 PUT 不带 base →
+    // 后端按"老客户端/agent"放行 → 乐观锁形同虚设（stale 快照可静默覆盖他人写入）。
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: /文本库/ }, { timeout: 10_000 }));
+    fireEvent.click(await screen.findByRole('button', { name: '章节', exact: true }));
+    fireEvent.click(await screen.findByRole('button', { name: /重命名章节 第一章/ }));
+    const titleInput = await screen.findByLabelText('章节标题');
+    fireEvent.change(titleInput, { target: { value: '第1章·改' } });
+    fireEvent.keyDown(titleInput, { key: 'Enter' });
+
+    await waitFor(() => expect(saveMock).toHaveBeenCalled(), { timeout: 15_000 });
+    const [, options] = saveMock.mock.calls[0];
+    // 加载期的权威版本是 T2（makeBackendProject），首次 PUT 必须带着它当 base
+    expect(options).toEqual({ base_updated_at: T2 });
+  }, 30_000);
 });

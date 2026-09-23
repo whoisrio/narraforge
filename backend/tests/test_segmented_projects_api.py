@@ -350,12 +350,44 @@ def test_put_rejects_stale_base_updated_at(client, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     r = client.post("/api/segmented-projects", json=_payload("p-stale"))
     assert r.status_code == 201, r.text
+    server_updated_at = r.json()["updated_at"]
 
     stale = _payload("p-stale")
     stale["base_updated_at"] = "2000-01-01T00:00:00"
     r = client.put("/api/segmented-projects/p-stale", json=stale)
     assert r.status_code == 409
-    assert r.json()["detail"]["code"] == "stale_payload"
+    detail = r.json()["detail"]
+    assert detail["code"] == "stale_payload"
+    # 契约固化：409 必须回报服务端当前版本，前端靠它区分"自撞"与"真冲突"
+    # （见 docs/plans/2026-09-23-segmented-save-conflict-recovery-design.md §5.1）
+    assert detail["server_updated_at"] == server_updated_at
+
+
+def test_stale_payload_reports_version_advanced_by_fine_grained_write(client, tmp_path, monkeypatch):
+    """段级 PATCH 推进服务端版本后，携带旧 base 的整包 PUT 409 回报的是推进后的版本。
+
+    这是前端自愈判定的核心前提：409 里的 server_updated_at 必须是"当前"服务端版本，
+    而不是请求携带的 base，否则前端无法判断该版本是否由本端写产生。
+    """
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    r = client.post("/api/segmented-projects", json=_payload("p-advanced"))
+    assert r.status_code == 201, r.text
+    original_updated_at = r.json()["updated_at"]
+
+    # 细粒度写（段 PATCH）推进项目级 updated_at
+    patch = client.patch(
+        "/api/segmented-projects/p-advanced/chapters/c1/segments/s1",
+        json={"text": "改过的文本。"},
+    )
+    assert patch.status_code == 200, patch.text
+    advanced_updated_at = patch.json()["project_updated_at"]
+    assert advanced_updated_at != original_updated_at
+
+    stale = _payload("p-advanced")
+    stale["base_updated_at"] = original_updated_at
+    r = client.put("/api/segmented-projects/p-advanced", json=stale)
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["server_updated_at"] == advanced_updated_at
 
 
 def test_put_accepts_matching_base_updated_at(client, tmp_path, monkeypatch):

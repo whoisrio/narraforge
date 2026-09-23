@@ -1,7 +1,7 @@
 # 分段项目保存冲突自愈与草稿保护设计 Spec
 
 日期：2026-09-23
-状态：草案（待评审）
+状态：已实现（分支 `fix/segment-save-conflict-recovery`；实现期发现的两个额外缺陷见 §11 实现后记）
 关联：`docs/plans/2026-08-27-segmented-api-granularity-design.md`、`docs/api-reference.md`、`backend/app/services/segmented_project_service.py`、`backend/app/api/segmented_projects.py`、`frontend/src/hooks/useSegmentedDraftSync.ts`、`frontend/src/pages/TTSSynthesis.tsx`
 
 ## 1. 背景
@@ -333,3 +333,41 @@ force save 通道（`base_updated_at=None`）的使用范围严格限定为：�
 
 前置条件：产品确认是否支持多写者（多标签页同时编辑、agent 与人同时写）。
 若确认单写者，第一层+第二层已是终态，第三层仅作为体验优化排期。
+
+## 11. 实现后记
+
+落地后补记，供 review 与第三层立项参考。
+
+### 11.1 交付范围
+
+§7 文件清单全部落地：第一层自愈、第二层裁决与归档、加载期流程统一、归档找回入口、i18n 双语键、`conflicted_drafts` store（DB_VERSION 4）。后端业务代码零变更。
+
+### 11.2 实现期发现并修复的两个额外缺陷
+
+**（一）自愈重试必须携带草稿最新内容（第一层）**
+
+§5.2 的伪代码只换 base、复用首次捕获的 `rec.draft`。但后端整包 PUT 对已存在段是照写 `text` 的（`segmented_project_service.py`：`seg.text = s_in.text or ""`），而 PUT 在途期间 `refreshDraft` 可能已把细粒度写的结果并入草稿记录——此时重试沿用旧快照，会把刚 PATCH 进去的内容整包覆盖回旧值，等于把自愈做成静默回滚。
+修复：重试前重读草稿，用最新内容 + 最新 base 重发（`useSegmentedDraftSync.flush`）。
+
+**（二）加载期草稿 key 错位 → 乐观锁整体失效（超出原设计范围，严重）**
+
+`TTSSynthesis` 的 `project` 初值是 scratchpad 项目（`useState(() => createScratchpadProject(t))`），加载 effect 持有的 `draftSync` 仍闭包着 `projectId='__scratchpad__'`，于是 `adoptBackendVersion` 把草稿写到了 `__scratchpad__` 名下。后果链：
+
+真实项目的草稿从未建立 → 首次 `markDirty` 只能得到 `base_updated_at: null` → 整包 PUT 不带 base → 后端按"老客户端 / agent"放行 → **乐观锁形同虚设，陈旧快照可静默覆盖他人写入**。
+
+这比 409 噪音更隐蔽，也正是本设计要消灭的那类数据丢失。它同时说明 §5.1 的正确性论证与 §1.3"来源一"都有个隐含前提：base 必须真实有效。在此之前，任何一个刚打开的项目在发生第一次细粒度写之前，整包 PUT 都是绕过锁的。
+
+修复：草稿 key 一律取"被写项目自己的 id"（`markDirty` / `adoptBackendVersion` / `refreshDraft`），`noteServerVersion` 取 `projectIdRef.current`（与 `flush` 保持一致）。
+
+### 11.3 测试
+
+- 单测（vitest，与源码同目录）：`useSegmentedDraftSync.test.ts`（含 409 自愈 8 例）、`handleStaleSave.test.ts`、`conflictedDraftStore.test.ts`、`ConflictPrompt.test.tsx`、`ConflictDraftsDialog.test.tsx`、`apiErrorCode.test.ts`。
+- 集成：`TTSSynthesis.conflictResolution.test.tsx` 4 例，含"干净加载后首次整包 PUT 必须带 `base_updated_at`"（缺陷二的回归闸）。
+- E2E：`tests/e2e/specs/studio-save-conflict.spec.ts` 3 例（假冲突自愈 / 真冲突用草稿 / 真冲突用后端 + 归档找回），用 `page.route` 扣住整包 PUT 制造确定性竞态，API + DB 双读。手法说明见 `docs/e2e-test-guide.md` 的 Testing Optimistic-Lock Conflicts。
+- 后端：`test_put_rejects_stale_base_updated_at` 补断言 409 detail 含 `server_updated_at`；新增 `test_stale_payload_reports_version_advanced_by_fine_grained_write`（段 PATCH 推进版本后，409 回报的是推进后的版本——前端自愈判定的前提）。
+
+### 11.4 遗留
+
+- §10 第三层未动（乐观锁粒度、`SET_CHAPTER_META` 改走 chapter PATCH）。
+- 归档草稿没有 diff 视图（§2 非目标）。
+- `noteServerVersion` 仍靠多处调用点人肉追新 base；合成入口的显式 `draftSync.flush()`（`TTSSynthesis.tsx` 的 `doRegenerateAll` / `handleProduceAll` / `handleRegenerate`）是第一层之外的额外护栏，第三层落地后可一并简化。
