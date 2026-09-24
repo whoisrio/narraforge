@@ -1,11 +1,12 @@
 import type { TTSLocalRecord, STTLocalRecord } from '../types';
 
 const DB_NAME = 'voice_clone_studio';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const TTS_STORE = 'tts_results';
 const STT_STORE = 'stt_results';
 const SEGMENTED_PROJECTS_STORE = 'segmented_projects';
 const DRAFTS_STORE = 'project_drafts';
+const CONFLICTED_DRAFTS_STORE = 'conflicted_drafts';
 
 /** 打开/创建 IndexedDB 数据库 */
 function openDB(): Promise<IDBDatabase> {
@@ -25,6 +26,10 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(DRAFTS_STORE)) {
         db.createObjectStore(DRAFTS_STORE, { keyPath: 'project_id' });
       }
+      if (!db.objectStoreNames.contains(CONFLICTED_DRAFTS_STORE)) {
+        // v4：409 真冲突时被放弃草稿的归档（带时间戳，可找回）
+        db.createObjectStore(CONFLICTED_DRAFTS_STORE, { keyPath: 'id' });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -35,6 +40,7 @@ function openDB(): Promise<IDBDatabase> {
 export function _openDB() { return openDB(); }
 export const _SEGMENTED_PROJECTS_STORE = SEGMENTED_PROJECTS_STORE;
 export const _DRAFTS_STORE = DRAFTS_STORE;
+export const _CONFLICTED_DRAFTS_STORE = CONFLICTED_DRAFTS_STORE;
 export const _TTS_STORE = TTS_STORE;
 
 function storePut(db: IDBDatabase, storeName: string, value: unknown): Promise<void> {

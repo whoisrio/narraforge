@@ -25,7 +25,7 @@ Each worktree has its own SQLite e2e DB (`backend/voice_clone_e2e.db` is per-wor
 Note: two e2e runs in the **same** worktree still share one stack — `webServer.reuseExistingServer` means the second run attaches to the first run's servers; run them serially.
 
 ```bash
-npm run e2e          # Full suite (67 tests, --workers=1, HTML report)
+npm run e2e          # Full suite (79 tests, --workers=1, HTML report)
 npm run e2e:ui       # Playwright visual test explorer
 npm run e2e:report   # Open latest HTML report
 npm run e2e:clean    # Remove all test-results/ and playwright-report/ dirs
@@ -44,7 +44,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs (81 tests; main app in zh-CN locale, Try page spec in en-US) |
+| `tests/e2e/specs/` | Automated browser E2E specs (79 tests; main app in zh-CN locale, Try page spec in en-US) |
 | `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
 | `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
 | `tests/e2e/global-setup.ts` | Seed data before all tests |
@@ -53,7 +53,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 ```text
 tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (81 tests)
+├── specs/                  ← Automated Playwright browser specs (79 tests)
 ├── fixtures/               ← Stable E2E input fixtures (audio, images)
 ├── helpers/                ← Shared utilities
 │   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
@@ -174,9 +174,26 @@ CSS Modules hash class names. Use partial match selectors:
 - `reuseExistingServer: !process.env.CI` — reuse local servers; CI always starts fresh
 - `DATABASE_URL` — connection string for dbReader, falls back to `backend/.env`
 
+## Testing Optimistic-Lock Conflicts
+
+`studio-save-conflict.spec.ts` (feature §4.8) needs a **deterministic** race between the
+debounced whole-project PUT and a concurrent write, so it never sleeps and hopes:
+
+- `gateProjectPuts(page)` installs a `page.route` handler that parks every
+  `PUT /api/segmented-projects/{id}` inside the browser until `release()` is called.
+  A parked request has **not** reached the backend yet, so it does **not** show up in the
+  webServer log until release — the backend log order does not reflect issue order.
+- With the PUT parked, the test performs the concurrent write and then releases the gate:
+  a segment PATCH through the UI produces a *false* conflict (the server version is one
+  this client produced), a raw API write produces a *real* one.
+- `page.request.*` bypasses `page.route` completely, which is exactly what makes the
+  "external writer" (agent / second tab) simulation possible from inside the same test.
+- Assert the PUT status sequence (e.g. a `409` followed by a `200`) rather than only the
+  end state — otherwise the test passes even when the self-heal path was never taken.
+
 ## Pending E2E Coverage (Gap Analysis)
 
-All 81 current tests pass. The following scenarios are not yet covered.
+All 79 current tests pass (count via `npx playwright test --list`). The following scenarios are not yet covered.
 
 **Verification standard for new tests**: Every test must verify both API and DB layers
 against their own contracts (API → `docs/api-reference.md` + Pydantic schema; DB →
@@ -188,7 +205,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G2 | **CosyVoice / VoxCPM role creation** | voice-role-flows only tests MiMo preset; other engines not verified | Extend `voice-role-flows.spec.ts` | Medium |
 | G3 | **Voice Clone flow** | MiMo clone: upload → preview → create → verify — covered by `voice-clone.spec.ts` | `voice-clone.spec.ts` | Medium | ✅ Done |
 | G4 | **Actual audio playback** | Only checks player UI visibility; does not verify audio src is valid and duration > 0 | Extend existing studio specs | Medium |
-| G5 | **English locale UI** | All 67 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
+| G5 | **English locale UI** | All 79 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
 | G6 | **Error recovery** | Synthesis-failure retry, state rollback, user feedback — untested | Extend `studio-segment-operations` / `studio-batch-export` | Low |
 | G7 | **Mobile / responsive** | No viewport-dimension tests | New `responsive.spec.ts` | Low |
 | G8 | **Knowledge video workflow entry + storyboard** | 工作流类型入口 + 分镜视图（brief API 预置 + 双层验证） | `knowledge-video-workflow.spec.ts` | Medium | ✅ Done |
@@ -197,6 +214,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G12 | **Try 页（/try 获客页）** | SEO 静态内容、3000 字上限、真实 edge_tts 合成链路、历史记录（重复下载/删除/清空）、全部下载打包 zip、下载推荐弹窗每 5 次下载一次（页面停留计数、刷新归零）、「试用完整功能」内容接力进主应用 | `try-page.spec.ts` | High | ✅ Done |
 | G11 | **Library 文档优先 IA** | 默认落 doc 视图、形态 A 粘贴 CTA + 去源文档、拆分后留在 doc + 结果反馈跳转、源文档视图可访问、视图记忆；章节/段落逐字段 API + DB 双读 | `library-doc-first.spec.ts` | High | ✅ Done |
 | G13 | **Studio 搜索 + 合成时文本变换** | 全项目搜索跳转（切章节/定位/闪烁）、发音映射（逐段勾选 + apply_all）、大写转小写（项目默认 + 段级三态覆盖）；`generated_params.effective_text` 双读断言 | `studio-text-transforms.spec.ts` | High | ✅ Done |
+| G14 | **整包保存冲突自愈与裁决** | 假冲突自愈（PUT 在途时本端细粒度写推进版本 → 409 静默重试、无弹窗、编辑零丢失）、真冲突「用草稿」（归档 + 模态 → force save 落库）、「用后端」采纳后归档找回；PUT 状态序列断言 + API/DB 双读 | `studio-save-conflict.spec.ts` | High | ✅ Done |
 
 **Additional rules**:
 - G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;

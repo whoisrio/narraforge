@@ -1,0 +1,173 @@
+/* =========================================
+   ConflictPrompt — 409 真冲突模态裁决
+   （遮罩无点击关闭：必须二选一，被放弃侧已归档）
+   ========================================= */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(26, 24, 20, 0.45);
+  backdrop-filter: blur(2px);
+  animation: conflictOverlayIn 0.15s ease-out;
+}
+
+@keyframes conflictOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dialog {
+  width: 420px;
+  max-width: 90vw;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 48px rgba(26, 24, 20, 0.25), 0 4px 12px rgba(26, 24, 20, 0.1);
+  overflow: hidden;
+  animation: conflictDialogIn 0.2s ease-out;
+}
+
+@keyframes conflictDialogIn {
+  from { opacity: 0; transform: scale(0.95) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  background: color-mix(in srgb, var(--color-warning, var(--color-primary)) 8%, var(--color-surface));
+  border-bottom: 2px solid color-mix(in srgb, var(--color-warning, var(--color-primary)) 25%, var(--color-border));
+}
+
+.icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.01em;
+}
+
+.body {
+  padding: 18px 20px;
+}
+
+.versions {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.message {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+
+.archivedHint {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-hover);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-surface-hover);
+}
+
+.useBackendBtn {
+  padding: 6px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.useBackendBtn:hover {
+  border-color: var(--color-text-muted);
+}
+
+.useDraftBtn {
+  padding: 6px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary);
+  color: var(--color-surface);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+}
+
+.useDraftBtn:hover {
+  background: var(--color-primary);
+}
+
+/* ── ConflictDraftsDialog：归档列表 ── */
+
+.archiveList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.archiveItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+}
+
+.archiveMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.archiveTime {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.archiveActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
