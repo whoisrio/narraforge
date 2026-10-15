@@ -254,7 +254,6 @@ describe('TTSSynthesis 409 真冲突裁决（第二层）', () => {
     fireEvent.click(screen.getByRole('button', { name: '恢复本地草稿' }));
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull(), { timeout: 5_000 });
 
-    console.error('SAVE CALLS DUMP', JSON.stringify(saveMock.mock.calls.map(c => ({ name: c[0]?.name, chapters: c[0]?.chapters?.map((ch: { name?: string }) => ch.name), options: c[1] })), null, 1));
     expect(saveMock).toHaveBeenCalledTimes(2); // 1 次 409 的 autosave PUT + 1 次 force save
     const [forcedProject, options] = saveMock.mock.calls[1];
     expect(forcedProject.chapters[0].name).toBe('第一章·冲突版');

@@ -481,8 +481,8 @@ export function SegmentRow({
             🗣 {pronunciationPreview.length}
           </span>
         )}
-        {(onOpenVerifyDetail || onVerifySegment) && (
-          <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} />
+        {onOpenVerifyDetail && (
+          <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} compact />
         )}
         {timeStart != null && (
           <span className={styles.compactTime}>

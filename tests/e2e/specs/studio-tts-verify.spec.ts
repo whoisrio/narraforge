@@ -139,10 +139,11 @@ test.describe('TTS 语音核对', () => {
       await openStudio(page);
 
       // ── 1. 全量核对：4 段全部未核对 → 全部判不一致（桩回读 ≠ 任何基准）──
-      await page.getByRole('button', { name: /语音核对/ }).click();
+      await page.getByRole('button', { name: '◎ 语音核对 ▾' }).click();
       await page.getByRole('button', { name: '全量核对（项目所有章节）' }).click();
       await expect(page.getByText(/语音核对完成：4 段/)).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByText(/✗ 不一致/)).toHaveCount(4, { timeout: 10_000 });
+      // 紧凑行角标为符号 + tooltip（aria-label），按 tooltip 前缀精确匹配不一致
+      await expect(page.getByRole('button', { name: /语音核对：不一致/ })).toHaveCount(4, { timeout: 10_000 });
 
       // API 双读（段级 PATCH 有 800ms 防抖，轮询等待落库）
       await expect
@@ -172,7 +173,7 @@ test.describe('TTS 语音核对', () => {
       expect(completed!.total).toBe(4);
 
       // ── 2. 二次全量核对：全部新鲜 → 幂等空跑，不建 run ──
-      await page.getByRole('button', { name: /语音核对/ }).click();
+      await page.getByRole('button', { name: '◎ 语音核对 ▾' }).click();
       await page.getByRole('button', { name: '全量核对（项目所有章节）' }).click();
       await expect(page.getByText('所有段落都已核对，无需再跑')).toBeVisible({ timeout: 10_000 });
       const runsAfter2nd = await readDbVerifyRuns(PROJECT_ID);
@@ -180,18 +181,18 @@ test.describe('TTS 语音核对', () => {
 
       // ── 3. 只看不一致：4 段全是不一致 → 打开详情忽略 s1 → 3 段 ──
       await page.getByRole('button', { name: '只看不一致' }).click();
-      await expect(page.getByText(/✗ 不一致/)).toHaveCount(4, { timeout: 10_000 });
+      await expect(page.getByRole('button', { name: /语音核对：不一致/ })).toHaveCount(4, { timeout: 10_000 });
       const s1Row = page.locator(`[data-segment-id="${SEG_IDS[0]}"]`);
-      await s1Row.getByRole('button', { name: /不一致/ }).click();
+      await s1Row.getByRole('button', { name: /语音核对：不一致/ }).click();
       const detail = page.getByRole('dialog', { name: '语音核对详情' });
       await expect(detail).toBeVisible();
       await expect(detail.getByText(/相似度 \d+%/)).toBeVisible();
       await detail.getByRole('button', { name: '忽略不一致' }).click();
       // s1 变 ⊘ 已忽略，过滤后只剩 3 段不一致
-      await expect(page.getByText(/✗ 不一致/)).toHaveCount(3, { timeout: 10_000 });
+      await expect(page.getByRole('button', { name: /语音核对：不一致/ })).toHaveCount(3, { timeout: 10_000 });
       // 关过滤后 s1 显示已忽略
       await page.getByRole('button', { name: '只看不一致' }).click();
-      await expect(s1Row.getByRole('button', { name: /已忽略/ })).toBeVisible();
+      await expect(s1Row.getByRole('button', { name: /已人工忽略/ })).toBeVisible();
       // SQLite：s1 status=ignored（防抖落库后可读）
       await expect
         .poll(async () => {
@@ -213,7 +214,7 @@ test.describe('TTS 语音核对', () => {
       await expect(s1RowV2.getByRole('button', { name: /已过期/ })).toBeVisible({ timeout: 20_000 });
 
       // ── 5. 幂等续跑：只补 s1 一段（其余新鲜跳过）──
-      await page.getByRole('button', { name: /语音核对/ }).click();
+      await page.getByRole('button', { name: '◎ 语音核对 ▾' }).click();
       await page.getByRole('button', { name: '全量核对（项目所有章节）' }).click();
       await expect(page.getByText(/语音核对完成：1 段/)).toBeVisible({ timeout: 30_000 });
       let reverified: { status: string; audio_key: string } | null = null;
@@ -259,12 +260,12 @@ test.describe('TTS 语音核对', () => {
       await expect(pill.getByText('核对中 0/4')).toBeVisible({ timeout: 10_000 });
       // 快照 run 无取消按钮（跨 tab 无控制权），下拉入口也被 pill 取代（防重）
       expect(pill.getByRole('button', { name: '取消' })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: /语音核对/ })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: '◎ 语音核对 ▾' })).toHaveCount(0);
       // 清理：置 stopped，UI 恢复下拉
       await page.request.patch(`${BACKEND}/api/tts-verify/runs/${firstRun.id}`, { data: { status: 'stopped' } });
       await page.reload();
       await reopenStudio(page);
-      await expect(page.getByRole('button', { name: /语音核对/ })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole('button', { name: '◎ 语音核对 ▾' })).toBeVisible({ timeout: 10_000 });
 
       // ── 3. 中断恢复：造 running run（done=1/4）+ 回拨心跳 200s → 惰性判 interrupted ──
       const stale = await page.request.post(`${BACKEND}/api/tts-verify/runs`, {
