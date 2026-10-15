@@ -193,7 +193,7 @@ debounced whole-project PUT and a concurrent write, so it never sleeps and hopes
 
 ## Pending E2E Coverage (Gap Analysis)
 
-All 79 current tests pass (count via `npx playwright test --list`). The following scenarios are not yet covered.
+All 81 current tests pass (count via `npx playwright test --list`). The following scenarios are not yet covered.
 
 **Verification standard for new tests**: Every test must verify both API and DB layers
 against their own contracts (API → `docs/api-reference.md` + Pydantic schema; DB →
@@ -215,6 +215,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G11 | **Library 文档优先 IA** | 默认落 doc 视图、形态 A 粘贴 CTA + 去源文档、拆分后留在 doc + 结果反馈跳转、源文档视图可访问、视图记忆；章节/段落逐字段 API + DB 双读 | `library-doc-first.spec.ts` | High | ✅ Done |
 | G13 | **Studio 搜索 + 合成时文本变换** | 全项目搜索跳转（切章节/定位/闪烁）、发音映射（逐段勾选 + apply_all）、大写转小写（项目默认 + 段级三态覆盖）；`generated_params.effective_text` 双读断言 | `studio-text-transforms.spec.ts` | High | ✅ Done |
 | G14 | **整包保存冲突自愈与裁决** | 假冲突自愈（PUT 在途时本端细粒度写推进版本 → 409 静默重试、无弹窗、编辑零丢失）、真冲突「用草稿」（归档 + 模态 → force save 落库）、「用后端」采纳后归档找回；PUT 状态序列断言 + API/DB 双读 | `studio-save-conflict.spec.ts` | High | ✅ Done |
+| G15 | **TTS 语音核对（ASR 回读验收）** | 全量核对 → 不一致（badge + API/SQLite 双读）→ 只看不一致过滤 → 忽略 → 重挂音频（audio_key 作废，真实 edge-tts 被 403 时等价驱动）→ 幂等续跑只补缺；防重 409 + 快照 pill + 回拨心跳 → interrupted 提示 → 续跑（runs 表双读）。后端以 `TTS_VERIFY_STUB=1` 运行（`.env.e2e`） | `studio-tts-verify.spec.ts` | High | ✅ Done |
 
 **Additional rules**:
 - G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;

@@ -239,6 +239,7 @@ Individual text segments within a chapter. Each segment holds text, role, voice 
 | `animation_spec_json` | Text | Yes | `NULL` | Animation spec |
 | `split_anchor` | JSON | Yes | `NULL` | Layer-sync Phase B anchor in chapter `narration_script`: `{offset_start, offset_end, baseline_text}`; written at split, used for L3->L2 localisation merge |
 | `text_transforms` | JSON | Yes | `NULL` | Synthesis-time text transforms: `{applied_map_ids?: string[], lowercase_latin?: boolean \| null}`; id references into the effective pronunciation map (global `gpm_` + project `pm_`), lowercase tri-state override. Only affects engine text; `text`/subtitles keep the original (P19) |
+| `verification` | JSON | Yes | `NULL` | TTS 语音核对（ASR 回读验收）最近一次结果，绑音频版本 `audio_key`：`{audio_key, status: 'match'\|'mismatch'\|'ignored'\|'error', baseline_text, asr_text, similarity?, match?, diff?, engine, error?, checked_at}`。只留最近一次；渲染层 audio_key 不匹配一律按未核对处理（P20） |
 | `created_at` | DateTime | Yes | `utcnow` | Record creation |
 | `updated_at` | DateTime | Yes | `utcnow` | Last update (auto) |
 
@@ -270,6 +271,28 @@ Individual text segments within a chapter. Each segment holds text, role, voice 
 合成后记录实际送引擎的最终文本（发音映射替换 + 大写转小写 + 引擎清洗之后），供追溯与 e2e 双读断言；`segment.text` 原文不受影响。
 
 `path` 是相对于资产根（默认 `backend/data/projects/`，环境变量 `SEGMENTED_DIR` 可覆盖）的相对路径，也可能是绝对路径（历史数据）。读取端一律以 DB 存储路径为准；新写入的文件遵循统一布局（设计见 `docs/superpowers/specs/2026-07-25-unified-data-root-asset-naming-design.md`）。
+
+---
+
+## Table: `segment_verification_runs`
+
+TTS 语音核对运行记录（全局进度持久化 + 防重）。`Base.metadata.create_all` 自动建表，无需 ALTER。
+project_id 不加 FK——frontend 存储模式下项目只存在于 IndexedDB，后端只做记录不约束。
+`updated_at` 兼作心跳：`running` 但心跳超过 180s（3× 默认单段核对超时）的 run 在 POST/GET
+runs 时惰性落库标 `interrupted`（孤儿 run 自愈）。只记粗粒度 done/total：断点续跑的
+「剩余段集合」从 `segmented_project_segments.verification` 推导，本表只服务进度展示与防重。
+
+| Column | Type | Nullable | Default | Notes |
+|---|---|---|---|---|
+| `id` | String | No | — | **Primary Key**（`svr_` 前缀） |
+| `project_id` | String | No | — | 项目 id（无 FK，frontend 存储模式不约束） |
+| `scope` | String | No | — | `chapter` / `project` |
+| `chapter_id` | String | Yes | `NULL` | scope=chapter 时有值 |
+| `status` | String | No | `running` | `running` / `completed` / `stopped` / `interrupted` |
+| `total` | Integer | No | `0` | 本轮核对目标段数 |
+| `done` | Integer | No | `0` | 已处理段数（PATCH 心跳推进） |
+| `started_at` | DateTime | Yes | `utcnow` | 创建时间 |
+| `updated_at` | DateTime | Yes | `utcnow` | 心跳 / 终态时间 |
 
 ---
 

@@ -153,6 +153,9 @@ class Settings(BaseSettings):
     # FunASR 本地语音识别
     funasr_model: str = "paraformer-zh"  # 仅离线模型；流式模型不支持字幕转写
     funasr_device: str = ""  # 留空自动检测 (cuda > mps > cpu)
+    # TTS 语音核对测试桩（E2E/CI）：verify 不跑真实 ASR，回读文本取 tts_verify_stub_text
+    tts_verify_stub: bool = False
+    tts_verify_stub_text: str = ""
 
     # LLM 字幕校准/翻译（默认复用 MiMo 配置）
     llm_api_key: str = ""           # 留空则自动回退到 mimo_api_key

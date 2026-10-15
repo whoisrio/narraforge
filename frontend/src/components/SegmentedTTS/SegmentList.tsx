@@ -39,6 +39,12 @@ interface SegmentListProps {
   pronunciationPreviews?: Record<string, { source: string; target: string }[]>;
   /** 段级合成文本变换写回（编辑面板三态） */
   onUpdateTextTransforms?: (id: string, transforms: SegmentTextTransforms | null) => void;
+  /** 正在语音核对的段 id 集合（in-flight 内存态，页面派生） */
+  verifyingIds?: Set<string>;
+  /** 打开核对详情弹层 */
+  onOpenVerifyDetail?: (id: string) => void;
+  /** 单段核对按钮 */
+  onVerifySegment?: (id: string) => void;
   onSelect: (id: string) => void;
   onDelete: (id: string) => void;
   onInsertAfter: (afterId: string) => void;
@@ -118,6 +124,9 @@ export function SegmentList(props: SegmentListProps) {
     onInsertAfter: props.onInsertAfter, onEdit: onEdit,
     onRegenerate: props.onRegenerate, onPlay: onPlay, onTrimSilence: props.onTrimSilence, onUndo: props.onUndo,
     onRecord: props.onRecord, onUnlockAudio: props.onUnlockAudio,
+    verifying: props.verifyingIds?.has(seg.id) ?? false,
+    onOpenVerifyDetail: props.onOpenVerifyDetail,
+    onVerifySegment: props.onVerifySegment,
     onAnnotateSSML: props.onAnnotateSSML, onDuplicate: props.onDuplicate,
     onToggleIndependentVoice: props.onToggleIndependentVoice,
     onMerge: props.onMerge,

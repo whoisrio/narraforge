@@ -3,6 +3,7 @@ import type { EngineParams, Segment, EmotionType, VoiceProfile, Role, RoleSnapsh
 import { isSegmentAudioStale, isSegmentVoiceStale } from '../../services/segmentGenerationInputs';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { MergeMenu } from './MergeMenu';
+import { VerificationBadge } from './VerificationBadge';
 import { useTranslation } from '../../i18n';
 import styles from './SegmentRow.module.css';
 
@@ -58,6 +59,12 @@ interface SegmentRowProps {
   onRecord?: (id: string) => void;
   /** 解锁已录入音频（清除 origin 标记，允许重新合成） */
   onUnlockAudio?: (id: string) => void;
+  /** 该段正在语音核对（in-flight 内存态，页面派生） */
+  verifying?: boolean;
+  /** 打开核对详情弹层 */
+  onOpenVerifyDetail?: (id: string) => void;
+  /** 单段核对按钮（无音频时由父级禁用/提示） */
+  onVerifySegment?: (id: string) => void;
   onAnnotateSSML?: (id: string) => void;
   onDuplicate?: (id: string) => void;
   onToggleIndependentVoice?: (id: string) => void;
@@ -105,6 +112,7 @@ export function SegmentRow({
   selectionMode, selected, flash, pronunciationPreview, onToggleSelect,
   onSelect, onDelete, onEdit, onRegenerate, onPlay, onTrimSilence, onToggleIndependentVoice,
   onRecord, onUnlockAudio,
+  verifying, onOpenVerifyDetail, onVerifySegment,
   onMerge, onMove, isLast,
 }: SegmentRowProps) {
   const { t } = useTranslation();
@@ -473,6 +481,9 @@ export function SegmentRow({
             🗣 {pronunciationPreview.length}
           </span>
         )}
+        {onOpenVerifyDetail && (
+          <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} compact />
+        )}
         {timeStart != null && (
           <span className={styles.compactTime}>
             {fmtTime(timeStart)}{timeEnd != null ? `–${fmtTime(timeEnd)}` : '–…'}
@@ -630,6 +641,9 @@ export function SegmentRow({
                 {t('segment.segmentRecord.recordedBadge')}
               </button>
             )}
+            {(onOpenVerifyDetail || onVerifySegment) && (
+              <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} />
+            )}
           </div>
           <div className={styles.actions}>
             {/* Generate button for idle/failed */}
@@ -651,6 +665,14 @@ export function SegmentRow({
             {isReady && (
               <button className={styles.actBtn} title={t('segment.segmentRow.regenerate')}
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>↻</button>
+            )}
+            {onVerifySegment && (
+              <button
+                className={styles.actBtn}
+                title={t('ttsVerify.menu.label')}
+                disabled={verifying || (!segment.audio.current?.id && !segment.audio.current?.path)}
+                onClick={(e) => { e.stopPropagation(); onVerifySegment(segment.id); }}
+              >◎</button>
             )}
             {onRecord && (
               <button className={styles.actBtn} title={t('segment.segmentRecord.recordTooltip')} aria-label={t('segment.segmentRecord.record')}

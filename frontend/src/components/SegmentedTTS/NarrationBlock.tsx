@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { EmotionType, Segment, SegmentKind } from '../../types';
 import { useTranslation } from '../../i18n';
+import { VerificationBadge } from './VerificationBadge';
 import styles from './NarrationBlock.module.css';
 
 interface NarrationBlockProps {
@@ -8,6 +9,9 @@ interface NarrationBlockProps {
   index: number;
   isSelected: boolean;
   hasNarratorVoice: boolean;
+  /** 该段正在语音核对（in-flight 内存态） */
+  verifying?: boolean;
+  onOpenVerifyDetail?: (id: string) => void;
   onSelect: (id: string) => void;
   onUpdateKind?: (id: string, kind: SegmentKind) => void;
   onTextSelection: (segmentId: string, start: number, end: number, text: string) => void;
@@ -23,14 +27,16 @@ function renderMarkedText(segment: Segment, t: (key: string) => string): ReactNo
   return segment.text || t('narrationBlock.emptyNarration');
 }
 
-export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, onSelect, onUpdateKind, onTextSelection }: NarrationBlockProps) {
+export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, verifying, onOpenVerifyDetail, onSelect, onUpdateKind, onTextSelection }: NarrationBlockProps) {
   const { t } = useTranslation();
   return (
     <article
       className={`${styles.root} ${emotionClass(segment.emotion)} ${isSelected ? styles.selected : ''}`}
       onClick={() => onSelect(segment.id)}
     >
-      <div className={styles.label}>{t('narrationBlock.narrationLabel')}{String(index).padStart(2, '0')}</div>
+      <div className={styles.label}>{t('narrationBlock.narrationLabel')}{String(index).padStart(2, '0')}
+        {onOpenVerifyDetail && <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} />}
+      </div>
       {onUpdateKind && (
         <button
           type="button"

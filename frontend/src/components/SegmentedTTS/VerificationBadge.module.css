@@ -1,0 +1,58 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  cursor: pointer;
+  background: none;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.unverified {
+  color: var(--text-tertiary, #999);
+  border-color: var(--border-subtle, #e0e0e0);
+}
+
+.stale {
+  color: var(--text-tertiary, #999);
+  border-color: var(--border-subtle, #e0e0e0);
+  border-style: dashed;
+  font-style: italic;
+}
+
+.verifying {
+  color: var(--info-color, #2563eb);
+  border-color: var(--info-color, #2563eb);
+  animation: verifyPulse 1.2s ease-in-out infinite;
+}
+
+@keyframes verifyPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+.match {
+  color: var(--success-color, #16a34a);
+  border-color: var(--success-color, #16a34a);
+}
+
+.mismatch {
+  color: var(--danger-color, #dc2626);
+  border-color: var(--danger-color, #dc2626);
+  font-weight: 600;
+}
+
+.ignored {
+  color: var(--text-secondary, #666);
+  border-color: var(--border-color, #d4d4d4);
+}
+
+.error {
+  color: var(--warning-color, #d97706);
+  border-color: var(--warning-color, #d97706);
+}

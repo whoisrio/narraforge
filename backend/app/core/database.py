@@ -205,6 +205,12 @@ _P19_TEXT_TRANSFORMS_ALTER_STMTS = (
     "ALTER TABLE segmented_project_segments ADD COLUMN text_transforms JSON",
 )
 
+# P20: TTS 语音核对（ASR 回读验收）- segment 级核对结果 JSON。
+# 运行记录表 segment_verification_runs 由 Base.metadata.create_all 自动建表，无需 ALTER。
+_P20_TTS_VERIFY_ALTER_STMTS = (
+    "ALTER TABLE segmented_project_segments ADD COLUMN verification JSON",
+)
+
 # Aggregate of every legacy ALTER group, in migration order. Used by _run_migrations
 # and the idempotency test. Zombie-column-adding statements (P6/P10 + P11 source_audio_path)
 # were removed so a modern DB is not re-polluted each startup (P9006 would drop them again).
@@ -218,6 +224,7 @@ _ALL_ALTER_STMTS = (
     + _P14_PROJECT_NARRATION_ALTER_STMTS + _P15_LAYER_SYNC_ALTER_STMTS
     + _P16_SPLIT_ANCHOR_ALTER_STMTS + _P17_AUDIO_ADJUST_ALTER_STMTS
     + _P18_PROJECT_LOGO_ALTER_STMTS + _P19_TEXT_TRANSFORMS_ALTER_STMTS
+    + _P20_TTS_VERIFY_ALTER_STMTS
 )
 
 

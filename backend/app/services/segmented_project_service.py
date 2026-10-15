@@ -217,6 +217,8 @@ def _segment_to_in(s: SegmentedProjectSegment) -> SegmentIn:
         voice=getattr(s, "voice", {}) or {"source": "chapter"},
         generated_params=s.generated_params,
         audio=_audio_with_file_exists(getattr(s, "audio", None)),
+        text_transforms=getattr(s, "text_transforms", None),
+        verification=getattr(s, "verification", None),
         generated_at=_to_iso(s.generated_at),
         animation_spec=_parse_animation_spec(s.animation_spec_json),
         created_at=_to_iso(s.created_at),
@@ -253,6 +255,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 generated_params=s.generated_params,
                 audio=_audio_with_file_exists(getattr(s, "audio", None)),
                 text_transforms=getattr(s, "text_transforms", None),
+                verification=getattr(s, "verification", None),
                 generated_at=_to_iso(s.generated_at),
                 animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
@@ -546,6 +549,9 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             # 防陈旧 autosave 快照把刚合成完的元数据回退掉。
             if s_in.text_transforms is not None:
                 setattr(seg, "text_transforms", s_in.text_transforms)
+            if s_in.verification is not None:
+                # 语音核对结果：随整量保存透传（payload 未携带 = 保留 DB 现值）
+                setattr(seg, "verification", s_in.verification)
             if s_in.animation_spec is not None:
                 setattr(seg, "animation_spec_json", _dump_animation_spec(s_in.animation_spec))
             if s_in.created_at:
@@ -754,6 +760,10 @@ def update_segment_after_synth(
     audio_data = {
         "format": audio_format,
         "current": {
+            # 唯一 id：audio_key（语音核对结果绑定）据此识别音频版本 ——
+            # backend 模式 path 由 segment_id 决定、重合成后不变，没有 id
+            # 就无法判定「旧核对结果已过期」。
+            "id": uuid.uuid4().hex,
             "path": current_audio_path,
             "format": audio_format,
             "origin": current_origin,
@@ -764,7 +774,7 @@ def update_segment_after_synth(
         # 顶层 duration_sec 是时间轴/SRT 的读取源，与 current 保持一致（D7）
         audio_data["duration_sec"] = duration_sec
     if previous_audio_path:
-        prev_entry: dict[str, Any] = {"path": previous_audio_path}
+        prev_entry: dict[str, Any] = {"id": uuid.uuid4().hex, "path": previous_audio_path}
         if previous_duration_sec is not None:
             prev_entry["duration_sec"] = previous_duration_sec
         if previous_origin is not None:
@@ -853,6 +863,9 @@ def patch_segment(
         # 整字典替换（含显式 null 键）：跟随项目 = lowercase_latin: null 等。
         # 后端「字段缺省=不动、显式 null=清空」语义，与前端三态开关一致。
         seg.text_transforms = patch.text_transforms
+    if "verification" in fields:
+        # 语音核对结果写回：tri-state（缺省=不动，显式 null=清空）
+        seg.verification = patch.verification
     now = utcnow()
     seg.updated_at = now
     seg.chapter.updated_at = now
@@ -2350,6 +2363,8 @@ def adjust_chapter_audio(
                 # SAVEPOINT 回滚本次 adjust 已改动的行。
                 raise AudioEncoderError(f"probe_failed: {cur_rel}")
             updated["current"]["duration_sec"] = new_duration
+            # 音频内容已重编码 → 换新 id（语音核对 audio_key 作废判定依赖）
+            updated["current"]["id"] = uuid.uuid4().hex
             # 顶层 duration_sec 是时间轴/SRT/章节时长的读取源，必须同步
             updated["duration_sec"] = new_duration
             seg.audio = updated

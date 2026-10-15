@@ -1213,6 +1213,80 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
   `applied_map_ids` 引用生效字典（全局 `gpm_` + 项目 `pm_` 两层）中对该段生效的条目 id，只存引用不存副本；悬空 id（被覆盖/已删除）在合成时自然忽略。
   `lowercase_latin` 为三态覆盖：`true`/`false` 覆盖项目默认 `configs.lowercase_latin`，`null`/缺省跟随项目。
   这些变换只影响送引擎文本；`segment.text` 原文、字幕、SRT 导出不受影响。
+
+## TTS 语音核对 (`/api/tts-verify`)
+
+TTS 合成后的 ASR 回读验收：把段音频转回文本与「实际朗读文本」比对，不一致的段挑出来人工复核。
+仅本地模式挂载（funasr 是本地模型，workers 不挂载；前端据此隐藏入口）。
+比对逻辑唯一实现在后端 `tts_verify_service`（归一化 → 相似度 → diff）；前端只做编排与呈现，
+核对结果由前端写回 `segment.verification`（绑 audio_key），运行进度落后端 runs 表（心跳判活）。
+
+### POST /api/tts-verify/verify
+
+单段核对（multipart）：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `audio` | file | 段音频（mp3/wav；两种存储模式都由前端上传） |
+| `baseline_text` | string | 实际朗读文本（前端用 resolveSegmentEngineText 与合成路径同源重算） |
+| `threshold` | number | 可选，相似度阈值，默认 0.8 |
+| `engine` | string | 可选，默认 `funasr`（当前唯一实现） |
+
+**Response 200：**
+
+```json
+{
+  "asr_text": "FunASR 原始回读文本",
+  "normalized_baseline": "归一化后的基准",
+  "normalized_asr": "归一化后的回读",
+  "similarity": 0.93,
+  "match": true,
+  "diff": [{ "op": "equal", "baseline": "保温杯", "asr": "保温杯" }],
+  "engine": "funasr",
+  "device": "mps",
+  "elapsed_ms": 1200
+}
+```
+
+- 归一化顺序固定：全角转半角 → 去空白 → 去中英文标点（保数字间小数点）→ 小写 → 阿拉伯数字转中文读法。
+- `diff.op` 取 difflib opcodes 语义：`equal / replace / delete / insert`。
+- 错误：`400`（空音频/缺参数/未知引擎/非法阈值）、`503`（funasr 不可用，如未安装）。
+- 测试桩：`TTS_VERIFY_STUB=1`（见 ENV.md）时不跑真实 ASR，回读文本取 `TTS_VERIFY_STUB_TEXT`。
+
+### 核对运行记录（runs）
+
+全局进度持久化 + 防重。run 只记粗粒度 done/total：断点续跑的「剩余段集合」从持久化的
+`segment.verification` 推导（幂等选择），本表只服务进度展示与防重。`updated_at` 兼作心跳；
+`running` 但心跳超过 180s（3× 默认单段超时）的 run 视为孤儿，在 POST/GET 时惰性落库标 `interrupted`。
+
+- `POST /api/tts-verify/runs` `{project_id, scope: 'chapter'|'project', chapter_id?, total}` → 201。
+  该项目已存在心跳新鲜的 running run → `409 {detail: {code: 'verify_run_in_progress', run}}`（前端 toast「核对已在进行中」）。
+- `PATCH /api/tts-verify/runs/{run_id}` `{done?, status?}` → 200。每完成一段心跳一次；批量正常结束 `completed`、用户取消 `stopped`。
+- `GET /api/tts-verify/runs/latest?project_id=` → 200 `{run: null | {...}}`。页面加载恢复进度 pill；读时惰性判活 running→interrupted。
+
+### segment.verification 字段
+
+`segmented_project_segments.verification`（JSON，只留最近一次）：
+
+```json
+{
+  "audio_key": "音频标识（current.id ?? current.path）",
+  "status": "match | mismatch | ignored | error",
+  "baseline_text": "实际朗读文本",
+  "asr_text": "ASR 回读文本",
+  "similarity": 0.93,
+  "match": false,
+  "diff": [],
+  "engine": "funasr",
+  "error": "error 状态时的信息（可选）",
+  "checked_at": "ISO 时间戳"
+}
+```
+
+- 渲染层有效状态：无 verification → 未核对；`audio_key` ≠ 当前音频 → 未核对（可提示「已过期」）；否则取 `status`。
+- 重新 TTS 后 `audio.current` 变化（backend 合成会写入新唯一 id）→ 旧核对结果/忽略标记自动作废。
+- `running` 态不持久化在段上（只在前端内存），避免中断后段永远卡「核对中」。
+- 项目设置：`configs.auto_verify_after_tts`（合成成功后自动核对，默认关）、`configs.verify_timeout_seconds`（单段超时，默认 60）。
 - `segment.generated_params.effective_text`：合成后记录实际送引擎的最终文本（含发音映射替换与大写转小写），供追溯与双读断言。
 
 ### POST `/api/segmented-projects/{id}/chapters:batch`

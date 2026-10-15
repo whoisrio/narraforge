@@ -135,6 +135,19 @@ function renderPage() {
   );
 }
 
+/** 等待干净加载收敛：后端项目已 adopt（草稿记录建立且 base=T2）。
+
+初始 scratchpad 项目也自带「第一章」章节，交互若抢在 LOAD_PROJECT 落地前，
+会点到即将被替换的旧 DOM（点击丢失 / 编辑态被重置）——先等加载收敛再操作。
+这是该文件曾偶发「重命名点击无效」的根因（timing race，非产品缺陷）。 */
+async function waitForCleanLoad(): Promise<void> {
+  await waitFor(async () => {
+    const rec = await getDraft('p-conflict');
+    expect(rec?.base_updated_at).toBe(T2);
+    expect(rec?.dirty).toBe(false);
+  }, { timeout: 10_000 });
+}
+
 beforeEach(async () => {
   for (const d of await listDrafts()) await deleteDraft(d.project_id);
   await clearConflictedDrafts();
@@ -218,6 +231,7 @@ describe('TTSSynthesis 409 真冲突裁决（第二层）', () => {
   it('C. 编辑中外部写入导致保存期 409 → 模态裁决不丢编辑；用草稿 force save 落库', async () => {
     // 干净加载（无草稿 → 加载期 adopt 后端基线）
     renderPage();
+    await waitForCleanLoad();
 
     // 进入文本库 → 章节页 → 重命名第一章（RENAME_CHAPTER → markDirty → 防抖 PUT）
     fireEvent.click(await screen.findByRole('button', { name: /文本库/ }, { timeout: 10_000 }));
@@ -264,6 +278,7 @@ describe('TTSSynthesis 409 真冲突裁决（第二层）', () => {
     // 草稿从未建立 → 首次 markDirty 得到 base_updated_at=null → 整包 PUT 不带 base →
     // 后端按"老客户端/agent"放行 → 乐观锁形同虚设（stale 快照可静默覆盖他人写入）。
     renderPage();
+    await waitForCleanLoad();
 
     fireEvent.click(await screen.findByRole('button', { name: /文本库/ }, { timeout: 10_000 }));
     fireEvent.click(await screen.findByRole('button', { name: '章节', exact: true }));

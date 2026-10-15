@@ -101,6 +101,43 @@ class FunASRService:
         _logger.info('FunASR: 使用 CPU')
         return 'cpu'
 
+    def transcribe_raw(self, input_file: str, device: str | None = None) -> str:
+        """纯转写：返回回读文本，不写任何 SRT 文件（TTS 语音核对专用）。
+
+        - 用 MODEL_PRESETS_NO_VAD（核对对象是短音频，整段识别）；
+        - 复用模型缓存（缓存 key 与 transcribe(enable_vad=False) 对齐）与推理锁；
+        - funasr 未安装时抛 ImportError，由 API 层转 503。
+        """
+        from funasr import AutoModel
+
+        if device is None:
+            device = self._detect_device()
+        self.last_device = device  # 供 API 层回传 device 元信息（实例随请求生命周期）
+
+        preset = self.MODEL_PRESETS_NO_VAD['paraformer-zh']
+        # 缓存 key 与 transcribe(enable_vad=False) 完全一致，两条链路共享模型
+        cache_key = f"paraformer-zh_False_{device}"
+        if cache_key in self._model_cache:
+            model = self._model_cache[cache_key]
+            _logger.info(f'FunASR transcribe_raw 复用缓存模型: {cache_key}')
+        else:
+            _logger.info(f'FunASR transcribe_raw 加载模型: device={device}, vad=off')
+            model = AutoModel(
+                model=preset['model'],
+                punc_model=preset['punc_model'],
+                device=device,
+            )
+            self._model_cache[cache_key] = model
+
+        _logger.info(f'FunASR transcribe_raw 开始识别: {input_file}')
+        with self._inference_lock:
+            results = model.generate(input=input_file, batch_size_s=300)
+
+        texts = [str(r.get('text', '')).strip() for r in results]
+        text = ''.join(t for t in texts if t)
+        _logger.info(f'FunASR transcribe_raw 完成: {len(text)} chars')
+        return text
+
     def transcribe(
         self,
         input_file: str,

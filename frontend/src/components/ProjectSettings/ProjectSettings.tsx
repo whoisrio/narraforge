@@ -10,6 +10,10 @@ export type ProjectSettingsMeta = {
   skip_parenthesized?: boolean | null;
   pronunciation_apply_all?: boolean | null;
   lowercase_latin?: boolean | null;
+  /** TTS 合成成功后自动触发该段语音核对 */
+  auto_verify_after_tts?: boolean | null;
+  /** 单段核对超时秒数（默认 60） */
+  verify_timeout_seconds?: number | null;
 };
 
 interface ProjectSettingsProps {
@@ -23,6 +27,8 @@ interface ProjectSettingsProps {
   skipParenthesized?: boolean | null;
   pronunciationApplyAll?: boolean | null;
   lowercaseLatin?: boolean | null;
+  autoVerifyAfterTts?: boolean | null;
+  verifyTimeoutSeconds?: number | null;
   onRenameProject: (name: string) => void;
   onUpdateRemotionPath: (path: string | null) => void;
   onUpdateProjectMeta: (meta: ProjectSettingsMeta) => void;
@@ -40,6 +46,8 @@ export function ProjectSettings({
   skipParenthesized,
   pronunciationApplyAll,
   lowercaseLatin,
+  autoVerifyAfterTts,
+  verifyTimeoutSeconds,
   onRenameProject,
   onUpdateRemotionPath,
   onUpdateProjectMeta,
@@ -165,6 +173,33 @@ export function ProjectSettings({
             <span>{t('projectSettings.lowercaseLatin')}</span>
           </label>
           <p className={styles.toggleHint}>{t('projectSettings.lowercaseLatinHint')}</p>
+
+          {/* 语音核对（ASR 回读验收）：仅本地后端可用（FunASR） */}
+          <label className={styles.toggleField}>
+            <input
+              type="checkbox"
+              aria-label={t('ttsVerify.settings.autoVerifyTitle')}
+              checked={autoVerifyAfterTts ?? false}
+              onChange={(event) => onUpdateProjectMeta({ auto_verify_after_tts: event.target.checked })}
+            />
+            <span>{t('ttsVerify.settings.autoVerifyTitle')}</span>
+          </label>
+          <p className={styles.toggleHint}>{t('ttsVerify.settings.autoVerifyHint')}</p>
+          <label className={styles.field}>
+            <span>{t('ttsVerify.settings.timeoutTitle')}</span>
+            <input
+              type="number"
+              min={10}
+              max={600}
+              aria-label={t('ttsVerify.settings.timeoutTitle')}
+              value={verifyTimeoutSeconds ?? 60}
+              onChange={(event) => {
+                const parsed = Number(event.target.value);
+                onUpdateProjectMeta({ verify_timeout_seconds: Number.isFinite(parsed) && parsed > 0 ? parsed : null });
+              }}
+            />
+          </label>
+          <p className={styles.toggleHint}>{t('ttsVerify.settings.timeoutHint')}</p>
         </section>
       </div>
     </section>

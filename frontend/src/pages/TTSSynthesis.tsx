@@ -17,7 +17,7 @@ import { ExportDialog } from '../components/SegmentedTTS/ExportDialog';
 import { AdjustAudioDialog } from '../components/TTSSynthesis/AdjustAudioDialog';
 import { ProjectSidebar } from '../components/SegmentedTTS/ProjectSidebar';
 import { segmentedReducer, createInitialProject, getActiveChapter, migrateV1, type Action, type ServerSegmentPatch } from '../hooks/useSegmentedProject';
-import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, apiErrorCode, configApi, type SegmentPatchBody } from '../services/api';
+import { textSplitApi, ttsApi, mimoTtsApi, voxcpmApi, indexttsApi, roleApi, segmentedProjectApi, ttsVerifyApi, apiErrorCode, configApi, type SegmentPatchBody } from '../services/api';
 import { apiUrl } from '../services/apiBase';
 import { playVoiceRolePreview } from '../services/voiceRolePreview';
 import { saveTTSResult, deleteTTSResult, getTTSAudioBlob } from '../services/indexedDB';
@@ -40,10 +40,23 @@ import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useAuth } from '../hooks/authContext';
 import { isAuthRequired } from '../services/auth';
 import { getAccessToken } from '../services/authSession';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms, PronunciationMapEntry } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms, PronunciationMapEntry, SegmentVerification, VerifyRunRecord } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { applyEngineTextCleaning } from '../services/styleTags';
 import { mergePronunciationMaps, resolveSegmentEngineText } from '../services/textTransforms';
+import {
+  HEARTBEAT_STALE_MS,
+  VerifyEnvironmentError,
+  VerifyRunInProgressError,
+  isMismatchVisible,
+  resolveVerificationView,
+  selectVerifySegments,
+  verificationAudioKey,
+  verifyBatch,
+  verifyOne,
+} from '../services/ttsVerify';
+import { VerifyMenu } from '../components/SegmentedTTS/VerifyMenu';
+import { VerificationDetailModal } from '../components/SegmentedTTS/VerificationDetailModal';
 import { PronunciationMapPanel } from '../components/SegmentedTTS/PronunciationMapPanel';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/useToast';
@@ -757,6 +770,235 @@ export function TTSSynthesis({
     }
     return out;
   }, [project.chapters, mergedPronunciationMap]);
+
+  // ---- TTS 语音核对（ASR 回读验收）编排 ----
+  // 结果层持久化在 segment.verification（写一段存一段）；运行层在后端 runs 表
+  // （心跳判活）。running 态只在本 tab 内存里，跨 tab 只恢复快照（不轮询）。
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
+  const [verifyRun, setVerifyRun] = useState<{ done: number; total: number } | null>(null);
+  const [restoredVerifyRun, setRestoredVerifyRun] = useState<VerifyRunRecord | null>(null);
+  const [mismatchOnly, setMismatchOnly] = useState(false);
+  const [verifyDetailSegmentId, setVerifyDetailSegmentId] = useState<string | null>(null);
+  const verifyAbortRef = useRef<AbortController | null>(null);
+
+  const findSegmentLive = useCallback((segmentId: string): { segment: Segment; chapterId: string } | undefined => {
+    for (const ch of projectRef.current.chapters) {
+      const seg = ch.segments.find(s => s.id === segmentId);
+      if (seg) return { segment: seg, chapterId: ch.id };
+    }
+    return undefined;
+  }, []);
+
+  // 取段音频 blob：backend 模式 HTTP fetch（与播放同路径），frontend 模式 IndexedDB
+  const verifyGetAudioBlob = useCallback(async (seg: Segment, chapterId: string): Promise<Blob | null> => {
+    const pid = projectRef.current.id;
+    if (storageMode === 'backend' && pid && pid !== SCRATCHPAD_PROJECT_ID && seg.audio.current?.path) {
+      try {
+        const url = apiUrl(`/segmented-projects/${pid}/audio/${chapterId}/${seg.id}`);
+        const token = await getAccessToken();
+        const resp = await fetch(url, {
+          cache: 'no-store', credentials: 'include',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!resp.ok) return null;
+        return await resp.blob();
+      } catch { return null; }
+    }
+    const audioId = segAudioId(seg);
+    if (!audioId) return null;
+    try { return await getTTSAudioBlob(audioId); } catch { return null; }
+  }, [storageMode]);
+
+  // 基准文本 = 实际朗读文本（与合成路径同源的 resolveSegmentEngineText；
+  // 引擎侧清洗如 skip_parenthesized/mute_tags 不重算——已知边界，靠阈值 + 人工 diff 兼底）
+  const resolveVerifyBaselineText = useCallback((seg: Segment): string => {
+    const p = projectRef.current;
+    return resolveSegmentEngineText(seg.text, {
+      globalMap: globalPronunciationMap,
+      projectMap: (p.configs?.pronunciation_map as PronunciationMapEntry[] | null | undefined) ?? [],
+      applyAll: Boolean(p.configs?.pronunciation_apply_all),
+      segmentTransforms: seg.text_transforms ?? null,
+      projectLowercaseLatin: p.configs?.lowercase_latin ?? null,
+    });
+  }, [globalPronunciationMap]);
+
+  // 核对结果写回 segment.verification；backend 模式走 PATCH 显式携带落库
+  // （touch=false 避免整包 PUT autosave 的并发 409）
+  const applyVerification = useCallback((segmentId: string, verification: SegmentVerification | null) => {
+    if (!verification) return; // audio_key 已变被丢弃 / in-flight 跳过
+    const remote = storageMode === 'backend' && projectRef.current.id !== SCRATCHPAD_PROJECT_ID;
+    dispatch({ type: 'SET_SEGMENT_VERIFICATION', id: segmentId, verification, touch: remote ? false : true });
+    if (remote) {
+      const chapter = projectRef.current.chapters.find(c => c.segments.some(s => s.id === segmentId));
+      if (chapter) segmentPatchSync.queue(segmentId, chapter.id, { verification });
+    }
+  }, [dispatch, storageMode, segmentPatchSync]);
+
+  const verifyTimeoutMs = useCallback(
+    () => (Number(projectRef.current.configs?.verify_timeout_seconds) || 60) * 1000,
+    [],
+  );
+
+  /** 单段核对（segment 按钮 / 合成后自动重核共用）。 */
+  const runSingleVerify = useCallback(async (params: {
+    segmentId: string;
+    chapterId: string;
+    /** 快照段（按钮场景来自 live ref；auto 场景来自合成响应的新段） */
+    segment: Segment;
+    /** audio_key 兑底：live 态尚未反映新音频时（auto 场景一帧窗口）使用 */
+    fallbackAudioKey?: string;
+    silent?: boolean;
+  }): Promise<SegmentVerification | null> => {
+    const { segment, chapterId, silent } = params;
+    setVerifyingIds(prev => new Set(prev).add(segment.id));
+    try {
+      const verification = await verifyOne(segment, chapterId, {
+        getAudioBlob: verifyGetAudioBlob,
+        baselineText: resolveVerifyBaselineText(segment),
+        getCurrentAudioKey: () => {
+          const live = findSegmentLive(segment.id)?.segment;
+          return (live ? verificationAudioKey(live) : undefined) ?? params.fallbackAudioKey;
+        },
+        timeoutMs: verifyTimeoutMs(),
+      });
+      if (verification) applyVerification(segment.id, verification);
+      return verification;
+    } catch (err) {
+      if (err instanceof VerifyEnvironmentError) {
+        showToast(t('ttsVerify.toast.unavailable'), 'error');
+      } else if (silent) {
+        console.warn('[ttsVerify] single verify failed:', err);
+      } else {
+        showToast(t('ttsVerify.toast.verifyFailed', { message: getErrorMessage(err, '') }), 'error');
+      }
+      return null;
+    } finally {
+      setVerifyingIds(prev => { const next = new Set(prev); next.delete(segment.id); return next; });
+    }
+  }, [applyVerification, findSegmentLive, resolveVerifyBaselineText, showToast, t, verifyGetAudioBlob, verifyTimeoutMs]);
+
+  const runSingleVerifyRef = useRef(runSingleVerify);
+  runSingleVerifyRef.current = runSingleVerify;
+
+  /** segment 操作区「核对」按钮 */
+  const handleVerifySegment = useCallback((segmentId: string) => {
+    const live = findSegmentLive(segmentId);
+    if (!live) return;
+    if (!live.segment.audio.current?.id && !live.segment.audio.current?.path) {
+      showToast(t('ttsVerify.toast.noAudio'), 'error');
+      return;
+    }
+    void runSingleVerify({ segmentId, chapterId: live.chapterId, segment: live.segment });
+  }, [findSegmentLive, runSingleVerify, showToast, t]);
+
+  // 页面加载恢复进度 pill（GET /runs/latest；后端读时惰性判活）
+  const refreshLatestVerifyRun = useCallback(async () => {
+    if (project.id === SCRATCHPAD_PROJECT_ID) { setRestoredVerifyRun(null); return; }
+    try {
+      setRestoredVerifyRun(await ttsVerifyApi.getLatestRun(project.id));
+    } catch {
+      setRestoredVerifyRun(null); // 本地无后端（纯前端）等场景：静默无 pill
+    }
+  }, [project.id]);
+
+  useEffect(() => { void refreshLatestVerifyRun(); }, [refreshLatestVerifyRun]);
+
+  /** 批量核对（核对本章 / 全量核对 / 续跑共用）。 */
+  const runVerifyBatch = useCallback(async (scope: { kind: 'chapter' | 'project'; chapterId?: string }) => {
+    if (verifyAbortRef.current) return; // 本 tab 已在跑
+    const chapters = scope.kind === 'chapter'
+      ? projectRef.current.chapters.filter(c => c.id === scope.chapterId)
+      : projectRef.current.chapters;
+    const targets = selectVerifySegments(chapters);
+    if (targets.length === 0) {
+      showToast(t('ttsVerify.toast.allVerified'));
+      return;
+    }
+    const controller = new AbortController();
+    verifyAbortRef.current = controller;
+    setVerifyRun({ done: 0, total: targets.length });
+    try {
+      const result = await verifyBatch(targets, {
+        projectId: projectRef.current.id,
+        getAudioBlob: verifyGetAudioBlob,
+        getSegment: (target) => findSegmentLive(target.segmentId)?.segment,
+        getCurrentAudioKey: (segmentId) => {
+          const live = findSegmentLive(segmentId)?.segment;
+          return live ? verificationAudioKey(live) : undefined;
+        },
+        resolveBaselineText: (seg) => resolveVerifyBaselineText(seg),
+        timeoutMs: verifyTimeoutMs(),
+        run: { scope: scope.kind, chapterId: scope.kind === 'chapter' ? (scope.chapterId ?? null) : null },
+        signal: controller.signal,
+        onSegmentStart: (id) => setVerifyingIds(prev => new Set(prev).add(id)),
+        onSegmentEnd: (id, verification) => {
+          setVerifyingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
+          applyVerification(id, verification);
+        },
+        onProgress: (done, total) => setVerifyRun({ done, total }),
+      });
+      showToast(result.stopped
+        ? t('ttsVerify.toast.batchStopped')
+        : t('ttsVerify.toast.batchDone', { count: result.completed - result.skipped }));
+    } catch (err) {
+      if (err instanceof VerifyRunInProgressError) showToast(t('ttsVerify.toast.inProgress'), 'error');
+      else if (err instanceof VerifyEnvironmentError) showToast(t('ttsVerify.toast.unavailable'), 'error');
+      else showToast(t('ttsVerify.toast.batchFailed'), 'error');
+    } finally {
+      verifyAbortRef.current = null;
+      setVerifyRun(null);
+      void refreshLatestVerifyRun();
+    }
+  }, [applyVerification, findSegmentLive, refreshLatestVerifyRun, resolveVerifyBaselineText, showToast, t, verifyGetAudioBlob, verifyTimeoutMs]);
+
+  const handleCancelVerifyBatch = useCallback(() => {
+    verifyAbortRef.current?.abort();
+  }, []);
+
+  /** 续跑：对剩余段重新发起批量（幂等规则保证只补缺） */
+  const handleResumeVerify = useCallback(() => {
+    if (!restoredVerifyRun) return;
+    void runVerifyBatch(restoredVerifyRun.scope === 'chapter' && restoredVerifyRun.chapter_id
+      ? { kind: 'chapter', chapterId: restoredVerifyRun.chapter_id }
+      : { kind: 'project' });
+  }, [restoredVerifyRun, runVerifyBatch]);
+
+  const handleIgnoreVerification = useCallback((segmentId: string) => {
+    const live = findSegmentLive(segmentId);
+    const v = live ? resolveVerificationView(live.segment).verification : null;
+    if (!v) return; // 只有新鲜 mismatch 可忽略
+    applyVerification(segmentId, { ...v, status: 'ignored', match: false });
+    setVerifyDetailSegmentId(null);
+    showToast(t('ttsVerify.toast.ignored'));
+  }, [applyVerification, findSegmentLive, showToast, t]);
+
+  const verifyDetailSegment = useMemo(() => {
+    if (!verifyDetailSegmentId) return undefined;
+    for (const ch of project.chapters) {
+      const seg = ch.segments.find(s => s.id === verifyDetailSegmentId);
+      if (seg) return seg;
+    }
+    return undefined;
+  }, [project.chapters, verifyDetailSegmentId]);
+
+  // 快照型 pill：渲染时按 updated_at 算心跳年龄，超阈值按「已中断」展示
+  // （纯前端零请求；后端在下次 GET/POST 时惰性落库对齐）
+  const snapshotStale = !!restoredVerifyRun && restoredVerifyRun.status === 'running'
+    && (Date.now() - Date.parse(restoredVerifyRun.updated_at ?? '') > HEARTBEAT_STALE_MS);
+  const activeVerifyRun = verifyRun
+    ? { done: verifyRun.done, total: verifyRun.total, snapshot: false }
+    : restoredVerifyRun && restoredVerifyRun.status === 'running' && !snapshotStale
+      ? { done: restoredVerifyRun.done, total: restoredVerifyRun.total, snapshot: true }
+      : null;
+  const interruptedVerifyRun = !activeVerifyRun && restoredVerifyRun
+    && (restoredVerifyRun.status === 'interrupted' || (restoredVerifyRun.status === 'running' && snapshotStale))
+    ? { done: restoredVerifyRun.done, total: restoredVerifyRun.total }
+    : null;
+
+  // 「只看不一致」过滤（角标作废逻辑 audio_key 不匹配在 isMismatchVisible 内同样生效）
+  const displaySegments = useMemo(() => (
+    mismatchOnly ? activeChapter.segments.filter(s => isMismatchVisible(s)) : activeChapter.segments
+  ), [activeChapter.segments, mismatchOnly]);
 
   // 打开面板时重新拉取全局字典（/settings 可能刚改过）；失败按空表处理
   useEffect(() => {
@@ -1663,6 +1905,17 @@ export function TTSSynthesis({
         // 避免后续其他写路径的整包 PUT 被 409（stale_payload）。
         if (updated?.updated_at) void draftSync.noteServerVersion(updated.updated_at);
         unlockedRecordedRef.current.delete(id);
+        // 自动语音核对（project.configs.auto_verify_after_tts）：单段 TTS 成功即触发；
+        // 基准段用响应里的新段（新 audio_key），in-flight 登记与批量核对互斥。
+        if (project.configs?.auto_verify_after_tts) {
+          void runSingleVerifyRef.current({
+            segmentId: id,
+            chapterId: segChapter.id,
+            segment: (updatedSeg as Segment | undefined) ?? seg,
+            fallbackAudioKey: updatedSeg ? verificationAudioKey(updatedSeg as Segment) : undefined,
+            silent: true,
+          });
+        }
         return;
       }
 
@@ -1742,6 +1995,16 @@ export function TTSSynthesis({
       await saveTTSResult({ id: audioId, text: seg.text, voice_id: voiceId ?? '', voice_name: '', audioBlob: blob, audio_format: fmt, speed: speed ?? 1, volume: volume ?? 80, pitch: pitch ?? 1, instruction: instruction ?? '', language: language ?? 'Chinese', created_at: new Date().toISOString(), source: 'segmented_tts' });
       if (seg.previous_audio_id) { try { await deleteTTSResult(seg.previous_audio_id); } catch { /* ignore */ } }
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: audioId, duration_sec: duration, generated_voice_id: usedVoiceId, updated_params: updatedParams, origin: 'tts' });
+      // 自动语音核对（frontend 模式）：同上，新音频 id 已知，直接兑底
+      if (project.configs?.auto_verify_after_tts) {
+        void runSingleVerifyRef.current({
+          segmentId: id,
+          chapterId: segChapter.id,
+          segment: seg,
+          fallbackAudioKey: audioId,
+          silent: true,
+        });
+      }
       unlockedRecordedRef.current.delete(id);
     } catch (error: unknown) {
       // 后端模式下失败状态无需整包 PUT（status 为前端态，服务端不持久化），
@@ -2563,6 +2826,17 @@ export function TTSSynthesis({
               />
               <div className={styles.productionActions}>
                 <BatchSynthesizeMenu disabled={generating} onSelect={(mode) => void handleRegenerateAll(mode)} />
+                <VerifyMenu
+                  disabled={generating}
+                  running={activeVerifyRun}
+                  interrupted={interruptedVerifyRun}
+                  onSelect={(scope) => {
+                    if (scope.kind === 'chapter') void runVerifyBatch({ kind: 'chapter', chapterId: activeChapter.id });
+                    else void runVerifyBatch({ kind: 'project' });
+                  }}
+                  onCancel={handleCancelVerifyBatch}
+                  onResume={handleResumeVerify}
+                />
                 <button type="button" className={styles.productionBtnSecondary} onClick={playAllActive ? handleStopAll : handlePlayAll}>
                   {playAllActive ? t('tts.stop') : `▶ ${t('studio.playAll')}`}
                 </button>
@@ -2611,6 +2885,14 @@ export function TTSSynthesis({
                 </button>
                 <button
                   type="button"
+                  className={`${styles.toolbarPill} ${mismatchOnly ? styles.toolbarPillActive : ''}`}
+                  aria-pressed={mismatchOnly}
+                  onClick={() => setMismatchOnly(v => !v)}
+                >
+                  {t('ttsVerify.filter.mismatchOnly')}
+                </button>
+                <button
+                  type="button"
                   className={`${styles.toolbarPill} ${selectionMode ? styles.toolbarPillActive : ''}`}
                   onClick={handleToggleSelectionMode}
                 >
@@ -2631,7 +2913,7 @@ export function TTSSynthesis({
 
             <div className={styles.segmentedEditor}>
               <SegmentList
-                segments={activeChapter.segments}
+                segments={displaySegments}
                 layout={project.layout}
                 selectedId={activeChapter.selected_segment_id}
                 playingId={playingId}
@@ -2651,6 +2933,9 @@ export function TTSSynthesis({
                 chapterVoice={activeChapter.voice}
                 flashId={flashSegmentId}
                 pronunciationPreviews={pronunciationPreviews}
+                verifyingIds={verifyingIds}
+                onOpenVerifyDetail={setVerifyDetailSegmentId}
+                onVerifySegment={handleVerifySegment}
                 onUpdateTextTransforms={handleUpdateTextTransforms}
                 selectionMode={selectionMode}
                 selectedIds={selectedSegmentIds}
@@ -2738,6 +3023,14 @@ export function TTSSynthesis({
                 onSetSegmentTransforms={(id, transforms) => dispatch({ type: 'SET_SEGMENT_TEXT_TRANSFORMS', id, transforms })}
                 onResynthesizeSegments={handleResynthesizeSegments}
               />
+              <VerificationDetailModal
+                segment={verifyDetailSegment}
+                verifying={verifyDetailSegment ? verifyingIds.has(verifyDetailSegment.id) : false}
+                onClose={() => setVerifyDetailSegmentId(null)}
+                onIgnore={handleIgnoreVerification}
+                onReverify={(id) => { setVerifyDetailSegmentId(null); handleVerifySegment(id); }}
+                onRegenerate={(id) => { setVerifyDetailSegmentId(null); handleRegenerateClick(id); }}
+              />
               {recordSegmentId && (() => {
                 const recordSeg = activeChapter.segments.find(s => s.id === recordSegmentId);
                 if (!recordSeg) return null;
@@ -2820,6 +3113,8 @@ export function TTSSynthesis({
             skipParenthesized={project.configs?.skip_parenthesized ?? null}
             pronunciationApplyAll={project.configs?.pronunciation_apply_all ?? null}
             lowercaseLatin={project.configs?.lowercase_latin ?? null}
+            autoVerifyAfterTts={project.configs?.auto_verify_after_tts ?? null}
+            verifyTimeoutSeconds={project.configs?.verify_timeout_seconds ?? null}
             onRenameProject={(name) => dispatch({ type: 'RENAME_PROJECT', name })}
             onUpdateRemotionPath={(path) => dispatch({ type: 'SET_PROJECT_META', meta: { remotion_project_path: path } })}
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}

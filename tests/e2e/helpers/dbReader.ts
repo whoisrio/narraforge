@@ -405,3 +405,38 @@ export function validateWorkflowRun(run: DbWorkflowRunRow): void {
     }
   }
 }
+
+// ── TTS 语音核对（ASR 回读验收）双读支持 ──
+
+export interface DbVerifyRunRow {
+  id: string;
+  project_id: string;
+  scope: string;
+  chapter_id: string | null;
+  status: string;
+  total: number;
+  done: number;
+  started_at: string | null;
+  updated_at: string | null;
+}
+
+/** 某项目的核对 runs（新→旧），供 runs 表双读断言（进度持久化 + 防重）。 */
+export async function readDbVerifyRuns(projectId: string): Promise<DbVerifyRunRow[]> {
+  const db = getDb();
+  return db
+    .prepare('SELECT * FROM segment_verification_runs WHERE project_id = ? ORDER BY started_at DESC')
+    .all(projectId) as DbVerifyRunRow[];
+}
+
+export interface DbSegmentVerificationRow {
+  id: string;
+  verification: string | null;
+}
+
+/** 读段的 verification JSON（原始文本；null = 未核对）。 */
+export async function readDbSegmentVerification(segmentId: string): Promise<DbSegmentVerificationRow | undefined> {
+  const db = getDb();
+  return db
+    .prepare('SELECT id, verification FROM segmented_project_segments WHERE id = ?')
+    .get(segmentId) as DbSegmentVerificationRow | undefined;
+}

@@ -185,3 +185,99 @@ class TestFunASRTranscribeMock:
                 assert 'vad_model' not in call_kwargs[1]
         finally:
             sys.modules.pop('funasr', None)
+
+
+class TestFunASRTranscribeRaw:
+    """transcribe_raw：TTS 核对专用纯转写（不落 SRT 文件，复用模型缓存 + 推理锁）。"""
+
+    def test_returns_concatenated_text_no_srt_file(self):
+        mock_model = MagicMock()
+        mock_model.generate.return_value = [
+            {'text': '第一段文本。', 'timestamp': []},
+            {'text': '第二段文本。', 'timestamp': []},
+        ]
+        mock_auto = MagicMock(return_value=mock_model)
+        _inject_mock_funasr(mock_auto)
+
+        try:
+            service = FunASRService()
+            FunASRService._model_cache.pop('paraformer-zh_False_cpu', None)
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    audio_path = os.path.join(tmpdir, 'seg.mp3')
+                    Path(audio_path).touch()
+
+                    text = service.transcribe_raw(audio_path, device='cpu')
+
+                    assert '第一段文本' in text
+                    assert '第二段文本' in text
+                    # 不写任何 SRT 文件
+                    assert list(Path(tmpdir).iterdir()) == [Path(audio_path)]
+                    # 无 VAD：AutoModel 不接收 vad_model
+                    assert 'vad_model' not in mock_auto.call_args[1]
+                    # batch_size_s=300 整段识别
+                    assert mock_model.generate.call_args[1]['batch_size_s'] == 300
+            finally:
+                FunASRService._model_cache.pop('paraformer-zh_False_cpu', None)
+        finally:
+            sys.modules.pop('funasr', None)
+
+    def test_reuses_no_vad_model_cache(self):
+        """缓存 key 与 transcribe(enable_vad=False) 对齐，两条链路共享已加载模型。"""
+        mock_model = MagicMock()
+        mock_model.generate.return_value = [{'text': 'x', 'timestamp': []}]
+        mock_auto = MagicMock(return_value=mock_model)
+        _inject_mock_funasr(mock_auto)
+
+        try:
+            service = FunASRService()
+            FunASRService._model_cache.pop('paraformer-zh_False_cpu', None)
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    audio_path = os.path.join(tmpdir, 'a.wav')
+                    Path(audio_path).touch()
+                    service.transcribe_raw(audio_path, device='cpu')
+                    service.transcribe_raw(audio_path, device='cpu')
+            finally:
+                FunASRService._model_cache.pop('paraformer-zh_False_cpu', None)
+            # 只在首次实例化模型
+            assert mock_auto.call_count == 1
+        finally:
+            sys.modules.pop('funasr', None)
+
+    def test_holds_inference_lock(self):
+        mock_model = MagicMock()
+        lock_holder = {}
+
+        def fake_generate(**kwargs):
+            lock_holder['locked'] = FunASRService._inference_lock.locked()
+            return [{'text': 'ok', 'timestamp': []}]
+
+        mock_model.generate.side_effect = fake_generate
+        mock_auto = MagicMock(return_value=mock_model)
+        _inject_mock_funasr(mock_auto)
+
+        try:
+            service = FunASRService()
+            with tempfile.TemporaryDirectory() as tmpdir:
+                audio_path = os.path.join(tmpdir, 'a.wav')
+                Path(audio_path).touch()
+                text = service.transcribe_raw(audio_path, device='cpu')
+            assert text == 'ok'
+            assert lock_holder['locked'] is True
+        finally:
+            sys.modules.pop('funasr', None)
+
+    def test_missing_funasr_package_raises_import_error(self):
+        """funasr 未安装（workers 环境）→ ImportError 上抛，由 API 层转 503。"""
+        saved = sys.modules.pop('funasr', None)
+        sys.modules['funasr'] = None  # import funasr → ImportError
+        try:
+            service = FunASRService()
+            with pytest.raises(ImportError):
+                service.transcribe_raw('/tmp/x.wav', device='cpu')
+        finally:
+            if saved is not None:
+                sys.modules['funasr'] = saved
+            else:
+                sys.modules.pop('funasr', None)

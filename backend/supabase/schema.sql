@@ -108,6 +108,7 @@ create table if not exists segmented_project_segments (
     generated_params jsonb,
     audio jsonb,
     text_transforms jsonb,  -- 合成时文本变换: {applied_map_ids, lowercase_latin}
+    verification jsonb,        -- TTS 语音核对最近一次结果（绑 audio_key）
     generated_at timestamptz,
     animation_spec_json text,  -- 模型侧是 Text（JSON 字符串），对齐不用 jsonb
     split_anchor jsonb,        -- layer-sync Phase B: {offset_start, offset_end, baseline_text}
@@ -120,6 +121,7 @@ create index if not exists ix_segments_chapter_id on segmented_project_segments 
 
 -- 既有部署的增量列（create table 块已含；此处为已建表环境补列，幂等）
 alter table segmented_project_segments add column if not exists text_transforms jsonb;
+alter table segmented_project_segments add column if not exists verification jsonb;
 
 -- 既有部署：将排序唯一约束改为可延迟，使 save_project 的批量 upsert 能安全处理
 -- 章节/段落重排序（重排 [0,1]→[1,0] 时，逐行检查会瞬间撞 (project_id,position)
