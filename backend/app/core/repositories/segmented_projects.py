@@ -380,6 +380,7 @@ def _seg_row_to_in(row: dict) -> SegmentIn:
         generated_params=row.get("generated_params"),
         audio=row.get("audio"),
         text_transforms=row.get("text_transforms"),
+        verification=row.get("verification"),
         generated_at=row.get("generated_at"),
         animation_spec=_parse_animation_spec(row.get("animation_spec_json")),
         created_at=row.get("created_at"),
@@ -707,6 +708,12 @@ class SupabaseSegmentedProjectRepository(UserScope):
                         if s_in.text_transforms is not None
                         else prev_seg.get("text_transforms")
                     ),
+                    # 语音核对结果：payload 未携带 = 保留旧值（对齐 svc.save_project）
+                    "verification": (
+                        s_in.verification
+                        if s_in.verification is not None
+                        else prev_seg.get("verification")
+                    ),
                     "generated_at": s_in.generated_at,
                     "animation_spec_json": (
                         _dump_animation_spec(s_in.animation_spec)
@@ -793,6 +800,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
         if "text_transforms" in fields:
             # 整字典替换（含显式 null 键），tri-state 语义与 local svc.patch_segment 一致
             updates["text_transforms"] = patch.text_transforms
+        if "verification" in fields:
+            # 语音核对结果写回：tri-state（缺省=不动，显式 null=清空）
+            updates["verification"] = patch.verification
         now = utcnow().isoformat()
         updates["updated_at"] = now
         self._client.update(SEGMENTS, updates, params={"id": f"eq.{segment_id}"})

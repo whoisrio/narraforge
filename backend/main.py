@@ -232,7 +232,7 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
         tts,
     )
     if is_local:
-        from app.api import indextts, speech_to_text, voxcpm
+        from app.api import indextts, speech_to_text, tts_verify, voxcpm
 
     if is_local:
         # qwen/dashscope/voxcpm 专属端点（依赖 dashscope/qiniu SDK 或本地 GPU），workers 不挂载。
@@ -245,6 +245,8 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
     app.include_router(config.router, prefix="/api/config", tags=["config"])
     if is_local:
         app.include_router(speech_to_text.router, prefix="/api/speech-to-text", tags=["speech-to-text"])
+        # TTS 语音核对（ASR 回读验收）：funasr 本地模型专属，workers 不挂载
+        app.include_router(tts_verify.router, prefix="/api/tts-verify", tags=["tts-verify"])
     app.include_router(mimo_tts.router, prefix="/api/mimo-tts", tags=["mimo-tts"])
     app.include_router(subtitle_llm.router, prefix="/api/subtitle-llm", tags=["subtitle-llm"])
     app.include_router(model_config.router, prefix="/api/model-config", tags=["model-config"])

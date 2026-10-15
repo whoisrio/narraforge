@@ -126,6 +126,8 @@ class SegmentedProjectSegment(Base):
     animation_spec_json = Column(Text, nullable=True)
     split_anchor = Column(JSON(none_as_null=True), nullable=True)  # layer-sync Phase B: {offset_start, offset_end, baseline_text}
     text_transforms = Column(JSON(none_as_null=True), nullable=True)  # 合成时文本变换: {applied_map_ids, lowercase_latin}
+    # TTS 语音核对最近一次结果（SegmentVerification，绑 audio_key；只留最近一次不做历史）
+    verification = Column(JSON(none_as_null=True), nullable=True)
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
@@ -141,3 +143,31 @@ class SegmentedProjectSegment(Base):
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<SegmentedProjectSegment(id={self.id}, text={self.text[:20]!r})>"
+
+
+class SegmentVerificationRun(Base):
+    """TTS 语音核对运行记录（全局进度持久化 + 防重）。
+
+    只记粗粒度 done/total：断点续跑的「剩余段集合」从持久化的
+    segment.verification 推导，本表只服务进度展示与防重。
+    project_id 不加 FK —— frontend 存储模式下项目只存在于 IndexedDB，
+    后端只做记录不约束。updated_at 兼作心跳（见 tts_verify API 的惰性判活）。
+    """
+
+    __tablename__ = "segment_verification_runs"
+    __table_args__ = (
+        Index("ix_verify_runs_project_id", "project_id"),
+    )
+
+    id = Column(String, primary_key=True)
+    project_id = Column(String, nullable=False)
+    scope = Column(String, nullable=False)  # 'chapter' | 'project'
+    chapter_id = Column(String, nullable=True)  # scope=chapter 时有值
+    status = Column(String, nullable=False, default="running")  # running/completed/stopped/interrupted
+    total = Column(Integer, nullable=False, default=0)
+    done = Column(Integer, nullable=False, default=0)
+    started_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<SegmentVerificationRun(id={self.id}, status={self.status}, done={self.done}/{self.total})>"

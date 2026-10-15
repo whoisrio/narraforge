@@ -18,6 +18,8 @@ class SegmentIn(BaseModel):
     generated_params: dict[str, Any] | None = None
     audio: dict[str, Any] | None = None
     text_transforms: dict[str, Any] | None = None
+    # TTS 语音核对最近一次结果（绑 audio_key；结构见前端 SegmentVerification）
+    verification: dict[str, Any] | None = None
     generated_at: str | None = None
     animation_spec: dict[str, Any] | None = None
     created_at: str | None = None
@@ -119,6 +121,8 @@ class SegmentPatchIn(BaseModel):
     # 段级文本变换（小写化覆盖 / 发音映射段级引用）。整字典替换（含显式 null 键）：
     # 跟随项目 = 该键为 null，tri-state 语义由后端「字段缺省=不动、显式 null=清空」保证。
     text_transforms: dict[str, Any] | None = None
+    # TTS 核对结果写回（前端 verifyOne 成功后 PATCH 此字段；显式 null = 清空）
+    verification: dict[str, Any] | None = None
 
 
 class SegmentPatchOut(BaseModel):

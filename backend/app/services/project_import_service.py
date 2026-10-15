@@ -94,6 +94,7 @@ def import_project(db: Session, zip_bytes: bytes):
             voice=s.get("voice") or {"source": "chapter"},
             generated_params=s.get("generated_params"),
             text_transforms=s.get("text_transforms"),
+            verification=s.get("verification"),
             audio=audio,
             generated_at=_parse_dt(s.get("generated_at")),
             animation_spec_json=s.get("animation_spec_json"),

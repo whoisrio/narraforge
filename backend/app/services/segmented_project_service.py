@@ -217,6 +217,8 @@ def _segment_to_in(s: SegmentedProjectSegment) -> SegmentIn:
         voice=getattr(s, "voice", {}) or {"source": "chapter"},
         generated_params=s.generated_params,
         audio=_audio_with_file_exists(getattr(s, "audio", None)),
+        text_transforms=getattr(s, "text_transforms", None),
+        verification=getattr(s, "verification", None),
         generated_at=_to_iso(s.generated_at),
         animation_spec=_parse_animation_spec(s.animation_spec_json),
         created_at=_to_iso(s.created_at),
@@ -253,6 +255,7 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
                 generated_params=s.generated_params,
                 audio=_audio_with_file_exists(getattr(s, "audio", None)),
                 text_transforms=getattr(s, "text_transforms", None),
+                verification=getattr(s, "verification", None),
                 generated_at=_to_iso(s.generated_at),
                 animation_spec=_parse_animation_spec(s.animation_spec_json),
                 created_at=_to_iso(s.created_at),
@@ -546,6 +549,9 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             # 防陈旧 autosave 快照把刚合成完的元数据回退掉。
             if s_in.text_transforms is not None:
                 setattr(seg, "text_transforms", s_in.text_transforms)
+            if s_in.verification is not None:
+                # 语音核对结果：随整量保存透传（payload 未携带 = 保留 DB 现值）
+                setattr(seg, "verification", s_in.verification)
             if s_in.animation_spec is not None:
                 setattr(seg, "animation_spec_json", _dump_animation_spec(s_in.animation_spec))
             if s_in.created_at:
@@ -853,6 +859,9 @@ def patch_segment(
         # 整字典替换（含显式 null 键）：跟随项目 = lowercase_latin: null 等。
         # 后端「字段缺省=不动、显式 null=清空」语义，与前端三态开关一致。
         seg.text_transforms = patch.text_transforms
+    if "verification" in fields:
+        # 语音核对结果写回：tri-state（缺省=不动，显式 null=清空）
+        seg.verification = patch.verification
     now = utcnow()
     seg.updated_at = now
     seg.chapter.updated_at = now
