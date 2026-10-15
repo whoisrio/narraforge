@@ -491,6 +491,56 @@ export type SegmentTextTransforms = {
   lowercase_latin?: boolean | null;
 };
 
+// ── TTS 语音核对（ASR 回读验收）──
+
+/** diff 片段：op 取 difflib opcodes 语义，各片段拼接还原完整归一化文本 */
+export interface VerificationDiffOp {
+  op: 'equal' | 'replace' | 'delete' | 'insert';
+  baseline: string;
+  asr: string;
+}
+
+export type SegmentVerificationStatus = 'match' | 'mismatch' | 'ignored' | 'error';
+
+/**
+ * 段上最近一次核对结果（绑 audio_key；running 态不持久化，只在前端内存）。
+ *
+ * 用 type 别名而非 interface：只有 type 别名拥有隐式索引签名，才能赋给
+ * `Record<string, unknown>`（SegmentPatchBody.verification）；见 SegmentTextTransforms
+ * 同样约定的注释。
+ */
+export type SegmentVerification = {
+  /** 核对时的音频标识：audio.current?.id ?? audio.current?.path */
+  audio_key: string;
+  status: SegmentVerificationStatus;
+  /** 实际朗读文本（核对时用的基准） */
+  baseline_text: string;
+  /** ASR 回读文本（error 时可为空） */
+  asr_text: string;
+  similarity?: number;
+  match?: boolean;
+  diff?: VerificationDiffOp[];
+  engine: string;
+  /** error 状态时的信息 */
+  error?: string;
+  /** ISO 时间戳 */
+  checked_at: string;
+}
+
+/** 后端 tts-verify runs 表记录（全局进度持久化 + 防重） */
+export interface VerifyRunRecord {
+  id: string;
+  project_id: string;
+  scope: 'chapter' | 'project';
+  chapter_id?: string | null;
+  status: 'running' | 'completed' | 'stopped' | 'interrupted';
+  total: number;
+  done: number;
+  /** 带时区后缀的 ISO（'Z'）——快照 pill 按它算心跳年龄 */
+  started_at?: string | null;
+  updated_at?: string | null;
+}
+
 export interface Segment {
   id: string;
   text: string;
@@ -508,6 +558,8 @@ export interface Segment {
   animation_spec?: Record<string, unknown> | null;
   /** 合成时文本变换（发音映射段级引用 + 小写化覆盖）；不影响原文/字幕 */
   text_transforms?: SegmentTextTransforms | null;
+  /** TTS 语音核对最近一次结果（绑 audio_key；旧音频上的结果渲染时按未核对处理） */
+  verification?: SegmentVerification | null;
   created_at: string;
   updated_at: string;
 
@@ -617,6 +669,10 @@ export interface SegmentedProject {
     pronunciation_apply_all?: boolean | null;
     /** 项目级默认：全大写拉丁词转小写（段级 text_transforms.lowercase_latin 可覆盖） */
     lowercase_latin?: boolean | null;
+    /** TTS 合成成功后自动触发该段语音核对（默认关） */
+    auto_verify_after_tts?: boolean | null;
+    /** 单段核对超时秒数（默认 60；冷启动加载 FunASR 模型可能超时，重试即可） */
+    verify_timeout_seconds?: number | null;
     [key: string]: unknown;
   } | null;
   created_at: string;

@@ -216,7 +216,7 @@ async def synthesize_segment_workers(
     prev_current = current if current.get("path") or current.get("id") else None
     seg["audio"] = {
         "format": fmt,
-        "current": {"path": ref, "origin": "tts"},
+        "current": {"id": uuid.uuid4().hex, "path": ref, "origin": "tts"},
         **({"previous": prev_current} if (prev_current and keep_previous) else {}),
     }
     seg["generated_params"] = {k: v for k, v in effective.items() if v is not None}
@@ -266,7 +266,7 @@ async def upload_segment_audio_workers(
     prev_current = (seg.get("audio") or {}).get("current") if isinstance(seg.get("audio"), dict) else None
     seg["audio"] = {
         "format": ext,
-        "current": {"path": ref, "origin": "recorded", **({"duration_sec": duration_sec} if duration_sec else {})},
+        "current": {"id": uuid.uuid4().hex, "path": ref, "origin": "recorded", **({"duration_sec": duration_sec} if duration_sec else {})},
         **({"previous": prev_current} if prev_current else {}),
     }
 

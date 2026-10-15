@@ -4,10 +4,8 @@
 - verify：multipart 上传音频 + 基准文本 → FunASR 转写 → 比对（monkeypatch transcribe_raw）
 - runs：创建（409 防重）/ 心跳 PATCH / GET latest（惰性判活 running→interrupted）
 """
-import os
 import uuid
 from datetime import timedelta
-from unittest.mock import patch
 
 import pytest
 
@@ -16,7 +14,10 @@ from app.models.segmented_project import SegmentVerificationRun
 from app.services.funasr_service import FunASRService
 
 
-def _verify(client, *, baseline_text="保温杯可以装热水", audio_bytes=b"fake-audio", filename="seg.mp3", **extra):
+def _verify(
+    client, *, baseline_text="保温杯可以装热水", audio_bytes=b"fake-audio",
+    filename="seg.mp3", **extra,
+):
     data = {"baseline_text": baseline_text, **extra}
     return client.post(
         "/api/tts-verify/verify",
@@ -97,14 +98,16 @@ class TestVerifyEndpoint:
         assert resp.status_code == 503
 
     def test_stub_env_returns_fixed_text_without_funasr(self, client, monkeypatch):
-        """TTS_VERIFY_STUB=1：不跑真实 ASR，返回可控文本（E2E 专用桩）。"""
+        """tts_verify_stub=True：不跑真实 ASR，返回可控文本（E2E 专用桩）。"""
 
         def explode(self, input_file, device=None):
             raise AssertionError("stub 模式不应触碰真实 ASR")
 
         monkeypatch.setattr(FunASRService, "transcribe_raw", explode)
-        monkeypatch.setenv("TTS_VERIFY_STUB", "1")
-        monkeypatch.setenv("TTS_VERIFY_STUB_TEXT", "桩回读")
+        from app.core.config import settings as app_settings
+
+        monkeypatch.setattr(app_settings, "tts_verify_stub", True)
+        monkeypatch.setattr(app_settings, "tts_verify_stub_text", "桩回读")
 
         resp = _verify(client, baseline_text="正常朗读的句子")
         assert resp.status_code == 200
@@ -188,7 +191,8 @@ class TestRunsPatch:
     def test_patch_status_completed(self, client):
         pid = f"p-{uuid.uuid4().hex[:8]}"
         run_id = _create_run(client, pid).json()["id"]
-        resp = client.patch(f"/api/tts-verify/runs/{run_id}", json={"done": 10, "status": "completed"})
+        resp = client.patch(
+            f"/api/tts-verify/runs/{run_id}", json={"done": 10, "status": "completed"})
         assert resp.status_code == 200
         assert resp.json()["status"] == "completed"
 
@@ -212,7 +216,8 @@ class TestRunsPatch:
 
 class TestRunsLatest:
     def test_no_runs_returns_null(self, client):
-        resp = client.get("/api/tts-verify/runs/latest", params={"project_id": f"p-{uuid.uuid4().hex[:8]}"})
+        resp = client.get(
+            "/api/tts-verify/runs/latest", params={"project_id": f"p-{uuid.uuid4().hex[:8]}"})
         assert resp.status_code == 200
         assert resp.json()["run"] is None
 

@@ -41,11 +41,10 @@ router = APIRouter()
 # 心跳过时阈值：3 × 默认单段核对超时（60s）。超过即判孤儿 run（崩溃/关页）。
 HEARTBEAT_STALE_SECONDS = 180
 
-# E2E/CI 测试桩：TTS_VERIFY_STUB=1 时 verify 不跑真实 ASR，回读文本取
-# TTS_VERIFY_STUB_TEXT（缺省固定句子）。桩文本与任何正常基准都不同 →
-# 全量核对后所有段都判「不一致」，供 E2E 驱动 mismatch/过滤/忽略流程。
-STUB_ENV = "TTS_VERIFY_STUB"
-STUB_TEXT_ENV = "TTS_VERIFY_STUB_TEXT"
+# E2E/CI 测试桩：settings.tts_verify_stub=True（.env.e2e 设 TTS_VERIFY_STUB=1）
+# 时 verify 不跑真实 ASR，回读文本取 settings.tts_verify_stub_text。桩文本与任何
+# 正常基准都不同 → 全量核对后所有段都判「不一致」，供 E2E 驱动 mismatch 流程。
+# 走 settings 而非 os.environ：ENV_FILE overlay 只进 pydantic Settings。
 _STUB_TEXT_DEFAULT = "语音核对测试桩回读文本"
 
 _RUN_STATUSES = {"running", "completed", "stopped", "interrupted"}
@@ -118,7 +117,7 @@ def _run_to_dict(run) -> dict:  # type: ignore[no-untyped-def]
 
 
 def _stub_asr_text() -> str:
-    return os.environ.get(STUB_TEXT_ENV) or _STUB_TEXT_DEFAULT
+    return settings.tts_verify_stub_text or _STUB_TEXT_DEFAULT
 
 
 @router.post("/verify")
@@ -141,7 +140,7 @@ def verify_endpoint(
 
     started = time.monotonic()
 
-    if os.environ.get(STUB_ENV) == "1":
+    if settings.tts_verify_stub:
         asr_text = _stub_asr_text()
         result = verify_texts(baseline_text, asr_text, threshold=threshold)
         result.update({"asr_text": asr_text, "engine": engine, "device": "stub"})

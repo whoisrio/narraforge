@@ -83,6 +83,8 @@ FunASR runs locally and does not require an API key. Models are downloaded from 
 |----------|----------|-------------|---------|
 | `FUNASR_MODEL` | No | FunASR model name. Options: `paraformer-zh`（流式模型不支持离线字幕转写，已移除） | `paraformer-zh` |
 | `FUNASR_DEVICE` | No | Compute device. Leave empty for auto-detection (`cuda` > `mps` > `cpu`) | *(empty -- auto)* |
+| `TTS_VERIFY_STUB` | No | TTS 语音核对（`/api/tts-verify/verify`）测试桩：`1` 时 verify 不跑真实 ASR（E2E/CI 专用，`.env.e2e` 已开启） | *(unset)* |
+| `TTS_VERIFY_STUB_TEXT` | No | 测试桩回读文本（与任何正常基准都不同 → 核对结果恒为「不一致」） | `语音核对测试桩回读文本` |
 
 ## VoxCPM (Local GPU Voice Cloning)
 

@@ -110,3 +110,17 @@ export function attachSegmentAudio(
     throw new Error(`[dbWriter] segment not found: ${segmentId}`);
   }
 }
+
+/**
+ * 把核对 run 的心跳回拨（模拟孤儿 run：刷新/崩溃后不再有心跳）。
+ * 后端在下次 GET/POST runs 时按 180s 阈值惰性判活 running→interrupted。
+ */
+export function backdateVerifyRunHeartbeat(runId: string, secondsAgo: number): void {
+  const db = getDb();
+  const res = db
+    .prepare("UPDATE segment_verification_runs SET updated_at = datetime('now', ?) WHERE id = ?")
+    .run(`-${secondsAgo} seconds`, runId);
+  if (Number(res.changes) === 0) {
+    throw new Error(`[dbWriter] verify run not found: ${runId}`);
+  }
+}

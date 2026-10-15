@@ -652,6 +652,8 @@ export interface SegmentPatchBody {
   unlock_audio?: boolean;
   /** 段级文本变换（小写化覆盖 / 发音映射段级引用），整字典替换，含显式 null 键（跟随项目） */
   text_transforms?: Record<string, unknown> | null;
+  /** TTS 核对结果写回（verifyOne 成功后；显式 null = 清空） */
+  verification?: Record<string, unknown> | null;
 }
 
 export interface SegmentPatchResponse {
@@ -1040,5 +1042,57 @@ export const indexttsApi = {
   }): Promise<TTSResult> => {
     const { data } = await api.post<TTSResult>('/indextts/tts', params);
     return data;
+  },
+};
+
+// ── TTS 语音核对（ASR 回读验收；仅本地后端挂载，workers 503/404） ──
+
+export const ttsVerifyApi = {
+  /** 单段核对：multipart 上传音频 + 基准文本（实际朗读文本），signal 用于单段超时 */
+  verify: async (
+    blob: Blob,
+    baselineText: string,
+    opts: { threshold?: number; engine?: string; signal?: AbortSignal } = {},
+  ): Promise<import('./ttsVerify').VerifyResponse> => {
+    const form = new FormData();
+    const ext = blob.type.includes('wav') ? 'wav' : 'mp3';
+    form.append('audio', blob, `segment-audio.${ext}`);
+    form.append('baseline_text', baselineText);
+    if (opts.threshold != null) form.append('threshold', String(opts.threshold));
+    if (opts.engine) form.append('engine', opts.engine);
+    const { data } = await api.post<import('./ttsVerify').VerifyResponse>('/tts-verify/verify', form, {
+      signal: opts.signal,
+    });
+    return data;
+  },
+
+  /** 创建核对运行（防重：已有心跳新鲜的 running run → 409 verify_run_in_progress） */
+  createRun: async (body: {
+    project_id: string;
+    scope: 'chapter' | 'project';
+    chapter_id?: string | null;
+    total: number;
+  }): Promise<import('../types').VerifyRunRecord> => {
+    const { data } = await api.post<import('../types').VerifyRunRecord>('/tts-verify/runs', body);
+    return data;
+  },
+
+  /** 进度心跳 / 终态（completed | stopped） */
+  patchRun: async (
+    runId: string,
+    body: { done?: number; status?: 'running' | 'completed' | 'stopped' },
+  ): Promise<import('../types').VerifyRunRecord> => {
+    const { data } = await api.patch<import('../types').VerifyRunRecord>(
+      `/tts-verify/runs/${runId}`, body,
+    );
+    return data;
+  },
+
+  /** 页面加载恢复进度 pill；无记录返回 null（后端读时惰性判活 running→interrupted） */
+  getLatestRun: async (projectId: string): Promise<import('../types').VerifyRunRecord | null> => {
+    const { data } = await api.get<{ run: import('../types').VerifyRunRecord | null }>(
+      '/tts-verify/runs/latest', { params: { project_id: projectId } },
+    );
+    return data.run;
   },
 };

@@ -84,6 +84,8 @@ function enrichSegment(raw: RawSegment): Segment {
     animation_spec: raw.animation_spec ?? null,
     // 合成时文本变换（发音映射段级引用 + 小写化覆盖），IndexedDB 透传
     text_transforms: raw.text_transforms ?? undefined,
+    // TTS 语音核对最近一次结果（绑 audio_key）透传
+    verification: raw.verification ?? undefined,
     created_at: raw.created_at || now,
     updated_at: raw.updated_at || now,
   };
@@ -232,6 +234,7 @@ export type Action =
   | { type: 'SPLIT_SEGMENT'; id: string; position: number; touch?: boolean }
   | { type: 'SELECT_SEGMENT'; id: string | undefined }
   | { type: 'SET_SEGMENT_TEXT_TRANSFORMS'; id: string; transforms: SegmentTextTransforms | null; touch?: boolean }
+  | { type: 'SET_SEGMENT_VERIFICATION'; id: string; verification: import('../types').SegmentVerification | null; touch?: boolean }
   | { type: 'CLEAR_ROLE_FROM_SEGMENTS'; roleId: string };
 
 /** PATCH /segments 响应里的服务端段形状（SegmentIn 子集；null 在入本地态时转 undefined） */
@@ -841,6 +844,15 @@ export function segmentedReducer(state: State, action: Action): State {
       return { project: updateSegmentById(p, action.id, seg => ({
         ...seg,
         text_transforms: action.transforms ?? undefined,
+        updated_at: new Date().toISOString(),
+      }), { touch: action.touch }) };
+    }
+    case 'SET_SEGMENT_VERIFICATION': {
+      // 语音核对结果写回（verifyOne 成功后）。null → undefined 丢键：渲染层
+      // 按「未核对」处理；touch=false 时由 segment PATCH 显式携带落库。
+      return { project: updateSegmentById(p, action.id, seg => ({
+        ...seg,
+        verification: action.verification ?? undefined,
         updated_at: new Date().toISOString(),
       }), { touch: action.touch }) };
     }

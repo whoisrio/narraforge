@@ -288,6 +288,19 @@ Avoids letter-by-letter reading of ALL-CAPS latin words (e.g. `REST API` -> `res
 - Only `[A-Z]{2,}` words with non-alphanumeric boundaries are lowercased (single letters like `I`, TitleCase like `Http`, and identifiers like `HTTP2` are untouched).
 - Resolution order: segment override (non-null first) -> project default -> false. Runs after the pronunciation map and before `prepare_text_for_engine`, so map targets containing ALL-CAPS words are lowercased as well. Display text and subtitles keep the original.
 
+#### TTS Voice Verification (语音核对, ASR 回读验收)
+
+Catches mispronunciations, omissions and polyphone mistakes without listening to every segment by hand: each segment's TTS audio is transcribed back (ASR round-trip, FunASR paraformer-zh) and compared against the text that was actually spoken.
+
+- Baseline text is the **engine text** recomputed via `resolveSegmentEngineText` (same source as the synthesis path: pronunciation map + lowercase transforms), never the display text.
+- Comparison runs entirely in the backend (`tts_verify_service`): normalization (fullwidth → halfwidth, whitespace/punctuation stripped, lowercase, Arabic digits → Chinese readings) → `difflib` similarity → diff. Threshold defaults to 0.8; the final judgment is always human — the detail modal shows baseline vs readback with diff highlighting and offers 忽略 / 重新核对 / 重新 TTS.
+- Entry points: per-segment 「核对」 button (◎, disabled without audio), Studio bottom toolbar 「语音核对」 dropdown (核对本章 / 全量核对), and optional auto-verify after each successful TTS (`configs.auto_verify_after_tts`, project settings).
+- Idempotent selection: batch verify only targets segments whose effective status is 未核对（无结果或 audio_key 不匹配）or error — re-clicking resumes instead of re-burning ASR. A module-level in-flight registry prevents same-segment concurrent verification.
+- Progress persistence: results are written to `segment.verification` (bound to `audio_key`; re-TTS invalidates old results automatically). A `segment_verification_runs` table tracks global progress with heartbeat-based liveness (stale runs become `interrupted` and the toolbar pill offers 一键续跑); a fresh `running` run blocks duplicate starts (409 → toast).
+- Single-segment timeout defaults to 60s (`configs.verify_timeout_seconds`); timeout marks the segment `error` and the batch continues. A 503 (funasr unavailable, e.g. workers deploy) aborts the whole batch with a toast 「语音核对仅本地环境可用」.
+- Rendering: segment badges (⟳ 核对中 / ✓ 一致 / ✗ 不一致 / ⊘ 已忽略 / ！出错 / – 未核对・已过期) in both list and dialogue views, a 「只看不一致」 filter pill, and a verification detail modal with diff view.
+- The verify endpoints are mounted local-only; workers deployments return 404 and the frontend hides the entry.
+
 ### 4.5 Library - Doc-First Views
 
 The Library is organized into three first-class views plus an immersive chapter editor, switched from a persistent header switcher:

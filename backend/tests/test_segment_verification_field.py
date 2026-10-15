@@ -3,13 +3,11 @@
 - 整量 PUT / patch / 项目详情 / 导入导出 全链路透传
 - 迁移幂等（列已存在时跳过）
 """
-from unittest.mock import patch
 
 from app.core.database import _P20_TTS_VERIFY_ALTER_STMTS
 from app.models.segmented_project import SegmentedProjectSegment
 from app.schemas.segmented_project import ProjectIn, SegmentPatchIn
 from app.services import segmented_project_service as svc
-
 
 VERIFICATION = {
     "audio_key": "aud-1",
@@ -74,7 +72,8 @@ def test_verification_preserved_when_payload_omits(db_session, tmp_path, monkeyp
             "id": "vc1", "position": 0, "name": "第一章",
             "voice": {"engine": "edge_tts", "voice_id": "v1"},
             "split_config": {"delimiters": ["。"], "mode": "rule"},
-            "segments": [{"id": "s1", "position": 0, "text": "你好改", "voice": {"source": "chapter"}}],
+            "segments": [{
+                "id": "s1", "position": 0, "text": "你好改", "voice": {"source": "chapter"}}],
         }],
     )
     svc.save_project(db_session, fresh)
@@ -89,7 +88,8 @@ def test_verification_patch_tri_state(db_session, tmp_path, monkeypatch):
     _seed(db_session, tmp_path, monkeypatch)
 
     # 写入
-    out = svc.patch_segment(db_session, "vp1", "vc1", "s1", SegmentPatchIn(verification=VERIFICATION))
+    out = svc.patch_segment(
+        db_session, "vp1", "vc1", "s1", SegmentPatchIn(verification=VERIFICATION))
     assert out[0].verification == VERIFICATION
     # 缺省 = 不动
     out = svc.patch_segment(db_session, "vp1", "vc1", "s1", SegmentPatchIn(text="改"))
@@ -119,11 +119,12 @@ def test_verification_in_export_import(db_session, tmp_path, monkeypatch):
 
 def test_p20_migration_idempotent(db_session):
     """P20 ALTER 语句：列已存在时跳过不报错。"""
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect
 
     from app.core.database import _run_alter_or_skip
 
-    existing = {c["name"] for c in inspect(db_session.bind).get_columns("segmented_project_segments")}
+    existing = {
+        c["name"] for c in inspect(db_session.bind).get_columns("segmented_project_segments")}
     if "verification" in existing:
         # create_all 已建列：再次执行应跳过（返回 False）且不抛异常
         assert _run_alter_or_skip(db_session.bind, _P20_TTS_VERIFY_ALTER_STMTS[0]) is False
@@ -141,3 +142,44 @@ def test_run_table_created_by_metadata(db_session):
 
     tables = inspect(db_session.bind).get_table_names()
     assert "segment_verification_runs" in tables
+
+
+def test_synth_audio_current_has_unique_id(db_session, tmp_path, monkeypatch):
+    """audio_key 绑定前提：backend 合成的 audio.current 必须带唯一 id，
+    重新合成后 id 变化 —— 否则 path 不变，旧核对结果无法作废。"""
+    import uuid as _uuid
+
+    from app.services.segmented_project_service import update_segment_after_synth
+
+    _seed(db_session, tmp_path, monkeypatch)
+
+    seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
+    update_segment_after_synth(
+        db_session, seg,
+        current_audio_path="p1/chapters/c1/segments/s1.mp3",
+        previous_audio_path=None,
+        audio_format="mp3",
+        duration_sec=1.2,
+        generated_params={"engine": "edge_tts"},
+    )
+    db_session.commit()
+    first_id = seg.audio["current"]["id"]
+    assert isinstance(first_id, str) and len(first_id) >= 16
+
+    # 重新合成：id 必须变化（audio_key 据此判定旧核对结果过期）
+    update_segment_after_synth(
+        db_session, seg,
+        current_audio_path="p1/chapters/c1/segments/s1.mp3",
+        previous_audio_path="p1/chapters/c1/segments/s1.mp3",
+        previous_duration_sec=1.2,
+        audio_format="mp3",
+        duration_sec=1.3,
+        generated_params={"engine": "edge_tts"},
+    )
+    db_session.commit()
+    assert seg.audio["current"]["id"] != first_id
+    # previous 也带 id（撤销/回放场景一致）
+    assert isinstance(seg.audio["previous"]["id"], str)
+
+    # id 必须是 uuid 形态（与 frontend 模式 IndexedDB id 同位）
+    _uuid.UUID(hex=seg.audio["current"]["id"])

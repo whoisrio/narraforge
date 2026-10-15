@@ -760,6 +760,10 @@ def update_segment_after_synth(
     audio_data = {
         "format": audio_format,
         "current": {
+            # 唯一 id：audio_key（语音核对结果绑定）据此识别音频版本 ——
+            # backend 模式 path 由 segment_id 决定、重合成后不变，没有 id
+            # 就无法判定「旧核对结果已过期」。
+            "id": uuid.uuid4().hex,
             "path": current_audio_path,
             "format": audio_format,
             "origin": current_origin,
@@ -770,7 +774,7 @@ def update_segment_after_synth(
         # 顶层 duration_sec 是时间轴/SRT 的读取源，与 current 保持一致（D7）
         audio_data["duration_sec"] = duration_sec
     if previous_audio_path:
-        prev_entry: dict[str, Any] = {"path": previous_audio_path}
+        prev_entry: dict[str, Any] = {"id": uuid.uuid4().hex, "path": previous_audio_path}
         if previous_duration_sec is not None:
             prev_entry["duration_sec"] = previous_duration_sec
         if previous_origin is not None:
@@ -2359,6 +2363,8 @@ def adjust_chapter_audio(
                 # SAVEPOINT 回滚本次 adjust 已改动的行。
                 raise AudioEncoderError(f"probe_failed: {cur_rel}")
             updated["current"]["duration_sec"] = new_duration
+            # 音频内容已重编码 → 换新 id（语音核对 audio_key 作废判定依赖）
+            updated["current"]["id"] = uuid.uuid4().hex
             # 顶层 duration_sec 是时间轴/SRT/章节时长的读取源，必须同步
             updated["duration_sec"] = new_duration
             seg.audio = updated
