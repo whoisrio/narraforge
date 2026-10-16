@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import json
-from urllib.parse import parse_qs
 
 import httpx
 
@@ -67,6 +66,16 @@ class FakePostgrestStore:
                 candidates = [v.strip().strip('"') for v in value.strip("()").split(",")]
                 if str(cell) not in candidates:
                     return False
+            if op == "not":
+                # 形如 not.in.(a,b,c)：非成员才匹配（孤儿清理 DELETE 用）
+                if value.startswith("in."):
+                    candidates = [
+                        v.strip().strip('"') for v in value[3:].strip("()").split(",")
+                    ]
+                    if str(cell) in candidates:
+                        return False
+                else:
+                    raise AssertionError(f"fake PostgREST 不支持操作符: not.{value}")
         or_clause = params.get("or")
         if or_clause:
             # 形如 (project_id.is.null,project_id.eq.p1)

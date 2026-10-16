@@ -58,7 +58,7 @@ local-services = [
     # Narration git versioning（本地能力：git + 文件系统）
     "pypinyin>=0.51",
     "pyyaml>=6.0",
-    "edge-tts>=7.0.0",
+    "edge-tts>=7.3.1",
     "dashscope>=1.25.0",
     "qiniu>=7.17.0",
     # 遗留工作流依赖（app 代码已无引用，agent/ 服务独立管理依赖）
@@ -102,7 +102,7 @@ dev = [
 # `uv sync --extra local-services` 已含 edge-tts，重复无害。
 # 注意：本组不进 CF Workers bundle（pywrangler 只收集 [project.dependencies]）。
 vercel-deploy = [
-    "edge-tts>=7.0.0",
+    "edge-tts>=7.3.1",
 ]
 
 [tool.uv]

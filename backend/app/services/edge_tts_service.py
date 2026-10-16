@@ -13,7 +13,6 @@ edge_tts 包在 Pyodide workers 环境不存在，import 必须延迟到策略�
 """
 
 import asyncio
-import uuid
 import time
 import logging
 from typing import Optional
@@ -214,7 +213,7 @@ class EdgeTTSService:
         url = (
             f"https://{proto.BASE_URL}/voices/list"
             f"?trustedclienttoken={proto.TRUSTED_CLIENT_TOKEN}"
-            f"&Sec-MS-GEC={proto.generate_sec_ms_gec()}"
+            f"&Sec-MS-GEC={proto.generate_sec_ms_gec_v2()}"
             f"&Sec-MS-GEC-Version={proto.SEC_MS_GEC_VERSION}"
         )
         async with httpx.AsyncClient(transport=self._voices_transport, timeout=30) as client:
