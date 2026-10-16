@@ -3,7 +3,9 @@
  *
  * 六态：⟳ 核对中（内存态，in-flight 派生）/ ✓ 一致 / ✗ 不一致 /
  * ⊘ 已忽略 / ！出错 / – 未核对（audio_key 不匹配时变体为「已过期」）。
- * 点击打开核对详情（由父级 onOpenDetail 决定）。
+ *
+ * 双职责角标：未核对/已过期时点击直接发起核对（onVerify），
+ * 已有结果时点击打开核对详情（onOpenDetail）——紧凑列表里不额外占一个按钮位。
  */
 import type { Segment } from '../../types';
 import { resolveVerificationView } from '../../services/ttsVerify';
@@ -15,11 +17,13 @@ interface VerificationBadgeProps {
   /** 该段正在核对（页面由 in-flight 状态派生） */
   verifying?: boolean;
   onOpenDetail?: (segmentId: string) => void;
+  /** 未核对/已过期时点击直接发起核对；缺省时未核对点击回退为打开详情 */
+  onVerify?: (segmentId: string) => void;
   /** 紧凑模式：只显示符号，完整状态放 tooltip（避免挤压行内文本布局） */
   compact?: boolean;
 }
 
-export function VerificationBadge({ segment, verifying, onOpenDetail, compact }: VerificationBadgeProps) {
+export function VerificationBadge({ segment, verifying, onOpenDetail, onVerify, compact }: VerificationBadgeProps) {
   const { t } = useTranslation();
   const view = resolveVerificationView(segment);
 
@@ -62,13 +66,27 @@ export function VerificationBadge({ segment, verifying, onOpenDetail, compact }:
     tooltip = t('ttsVerify.badge.staleTooltip');
   }
 
+  // 未核对/已过期 + onVerify → 点击直接核对；核对中不重复触发
+  const canTriggerVerify = !!onVerify && !verifying && view.state === 'unverified';
+  if (canTriggerVerify) {
+    tooltip = view.stale
+      ? t('ttsVerify.badge.staleVerifyTooltip')
+      : t('ttsVerify.badge.unverifiedVerifyTooltip');
+  }
+
+  const handleClick = () => {
+    if (verifying) return; // in-flight：不重复触发也不开详情
+    if (canTriggerVerify) onVerify?.(segment.id);
+    else onOpenDetail?.(segment.id);
+  };
+
   return (
     <button
       type="button"
       className={`${styles.badge} ${cls}`}
       title={tooltip}
       aria-label={compact ? tooltip : undefined}
-      onClick={(e) => { e.stopPropagation(); onOpenDetail?.(segment.id); }}
+      onClick={(e) => { e.stopPropagation(); handleClick(); }}
     >
       {compact ? symbol : `${symbol} ${label}`}
     </button>

@@ -138,10 +138,30 @@ test.describe('TTS 语音核对', () => {
     try {
       await openStudio(page);
 
-      // ── 1. 全量核对：4 段全部未核对 → 全部判不一致（桩回读 ≠ 任何基准）──
+      // ── 0. 紧凑行（默认视图）角标双职责：未核对 → 点角标直接核对，不建 run ──
+      const runsBeforeSingle = await readDbVerifyRuns(PROJECT_ID);
+      const s1Badge = page
+        .locator(`[data-segment-id="${SEG_IDS[0]}"]`)
+        .getByRole('button', { name: '语音核对：未核对（点击核对）' });
+      await s1Badge.click();
+      await expect(
+        page.locator(`[data-segment-id="${SEG_IDS[0]}"]`).getByRole('button', { name: /语音核对：不一致/ }),
+      ).toBeVisible({ timeout: 15_000 });
+      // 单段核对不走批量：不建 run（SQLite 双读，与点击前快照对比）
+      expect(await readDbVerifyRuns(PROJECT_ID)).toHaveLength(runsBeforeSingle.length);
+
+      // ── 1. 全量核对：剩余 3 段未核对 → 全部判不一致（桩回读 ≠ 任何基准）；完成后弹报告 ──
       await page.getByRole('button', { name: '◎ 语音核对 ▾' }).click();
       await page.getByRole('button', { name: '全量核对（项目所有章节）' }).click();
-      await expect(page.getByText(/语音核对完成：4 段/)).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByText(/语音核对完成：3 段/)).toBeVisible({ timeout: 30_000 });
+      // 核对报告：列出本次 run 发现的 3 段不一致，直接给 基准 vs ASR 回读比对
+      const report = page.getByRole('dialog', { name: '语音核对报告' });
+      await expect(report).toBeVisible({ timeout: 10_000 });
+      await expect(report.getByText('不一致 3')).toBeVisible();
+      await expect(report.getByText('语音核对测试桩回读文本').first()).toBeVisible();
+      await report.getByText('关闭').click();
+      await expect(report).toHaveCount(0);
+
       // 紧凑行角标为符号 + tooltip（aria-label），按 tooltip 前缀精确匹配不一致
       await expect(page.getByRole('button', { name: /语音核对：不一致/ })).toHaveCount(4, { timeout: 10_000 });
 
@@ -165,12 +185,12 @@ test.describe('TTS 语音核对', () => {
         expect(parsed.audio_key).toContain(`${id}-seed.mp3`);
         expect(parsed.engine).toBe('funasr');
       }
-      // runs 表：completed 4/4
+      // runs 表：completed 3/3（s1 已由步骤 0 的单段核对覆盖，批量幂等跳过）
       const runs = await readDbVerifyRuns(PROJECT_ID);
       const completed = runs.find((r) => r.status === 'completed');
       expect(completed, 'completed run row').toBeTruthy();
-      expect(completed!.done).toBe(4);
-      expect(completed!.total).toBe(4);
+      expect(completed!.done).toBe(3);
+      expect(completed!.total).toBe(3);
 
       // ── 2. 二次全量核对：全部新鲜 → 幂等空跑，不建 run ──
       await page.getByRole('button', { name: '◎ 语音核对 ▾' }).click();
@@ -217,6 +237,11 @@ test.describe('TTS 语音核对', () => {
       await page.getByRole('button', { name: '◎ 语音核对 ▾' }).click();
       await page.getByRole('button', { name: '全量核对（项目所有章节）' }).click();
       await expect(page.getByText(/语音核对完成：1 段/)).toBeVisible({ timeout: 30_000 });
+      // 报告只含本次 run 发现的 s1 → 关闭后继续双读断言
+      const reportV2 = page.getByRole('dialog', { name: '语音核对报告' });
+      await expect(reportV2).toBeVisible({ timeout: 10_000 });
+      await expect(reportV2.getByText('不一致 1')).toBeVisible();
+      await reportV2.getByText('关闭').click();
       let reverified: { status: string; audio_key: string } | null = null;
       await expect
         .poll(async () => {
@@ -285,6 +310,11 @@ test.describe('TTS 语音核对', () => {
 
       // 续跑 = 幂等选择：4 段全部未核对 → 补 4 段
       await expect(page.getByText(/语音核对完成：4 段/)).toBeVisible({ timeout: 30_000 });
+      // 报告汇总本次 run 的 4 段不一致 → 关闭
+      const resumeReport = page.getByRole('dialog', { name: '语音核对报告' });
+      await expect(resumeReport).toBeVisible({ timeout: 10_000 });
+      await expect(resumeReport.getByText('不一致 4')).toBeVisible();
+      await resumeReport.getByText('关闭').click();
       // pill 消失（无活跃/中断 run）
       await expect(page.getByTestId('verify-run-pill')).toHaveCount(0, { timeout: 10_000 });
 

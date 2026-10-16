@@ -17,6 +17,8 @@ interface ChatBubbleProps {
   /** 该段正在语音核对（in-flight 内存态） */
   verifying?: boolean;
   onOpenVerifyDetail?: (id: string) => void;
+  /** 未核对/已过期角标点击直接发起单段核对（双职责角标） */
+  onVerifySegment?: (id: string) => void;
   onSelect: (id: string) => void;
   onRegenerate: (id: string) => void;
   onPlay: (id: string) => void;
@@ -48,7 +50,7 @@ function renderMarkedText(segment: Segment, t: (key: string) => string): ReactNo
   return segment.text || t('segment.chatBubble.emptyLine');
 }
 
-export function ChatBubble({ segment, index, role, roles = [], isSelected, isPlaying, isStale, verifying, onOpenVerifyDetail, onSelect, onRegenerate, onPlay, onUpdateRole, onUpdateKind, onTextSelection }: ChatBubbleProps) {
+export function ChatBubble({ segment, index, role, roles = [], isSelected, isPlaying, isStale, verifying, onOpenVerifyDetail, onVerifySegment, onSelect, onRegenerate, onPlay, onUpdateRole, onUpdateKind, onTextSelection }: ChatBubbleProps) {
   const { t } = useTranslation();
   const roleName = role?.name ?? t('segment.chatBubble.unnamedRole');
   const emotion = (segment.emotion ?? 'neutral') as EmotionType;
@@ -108,7 +110,7 @@ export function ChatBubble({ segment, index, role, roles = [], isSelected, isPla
         <footer className={styles.footer}>
           <span>{t(EMOTION_LABELS[emotion])}</span>
           <span>{t('segment.chatBubble.prosodyMarks', { count: 0 })}</span>
-          {onOpenVerifyDetail && <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} />}
+          {onOpenVerifyDetail && <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} onVerify={onVerifySegment} />}
           {isStale && <span className={styles.stale}>{t('segment.chatBubble.needRegenerate')}</span>}
           <button type="button" onClick={(event) => { event.stopPropagation(); onPlay(segment.id); }}>{isPlaying ? t('segment.chatBubble.playing') : t('segment.chatBubble.play')}</button>
           <button type="button" onClick={(event) => { event.stopPropagation(); onRegenerate(segment.id); }}>{t('segment.chatBubble.generate')}</button>

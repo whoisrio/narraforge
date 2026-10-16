@@ -1,0 +1,235 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.card {
+  background: var(--bg-primary, #fff);
+  border-radius: 12px;
+  width: min(880px, calc(100vw - 48px));
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.24);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 8px;
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+  }
+
+  button {
+    border: none;
+    background: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: var(--text-secondary, #666);
+    line-height: 1;
+    padding: 4px;
+  }
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 4px 20px 12px;
+  border-bottom: 1px solid var(--border-subtle, #ececec);
+}
+
+.scopeLine {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  margin-right: auto;
+}
+
+.countChip {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.countMatch {
+  color: var(--success-color, #16a34a);
+  background: rgba(22, 163, 74, 0.1);
+}
+
+.countMismatch {
+  color: var(--danger-color, #dc2626);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.countError {
+  color: var(--warning-color, #d97706);
+  background: rgba(217, 119, 6, 0.1);
+}
+
+.body {
+  padding: 12px 20px 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.allMatch {
+  margin: 24px 0;
+  text-align: center;
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+}
+
+.item {
+  border: 1px solid var(--border-subtle, #ececec);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.itemHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.itemLoc {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+}
+
+.statusChip {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.statusMismatch {
+  color: var(--danger-color, #dc2626);
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.statusError {
+  color: var(--warning-color, #d97706);
+  background: rgba(217, 119, 6, 0.1);
+}
+
+.similarity {
+  font-size: 12px;
+  color: var(--text-secondary, #666);
+}
+
+.itemActions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+
+.textGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diffPair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+
+  @media (max-width: 720px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.textCol {
+  h4 {
+    margin: 0 0 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-tertiary, #999);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.plainText,
+.diffText {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-secondary, #f8f8f8);
+  border: 1px solid var(--border-subtle, #ececec);
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.diffText mark {
+  border-radius: 3px;
+  padding: 0 2px;
+}
+
+.errorNote {
+  margin: 0;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  color: var(--warning-color, #d97706);
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border-subtle, #ececec);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.ghostBtn {
+  border: 1px solid var(--border-color, #d4d4d4);
+  background: none;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--text-primary, #333);
+
+  &:hover {
+    background: var(--bg-secondary, #f5f5f5);
+  }
+}
+
+.primaryBtn {
+  border: none;
+  background: var(--primary-color, #2563eb);
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    filter: brightness(1.06);
+  }
+}

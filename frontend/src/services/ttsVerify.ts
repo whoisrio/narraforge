@@ -117,6 +117,96 @@ export function isMismatchVisible(segment: Segment): boolean {
 }
 
 // ---------------------------------------------------------------------------
+// 核对报告（批量完成后弹出的汇总数据，纯函数组装）
+// ---------------------------------------------------------------------------
+
+/** 报告条目：本次 run 发现的需人工处理段（mismatch / error） */
+export interface VerifyReportItem {
+  segmentId: string;
+  chapterId: string;
+  chapterName: string;
+  /** 章内 1-based 序号（与列表 #idx 一致） */
+  segmentIndex: number;
+  displayText: string;
+  verification: SegmentVerification;
+}
+
+/** 批量核对报告数据（VerifyReportModal 的输入） */
+export interface VerifyReportData {
+  scope: 'chapter' | 'project';
+  /** 本次 run 的目标段数（含跳过） */
+  total: number;
+  /** 本次 run 实际写回结果的段数（段被删则不计） */
+  verified: number;
+  matchCount: number;
+  mismatchCount: number;
+  errorCount: number;
+  items: VerifyReportItem[];
+}
+
+/**
+ * 从 run 结果组装报告：计数分类 + 挑出 mismatch/error 段（带章节名/段序号/显示文本）。
+ * run 期间被删除的段（chapters 里找不到）只计 verified，不进 items。
+ */
+export function buildVerifyReport(params: {
+  scope: 'chapter' | 'project';
+  total: number;
+  results: Map<string, SegmentVerification>;
+  chapters: Chapter[];
+}): VerifyReportData {
+  const { scope, total, results, chapters } = params;
+
+  let matchCount = 0;
+  let mismatchCount = 0;
+  let errorCount = 0;
+  const items: VerifyReportItem[] = [];
+
+  for (const [segmentId, verification] of results) {
+    let chapter: Chapter | undefined;
+    let index = -1;
+    for (const ch of chapters) {
+      const idx = ch.segments.findIndex((s) => s.id === segmentId);
+      if (idx >= 0) {
+        chapter = ch;
+        index = idx;
+        break;
+      }
+    }
+    if (!chapter || index < 0) continue; // run 期间被删：无呈现载体，跳过
+    if (verification.status === 'match') { matchCount++; continue; }
+    if (verification.status === 'mismatch') mismatchCount++;
+    else if (verification.status === 'error') errorCount++;
+    else continue; // ignored 等非 run 产出状态不进报告
+    items.push({
+      segmentId,
+      chapterId: chapter.id,
+      chapterName: chapter.name,
+      segmentIndex: index + 1,
+      displayText: chapter.segments[index].text,
+      verification,
+    });
+  }
+
+  // 章节位置 → 段位置稳定排序，与列表顺序一致
+  const chapterOrder = new Map(chapters.map((ch, i) => [ch.id, ch.position ?? i]));
+  items.sort((a, b) => {
+    const ca = chapterOrder.get(a.chapterId) ?? 0;
+    const cb = chapterOrder.get(b.chapterId) ?? 0;
+    return ca !== cb ? ca - cb : a.segmentIndex - b.segmentIndex;
+  });
+
+  return {
+    scope,
+    total,
+    verified: results.size,
+    matchCount,
+    mismatchCount,
+    errorCount,
+    items,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 幂等选择（数据层防重闸门）
 // ---------------------------------------------------------------------------
 

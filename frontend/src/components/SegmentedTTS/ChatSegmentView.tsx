@@ -13,6 +13,8 @@ interface ChatSegmentViewProps {
   /** 正在语音核对的段 id 集合（in-flight 内存态，页面派生） */
   verifyingIds?: Set<string>;
   onOpenVerifyDetail?: (id: string) => void;
+  /** 未核对/已过期角标点击直接发起单段核对（双职责角标） */
+  onVerifySegment?: (id: string) => void;
   onSelect: (id: string) => void;
   onAppend: (kind: SegmentKind) => void;
   onRegenerate: (id: string) => void;
@@ -29,6 +31,7 @@ export function ChatSegmentView({
   hasNarratorVoice,
   verifyingIds,
   onOpenVerifyDetail,
+  onVerifySegment,
   onSelect,
   onAppend,
   onRegenerate,
@@ -71,6 +74,7 @@ export function ChatSegmentView({
                 hasNarratorVoice={hasNarratorVoice}
                 verifying={verifyingIds?.has(segment.id) ?? false}
                 onOpenVerifyDetail={onOpenVerifyDetail}
+                onVerifySegment={onVerifySegment}
                 onSelect={onSelect}
                 onTextSelection={handleTextSelection}
                 onUpdateKind={onUpdateKind ? (id) => {
@@ -91,6 +95,7 @@ export function ChatSegmentView({
               isStale={false}
               verifying={verifyingIds?.has(segment.id) ?? false}
               onOpenVerifyDetail={onOpenVerifyDetail}
+              onVerifySegment={onVerifySegment}
               onSelect={onSelect}
               onRegenerate={onRegenerate}
               onPlay={onPlay}

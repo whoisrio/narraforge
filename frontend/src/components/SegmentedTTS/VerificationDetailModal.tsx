@@ -4,8 +4,9 @@
  *
  * 最终裁决是人：归一化 + 相似度只负责把可疑段挑出来，忽略或重 TTS 由用户决定。
  */
-import type { Segment, VerificationDiffOp } from '../../types';
+import type { Segment } from '../../types';
 import { resolveVerificationView } from '../../services/ttsVerify';
+import { VerificationDiffText } from './VerificationDiffText';
 import { useTranslation } from '../../i18n';
 import styles from './VerificationDetailModal.module.css';
 
@@ -19,22 +20,6 @@ interface VerificationDetailModalProps {
   onReverify: (segmentId: string) => void;
   /** 重新 TTS（走现有重生成流程，完成后按设置决定是否自动重核） */
   onRegenerate: (segmentId: string) => void;
-}
-
-/** 基准/回读两行的 diff 高亮：delete 标在基准行，insert 标在回读行，replace 两行都标。 */
-function DiffText({ ops, side }: { ops: VerificationDiffOp[]; side: 'baseline' | 'asr' }) {
-  return (
-    <>
-      {ops.map((op, i) => {
-        const text = side === 'baseline' ? op.baseline : op.asr;
-        const marked = op.op !== 'equal' && (op.op !== 'delete' || side === 'baseline') && (op.op !== 'insert' || side === 'asr');
-        if (!text) return null;
-        return marked
-          ? <mark key={i} className={styles[`mark_${op.op}`] ?? styles.markReplace}>{text}</mark>
-          : <span key={i}>{text}</span>;
-      })}
-    </>
-  );
 }
 
 export function VerificationDetailModal({
@@ -97,7 +82,7 @@ export function VerificationDetailModal({
                   <h4>{t('ttsVerify.detail.baseline')}</h4>
                   <p className={styles.diffText}>
                     {v.diff && v.diff.length > 0
-                      ? <DiffText ops={v.diff} side="baseline" />
+                      ? <VerificationDiffText ops={v.diff} side="baseline" />
                       : v.baseline_text || '—'}
                   </p>
                 </div>
@@ -105,7 +90,7 @@ export function VerificationDetailModal({
                   <h4>{t('ttsVerify.detail.asr')}</h4>
                   <p className={styles.diffText}>
                     {v.diff && v.diff.length > 0
-                      ? <DiffText ops={v.diff} side="asr" />
+                      ? <VerificationDiffText ops={v.diff} side="asr" />
                       : v.asr_text || '—'}
                   </p>
                 </div>

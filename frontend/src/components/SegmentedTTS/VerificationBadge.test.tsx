@@ -63,4 +63,53 @@ describe('VerificationBadge', () => {
     fireEvent.click(screen.getByRole('button'));
     expect(onOpenDetail).toHaveBeenCalledWith('s1');
   });
+
+  // ── 双职责角标：未核对/已过期 → 点击直接发起核对；已有结果 → 点击看详情 ──
+  it('未核对 + onVerify：点击发起核对，不开详情', () => {
+    const onOpenDetail = vi.fn();
+    const onVerify = vi.fn();
+    render(<VerificationBadge segment={makeSegment()} onOpenDetail={onOpenDetail} onVerify={onVerify} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(onVerify).toHaveBeenCalledWith('s1');
+    expect(onOpenDetail).not.toHaveBeenCalled();
+  });
+
+  it('未核对 + onVerify：tooltip 提示可直接核对', () => {
+    render(<VerificationBadge segment={makeSegment()} onVerify={vi.fn()} />);
+    expect(screen.getByRole('button')).toHaveAttribute('title', expect.stringContaining('点击核对'));
+  });
+
+  it('已过期 + onVerify：点击重新核对', () => {
+    const onOpenDetail = vi.fn();
+    const onVerify = vi.fn();
+    render(<VerificationBadge segment={makeSegment(v({ audio_key: 'old-key' }))} onOpenDetail={onOpenDetail} onVerify={onVerify} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(onVerify).toHaveBeenCalledWith('s1');
+    expect(onOpenDetail).not.toHaveBeenCalled();
+  });
+
+  it('已有结果（不一致）：点击仍开详情，不触发核对', () => {
+    const onOpenDetail = vi.fn();
+    const onVerify = vi.fn();
+    render(<VerificationBadge segment={makeSegment(v({ status: 'mismatch', match: false }))} onOpenDetail={onOpenDetail} onVerify={onVerify} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(onOpenDetail).toHaveBeenCalledWith('s1');
+    expect(onVerify).not.toHaveBeenCalled();
+  });
+
+  it('核对中：点击不重复触发', () => {
+    const onVerify = vi.fn();
+    const onOpenDetail = vi.fn();
+    render(<VerificationBadge segment={makeSegment()} verifying onVerify={onVerify} onOpenDetail={onOpenDetail} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(onVerify).not.toHaveBeenCalled();
+    expect(onOpenDetail).not.toHaveBeenCalled();
+  });
+
+  it('未传 onVerify 时保持向后兼容：未核对点击开详情', () => {
+    const onOpenDetail = vi.fn();
+    render(<VerificationBadge segment={makeSegment()} onOpenDetail={onOpenDetail} />);
+    fireEvent.click(screen.getByRole('button'));
+    expect(onOpenDetail).toHaveBeenCalledWith('s1');
+  });
 });
