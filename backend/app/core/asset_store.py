@@ -24,6 +24,7 @@ R2 Python 语义（workers-py FFI，参照 Cloudflare 文档与 spike VERDICT）
 - 对象体经 ``array_buffer()``/``arrayBuffer()`` 读出；Pyodide 的 ArrayBuffer
   需经 Uint8Array.new(buf).to_py() 转 bytes（VERDICT 坑 3）。
 """
+
 from __future__ import annotations
 
 import inspect
@@ -288,7 +289,7 @@ async def get_asset_store() -> AssetStore:
             raise RuntimeError(
                 "R2 asset store unavailable: no bucket binding injected. "
                 "workers 入口需经 set_r2_binding(env.ASSETS) 注入"
-                "（wrangler.toml 的 [[r2_buckets]] binding = \"ASSETS\"）"
+                '（wrangler.toml 的 [[r2_buckets]] binding = "ASSETS"）'
             )
         return R2AssetStore(_r2_binding)
     if backend == "supabase":

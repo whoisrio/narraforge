@@ -14,6 +14,7 @@ editing a layer makes it dirty.
 
 Phase A only: badges. Phase B adds the localisation-merge sync actions.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -73,8 +74,9 @@ def mark_split(chapter: Any) -> None:
 def _write_split_anchors(chapter: Any) -> None:
     """Record each segment's char span in narration_script + its baseline text."""
     script = getattr(chapter, "narration_script", None) or ""
-    segs = sorted(getattr(chapter, "segments", None) or [],
-                  key=lambda s: getattr(s, "position", 0) or 0)
+    segs = sorted(
+        getattr(chapter, "segments", None) or [], key=lambda s: getattr(s, "position", 0) or 0
+    )
     offset = 0
     for seg in segs:
         text = getattr(seg, "text", None) or ""
@@ -110,7 +112,11 @@ def rewrite_script_from_segments(chapter: Any) -> str:
         if not anchor:
             continue
         if (getattr(seg, "text", None) or "") != anchor.get("baseline_text", ""):
-            script = script[:anchor["offset_start"]] + (getattr(seg, "text", None) or "") + script[anchor["offset_end"]:]
+            script = (
+                script[: anchor["offset_start"]]
+                + (getattr(seg, "text", None) or "")
+                + script[anchor["offset_end"] :]
+            )
     chapter.narration_script = script
     mark_split(chapter)  # re-derive offsets/baseline + re-baseline hashes
     return script

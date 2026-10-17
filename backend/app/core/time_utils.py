@@ -1,5 +1,8 @@
 """Time helpers shared by ORM models and services."""
+
 from datetime import UTC, datetime
+
+
 def utcnow() -> datetime:
     """Return naive UTC datetime without using deprecated utcnow().
 

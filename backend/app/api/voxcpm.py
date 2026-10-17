@@ -12,10 +12,7 @@ VoxCPM API 路由
 """
 
 import logging
-import os
 import uuid
-from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 import aiofiles
@@ -24,12 +21,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
+from app.core.time_utils import utcnow
 from app.models.tts_result import TTSResultRecord
 from app.models.voice_profile import VoiceProfile
+from app.schemas.tts import TTSResultOut
 from app.services.voxcpm_service import get_voxcpm_service
-from app.core.time_utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +38,14 @@ router = APIRouter()
 
 class VoxCPMLoadRequest(BaseModel):
     """加载模型请求"""
+
     model_path: str = Field(default="", description="模型路径（留空使用配置默认值）")
     device: str = Field(default="", description="推理设备（留空使用配置默认值）")
 
 
 class VoxCPMTTSRequest(BaseModel):
     """纯文本 TTS 请求"""
+
     text: str = Field(..., min_length=1, description="待合成的文本")
     cfg_value: float = Field(default=2.0, ge=1.0, le=5.0, description="CFG 强度")
     inference_timesteps: int = Field(default=10, ge=1, le=50, description="去噪步数")
@@ -55,6 +54,7 @@ class VoxCPMTTSRequest(BaseModel):
 
 class VoxCPMDesignRequest(BaseModel):
     """Voice Design 请求 — 文本描述生成音色"""
+
     voice_description: str = Field(..., min_length=1, description="音色描述文本")
     text: str = Field(default="", description="合成文本（为空时自动生成适配文本）")
     cfg_value: float = Field(default=2.0, ge=1.0, le=5.0)
@@ -64,6 +64,7 @@ class VoxCPMDesignRequest(BaseModel):
 
 class VoxCPMCloneRequest(BaseModel):
     """Controllable Clone 请求"""
+
     text: str = Field(..., min_length=1, description="待合成的文本")
     profile_id: str = Field(..., description="本地数据库中已上传的声音ID")
     style_control: str = Field(default="", description="风格控制描述（如：语速稍快，欢快语气）")
@@ -74,9 +75,12 @@ class VoxCPMCloneRequest(BaseModel):
 
 class VoxCPMUltimateCloneRequest(BaseModel):
     """Ultimate Clone 请求 — 最高保真克隆"""
+
     text: str = Field(..., min_length=1, description="待合成的文本")
     profile_id: str = Field(..., description="本地数据库中已上传的声音ID")
-    prompt_text: Optional[str] = Field(None, description="参考音频的完整转录文本（可选，未提供时自动从 VoiceProfile 读取）")
+    prompt_text: Optional[str] = Field(
+        None, description="参考音频的完整转录文本（可选，未提供时自动从 VoiceProfile 读取）"
+    )
     style_control: str = Field(default="", description="风格控制描述（如：语速稍快，欢快语气）")
     cfg_value: float = Field(default=2.0, ge=1.0, le=5.0)
     inference_timesteps: int = Field(default=10, ge=1, le=50)
@@ -137,8 +141,9 @@ async def _save_and_respond(
     inference_timesteps: int = 10,
 ) -> dict:
     """保存合成结果并返回响应"""
-    from app.core.config import settings
     import base64
+
+    from app.core.config import settings
 
     if is_frontend_storage(db):
         # 前端存储模式：返回 base64
@@ -150,7 +155,11 @@ async def _save_and_respond(
             "engine": f"voxcpm_{engine_mode}",
             "text": text,
             "voice_id": voice_id,
-            "params": {"engine": "voxcpm", "cfg_value": cfg_value, "inference_timesteps": inference_timesteps},
+            "params": {
+                "engine": "voxcpm",
+                "cfg_value": cfg_value,
+                "inference_timesteps": inference_timesteps,
+            },
         }
 
     # 后端存储模式：保存文件并记录到数据库
@@ -189,7 +198,11 @@ async def _save_and_respond(
         "text": text,
         "voice_id": voice_id,
         "voice_name": voice_name,
-        "params": {"engine": "voxcpm", "cfg_value": cfg_value, "inference_timesteps": inference_timesteps},
+        "params": {
+            "engine": "voxcpm",
+            "cfg_value": cfg_value,
+            "inference_timesteps": inference_timesteps,
+        },
     }
 
 
@@ -256,9 +269,16 @@ def synthesize_voxcpm_internal(
                 stored_prompt = voxcpm_params.get("original_prompt_text")
                 if not stored_prompt and voice:
                     model = (voice.voice or {}).get("model", "")
-                    stored_prompt = (voice.voice_params or {}).get(model, {}).get("params", {}).get("prompt_text")
+                    stored_prompt = (
+                        (voice.voice_params or {})
+                        .get(model, {})
+                        .get("params", {})
+                        .get("prompt_text")
+                    )
 
-            effective_prompt = prompt_text or (stored_prompt if isinstance(stored_prompt, str) else None)
+            effective_prompt = prompt_text or (
+                stored_prompt if isinstance(stored_prompt, str) else None
+            )
             if not effective_prompt:
                 raise ValueError("ultimate 模式需要 prompt_text")
             return await service.synthesize(
@@ -440,9 +460,7 @@ async def clone(request: VoxCPMCloneRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/ultimate-clone", response_model=TTSResultOut)
-async def ultimate_clone(
-    request: VoxCPMUltimateCloneRequest, db: Session = Depends(get_db)
-):
+async def ultimate_clone(request: VoxCPMUltimateCloneRequest, db: Session = Depends(get_db)):
     """Ultimate Clone — 参考音频 + 转录文本，最高保真克隆"""
     service = await get_voxcpm_service()
     if not service.loaded:
@@ -472,11 +490,13 @@ async def ultimate_clone(
             prompt_text = voxcpm_params.get("original_prompt_text")
             if not prompt_text:
                 model = (voice.voice or {}).get("model", "")
-                prompt_text = (voice.voice_params or {}).get(model, {}).get("params", {}).get("prompt_text")
+                prompt_text = (
+                    (voice.voice_params or {}).get(model, {}).get("params", {}).get("prompt_text")
+                )
     if not prompt_text:
         raise HTTPException(
             status_code=400,
-            detail="ultimate 模式需要 prompt_text，请在请求中提供或在声音录入时填写"
+            detail="ultimate 模式需要 prompt_text，请在请求中提供或在声音录入时填写",
         )
 
     try:

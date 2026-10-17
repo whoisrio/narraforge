@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, DateTime, Float, Integer
-from datetime import datetime
 import uuid
+
+from sqlalchemy import Column, DateTime, Float, String
 
 from app.core.database import Base
 from app.core.time_utils import utcnow

@@ -9,12 +9,13 @@
 Local 用 SQLAlchemy（local 模式），Supabase 用 PostgREST（workers 模式）。
 返回 dict 形状与 TTSResultRecordOut 契约一致（tts.py _result_to_dict 消费）。
 """
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from app.core.supabase_client import SupabaseClient
 from app.core.repositories.user_scope import UserScope
+from app.core.supabase_client import SupabaseClient
 
 # workers bundle 不含 sqlalchemy / app.models：Local* 只在 local 模式实例化。
 try:
@@ -83,11 +84,7 @@ class LocalTTSResultRepository:
         self._db = db
 
     def list(self) -> list[dict]:
-        rows = (
-            self._db.query(TTSResultRecord)
-            .order_by(TTSResultRecord.created_at.desc())
-            .all()
-        )
+        rows = self._db.query(TTSResultRecord).order_by(TTSResultRecord.created_at.desc()).all()
         return [_orm_to_dict(r) for r in rows]
 
     def get(self, result_id: str) -> dict | None:
@@ -139,22 +136,26 @@ class SupabaseTTSResultRepository(UserScope):
         return tts_row_to_dict(row) if row else None
 
     def create(self, fields: dict) -> dict:
-        row = self._stamp_row({
-            "id": fields["id"],
-            "text": fields["text"],
-            "voice_id": fields["voice_id"],
-            "voice_name": fields.get("voice_name"),
-            "audio_path": fields["audio_path"],
-            "audio_format": fields.get("audio_format", "mp3"),
-            "speed": fields.get("speed", 1.0),
-            "volume": fields.get("volume", 80),
-            "pitch": fields.get("pitch", 1.0),
-            "instruction": fields.get("instruction", ""),
-            "language": fields.get("language", "Chinese"),
-            "source": fields.get("source"),
-        })
+        row = self._stamp_row(
+            {
+                "id": fields["id"],
+                "text": fields["text"],
+                "voice_id": fields["voice_id"],
+                "voice_name": fields.get("voice_name"),
+                "audio_path": fields["audio_path"],
+                "audio_format": fields.get("audio_format", "mp3"),
+                "speed": fields.get("speed", 1.0),
+                "volume": fields.get("volume", 80),
+                "pitch": fields.get("pitch", 1.0),
+                "instruction": fields.get("instruction", ""),
+                "language": fields.get("language", "Chinese"),
+                "source": fields.get("source"),
+            }
+        )
         inserted = self._client.insert(TABLE, [row])
         return tts_row_to_dict(inserted[0])
 
     def delete(self, result_id: str) -> bool:
-        return bool(self._client.delete(TABLE, params=self._scope_params({"id": f"eq.{result_id}"})))
+        return bool(
+            self._client.delete(TABLE, params=self._scope_params({"id": f"eq.{result_id}"}))
+        )

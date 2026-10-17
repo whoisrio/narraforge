@@ -1,38 +1,37 @@
+from typing import Any, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
-from typing import Any, List, Optional
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
     from sqlalchemy.orm import Session
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
-import uuid
-import os
 import base64
 import logging
+import os
+import uuid
 from pathlib import Path
-import aiofiles
 
-from app.core.database import get_db
-from app.core.config import settings
 from app.core.asset_store import AssetStore, get_asset_store
+from app.core.auth_deps import is_workers_anonymous
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.rate_limit import enforce_try_rate_limit
 from app.core.repositories.deps import get_tts_results_repo, get_usage_repo, get_voice_repo
 from app.core.repositories.tts_results import TTSResultRepository
 from app.core.repositories.usage import UsageRepository
 from app.core.repositories.voice_profiles import VoiceProfileRepository
+from app.core.system_config_service import is_frontend_storage
 from app.schemas.common import ItemsOut
 from app.schemas.tts import TTSResultOut, TTSResultRecordOut
-from app.core.system_config_service import is_frontend_storage
-from app.core.auth_deps import is_workers_anonymous
-from app.core.rate_limit import enforce_try_rate_limit
-from app.api._voice_helpers import voice_to_dict
 
 # workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
 try:
-    from app.models.voice_profile import VoiceProfile
     from app.models.tts_result import TTSResultRecord
+    from app.models.voice_profile import VoiceProfile
 except ImportError:  # workers bundle
     VoiceProfile = None  # type: ignore[assignment,misc]
     TTSResultRecord = None  # type: ignore[assignment,misc]
@@ -137,7 +136,12 @@ async def synthesize_speech(
         if force_frontend:
             enforce_try_rate_limit(http_request)
         return await _synthesize_edge_tts(
-            request, db, repo, store, force_frontend=force_frontend, usage_repo=usage_repo,
+            request,
+            db,
+            repo,
+            store,
+            force_frontend=force_frontend,
+            usage_repo=usage_repo,
         )
     else:
         # cosyvoice 依赖 dashscope/qwen SDK，workers 模式不挂载/不支持，保持原逻辑
@@ -148,7 +152,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
     """CosyVoice 引擎合成 - 根据存储模式决定是否持久化到后端"""
     audio_fmt = request.format or "mp3"
 
-    logger.info(f'request is: {request}')
+    logger.info(f"request is: {request}")
     if not request.voice_id:
         raise HTTPException(status_code=400, detail="voice_id is required")
 
@@ -176,8 +180,12 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
         # 查询声音名称用于历史记录展示
         all_voices = db.query(VoiceProfile).all()
         voice = next(
-            (v for v in all_voices
-             if (v.voice_params or {}).get("cosyvoice", {}).get("params", {}).get("voice_id") == request.voice_id),
+            (
+                v
+                for v in all_voices
+                if (v.voice_params or {}).get("cosyvoice", {}).get("params", {}).get("voice_id")
+                == request.voice_id
+            ),
             None,
         )
         voice_name = voice.description or voice.name if voice else request.voice_id
@@ -206,7 +214,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                     "enable_ssml": request.enable_ssml,
                     "enable_markdown_filter": request.enable_markdown_filter,
                     "voice_id": request.voice_id,
-                }
+                },
             }
         else:
             # 后端存储模式：保持现状，持久化记录
@@ -238,7 +246,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
                     "enable_ssml": request.enable_ssml,
                     "enable_markdown_filter": request.enable_markdown_filter,
                     "voice_id": request.voice_id,
-                }
+                },
             }
 
     except Exception as e:
@@ -272,9 +280,12 @@ async def _synthesize_edge_tts(
 
     try:
         from app.services.edge_tts_service import get_edge_tts_service
+
         edge_service = get_edge_tts_service()
 
-        logger.info(f"Synthesizing with edge-tts: voice={request.edge_voice}, text={request.text[:50]}...")
+        logger.info(
+            f"Synthesizing with edge-tts: voice={request.edge_voice}, text={request.text[:50]}..."
+        )
         audio_data, audio_format = await edge_service.synthesize(
             text=request.text,
             voice=request.edge_voice,
@@ -296,25 +307,27 @@ async def _synthesize_edge_tts(
                     "edge_voice": request.edge_voice,
                     "edge_rate": request.edge_rate,
                     "edge_volume": request.edge_volume,
-                }
+                },
             }
 
         # 后端存储模式：音频进 asset store（local 写盘 / workers 写 Supabase Storage）
         ref = await store.put(f"data/tts-history/tts_{audio_id}.mp3", audio_data)
-        repo.create({
-            "id": audio_id,
-            "text": request.text,
-            "voice_id": request.edge_voice,
-            "voice_name": request.edge_voice,
-            "audio_path": ref,
-            "audio_format": "mp3",
-            "speed": 1.0,
-            "volume": 80,
-            "pitch": 1.0,
-            "instruction": "",
-            "language": "Chinese",
-            "source": None,
-        })
+        repo.create(
+            {
+                "id": audio_id,
+                "text": request.text,
+                "voice_id": request.edge_voice,
+                "voice_name": request.edge_voice,
+                "audio_path": ref,
+                "audio_format": "mp3",
+                "speed": 1.0,
+                "volume": 80,
+                "pitch": 1.0,
+                "instruction": "",
+                "language": "Chinese",
+                "source": None,
+            }
+        )
         # Phase 3 用量计量：workers 匿名走 force_frontend 到不了这里；
         # local 单租户与 workers 已认证都记录（best-effort）
         if usage_repo is not None:
@@ -329,7 +342,7 @@ async def _synthesize_edge_tts(
                 "edge_voice": request.edge_voice,
                 "edge_rate": request.edge_rate,
                 "edge_volume": request.edge_volume,
-            }
+            },
         }
 
     except Exception as e:
@@ -389,13 +402,15 @@ async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_d
             )
 
             audio_id = Path(audio_path).stem
-            results.append({
-                "audio_id": audio_id,
-                "audio_url": f"/api/tts/audio/{audio_id}",
-                "text": segment.text,
-                "start_time": segment.start_time,
-                "end_time": segment.end_time
-            })
+            results.append(
+                {
+                    "audio_id": audio_id,
+                    "audio_url": f"/api/tts/audio/{audio_id}",
+                    "text": segment.text,
+                    "start_time": segment.start_time,
+                    "end_time": segment.end_time,
+                }
+            )
 
         return {"segments": results}
 
@@ -459,7 +474,8 @@ async def list_available_voices(
 
     # voice_type 在 voice JSON 列里，仓储按 project 过滤后在 Python 里筛 clone
     voices = [
-        v for v in repo.list(project_id=project_id)
+        v
+        for v in repo.list(project_id=project_id)
         if (v.get("voice") or {}).get("voice_type") == "clone"
     ]
 
@@ -471,6 +487,7 @@ async def list_edge_voices(language: Optional[str] = None, gender: Optional[str]
     """获取 Edge-TTS 可用音色列表"""
     try:
         from app.services.edge_tts_service import get_edge_tts_service
+
         edge_service = get_edge_tts_service()
         voices = await edge_service.list_voices(language=language, gender=gender)
         return {"items": voices}
@@ -484,6 +501,7 @@ async def list_edge_languages():
     """获取 Edge-TTS 可用语言列表"""
     try:
         from app.services.edge_tts_service import get_edge_tts_service
+
         edge_service = get_edge_tts_service()
         languages = await edge_service.get_available_languages()
         return {"items": languages}
@@ -493,6 +511,7 @@ async def list_edge_languages():
 
 
 # ---- Segmented editor integration ----
+
 
 def synthesize_speech_internal(
     *,
@@ -519,11 +538,11 @@ def synthesize_speech_internal(
     segments saved to the backend "couldn't be played" — there was never any
     real speech content in the file in the first place.
     """
-    import asyncio
 
     if edge_voice:
         # Edge TTS (no auth, online) — returns (mp3_bytes, "mp3") directly.
         from app.services.edge_tts_service import get_edge_tts_service
+
         edge_service = get_edge_tts_service()
         coro = edge_service.synthesize(
             text=text,
@@ -557,9 +576,7 @@ def synthesize_speech_internal(
 
         return _run_async(_synthesize()), "wav"
 
-    raise ValueError(
-        "synthesize_speech_internal: must supply edge_voice or voice_id"
-    )
+    raise ValueError("synthesize_speech_internal: must supply edge_voice or voice_id")
 
 
 def _run_async(coro):
@@ -567,6 +584,7 @@ def _run_async(coro):
     where a FastAPI worker is already inside an event loop (in which case
     asyncio.run would raise RuntimeError)."""
     import asyncio
+
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
@@ -578,6 +596,7 @@ def _run_async(coro):
     else:
         # Already in a loop — create an isolated one in a new thread
         import concurrent.futures
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             future = executor.submit(asyncio.run, coro)
             return future.result()

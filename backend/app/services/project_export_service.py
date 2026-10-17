@@ -6,6 +6,7 @@ source of truth (DB row snapshot + rewritten bundle-relative asset paths);
 
 Export is non-destructive: the source project and its files are never modified.
 """
+
 from __future__ import annotations
 
 import io
@@ -13,7 +14,6 @@ import json
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -234,7 +234,6 @@ def _assert_assets_under_project_dir(project: SegmentedProject) -> None:
     backend workspace (base_dir). Paths in ANY historical layout under the
     workspace are fine — the bundler reads DB-stored paths, not dir names;
     missing files are skipped, never fatal."""
-    from app.core import segmented_assets as assets
 
     root = settings.segmented_dir.resolve()
     workspace = settings.base_dir.resolve()

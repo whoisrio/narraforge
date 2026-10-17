@@ -175,9 +175,7 @@ _V2_SHA256_ROUND_CONSTANTS = (
 # 版权常量载体：第 15 个轮常数被替换，盐值块的 sigma 计算也被加扰
 _V2_SHA256_ADJUSTMENT = 0xC9DC06A7
 _V2_SHA256_BLOCK_CONSTANTS = (
-    _V2_SHA256_ROUND_CONSTANTS[:14]
-    + (_V2_SHA256_ADJUSTMENT,)
-    + _V2_SHA256_ROUND_CONSTANTS[15:]
+    _V2_SHA256_ROUND_CONSTANTS[:14] + (_V2_SHA256_ADJUSTMENT,) + _V2_SHA256_ROUND_CONSTANTS[15:]
 )
 _V2_SHA256_SIGMA0_ADJUSTMENT = 0x059C0B80
 _V2_SHA256_SIGMA1_ADJUSTMENT = 0x000B92C0
@@ -223,9 +221,7 @@ def _v2_words_le4_even(data: bytes) -> list[int]:
 
 def _v2_sigma0(value: int) -> int:
     """SHA-256 小 sigma0（旋转合并后一次截断）。"""
-    return (
-        (value >> 7) ^ (value << 25) ^ (value >> 18) ^ (value << 14) ^ (value >> 3)
-    ) & _U32_MASK
+    return ((value >> 7) ^ (value << 25) ^ (value >> 18) ^ (value << 14) ^ (value >> 3)) & _U32_MASK
 
 
 def _v2_sigma1(value: int) -> int:
@@ -311,9 +307,7 @@ def _v2_sha256_init(salt: bytes) -> tuple[int, ...]:
         & mask
     )
     _v2_expand_schedule(words, 31)
-    working = _v2_sha256_rounds(
-        _V2_SHA256_STATE, words, _V2_SHA256_BLOCK_CONSTANTS, first_round=14
-    )
+    working = _v2_sha256_rounds(_V2_SHA256_STATE, words, _V2_SHA256_BLOCK_CONSTANTS, first_round=14)
     return tuple((x + y) & mask for x, y in zip(_V2_SHA256_INITIAL, working))
 
 

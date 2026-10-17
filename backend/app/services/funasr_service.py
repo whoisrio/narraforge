@@ -13,22 +13,23 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-_logger = logging.getLogger('funasr_service')
+_logger = logging.getLogger("funasr_service")
 
 # 复用 voice_to_srt_service 的字幕拆分逻辑
-from app.services.voice_to_srt_service import split_segment_to_entries
+from app.services.voice_to_srt_service import split_segment_to_entries  # noqa: E402
 
 
 @dataclass
 class FunASRResult:
     """FunASR 识别结果，与 SrtResult 结构兼容"""
+
     file_path: Path
     content: str
     filename: str
     language: str
     language_probability: float
-    device: str = 'cpu'
-    compute_type: str = 'funasr'
+    device: str = "cpu"
+    compute_type: str = "funasr"
 
 
 class FunASRService:
@@ -43,19 +44,19 @@ class FunASRService:
     # 注意：不提供 paraformer-zh-streaming —— 流式模型在离线 generate 下
     # 不产生有效时间戳且文本错乱，不适合字幕转写场景。
     MODEL_PRESETS = {
-        'paraformer-zh': {
-            'model': 'paraformer-zh',
-            'vad_model': 'fsmn-vad',
-            'punc_model': 'ct-punc',
+        "paraformer-zh": {
+            "model": "paraformer-zh",
+            "vad_model": "fsmn-vad",
+            "punc_model": "ct-punc",
         },
     }
 
     # 不带 VAD 的预设（直接识别整段音频）
     MODEL_PRESETS_NO_VAD = {
-        'paraformer-zh': {
-            'model': 'paraformer-zh',
-            'vad_model': None,
-            'punc_model': 'ct-punc',
+        "paraformer-zh": {
+            "model": "paraformer-zh",
+            "vad_model": None,
+            "punc_model": "ct-punc",
         },
     }
 
@@ -63,43 +64,46 @@ class FunASRService:
         if output_path:
             p = Path(output_path)
         else:
-            env_dir = os.getenv('OUTPUT_DIR')
+            env_dir = os.getenv("OUTPUT_DIR")
             if env_dir:
                 p = Path(env_dir)
             else:
-                p = Path(__file__).parent.parent.parent / 'output' / 'srt'
+                p = Path(__file__).parent.parent.parent / "output" / "srt"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
-    def _resolve_output_filename(self, input_file: str, file_id: str, output_filename: str | None = None) -> str:
+    def _resolve_output_filename(
+        self, input_file: str, file_id: str, output_filename: str | None = None
+    ) -> str:
         if output_filename:
-            name = output_filename if output_filename.endswith('.srt') else output_filename + '.srt'
-            return f'{file_id}_{name}'
+            name = output_filename if output_filename.endswith(".srt") else output_filename + ".srt"
+            return f"{file_id}_{name}"
         stem = Path(input_file).stem
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        return f'{file_id}_{stem}_{timestamp}.srt'
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return f"{file_id}_{stem}_{timestamp}.srt"
 
     def _format_srt_time(self, seconds: float) -> str:
         h = int(seconds // 3600)
         m = int((seconds % 3600) // 60)
         s = int(seconds % 60)
         ms = int(round((seconds - int(seconds)) * 1000))
-        return f'{h:02d}:{m:02d}:{s:02d},{ms:03d}'
+        return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
     def _detect_device(self) -> str:
         """检测可用设备：cuda > mps > cpu"""
         try:
             import torch
+
             if torch.cuda.is_available():
-                _logger.info('FunASR: 检测到 CUDA GPU')
-                return 'cuda'
-            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                _logger.info('FunASR: 检测到 Apple MPS')
-                return 'mps'
+                _logger.info("FunASR: 检测到 CUDA GPU")
+                return "cuda"
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                _logger.info("FunASR: 检测到 Apple MPS")
+                return "mps"
         except ImportError:
             pass
-        _logger.info('FunASR: 使用 CPU')
-        return 'cpu'
+        _logger.info("FunASR: 使用 CPU")
+        return "cpu"
 
     def transcribe_raw(self, input_file: str, device: str | None = None) -> str:
         """纯转写：返回回读文本，不写任何 SRT 文件（TTS 语音核对专用）。
@@ -114,35 +118,35 @@ class FunASRService:
             device = self._detect_device()
         self.last_device = device  # 供 API 层回传 device 元信息（实例随请求生命周期）
 
-        preset = self.MODEL_PRESETS_NO_VAD['paraformer-zh']
+        preset = self.MODEL_PRESETS_NO_VAD["paraformer-zh"]
         # 缓存 key 与 transcribe(enable_vad=False) 完全一致，两条链路共享模型
         cache_key = f"paraformer-zh_False_{device}"
         if cache_key in self._model_cache:
             model = self._model_cache[cache_key]
-            _logger.info(f'FunASR transcribe_raw 复用缓存模型: {cache_key}')
+            _logger.info(f"FunASR transcribe_raw 复用缓存模型: {cache_key}")
         else:
-            _logger.info(f'FunASR transcribe_raw 加载模型: device={device}, vad=off')
+            _logger.info(f"FunASR transcribe_raw 加载模型: device={device}, vad=off")
             model = AutoModel(
-                model=preset['model'],
-                punc_model=preset['punc_model'],
+                model=preset["model"],
+                punc_model=preset["punc_model"],
                 device=device,
             )
             self._model_cache[cache_key] = model
 
-        _logger.info(f'FunASR transcribe_raw 开始识别: {input_file}')
+        _logger.info(f"FunASR transcribe_raw 开始识别: {input_file}")
         with self._inference_lock:
             results = model.generate(input=input_file, batch_size_s=300)
 
-        texts = [str(r.get('text', '')).strip() for r in results]
-        text = ''.join(t for t in texts if t)
-        _logger.info(f'FunASR transcribe_raw 完成: {len(text)} chars')
+        texts = [str(r.get("text", "")).strip() for r in results]
+        text = "".join(t for t in texts if t)
+        _logger.info(f"FunASR transcribe_raw 完成: {len(text)} chars")
         return text
 
     def transcribe(
         self,
         input_file: str,
         file_id: str,
-        model_name: str = 'paraformer-zh',
+        model_name: str = "paraformer-zh",
         enable_vad: bool = True,
         output_filename: str | None = None,
         output_path: str | None = None,
@@ -168,29 +172,29 @@ class FunASRService:
             device = self._detect_device()
 
         presets = self.MODEL_PRESETS if enable_vad else self.MODEL_PRESETS_NO_VAD
-        preset = presets.get(model_name, presets['paraformer-zh'])
+        preset = presets.get(model_name, presets["paraformer-zh"])
 
         # 用缓存 key 复用已加载的模型
         cache_key = f"{model_name}_{enable_vad}_{device}"
         if cache_key in self._model_cache:
             model = self._model_cache[cache_key]
-            _logger.info(f'FunASR 复用缓存模型: {cache_key}')
+            _logger.info(f"FunASR 复用缓存模型: {cache_key}")
         else:
-            vad_info = f", vad={preset['vad_model']}" if preset.get('vad_model') else ", vad=off"
-            _logger.info(f'FunASR 加载模型: {model_name}, device={device}{vad_info}')
+            vad_info = f", vad={preset['vad_model']}" if preset.get("vad_model") else ", vad=off"
+            _logger.info(f"FunASR 加载模型: {model_name}, device={device}{vad_info}")
 
             model_kwargs = {
-                'model': preset['model'],
-                'punc_model': preset['punc_model'],
-                'device': device,
+                "model": preset["model"],
+                "punc_model": preset["punc_model"],
+                "device": device,
             }
-            if preset.get('vad_model'):
-                model_kwargs['vad_model'] = preset['vad_model']
+            if preset.get("vad_model"):
+                model_kwargs["vad_model"] = preset["vad_model"]
 
             model = AutoModel(**model_kwargs)
             self._model_cache[cache_key] = model
 
-        _logger.info(f'FunASR 开始识别: {input_file}')
+        _logger.info(f"FunASR 开始识别: {input_file}")
         with self._inference_lock:
             results = model.generate(input=input_file, batch_size_s=300)
 
@@ -198,12 +202,12 @@ class FunASRService:
         srt_entries: list[tuple[str, float, float]] = []
 
         for result in results:
-            text = result.get('text', '').strip()
+            text = result.get("text", "").strip()
             if not text:
                 continue
 
             # FunASR 返回的 timestamp 是字级别时间戳 [(start_ms, end_ms), ...]
-            timestamps = result.get('timestamp', [])
+            timestamps = result.get("timestamp", [])
 
             if timestamps and len(timestamps) > 0:
                 # 有字级别时间戳：按标点拆分后精确分配时间
@@ -221,30 +225,30 @@ class FunASRService:
         lines = []
         for i, (text, start, end) in enumerate(srt_entries, start=1):
             lines.append(str(i))
-            lines.append(f'{self._format_srt_time(start)} --> {self._format_srt_time(end)}')
+            lines.append(f"{self._format_srt_time(start)} --> {self._format_srt_time(end)}")
             lines.append(text)
-            lines.append('')
+            lines.append("")
 
-        content = '\n'.join(lines)
+        content = "\n".join(lines)
 
         # 保存文件
         out_dir = self._resolve_output_dir(output_path)
         filename = self._resolve_output_filename(input_file, file_id, output_filename)
         out_file = out_dir / filename
 
-        with open(out_file, 'w', encoding='utf-8') as f:
+        with open(out_file, "w", encoding="utf-8") as f:
             f.write(content)
 
-        _logger.info(f'FunASR 识别完成: {out_file}')
+        _logger.info(f"FunASR 识别完成: {out_file}")
 
         return FunASRResult(
             file_path=out_file,
             content=content,
             filename=filename,
-            language='zh',
+            language="zh",
             language_probability=0.95,  # FunASR Paraformer 默认中文
             device=device,
-            compute_type='funasr',
+            compute_type="funasr",
         )
 
     def _split_by_punctuation(
@@ -266,7 +270,7 @@ class FunASRService:
         if not timestamps:
             return [(text, 0.0, 0.0)]
 
-        punct_pattern = re.compile(r'[，。；！？、,;!?]')
+        punct_pattern = re.compile(r"[，。；！？、,;!?]")
         last_end_ms = timestamps[-1][1]  # 用于超出范围时的兜底
 
         segments = []
@@ -285,7 +289,7 @@ class FunASRService:
 
             # 如果是标点或者是最后一个字符，切分一段
             if punct_pattern.match(ch) or i == len(text) - 1:
-                seg_text = ''.join(current_text).strip()
+                seg_text = "".join(current_text).strip()
                 if seg_text:
                     start_sec = current_start_ms / 1000.0
                     end_sec = end_ms / 1000.0
@@ -305,11 +309,11 @@ class FunASRService:
 
             # 计数所有有意义的字符（与 FunASR 的 timestamp 索引一致）
             # FunASR 对中英文字符和标点都生成 timestamp，只跳过空格
-            if ch != ' ':
+            if ch != " ":
                 char_idx += 1
 
         # 处理残留
-        remaining = ''.join(current_text).strip()
+        remaining = "".join(current_text).strip()
         if remaining:
             if timestamps:
                 start_sec = timestamps[max(0, min(char_idx, len(timestamps) - 1))][0] / 1000.0
@@ -322,15 +326,15 @@ class FunASRService:
         return segments if segments else [(text, 0.0, 0.0)]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='FunASR 语音转 SRT 字幕')
-    parser.add_argument('input_file', help='输入音频文件路径')
-    parser.add_argument('-o', '--output-filename', default=None)
-    parser.add_argument('-p', '--output-path', default=None)
-    parser.add_argument('-m', '--model', default='paraformer-zh', help='FunASR 模型名')
-    parser.add_argument('-d', '--device', default=None)
+    parser = argparse.ArgumentParser(description="FunASR 语音转 SRT 字幕")
+    parser.add_argument("input_file", help="输入音频文件路径")
+    parser.add_argument("-o", "--output-filename", default=None)
+    parser.add_argument("-p", "--output-path", default=None)
+    parser.add_argument("-m", "--model", default="paraformer-zh", help="FunASR 模型名")
+    parser.add_argument("-d", "--device", default=None)
 
     args = parser.parse_args()
 
@@ -344,5 +348,5 @@ if __name__ == '__main__':
         output_path=args.output_path,
         device=args.device,
     )
-    print(f'SRT saved: {result.file_path}')
-    print(f'Language: {result.language} ({result.language_probability})')
+    print(f"SRT saved: {result.file_path}")
+    print(f"Language: {result.language} ({result.language_probability})")

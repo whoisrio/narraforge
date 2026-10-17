@@ -13,8 +13,8 @@ edge_tts 包在 Pyodide workers 环境不存在，import 必须延迟到策略�
 """
 
 import asyncio
-import time
 import logging
+import time
 from typing import Optional
 
 from app.core.config import settings
@@ -191,14 +191,16 @@ class EdgeTTSService:
             parts = short_name.split("-")
             display_name = parts[-1].replace("Neural", "").replace("V2", "").replace("V3", "")
 
-            voices.append({
-                "name": v["Name"],
-                "short_name": short_name,
-                "display_name": display_name,
-                "gender": gender,
-                "locale": locale,
-                "language": _locale_to_language(locale),
-            })
+            voices.append(
+                {
+                    "name": v["Name"],
+                    "short_name": short_name,
+                    "display_name": display_name,
+                    "gender": gender,
+                    "locale": locale,
+                    "language": _locale_to_language(locale),
+                }
+            )
 
         self._voices_cache = voices
         self._voices_cache_time = now

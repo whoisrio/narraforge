@@ -19,14 +19,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+# 复用 voxcpm 的声音音频路径解析（两者同为 local-only 路由，workers 不会 import）
+from app.api.voxcpm import _resolve_voice_audio_path
 from app.core.database import get_db
-from app.core.time_utils import utcnow
 from app.core.system_config_service import is_frontend_storage
+from app.core.time_utils import utcnow
 from app.models.tts_result import TTSResultRecord
 from app.schemas.tts import TTSResultOut
 from app.services.indextts_service import IndexTTSServiceError, get_indextts_service
-# 复用 voxcpm 的声音音频路径解析（两者同为 local-only 路由，workers 不会 import）
-from app.api.voxcpm import _resolve_voice_audio_path
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +38,7 @@ router = APIRouter()
 
 class IndexTTSTTSRequest(BaseModel):
     """IndexTTS TTS 请求"""
+
     text: str = Field(..., min_length=1, description="待合成的文本")
     lang: str = Field(default="ZH", description="语言：ZH/EN/JA/ES/AR")
     voice_id: str = Field(..., description="本地数据库中已上传的声音ID（克隆参考音频）")
@@ -63,9 +64,10 @@ async def _save_and_respond(
     duration_factor: float,
 ) -> dict:
     """保存合成结果并返回响应（仿 voxcpm._save_and_respond）"""
-    from app.core.config import settings
     import base64
     import uuid
+
+    from app.core.config import settings
 
     params = {
         "engine": "indextts",

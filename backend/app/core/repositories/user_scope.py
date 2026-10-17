@@ -10,6 +10,7 @@ service key 走 PostgREST 绕过 RLS，隔离在仓储层实现：
 chapters/segments 无 user_id 列：归属经 project 传递，由
 SupabaseSegmentedProjectRepository 在操作前校验 project 归属。
 """
+
 from __future__ import annotations
 
 

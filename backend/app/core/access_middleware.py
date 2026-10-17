@@ -18,12 +18,14 @@
 放行：`/health`（监控探活）与 OPTIONS 预检（CORS 由 CORSMiddleware 处理）。
 三者都无 → 401，错误信封与全局异常处理一致（{detail: {code, message}}）。
 """
+
 import hmac
 
-from app.core.config import settings
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.core.config import settings
 
 ACCESS_EMAIL_HEADER = "cf-access-authenticated-user-email"
 GATEWAY_SECRET_HEADER = "x-narraforge-gateway-secret"
@@ -46,7 +48,7 @@ class AccessEnforcementMiddleware(BaseHTTPMiddleware):
             auth = request.headers.get(AUTHORIZATION_HEADER, "")
             # scheme 大小写不敏感（RFC 9110），口令本体精确比对
             if auth.lower().startswith(_BEARER_PREFIX) and hmac.compare_digest(
-                auth[len(_BEARER_PREFIX):], settings.access_token
+                auth[len(_BEARER_PREFIX) :], settings.access_token
             ):
                 return await call_next(request)
         return JSONResponse(

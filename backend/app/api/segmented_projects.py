@@ -7,6 +7,7 @@
   （合成落盘、录音上传、音频文件服务、导出、adjust-audio、migrate、
   项目 ZIP 导出/导入），仅 local 模式挂载；workers 模式一律 404。
 """
+
 from __future__ import annotations
 
 import base64
@@ -15,12 +16,11 @@ import io
 import json
 import logging
 import zipfile
-from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from typing import Any
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
@@ -28,7 +28,9 @@ try:
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
 
+from app.api._usage_helpers import build_llm_usage_sink
 from app.core import segmented_assets as assets
+from app.core.asset_store import AssetStore, get_asset_store
 from app.core.audio_encoder import AudioEncoderError
 from app.core.config import settings
 from app.core.database import get_db
@@ -36,13 +38,10 @@ from app.core.limits import validate_segment_lengths, validate_synthesis_text
 from app.core.repositories.deps import get_segmented_repo, get_usage_repo
 from app.core.repositories.segmented_projects import SegmentedProjectRepository
 from app.core.repositories.usage import UsageRepository
-from app.api._usage_helpers import build_llm_usage_sink
-from app.core.asset_store import AssetStore, get_asset_store
 from app.core.supabase_client import SupabaseError
-from app.core.segmented_assets import project_dir
+from app.core.time_utils import utcnow
 from app.schemas.common import ItemsOut
 from app.schemas.segmented_project import (
-    AnimationSpecItem,
     ApplyAnimationSpecRequest,
     ApplyAnimationSpecResult,
     ChapterCreateIn,
@@ -76,7 +75,6 @@ from app.schemas.segmented_project import (
     SweepOrphanAudioRequest,
     SynthesizeSegmentRequest,
 )
-from app.core.time_utils import utcnow
 
 # workers bundle 不含 sqlalchemy，segmented_project_service 顶层依赖 ORM；
 # svc 只在 local_router 端点（workers 不挂载）运行时引用。
@@ -91,6 +89,7 @@ router = APIRouter()
 local_router = APIRouter()
 
 SCRATCHPAD_PROJECT_ID = "__scratchpad__"
+
 
 def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_project_id"):
     """防止草稿项目污染后端数据库."""
@@ -157,6 +156,7 @@ def _enforce_chapter_quota(
 
 # ----- project CRUD (metadata) -----
 
+
 @router.get("/segmented-projects", response_model=ItemsOut[ProjectSummary])
 async def list_projects(repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
     projects = repo.list_projects()
@@ -183,7 +183,9 @@ async def create_project(
 
 
 @router.get("/segmented-projects/{project_id}", response_model=ProjectDetail)
-async def get_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def get_project(
+    project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)
+):
     _reject_scratchpad(project_id)
     detail = repo.get_project(project_id)
     if detail is None:
@@ -218,7 +220,11 @@ async def put_project(
         status = e.status_code if 400 <= e.status_code < 600 else 502
         raise HTTPException(
             status_code=status,
-            detail={"code": "storage_error", "supabase_status": e.status_code, "message": e.message},
+            detail={
+                "code": "storage_error",
+                "supabase_status": e.status_code,
+                "message": e.message,
+            },
         )
     except LookupError:
         # workers 多用户：id 属于他人项目 → 按不存在处理（不泄露存在性）
@@ -226,7 +232,9 @@ async def put_project(
 
 
 @router.delete("/segmented-projects/{project_id}", status_code=204)
-async def delete_project(project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)):
+async def delete_project(
+    project_id: str, repo: SegmentedProjectRepository = Depends(get_segmented_repo)
+):
     _reject_scratchpad(project_id)
     ok = repo.delete_project(project_id)
     if not ok:
@@ -302,6 +310,7 @@ async def put_narration_script(
 
 # ----- segment synthesis & audio (local: TTS 引擎 + 音频落盘; workers: edge-tts + Supabase Storage) -----
 
+
 @router.post(
     "/segmented-projects/{project_id}/chapters/{chapter_id}/segments/{segment_id}/synthesize",
     response_model=ProjectDetail,
@@ -323,7 +332,8 @@ async def synthesize_segment(
 
         try:
             detail = await synthesize_segment_workers(
-                repo, store,
+                repo,
+                store,
                 project_id=project_id,
                 chapter_id=chapter_id,
                 segment_id=segment_id,
@@ -420,7 +430,9 @@ async def create_segment(
         raise HTTPException(status_code=404, detail="chapter_not_found")
     segment, positions, project_updated_at = result
     return SegmentCreateOut(
-        segment=segment, positions=positions, project_updated_at=project_updated_at,
+        segment=segment,
+        positions=positions,
+        project_updated_at=project_updated_at,
     )
 
 
@@ -576,7 +588,8 @@ async def upload_segment_audio(
 
         try:
             detail = await upload_segment_audio_workers(
-                repo, store,
+                repo,
+                store,
                 project_id=project_id,
                 chapter_id=chapter_id,
                 segment_id=segment_id,
@@ -612,7 +625,7 @@ async def upload_segment_audio(
 
 # ----- chapters:batch (agent split_segment node) -----
 
-from pydantic import BaseModel
+from pydantic import BaseModel  # noqa: E402
 
 
 class BatchSegmentIn(BaseModel):
@@ -682,7 +695,9 @@ async def batch_create_chapters(
         raise HTTPException(status_code=404, detail="project_not_found")
     return BatchResponse(
         chapters=[
-            BatchChapterOut(id=c["id"], segments=[BatchSegmentOut(id=s["id"]) for s in c["segments"]])
+            BatchChapterOut(
+                id=c["id"], segments=[BatchSegmentOut(id=s["id"]) for s in c["segments"]]
+            )
             for c in result["chapters"]
         ],
         reuse=result.get("reuse"),
@@ -690,6 +705,7 @@ async def batch_create_chapters(
 
 
 # ----- P2 v3: Animation spec 批量应用 -----
+
 
 @router.post(
     "/segmented-projects/{project_id}/apply-animation-spec",
@@ -718,9 +734,8 @@ async def apply_animation_spec_endpoint(
 
 # ----- segment audio file & chapter export (local-only: 磁盘文件 / ffmpeg) -----
 
-@router.get(
-    "/segmented-projects/{project_id}/audio/{chapter_id}/{segment_id}"
-)
+
+@router.get("/segmented-projects/{project_id}/audio/{chapter_id}/{segment_id}")
 async def get_segment_audio(
     project_id: str,
     chapter_id: str,
@@ -734,7 +749,8 @@ async def get_segment_audio(
         from app.services.segmented_synth_workers import get_segment_audio_workers
 
         data = await get_segment_audio_workers(
-            repo, store,
+            repo,
+            store,
             project_id=project_id,
             chapter_id=chapter_id,
             segment_id=segment_id,
@@ -772,9 +788,7 @@ async def get_segment_audio(
     return response
 
 
-@local_router.get(
-    "/segmented-projects/{project_id}/chapters/{chapter_id}/export-audio"
-)
+@local_router.get("/segmented-projects/{project_id}/chapters/{chapter_id}/export-audio")
 def export_chapter_audio(
     project_id: str,
     chapter_id: str,
@@ -826,15 +840,14 @@ def export_all_chapters_endpoint(
         raise HTTPException(status_code=status, detail=detail)
 
 
-@local_router.post(
-    "/segmented-projects/{project_id}/export-text-file-to-remotion"
-)
+@local_router.post("/segmented-projects/{project_id}/export-text-file-to-remotion")
 def export_text_file_to_remotion(
     project_id: str,
     body: ExportTextFileRequest,
     db: Session = Depends(get_db),
 ):
     import tempfile
+
     suffix = Path(body.filename).suffix or ".txt"
     with tempfile.NamedTemporaryFile("w", suffix=suffix, encoding="utf-8", delete=False) as f:
         tmp_path = Path(f.name)
@@ -894,6 +907,7 @@ def scaffold_remotion(
 
 # ----- split / layer-sync (metadata) -----
 
+
 @router.get("/segmented-projects/{project_id}/chapters/{chapter_id}/sync-status")
 async def get_sync_status(
     project_id: str,
@@ -929,7 +943,9 @@ class AdjustAudioRequest(BaseModel):
 
 
 @local_router.post("/segmented-projects/{project_id}/chapters/{chapter_id}/adjust-audio")
-def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioRequest, db: Session = Depends(get_db)):
+def adjust_audio_endpoint(
+    project_id: str, chapter_id: str, body: AdjustAudioRequest, db: Session = Depends(get_db)
+):
     """Post-synthesis audio adjustment (atempo / volume) for a chapter's ready segments.
 
     Previous audio is preserved as audio.previous; duration is re-probed.
@@ -938,7 +954,9 @@ def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioReq
     """
     try:
         return svc.adjust_chapter_audio(
-            db, project_id, chapter_id,
+            db,
+            project_id,
+            chapter_id,
             tempo=body.tempo if body.tempo is not None else 1.0,
             volume_db=body.volume_db if body.volume_db is not None else 0.0,
         )
@@ -949,7 +967,9 @@ def adjust_audio_endpoint(project_id: str, chapter_id: str, body: AdjustAudioReq
 
 
 @local_router.post("/segmented-projects/{project_id}/adjust-audio-all")
-def adjust_audio_all_endpoint(project_id: str, body: AdjustAudioRequest, db: Session = Depends(get_db)):
+def adjust_audio_all_endpoint(
+    project_id: str, body: AdjustAudioRequest, db: Session = Depends(get_db)
+):
     """Post-synthesis audio adjustment (atempo / volume) for ALL chapters' ready
     segments. Reuses the per-chapter contract: original audio preserved as
     ``audio.previous``; durations re-probed so timeline/SRT stay correct.
@@ -957,7 +977,8 @@ def adjust_audio_all_endpoint(project_id: str, body: AdjustAudioRequest, db: Ses
     """
     try:
         return svc.adjust_all_chapters_audio(
-            db, project_id,
+            db,
+            project_id,
             tempo=body.tempo if body.tempo is not None else 1.0,
             volume_db=body.volume_db if body.volume_db is not None else 0.0,
         )
@@ -1026,19 +1047,26 @@ async def split_chapter(
     if body.replace_strategy not in ("preview_only", "replace_chapter_segments"):
         raise HTTPException(status_code=422, detail="invalid_replace_strategy")
 
-    from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split, llm_split
+    from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, llm_split, rule_split
+
     max_len = settings.max_segment_chars if settings.max_segment_chars > 0 else None
     if body.mode == "rule":
         items = rule_split(
             body.text,
-            body.delimiters or chapter.split_config.get("delimiters") or list(DEFAULT_RULE_DELIMITERS),
+            body.delimiters
+            or chapter.split_config.get("delimiters")
+            or list(DEFAULT_RULE_DELIMITERS),
             max_len=max_len,
         )
     else:
         result = llm_split(
-            body.text, max_len=max_len,
+            body.text,
+            max_len=max_len,
             usage_sink=build_llm_usage_sink(
-                http_request, usage_repo, chars=len(body.text), project_id=project_id,
+                http_request,
+                usage_repo,
+                chars=len(body.text),
+                project_id=project_id,
             ),
         )
         items = [s["text"] for s in result.segments]
@@ -1093,22 +1121,28 @@ def migrate(request: MigrateRequest, db: Session = Depends(get_db)):
                 except Exception as e:  # noqa: BLE001
                     logger.warning("audio upload failed for %s/%s: %s", proj.id, aud.segment_id, e)
                     failed += 1
-            results.append(MigrateResultItem(
-                project_id=proj.id, status="ok",
-                audio_uploaded=uploaded, audio_failed=failed,
-            ))
+            results.append(
+                MigrateResultItem(
+                    project_id=proj.id,
+                    status="ok",
+                    audio_uploaded=uploaded,
+                    audio_failed=failed,
+                )
+            )
         except Exception as e:  # noqa: BLE001
             logger.exception("migrate failed for project %s", proj.id)
             db.rollback()
-            results.append(MigrateResultItem(
-                project_id=proj.id, status="error", message=str(e),
-            ))
+            results.append(
+                MigrateResultItem(
+                    project_id=proj.id,
+                    status="error",
+                    message=str(e),
+                )
+            )
     return MigrateResponse(results=results)
 
 
-def _write_audio_blob(
-    db: Session, project_id: str, aud: MigrateAudioItem
-) -> None:
+def _write_audio_blob(db: Session, project_id: str, aud: MigrateAudioItem) -> None:
     seg = svc.get_segment_row(db, project_id, aud.chapter_id, aud.segment_id)
     if seg is None:
         raise LookupError("segment_not_found")
@@ -1116,13 +1150,19 @@ def _write_audio_blob(
     chapter_title = seg.chapter.name or ""
     project_name = seg.chapter.project.name
     assets.ensure_chapter_layout(
-        project_id, aud.chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
+        project_id,
+        aud.chapter_id,
+        chapter_title=chapter_title,
+        project_name=project_name,
     )
     target = assets.segment_audio_path(
-        project_id, aud.chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
-        segment_id=seg.id, position=seg.position or 0, fmt="mp3",
+        project_id,
+        aud.chapter_id,
+        chapter_title=chapter_title,
+        project_name=project_name,
+        segment_id=seg.id,
+        position=seg.position or 0,
+        fmt="mp3",
     )
     target.write_bytes(data)
     # Store path relative to settings.segmented_dir (root) for consistency with synth
@@ -1136,6 +1176,7 @@ def _write_audio_blob(
 
 
 # ----- project export / import (local-only: ZIP 含磁盘音频资产) -----
+
 
 @local_router.get("/segmented-projects/{project_id}/export")
 def export_project_endpoint(project_id: str, db: Session = Depends(get_db)):
@@ -1157,8 +1198,7 @@ def export_project_endpoint(project_id: str, db: Session = Depends(get_db)):
         media_type="application/zip",
         headers={
             "Content-Disposition": (
-                f'attachment; filename="{ascii_name}"; '
-                f"filename*=UTF-8''{quote(filename)}"
+                f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
             )
         },
     )

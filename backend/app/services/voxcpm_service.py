@@ -21,7 +21,6 @@ import os
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -38,7 +37,7 @@ class VoxCPMService:
     """VoxCPM 本地推理服务 — 全局单例，管理模型生命周期"""
 
     def __init__(self):
-        self.model = None           # VoxCPM 模型实例
+        self.model = None  # VoxCPM 模型实例
         self.model_path: str = ""
         self.device: str = "auto"
         self.dtype: str = "auto"
@@ -95,9 +94,7 @@ class VoxCPMService:
             self.loading = False
             return {"success": False, "error": str(e)}
 
-    def _load_model_sync(
-        self, model_path: str, device: str, dtype: str
-    ) -> Dict[str, Any]:
+    def _load_model_sync(self, model_path: str, device: str, dtype: str) -> Dict[str, Any]:
         """同步加载模型（在线程池中运行）"""
         try:
             start_time = time.time()
@@ -123,6 +120,7 @@ class VoxCPMService:
             # tqdm 等上游依赖也往 sys.stdout 写进度条 —— 线程池子线程中
             # 这两个文件描述符可能处于无效状态（管道断开/编码问题），直接崩溃。
             import sys as _sys
+
             _stdout_backup = _sys.stdout
             _stderr_backup = _sys.stderr
             _sys.stdout = open(os.devnull, "w", encoding="utf-8")
@@ -140,7 +138,11 @@ class VoxCPMService:
 
             # 获取实际使用的设备
             try:
-                actual_device = str(next(self.model.parameters()).device) if hasattr(self.model, 'parameters') else device
+                actual_device = (
+                    str(next(self.model.parameters()).device)
+                    if hasattr(self.model, "parameters")
+                    else device
+                )
             except Exception:
                 actual_device = device
 
@@ -153,7 +155,9 @@ class VoxCPMService:
 
             # 获取采样率
             try:
-                if hasattr(self.model, 'tts_model') and hasattr(self.model.tts_model, 'sample_rate'):
+                if hasattr(self.model, "tts_model") and hasattr(
+                    self.model.tts_model, "sample_rate"
+                ):
                     self._sample_rate = self.model.tts_model.sample_rate
             except Exception:
                 pass
@@ -174,10 +178,7 @@ class VoxCPMService:
 
         except ImportError as e:
             self.loading = False
-            error_msg = (
-                "voxcpm 包未安装。请运行: pip install voxcpm\n"
-                f"原始错误: {e}"
-            )
+            error_msg = f"voxcpm 包未安装。请运行: pip install voxcpm\n原始错误: {e}"
             logger.error(error_msg)
             return {"success": False, "error": error_msg}
 
@@ -203,6 +204,7 @@ class VoxCPMService:
             gc.collect()
             try:
                 import torch
+
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                     torch.cuda.synchronize()
@@ -329,27 +331,32 @@ class VoxCPMService:
         try:
             start_time = time.time()
 
-            # 对于 clone 模式，根据 voice_id + text 生成固定 seed，保证相同输入产出一致
-            ref_path = generate_kwargs.get("reference_wav_path") or generate_kwargs.get("prompt_wav_path")
-            text = generate_kwargs.get("text", "")
+            # 对于 clone 模式，根据参考音频路径生成固定 seed（同进程内），
+            # 保证相同参考音色下产出一致
+            ref_path = generate_kwargs.get("reference_wav_path") or generate_kwargs.get(
+                "prompt_wav_path"
+            )
             if ref_path:
                 import random as _random
+
                 seed = hash(f"{ref_path}") % (2**31)
                 _random.seed(seed)
                 try:
                     import torch
+
                     torch.manual_seed(seed)
                     if torch.cuda.is_available():
                         torch.cuda.manual_seed_all(seed)
                 except ImportError:
                     pass
 
-            logger.info(f'\nkwargs: {generate_kwargs}')
+            logger.info(f"\nkwargs: {generate_kwargs}")
 
             # 保护 stdout/stderr：voxcpm 推理过程中的 tqdm 进度条同样运行在
             # 线程池子线程中，Windows 下 sys.stderr/stdout 可能不可写，导致
             # OSError: [Errno 22] Invalid argument（与加载阶段相同根因）。
             import sys as _sys
+
             _stdout_backup = _sys.stdout
             _stderr_backup = _sys.stderr
             _sys.stdout = open(os.devnull, "w", encoding="utf-8")
@@ -367,9 +374,7 @@ class VoxCPMService:
             # 计算音频时长
             duration = round(len(wav) / self._sample_rate, 2)
             rtf = round(elapsed / duration, 2) if duration > 0 else 0
-            logger.info(
-                f"VoxCPM 推理完成: 音频={duration}s, 耗时={elapsed}s, RTF={rtf}"
-            )
+            logger.info(f"VoxCPM 推理完成: 音频={duration}s, 耗时={elapsed}s, RTF={rtf}")
             return wav
 
         except Exception as e:
@@ -445,6 +450,7 @@ class VoxCPMService:
         """获取当前 GPU 显存使用量 (MB)"""
         try:
             import torch
+
             if torch.cuda.is_available():
                 return round(torch.cuda.memory_allocated(0) / 1024 / 1024)
         except Exception:
@@ -455,6 +461,7 @@ class VoxCPMService:
         """获取 GPU 信息"""
         try:
             import torch
+
             if torch.cuda.is_available():
                 total = torch.cuda.get_device_properties(0).total_memory
                 allocated = torch.cuda.memory_allocated(0)

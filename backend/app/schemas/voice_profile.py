@@ -9,6 +9,7 @@ shapes); they are typed as `dict` intentionally. `created_at` is serialized as
 an ISO string (not `datetime`) so the wire format is unchanged from the
 hand-rolled `voice_to_dict`.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

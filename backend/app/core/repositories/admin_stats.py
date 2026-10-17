@@ -7,6 +7,7 @@ daily_active_users），由 stats_middleware 写入。local 模式无用户体�
 规模假设：单实例小团队量级，分页/聚合在 Python 侧做（PostgREST 聚合
 能力有限，行数可控时全量 select + 内存聚合最简单可靠）。
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -133,7 +134,7 @@ def _paginate(items: list, page: int, page_size: int) -> dict:
     page_size = max(1, min(page_size, 200))
     start = (page - 1) * page_size
     return {
-        "items": items[start:start + page_size],
+        "items": items[start : start + page_size],
         "total": len(items),
         "page": page,
         "page_size": page_size,

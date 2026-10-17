@@ -19,6 +19,7 @@
 
 OPTIONS 预检恒放行（CORS 由更外层的 CORSMiddleware 处理）。
 """
+
 from __future__ import annotations
 
 import hmac
@@ -41,13 +42,15 @@ AUTHORIZATION_HEADER = "authorization"
 _BEARER_PREFIX = "bearer "
 
 # 匿名 allowlist：无状态端点（不读/写用户数据）。精确匹配（方法 + 路径）。
-_ANON_EXACT = frozenset({
-    ("GET", "/health"),
-    ("GET", "/"),
-    ("GET", "/api/config/capabilities"),
-    ("GET", "/api/config/storage-mode"),
-    ("POST", "/api/tts/synthesize"),
-})
+_ANON_EXACT = frozenset(
+    {
+        ("GET", "/health"),
+        ("GET", "/"),
+        ("GET", "/api/config/capabilities"),
+        ("GET", "/api/config/storage-mode"),
+        ("POST", "/api/tts/synthesize"),
+    }
+)
 # 匿名 allowlist：路径前缀匹配（方法 + 前缀）。
 _ANON_PREFIX = (
     ("POST", "/api/mimo-tts/"),
@@ -138,7 +141,7 @@ def _has_legacy_credentials(request: Request) -> bool:
         auth = request.headers.get(AUTHORIZATION_HEADER, "")
         # scheme 大小写不敏感（RFC 9110），口令本体精确比对
         if auth.lower().startswith(_BEARER_PREFIX) and hmac.compare_digest(
-            auth[len(_BEARER_PREFIX):], settings.access_token
+            auth[len(_BEARER_PREFIX) :], settings.access_token
         ):
             return True
     return False
@@ -147,7 +150,7 @@ def _has_legacy_credentials(request: Request) -> bool:
 def _bearer_token(request: Request) -> str | None:
     auth = request.headers.get(AUTHORIZATION_HEADER, "")
     if auth.lower().startswith(_BEARER_PREFIX):
-        return auth[len(_BEARER_PREFIX):]
+        return auth[len(_BEARER_PREFIX) :]
     return None
 
 

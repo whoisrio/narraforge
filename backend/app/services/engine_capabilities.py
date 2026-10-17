@@ -3,6 +3,7 @@
 注意：本模块与前端 ``frontend/src/services/styleTags.ts`` 互为镜像，
 任何规则改动（标签形式、情绪映射、能力矩阵）必须两侧同步。
 """
+
 from __future__ import annotations
 
 import re
@@ -13,9 +14,9 @@ from dataclasses import dataclass
 class EngineCapability:
     """单个引擎对风格控制手段的支持情况。"""
 
-    inline_tags: bool        # 文本内联 [tag] 形式
+    inline_tags: bool  # 文本内联 [tag] 形式
     leading_style_tag: bool  # 文本开头 (风格) 标签
-    instruction: bool        # 独立 instruction 参数
+    instruction: bool  # 独立 instruction 参数
 
 
 ENGINE_CAPABILITIES: dict[str, EngineCapability] = {
@@ -69,6 +70,7 @@ def emo_vector_for_emotion(emotion: str | None) -> list[float] | None:
         return None
     vec = EMOTION_TO_EMO_VECTOR.get(emotion.strip())
     return list(vec) if vec is not None else None
+
 
 _INLINE_TAG_RE = re.compile(r"\[[^\[\]]*\]")
 _LEADING_TAG_RE = re.compile(r"^\s*[\(（][^\)）]*[\)）]\s*")

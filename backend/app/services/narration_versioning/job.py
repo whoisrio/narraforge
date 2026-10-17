@@ -3,6 +3,7 @@
 Reads every SegmentedProject from the DB, serializes to the meta repo,
 and commits if anything changed.
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,7 +17,8 @@ from app.core.database import SessionLocal
 from app.models.segmented_project import SegmentedProject
 
 from . import config
-from .git_ops import add_all, commit, ensure_repo, push as git_push, GitError
+from .git_ops import GitError, add_all, commit, ensure_repo
+from .git_ops import push as git_push
 from .serializer import write_project
 
 log = logging.getLogger(__name__)
@@ -81,11 +83,7 @@ def snapshot_all(
     own_session = session is None
     session = session or SessionLocal()
     try:
-        projects = (
-            session.query(SegmentedProject)
-            .order_by(SegmentedProject.created_at)
-            .all()
-        )
+        projects = session.query(SegmentedProject).order_by(SegmentedProject.created_at).all()
         taken: set[str] = set()
         written: set[str] = set()
         for p in projects:

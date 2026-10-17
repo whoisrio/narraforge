@@ -12,18 +12,18 @@ try:
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
 
-from app.core.database import get_db
+from app.api._usage_helpers import build_llm_usage_sink
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.repositories.deps import get_usage_repo
 from app.core.repositories.usage import UsageRepository
-from app.api._usage_helpers import build_llm_usage_sink
 from app.services.text_split_service import (
     DEFAULT_RULE_DELIMITERS,
-    rule_split,
     llm_split,
-    ssml_annotate,
     markdown_detect,
     markdown_split,
+    rule_split,
+    ssml_annotate,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,6 +32,7 @@ router = APIRouter()
 
 
 # ---- Request / Response Models ----
+
 
 class RuleSplitRequest(BaseModel):
     text: str = Field(..., min_length=1, description="待拆分文本")
@@ -89,6 +90,7 @@ class SSMLAnnotateResponse(BaseModel):
 
 # ---- Endpoints ----
 
+
 @router.post("/rule", response_model=RuleSplitResponse)
 async def split_rule(req: RuleSplitRequest):
     """按指定标点切分文本。纯本地，无 LLM 依赖。
@@ -120,7 +122,9 @@ async def split_llm(
     """LLM 智能语义拆分。"""
     try:
         result = llm_split(
-            req.text, req.delimiters, db=db,
+            req.text,
+            req.delimiters,
+            db=db,
             usage_sink=build_llm_usage_sink(http_request, usage_repo, chars=len(req.text)),
         )
         return LLMSplitResponse(
@@ -146,9 +150,12 @@ async def annotate_ssml(
     """LLM 为每段加 SSML 标签。"""
     try:
         result = ssml_annotate(
-            req.texts, req.style_hint, db=db,
+            req.texts,
+            req.style_hint,
+            db=db,
             usage_sink=build_llm_usage_sink(
-                http_request, usage_repo,
+                http_request,
+                usage_repo,
                 chars=sum(len(t) for t in req.texts),
             ),
         )
@@ -166,6 +173,7 @@ async def annotate_ssml(
 
 
 # ---- Markdown 检测 + 切分 (P2 v3+) ----
+
 
 class MarkdownHeadingItem(BaseModel):
     level: int
@@ -197,8 +205,8 @@ class MarkdownDetectRequest(BaseModel):
 
 class MarkdownDetectResponse(BaseModel):
     doc_title: str | None
-    candidates: list[MarkdownHeadingItem]            # 全部 H1-H6 候选
-    chapters: list[MarkdownChapterItem]              # 默认推荐 (H2 + 短章合并)
+    candidates: list[MarkdownHeadingItem]  # 全部 H1-H6 候选
+    chapters: list[MarkdownChapterItem]  # 默认推荐 (H2 + 短章合并)
     total_chars: int
 
 
@@ -241,7 +249,7 @@ async def split_markdown(req: MarkdownSplitRequest):
     层级包含语义: 勾选最深层级 L 时, 所有 level <= L 的标题都当章节边界.
     H1 仍只作 doc_title, 不作章节.
     """
-    if not req.levels or any(l < 1 or l > 6 for l in req.levels):
+    if not req.levels or any(lv < 1 or lv > 6 for lv in req.levels):
         raise HTTPException(status_code=400, detail="levels 必须在 1-6 之间")
     try:
         chapters = markdown_split(
@@ -251,7 +259,9 @@ async def split_markdown(req: MarkdownSplitRequest):
             front_matter_mode=req.front_matter_mode,
         )
         # 拿 doc_title (走 detect 一遍取)
-        full = markdown_detect(req.text, min_chars=req.min_chars, front_matter_mode=req.front_matter_mode)
+        full = markdown_detect(
+            req.text, min_chars=req.min_chars, front_matter_mode=req.front_matter_mode
+        )
         return MarkdownSplitResponse(
             doc_title=full.get("doc_title"),
             chapters=chapters,

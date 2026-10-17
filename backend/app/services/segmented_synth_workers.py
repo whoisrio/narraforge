@@ -10,6 +10,7 @@ deploy_target=workers 时使用：
 
 local 模式不走本模块（svc 保持现状，ffmpeg 转码/trim/adjust 不受影响）。
 """
+
 from __future__ import annotations
 
 import json
@@ -18,19 +19,18 @@ import uuid
 from typing import Any
 
 from app.core.asset_store import AssetStore
-from app.core.config import settings
 from app.core.repositories.segmented_projects import SegmentedProjectRepository
 from app.core.system_config_service import (
     PRONUNCIATION_MAP_GLOBAL_KEY,
     get_config,
 )
+from app.schemas.segmented_project import SynthesizeParams
 from app.services.engine_capabilities import prepare_text_for_engine
 from app.services.text_transform_service import (
     apply_text_transforms,
     merge_maps,
     resolve_lowercase_latin,
 )
-from app.schemas.segmented_project import SynthesizeParams
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +140,7 @@ async def synthesize_segment_workers(
     engine = effective.get("engine") or "edge_tts"
     if engine not in ("edge_tts", "mimo_tts"):
         raise ValueError(
-            f"engine '{engine}' not supported in workers mode "
-            "(edge_tts / mimo_tts only)"
+            f"engine '{engine}' not supported in workers mode (edge_tts / mimo_tts only)"
         )
     effective["engine"] = engine
 
@@ -168,7 +167,8 @@ async def synthesize_segment_workers(
         apply_all=apply_all,
         applied_map_ids=applied_ids,
         lowercase_latin=resolve_lowercase_latin(
-            tt.get("lowercase_latin"), project_configs.get("lowercase_latin"),
+            tt.get("lowercase_latin"),
+            project_configs.get("lowercase_latin"),
         ),
     )
     text_to_speak = prepare_text_for_engine(
@@ -263,10 +263,17 @@ async def upload_segment_audio_workers(
         audio_bytes,
     )
 
-    prev_current = (seg.get("audio") or {}).get("current") if isinstance(seg.get("audio"), dict) else None
+    prev_current = (
+        (seg.get("audio") or {}).get("current") if isinstance(seg.get("audio"), dict) else None
+    )
     seg["audio"] = {
         "format": ext,
-        "current": {"id": uuid.uuid4().hex, "path": ref, "origin": "recorded", **({"duration_sec": duration_sec} if duration_sec else {})},
+        "current": {
+            "id": uuid.uuid4().hex,
+            "path": ref,
+            "origin": "recorded",
+            **({"duration_sec": duration_sec} if duration_sec else {}),
+        },
         **({"previous": prev_current} if prev_current else {}),
     }
 

@@ -3,6 +3,7 @@
 Timeline logic mirrors the frontend's ``buildSRTContent`` (audioConcat.ts):
 timestamps are computed by accumulating each segment's ``duration_sec``.
 """
+
 from __future__ import annotations
 
 from app.services.engine_capabilities import strip_inline_tags, strip_leading_style_tag

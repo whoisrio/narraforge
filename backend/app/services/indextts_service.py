@@ -43,9 +43,7 @@ class IndexTTSService:
         kwargs: Dict[str, Any] = {}
         if self._transport is not None:
             kwargs["transport"] = self._transport
-        return httpx.AsyncClient(
-            base_url=self.base_url, timeout=self.timeout, **kwargs
-        )
+        return httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout, **kwargs)
 
     async def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         """发起请求；连接失败抛出带中文提示的异常，HTTP 错误透传 sidecar detail。"""
@@ -53,9 +51,7 @@ class IndexTTSService:
             async with self._client() as client:
                 resp = await client.request(method, path, **kwargs)
         except (httpx.ConnectError, httpx.ConnectTimeout) as e:
-            raise IndexTTSServiceError(
-                "IndexTTS sidecar 未启动，请先运行 sidecar 服务"
-            ) from e
+            raise IndexTTSServiceError("IndexTTS sidecar 未启动，请先运行 sidecar 服务") from e
         except httpx.TimeoutException as e:
             raise IndexTTSServiceError(f"IndexTTS sidecar 请求超时: {e}") from e
         except httpx.HTTPError as e:
@@ -67,9 +63,7 @@ class IndexTTSService:
                 detail = resp.json().get("detail", detail)
             except Exception:
                 pass
-            raise IndexTTSServiceError(
-                f"IndexTTS sidecar 错误 (HTTP {resp.status_code}): {detail}"
-            )
+            raise IndexTTSServiceError(f"IndexTTS sidecar 错误 (HTTP {resp.status_code}): {detail}")
         return resp
 
     async def status(self) -> Dict[str, Any]:

@@ -19,6 +19,7 @@ workers 模式已知取舍（写进设计缺口，非 bug）：
 - 音频二进制不进后端：分段 audio JSON 由前端写 {current: {audio_id}} 引用
   IndexedDB；summary 的 generated_count 把 audio_id 与 path 同等计数。
 """
+
 from __future__ import annotations
 
 import copy
@@ -27,10 +28,10 @@ import uuid
 from types import SimpleNamespace
 from typing import Any, Protocol, runtime_checkable
 
-from app.core.supabase_client import SupabaseClient
-from app.core.time_utils import utcnow
 from app.core.config import settings
 from app.core.repositories.user_scope import UserScope
+from app.core.supabase_client import SupabaseClient
+from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterCreateIn,
     ChapterIn,
@@ -54,25 +55,28 @@ try:
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
     svc = None  # type: ignore[assignment]
-from app.services.layer_sync_service import (
-    mark_consistent,
-    mark_split,
-    rewrite_script_from_segments as ls_rewrite_script_from_segments,
-    sync_status as ls_sync_status,
-)
 from app.services.animation_spec_codec import (
     _dump_animation_spec,
     _parse_animation_spec,
 )
-from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split
 from app.services.batch_reuse import (
     build_reuse_index,
-    new_reuse_report,
     normalize_chapter_title,
     plan_batch_reuse,
     resolve_split_delimiters,
     snapshot_has_segments,
 )
+from app.services.layer_sync_service import (
+    mark_consistent,
+    mark_split,
+)
+from app.services.layer_sync_service import (
+    rewrite_script_from_segments as ls_rewrite_script_from_segments,
+)
+from app.services.layer_sync_service import (
+    sync_status as ls_sync_status,
+)
+from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +85,12 @@ CHAPTERS = "segmented_project_chapters"
 SEGMENTS = "segmented_project_segments"
 
 _DEFAULT_SPLIT_CONFIG = {"delimiters": list(DEFAULT_RULE_DELIMITERS), "mode": "rule"}
-_DEFAULT_VOICE = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
+_DEFAULT_VOICE = {
+    "engine": "edge_tts",
+    "voice": "zh-CN-YunxiNeural",
+    "rate": "+0%",
+    "volume": "+0%",
+}
 
 
 def _max_segment_len() -> int | None:
@@ -98,12 +107,20 @@ class SegmentedProjectRepository(Protocol):
     def count_chapters(self, project_id: str) -> int: ...
     def save_project(self, project: ProjectIn) -> ProjectDetail: ...
     def patch_segment(
-        self, project_id: str, chapter_id: str, segment_id: str, patch: SegmentPatchIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        segment_id: str,
+        patch: SegmentPatchIn,
     ) -> tuple[SegmentIn, str] | None:
         """段级部分更新；返回 (更新后的段, 项目最新 updated_at)，不存在 → None。..."""
         ...
+
     def create_segment(
-        self, project_id: str, chapter_id: str, body: SegmentCreateIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        body: SegmentCreateIn,
     ) -> tuple[SegmentIn, list[dict[str, Any]], str] | None:
         """新建段；返回 (新段, 章内 [{id, position}], 项目最新 updated_at)。
 
@@ -111,36 +128,51 @@ class SegmentedProjectRepository(Protocol):
         → ValueError("after_segment_not_found") → 路由 404 segment_not_found。
         """
         ...
+
     def reconcile_chapter_structure(
-        self, project_id: str, chapter_id: str, segments: list[StructureSegmentIn],
+        self,
+        project_id: str,
+        chapter_id: str,
+        segments: list[StructureSegmentIn],
     ) -> tuple[list[SegmentIn], str] | None:
         """章内结构 reconcile（删除/合并/拆段/排序）；返回 (该章全部段, 项目最新 updated_at)。
 
         章节不存在（或跨用户）→ None → 路由 404。
         """
         ...
+
     def create_chapter(
-        self, project_id: str, body: ChapterCreateIn,
+        self,
+        project_id: str,
+        body: ChapterCreateIn,
     ) -> tuple[ChapterIn, str] | None:
         """新建章节（position 追加到末尾）；返回 (新章节, 项目最新 updated_at)。
 
         项目不存在（或跨用户）→ None → 路由 404。
         """
         ...
+
     def patch_chapter(
-        self, project_id: str, chapter_id: str, patch: ChapterPatchIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        patch: ChapterPatchIn,
     ) -> tuple[ChapterIn, str] | None:
         """章节部分更新（name/voice/split_config/design_title，tri-state）；
         返回 (更新后的章节, 项目最新 updated_at)。章节不存在（或跨用户）→ None → 路由 404。"""
         ...
+
     def delete_chapter(self, project_id: str, chapter_id: str) -> str | None:
         """删章（段行级联删除，音频文件保留在盘上）；返回项目最新 updated_at。
 
         章节不存在（或跨用户）→ None → 路由 404。
         """
         ...
+
     def reorder_chapters(
-        self, project_id: str, chapter_ids: list[str],
+        self,
+        project_id: str,
+        chapter_ids: list[str],
     ) -> tuple[list[dict[str, Any]], str] | None:
         """按数组顺序重排章节 position；返回 (全章按新序的 [{id, name, position}],
         项目最新 updated_at)。
@@ -149,31 +181,49 @@ class SegmentedProjectRepository(Protocol):
         全部章节 id → ValueError("chapter_ids_mismatch") → 路由 422。
         """
         ...
+
     def patch_project(
-        self, project_id: str, patch: ProjectPatchIn,
+        self,
+        project_id: str,
+        patch: ProjectPatchIn,
     ) -> ProjectDetail | None:
         """项目元信息部分更新（tri-state，改名时事务内搬迁资产目录）；
         返回更新后的 ProjectDetail。项目不存在（或跨用户）-> None -> 路由 404。"""
         ...
+
     def put_source_document(
-        self, project_id: str, text: str,
+        self,
+        project_id: str,
+        text: str,
     ) -> tuple[str | None, str] | None:
         """写源文档（local：落文件+路径列；workers：文本列）；返回
         (路径或 None, 项目最新 updated_at)。项目不存在（或跨用户）-> None。"""
         ...
+
     def put_narration_script(
-        self, project_id: str, text: str,
+        self,
+        project_id: str,
+        text: str,
     ) -> tuple[str | None, str] | None:
         """写项目级完整旁白稿（local：落文件+路径列；workers：不持久化，
         no-op 警告）；返回 (路径或 None, 项目最新 updated_at)。
         项目不存在（或跨用户）-> None。
         """
         ...
+
     def delete_project(self, project_id: str) -> bool: ...
     def batch_create_structure(
-        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
-        *, preserve_audio: bool = False, split_segments: bool = False, dry_run: bool = False,
-    ) -> dict[str, Any]: ...  # LookupError("project_not_found"); {"chapters": [...], "reuse": report|None}
+        self,
+        project_id: str,
+        chapters: list[dict[str, Any]],
+        narration_script: str | None = None,
+        *,
+        preserve_audio: bool = False,
+        split_segments: bool = False,
+        dry_run: bool = False,
+    ) -> dict[
+        str, Any
+    ]: ...  # LookupError("project_not_found"); {"chapters": [...], "reuse": report|None}
     def apply_animation_spec(
         self, project_id: str, theme: str | None, items: list[dict[str, Any]]
     ) -> dict[str, Any]: ...  # LookupError(f"project_not_found: {id}")
@@ -218,29 +268,48 @@ class LocalSegmentedProjectRepository:
         return svc.save_project(self._db, project)
 
     def patch_segment(
-        self, project_id: str, chapter_id: str, segment_id: str, patch: SegmentPatchIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        segment_id: str,
+        patch: SegmentPatchIn,
     ) -> tuple[SegmentIn, str] | None:
         return svc.patch_segment(self._db, project_id, chapter_id, segment_id, patch)
 
     def create_segment(
-        self, project_id: str, chapter_id: str, body: SegmentCreateIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        body: SegmentCreateIn,
     ) -> tuple[SegmentIn, list[dict[str, Any]], str] | None:
         return svc.create_segment(
-            self._db, project_id, chapter_id, text=body.text, after_id=body.after_id,
+            self._db,
+            project_id,
+            chapter_id,
+            text=body.text,
+            after_id=body.after_id,
         )
 
     def reconcile_chapter_structure(
-        self, project_id: str, chapter_id: str, segments: list[StructureSegmentIn],
+        self,
+        project_id: str,
+        chapter_id: str,
+        segments: list[StructureSegmentIn],
     ) -> tuple[list[SegmentIn], str] | None:
         return svc.reconcile_chapter_structure(self._db, project_id, chapter_id, segments)
 
     def create_chapter(
-        self, project_id: str, body: ChapterCreateIn,
+        self,
+        project_id: str,
+        body: ChapterCreateIn,
     ) -> tuple[ChapterIn, str] | None:
         return svc.create_chapter(self._db, project_id, name=body.name)
 
     def patch_chapter(
-        self, project_id: str, chapter_id: str, patch: ChapterPatchIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        patch: ChapterPatchIn,
     ) -> tuple[ChapterIn, str] | None:
         return svc.patch_chapter(self._db, project_id, chapter_id, patch)
 
@@ -248,22 +317,30 @@ class LocalSegmentedProjectRepository:
         return svc.delete_chapter(self._db, project_id, chapter_id)
 
     def reorder_chapters(
-        self, project_id: str, chapter_ids: list[str],
+        self,
+        project_id: str,
+        chapter_ids: list[str],
     ) -> tuple[list[dict[str, Any]], str] | None:
         return svc.reorder_chapters(self._db, project_id, chapter_ids)
 
     def patch_project(
-        self, project_id: str, patch: ProjectPatchIn,
+        self,
+        project_id: str,
+        patch: ProjectPatchIn,
     ) -> ProjectDetail | None:
         return svc.patch_project(self._db, project_id, patch)
 
     def put_source_document(
-        self, project_id: str, text: str,
+        self,
+        project_id: str,
+        text: str,
     ) -> tuple[str | None, str] | None:
         return svc.put_source_document(self._db, project_id, text)
 
     def put_narration_script(
-        self, project_id: str, text: str,
+        self,
+        project_id: str,
+        text: str,
     ) -> tuple[str | None, str] | None:
         return svc.put_narration_script(self._db, project_id, text)
 
@@ -271,12 +348,23 @@ class LocalSegmentedProjectRepository:
         return svc.delete_project(self._db, project_id)
 
     def batch_create_structure(
-        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
-        *, preserve_audio: bool = False, split_segments: bool = False, dry_run: bool = False,
+        self,
+        project_id: str,
+        chapters: list[dict[str, Any]],
+        narration_script: str | None = None,
+        *,
+        preserve_audio: bool = False,
+        split_segments: bool = False,
+        dry_run: bool = False,
     ) -> dict[str, Any]:
         return svc.batch_create_structure(
-            self._db, project_id, chapters, narration_script,
-            preserve_audio=preserve_audio, split_segments=split_segments, dry_run=dry_run,
+            self._db,
+            project_id,
+            chapters,
+            narration_script,
+            preserve_audio=preserve_audio,
+            split_segments=split_segments,
+            dry_run=dry_run,
         )
 
     def apply_animation_spec(
@@ -310,8 +398,11 @@ class LocalSegmentedProjectRepository:
         if proj is None or chapter is None:
             raise LookupError("chapter_not_found")
         payload = ProjectIn(
-            id=proj.id, name=proj.name, schema_version=proj.schema_version,
-            layout=proj.layout, active_chapter_id=proj.active_chapter_id,
+            id=proj.id,
+            name=proj.name,
+            schema_version=proj.schema_version,
+            layout=proj.layout,
+            active_chapter_id=proj.active_chapter_id,
             original_text=proj.original_text,
             animation_theme=getattr(proj, "animation_theme", None),
             remotion_project_path=getattr(proj, "remotion_project_path", None),
@@ -322,7 +413,9 @@ class LocalSegmentedProjectRepository:
             logo=getattr(proj, "logo", None),
             chapters=[
                 {
-                    "id": c.id, "position": c.position, "name": c.name,
+                    "id": c.id,
+                    "position": c.position,
+                    "name": c.name,
                     "voice": c.voice or {},
                     "split_config": c.split_config or {},
                     "original_text": c.original_text,
@@ -332,16 +425,19 @@ class LocalSegmentedProjectRepository:
                         [
                             {
                                 "id": f"{c.id}-seg-{idx}",
-                                "position": idx, "text": t,
+                                "position": idx,
+                                "text": t,
                                 "params": c.voice or {},
                                 "locked_params": [],
                             }
                             for idx, t in enumerate(texts)
                         ]
-                        if c.id == chapter_id else
-                        [
+                        if c.id == chapter_id
+                        else [
                             {
-                                "id": s.id, "position": s.position, "text": s.text,
+                                "id": s.id,
+                                "position": s.position,
+                                "text": s.text,
                                 "emotion": s.emotion,
                                 "voice": getattr(s, "voice", {"source": "chapter"}),
                                 "generated_params": s.generated_params,
@@ -405,9 +501,7 @@ def _ch_row_to_in(row: dict, seg_rows: list[dict]) -> ChapterIn:
     )
 
 
-def _rows_to_detail(
-    p_row: dict, ch_rows: list[dict], seg_rows: list[dict]
-) -> ProjectDetail:
+def _rows_to_detail(p_row: dict, ch_rows: list[dict], seg_rows: list[dict]) -> ProjectDetail:
     segs_by_chapter: dict[str, list[dict]] = {}
     for s in seg_rows:
         segs_by_chapter.setdefault(s["chapter_id"], []).append(s)
@@ -546,9 +640,7 @@ class SupabaseSegmentedProjectRepository(UserScope):
         )
         chapter_ids = [c["id"] for c in chapters]
         segments = (
-            self._client.select(
-                SEGMENTS, params={"chapter_id": f"in.({','.join(chapter_ids)})"}
-            )
+            self._client.select(SEGMENTS, params={"chapter_id": f"in.({','.join(chapter_ids)})"})
             if chapter_ids
             else []
         )
@@ -562,8 +654,7 @@ class SupabaseSegmentedProjectRepository(UserScope):
                 [
                     s
                     for s in segments
-                    if s["chapter_id"]
-                    in {c["id"] for c in chapters_by_project.get(p["id"], [])}
+                    if s["chapter_id"] in {c["id"] for c in chapters_by_project.get(p["id"], [])}
                 ],
             )
             for p in projects
@@ -594,9 +685,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
         chapters 表无 user_id 列，按 project_id 过滤即可——配额检查只在
         路由层校验过归属后调用。
         """
-        return len(self._client.select(
-            CHAPTERS, params={"project_id": f"eq.{project_id}", "select": "id"}
-        ))
+        return len(
+            self._client.select(CHAPTERS, params={"project_id": f"eq.{project_id}", "select": "id"})
+        )
 
     # ----- 全量保存 -----
 
@@ -620,9 +711,7 @@ class SupabaseSegmentedProjectRepository(UserScope):
         # 先读出要保留的行状态（全量 reconcile 是删旧插新，否则这些列会丢）
         old_chapters = self._list_chapter_rows(project.id) if existing_p else []
         old_ch_by_id = {c["id"]: c for c in old_chapters}
-        old_seg_by_id = {
-            s["id"]: s for s in self._list_segment_rows(list(old_ch_by_id))
-        }
+        old_seg_by_id = {s["id"]: s for s in self._list_segment_rows(list(old_ch_by_id))}
 
         p_row: dict[str, Any] = {
             "id": project.id,
@@ -657,7 +746,8 @@ class SupabaseSegmentedProjectRepository(UserScope):
         if project.narration_script is not None:
             logger.warning(
                 "[supabase] project-level narration_script is not persisted in workers mode "
-                "(project %s)", project.id,
+                "(project %s)",
+                project.id,
             )
         self._client.insert(PROJECTS, [p_row], upsert=True)
 
@@ -669,62 +759,66 @@ class SupabaseSegmentedProjectRepository(UserScope):
         seg_rows: list[dict[str, Any]] = []
         for ch_idx, ch_in in enumerate(project.chapters):
             prev_ch = old_ch_by_id.get(ch_in.id, {})
-            ch_rows.append({
-                "id": ch_in.id,
-                "project_id": project.id,
-                "position": ch_in.position if ch_in.position is not None else ch_idx,
-                "name": ch_in.name,
-                "voice": ch_in.voice or {},
-                "split_config": ch_in.split_config or {},
-                "original_text": ch_in.original_text,
-                "narration_script": ch_in.narration_script,
-                "design_title": ch_in.design_title,
-                # audio_adjust/sync_state 只能由专门端点管理，payload 忽略、保留旧值
-                "sync_state": prev_ch.get("sync_state"),
-                "audio_adjust": prev_ch.get("audio_adjust"),
-                "created_at": ch_in.created_at or prev_ch.get("created_at") or now,
-                "updated_at": now,
-            })
+            ch_rows.append(
+                {
+                    "id": ch_in.id,
+                    "project_id": project.id,
+                    "position": ch_in.position if ch_in.position is not None else ch_idx,
+                    "name": ch_in.name,
+                    "voice": ch_in.voice or {},
+                    "split_config": ch_in.split_config or {},
+                    "original_text": ch_in.original_text,
+                    "narration_script": ch_in.narration_script,
+                    "design_title": ch_in.design_title,
+                    # audio_adjust/sync_state 只能由专门端点管理，payload 忽略、保留旧值
+                    "sync_state": prev_ch.get("sync_state"),
+                    "audio_adjust": prev_ch.get("audio_adjust"),
+                    "created_at": ch_in.created_at or prev_ch.get("created_at") or now,
+                    "updated_at": now,
+                }
+            )
             for seg_idx, s_in in enumerate(ch_in.segments):
                 prev_seg = old_seg_by_id.get(s_in.id, {})
-                seg_rows.append({
-                    "id": s_in.id,
-                    "chapter_id": ch_in.id,
-                    "position": s_in.position if s_in.position is not None else seg_idx,
-                    "text": s_in.text or "",
-                    "emotion": s_in.emotion,
-                    "role_id": s_in.role_id,
-                    "segment_kind": s_in.segment_kind or "narration",
-                    "voice": s_in.voice or {"source": "chapter"},
-                    # None 表示 payload 未携带 → 保留旧值（对齐 svc.save_project）
-                    "generated_params": (
-                        s_in.generated_params
-                        if s_in.generated_params is not None
-                        else prev_seg.get("generated_params")
-                    ),
-                    "audio": s_in.audio if s_in.audio is not None else prev_seg.get("audio"),
-                    "text_transforms": (
-                        s_in.text_transforms
-                        if s_in.text_transforms is not None
-                        else prev_seg.get("text_transforms")
-                    ),
-                    # 语音核对结果：payload 未携带 = 保留旧值（对齐 svc.save_project）
-                    "verification": (
-                        s_in.verification
-                        if s_in.verification is not None
-                        else prev_seg.get("verification")
-                    ),
-                    "generated_at": s_in.generated_at,
-                    "animation_spec_json": (
-                        _dump_animation_spec(s_in.animation_spec)
-                        if s_in.animation_spec is not None
-                        else prev_seg.get("animation_spec_json")
-                    ),
-                    # split_anchor 由 layer-sync 端点管理，payload 没有此字段 → 保留
-                    "split_anchor": prev_seg.get("split_anchor"),
-                    "created_at": s_in.created_at or prev_seg.get("created_at") or now,
-                    "updated_at": now,
-                })
+                seg_rows.append(
+                    {
+                        "id": s_in.id,
+                        "chapter_id": ch_in.id,
+                        "position": s_in.position if s_in.position is not None else seg_idx,
+                        "text": s_in.text or "",
+                        "emotion": s_in.emotion,
+                        "role_id": s_in.role_id,
+                        "segment_kind": s_in.segment_kind or "narration",
+                        "voice": s_in.voice or {"source": "chapter"},
+                        # None 表示 payload 未携带 → 保留旧值（对齐 svc.save_project）
+                        "generated_params": (
+                            s_in.generated_params
+                            if s_in.generated_params is not None
+                            else prev_seg.get("generated_params")
+                        ),
+                        "audio": s_in.audio if s_in.audio is not None else prev_seg.get("audio"),
+                        "text_transforms": (
+                            s_in.text_transforms
+                            if s_in.text_transforms is not None
+                            else prev_seg.get("text_transforms")
+                        ),
+                        # 语音核对结果：payload 未携带 = 保留旧值（对齐 svc.save_project）
+                        "verification": (
+                            s_in.verification
+                            if s_in.verification is not None
+                            else prev_seg.get("verification")
+                        ),
+                        "generated_at": s_in.generated_at,
+                        "animation_spec_json": (
+                            _dump_animation_spec(s_in.animation_spec)
+                            if s_in.animation_spec is not None
+                            else prev_seg.get("animation_spec_json")
+                        ),
+                        # split_anchor 由 layer-sync 端点管理，payload 没有此字段 → 保留
+                        "split_anchor": prev_seg.get("split_anchor"),
+                        "created_at": s_in.created_at or prev_seg.get("created_at") or now,
+                        "updated_at": now,
+                    }
+                )
         if ch_rows:
             self._client.insert(CHAPTERS, ch_rows, upsert=True)
         if seg_rows:
@@ -750,7 +844,11 @@ class SupabaseSegmentedProjectRepository(UserScope):
         return detail
 
     def patch_segment(
-        self, project_id: str, chapter_id: str, segment_id: str, patch: SegmentPatchIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        segment_id: str,
+        patch: SegmentPatchIn,
     ) -> tuple[SegmentIn, str] | None:
         """段级部分更新（与 svc.patch_segment 同语义）。跨用户/不存在 → None → 404。"""
         if not self._owns_project(project_id):
@@ -815,7 +913,10 @@ class SupabaseSegmentedProjectRepository(UserScope):
     # ----- 段结构端点（B 类） -----
 
     def create_segment(
-        self, project_id: str, chapter_id: str, body: SegmentCreateIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        body: SegmentCreateIn,
     ) -> tuple[SegmentIn, list[dict[str, Any]], str] | None:
         """新建段（与 svc.create_segment 同语义）。跨用户/章节不存在 → None → 404。
 
@@ -861,13 +962,14 @@ class SupabaseSegmentedProjectRepository(UserScope):
             PROJECTS, {"updated_at": now}, params=self._scope_params({"id": f"eq.{project_id}"})
         )
         final_rows = seg_rows[:insert_at] + [new_row] + shifted
-        positions = [
-            {"id": r["id"], "position": r.get("position") or 0} for r in final_rows
-        ]
+        positions = [{"id": r["id"], "position": r.get("position") or 0} for r in final_rows]
         return _seg_row_to_in(new_row), positions, now
 
     def reconcile_chapter_structure(
-        self, project_id: str, chapter_id: str, segments: list[StructureSegmentIn],
+        self,
+        project_id: str,
+        chapter_id: str,
+        segments: list[StructureSegmentIn],
     ) -> tuple[list[SegmentIn], str] | None:
         """章内结构 reconcile（与 svc.reconcile_chapter_structure 同语义）。
 
@@ -911,7 +1013,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
                 self._client.insert(SEGMENTS, [row])
             else:
                 updates: dict[str, Any] = {
-                    "text": s_in.text or "", "position": s_in.position, "updated_at": now,
+                    "text": s_in.text or "",
+                    "position": s_in.position,
+                    "updated_at": now,
                 }
                 row = {
                     **prev,
@@ -925,8 +1029,8 @@ class SupabaseSegmentedProjectRepository(UserScope):
                     audio = dict(prev.get("audio") or {})
                     current = audio.get("current")
                     if isinstance(current, dict) and (
-                    current.get("path") or current.get("id") or current.get("audio_id")
-                ):
+                        current.get("path") or current.get("id") or current.get("audio_id")
+                    ):
                         audio["previous"] = current
                         audio["current"] = None
                         audio.pop("duration_sec", None)
@@ -959,7 +1063,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
     # ----- 章节操作端点（C 类） -----
 
     def create_chapter(
-        self, project_id: str, body: ChapterCreateIn,
+        self,
+        project_id: str,
+        body: ChapterCreateIn,
     ) -> tuple[ChapterIn, str] | None:
         """新建章节（与 svc.create_chapter 同语义）。跨用户/项目不存在 → None → 404。"""
         if not self._owns_project(project_id):
@@ -985,7 +1091,10 @@ class SupabaseSegmentedProjectRepository(UserScope):
         return _ch_row_to_in(row, []), now
 
     def patch_chapter(
-        self, project_id: str, chapter_id: str, patch: ChapterPatchIn,
+        self,
+        project_id: str,
+        chapter_id: str,
+        patch: ChapterPatchIn,
     ) -> tuple[ChapterIn, str] | None:
         """章节部分更新（与 svc.patch_chapter 同语义）。跨用户/不存在 → None → 404。"""
         if not self._owns_project(project_id):
@@ -1029,7 +1138,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
         return now
 
     def reorder_chapters(
-        self, project_id: str, chapter_ids: list[str],
+        self,
+        project_id: str,
+        chapter_ids: list[str],
     ) -> tuple[list[dict[str, Any]], str] | None:
         """章节重排（与 svc.reorder_chapters 同语义）。跨用户/项目不存在 → None → 404；
         chapter_ids 未恰好覆盖全部章节 → ValueError("chapter_ids_mismatch") → 422。
@@ -1063,7 +1174,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
         return result, now
 
     def patch_project(
-        self, project_id: str, patch: ProjectPatchIn,
+        self,
+        project_id: str,
+        patch: ProjectPatchIn,
     ) -> ProjectDetail | None:
         """项目元信息部分更新（与 svc.patch_project 同语义，tri-state）。
 
@@ -1096,7 +1209,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
         return self.get_project(project_id)
 
     def put_source_document(
-        self, project_id: str, text: str,
+        self,
+        project_id: str,
+        text: str,
     ) -> tuple[str | None, str] | None:
         """写源文档：workers 无文件系统，内容直接存 ``source_document`` 文本列
         （对齐 save_project 的 workers 语义）。跨用户/项目不存在 -> None -> 404。
@@ -1112,7 +1227,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
         return None, now
 
     def put_narration_script(
-        self, project_id: str, text: str,
+        self,
+        project_id: str,
+        text: str,
     ) -> tuple[str | None, str] | None:
         """写项目级完整旁白稿：workers 模式本就不持久化该字段（对齐
         save_project 的忽略语义），no-op 警告并返回当前版本，不报错。
@@ -1143,8 +1260,14 @@ class SupabaseSegmentedProjectRepository(UserScope):
     # ----- batch（agent split_segment 节点 / 前端批量建结构） -----
 
     def batch_create_structure(
-        self, project_id: str, chapters: list[dict[str, Any]], narration_script: str | None = None,
-        *, preserve_audio: bool = False, split_segments: bool = False, dry_run: bool = False,
+        self,
+        project_id: str,
+        chapters: list[dict[str, Any]],
+        narration_script: str | None = None,
+        *,
+        preserve_audio: bool = False,
+        split_segments: bool = False,
+        dry_run: bool = False,
     ) -> dict[str, Any]:
         now = utcnow().isoformat()
         if not self.project_exists(project_id):
@@ -1180,7 +1303,10 @@ class SupabaseSegmentedProjectRepository(UserScope):
                 if split_segments or (preserve_audio and snapshot_has_segments(snapshot)):
                     body = ch_data.get("narration_script") or ch_data.get("original_text") or ""
                     delimiters = resolve_split_delimiters(ch_data.get("split_config"), snapshot)
-                    seg_payloads = [{"text": t} for t in rule_split(body, delimiters, max_len=_max_segment_len())]
+                    seg_payloads = [
+                        {"text": t}
+                        for t in rule_split(body, delimiters, max_len=_max_segment_len())
+                    ]
             resolved_chapters.append({**ch_data, "segments": seg_payloads})
 
         plan = plan_batch_reuse(old_chapters, resolved_chapters, preserve_audio=preserve_audio)
@@ -1192,7 +1318,8 @@ class SupabaseSegmentedProjectRepository(UserScope):
         if narration_script is not None:
             logger.warning(
                 "[supabase] project-level narration_script is not persisted in workers mode "
-                "(project %s)", project_id,
+                "(project %s)",
+                project_id,
             )
 
         if old_chapter_rows:
@@ -1263,19 +1390,21 @@ class SupabaseSegmentedProjectRepository(UserScope):
             mark_consistent(stand_in)
             for row, ns in zip(new_segs, seg_ns):
                 row["split_anchor"] = ns.split_anchor
-            ch_rows.append({
-                "id": chapter_id,
-                "project_id": project_id,
-                "position": index,
-                "name": title,
-                "voice": voice,
-                "split_config": split_config,
-                "original_text": plan_ch["original_text"],
-                "narration_script": plan_ch["narration_script"],
-                "sync_state": stand_in.sync_state,
-                "created_at": now,
-                "updated_at": now,
-            })
+            ch_rows.append(
+                {
+                    "id": chapter_id,
+                    "project_id": project_id,
+                    "position": index,
+                    "name": title,
+                    "voice": voice,
+                    "split_config": split_config,
+                    "original_text": plan_ch["original_text"],
+                    "narration_script": plan_ch["narration_script"],
+                    "sync_state": stand_in.sync_state,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            )
             seg_rows.extend(new_segs)
             result.append({"id": chapter_id, "segments": seg_result})
         if ch_rows:
@@ -1357,7 +1486,9 @@ class SupabaseSegmentedProjectRepository(UserScope):
         delimiters = (ch_row.get("split_config") or {}).get(
             "delimiters", _DEFAULT_SPLIT_CONFIG["delimiters"]
         )
-        items = rule_split(ch_row.get("narration_script") or "", delimiters, max_len=_max_segment_len())
+        items = rule_split(
+            ch_row.get("narration_script") or "", delimiters, max_len=_max_segment_len()
+        )
 
         self._client.delete(SEGMENTS, params={"chapter_id": f"eq.{chapter_id}"})
         new_segs = [
@@ -1408,9 +1539,7 @@ class SupabaseSegmentedProjectRepository(UserScope):
             },
             params={"id": f"eq.{chapter_id}"},
         )
-        for row, ns in zip(
-            sorted(seg_rows, key=lambda s: s.get("position") or 0), seg_ns
-        ):
+        for row, ns in zip(sorted(seg_rows, key=lambda s: s.get("position") or 0), seg_ns):
             self._client.update(
                 SEGMENTS,
                 {"split_anchor": ns.split_anchor, "updated_at": now},

@@ -4,6 +4,7 @@
 email ∈ settings.admin_emails。数据经 SupabaseAdminStatsRepository 读
 M2 统计表（stats_middleware 写入）。
 """
+
 from fastapi import APIRouter, Depends
 
 from app.core.auth_deps import require_admin
@@ -39,6 +40,4 @@ async def list_logs(
     repo: SupabaseAdminStatsRepository = Depends(get_admin_stats_repo),
 ):
     """操作日志（分页，最新在前；支持 user_id/action/date 过滤）。"""
-    return repo.list_logs(
-        page=page, page_size=page_size, user_id=user_id, action=action, date=date
-    )
+    return repo.list_logs(page=page, page_size=page_size, user_id=user_id, action=action, date=date)

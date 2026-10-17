@@ -1,4 +1,5 @@
 """Thin subprocess wrapper around `git`. Not thread-safe."""
+
 from __future__ import annotations
 
 import subprocess
@@ -11,8 +12,7 @@ class GitError(RuntimeError):
 
 
 DEFAULT_GITIGNORE = (
-    "# Audio files live under backend/uploads/, tracked by DB metadata only.\n"
-    "projects/*/audio/\n"
+    "# Audio files live under backend/uploads/, tracked by DB metadata only.\nprojects/*/audio/\n"
 )
 
 

@@ -3,6 +3,7 @@
 本模块不得引入 sqlalchemy 或文件系统依赖——workers bundle 也会导入它。
 文件搬运/GC 属于 local 模式，留在 segmented_project_service。
 """
+
 from __future__ import annotations
 
 import copy
@@ -45,14 +46,18 @@ def build_reuse_index(chapters: list[dict[str, Any]]) -> dict[str, dict[str, Any
                     "voice": copy.deepcopy(s.get("voice")) if s.get("voice") else None,
                     "audio": copy.deepcopy(s.get("audio")) if s.get("audio") else None,
                     "generated_params": (
-                        copy.deepcopy(s.get("generated_params")) if s.get("generated_params") else None
+                        copy.deepcopy(s.get("generated_params"))
+                        if s.get("generated_params")
+                        else None
                     ),
                     "generated_at": s.get("generated_at"),
                 }
             )
         index[key] = {
             "voice": copy.deepcopy(ch.get("voice")) if ch.get("voice") else None,
-            "split_config": copy.deepcopy(ch.get("split_config")) if ch.get("split_config") else None,
+            "split_config": copy.deepcopy(ch.get("split_config"))
+            if ch.get("split_config")
+            else None,
             "segments": segs,
         }
     return index
@@ -75,11 +80,16 @@ def new_reuse_report() -> dict[str, Any]:
 # plan_batch_reuse：重拆保留的纯匹配规划器（A1）
 # ---------------------------------------------------------------------------
 
-from app.services.text_split_service import DEFAULT_RULE_DELIMITERS
+from app.services.text_split_service import DEFAULT_RULE_DELIMITERS  # noqa: E402
 
 DEFAULT_SPLIT_DELIMITERS = DEFAULT_RULE_DELIMITERS
 
-_DEFAULT_VOICE = {"engine": "edge_tts", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "volume": "+0%"}
+_DEFAULT_VOICE = {
+    "engine": "edge_tts",
+    "voice": "zh-CN-YunxiNeural",
+    "rate": "+0%",
+    "volume": "+0%",
+}
 
 _WHITESPACE_RE = re.compile(r"\s+")
 _CONSUMED_FLAG = "_consumed"
@@ -134,7 +144,11 @@ def _derive_default_voice(old_chapters: list[dict[str, Any]]) -> dict[str, Any]:
         ch_voice = old_chapters[0].get("voice") or {}
         if ch_voice.get("voice") and ch_voice.get("engine") == "edge_tts":
             return copy.deepcopy(ch_voice)
-        if ch_voice.get("voice_id") and ch_voice.get("engine") in ("cosyvoice", "mimo_tts", "voxcpm"):
+        if ch_voice.get("voice_id") and ch_voice.get("engine") in (
+            "cosyvoice",
+            "mimo_tts",
+            "voxcpm",
+        ):
             return copy.deepcopy(ch_voice)
     return copy.deepcopy(_DEFAULT_VOICE)
 

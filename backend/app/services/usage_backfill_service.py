@@ -14,6 +14,7 @@ LLM 调用无历史记录，无法回填（token 维度从启用计量起才开�
 幂等：事件 id 用 uuid5(命名空间, 稳定源串) 生成，重复执行命中已有主键即跳过。
 备份：local apply 前由 CLI 用 SQLite 在线备份 API 落一个副本（WAL 安全）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,7 +33,9 @@ _NS = uuid.NAMESPACE_URL
 
 
 def _segment_event_id(project_id: str, chapter_id: str, segment_id: str) -> str:
-    return str(uuid.uuid5(_NS, f"narraforge:usage-backfill:seg:{project_id}:{chapter_id}:{segment_id}"))
+    return str(
+        uuid.uuid5(_NS, f"narraforge:usage-backfill:seg:{project_id}:{chapter_id}:{segment_id}")
+    )
 
 
 def _history_event_id(tts_result_id: str) -> str:
@@ -43,9 +46,7 @@ def collect_local(db: Session) -> list[UsageEvent]:
     """扫描本地库，构造待写入的事件列表（不判重、不落库）。"""
     events: list[UsageEvent] = []
 
-    project_by_chapter = {
-        c.id: c.project_id for c in db.query(SegmentedProjectChapter).all()
-    }
+    project_by_chapter = {c.id: c.project_id for c in db.query(SegmentedProjectChapter).all()}
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     for seg in db.query(SegmentedProjectSegment).all():
         current = (seg.audio or {}).get("current") or {}
@@ -54,28 +55,32 @@ def collect_local(db: Session) -> list[UsageEvent]:
         if current.get("origin") == "recorded":
             continue
         project_id = project_by_chapter.get(seg.chapter_id)
-        events.append(UsageEvent(
-            id=_segment_event_id(project_id or "", seg.chapter_id, seg.id),
-            project_id=project_id,
-            kind="tts",
-            chars=len(seg.text or ""),
-            input_tokens=0,
-            output_tokens=0,
-            estimated=False,
-            created_at=now,
-        ))
+        events.append(
+            UsageEvent(
+                id=_segment_event_id(project_id or "", seg.chapter_id, seg.id),
+                project_id=project_id,
+                kind="tts",
+                chars=len(seg.text or ""),
+                input_tokens=0,
+                output_tokens=0,
+                estimated=False,
+                created_at=now,
+            )
+        )
 
     for row in db.query(TTSResultRecord).all():
-        events.append(UsageEvent(
-            id=_history_event_id(row.id),
-            project_id=None,
-            kind="tts",
-            chars=len(row.text or ""),
-            input_tokens=0,
-            output_tokens=0,
-            estimated=False,
-            created_at=row.created_at or now,
-        ))
+        events.append(
+            UsageEvent(
+                id=_history_event_id(row.id),
+                project_id=None,
+                kind="tts",
+                chars=len(row.text or ""),
+                input_tokens=0,
+                output_tokens=0,
+                estimated=False,
+                created_at=row.created_at or now,
+            )
+        )
 
     return events
 
@@ -87,11 +92,16 @@ def apply_local(db: Session) -> dict:
     调用方负责 commit。
     """
     events = collect_local(db)
-    existing = {
-        row[0] for row in db.query(UsageEvent.id).filter(
-            UsageEvent.id.in_([e.id for e in events])
-        ).all()
-    } if events else set()
+    existing = (
+        {
+            row[0]
+            for row in db.query(UsageEvent.id)
+            .filter(UsageEvent.id.in_([e.id for e in events]))
+            .all()
+        }
+        if events
+        else set()
+    )
 
     stats = {"segment_events": 0, "history_events": 0, "skipped_existing": 0}
     for e in events:

@@ -14,8 +14,8 @@ import json
 import logging
 import re
 import ssl
-import urllib.request
 import urllib.error
+import urllib.request
 from typing import Callable, Type, TypeVar
 
 from pydantic import BaseModel, ValidationError
@@ -42,6 +42,7 @@ class LLMValidationError(RuntimeError):
 # ---------------------------------------------------------------------------
 # 用量计量（Phase 3）：usage_sink 回调 + token 提取/字符估算
 # ---------------------------------------------------------------------------
+
 
 def _extract_usage(result: dict, messages: list[dict], content: str) -> dict:
     """从一次 LLM 调用提取 {input_tokens, output_tokens, estimated}。
@@ -93,11 +94,11 @@ def extract_json_array(raw: str | None) -> str | None:
         return None
     text = raw.strip()
 
-    md_match = re.search(r'```(?:json)?\s*(\[.*?\])\s*```', text, re.DOTALL)
+    md_match = re.search(r"```(?:json)?\s*(\[.*?\])\s*```", text, re.DOTALL)
     if md_match:
         return md_match.group(1)
 
-    arr_match = re.search(r'\[.*\]', text, re.DOTALL)
+    arr_match = re.search(r"\[.*\]", text, re.DOTALL)
     if arr_match:
         candidate = arr_match.group()
         try:
@@ -126,12 +127,12 @@ def extract_json_object(raw: str | None) -> str | None:
         return None
     text = raw.strip()
 
-    md_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+    md_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if md_match:
         return md_match.group(1)
 
     # 贪婪匹配最外层 {...}
-    obj_match = re.search(r'\{.*\}', text, re.DOTALL)
+    obj_match = re.search(r"\{.*\}", text, re.DOTALL)
     if obj_match:
         candidate = obj_match.group()
         try:
@@ -160,6 +161,7 @@ def get_llm_config(db=None) -> tuple[str, str, str]:
     if db is not None:
         try:
             from app.core.model_config_service import get_effective_config
+
             config = get_effective_config(db, "llm")
             api_key = config.get("api_key") or api_key
             base_url = (config.get("base_url") or base_url).rstrip("/")
@@ -168,9 +170,7 @@ def get_llm_config(db=None) -> tuple[str, str, str]:
             pass  # 降级到 settings
 
     if not api_key:
-        raise ValueError(
-            "LLM API Key 未配置。请在界面或 .env 中设置 LLM_API_KEY 或 MIMO_API_KEY"
-        )
+        raise ValueError("LLM API Key 未配置。请在界面或 .env 中设置 LLM_API_KEY 或 MIMO_API_KEY")
     return api_key, base_url, model
 
 
@@ -196,12 +196,15 @@ def get_agent_llm_config(db=None) -> tuple[str, str, str]:
     优先级：DB config > agent_llm_* env > llm_* env > mimo_* env
     """
     api_key = settings.agent_llm_api_key or settings.llm_api_key or settings.mimo_api_key
-    base_url = (settings.agent_llm_base_url or settings.llm_base_url or settings.mimo_base_url).rstrip("/")
+    base_url = (
+        settings.agent_llm_base_url or settings.llm_base_url or settings.mimo_base_url
+    ).rstrip("/")
     model = settings.agent_llm_model or settings.llm_model
 
     if db is not None:
         try:
             from app.core.model_config_service import get_effective_config
+
             config = get_effective_config(db, "agent_llm")
             api_key = config.get("api_key") or api_key
             base_url = (config.get("base_url") or base_url).rstrip("/")
@@ -261,7 +264,7 @@ def call_agent_llm(
         reasoning = msg.get("reasoning_content") or ""
         usage = result.get("usage", {})
 
-        logger.info(f'agent llm messages : {msg}')
+        logger.info(f"agent llm messages : {msg}")
         if not content.strip():
             logger.warning(
                 f"Agent LLM 返回空 content。usage={usage}, "
@@ -426,7 +429,7 @@ def call_llm(
         reasoning = msg.get("reasoning_content") or ""
         usage = result.get("usage", {})
 
-        logger.info(f'llm messages : {msg}')
+        logger.info(f"llm messages : {msg}")
         if not content.strip():
             logger.warning(
                 f"LLM 返回空 content。usage={usage}, "

@@ -22,7 +22,7 @@ def voice_to_dict(v: VoiceProfile) -> dict:
 
     has_preview = bool(preview.get("preview_audio_path"))
     model = voice.get("model", "")
-    model_params = (voice_params.get(model, {}) or {})
+    model_params = voice_params.get(model, {}) or {}
     has_source = bool(model_params.get("source_audio_path"))
 
     return {

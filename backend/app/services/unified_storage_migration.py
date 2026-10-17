@@ -16,6 +16,7 @@ Rewrites DB path strings accordingly:
 Two-phase (plan/apply), idempotent; unreferenced orphan files are moved
 without DB changes; missing sources are skipped.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,8 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.tts_result import TTSResultRecord as TTSResult
 from app.models.transcription_record import TranscriptionRecord
+from app.models.tts_result import TTSResultRecord as TTSResult
 from app.models.voice_profile import VoiceProfile
 
 log = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class StoragePlan:
-    file_moves: dict[Path, Path] = field(default_factory=dict)   # abs -> abs
+    file_moves: dict[Path, Path] = field(default_factory=dict)  # abs -> abs
     notes: list[str] = field(default_factory=list)
 
 

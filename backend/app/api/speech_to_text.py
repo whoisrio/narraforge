@@ -1,12 +1,12 @@
 import os
-import uuid
 import shutil
 import subprocess
 import tempfile
+import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -14,8 +14,8 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.system_config_service import is_frontend_storage
 from app.models.transcription_record import TranscriptionRecord
-from app.services.voice_to_srt_service import VoiceToSrt
 from app.services.funasr_service import FunASRService
+from app.services.voice_to_srt_service import VoiceToSrt
 
 router = APIRouter()
 
@@ -124,6 +124,7 @@ async def transcribe(
             funasr_device = settings.funasr_device or None
             try:
                 from app.core.model_config_service import get_effective_config
+
                 funasr_config = get_effective_config(db, "funasr")
                 funasr_device = funasr_config.get("device") or funasr_device
             except Exception:
@@ -177,7 +178,9 @@ async def transcribe(
         "device": result.device,
         "compute_type": result.compute_type,
         "engine": engine,
-        "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
+        "download_url": f"/api/speech-to-text/download/{file_id}"
+        if not is_frontend_storage(db)
+        else None,
     }
 
 
@@ -235,19 +238,21 @@ def _merge_audio_files(input_paths: List[str], output_path: str) -> None:
     不要求格式统一，ffmpeg 会自动重编码为一致的输出格式。
     输出格式根据扩展名自动推断，这里统一输出为 .mp3。
     """
-    cmd = ['ffmpeg', '-y']
+    cmd = ["ffmpeg", "-y"]
     for p in input_paths:
-        cmd.extend(['-i', p])
+        cmd.extend(["-i", p])
 
     # 构建 concat filter： [0:a][1:a][2:a]concat=n=3:v=0:a=1[out]
-    filter_parts = ''.join(f'[{i}:a]' for i in range(len(input_paths)))
-    filter_str = f'{filter_parts}concat=n={len(input_paths)}:v=0:a=1[out]'
-    cmd.extend(['-filter_complex', filter_str, '-map', '[out]', '-ac', '1', output_path])
+    filter_parts = "".join(f"[{i}:a]" for i in range(len(input_paths)))
+    filter_str = f"{filter_parts}concat=n={len(input_paths)}:v=0:a=1[out]"
+    cmd.extend(["-filter_complex", filter_str, "-map", "[out]", "-ac", "1", output_path])
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
     except FileNotFoundError:
-        raise RuntimeError("ffmpeg not found. Please install ffmpeg from https://ffmpeg.org/download.html")
+        raise RuntimeError(
+            "ffmpeg not found. Please install ffmpeg from https://ffmpeg.org/download.html"
+        )
     if result.returncode != 0:
         raise RuntimeError(f"ffmpeg merge failed: {(result.stderr or '').strip()}")
 
@@ -301,6 +306,7 @@ async def multi_transcribe(
             funasr_device = settings.funasr_device or None
             try:
                 from app.core.model_config_service import get_effective_config
+
                 funasr_config = get_effective_config(db, "funasr")
                 funasr_device = funasr_config.get("device") or funasr_device
             except Exception:
@@ -348,7 +354,9 @@ async def multi_transcribe(
             "device": result.device,
             "compute_type": result.compute_type,
             "engine": engine,
-            "download_url": f"/api/speech-to-text/download/{file_id}" if not is_frontend_storage(db) else None,
+            "download_url": f"/api/speech-to-text/download/{file_id}"
+            if not is_frontend_storage(db)
+            else None,
         }
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)

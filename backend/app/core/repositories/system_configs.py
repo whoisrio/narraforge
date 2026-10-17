@@ -4,6 +4,7 @@ SystemConfigRepository 只有两个原语：get / set（upsert）。
 所有高层语义（storage_mode、animation_root_folder、model_config.* 等）
 都由调用方在这两个原语之上构建。
 """
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
@@ -51,9 +52,7 @@ class SupabaseSystemConfigRepository:
         self._client = client
 
     def get(self, key: str, default: str = "") -> str:
-        row = self._client.select_one(
-            TABLE, params={"key": f"eq.{key}", "select": "value"}
-        )
+        row = self._client.select_one(TABLE, params={"key": f"eq.{key}", "select": "value"})
         return row["value"] if row else default
 
     def set(self, key: str, value: str) -> None:

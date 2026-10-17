@@ -5,6 +5,7 @@ local 模式不注册认证中间件，request.state 没有 user/legacy_admin �
 repo 挂载路由的匿名拦截由 SupabaseAuthMiddleware 的 allowlist 统一完成
 （匿名在仓储层另有 user_id IS NULL 兜底作用域，见 repositories/deps.py）。
 """
+
 from __future__ import annotations
 
 from fastapi import HTTPException, Request

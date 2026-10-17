@@ -1,4 +1,5 @@
 """FastAPI routes for source documents (P2 v2)."""
+
 from __future__ import annotations
 
 import logging
@@ -17,11 +18,14 @@ router = APIRouter()
 
 # ----- 源 CRUD -----
 
+
 @router.get(
     "/projects/{project_id}/sources",
     response_model=list[SourceDocumentOut],
 )
-async def list_sources(project_id: str, repo: SourceDocumentRepository = Depends(get_source_document_repo)):
+async def list_sources(
+    project_id: str, repo: SourceDocumentRepository = Depends(get_source_document_repo)
+):
     """列出项目所有源."""
     return repo.list(project_id)
 

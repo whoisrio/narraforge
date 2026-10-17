@@ -1,8 +1,9 @@
 """字幕 LLM 服务 API — 校准 + 双语翻译"""
 
-from fastapi import APIRouter, HTTPException, Depends, Request
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import Any, Optional
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
@@ -10,21 +11,22 @@ try:
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
 
-from app.services.llm_subtitle_service import (
-    correct_subtitles,
-    translate_subtitles,
-    build_bilingual_srt,
-)
+from app.api._usage_helpers import build_llm_usage_sink
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.repositories.deps import get_usage_repo
 from app.core.repositories.usage import UsageRepository
-from app.api._usage_helpers import build_llm_usage_sink
+from app.services.llm_subtitle_service import (
+    build_bilingual_srt,
+    correct_subtitles,
+    translate_subtitles,
+)
 
 router = APIRouter()
 
 
 # ---- Request / Response Models ----
+
 
 class CorrectionRequest(BaseModel):
     srt_content: str = Field(..., description="SRT 字幕内容")
@@ -67,6 +69,7 @@ class TranslationResponse(BaseModel):
 
 
 # ---- Endpoints ----
+
 
 @router.post("/correct", response_model=CorrectionResponse)
 async def subtitle_correct(
@@ -160,6 +163,7 @@ async def get_llm_config(db: Session = Depends(get_db)):
     api_key, base_url, model = "", "", settings.llm_model
     try:
         from app.services.llm_subtitle_service import _get_llm_config
+
         api_key, base_url, model = _get_llm_config(db=db)
     except Exception:
         pass

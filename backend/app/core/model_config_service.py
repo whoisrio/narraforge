@@ -12,7 +12,7 @@ import logging
 from typing import Any
 
 from app.core.config import settings
-from app.core.crypto_service import encrypt_value, decrypt_value, is_encrypted
+from app.core.crypto_service import decrypt_value, encrypt_value
 from app.core.system_config_service import get_config, set_config
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解，缺失时退化为 Any。
@@ -149,6 +149,7 @@ def _save_provider_config(db: Session, provider: str, config: dict) -> None:
 # ---------------------------------------------------------------------------
 # 公开 API
 # ---------------------------------------------------------------------------
+
 
 def get_all_configs(db: Session) -> dict:
     """

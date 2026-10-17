@@ -7,6 +7,7 @@ SQLAlchemy + SQLite 零回退。每个域一个模块：Protocol + Local + Supab
 依赖注入（FastAPI）：见 deps.py —— 按 settings.deploy_target 返回 Local/Supabase
 实现；Local 实现内部仍用 get_db 的 Session。
 """
+
 from app.core.repositories.deps import (
     get_role_repo,
     get_source_document_repo,

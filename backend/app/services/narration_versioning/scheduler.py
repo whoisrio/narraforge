@@ -4,6 +4,7 @@ Uses BackgroundScheduler so it runs in-process without external services.
 The job is idempotent and short-lived (seconds), so pause/resume across
 restarts is unnecessary.
 """
+
 from __future__ import annotations
 
 import logging
@@ -55,6 +56,7 @@ def _safe_snapshot() -> None:
     try:
         from app.core.database import SessionLocal
         from app.core.system_config_service import get_narration_git_remote
+
         session = SessionLocal()
         try:
             remote = get_narration_git_remote(session)

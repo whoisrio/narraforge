@@ -5,13 +5,14 @@ Local 薄封装 role_service（含删除前 segments/project 引用清理的 SQL
 Supabase 走 PostgREST —— 注意：segments 引用清理依赖 segmented 三大表，
 3B 迁移后需要在 Supabase 实现里补齐（当前 workers 模式下删除角色只删行）。
 """
+
 from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+from app.core.repositories.user_scope import UserScope
 from app.core.supabase_client import SupabaseClient, SupabaseError
 from app.core.time_utils import utcnow
-from app.core.repositories.user_scope import UserScope
 from app.schemas.role import RoleIn, RoleOut, RoleUpdate
 
 # workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化。
@@ -101,7 +102,10 @@ class SupabaseRoleRepository(UserScope):
         else:
             params = {"project_id": "is.null"}
         params["order"] = "updated_at.desc"
-        return [_row_to_out(row) for row in self._client.select(TABLE, params=self._scope_params(params))]
+        return [
+            _row_to_out(row)
+            for row in self._client.select(TABLE, params=self._scope_params(params))
+        ]
 
     def create(self, payload: RoleIn) -> RoleOut:
         if self._client.select_one(
@@ -110,16 +114,18 @@ class SupabaseRoleRepository(UserScope):
             raise ValueError("role_already_exists")
         # "__scratchpad__" 是前端占位符，非真实项目行，归一化为 NULL（对齐 local）
         project_id = payload.project_id if payload.project_id != "__scratchpad__" else None
-        row = self._stamp_row({
-            "id": payload.id,
-            "name": payload.name,
-            "avatar": payload.avatar,
-            "description": payload.description,
-            "role_kind": payload.role_kind,
-            "project_id": project_id,
-            "voice": payload.voice,
-            "favorite_styles": payload.favorite_styles,
-        })
+        row = self._stamp_row(
+            {
+                "id": payload.id,
+                "name": payload.name,
+                "avatar": payload.avatar,
+                "description": payload.description,
+                "role_kind": payload.role_kind,
+                "project_id": project_id,
+                "voice": payload.voice,
+                "favorite_styles": payload.favorite_styles,
+            }
+        )
         try:
             inserted = self._client.insert(TABLE, [row])
         except SupabaseError as exc:
@@ -131,7 +137,9 @@ class SupabaseRoleRepository(UserScope):
     def update(self, role_id: str, payload: RoleUpdate) -> RoleOut | None:
         values = payload.model_dump(exclude_unset=True)
         values["updated_at"] = utcnow().isoformat()  # 对齐 local 的 onupdate 语义
-        rows = self._client.update(TABLE, values, params=self._scope_params({"id": f"eq.{role_id}"}))
+        rows = self._client.update(
+            TABLE, values, params=self._scope_params({"id": f"eq.{role_id}"})
+        )
         if not rows:
             return None
         return _row_to_out(rows[0])
@@ -154,9 +162,7 @@ class SupabaseRoleRepository(UserScope):
         """
         from app.core.repositories.segmented_projects import PROJECTS, SEGMENTS
 
-        self._client.update(
-            SEGMENTS, {"role_id": None}, params={"role_id": f"eq.{role_id}"}
-        )
+        self._client.update(SEGMENTS, {"role_id": None}, params={"role_id": f"eq.{role_id}"})
         self._client.update(
             PROJECTS,
             {"default_narrator_role_id": None},
