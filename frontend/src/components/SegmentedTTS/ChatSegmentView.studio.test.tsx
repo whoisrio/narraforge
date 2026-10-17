@@ -199,4 +199,30 @@ describe('ChatSegmentView studio script flow', () => {
     // Narration segments get null role — voice comes from global Engine panel
     expect(onUpdateKind).toHaveBeenCalledWith('s1', 'narration');
   });
+
+  it('未核对角标点击 → 穿透 onVerifySegment 触发单段核对', () => {
+    const onVerifySegment = vi.fn();
+    const onOpenVerifyDetail = vi.fn();
+
+    render(
+      <ChatSegmentView
+        segments={[makeSegment('s1', 'narration', '旁白内容')]}
+        roles={extraRoles}
+        selectedId="s1"
+        playingId={undefined}
+        hasNarratorVoice
+        verifyingIds={new Set()}
+        onOpenVerifyDetail={onOpenVerifyDetail}
+        onVerifySegment={onVerifySegment}
+        onSelect={vi.fn()}
+        onAppend={vi.fn()}
+        onRegenerate={vi.fn()}
+        onPlay={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /未核对/ }));
+    expect(onVerifySegment).toHaveBeenCalledWith('s1');
+    expect(onOpenVerifyDetail).not.toHaveBeenCalled();
+  });
 });

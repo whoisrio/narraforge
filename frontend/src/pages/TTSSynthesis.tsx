@@ -48,15 +48,18 @@ import {
   HEARTBEAT_STALE_MS,
   VerifyEnvironmentError,
   VerifyRunInProgressError,
+  buildVerifyReport,
   isMismatchVisible,
   resolveVerificationView,
   selectVerifySegments,
   verificationAudioKey,
   verifyBatch,
   verifyOne,
+  type VerifyReportData,
 } from '../services/ttsVerify';
 import { VerifyMenu } from '../components/SegmentedTTS/VerifyMenu';
 import { VerificationDetailModal } from '../components/SegmentedTTS/VerificationDetailModal';
+import { VerifyReportModal } from '../components/SegmentedTTS/VerifyReportModal';
 import { PronunciationMapPanel } from '../components/SegmentedTTS/PronunciationMapPanel';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { useToast } from '../components/ui/useToast';
@@ -779,6 +782,8 @@ export function TTSSynthesis({
   const [restoredVerifyRun, setRestoredVerifyRun] = useState<VerifyRunRecord | null>(null);
   const [mismatchOnly, setMismatchOnly] = useState(false);
   const [verifyDetailSegmentId, setVerifyDetailSegmentId] = useState<string | null>(null);
+  /** 批量核对完成后的报告（mismatch/error 汇总）；null = 不显示 */
+  const [verifyReport, setVerifyReport] = useState<VerifyReportData | null>(null);
   const verifyAbortRef = useRef<AbortController | null>(null);
 
   const findSegmentLive = useCallback((segmentId: string): { segment: Segment; chapterId: string } | undefined => {
@@ -917,6 +922,7 @@ export function TTSSynthesis({
     const controller = new AbortController();
     verifyAbortRef.current = controller;
     setVerifyRun({ done: 0, total: targets.length });
+    const runResults = new Map<string, SegmentVerification>(); // 报告数据源：本次 run 写回的结果
     try {
       const result = await verifyBatch(targets, {
         projectId: projectRef.current.id,
@@ -934,12 +940,23 @@ export function TTSSynthesis({
         onSegmentEnd: (id, verification) => {
           setVerifyingIds(prev => { const next = new Set(prev); next.delete(id); return next; });
           applyVerification(id, verification);
+          if (verification) runResults.set(id, verification);
         },
         onProgress: (done, total) => setVerifyRun({ done, total }),
       });
       showToast(result.stopped
         ? t('ttsVerify.toast.batchStopped')
         : t('ttsVerify.toast.batchDone', { count: result.completed - result.skipped }));
+      // 正常结束且有需人工处理的段 → 弹核对报告（取消/环境错误不弹）
+      if (!result.stopped) {
+        const report = buildVerifyReport({
+          scope: scope.kind,
+          total: targets.length,
+          results: runResults,
+          chapters: projectRef.current.chapters,
+        });
+        if (report.items.length > 0) setVerifyReport(report);
+      }
     } catch (err) {
       if (err instanceof VerifyRunInProgressError) showToast(t('ttsVerify.toast.inProgress'), 'error');
       else if (err instanceof VerifyEnvironmentError) showToast(t('ttsVerify.toast.unavailable'), 'error');
@@ -3031,6 +3048,22 @@ export function TTSSynthesis({
                 onReverify={(id) => { setVerifyDetailSegmentId(null); handleVerifySegment(id); }}
                 onRegenerate={(id) => { setVerifyDetailSegmentId(null); handleRegenerateClick(id); }}
               />
+              {verifyReport && (
+                <VerifyReportModal
+                  data={verifyReport}
+                  onClose={() => setVerifyReport(null)}
+                  onOpenDetail={(id) => { setVerifyReport(null); setVerifyDetailSegmentId(id); }}
+                  onIgnore={(id) => {
+                    handleIgnoreVerification(id);
+                    setVerifyReport(prev => {
+                      if (!prev) return null;
+                      const items = prev.items.filter(i => i.segmentId !== id);
+                      if (items.length === 0) return null; // 全部处理完 → 收起报告
+                      return { ...prev, mismatchCount: Math.max(0, prev.mismatchCount - 1), items };
+                    });
+                  }}
+                />
+              )}
               {recordSegmentId && (() => {
                 const recordSeg = activeChapter.segments.find(s => s.id === recordSegmentId);
                 if (!recordSeg) return null;

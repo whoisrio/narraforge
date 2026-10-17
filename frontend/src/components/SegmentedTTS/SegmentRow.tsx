@@ -482,7 +482,7 @@ export function SegmentRow({
           </span>
         )}
         {onOpenVerifyDetail && (
-          <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} compact />
+          <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} onVerify={onVerifySegment} compact />
         )}
         {timeStart != null && (
           <span className={styles.compactTime}>
@@ -642,7 +642,7 @@ export function SegmentRow({
               </button>
             )}
             {(onOpenVerifyDetail || onVerifySegment) && (
-              <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} />
+              <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} onVerify={onVerifySegment} />
             )}
           </div>
           <div className={styles.actions}>

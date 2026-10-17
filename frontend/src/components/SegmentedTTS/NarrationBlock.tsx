@@ -12,6 +12,8 @@ interface NarrationBlockProps {
   /** 该段正在语音核对（in-flight 内存态） */
   verifying?: boolean;
   onOpenVerifyDetail?: (id: string) => void;
+  /** 未核对/已过期角标点击直接发起单段核对（双职责角标） */
+  onVerifySegment?: (id: string) => void;
   onSelect: (id: string) => void;
   onUpdateKind?: (id: string, kind: SegmentKind) => void;
   onTextSelection: (segmentId: string, start: number, end: number, text: string) => void;
@@ -27,7 +29,7 @@ function renderMarkedText(segment: Segment, t: (key: string) => string): ReactNo
   return segment.text || t('narrationBlock.emptyNarration');
 }
 
-export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, verifying, onOpenVerifyDetail, onSelect, onUpdateKind, onTextSelection }: NarrationBlockProps) {
+export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, verifying, onOpenVerifyDetail, onVerifySegment, onSelect, onUpdateKind, onTextSelection }: NarrationBlockProps) {
   const { t } = useTranslation();
   return (
     <article
@@ -35,7 +37,7 @@ export function NarrationBlock({ segment, index, isSelected, hasNarratorVoice, v
       onClick={() => onSelect(segment.id)}
     >
       <div className={styles.label}>{t('narrationBlock.narrationLabel')}{String(index).padStart(2, '0')}
-        {onOpenVerifyDetail && <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} />}
+        {onOpenVerifyDetail && <VerificationBadge segment={segment} verifying={verifying} onOpenDetail={onOpenVerifyDetail} onVerify={onVerifySegment} />}
       </div>
       {onUpdateKind && (
         <button
