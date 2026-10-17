@@ -85,22 +85,16 @@ def run_coverage_report():
 
 
 def run_linting():
-    """运行代码检查"""
+    """运行代码检查 (ruff: 风格检查 + 导入排序 + 格式检查)"""
     base_dir = Path(__file__).parent.parent
+    app_dir = base_dir / "app"
 
-    # 运行 flake8
-    flake8_cmd = f"flake8 {base_dir / 'app'} --max-line-length=100 --exclude=__pycache__,.venv"
-    if not run_command(flake8_cmd, "代码风格检查 (flake8)"):
+    # ruff check 覆盖 flake8 风格检查(E/F/W) + isort 导入排序(I)
+    if not run_command(f"ruff check {app_dir}", "代码检查 (ruff check)"):
         return False
 
-    # 运行 black 检查（不修改）
-    black_cmd = f"black --check {base_dir / 'app'} --line-length=100"
-    if not run_command(black_cmd, "代码格式化检查 (black)"):
-        return False
-
-    # 运行 isort 检查（不修改）
-    isort_cmd = f"isort --check-only {base_dir / 'app'} --profile=black"
-    if not run_command(isort_cmd, "导入排序检查 (isort)"):
+    # ruff format --check 等价 black --check（只检查、不修改）
+    if not run_command(f"ruff format --check {app_dir}", "代码格式检查 (ruff format --check)"):
         return False
 
     return True
