@@ -1,4 +1,5 @@
 """Business logic for segmented project CRUD and asset mirroring."""
+
 from __future__ import annotations
 
 import copy
@@ -11,8 +12,6 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
-
-from app.schemas.segmented_project import SynthesizeParams
 
 from sqlalchemy.orm import Session
 
@@ -27,23 +26,16 @@ from app.core.audio_encoder import (
     trim_audio_silence_bytes,
 )
 from app.core.config import settings
+from app.core.system_config_service import (
+    PRONUNCIATION_MAP_GLOBAL_KEY,
+    get_config,
+)
+from app.core.time_utils import utcnow
 from app.models.segmented_project import (
     SegmentedProject,
     SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
-from app.services.engine_capabilities import emo_vector_for_emotion, prepare_text_for_engine
-from app.core.system_config_service import (
-    PRONUNCIATION_MAP_GLOBAL_KEY,
-    get_config,
-)
-from app.services.text_split_service import DEFAULT_RULE_DELIMITERS
-from app.services.text_transform_service import (
-    apply_text_transforms,
-    merge_maps,
-    resolve_lowercase_latin,
-)
-from app.core.time_utils import utcnow
 from app.schemas.segmented_project import (
     ChapterIn,
     ChapterPatchIn,
@@ -54,6 +46,14 @@ from app.schemas.segmented_project import (
     SegmentIn,
     SegmentPatchIn,
     StalePayloadError,
+    SynthesizeParams,
+)
+from app.services.engine_capabilities import emo_vector_for_emotion, prepare_text_for_engine
+from app.services.text_split_service import DEFAULT_RULE_DELIMITERS
+from app.services.text_transform_service import (
+    apply_text_transforms,
+    merge_maps,
+    resolve_lowercase_latin,
 )
 
 logger = logging.getLogger(__name__)
@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 
 def _ends_with_sentence_period(text: str) -> bool:
     return re.search(r"[。．\.](?:[”\"』」》）\)]*)\s*$", (text or "").strip()) is not None
+
 
 def _to_iso(value: datetime | None) -> str | None:
     if value is None:
@@ -91,7 +92,7 @@ def _parse_iso(value: str | None) -> datetime | None:
 # （纯函数、无 ORM 依赖，workers 的 Supabase 仓储也用）；此处 re-export
 # 保持 `from app.services.segmented_project_service import _dump_animation_spec`
 # 历史路径不变。
-from app.services.animation_spec_codec import (
+from app.services.animation_spec_codec import (  # noqa: E402
     _dump_animation_spec,
     _parse_animation_spec,
 )
@@ -100,8 +101,10 @@ from app.services.animation_spec_codec import (
 def _duration_from_bytes(audio_bytes: bytes, fmt: str) -> float | None:
     """Compute audio duration from raw bytes using pydub. Returns None on failure."""
     import io
+
     try:
         from pydub import AudioSegment
+
         seg_audio = AudioSegment.from_file(io.BytesIO(audio_bytes), format=fmt)
         return round(seg_audio.duration_seconds, 2)
     except Exception:
@@ -109,6 +112,7 @@ def _duration_from_bytes(audio_bytes: bytes, fmt: str) -> float | None:
 
 
 # ----- serialization -----
+
 
 def project_to_summary(p: SegmentedProject) -> ProjectSummary:
     chapter_count = len(p.chapters)
@@ -200,9 +204,7 @@ def _audio_with_file_exists(audio: dict[str, Any] | None) -> dict[str, Any] | No
         current_out = dict(current)
         rel = current_out.get("path")
         current_out["file_exists"] = bool(
-            isinstance(rel, str)
-            and rel
-            and (assets.settings.segmented_dir / rel).exists()
+            isinstance(rel, str) and rel and (assets.settings.segmented_dir / rel).exists()
         )
         out["current"] = current_out
     return out
@@ -210,7 +212,9 @@ def _audio_with_file_exists(audio: dict[str, Any] | None) -> dict[str, Any] | No
 
 def _segment_to_in(s: SegmentedProjectSegment) -> SegmentIn:
     return SegmentIn(
-        id=s.id, position=s.position, text=s.text,
+        id=s.id,
+        position=s.position,
+        text=s.text,
         emotion=s.emotion,
         role_id=getattr(s, "role_id", None),
         segment_kind=getattr(s, "segment_kind", None) or "narration",
@@ -228,7 +232,9 @@ def _segment_to_in(s: SegmentedProjectSegment) -> SegmentIn:
 
 def _chapter_to_in(ch: SegmentedProjectChapter) -> ChapterIn:
     return ChapterIn(
-        id=ch.id, position=ch.position, name=ch.name,
+        id=ch.id,
+        position=ch.position,
+        name=ch.name,
         voice=getattr(ch, "voice", None) or {},
         split_config=ch.split_config or {},
         original_text=ch.original_text,
@@ -247,7 +253,9 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         voice = getattr(ch, "voice", None) or {}
         segs = [
             SegmentIn(
-                id=s.id, position=s.position, text=s.text,
+                id=s.id,
+                position=s.position,
+                text=s.text,
                 emotion=s.emotion,
                 role_id=getattr(s, "role_id", None),
                 segment_kind=getattr(s, "segment_kind", None) or "narration",
@@ -265,7 +273,9 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
         ]
         chapters.append(
             ChapterIn(
-                id=ch.id, position=ch.position, name=ch.name,
+                id=ch.id,
+                position=ch.position,
+                name=ch.name,
                 voice=voice,
                 split_config=ch.split_config or {},
                 original_text=ch.original_text,
@@ -278,13 +288,16 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
             )
         )
     return ProjectDetail(
-        id=p.id, name=p.name, schema_version=p.schema_version,
-        layout=p.layout, active_chapter_id=p.active_chapter_id,
+        id=p.id,
+        name=p.name,
+        schema_version=p.schema_version,
+        layout=p.layout,
+        active_chapter_id=p.active_chapter_id,
         original_text=p.original_text,
         animation_theme=getattr(p, "animation_theme", None),
         remotion_project_path=getattr(p, "remotion_project_path", None),
         source_document=assets.read_project_document(getattr(p, "source_document_path", None))
-            or getattr(p, "source_document", None),
+        or getattr(p, "source_document", None),
         narration_script=assets.read_project_document(getattr(p, "narration_document_path", None)),
         source_document_path=getattr(p, "source_document_path", None),
         narration_document_path=getattr(p, "narration_document_path", None),
@@ -299,12 +312,9 @@ def project_to_detail(p: SegmentedProject) -> ProjectDetail:
 
 # ----- CRUD -----
 
+
 def list_projects(db: Session) -> list[ProjectSummary]:
-    rows = (
-        db.query(SegmentedProject)
-        .order_by(SegmentedProject.updated_at.desc())
-        .all()
-    )
+    rows = db.query(SegmentedProject).order_by(SegmentedProject.updated_at.desc()).all()
     return [project_to_summary(p) for p in rows]
 
 
@@ -322,22 +332,14 @@ def get_project_row(db: Session, project_id: str) -> SegmentedProject | None:
 def get_chapter_row(
     db: Session, project_id: str, chapter_id: str
 ) -> SegmentedProjectChapter | None:
-    ch = (
-        db.query(SegmentedProjectChapter)
-        .filter_by(id=chapter_id, project_id=project_id)
-        .first()
-    )
+    ch = db.query(SegmentedProjectChapter).filter_by(id=chapter_id, project_id=project_id).first()
     return ch
 
 
 def get_segment_row(
     db: Session, project_id: str, chapter_id: str, segment_id: str
 ) -> SegmentedProjectSegment | None:
-    seg = (
-        db.query(SegmentedProjectSegment)
-        .filter_by(id=segment_id, chapter_id=chapter_id)
-        .first()
-    )
+    seg = db.query(SegmentedProjectSegment).filter_by(id=segment_id, chapter_id=chapter_id).first()
     return seg
 
 
@@ -388,8 +390,14 @@ def _delete_dropped_audio_files(seg: SegmentedProjectSegment, new_audio: dict) -
             old = None
     if not isinstance(old, dict):
         return
-    keep = {p for p in (_audio_path_str(new_audio.get("current")),
-                        _audio_path_str(new_audio.get("previous"))) if p}
+    keep = {
+        p
+        for p in (
+            _audio_path_str(new_audio.get("current")),
+            _audio_path_str(new_audio.get("previous")),
+        )
+        if p
+    }
     for key in ("current", "previous"):
         path_str = _audio_path_str(old.get(key))
         if path_str and path_str not in keep:
@@ -435,14 +443,14 @@ def _relocate_project_assets(p: SegmentedProject, old_name: str, new_name: str) 
             for key in ("current", "previous"):
                 rel = _audio_path_str(updated.get(key))
                 if rel and (rel == old_prefix or rel.startswith(old_prefix + "/")):
-                    updated[key]["path"] = new_prefix + rel[len(old_prefix):]
+                    updated[key]["path"] = new_prefix + rel[len(old_prefix) :]
                     changed = True
             if changed:
                 seg.audio = updated
     for attr in ("source_document_path", "narration_document_path"):
         stored = getattr(p, attr, None)
         if isinstance(stored, str) and stored.startswith(str(old_dir)):
-            setattr(p, attr, str(new_dir) + stored[len(str(old_dir)):])
+            setattr(p, attr, str(new_dir) + stored[len(str(old_dir)) :])
 
 
 def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
@@ -468,14 +476,18 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
     # 项目级长文档（源文档/旁白稿）内容落文件，DB 只存路径；旧 TEXT 列仅作遗留回退
     if project.source_document is not None:
         p.source_document_path = assets.write_project_document(
-            project.id, kind="source",
-            project_name=project.name, text=project.source_document,
+            project.id,
+            kind="source",
+            project_name=project.name,
+            text=project.source_document,
         )
         p.source_document = None
     if project.narration_script is not None:
         p.narration_document_path = assets.write_project_document(
-            project.id, kind="narration",
-            project_name=project.name, text=project.narration_script,
+            project.id,
+            kind="narration",
+            project_name=project.name,
+            text=project.narration_script,
         )
     setattr(p, "animation_theme", project.animation_theme)
     setattr(p, "remotion_project_path", project.remotion_project_path)
@@ -527,7 +539,8 @@ def save_project(db: Session, project: ProjectIn) -> ProjectDetail:
             is_new_segment = seg is None
             if seg is None:
                 seg = SegmentedProjectSegment(
-                    id=s_in.id, chapter_id=ch.id,
+                    id=s_in.id,
+                    chapter_id=ch.id,
                 )
                 db.add(seg)
             seg.position = s_in.position if s_in.position is not None else seg_idx
@@ -587,17 +600,20 @@ def _mirror_to_filesystem(p: SegmentedProject, project: ProjectIn) -> None:
     assets.write_original_text(p.id, p.original_text or "", project_name=p.name)
     for ch_in, ch in zip(project.chapters, p.chapters):
         assets.write_chapter_original_text(
-            p.id, ch.id,
+            p.id,
+            ch.id,
             project_name=p.name,
             text=ch.original_text or "",
         )
         assets.ensure_chapter_layout(
-            p.id, ch.id,
+            p.id,
+            ch.id,
             project_name=p.name,
         )
         for s_in in ch_in.segments:
             assets.write_segment_text(
-                p.id, ch.id,
+                p.id,
+                ch.id,
                 project_name=p.name,
                 segment_id=s_in.id,
                 text=s_in.text or "",
@@ -611,6 +627,7 @@ def delete_project(db: Session, project_id: str) -> bool:
         return False
     # 显式清理源 (FK CASCADE 在 SQLite 默认未启用, 不能依赖)
     from app.models.source_document import SourceDocument
+
     db.query(SourceDocument).filter_by(project_id=project_id).delete(synchronize_session=False)
     db.delete(p)
     db.commit()
@@ -788,7 +805,8 @@ def update_segment_after_synth(
     seg.chapter.project.updated_at = utcnow()
     db.flush()
     assets.write_segment_text(
-        seg.project_id, seg.chapter_id,
+        seg.project_id,
+        seg.chapter_id,
         chapter_title=seg.chapter.name or "",
         project_name=seg.chapter.project.name,
         segment_id=seg.id,
@@ -910,7 +928,8 @@ def create_segment(
     db.flush()
 
     new_seg = SegmentedProjectSegment(
-        id=str(uuid.uuid4()), chapter_id=ch.id,
+        id=str(uuid.uuid4()),
+        chapter_id=ch.id,
         text=text or "",
         segment_kind="narration",
         voice={"source": "chapter"},
@@ -968,7 +987,8 @@ def reconcile_chapter_structure(
         is_existing = seg is not None
         if seg is None:
             seg = SegmentedProjectSegment(
-                id=s_in.id or str(uuid.uuid4()), chapter_id=ch.id,
+                id=s_in.id or str(uuid.uuid4()),
+                chapter_id=ch.id,
                 segment_kind="narration",
                 voice={"source": "chapter"},
             )
@@ -1018,10 +1038,14 @@ def create_chapter(
     position = max((c.position or 0) for c in p.chapters) + 1 if p.chapters else 0
     now = utcnow()
     ch = SegmentedProjectChapter(
-        id=str(uuid.uuid4()), project_id=p.id, position=position, name=name,
+        id=str(uuid.uuid4()),
+        project_id=p.id,
+        position=position,
+        name=name,
         voice={},
         split_config={"delimiters": list(DEFAULT_RULE_DELIMITERS), "mode": "rule"},
-        created_at=now, updated_at=now,
+        created_at=now,
+        updated_at=now,
     )
     db.add(ch)
     p.updated_at = now
@@ -1135,8 +1159,7 @@ def patch_project(
         return None
     fields = patch.model_fields_set
     rename_from = (
-        p.name if "name" in fields and patch.name and p.name and patch.name != p.name
-        else None
+        p.name if "name" in fields and patch.name and p.name and patch.name != p.name else None
     )
     if "name" in fields:
         p.name = patch.name or ""
@@ -1163,14 +1186,18 @@ def patch_project(
     db.refresh(p)
     # manifest 镜像嵌入 name/configs/文档内容等，字段更新后重写保持新鲜
     assets.write_manifest(
-        p.id, project_to_detail(p).model_dump(mode="json"), project_name=p.name,
+        p.id,
+        project_to_detail(p).model_dump(mode="json"),
+        project_name=p.name,
     )
     db.commit()
     return project_to_detail(p)
 
 
 def put_source_document(
-    db: Session, project_id: str, text: str,
+    db: Session,
+    project_id: str,
+    text: str,
 ) -> tuple[str | None, str] | None:
     """PUT source-document：写源文档文件、更新 ``source_document_path``，
     并清空遗留 ``source_document`` 文本列。返回 (文件绝对路径, 项目最新
@@ -1180,7 +1207,9 @@ def put_source_document(
 
 
 def put_narration_script(
-    db: Session, project_id: str, text: str,
+    db: Session,
+    project_id: str,
+    text: str,
 ) -> tuple[str | None, str] | None:
     """PUT narration-script：写完整旁白稿文件、更新 ``narration_document_path``。
 
@@ -1192,13 +1221,20 @@ def put_narration_script(
 
 
 def _put_project_document(
-    db: Session, project_id: str, *, kind: str, text: str,
+    db: Session,
+    project_id: str,
+    *,
+    kind: str,
+    text: str,
 ) -> tuple[str | None, str] | None:
     p = get_project_row(db, project_id)
     if p is None:
         return None
     path = assets.write_project_document(
-        project_id, kind=kind, project_name=p.name, text=text,
+        project_id,
+        kind=kind,
+        project_name=p.name,
+        text=text,
     )
     if kind == "source":
         p.source_document_path = path
@@ -1211,7 +1247,9 @@ def _put_project_document(
     db.refresh(p)
     # manifest 镜像嵌入文档内容（project_to_detail 读文件），写入后重写保持新鲜
     assets.write_manifest(
-        p.id, project_to_detail(p).model_dump(mode="json"), project_name=p.name,
+        p.id,
+        project_to_detail(p).model_dump(mode="json"),
+        project_name=p.name,
     )
     db.commit()
     return path, _to_iso(p.updated_at)
@@ -1260,17 +1298,25 @@ def synthesize_with_engine(
     engine = p.engine
     logger.info(
         "[synthesize_with_engine] engine=%s mimo_mode=%s mimo_clone=%s voxcpm_mode=%s voice_id=%s",
-        engine, p.mimo_mode, p.mimo_clone_voice_id, p.voxcpm_mode, p.voice_id)
+        engine,
+        p.mimo_mode,
+        p.mimo_clone_voice_id,
+        p.voxcpm_mode,
+        p.voice_id,
+    )
     if engine == "edge_tts":
         from app.api.tts import synthesize_speech_internal
+
         return synthesize_speech_internal(
-            text=text, voice_id="",
+            text=text,
+            voice_id="",
             edge_voice=p.edge_voice,
             edge_rate=p.edge_rate,
             edge_volume=p.edge_volume,
         )
     if engine == "cosyvoice":
         from app.api.tts import synthesize_speech_internal
+
         return synthesize_speech_internal(
             text=text,
             voice_id=p.voice_id,
@@ -1285,6 +1331,7 @@ def synthesize_with_engine(
         )
     if engine == "mimo_tts":
         from app.api.mimo_tts import synthesize_mimo_internal
+
         return synthesize_mimo_internal(
             text=text,
             mimo_mode=p.mimo_mode,
@@ -1297,6 +1344,7 @@ def synthesize_with_engine(
         )
     if engine == "voxcpm":
         from app.api.voxcpm import synthesize_voxcpm_internal
+
         return synthesize_voxcpm_internal(
             text=text,
             mode=p.voxcpm_mode,
@@ -1310,6 +1358,7 @@ def synthesize_with_engine(
         )
     if engine == "indextts":
         from app.api.indextts import synthesize_indextts_internal
+
         return synthesize_indextts_internal(
             text=text,
             voice_id=p.voice_id,
@@ -1352,11 +1401,11 @@ def synthesize_segment(
     existing_audio_check = seg.audio or {}
     current_check = (
         (existing_audio_check.get("current") or {})
-        if isinstance(existing_audio_check, dict) else {}
+        if isinstance(existing_audio_check, dict)
+        else {}
     )
     if not force and current_check.get("origin") == "recorded":
-        logger.info(
-            "[synthesize_segment] segment %s has recorded audio; skipping", seg.id)
+        logger.info("[synthesize_segment] segment %s has recorded audio; skipping", seg.id)
         return seg
 
     # Get role voice parameters if role_id is set
@@ -1364,13 +1413,21 @@ def synthesize_segment(
     role_params: dict[str, Any] | None = None
     if role_id:
         from app.models.role import Role
+
         role = db.query(Role).filter_by(id=role_id).first()
         if role and role.voice:
             role_params = role.voice.get("params", {}) if isinstance(role.voice, dict) else {}
 
-    effective = _merge_params(_flatten_voice_for_synthesis(chapter.voice or {}), role_params, request_params)
-    logger.info("[synthesize_segment] chapter.voice=%s role_params=%s request_params=%s merged=%s",
-                 chapter.voice, role_params, request_params, effective)
+    effective = _merge_params(
+        _flatten_voice_for_synthesis(chapter.voice or {}), role_params, request_params
+    )
+    logger.info(
+        "[synthesize_segment] chapter.voice=%s role_params=%s request_params=%s merged=%s",
+        chapter.voice,
+        role_params,
+        request_params,
+        effective,
+    )
 
     # Preserve role_id and segment_kind for reproducibility
     if role_id is not None:
@@ -1395,8 +1452,12 @@ def synthesize_segment(
     # 项目级全局开关（项目设置 configs.underscore_to_space / configs.skip_parenthesized）：
     # 与请求/章节参数任一开启即生效；只影响合成文本，不影响显示/字幕
     project_configs = chapter.project.configs if isinstance(chapter.project.configs, dict) else {}
-    underscore_to_space = bool(sp.underscore_to_space) or bool(project_configs.get("underscore_to_space"))
-    skip_parenthesized = bool(sp.skip_parenthesized) or bool(project_configs.get("skip_parenthesized"))
+    underscore_to_space = bool(sp.underscore_to_space) or bool(
+        project_configs.get("underscore_to_space")
+    )
+    skip_parenthesized = bool(sp.skip_parenthesized) or bool(
+        project_configs.get("skip_parenthesized")
+    )
     # 合成时文本变换（发音映射 + 大写转小写）：只改送引擎文本，不改原文。
     # 生效字典 = 全局 ∪ 项目（同 source 项目覆盖）；段级 applied_map_ids 选子集，
     # 项目级 configs.pronunciation_apply_all 开启则全量生效；小写化解析顺序：
@@ -1419,7 +1480,8 @@ def synthesize_segment(
         apply_all=apply_all,
         applied_map_ids=applied_ids,
         lowercase_latin=resolve_lowercase_latin(
-            tt.get("lowercase_latin"), project_configs.get("lowercase_latin"),
+            tt.get("lowercase_latin"),
+            project_configs.get("lowercase_latin"),
         ),
     )
     text_to_speak = prepare_text_for_engine(
@@ -1446,8 +1508,10 @@ def synthesize_segment(
     chapter_title = chapter.name or ""
     project_name = chapter.project.name
     assets.ensure_chapter_layout(
-        project_id, chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
+        project_id,
+        chapter_id,
+        chapter_title=chapter_title,
+        project_name=project_name,
     )
 
     existing_audio = seg.audio or {}
@@ -1459,9 +1523,13 @@ def synthesize_segment(
 
     if is_ffmpeg_available():
         target_mp3 = assets.segment_audio_path(
-            project_id, chapter_id,
-            chapter_title=chapter_title, project_name=project_name,
-            segment_id=seg.id, position=seg.position or 0, fmt="mp3",
+            project_id,
+            chapter_id,
+            chapter_title=chapter_title,
+            project_name=project_name,
+            segment_id=seg.id,
+            position=seg.position or 0,
+            fmt="mp3",
         )
         leading_keep_ms = 80
         trailing_keep_ms = 100 if _ends_with_sentence_period(str(text_to_speak)) else 80
@@ -1493,9 +1561,7 @@ def synthesize_segment(
         adj_rec = chapter.audio_adjust if isinstance(chapter.audio_adjust, dict) else None
         adj_tempo = (adj_rec or {}).get("tempo")
         adj_vol = (adj_rec or {}).get("volume_db")
-        if (
-            adj_tempo is not None and abs(float(adj_tempo) - 1.0) > 1e-9
-        ) or (
+        if (adj_tempo is not None and abs(float(adj_tempo) - 1.0) > 1e-9) or (
             adj_vol is not None and abs(float(adj_vol)) > 1e-9
         ):
             adj_tempo_v = float(adj_tempo) if adj_tempo is not None else 1.0
@@ -1504,8 +1570,10 @@ def synthesize_segment(
             shutil.copy2(target_mp3, prev_abs)
             try:
                 adjust_audio_speed_volume(
-                    prev_abs, target_mp3,
-                    tempo=adj_tempo_v, volume_db=adj_vol_v,
+                    prev_abs,
+                    target_mp3,
+                    tempo=adj_tempo_v,
+                    volume_db=adj_vol_v,
                 )
             except AudioEncoderError as e:
                 # 变速失败 = 本次合成失败：不留 1.0x 半成品冒充已变速，
@@ -1533,18 +1601,24 @@ def synthesize_segment(
                         new_duration = duration_sec / adj_tempo_v
                     logger.warning(
                         "probe after adjust failed for %s; estimated duration %s",
-                        new_rel, new_duration,
+                        new_rel,
+                        new_duration,
                     )
                 duration_sec = new_duration
                 _delete_dropped_audio_files(
-                    seg, {"current": {"path": new_rel}, "previous": {"path": prev_rel}},
+                    seg,
+                    {"current": {"path": new_rel}, "previous": {"path": prev_rel}},
                 )
                 adjust_applied = True
     else:
         wav_path = assets.segment_audio_path(
-            project_id, chapter_id,
-            chapter_title=chapter_title, project_name=project_name,
-            segment_id=seg.id, position=seg.position or 0, fmt="wav",
+            project_id,
+            chapter_id,
+            chapter_title=chapter_title,
+            project_name=project_name,
+            segment_id=seg.id,
+            position=seg.position or 0,
+            fmt="wav",
         )
         wav_path.write_bytes(audio_bytes)
         new_rel = wav_path.relative_to(assets.settings.segmented_dir).as_posix()
@@ -1560,7 +1634,8 @@ def synthesize_segment(
         prev_origin = None
 
     update_segment_after_synth(
-        db, seg,
+        db,
+        seg,
         current_audio_path=new_rel,
         previous_audio_path=prev_rel,
         previous_duration_sec=prev_duration,
@@ -1574,6 +1649,7 @@ def synthesize_segment(
     # local 单租户，service 只有 db，直接用 Local 实现（workers 走
     # segmented_synth_workers 的 usage_repo 注入路径）。
     from app.core.repositories.usage import LocalUsageRepository
+
     LocalUsageRepository(db).record_event(
         kind="tts",
         chars=len(text_override or seg.text or ""),
@@ -1613,7 +1689,9 @@ def save_recorded_segment_audio(
         # contract derives `code` from it); log the rejected extension.
         logger.warning(
             "[save_recorded_segment_audio] rejected extension %r for segment %s",
-            ext or "unknown", segment_id)
+            ext or "unknown",
+            segment_id,
+        )
         raise ValueError("unsupported_audio_format")
     if not audio_bytes:
         raise ValueError("empty_audio")
@@ -1621,8 +1699,10 @@ def save_recorded_segment_audio(
     chapter_title = chapter.name or ""
     project_name = chapter.project.name
     assets.ensure_chapter_layout(
-        project_id, chapter_id,
-        chapter_title=chapter_title, project_name=project_name,
+        project_id,
+        chapter_id,
+        chapter_title=chapter_title,
+        project_name=project_name,
     )
 
     existing_audio = seg.audio or {}
@@ -1635,9 +1715,15 @@ def save_recorded_segment_audio(
     # (path stored in DB) keeps pointing at the old file and undo stays real.
     out_ext = "mp3" if (ext != "mp3" and is_ffmpeg_available()) else ext
     unique_name = f"{seg.id}.rec-{uuid.uuid4().hex[:8]}.{out_ext}"
-    target = assets.chapter_dir(
-        project_id, chapter_id, project_name=project_name,
-    ) / "segments" / unique_name
+    target = (
+        assets.chapter_dir(
+            project_id,
+            chapter_id,
+            project_name=project_name,
+        )
+        / "segments"
+        / unique_name
+    )
     target.parent.mkdir(parents=True, exist_ok=True)
 
     if out_ext == "mp3" and ext != "mp3":
@@ -1667,7 +1753,8 @@ def save_recorded_segment_audio(
     _delete_dropped_audio_files(seg, new_audio)
 
     update_segment_after_synth(
-        db, seg,
+        db,
+        seg,
         current_audio_path=new_rel,
         previous_audio_path=prev_rel,
         previous_duration_sec=prev_duration,
@@ -1756,11 +1843,16 @@ def _chapter_audio_export_path(
         target_dir = root / rel_dir
         target_dir.mkdir(parents=True, exist_ok=True)
         return target_dir / filename
-    return assets.chapter_dir(
-        project_id, chapter_id,
-        chapter_title=chapter.name or "",
-        project_name=project.name,
-    ) / "exports" / filename
+    return (
+        assets.chapter_dir(
+            project_id,
+            chapter_id,
+            chapter_title=chapter.name or "",
+            project_name=project.name,
+        )
+        / "exports"
+        / filename
+    )
 
 
 def copy_file_to_remotion_export_target(
@@ -1886,18 +1978,22 @@ def export_all_chapters(db: Session, project_id: str) -> dict[str, Any]:
         for seg in sorted(ch.segments, key=lambda s: s.position):
             audio = seg.audio or {}
             current = (audio.get("current") or {}) if isinstance(audio, dict) else {}
-            srt_segments.append({
-                "text": seg.text,
-                "duration_sec": current.get("duration_sec"),
-            })
+            srt_segments.append(
+                {
+                    "text": seg.text,
+                    "duration_sec": current.get("duration_sec"),
+                }
+            )
         srt_path = target_dir / f"{basename}.srt"
         srt_path.write_text(build_srt(srt_segments), encoding="utf-8")
-        exported.append({
-            "chapter_id": ch.id,
-            "title": ch.name or ch.id,
-            "audio_path": str(audio_path),
-            "srt_path": str(srt_path),
-        })
+        exported.append(
+            {
+                "chapter_id": ch.id,
+                "title": ch.name or ch.id,
+                "audio_path": str(audio_path),
+                "srt_path": str(srt_path),
+            }
+        )
     return {"exported": exported, "count": len(exported)}
 
 
@@ -1930,10 +2026,7 @@ def mark_silent_segments_as_missing(
 
     scanned = marked = already_missing = file_missing = 0
 
-    segs = (
-        db.query(SegmentedProjectSegment)
-        .all()
-    )
+    segs = db.query(SegmentedProjectSegment).all()
 
     for seg in segs:
         audio_data = dict(seg.audio) if seg.audio else {}
@@ -1985,7 +2078,7 @@ def mark_silent_segments_as_missing(
 
 # 纯匹配逻辑（标题规范化/复用索引/匹配规划器）在 app.services.batch_reuse——
 # workers 模式的 supabase 仓储也用它，不能留在含 sqlalchemy 的本模块里被直接复用。
-from app.services.batch_reuse import (
+from app.services.batch_reuse import (  # noqa: E402
     build_reuse_index,
     normalize_chapter_title,
     plan_batch_reuse,
@@ -2038,7 +2131,8 @@ class _AudioMove:
             except OSError:
                 logger.error(
                     "compensation move failed, file left at: %s (should be %s)",
-                    self.new_abs, self.old_abs,
+                    self.new_abs,
+                    self.old_abs,
                 )
 
 
@@ -2064,8 +2158,11 @@ def _prepare_reused_audio_moves(
         return None
     fmt = current.get("format") or audio.get("format") or old_abs.suffix.lstrip(".") or "mp3"
     new_abs = assets.segment_audio_path(
-        project_id, chapter_id,
-        project_name=project_name, segment_id=new_segment_id, fmt=fmt,
+        project_id,
+        chapter_id,
+        project_name=project_name,
+        segment_id=new_segment_id,
+        fmt=fmt,
     )
     moves = [_AudioMove(current, old_abs, new_abs)]
     previous = audio.get("previous")
@@ -2076,7 +2173,9 @@ def _prepare_reused_audio_moves(
         if prev_old_abs.exists():
             prev_fmt = previous.get("format") or prev_old_abs.suffix.lstrip(".") or fmt
             moves.append(
-                _AudioMove(previous, prev_old_abs, new_abs.with_name(f"{new_segment_id}.prev.{prev_fmt}"))
+                _AudioMove(
+                    previous, prev_old_abs, new_abs.with_name(f"{new_segment_id}.prev.{prev_fmt}")
+                )
             )
         else:
             logger.warning("reuse audio previous missing on disk, keep old ref: %s", prev_old_abs)
@@ -2142,8 +2241,8 @@ def batch_create_structure(
         ]
     old_index = build_reuse_index(old_chapters) if old_chapters else {}
 
-    from app.services.text_split_service import rule_split
     from app.core.config import settings
+    from app.services.text_split_service import rule_split
 
     max_len = settings.max_segment_chars if settings.max_segment_chars > 0 else None
 
@@ -2168,8 +2267,10 @@ def batch_create_structure(
 
     if narration_script is not None:
         project.narration_document_path = assets.write_project_document(
-            project_id, kind="narration",
-            project_name=project.name, text=narration_script,
+            project_id,
+            kind="narration",
+            project_name=project.name,
+            text=narration_script,
         )
 
     # delete existing chapters (cascade deletes segments). preserve_audio 时
@@ -2185,7 +2286,11 @@ def batch_create_structure(
     result = []
     for position, plan_ch in enumerate(plan["chapters"]):
         chapter = create_chapter_for_project(
-            db, project_id, plan_ch["title"], position, voice=plan_ch["voice"],
+            db,
+            project_id,
+            plan_ch["title"],
+            position,
+            voice=plan_ch["voice"],
         )
         if plan_ch["split_config"]:
             chapter.split_config = plan_ch["split_config"]
@@ -2196,8 +2301,12 @@ def batch_create_structure(
         file_missing = 0
         for plan_seg in plan_ch["segments"]:
             seg = create_segment_for_chapter(
-                db, chapter.id, plan_seg["text"], len(seg_result),
-                emotion=plan_seg["emotion"], role=plan_seg["role"],
+                db,
+                chapter.id,
+                plan_seg["text"],
+                len(seg_result),
+                emotion=plan_seg["emotion"],
+                role=plan_seg["role"],
                 segment_kind=plan_seg["segment_kind"],
             )
             matched = plan_seg["match"]
@@ -2211,7 +2320,11 @@ def batch_create_structure(
                 if matched["audio"]:
                     audio = copy.deepcopy(matched["audio"])
                     prepared = _prepare_reused_audio_moves(
-                        project_id, chapter.id, project.name, seg.id, audio,
+                        project_id,
+                        chapter.id,
+                        project.name,
+                        seg.id,
+                        audio,
                     )
                     if prepared is not None:
                         seg.audio = audio
@@ -2236,6 +2349,7 @@ def batch_create_structure(
         # layer-sync: this chapter is freshly derived (L2 from L1) and split
         # (L3 from L2) in one go -> snapshot all three hashes as the baseline.
         from app.services.layer_sync_service import mark_consistent
+
         mark_consistent(chapter)
         result.append({"id": chapter.id, "segments": seg_result})
 
@@ -2372,12 +2486,16 @@ def adjust_chapter_audio(
             adjusted += 1
 
         if adjusted > 0 or identity:
-            chapter.audio_adjust = None if identity else {
-                "tempo": tempo,
-                "volume_db": volume_db,
-                "applied_at": utcnow().isoformat(),
-                "segments": adjusted,
-            }
+            chapter.audio_adjust = (
+                None
+                if identity
+                else {
+                    "tempo": tempo,
+                    "volume_db": volume_db,
+                    "applied_at": utcnow().isoformat(),
+                    "segments": adjusted,
+                }
+            )
         chapter.updated_at = utcnow()
         chapter.project.updated_at = utcnow()
     db.commit()
@@ -2460,10 +2578,16 @@ def resplit_from_script(db: Session, project_id: str, chapter_id: str):
         db.delete(s)
     db.flush()
     for i, text in enumerate(items):
-        db.add(SegmentedProjectSegment(
-            id=str(uuid4()), chapter_id=chapter.id, position=i, text=text,
-            segment_kind="narration", voice={"source": "chapter"},
-        ))
+        db.add(
+            SegmentedProjectSegment(
+                id=str(uuid4()),
+                chapter_id=chapter.id,
+                position=i,
+                text=text,
+                segment_kind="narration",
+                voice={"source": "chapter"},
+            )
+        )
     db.flush()
     db.refresh(chapter)
     mark_split(chapter)

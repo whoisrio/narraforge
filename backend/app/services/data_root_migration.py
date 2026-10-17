@@ -10,6 +10,7 @@ Two-phase: :func:`plan_migration` computes everything without touching
 disk or DB; :func:`apply_migration` executes. Idempotent: projects whose
 legacy dir is gone (or already migrated) are skipped.
 """
+
 from __future__ import annotations
 
 import copy
@@ -21,7 +22,6 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.core import segmented_assets as assets
-from app.core.config import settings
 from app.models.segmented_project import SegmentedProject
 
 log = logging.getLogger(__name__)
@@ -33,10 +33,10 @@ LEGACY_ROOT = Path(__file__).parent.parent.parent / "uploads" / "segmented"
 class ProjectPlan:
     project_id: str
     slug_dir: Path
-    dir_moves: dict[Path, Path] = field(default_factory=dict)   # abs -> abs
+    dir_moves: dict[Path, Path] = field(default_factory=dict)  # abs -> abs
     file_moves: dict[Path, Path] = field(default_factory=dict)  # abs -> abs
     audio_rewrites: dict[str, str] = field(default_factory=dict)  # rel old -> rel new
-    doc_rewrites: dict[str, str] = field(default_factory=dict)    # abs old -> abs new
+    doc_rewrites: dict[str, str] = field(default_factory=dict)  # abs old -> abs new
     skipped_reason: str | None = None
     notes: list[str] = field(default_factory=list)
 
@@ -100,7 +100,7 @@ def plan_project(project: SegmentedProject, legacy_root: Path | None = None) -> 
     for attr in ("source_document_path", "narration_document_path"):
         stored = getattr(project, attr, None)
         if isinstance(stored, str) and stored.startswith(str(old_dir)):
-            plan.doc_rewrites[stored] = str(new_dir) + stored[len(str(old_dir)):]
+            plan.doc_rewrites[stored] = str(new_dir) + stored[len(str(old_dir)) :]
 
     return plan
 

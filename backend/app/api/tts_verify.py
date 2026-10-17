@@ -10,6 +10,7 @@ runs 表是本地 SQLAlchemy 模型，Supabase 仓储不覆盖。比对逻辑唯
 app.services.tts_verify_service（前端只做编排和呈现，不落库——核对结果由
 前端写回 segment.verification，运行进度落后端 runs 表）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -94,6 +95,7 @@ def _lazily_interrupt_stale_runs(db: Session) -> int:
 def _run_to_dict(run) -> dict:  # type: ignore[no-untyped-def]
     """run 序列化。时间戳带 'Z' 后缀显式标 UTC——前端快照 pill 按
     updated_at 计算心跳年龄，无时区歧义。"""
+
     def iso(value):  # type: ignore[no-untyped-def]
         if value is None:
             return None
@@ -246,7 +248,8 @@ def patch_verify_run(run_id: str, body: VerifyRunPatchIn, db: Session = Depends(
 
 @router.get("/runs/latest")
 def latest_verify_run(
-    project_id: str = "", db: Session = Depends(get_db)  # type: ignore[name-defined]
+    project_id: str = "",
+    db: Session = Depends(get_db),  # type: ignore[name-defined]
 ) -> dict:
     """页面加载时恢复进度 pill。
 

@@ -1,7 +1,8 @@
-from sqlalchemy import Column, String, Float, Integer, Boolean, DateTime, Enum as SQLEnum
-from datetime import datetime
-import uuid
 import enum
+import uuid
+
+from sqlalchemy import Boolean, Column, DateTime, Float, String
+from sqlalchemy import Enum as SQLEnum
 
 from app.core.database import Base
 from app.core.time_utils import utcnow

@@ -88,9 +88,8 @@ workers = [
     "workers-py",
 ]
 dev = [
-    "black>=23.12.1",
-    "flake8>=6.1.0",
-    "isort>=5.13.2",
+    # ruff 统一替代 flake8(风格) + isort(导入排序) + black(格式检查)
+    "ruff>=0.6.0",
     "mypy>=1.8.0"
 ]
 
@@ -117,4 +116,20 @@ markers = [
     "integration: integration tests",
     "external: tests that call external services",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E/F/W 对应 flake8 默认(pycodestyle + pyflakes)，I 对应 isort 导入排序
+select = ["E", "F", "W", "I"]
+# E501：行宽以 ruff format 为权威；长中文注释/字符串无法自动折行，不强制
+#（与旧 black --line-length=100 时代的实际宽容度一致）
+extend-ignore = ["E501"]
+
+[tool.ruff.format]
+# 与 black 默认风格保持一致
+quote-style = "double"
+indent-style = "space"
 

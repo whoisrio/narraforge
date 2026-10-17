@@ -3,15 +3,15 @@
 v1: 项目 → 章节 → 段落 三层结构, schema_version=2
 v3: 简化模型 - voice/audio 合并为 JSON 字段, 移除旁白关联
 """
+
 from sqlalchemy import (
-    Column,
-    String,
-    DateTime,
     JSON,
-    Integer,
-    Float,
+    Column,
+    DateTime,
     ForeignKey,
     Index,
+    Integer,
+    String,
     Text,
     UniqueConstraint,
 )
@@ -37,7 +37,9 @@ class SegmentedProject(Base):
     original_text = Column(String, nullable=True)
     animation_theme = Column(String, nullable=True)
     remotion_project_path = Column(String, nullable=True)
-    source_document = Column(Text, nullable=True)  # deprecated: 内容改存文件，见 source_document_path
+    source_document = Column(
+        Text, nullable=True
+    )  # deprecated: 内容改存文件，见 source_document_path
     source_document_path = Column(String, nullable=True)
     narration_document_path = Column(String, nullable=True)
     default_narrator_role_id = Column(
@@ -58,7 +60,6 @@ class SegmentedProject(Base):
         order_by="SegmentedProjectChapter.position",
     )
 
-    
     def __repr__(self) -> str:  # pragma: no cover
         return f"<SegmentedProject(id={self.id}, name={self.name!r})>"
 
@@ -83,8 +84,12 @@ class SegmentedProjectChapter(Base):
     original_text = Column(String, nullable=True)
     narration_script = Column(Text, nullable=True)
     design_title = Column(String, nullable=True)
-    sync_state = Column(JSON(none_as_null=True), nullable=True)  # layer-sync Phase A: {l1_hash, l2_hash, segments_hash}
-    audio_adjust = Column(JSON(none_as_null=True), nullable=True)  # post-synthesis adjust record: {tempo, volume_db, applied_at, segments}
+    sync_state = Column(
+        JSON(none_as_null=True), nullable=True
+    )  # layer-sync Phase A: {l1_hash, l2_hash, segments_hash}
+    audio_adjust = Column(
+        JSON(none_as_null=True), nullable=True
+    )  # post-synthesis adjust record: {tempo, volume_db, applied_at, segments}
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
@@ -124,8 +129,12 @@ class SegmentedProjectSegment(Base):
     audio = Column(JSON(none_as_null=True), nullable=True)
     generated_at = Column(DateTime, nullable=True)
     animation_spec_json = Column(Text, nullable=True)
-    split_anchor = Column(JSON(none_as_null=True), nullable=True)  # layer-sync Phase B: {offset_start, offset_end, baseline_text}
-    text_transforms = Column(JSON(none_as_null=True), nullable=True)  # 合成时文本变换: {applied_map_ids, lowercase_latin}
+    split_anchor = Column(
+        JSON(none_as_null=True), nullable=True
+    )  # layer-sync Phase B: {offset_start, offset_end, baseline_text}
+    text_transforms = Column(
+        JSON(none_as_null=True), nullable=True
+    )  # 合成时文本变换: {applied_map_ids, lowercase_latin}
     # TTS 语音核对最近一次结果（SegmentVerification，绑 audio_key；只留最近一次不做历史）
     verification = Column(JSON(none_as_null=True), nullable=True)
     created_at = Column(DateTime, default=utcnow)
@@ -155,15 +164,15 @@ class SegmentVerificationRun(Base):
     """
 
     __tablename__ = "segment_verification_runs"
-    __table_args__ = (
-        Index("ix_verify_runs_project_id", "project_id"),
-    )
+    __table_args__ = (Index("ix_verify_runs_project_id", "project_id"),)
 
     id = Column(String, primary_key=True)
     project_id = Column(String, nullable=False)
     scope = Column(String, nullable=False)  # 'chapter' | 'project'
     chapter_id = Column(String, nullable=True)  # scope=chapter 时有值
-    status = Column(String, nullable=False, default="running")  # running/completed/stopped/interrupted
+    status = Column(
+        String, nullable=False, default="running"
+    )  # running/completed/stopped/interrupted
     total = Column(Integer, nullable=False, default=0)
     done = Column(Integer, nullable=False, default=0)
     started_at = Column(DateTime, default=utcnow)

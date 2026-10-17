@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, DateTime, Integer, Boolean
-from datetime import datetime
 import uuid
+
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 
 from app.core.database import Base
 from app.core.time_utils import utcnow
@@ -16,6 +16,7 @@ class UsageEvent(Base):
     - local SQLite 单租户无 user_id 列；Supabase 侧经 alter table 追加
       （见 supabase/schema.sql 与 schema sync 测试的 EXTRA_DDL_COLUMNS）。
     """
+
     __tablename__ = "usage_events"
 
     def __repr__(self):

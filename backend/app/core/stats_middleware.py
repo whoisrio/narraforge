@@ -16,6 +16,7 @@
 同步 httpx Supabase 客户端在 async 中间件里直接调用——与 workers 模式
 既有仓储层用法一致（repo 全是 sync 类被 async 端点直接调用）。
 """
+
 from __future__ import annotations
 
 import logging
@@ -116,7 +117,13 @@ def record_request(request: Request, status: int, duration_ms: int) -> None:
         if _mark_seen(_profile_seen, (now.strftime("%Y-%m-%dT%H"), user["id"])):
             client.insert(
                 "profiles",
-                [{"id": user["id"], "email": user.get("email") or "", "last_seen_at": now.isoformat()}],
+                [
+                    {
+                        "id": user["id"],
+                        "email": user.get("email") or "",
+                        "last_seen_at": now.isoformat(),
+                    }
+                ],
                 upsert=True,
             )
         if _mark_seen(_dau_seen, (today, user["id"])):
@@ -126,9 +133,7 @@ def record_request(request: Request, status: int, duration_ms: int) -> None:
                 upsert=True,
             )
 
-    if method in _MUTATION_METHODS and not any(
-        path.startswith(p) for p in _LOG_SKIP_PREFIXES
-    ):
+    if method in _MUTATION_METHODS and not any(path.startswith(p) for p in _LOG_SKIP_PREFIXES):
         client.insert(
             "operation_logs",
             [

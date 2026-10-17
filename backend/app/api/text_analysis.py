@@ -3,7 +3,7 @@
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
@@ -12,7 +12,6 @@ try:
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
 
-from app.core.database import get_db
 from app.services.text_analysis_service import analyze_script
 
 logger = logging.getLogger(__name__)
@@ -21,6 +20,7 @@ router = APIRouter()
 
 
 # ---- Request / Response Models ----
+
 
 class SplitRequest(BaseModel):
     text: str = Field(..., min_length=1, description="原始文本内容")
@@ -52,6 +52,7 @@ class SplitResponse(BaseModel):
 
 
 # ---- Endpoints ----
+
 
 @router.post("/split", response_model=SplitResponse)
 async def split_script(req: SplitRequest):

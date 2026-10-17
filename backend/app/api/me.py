@@ -3,6 +3,7 @@
 workers：/api/me/* 不在匿名 allowlist → 未认证由 auth 中间件自动 401；
 已认证经仓储作用域只见本人数据。local：单租户，返回全量用量。
 """
+
 from fastapi import APIRouter, Depends
 
 from app.core.repositories.deps import get_segmented_repo, get_usage_repo

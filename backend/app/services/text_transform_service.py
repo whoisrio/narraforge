@@ -7,6 +7,7 @@
 本模块被 workers bundle 引用（segmented_synth_workers），不得 import
 sqlalchemy / app.models。
 """
+
 from __future__ import annotations
 
 import re

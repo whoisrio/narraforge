@@ -4,13 +4,14 @@
 返回值统一为 voice_to_dict 形状（A5/B-P1-8 契约：含 has_preview/has_source），
 Local 与 Supabase 实现共用同一映射，保证两模式响应一致。
 """
+
 from __future__ import annotations
 
 import copy
 from typing import Any, Protocol, runtime_checkable
 
-from app.core.supabase_client import SupabaseClient
 from app.core.repositories.user_scope import UserScope
+from app.core.supabase_client import SupabaseClient
 
 # workers bundle 不含 sqlalchemy / app.models：Local* 只在 local 模式实例化。
 try:
@@ -26,7 +27,15 @@ except ImportError:  # workers bundle
 TABLE = "voice_profiles"
 
 # update 允许的字段（防 id/created_at 被改写）
-_UPDATABLE_FIELDS = ("name", "description", "avatar", "project_id", "voice", "voice_params", "preview")
+_UPDATABLE_FIELDS = (
+    "name",
+    "description",
+    "avatar",
+    "project_id",
+    "voice",
+    "voice_params",
+    "preview",
+)
 _JSON_FIELDS = ("voice", "voice_params", "preview")
 
 
@@ -88,10 +97,13 @@ class LocalVoiceProfileRepository:
         query = self._db.query(VoiceProfile)
         if project_id:
             query = query.filter(
-                or_(VoiceProfile.project_id == None, VoiceProfile.project_id == project_id)
+                or_(
+                    VoiceProfile.project_id.is_(None),
+                    VoiceProfile.project_id == project_id,
+                )
             )
         else:
-            query = query.filter(VoiceProfile.project_id == None)
+            query = query.filter(VoiceProfile.project_id.is_(None))
         return [_orm_to_dict(v) for v in query.order_by(VoiceProfile.created_at.desc()).all()]
 
     def get(self, voice_id: str) -> dict | None:
@@ -173,16 +185,18 @@ class SupabaseVoiceProfileRepository(UserScope):
         return voice_row_to_dict(row) if row else None
 
     def create(self, fields: dict) -> dict:
-        row = self._stamp_row({
-            "id": fields["id"],
-            "name": fields["name"],
-            "description": fields.get("description"),
-            "avatar": fields.get("avatar"),
-            "project_id": fields.get("project_id"),
-            "voice": fields.get("voice") or {},
-            "voice_params": fields.get("voice_params") or {},
-            "preview": fields.get("preview"),
-        })
+        row = self._stamp_row(
+            {
+                "id": fields["id"],
+                "name": fields["name"],
+                "description": fields.get("description"),
+                "avatar": fields.get("avatar"),
+                "project_id": fields.get("project_id"),
+                "voice": fields.get("voice") or {},
+                "voice_params": fields.get("voice_params") or {},
+                "preview": fields.get("preview"),
+            }
+        )
         inserted = self._client.insert(TABLE, [row])
         return voice_row_to_dict(inserted[0])
 
@@ -191,7 +205,9 @@ class SupabaseVoiceProfileRepository(UserScope):
         if not values:
             current = self.get(voice_id)
             return current
-        rows = self._client.update(TABLE, values, params=self._scope_params({"id": f"eq.{voice_id}"}))
+        rows = self._client.update(
+            TABLE, values, params=self._scope_params({"id": f"eq.{voice_id}"})
+        )
         if not rows:
             return None
         return voice_row_to_dict(rows[0])
@@ -217,6 +233,4 @@ class SupabaseVoiceProfileRepository(UserScope):
         不依赖 PostgREST 的 ->> 操作符（fake PostgREST 同样可跑）。
         """
         rows = self._client.select(TABLE, params=self._scope_params({"select": "voice"}))
-        return sum(
-            1 for r in rows if (r.get("voice") or {}).get("voice_type") == "design"
-        )
+        return sum(1 for r in rows if (r.get("voice") or {}).get("voice_type") == "design")

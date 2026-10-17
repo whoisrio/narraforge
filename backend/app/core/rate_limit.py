@@ -6,6 +6,7 @@ workers 用 Supabase 表计数（serverless 多实例共享），local/测试用
 
 设计：docs/superpowers/specs/2026-08-20-try-page-seo-acquisition-design.md
 """
+
 from __future__ import annotations
 
 import logging

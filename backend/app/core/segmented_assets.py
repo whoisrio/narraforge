@@ -20,6 +20,7 @@ Design rules:
 - DB-stored paths are relative to ``settings.segmented_dir`` (the asset
   root, alias ``projects_dir``).
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -193,7 +194,11 @@ def segment_audio_path(
     fmt: str,
     **_: Any,
 ) -> Path:
-    return chapter_dir(project_id, chapter_id, project_name=project_name) / "segments" / f"{segment_id}.{fmt}"
+    return (
+        chapter_dir(project_id, chapter_id, project_name=project_name)
+        / "segments"
+        / f"{segment_id}.{fmt}"
+    )
 
 
 def write_segment_text(
@@ -206,8 +211,11 @@ def write_segment_text(
     **_: Any,
 ) -> None:
     p = segment_audio_path(
-        project_id, chapter_id,
-        project_name=project_name, segment_id=segment_id, fmt="txt",
+        project_id,
+        chapter_id,
+        project_name=project_name,
+        segment_id=segment_id,
+        fmt="txt",
     )
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text or "", encoding="utf-8")
@@ -223,8 +231,11 @@ def write_segment_ssml(
     **_: Any,
 ) -> None:
     p = segment_audio_path(
-        project_id, chapter_id,
-        project_name=project_name, segment_id=segment_id, fmt="ssml",
+        project_id,
+        chapter_id,
+        project_name=project_name,
+        segment_id=segment_id,
+        fmt="ssml",
     )
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(ssml or "", encoding="utf-8")
@@ -265,8 +276,11 @@ def remove_segment_audio(
     Prefer ``delete_audio_file`` whenever the DB-stored path is available.
     """
     p = segment_audio_path(
-        project_id, chapter_id,
-        project_name=project_name, segment_id=segment_id, fmt=fmt,
+        project_id,
+        chapter_id,
+        project_name=project_name,
+        segment_id=segment_id,
+        fmt=fmt,
     )
     try:
         p.unlink()
@@ -277,7 +291,9 @@ def remove_segment_audio(
 # ----- manifest & top-level cleanup ----------------------------------------
 
 
-def write_manifest(project_id: str, payload: dict[str, Any], project_name: str | None = None) -> None:
+def write_manifest(
+    project_id: str, payload: dict[str, Any], project_name: str | None = None
+) -> None:
     p = project_dir(project_id, project_name) / "manifest.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

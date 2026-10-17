@@ -1,6 +1,6 @@
 """Source document model — project-level source files (text/audio/path)."""
 
-from sqlalchemy import Column, String, Integer, Float, Text, ForeignKey, DateTime
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
 
 from app.core.database import Base
 from app.core.time_utils import utcnow
@@ -8,6 +8,7 @@ from app.core.time_utils import utcnow
 
 class SourceDocument(Base):
     """项目级源文件 (文本/音频/路径引用)."""
+
     __tablename__ = "source_documents"
 
     id = Column(String, primary_key=True)

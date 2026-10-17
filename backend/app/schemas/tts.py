@@ -8,6 +8,7 @@ backend-mode returns `audio_url`; voxcpm adds a top-level `engine`). The
 
 `TTSResultRecordOut` is the persisted-history item shape (`_result_to_dict`).
 """
+
 from __future__ import annotations
 
 from datetime import datetime

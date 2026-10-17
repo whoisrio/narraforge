@@ -8,6 +8,7 @@ workers 运行时（Cloudflare Pyodide）没有原生 socket，psycopg/asyncpg �
 - PostgREST 语义：REST 过滤（?id=eq.x）、Prefer: return=representation、
   单条取数组首元素（不用 vnd.pgrst.object+json，避免 0 行时 406 分支）。
 """
+
 from __future__ import annotations
 
 import httpx
@@ -85,7 +86,10 @@ class SupabaseClient:
         return self._request("POST", table, json_body=rows, prefer=prefer) or []
 
     def update(self, table: str, values: dict, *, params: dict) -> list:
-        return self._request("PATCH", table, params=params, json_body=values, prefer=_PREFER_RETURN) or []
+        return (
+            self._request("PATCH", table, params=params, json_body=values, prefer=_PREFER_RETURN)
+            or []
+        )
 
     def delete(self, table: str, *, params: dict) -> list:
         return self._request("DELETE", table, params=params, prefer=_PREFER_RETURN) or []
@@ -98,7 +102,5 @@ class SupabaseClient:
 def get_supabase_client(*, transport: httpx.BaseTransport | None = None) -> SupabaseClient:
     """按 settings 构建客户端。未配置时 RuntimeError（workers 部署必须配置 secrets）。"""
     if not settings.supabase_url or not settings.supabase_service_key:
-        raise RuntimeError(
-            "Supabase is not configured: set SUPABASE_URL and SUPABASE_SERVICE_KEY"
-        )
+        raise RuntimeError("Supabase is not configured: set SUPABASE_URL and SUPABASE_SERVICE_KEY")
     return SupabaseClient(settings.supabase_url, settings.supabase_service_key, transport=transport)

@@ -20,6 +20,7 @@ YAML output uses sort_keys=True for deterministic diffs.
 Chapter subdirs no longer in the input are removed so `git status`
 reflects deletions.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -62,18 +63,26 @@ def write_project(project, root: Path, taken: set[str] | None = None) -> Path:
     proj_dir = root / "projects" / project_dir_name(project, taken)
     proj_dir.mkdir(parents=True, exist_ok=True)
 
-    _write_yaml(proj_dir / "project.yaml", {
-        "id": project.id,
-        "name": project.name,
-        "layout": project.layout,
-        "active_chapter_id": getattr(project, "active_chapter_id", None),
-        "animation_theme": getattr(project, "animation_theme", None),
-        "remotion_project_path": getattr(project, "remotion_project_path", None),
-        "default_narrator_role_id": getattr(project, "default_narrator_role_id", None),
-        "configs": getattr(project, "configs", None) or {},
-    })
-    _write_text_or_delete(proj_dir / "source.md", _project_document(project, "source_document_path", "source_document"))
-    _write_text_or_delete(proj_dir / "narration.md", _project_document(project, "narration_document_path", None))
+    _write_yaml(
+        proj_dir / "project.yaml",
+        {
+            "id": project.id,
+            "name": project.name,
+            "layout": project.layout,
+            "active_chapter_id": getattr(project, "active_chapter_id", None),
+            "animation_theme": getattr(project, "animation_theme", None),
+            "remotion_project_path": getattr(project, "remotion_project_path", None),
+            "default_narrator_role_id": getattr(project, "default_narrator_role_id", None),
+            "configs": getattr(project, "configs", None) or {},
+        },
+    )
+    _write_text_or_delete(
+        proj_dir / "source.md",
+        _project_document(project, "source_document_path", "source_document"),
+    )
+    _write_text_or_delete(
+        proj_dir / "narration.md", _project_document(project, "narration_document_path", None)
+    )
 
     chapters_dir = proj_dir / "chapters"
     chapters_dir.mkdir(exist_ok=True)
@@ -85,14 +94,17 @@ def write_project(project, root: Path, taken: set[str] | None = None) -> Path:
         )
         ch_dir.mkdir(exist_ok=True)
         written.add(ch_dir.name)
-        _write_yaml(ch_dir / "chapter.yaml", {
-            "id": ch.id,
-            "position": ch.position,
-            "name": ch.name,
-            "design_title": getattr(ch, "design_title", None),
-            "voice": getattr(ch, "voice", None) or {},
-            "split_config": getattr(ch, "split_config", None) or {},
-        })
+        _write_yaml(
+            ch_dir / "chapter.yaml",
+            {
+                "id": ch.id,
+                "position": ch.position,
+                "name": ch.name,
+                "design_title": getattr(ch, "design_title", None),
+                "voice": getattr(ch, "voice", None) or {},
+                "split_config": getattr(ch, "split_config", None) or {},
+            },
+        )
         _write_text_or_delete(ch_dir / "original.md", getattr(ch, "original_text", None))
         _write_text_or_delete(ch_dir / "script.md", getattr(ch, "narration_script", None))
         _write_segments_md(ch_dir / "segments.md", ch.segments)
@@ -147,7 +159,9 @@ def _segment_header(seg, sid: str) -> str:
         parts.append(f"emotion={seg.emotion}")
     voice = getattr(seg, "voice", None) or {}
     if voice and voice != {"source": "chapter"}:
-        parts.append(f"voice={json.dumps(voice, ensure_ascii=False, sort_keys=True, separators=(',', ':'))}")
+        parts.append(
+            f"voice={json.dumps(voice, ensure_ascii=False, sort_keys=True, separators=(',', ':'))}"
+        )
     return "<!-- " + " ".join(parts) + " -->"
 
 

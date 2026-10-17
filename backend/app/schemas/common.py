@@ -21,6 +21,7 @@ Binary upload convention (audit A13):
 - Files <= 1 MB may use base64 in JSON, with a 1 MB decoded size limit.
 - Synthesis responses return ``audio_base64`` for convenience; no inbound limit.
 """
+
 from __future__ import annotations
 
 import base64

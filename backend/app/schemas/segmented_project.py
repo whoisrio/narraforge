@@ -1,10 +1,12 @@
 """Pydantic request/response schemas for the segmented project API."""
+
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field, field_validator
 
-from app.schemas.common import ItemsOut, validate_base64_field
+from app.schemas.common import validate_base64_field
 
 
 class SegmentIn(BaseModel):
@@ -112,6 +114,7 @@ class SegmentPatchIn(BaseModel):
     唯一的例外是 unlock_audio=True —— 清除录音 origin 锁（显式解锁意图），
     不触碰音频路径本身。
     """
+
     text: str | None = None
     emotion: str | None = None
     role_id: str | None = None
@@ -127,6 +130,7 @@ class SegmentPatchIn(BaseModel):
 
 class SegmentPatchOut(BaseModel):
     """PATCH 响应：更新后的段 + 服务端项目 updated_at（前端用它推进乐观锁 base）。"""
+
     segment: SegmentIn
     project_updated_at: str
 
@@ -137,18 +141,21 @@ class SegmentCreateIn(BaseModel):
     text 可为空（先建空段再补文本是合法场景）；after_id 指定插入锚点
     （插到该段之后），null/缺省 = 追加到章末。
     """
+
     text: str = ""
     after_id: str | None = None
 
 
 class SegmentPositionOut(BaseModel):
     """段 id → 最终 position，结构变更后前端按此收敛本地排序。"""
+
     id: str
     position: int
 
 
 class SegmentCreateOut(BaseModel):
     """新建段响应：新段 + 章内全部段的 position 列表 + 项目最新 updated_at。"""
+
     segment: SegmentIn
     positions: list[SegmentPositionOut]
     project_updated_at: str
@@ -161,6 +168,7 @@ class StructureSegmentIn(BaseModel):
     （audio/generated_params/generated_at 等服务端自产字段不在此接受）；
     id 存在但该章无此行 → 按新建处理（用给定 id 播种，对齐 save_project）。
     """
+
     id: str | None = None
     text: str = ""
     position: int
@@ -168,12 +176,14 @@ class StructureSegmentIn(BaseModel):
 
 class ChapterStructureIn(BaseModel):
     """PATCH .../chapters/{cid}/structure 请求体：目标章段的期望终态。"""
+
     segments: list[StructureSegmentIn] = Field(default_factory=list)
 
 
 class ChapterStructureOut(BaseModel):
     """structure reconcile 响应：该章 reconcile 后的全部段（按 position 升序）
     + 项目最新 updated_at。"""
+
     segments: list[SegmentIn]
     project_updated_at: str
 
@@ -183,6 +193,7 @@ class ChapterStructureOut(BaseModel):
 
 class ChapterCreateIn(BaseModel):
     """新建章节请求（POST .../chapters）：position 追加到项目末尾。"""
+
     name: str
 
 
@@ -191,6 +202,7 @@ class ChapterPatchIn(BaseModel):
     出现的字段（model_fields_set），显式 null = 清空，字段缺省 = 不动。
     纯字段更新，不触碰段的音频等自产字段。
     """
+
     name: str | None = None
     voice: dict[str, Any] | None = None
     split_config: dict[str, Any] | None = None
@@ -200,6 +212,7 @@ class ChapterPatchIn(BaseModel):
 class ChapterMutationOut(BaseModel):
     """章节新建/PATCH 响应：更新后的章节 + 项目最新 updated_at
     （后者供前端推进乐观锁 base）。"""
+
     chapter: ChapterIn
     project_updated_at: str
 
@@ -207,17 +220,20 @@ class ChapterMutationOut(BaseModel):
 class ChapterDeleteOut(BaseModel):
     """删章响应：只携带项目最新 updated_at（前端用它推进乐观锁 base）。
     200 带体而非 204——前端需要新 base。"""
+
     project_updated_at: str
 
 
 class ChapterReorderIn(BaseModel):
     """章节重排请求（POST .../chapters:reorder）：chapter_ids 必须恰好覆盖
     项目全部章节 id（缺/多/未知 → 422），按数组顺序赋 position 0..n-1。"""
+
     chapter_ids: list[str] = Field(default_factory=list)
 
 
 class ChapterReorderItemOut(BaseModel):
     """重排后单章的 {id, name, position} 终态。"""
+
     id: str
     name: str
     position: int
@@ -225,6 +241,7 @@ class ChapterReorderItemOut(BaseModel):
 
 class ChapterReorderOut(BaseModel):
     """章节重排响应：全章按新序的 {id, name, position} + 项目最新 updated_at。"""
+
     chapters: list[ChapterReorderItemOut]
     project_updated_at: str
 
@@ -237,6 +254,7 @@ class ProjectPatchIn(BaseModel):
     请求体中出现的字段（model_fields_set），显式 null = 清空，字段缺省 = 不动。
     改名时在同一事务内搬迁资产目录并重写存储路径（复用 _relocate_project_assets）。
     """
+
     name: str | None = None
     layout: str | None = None
     configs: dict[str, Any] | None = None
@@ -248,12 +266,14 @@ class ProjectPatchIn(BaseModel):
 
 class DocumentPutIn(BaseModel):
     """文档层 PUT（source-document / narration-script）请求体。"""
+
     text: str
 
 
 class DocumentPutOut(BaseModel):
     """文档层 PUT 响应：文件绝对路径（workers 模式无文件系统 -> None）
     + 项目最新 updated_at（供前端推进乐观锁 base）。"""
+
     path: str | None
     project_updated_at: str
 
@@ -261,17 +281,20 @@ class DocumentPutOut(BaseModel):
 class SweepOrphanAudioRequest(BaseModel):
     """孤儿音频 sweep 请求：缺省 dry-run（只报告不删）；``execute=true`` 才真正
     删除（粒度重构 Phase 6 的唯一显式文件回收入口，local-only）。"""
+
     execute: bool = False
 
 
 class SweepOrphanItem(BaseModel):
     """单个孤儿文件报告项（path 为 segmented_dir 相对路径）。"""
+
     path: str
     size_bytes: int
 
 
 class SweepOrphanAudioOut(BaseModel):
     """sweep 响应：孤儿清单 + 汇总；execute=true 时 deleted_count 为实际删除数。"""
+
     dry_run: bool
     orphans: list[SweepOrphanItem]
     total_count: int
@@ -334,12 +357,14 @@ class MigrateResponse(BaseModel):
 
 # ===== P2 v3: Animation Spec 批量应用 =====
 
+
 class AnimationSpecItem(BaseModel):
     """单个 segment 的动画规格 (写到 segments.animation_spec_json)
 
     extra="allow": kv workflow 的 brief 字段 (narration_text / visual_content /
     animation / start_sec ...) 原样透传给 apply_animation_spec 合并.
     """
+
     segment_id: str
     visual_concept: str | None = None
     layout: str | None = None
@@ -356,6 +381,7 @@ class AnimationSpecItem(BaseModel):
 
 class ApplyAnimationSpecRequest(BaseModel):
     """skill 一次性 POST 全部 spec, 后端原子更新"""
+
     theme: str | None = None
     segments: list[AnimationSpecItem] = Field(default_factory=list)
     narration_version: str | None = None
@@ -395,6 +421,7 @@ class SourceDocumentOut(BaseModel):
 
 
 # ── TTS Synthesis Params ──
+
 
 class SynthesizeParams(BaseModel):
     """Structured TTS parameters for synthesize_with_engine.

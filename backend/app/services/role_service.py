@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
 from sqlalchemy import or_
+from sqlalchemy.orm import Session
 
 from app.core.time_utils import utcnow
 from app.models.role import Role
@@ -36,9 +36,9 @@ def role_to_out(role: Role) -> RoleOut:
 def list_roles(db: Session, project_id: str | None = None) -> list[RoleOut]:
     query = db.query(Role)
     if project_id:
-        query = query.filter(or_(Role.project_id == None, Role.project_id == project_id))
+        query = query.filter(or_(Role.project_id.is_(None), Role.project_id == project_id))
     else:
-        query = query.filter(Role.project_id == None)
+        query = query.filter(Role.project_id.is_(None))
     roles = query.order_by(Role.updated_at.desc()).all()
     return [role_to_out(role) for role in roles]
 
@@ -104,12 +104,12 @@ def _clean_role_references(db: Session, role_id: str) -> None:
         SegmentedProjectSegment,
     )
 
-    db.query(SegmentedProjectSegment).filter(
-        SegmentedProjectSegment.role_id == role_id
-    ).update({"role_id": None}, synchronize_session=False)
-    db.query(SegmentedProject).filter(
-        SegmentedProject.default_narrator_role_id == role_id
-    ).update({"default_narrator_role_id": None}, synchronize_session=False)
+    db.query(SegmentedProjectSegment).filter(SegmentedProjectSegment.role_id == role_id).update(
+        {"role_id": None}, synchronize_session=False
+    )
+    db.query(SegmentedProject).filter(SegmentedProject.default_narrator_role_id == role_id).update(
+        {"default_narrator_role_id": None}, synchronize_session=False
+    )
 
     for seg in db.query(SegmentedProjectSegment).all():
         voice = seg.voice

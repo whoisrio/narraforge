@@ -9,13 +9,14 @@ Supabase 实现说明：
 - audio 源需要二进制资产存储（R2，步骤 4），本步 create_audio 抛
   NotImplementedError，由路由映射为 501。
 """
+
 from __future__ import annotations
 
 import uuid
 from typing import Any, Protocol, runtime_checkable
 
-from app.core.supabase_client import SupabaseClient
 from app.core.repositories.user_scope import UserScope
+from app.core.supabase_client import SupabaseClient
 from app.schemas.segmented_project import SourceDocumentOut
 
 # workers bundle 不含 sqlalchemy：Local* 只在 local 模式实例化。
@@ -128,14 +129,16 @@ class SupabaseSourceDocumentRepository(UserScope):
         ):
             raise LookupError(f"project_not_found: {project_id}")
         # 对齐 local：title 为空取正文前 30 字；file_size 为 UTF-8 字节数
-        row = self._stamp_row({
-            "id": f"src_{uuid.uuid4().hex[:12]}",
-            "project_id": project_id,
-            "source_type": "paste",
-            "title": title or pasted_text[:30].replace("\n", " "),
-            "pasted_text": pasted_text,
-            "file_size": len(pasted_text.encode("utf-8")),
-        })
+        row = self._stamp_row(
+            {
+                "id": f"src_{uuid.uuid4().hex[:12]}",
+                "project_id": project_id,
+                "source_type": "paste",
+                "title": title or pasted_text[:30].replace("\n", " "),
+                "pasted_text": pasted_text,
+                "file_size": len(pasted_text.encode("utf-8")),
+            }
+        )
         inserted = self._client.insert(TABLE, [row])
         return _row_to_out(inserted[0])
 
@@ -147,9 +150,7 @@ class SupabaseSourceDocumentRepository(UserScope):
         suffix: str,
         duration_sec: float | None = None,
     ) -> SourceDocumentOut:
-        raise NotImplementedError(
-            "audio sources require the R2 asset store (deploy step 4)"
-        )
+        raise NotImplementedError("audio sources require the R2 asset store (deploy step 4)")
 
     def delete(self, project_id: str, source_id: str) -> bool:
         # audio 源的文件清理由 R2 资产存储负责（步骤 4）；本步只删行

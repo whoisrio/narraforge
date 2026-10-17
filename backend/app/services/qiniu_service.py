@@ -1,4 +1,5 @@
 import logging
+
 from qiniu import Auth, put_file_v2
 
 from app.core.config import settings
@@ -17,6 +18,7 @@ def _get_oss_config(db=None) -> dict:
     if db is not None:
         try:
             from app.core.model_config_service import get_effective_config
+
             db_config = get_effective_config(db, "oss")
             config["access_key"] = db_config.get("access_key") or config["access_key"]
             config["secret_key"] = db_config.get("secret_key") or config["secret_key"]

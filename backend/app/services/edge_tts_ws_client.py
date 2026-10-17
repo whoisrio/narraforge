@@ -41,9 +41,9 @@ class _WsBridge:
 
     async def connect(self, url: str):
         try:
-            from workers import fetch
             from js import Object
             from pyodide.ffi import to_js
+            from workers import fetch
         except ImportError as e:
             raise RuntimeError(_PYODIDE_REQUIRED_MSG) from e
 
@@ -61,9 +61,7 @@ class _WsBridge:
         )
         if int(resp.status) != 101:
             body = await resp.text()
-            raise RuntimeError(
-                f"WS upgrade rejected: HTTP {resp.status}, body={body[:200]!r}"
-            )
+            raise RuntimeError(f"WS upgrade rejected: HTTP {resp.status}, body={body[:200]!r}")
         self.ws = resp.webSocket
         self.ws.accept()
         from pyodide.ffi import create_proxy

@@ -4,6 +4,7 @@ GET /api/config/capabilities 的事实源：按 deploy_target 给出可用的
 TTS 引擎、克隆引擎与功能开关，前端据此隐藏/禁用本地专属能力。
 workers 清单必须保持为 local 清单的子集。
 """
+
 from __future__ import annotations
 
 LOCAL_ENGINES = ["edge_tts", "mimo_tts", "cosyvoice", "voxcpm", "indextts"]

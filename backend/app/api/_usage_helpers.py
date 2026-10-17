@@ -3,6 +3,7 @@
 workers 匿名请求（allowlist 放行的无状态端点）不计量——无用户归属；
 local 单租户全量计量。record_event 本身 best-effort（不抛出）。
 """
+
 from __future__ import annotations
 
 from typing import Callable

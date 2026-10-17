@@ -5,6 +5,7 @@ app.core.config.Settings) so tests can monkeypatch cleanly without
 touching global settings, and so the feature can be disabled via env
 without a schema change.
 """
+
 from __future__ import annotations
 
 import os

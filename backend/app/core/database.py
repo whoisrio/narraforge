@@ -7,6 +7,7 @@ from app.core.config import settings
 try:
     from sqlalchemy import create_engine, event, inspect, text
     from sqlalchemy.orm import declarative_base, sessionmaker
+
     _HAS_SQLALCHEMY = True
 except ImportError:  # workers bundle
     _HAS_SQLALCHEMY = False
@@ -34,7 +35,7 @@ def get_engine():
             )
         _engine = create_engine(
             settings.database_url,
-            connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {}
+            connect_args={"check_same_thread": False} if "sqlite" in settings.database_url else {},
         )
         if "sqlite" in settings.database_url:
             # SQLite 默认不强制外键：不开这个 PRAGMA，模型里所有 ondelete= 声明都是死代码
@@ -124,14 +125,10 @@ _P3_ROLE_PROSODY_ALTER_STMTS = (
 )
 
 # P4: explicit voice role kind.
-_P4_ROLE_KIND_ALTER_STMTS = (
-    "ALTER TABLE roles ADD COLUMN role_kind VARCHAR DEFAULT 'cast'",
-)
+_P4_ROLE_KIND_ALTER_STMTS = ("ALTER TABLE roles ADD COLUMN role_kind VARCHAR DEFAULT 'cast'",)
 
 # P5: voice profile avatar.
-_P5_VOICE_AVATAR_ALTER_STMTS = (
-    "ALTER TABLE voice_profiles ADD COLUMN avatar VARCHAR",
-)
+_P5_VOICE_AVATAR_ALTER_STMTS = ("ALTER TABLE voice_profiles ADD COLUMN avatar VARCHAR",)
 
 # P6: voice clone original/preview audio paths.
 # (Obsolete) both columns were superseded by P9000/P9004 (voice/voice_params/preview)
@@ -144,14 +141,10 @@ _P7_SOURCE_DOCUMENT_ALTER_STMTS = (
 )
 
 # P8: voice profile prompt text (VoxCPM reference audio transcript).
-_P8_PROMPT_TEXT_ALTER_STMTS = (
-    "ALTER TABLE voice_profiles ADD COLUMN prompt_text VARCHAR",
-)
+_P8_PROMPT_TEXT_ALTER_STMTS = ("ALTER TABLE voice_profiles ADD COLUMN prompt_text VARCHAR",)
 
 # P9: voice profile project scope (NULL = global, non-null = project-specific).
-_P9_VOICE_PROJECT_SCOPE_ALTER_STMTS = (
-    "ALTER TABLE voice_profiles ADD COLUMN project_id VARCHAR",
-)
+_P9_VOICE_PROJECT_SCOPE_ALTER_STMTS = ("ALTER TABLE voice_profiles ADD COLUMN project_id VARCHAR",)
 
 # P10: voice engine metadata (voices_engine nested structure).
 # (Obsolete) all four columns were superseded by P9000/P9004 and dropped by P9006;
@@ -165,9 +158,7 @@ _P11_SOURCE_AUDIO_ALTER_STMTS = (
 )
 
 # P12: segment 显式音色引用
-_P12_VOICE_REF_ALTER_STMTS = (
-    "ALTER TABLE segmented_project_segments ADD COLUMN voice_ref JSON",
-)
+_P12_VOICE_REF_ALTER_STMTS = ("ALTER TABLE segmented_project_segments ADD COLUMN voice_ref JSON",)
 
 # P13: chapter-level narration script (L3 text layer).
 _P13_NARRATION_SCRIPT_ALTER_STMTS = (
@@ -181,9 +172,7 @@ _P14_PROJECT_NARRATION_ALTER_STMTS = (
 )
 
 # P15: narration layer sync - chapter-level sync_state JSON (l1/l2/segments hashes).
-_P15_LAYER_SYNC_ALTER_STMTS = (
-    "ALTER TABLE segmented_project_chapters ADD COLUMN sync_state JSON",
-)
+_P15_LAYER_SYNC_ALTER_STMTS = ("ALTER TABLE segmented_project_chapters ADD COLUMN sync_state JSON",)
 
 # P16: layer-sync Phase B - segment-level split_anchor JSON (offsets + baseline).
 _P16_SPLIT_ANCHOR_ALTER_STMTS = (
@@ -196,9 +185,7 @@ _P17_AUDIO_ADJUST_ALTER_STMTS = (
 )
 
 # P18: project logo (data URL / remote URL) - previously frontend-only, lost on PUT.
-_P18_PROJECT_LOGO_ALTER_STMTS = (
-    "ALTER TABLE segmented_projects ADD COLUMN logo VARCHAR",
-)
+_P18_PROJECT_LOGO_ALTER_STMTS = ("ALTER TABLE segmented_projects ADD COLUMN logo VARCHAR",)
 
 # P19: synthesis-time text transforms - segment-level applied map ids + lowercase override.
 _P19_TEXT_TRANSFORMS_ALTER_STMTS = (
@@ -215,15 +202,25 @@ _P20_TTS_VERIFY_ALTER_STMTS = (
 # and the idempotency test. Zombie-column-adding statements (P6/P10 + P11 source_audio_path)
 # were removed so a modern DB is not re-polluted each startup (P9006 would drop them again).
 _ALL_ALTER_STMTS = (
-    _P2_V2_ALTER_STMTS + _P2_V3_ALTER_STMTS + _P3_ROLE_PROSODY_ALTER_STMTS
-    + _P4_ROLE_KIND_ALTER_STMTS + _P5_VOICE_AVATAR_ALTER_STMTS
-    + _P6_CLONE_AUDIO_PATHS_ALTER_STMTS + _P7_SOURCE_DOCUMENT_ALTER_STMTS
-    + _P8_PROMPT_TEXT_ALTER_STMTS + _P9_VOICE_PROJECT_SCOPE_ALTER_STMTS
-    + _P10_VOICE_ENGINE_ALTER_STMTS + _P11_SOURCE_AUDIO_ALTER_STMTS
-    + _P12_VOICE_REF_ALTER_STMTS + _P13_NARRATION_SCRIPT_ALTER_STMTS
-    + _P14_PROJECT_NARRATION_ALTER_STMTS + _P15_LAYER_SYNC_ALTER_STMTS
-    + _P16_SPLIT_ANCHOR_ALTER_STMTS + _P17_AUDIO_ADJUST_ALTER_STMTS
-    + _P18_PROJECT_LOGO_ALTER_STMTS + _P19_TEXT_TRANSFORMS_ALTER_STMTS
+    _P2_V2_ALTER_STMTS
+    + _P2_V3_ALTER_STMTS
+    + _P3_ROLE_PROSODY_ALTER_STMTS
+    + _P4_ROLE_KIND_ALTER_STMTS
+    + _P5_VOICE_AVATAR_ALTER_STMTS
+    + _P6_CLONE_AUDIO_PATHS_ALTER_STMTS
+    + _P7_SOURCE_DOCUMENT_ALTER_STMTS
+    + _P8_PROMPT_TEXT_ALTER_STMTS
+    + _P9_VOICE_PROJECT_SCOPE_ALTER_STMTS
+    + _P10_VOICE_ENGINE_ALTER_STMTS
+    + _P11_SOURCE_AUDIO_ALTER_STMTS
+    + _P12_VOICE_REF_ALTER_STMTS
+    + _P13_NARRATION_SCRIPT_ALTER_STMTS
+    + _P14_PROJECT_NARRATION_ALTER_STMTS
+    + _P15_LAYER_SYNC_ALTER_STMTS
+    + _P16_SPLIT_ANCHOR_ALTER_STMTS
+    + _P17_AUDIO_ADJUST_ALTER_STMTS
+    + _P18_PROJECT_LOGO_ALTER_STMTS
+    + _P19_TEXT_TRANSFORMS_ALTER_STMTS
     + _P20_TTS_VERIFY_ALTER_STMTS
 )
 
@@ -254,21 +251,26 @@ def _run_alter_or_skip(conn, stmt: str) -> bool:
 def _migrate_source_audio_path(conn):
     """P11: copy audio_path/original_audio_path → source_audio_path (幂等)."""
     import logging
+
     logger = logging.getLogger(__name__)
     try:
         existing = {c["name"] for c in inspect(conn).get_columns("voice_profiles")}
         if "source_audio_path" not in existing:
             return
         if "original_audio_path" in existing:
-            conn.execute(text(
-                "UPDATE voice_profiles SET source_audio_path = original_audio_path "
-                "WHERE source_audio_path IS NULL AND original_audio_path IS NOT NULL"
-            ))
+            conn.execute(
+                text(
+                    "UPDATE voice_profiles SET source_audio_path = original_audio_path "
+                    "WHERE source_audio_path IS NULL AND original_audio_path IS NOT NULL"
+                )
+            )
         if "audio_path" in existing:
-            conn.execute(text(
-                "UPDATE voice_profiles SET source_audio_path = audio_path "
-                "WHERE source_audio_path IS NULL AND audio_path IS NOT NULL AND audio_path != ''"
-            ))
+            conn.execute(
+                text(
+                    "UPDATE voice_profiles SET source_audio_path = audio_path "
+                    "WHERE source_audio_path IS NULL AND audio_path IS NOT NULL AND audio_path != ''"
+                )
+            )
         logger.info("[migration] P11: copied audio_path → source_audio_path")
     except Exception as e:
         logger.warning(f"[migration] P11 data migration skipped: {e}")
@@ -277,6 +279,7 @@ def _migrate_source_audio_path(conn):
 def _migrate_design_preview_and_drop_legacy(conn):
     """P12: move design source→preview, drop audio_path/original_audio_path columns."""
     import logging
+
     logger = logging.getLogger(__name__)
     try:
         existing = {c["name"] for c in inspect(conn).get_columns("voice_profiles")}
@@ -285,13 +288,13 @@ def _migrate_design_preview_and_drop_legacy(conn):
 
         # Step 1: move design voice source_audio_path → cloned_preview_path
         if "source_audio_path" in existing and "cloned_preview_path" in existing:
-            conn.execute(text(
-                "UPDATE voice_profiles SET cloned_preview_path = source_audio_path, source_audio_path = NULL "
-                "WHERE source_audio_path LIKE '%design_%' AND (cloned_preview_path IS NULL OR cloned_preview_path = '')"
-            ))
-            count = conn.execute(text(
-                "SELECT changes()"
-            )).scalar()
+            conn.execute(
+                text(
+                    "UPDATE voice_profiles SET cloned_preview_path = source_audio_path, source_audio_path = NULL "
+                    "WHERE source_audio_path LIKE '%design_%' AND (cloned_preview_path IS NULL OR cloned_preview_path = '')"
+                )
+            )
+            count = conn.execute(text("SELECT changes()")).scalar()
             if count:
                 logger.info(f"[migration] P12: moved {count} design source → preview")
 
@@ -330,12 +333,18 @@ def _migrate_design_preview_and_drop_legacy(conn):
             unique = "UNIQUE " if idx[2] else ""
             cols = conn.execute(text(f"PRAGMA index_info({idx_name})")).fetchall()
             col_names = ", ".join(c[2] for c in cols)
-            index_stmts.append(f"CREATE {unique}INDEX IF NOT EXISTS {idx_name} ON voice_profiles ({col_names})")
+            index_stmts.append(
+                f"CREATE {unique}INDEX IF NOT EXISTS {idx_name} ON voice_profiles ({col_names})"
+            )
 
         conn.execute(text("ALTER TABLE voice_profiles RENAME TO voice_profiles_old"))
         conn.execute(text(f"CREATE TABLE voice_profiles ({col_sql})"))
         col_names = ", ".join(c[1] for c in keep_cols)
-        conn.execute(text(f"INSERT INTO voice_profiles ({col_names}) SELECT {col_names} FROM voice_profiles_old"))
+        conn.execute(
+            text(
+                f"INSERT INTO voice_profiles ({col_names}) SELECT {col_names} FROM voice_profiles_old"
+            )
+        )
         conn.execute(text("DROP TABLE voice_profiles_old"))
         for stmt in index_stmts:
             conn.execute(text(stmt))
@@ -349,7 +358,9 @@ def _migrate_absolute_to_relative(conn):
     """P13: convert absolute paths in voice_profiles to relative paths (幂等)."""
     import logging
     from pathlib import Path as FsPath
+
     from app.core.config import settings
+
     logger = logging.getLogger(__name__)
     try:
         existing = {c["name"] for c in inspect(conn).get_columns("voice_profiles")}
@@ -359,7 +370,9 @@ def _migrate_absolute_to_relative(conn):
 
         base = settings.base_dir
         for col in path_cols:
-            rows = conn.execute(text(f"SELECT rowid, {col} FROM voice_profiles WHERE {col} IS NOT NULL")).fetchall()
+            rows = conn.execute(
+                text(f"SELECT rowid, {col} FROM voice_profiles WHERE {col} IS NOT NULL")
+            ).fetchall()
             updated = 0
             for rowid, val in rows:
                 p = FsPath(val)
@@ -369,7 +382,10 @@ def _migrate_absolute_to_relative(conn):
                     except ValueError:
                         rel = str(p).replace("\\", "/")
                     if rel != val:
-                        conn.execute(text(f"UPDATE voice_profiles SET {col} = :rel WHERE rowid = :rid"), {"rel": rel, "rid": rowid})
+                        conn.execute(
+                            text(f"UPDATE voice_profiles SET {col} = :rel WHERE rowid = :rid"),
+                            {"rel": rel, "rid": rowid},
+                        )
                         updated += 1
             if updated:
                 logger.info(f"[migration] P13: converted {updated} absolute paths in {col}")
@@ -382,11 +398,9 @@ def _has_unique_index_on(conn, table_name: str, column_names: set[str]) -> bool:
     exists (including SQLite auto-indexes created by UNIQUE constraints)."""
     for row in conn.execute(text(f"PRAGMA index_list({table_name})")).fetchall():
         # row: (seq, name, unique, partial, ...)
-        if not row[2]:        # not unique
+        if not row[2]:  # not unique
             continue
-        idx_cols = {
-            r[2] for r in conn.execute(text(f"PRAGMA index_info({row[1]})")).fetchall()
-        }
+        idx_cols = {r[2] for r in conn.execute(text(f"PRAGMA index_info({row[1]})")).fetchall()}
         if idx_cols == column_names:
             return True
     return False
@@ -398,43 +412,56 @@ def _migrate_deduplicate_positions(conn):
     exist, and named indexes are skipped when an equivalent unique index
     (including auto-indexes from create_all) already exists."""
     import logging
+
     logger = logging.getLogger(__name__)
     existing_tables = set(inspect(conn).get_table_names())
 
     # ── 1. Deduplicate segment positions ──
     if "segmented_project_segments" in existing_tables:
-        dup_chapters = conn.execute(text(
-            "SELECT chapter_id FROM segmented_project_segments "
-            "GROUP BY chapter_id, position HAVING COUNT(*) > 1"
-        )).fetchall()
+        dup_chapters = conn.execute(
+            text(
+                "SELECT chapter_id FROM segmented_project_segments "
+                "GROUP BY chapter_id, position HAVING COUNT(*) > 1"
+            )
+        ).fetchall()
         for (chapter_id,) in dup_chapters:
-            rows = conn.execute(text(
-                "SELECT id FROM segmented_project_segments "
-                "WHERE chapter_id = :cid ORDER BY position, COALESCE(created_at, ''), id"
-            ), {"cid": chapter_id}).fetchall()
+            rows = conn.execute(
+                text(
+                    "SELECT id FROM segmented_project_segments "
+                    "WHERE chapter_id = :cid ORDER BY position, COALESCE(created_at, ''), id"
+                ),
+                {"cid": chapter_id},
+            ).fetchall()
             for new_pos, (seg_id,) in enumerate(rows):
-                conn.execute(text(
-                    "UPDATE segmented_project_segments SET position = :pos WHERE id = :sid"
-                ), {"pos": new_pos, "sid": seg_id})
+                conn.execute(
+                    text("UPDATE segmented_project_segments SET position = :pos WHERE id = :sid"),
+                    {"pos": new_pos, "sid": seg_id},
+                )
             logger.info(
                 f"[migration] P9007: deduped {len(rows)} segment positions in chapter {chapter_id}"
             )
 
     # ── 2. Deduplicate chapter positions ──
     if "segmented_project_chapters" in existing_tables:
-        dup_projects = conn.execute(text(
-            "SELECT project_id FROM segmented_project_chapters "
-            "GROUP BY project_id, position HAVING COUNT(*) > 1"
-        )).fetchall()
+        dup_projects = conn.execute(
+            text(
+                "SELECT project_id FROM segmented_project_chapters "
+                "GROUP BY project_id, position HAVING COUNT(*) > 1"
+            )
+        ).fetchall()
         for (project_id,) in dup_projects:
-            rows = conn.execute(text(
-                "SELECT id FROM segmented_project_chapters "
-                "WHERE project_id = :pid ORDER BY position, COALESCE(created_at, ''), id"
-            ), {"pid": project_id}).fetchall()
+            rows = conn.execute(
+                text(
+                    "SELECT id FROM segmented_project_chapters "
+                    "WHERE project_id = :pid ORDER BY position, COALESCE(created_at, ''), id"
+                ),
+                {"pid": project_id},
+            ).fetchall()
             for new_pos, (ch_id,) in enumerate(rows):
-                conn.execute(text(
-                    "UPDATE segmented_project_chapters SET position = :pos WHERE id = :cid"
-                ), {"pos": new_pos, "cid": ch_id})
+                conn.execute(
+                    text("UPDATE segmented_project_chapters SET position = :pos WHERE id = :cid"),
+                    {"pos": new_pos, "cid": ch_id},
+                )
             logger.info(
                 f"[migration] P9007: deduped {len(rows)} chapter positions in project {project_id}"
             )
@@ -444,12 +471,18 @@ def _migrate_deduplicate_positions(conn):
     # auto-index (fresh DB path).  IF NOT EXISTS checks by name, so it can't
     # detect the auto-index and would create a duplicate.
     unique_index_checks = [
-        ("segmented_project_chapters", {"project_id", "position"},
-         "CREATE UNIQUE INDEX uq_chapter_project_position "
-         "ON segmented_project_chapters(project_id, position)"),
-        ("segmented_project_segments", {"chapter_id", "position"},
-         "CREATE UNIQUE INDEX uq_segment_chapter_position "
-         "ON segmented_project_segments(chapter_id, position)"),
+        (
+            "segmented_project_chapters",
+            {"project_id", "position"},
+            "CREATE UNIQUE INDEX uq_chapter_project_position "
+            "ON segmented_project_chapters(project_id, position)",
+        ),
+        (
+            "segmented_project_segments",
+            {"chapter_id", "position"},
+            "CREATE UNIQUE INDEX uq_segment_chapter_position "
+            "ON segmented_project_segments(chapter_id, position)",
+        ),
     ]
     for table, cols, ddl in unique_index_checks:
         if table not in existing_tables:
@@ -485,6 +518,7 @@ def _migrate_drop_zombie_table(conn):
     table recreate).  Safe to drop unconditionally.
     """
     import logging
+
     logger = logging.getLogger(__name__)
     existing = set(inspect(conn).get_table_names())
     if "narration_documents" not in existing:
@@ -495,6 +529,7 @@ def _migrate_drop_zombie_table(conn):
 
 def _run_migrations(conn):
     import logging
+
     for stmt in _ALL_ALTER_STMTS:
         if _run_alter_or_skip(conn, stmt):
             logging.getLogger(__name__).info(f"[migration] applied: {stmt}")
@@ -557,19 +592,25 @@ def init_db():
     # start. Guarded by app_env so production is never touched.
     if getattr(settings, "app_env", "production") == "e2e":
         with engine.begin() as conn:
-            conn.execute(text(
-                "UPDATE segmented_project_segments SET role_id = NULL "
-                "WHERE role_id IN (SELECT id FROM roles WHERE project_id IS NOT NULL "
-                "AND project_id NOT IN (SELECT id FROM segmented_projects))"
-            ))
-            conn.execute(text(
-                "DELETE FROM roles WHERE project_id IS NOT NULL "
-                "AND project_id NOT IN (SELECT id FROM segmented_projects)"
-            ))
-            conn.execute(text(
-                "DELETE FROM voice_profiles WHERE project_id IS NOT NULL "
-                "AND project_id NOT IN (SELECT id FROM segmented_projects)"
-            ))
+            conn.execute(
+                text(
+                    "UPDATE segmented_project_segments SET role_id = NULL "
+                    "WHERE role_id IN (SELECT id FROM roles WHERE project_id IS NOT NULL "
+                    "AND project_id NOT IN (SELECT id FROM segmented_projects))"
+                )
+            )
+            conn.execute(
+                text(
+                    "DELETE FROM roles WHERE project_id IS NOT NULL "
+                    "AND project_id NOT IN (SELECT id FROM segmented_projects)"
+                )
+            )
+            conn.execute(
+                text(
+                    "DELETE FROM voice_profiles WHERE project_id IS NOT NULL "
+                    "AND project_id NOT IN (SELECT id FROM segmented_projects)"
+                )
+            )
 
 
 def _migrate_v3_reduce_schema(conn):
@@ -580,6 +621,7 @@ def _migrate_v3_reduce_schema(conn):
     """
     import json
     import logging
+
     logger = logging.getLogger(__name__)
 
     # ── Build column sets ──
@@ -588,17 +630,22 @@ def _migrate_v3_reduce_schema(conn):
     role_cols = {c["name"] for c in inspect(conn).get_columns("roles")}
 
     # ── segments: add voice + audio + drop old columns ──
-    _run_alter_or_skip(conn, "ALTER TABLE segmented_project_segments ADD COLUMN voice JSON NOT NULL DEFAULT '{\"source\":\"chapter\"}'")
+    _run_alter_or_skip(
+        conn,
+        'ALTER TABLE segmented_project_segments ADD COLUMN voice JSON NOT NULL DEFAULT \'{"source":"chapter"}\'',
+    )
     _run_alter_or_skip(conn, "ALTER TABLE segmented_project_segments ADD COLUMN audio JSON")
 
     # Migrate data if old columns still exist and voice data is empty
     if "params" in seg_cols:
         logger.info("[migration] P9000: migrating segment data to voice/audio")
-        seg_rows = conn.execute(text(
-            "SELECT id, params, voice_ref, locked_params, ssml, role_id, "
-            "current_audio_path, previous_audio_path, audio_format, duration_sec "
-            "FROM segmented_project_segments"
-        )).fetchall()
+        seg_rows = conn.execute(
+            text(
+                "SELECT id, params, voice_ref, locked_params, ssml, role_id, "
+                "current_audio_path, previous_audio_path, audio_format, duration_sec "
+                "FROM segmented_project_segments"
+            )
+        ).fetchall()
         for s in seg_rows:
             sid, sp, svr, slp, s_ssml, s_role_id, s_cur, s_prev, s_fmt, s_dur = s
             sp_dict = json.loads(sp) if sp else {}
@@ -608,57 +655,103 @@ def _migrate_v3_reduce_schema(conn):
             audio = None
             if s_cur or s_prev or s_fmt or s_dur is not None:
                 audio = {"format": s_fmt or "mp3"}
-                if s_cur: audio["current"] = {"id": None, "path": s_cur}
-                if s_prev: audio["previous"] = {"id": None, "path": s_prev}
-                if s_dur is not None: audio["duration_sec"] = s_dur
-            conn.execute(text("UPDATE segmented_project_segments SET voice=:v, audio=:a WHERE id=:id"),
-                         {"v": json.dumps(voice), "a": json.dumps(audio) if audio else None, "id": sid})
+                if s_cur:
+                    audio["current"] = {"id": None, "path": s_cur}
+                if s_prev:
+                    audio["previous"] = {"id": None, "path": s_prev}
+                if s_dur is not None:
+                    audio["duration_sec"] = s_dur
+            conn.execute(
+                text("UPDATE segmented_project_segments SET voice=:v, audio=:a WHERE id=:id"),
+                {"v": json.dumps(voice), "a": json.dumps(audio) if audio else None, "id": sid},
+            )
         logger.info(f"[migration] P9000: migrated {len(seg_rows)} segment rows")
 
-    _drop_columns_via_recreate(conn, "segmented_project_segments", [
-        "project_id", "ssml", "params", "voice_ref", "locked_params",
-        "current_audio_path", "previous_audio_path", "audio_format",
-        "duration_sec", "audio_missing", "ssml_annotated_by_llm",
-        "prosody_marks", "role_snapshot",
-    ])
+    _drop_columns_via_recreate(
+        conn,
+        "segmented_project_segments",
+        [
+            "project_id",
+            "ssml",
+            "params",
+            "voice_ref",
+            "locked_params",
+            "current_audio_path",
+            "previous_audio_path",
+            "audio_format",
+            "duration_sec",
+            "audio_missing",
+            "ssml_annotated_by_llm",
+            "prosody_marks",
+            "role_snapshot",
+        ],
+    )
 
     # ── voice_profiles: add engine + drop old columns ──
-    _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN engine JSON NOT NULL DEFAULT '{}'")
+    _run_alter_or_skip(
+        conn, "ALTER TABLE voice_profiles ADD COLUMN engine JSON NOT NULL DEFAULT '{}'"
+    )
 
     if "qwen_voice_id" in vp_cols or "external_audio_url" in vp_cols:
         logger.info("[migration] P9000: migrating voice_profile data to engine")
-        vp_rows = conn.execute(text(
-            "SELECT id, qwen_voice_id, external_audio_url, mimo_voice_id, prompt_text, "
-            "clone_engine, is_cloned, cloned_at FROM voice_profiles"
-        )).fetchall()
+        vp_rows = conn.execute(
+            text(
+                "SELECT id, qwen_voice_id, external_audio_url, mimo_voice_id, prompt_text, "
+                "clone_engine, is_cloned, cloned_at FROM voice_profiles"
+            )
+        ).fetchall()
         for v in vp_rows:
             vid, vq, ve, vm, vp_text, vc, vi, vca = v
             eng = {}
-            if vc: eng["type"] = vc
-            if vq: eng["qwen_voice_id"] = vq
-            if ve: eng["external_audio_url"] = ve
-            if vm: eng["mimo_voice_id"] = vm
-            if vp_text: eng["prompt_text"] = vp_text
-            if vi is not None: eng["is_cloned"] = bool(vi)
-            if vca: eng["cloned_at"] = vca
-            conn.execute(text("UPDATE voice_profiles SET engine=:e WHERE id=:id"),
-                         {"e": json.dumps(eng), "id": vid})
+            if vc:
+                eng["type"] = vc
+            if vq:
+                eng["qwen_voice_id"] = vq
+            if ve:
+                eng["external_audio_url"] = ve
+            if vm:
+                eng["mimo_voice_id"] = vm
+            if vp_text:
+                eng["prompt_text"] = vp_text
+            if vi is not None:
+                eng["is_cloned"] = bool(vi)
+            if vca:
+                eng["cloned_at"] = vca
+            conn.execute(
+                text("UPDATE voice_profiles SET engine=:e WHERE id=:id"),
+                {"e": json.dumps(eng), "id": vid},
+            )
         logger.info(f"[migration] P9000: migrated {len(vp_rows)} voice_profiles")
 
-    _drop_columns_via_recreate(conn, "voice_profiles", [
-        "qwen_voice_id", "external_audio_url", "mimo_voice_id", "prompt_text",
-        "clone_engine", "is_cloned", "cloned_at", "voice_engine_type",
-        "engine_type", "engine_sub_type", "role",
-    ])
+    _drop_columns_via_recreate(
+        conn,
+        "voice_profiles",
+        [
+            "qwen_voice_id",
+            "external_audio_url",
+            "mimo_voice_id",
+            "prompt_text",
+            "clone_engine",
+            "is_cloned",
+            "cloned_at",
+            "voice_engine_type",
+            "engine_type",
+            "engine_sub_type",
+            "role",
+        ],
+    )
 
     # ── roles: add voice + drop old columns ──
-    _run_alter_or_skip(conn, "ALTER TABLE roles ADD COLUMN voice JSON NOT NULL DEFAULT '{\"engine\":\"edge_tts\",\"params\":{}}'")
+    _run_alter_or_skip(
+        conn,
+        'ALTER TABLE roles ADD COLUMN voice JSON NOT NULL DEFAULT \'{"engine":"edge_tts","params":{}}\'',
+    )
 
     if "default_engine" in role_cols:
         logger.info("[migration] P9000: migrating role data to voice")
-        role_rows = conn.execute(text(
-            "SELECT id, default_engine, default_voice, default_engine_params FROM roles"
-        )).fetchall()
+        role_rows = conn.execute(
+            text("SELECT id, default_engine, default_voice, default_engine_params FROM roles")
+        ).fetchall()
         for r in role_rows:
             rid, re, rv, rp = r
             rp_dict = json.loads(rp) if rp else {}
@@ -669,22 +762,36 @@ def _migrate_v3_reduce_schema(conn):
                     voice["params"]["voice_id"] = rv
                 elif engine == "edge_tts":
                     voice["params"]["voice"] = rv
-            conn.execute(text("UPDATE roles SET voice=:v WHERE id=:id"),
-                         {"v": json.dumps(voice), "id": rid})
+            conn.execute(
+                text("UPDATE roles SET voice=:v WHERE id=:id"), {"v": json.dumps(voice), "id": rid}
+            )
         logger.info(f"[migration] P9000: migrated {len(role_rows)} roles")
 
-    _drop_columns_via_recreate(conn, "roles", ["default_engine", "default_voice", "default_engine_params"])
+    _drop_columns_via_recreate(
+        conn, "roles", ["default_engine", "default_voice", "default_engine_params"]
+    )
 
     # ── chapters: drop narration columns ──
-    if "narration_document_id" in {c["name"] for c in inspect(conn).get_columns("segmented_project_chapters")}:
-        _drop_columns_via_recreate(conn, "segmented_project_chapters", [
-            "narration_document_id", "narration_version",
-            "narration_slice_start", "narration_slice_end", "narration_synced_at",
-        ])
+    if "narration_document_id" in {
+        c["name"] for c in inspect(conn).get_columns("segmented_project_chapters")
+    }:
+        _drop_columns_via_recreate(
+            conn,
+            "segmented_project_chapters",
+            [
+                "narration_document_id",
+                "narration_version",
+                "narration_slice_start",
+                "narration_slice_end",
+                "narration_synced_at",
+            ],
+        )
         logger.info("[migration] P9000: dropped narration columns from chapters")
 
     # ── projects: drop active_narration_version ──
-    if "active_narration_version" in {c["name"] for c in inspect(conn).get_columns("segmented_projects")}:
+    if "active_narration_version" in {
+        c["name"] for c in inspect(conn).get_columns("segmented_projects")
+    }:
         _drop_columns_via_recreate(conn, "segmented_projects", ["active_narration_version"])
         logger.info("[migration] P9000: dropped active_narration_version from projects")
 
@@ -700,6 +807,7 @@ def _migrate_chapter_voice(conn):
     """
     import json
     import logging
+
     logger = logging.getLogger(__name__)
 
     # Check if voice column already exists
@@ -710,12 +818,14 @@ def _migrate_chapter_voice(conn):
         return
 
     # Add voice column
-    conn.execute(text("ALTER TABLE segmented_project_chapters ADD COLUMN voice JSON NOT NULL DEFAULT '{}'"))
+    conn.execute(
+        text("ALTER TABLE segmented_project_chapters ADD COLUMN voice JSON NOT NULL DEFAULT '{}'")
+    )
 
     # Migrate data: build EngineParams from engine + default_params
-    rows = conn.execute(text(
-        "SELECT id, engine, default_params FROM segmented_project_chapters"
-    )).fetchall()
+    rows = conn.execute(
+        text("SELECT id, engine, default_params FROM segmented_project_chapters")
+    ).fetchall()
 
     migrated = 0
     for row in rows:
@@ -775,11 +885,12 @@ def _migrate_segment_voice_params(conn):
     """P9003: convert segment voice.params (custom) and generated_params to EngineParams format."""
     import json
     import logging
+
     logger = logging.getLogger(__name__)
 
-    rows = conn.execute(text(
-        "SELECT id, voice, generated_params FROM segmented_project_segments"
-    )).fetchall()
+    rows = conn.execute(
+        text("SELECT id, voice, generated_params FROM segmented_project_segments")
+    ).fetchall()
 
     updated_voice = 0
     updated_generated = 0
@@ -797,8 +908,12 @@ def _migrate_segment_voice_params(conn):
                 new_params["voice"] = p.get("edge_voice", "")
                 raw_rate = p.get("edge_rate", 0)
                 raw_vol = p.get("edge_volume", 0)
-                new_params["rate"] = f"+{raw_rate}%" if isinstance(raw_rate, (int, float)) else str(raw_rate)
-                new_params["volume"] = f"+{raw_vol}%" if isinstance(raw_vol, (int, float)) else str(raw_vol)
+                new_params["rate"] = (
+                    f"+{raw_rate}%" if isinstance(raw_rate, (int, float)) else str(raw_rate)
+                )
+                new_params["volume"] = (
+                    f"+{raw_vol}%" if isinstance(raw_vol, (int, float)) else str(raw_vol)
+                )
             elif engine == "cosyvoice":
                 new_params["voice_id"] = p.get("voice_id", "")
                 new_params["speed"] = p.get("speed", 1.0)
@@ -809,7 +924,9 @@ def _migrate_segment_voice_params(conn):
             elif engine == "mimo_tts":
                 mode = p.get("mimo_mode", "preset")
                 new_params["mode"] = mode
-                new_params["voice_id"] = p.get("mimo_preset_voice" if mode == "preset" else "mimo_clone_voice_id", "")
+                new_params["voice_id"] = p.get(
+                    "mimo_preset_voice" if mode == "preset" else "mimo_clone_voice_id", ""
+                )
                 new_params["instruction"] = p.get("mimo_instruction", "")
                 if p.get("mimo_voice_description"):
                     new_params["voice_description"] = p["mimo_voice_description"]
@@ -840,24 +957,46 @@ def _migrate_segment_voice_params(conn):
                 cropped: dict[str, object] = {"engine": engine}
                 if engine == "edge_tts":
                     for k in ("edge_voice", "edge_rate", "edge_volume"):
-                        if k in gp: cropped[k] = gp[k]
+                        if k in gp:
+                            cropped[k] = gp[k]
                 elif engine == "cosyvoice":
                     for k in ("voice_id", "speed", "volume", "pitch", "language", "instruction"):
-                        if k in gp: cropped[k] = gp[k]
+                        if k in gp:
+                            cropped[k] = gp[k]
                 elif engine == "mimo_tts":
-                    for k in ("mimo_mode", "mimo_preset_voice", "mimo_clone_voice_id", "mimo_instruction", "mimo_voice_description"):
-                        if k in gp: cropped[k] = gp[k]
+                    for k in (
+                        "mimo_mode",
+                        "mimo_preset_voice",
+                        "mimo_clone_voice_id",
+                        "mimo_instruction",
+                        "mimo_voice_description",
+                    ):
+                        if k in gp:
+                            cropped[k] = gp[k]
                 elif engine == "voxcpm":
-                    for k in ("voxcpm_mode", "voice_id", "voxcpm_style_control", "voxcpm_prompt_text", "voxcpm_cfg_value", "voxcpm_inference_timesteps", "voxcpm_voice_description"):
-                        if k in gp: cropped[k] = gp[k]
+                    for k in (
+                        "voxcpm_mode",
+                        "voice_id",
+                        "voxcpm_style_control",
+                        "voxcpm_prompt_text",
+                        "voxcpm_cfg_value",
+                        "voxcpm_inference_timesteps",
+                        "voxcpm_voice_description",
+                    ):
+                        if k in gp:
+                            cropped[k] = gp[k]
 
                 conn.execute(
-                    text("UPDATE segmented_project_segments SET generated_params = :g WHERE id = :id"),
+                    text(
+                        "UPDATE segmented_project_segments SET generated_params = :g WHERE id = :id"
+                    ),
                     {"g": json.dumps(cropped), "id": seg_id},
                 )
                 updated_generated += 1
 
-    logger.info(f"[migration] P9003: migrated {updated_voice} custom segment voice.params + cropped {updated_generated} generated_params")
+    logger.info(
+        f"[migration] P9003: migrated {updated_voice} custom segment voice.params + cropped {updated_generated} generated_params"
+    )
 
 
 def _migrate_vp_v2_columns(conn):
@@ -866,11 +1005,12 @@ def _migrate_vp_v2_columns(conn):
     These columns are the replacement for the old engine/engine_params/cloned_preview_path
     columns. They must be added BEFORE P9004 which migrates data into them.
     """
-    import logging
-    logger = logging.getLogger(__name__)
-
-    _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN voice JSON NOT NULL DEFAULT '{}'")
-    _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN voice_params JSON NOT NULL DEFAULT '{}'")
+    _run_alter_or_skip(
+        conn, "ALTER TABLE voice_profiles ADD COLUMN voice JSON NOT NULL DEFAULT '{}'"
+    )
+    _run_alter_or_skip(
+        conn, "ALTER TABLE voice_profiles ADD COLUMN voice_params JSON NOT NULL DEFAULT '{}'"
+    )
     _run_alter_or_skip(conn, "ALTER TABLE voice_profiles ADD COLUMN preview JSON")
 
 
@@ -878,6 +1018,7 @@ def _migrate_voice_profile(conn):
     """P9004: migrate voice_profiles engine→voice, engine_params→voice_params, add preview."""
     import json
     import logging
+
     logger = logging.getLogger(__name__)
 
     # Check if old columns exist (fresh DBs already have new schema)
@@ -888,16 +1029,24 @@ def _migrate_voice_profile(conn):
 
     # Verify new columns have data (prevent re-migration on already-migrated DB)
     if "voice" in cols:
-        populated = conn.execute(text(
-            "SELECT count(*) FROM voice_profiles WHERE voice IS NOT NULL AND json_extract(voice, '$.model') != ''"
-        )).fetchone()[0]
+        populated = conn.execute(
+            text(
+                "SELECT count(*) FROM voice_profiles WHERE voice IS NOT NULL AND json_extract(voice, '$.model') != ''"
+            )
+        ).fetchone()[0]
         if populated > 0:
-            logger.info("[migration] P9004: voice column already populated (%d rows), skipping", populated)
+            logger.info(
+                "[migration] P9004: voice column already populated (%d rows), skipping", populated
+            )
             return
 
     # Only SELECT legacy columns that actually exist (fresh DBs lack engine_params etc.
     # since the P6/P10/P11 zombie-adding ALTERs were removed). Missing ones default to None.
-    select_cols = ["id"] + [c for c in ("engine", "engine_params", "cloned_preview_path", "source_audio_path") if c in cols]
+    select_cols = ["id"] + [
+        c
+        for c in ("engine", "engine_params", "cloned_preview_path", "source_audio_path")
+        if c in cols
+    ]
     rows = conn.execute(text(f"SELECT {', '.join(select_cols)} FROM voice_profiles")).fetchall()
 
     updated = 0
@@ -908,23 +1057,35 @@ def _migrate_voice_profile(conn):
         ep_json = d.get("engine_params")
         cp_path = d.get("cloned_preview_path")
         src_path = d.get("source_audio_path")
-        engine_data = json.loads(engine_json) if isinstance(engine_json, str) else (engine_json or {})
+        engine_data = (
+            json.loads(engine_json) if isinstance(engine_json, str) else (engine_json or {})
+        )
         ep_data = json.loads(ep_json) if isinstance(ep_json, str) else (ep_json or {})
 
         old_type = engine_data.get("type", "")
         model = (
-            "cosyvoice" if old_type == "qwen"
-            else "mimo_tts" if old_type == "mimo"
-            else "voxcpm" if old_type in ("voxcpm",)
-            else "edge_tts" if old_type == "preset"
+            "cosyvoice"
+            if old_type == "qwen"
+            else "mimo_tts"
+            if old_type == "mimo"
+            else "voxcpm"
+            if old_type in ("voxcpm",)
+            else "edge_tts"
+            if old_type == "preset"
             else old_type
         )
         # Fallback for design/clone voices with no explicit engine type
         if not model or model in ("design", "clone"):
             model = "mimo_tts"
-        voice_type = "preset" if old_type == "preset" else ("design" if old_type == "design" else "clone")
+        voice_type = (
+            "preset" if old_type == "preset" else ("design" if old_type == "design" else "clone")
+        )
         # Detect design voices: MiMo or VoxCPM with voice_description in engine_params
-        if voice_type == "clone" and model in ("mimo_tts", "voxcpm") and ep_data.get("voice_description"):
+        if (
+            voice_type == "clone"
+            and model in ("mimo_tts", "voxcpm")
+            and ep_data.get("voice_description")
+        ):
             voice_type = "design"
 
         new_voice = {"model": model, "voice_type": voice_type}
@@ -963,17 +1124,20 @@ def _migrate_voice_profile(conn):
         new_voice_params = {model: vp_entry}
 
         preview = {}
-        preview["audition_text"] = ep_data.get("audition_text", "") or engine_data.get("prompt_text", "") or ""
+        preview["audition_text"] = (
+            ep_data.get("audition_text", "") or engine_data.get("prompt_text", "") or ""
+        )
         preview["preview_audio_path"] = cp_path or (src_path if voice_type != "clone" else "")
 
-        conn.execute(text(
-            "UPDATE voice_profiles SET voice=:v, voice_params=:vp, preview=:p WHERE id=:id"
-        ), {
-            "v": json.dumps(new_voice),
-            "vp": json.dumps(new_voice_params),
-            "p": json.dumps(preview) if any(preview.values()) else None,
-            "id": vp_id,
-        })
+        conn.execute(
+            text("UPDATE voice_profiles SET voice=:v, voice_params=:vp, preview=:p WHERE id=:id"),
+            {
+                "v": json.dumps(new_voice),
+                "vp": json.dumps(new_voice_params),
+                "p": json.dumps(preview) if any(preview.values()) else None,
+                "id": vp_id,
+            },
+        )
         updated += 1
 
     logger.info(f"[migration] P9004: migrated {updated} voice_profiles")
@@ -982,15 +1146,18 @@ def _migrate_voice_profile(conn):
 def _migrate_add_role_project_id(conn):
     """P9005: add project_id column to roles table (nullable, FK to projects)."""
     import logging
+
     logger = logging.getLogger(__name__)
     cols = [row[1] for row in conn.execute(text("PRAGMA table_info(roles)")).fetchall()]
     if "project_id" in cols:
         logger.info("[migration] P9005: project_id column already exists, skipping")
         return
-    conn.execute(text(
-        "ALTER TABLE roles ADD COLUMN project_id VARCHAR "
-        "REFERENCES segmented_projects(id) ON DELETE SET NULL"
-    ))
+    conn.execute(
+        text(
+            "ALTER TABLE roles ADD COLUMN project_id VARCHAR "
+            "REFERENCES segmented_projects(id) ON DELETE SET NULL"
+        )
+    )
     logger.info("[migration] P9005: added project_id column to roles")
 
 
@@ -998,10 +1165,12 @@ def _fix_role_source_segments(conn, logger):
     """Fix segments that have role_id but voice.source = 'custom' (migration bug)."""
     import json
 
-    rows = conn.execute(text(
-        "SELECT id, voice, role_id FROM segmented_project_segments "
-        "WHERE role_id IS NOT NULL AND json_extract(voice, '$.source') = 'custom'"
-    )).fetchall()
+    rows = conn.execute(
+        text(
+            "SELECT id, voice, role_id FROM segmented_project_segments "
+            "WHERE role_id IS NOT NULL AND json_extract(voice, '$.source') = 'custom'"
+        )
+    ).fetchall()
 
     fixed = 0
     for sid, sv, role_id in rows:
@@ -1010,12 +1179,16 @@ def _fix_role_source_segments(conn, logger):
         voice["role_id"] = role_id
         voice.pop("engine", None)
         voice.pop("params", None)
-        conn.execute(text("UPDATE segmented_project_segments SET voice=:v WHERE id=:id"),
-                     {"v": json.dumps(voice), "id": sid})
+        conn.execute(
+            text("UPDATE segmented_project_segments SET voice=:v WHERE id=:id"),
+            {"v": json.dumps(voice), "id": sid},
+        )
         fixed += 1
 
     if fixed:
-        logger.info(f"[migration] P9001: fixed {fixed} segment(s) — changed voice.source from 'custom' to 'role'")
+        logger.info(
+            f"[migration] P9001: fixed {fixed} segment(s) — changed voice.source from 'custom' to 'role'"
+        )
 
 
 def _build_voice_from_legacy(params_dict, voice_ref_dict, locked_params_list, ssml_text, role_id):
@@ -1043,7 +1216,9 @@ def _build_voice_from_legacy(params_dict, voice_ref_dict, locked_params_list, ss
                 result["params"]["voice_id"] = params_dict.get("mimo_clone_voice_id", "")
             elif mode == "voicedesign":
                 result["params"]["voice_id"] = params_dict.get("mimo_clone_voice_id", "")
-                result["params"]["voice_description"] = params_dict.get("mimo_voice_description", "")
+                result["params"]["voice_description"] = params_dict.get(
+                    "mimo_voice_description", ""
+                )
             if params_dict.get("mimo_instruction"):
                 result["params"]["instruction"] = params_dict["mimo_instruction"]
         elif engine == "cosyvoice":
@@ -1115,11 +1290,15 @@ def _preserved_index_stmts(conn, table_name, keep_cols):
             continue
         unique = "UNIQUE " if idx[2] else ""
         col_list = ", ".join(f'"{c}"' for c in cols)
-        stmts.append(f'CREATE {unique}INDEX IF NOT EXISTS "{idx_name}" ON "{table_name}" ({col_list})')
+        stmts.append(
+            f'CREATE {unique}INDEX IF NOT EXISTS "{idx_name}" ON "{table_name}" ({col_list})'
+        )
     return stmts
 
 
-def _swap_in_recreated_table(conn, table_name, create_sql, col_names, select_exprs, params, index_ddls):
+def _swap_in_recreated_table(
+    conn, table_name, create_sql, col_names, select_exprs, params, index_ddls
+):
     """Rebuild a table without ever renaming the original.
 
     Order: CREATE {t}_new → copy → DROP {t} → RENAME {t}_new to {t}.
@@ -1131,7 +1310,9 @@ def _swap_in_recreated_table(conn, table_name, create_sql, col_names, select_exp
     conn.execute(text(create_sql))
     cols = ", ".join(f'"{c}"' for c in col_names)
     conn.execute(
-        text(f'INSERT INTO {table_name}_new ({cols}) SELECT {", ".join(select_exprs)} FROM {table_name}'),
+        text(
+            f"INSERT INTO {table_name}_new ({cols}) SELECT {', '.join(select_exprs)} FROM {table_name}"
+        ),
         params,
     )
     conn.execute(text(f"DROP TABLE {table_name}"))
@@ -1157,8 +1338,12 @@ def _drop_columns_via_recreate(conn, table_name, columns_to_drop):
     idx_stmts = _preserved_index_stmts(conn, table_name, set(keep))
     create_sql = f"CREATE TABLE {table_name}_new ({', '.join(col_defs)})"
     _swap_in_recreated_table(
-        conn, table_name, create_sql,
-        col_names=keep, select_exprs=[f'"{c}"' for c in keep], params={},
+        conn,
+        table_name,
+        create_sql,
+        col_names=keep,
+        select_exprs=[f'"{c}"' for c in keep],
+        params={},
         index_ddls=idx_stmts,
     )
 
@@ -1183,6 +1368,7 @@ def _repair_lost_constraints(conn):
     Idempotent: intact tables are skipped.
     """
     import logging
+
     logger = logging.getLogger(__name__)
     existing = set(inspect(conn).get_table_names())
     for table_name in _CONSTRAINT_REPAIR_TABLES:
@@ -1213,6 +1399,7 @@ def _repair_lost_constraints(conn):
         # 复制数据时，模型里 NOT NULL 的列若在老数据里是 NULL（老表无约束，可能发生），
         # 用模型的 Python 默认值兜底，否则 INSERT 会被新约束拒绝。
         import json as _json
+
         params: dict = {}
         exprs = []
         copy_cols = []
@@ -1224,14 +1411,21 @@ def _repair_lost_constraints(conn):
                 fallback = _column_python_default(col)
                 if fallback is not None:
                     key = f"fb_{col.name}"
-                    params[key] = _json.dumps(fallback, ensure_ascii=False) if isinstance(fallback, (dict, list)) else fallback
+                    params[key] = (
+                        _json.dumps(fallback, ensure_ascii=False)
+                        if isinstance(fallback, (dict, list))
+                        else fallback
+                    )
                     exprs.append(f'COALESCE("{col.name}", :{key})')
                     continue
             exprs.append(f'"{col.name}"')
         # 用编译后的模型 DDL 建临时表（换名），再安全换表。
         from sqlalchemy.schema import CreateIndex, CreateTable
+
         create_sql = str(CreateTable(table).compile(dialect=conn.dialect))
-        tmp_sql = create_sql.replace(f"CREATE TABLE {table_name} ", f"CREATE TABLE {table_name}_new ", 1)
+        tmp_sql = create_sql.replace(
+            f"CREATE TABLE {table_name} ", f"CREATE TABLE {table_name}_new ", 1
+        )
         if tmp_sql == create_sql:
             raise RuntimeError(f"P9006: cannot rewrite CREATE TABLE for {table_name}")
         index_ddls = [str(CreateIndex(idx).compile(dialect=conn.dialect)) for idx in table.indexes]

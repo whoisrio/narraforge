@@ -1,19 +1,23 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
-from typing import Any, List, Optional
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
     from sqlalchemy.orm import Session
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
-from datetime import datetime
-from pydantic import BaseModel, field_validator
 import copy
-import uuid
-import aiofiles
+import logging
 import os
+import re
 import subprocess
 import tempfile
+import uuid
+from datetime import datetime
+
+import aiofiles
+from pydantic import BaseModel, field_validator
 
 from app.api._voice_helpers import voice_to_dict
 from app.core.asset_store import (
@@ -21,17 +25,13 @@ from app.core.asset_store import (
     SupabaseStorageAssetStore,
     get_asset_store,
 )
+from app.core.config import settings
+from app.core.database import get_db
 from app.core.repositories.deps import get_voice_repo
 from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.core.supabase_client import SupabaseError
 from app.schemas.common import ItemsOut, validate_base64_field
 from app.schemas.voice_profile import VoiceProfileOut
-import logging
-import re
-
-from app.core.database import get_db
-from app.core.config import settings
-from app.core.time_utils import utcnow
 
 # workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
 try:
@@ -113,6 +113,7 @@ def _guess_media_type(file_path: str) -> str:
         "flac": "audio/flac",
     }.get(ext, "audio/wav")
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
@@ -132,32 +133,26 @@ def convert_audio_to_mp3(input_path: str, output_path: str) -> bool:
     """
     try:
         # 检查 ffmpeg 是否可用
-        result = subprocess.run(
-            ["ffmpeg", "-version"],
-            capture_output=True,
-            text=True,
-            check=False
-        )
+        result = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True, check=False)
         if result.returncode != 0:
             raise RuntimeError("ffmpeg not found. Please install ffmpeg.")
 
         # 执行转换
         cmd = [
             "ffmpeg",
-            "-i", input_path,
-            "-acodec", "libmp3lame",
-            "-ab", "192k",
-            "-ar", "16000",
+            "-i",
+            input_path,
+            "-acodec",
+            "libmp3lame",
+            "-ab",
+            "192k",
+            "-ar",
+            "16000",
             "-y",  # 覆盖输出文件
-            output_path
+            output_path,
         ]
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=False
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
         if result.returncode != 0:
             raise RuntimeError(f"ffmpeg conversion failed: {result.stderr}")
@@ -170,6 +165,7 @@ def convert_audio_to_mp3(input_path: str, output_path: str) -> bool:
 
 
 # ============ Request Models ============
+
 
 class RegisterRequest(BaseModel):
     profile_id: str
@@ -222,10 +218,13 @@ class DesignVoiceRequest(BaseModel):
     instruction: str | None = None  # 合成指令
     preview_text: str | None = None  # 试听文本（存为 audition_text）
     original_prompt_text: str | None = None  # 原始语音转录（ultimate clone 的 prompt_text）
-    default_voice: str | None = None  # 预置音色的默认 voice 名称（用于区分 edge_tts 和 mimo_tts 预置）
+    default_voice: str | None = (
+        None  # 预置音色的默认 voice 名称（用于区分 edge_tts 和 mimo_tts 预置）
+    )
 
 
 # ============ Routes ============
+
 
 @router.post("/upload", response_model=VoiceProfileOut)
 async def upload_voice(
@@ -244,7 +243,7 @@ async def upload_voice(
         allowed_hint = ", ".join(ext.upper() for ext in allowed_extensions)
         raise HTTPException(
             status_code=400,
-            detail=f"Unsupported file format: {file_ext or '(none)'}. Please upload one of: {allowed_hint}."
+            detail=f"Unsupported file format: {file_ext or '(none)'}. Please upload one of: {allowed_hint}.",
         )
 
     file_id = str(uuid.uuid4())
@@ -278,26 +277,29 @@ async def upload_voice(
 
         file_path = settings.voices_profiles_dir / f"{safe_name}_{ts}.mp3"
         stored_ref = await store.put(settings.to_relative(file_path), converted)
-        file_extension = "mp3"
 
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to convert audio: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to convert audio: {str(e)}")
     finally:
         # 清理临时文件
         for tmp in (orig_path, temp_mp3_path):
             if os.path.exists(tmp):
                 os.remove(tmp)
 
-    voice = repo.create({
-        "id": file_id,
-        "name": file.filename or "Unnamed Voice",
-        "voice": {"model": "", "voice_type": "upload"},
-        "voice_params": {"": {"source_audio_path": stored_ref, "params": {"prompt_text": prompt_text or None}}},
-        "project_id": project_id or None,
-    })
+    voice = repo.create(
+        {
+            "id": file_id,
+            "name": file.filename or "Unnamed Voice",
+            "voice": {"model": "", "voice_type": "upload"},
+            "voice_params": {
+                "": {
+                    "source_audio_path": stored_ref,
+                    "params": {"prompt_text": prompt_text or None},
+                }
+            },
+            "project_id": project_id or None,
+        }
+    )
 
     return voice
 
@@ -322,27 +324,28 @@ async def upload_voice_from_url(
 
     # 验证 URL 是否可访问（禁用代理）
     try:
-        head_resp = req.head(audio_url, timeout=30, allow_redirects=True, proxies={'http': None, 'https': None})
+        head_resp = req.head(
+            audio_url, timeout=30, allow_redirects=True, proxies={"http": None, "https": None}
+        )
         if head_resp.status_code != 200:
             raise HTTPException(
                 status_code=400,
-                detail=f"Audio URL is not accessible. Status code: {head_resp.status_code}"
+                detail=f"Audio URL is not accessible. Status code: {head_resp.status_code}",
             )
 
         # 检查 Content-Type 是否为音频
-        content_type = head_resp.headers.get('Content-Type', '')
-        if not content_type.startswith('audio/'):
+        content_type = head_resp.headers.get("Content-Type", "")
+        if not content_type.startswith("audio/"):
             logger.warning(f"URL may not be an audio file. Content-Type: {content_type}")
 
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to access audio URL: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Failed to access audio URL: {str(e)}")
 
     # 下载音频文件（禁用代理）
     file_id = str(uuid.uuid4())
-    safe_name = (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    safe_name = (
+        (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     temp_dir = tempfile.gettempdir()
     # 下载到临时文件时不假定格式（扩展名来自 URL 不可信，可能实际是 M4A/AAC）
@@ -352,11 +355,13 @@ async def upload_voice_from_url(
 
     try:
         # 下载音频（禁用代理）
-        download_resp = req.get(audio_url, timeout=60, stream=True, proxies={'http': None, 'https': None})
+        download_resp = req.get(
+            audio_url, timeout=60, stream=True, proxies={"http": None, "https": None}
+        )
         if download_resp.status_code != 200:
             raise HTTPException(
                 status_code=400,
-                detail=f"Failed to download audio. Status code: {download_resp.status_code}"
+                detail=f"Failed to download audio. Status code: {download_resp.status_code}",
             )
 
         # 保存到临时文件
@@ -374,8 +379,7 @@ async def upload_voice_from_url(
 
     except Exception as e:
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to download or process audio: {str(e)}"
+            status_code=500, detail=f"Failed to download or process audio: {str(e)}"
         )
     finally:
         for tmp in (temp_audio_path, temp_converted_path):
@@ -383,13 +387,23 @@ async def upload_voice_from_url(
                 os.remove(tmp)
 
     # 创建数据库记录
-    voice = repo.create({
-        "id": file_id,
-        "name": request.name or f"Voice_{file_id[:8]}",
-        "voice": {"model": "", "voice_type": "upload"},
-        "voice_params": {"": {"source_audio_path": stored_ref, "params": {"external_audio_url": audio_url, "prompt_text": request.prompt_text or None}}},
-        "project_id": request.project_id or None,
-    })
+    voice = repo.create(
+        {
+            "id": file_id,
+            "name": request.name or f"Voice_{file_id[:8]}",
+            "voice": {"model": "", "voice_type": "upload"},
+            "voice_params": {
+                "": {
+                    "source_audio_path": stored_ref,
+                    "params": {
+                        "external_audio_url": audio_url,
+                        "prompt_text": request.prompt_text or None,
+                    },
+                }
+            },
+            "project_id": request.project_id or None,
+        }
+    )
 
     return voice
 
@@ -478,13 +492,20 @@ async def upload_voice_from_storage(
         raise HTTPException(status_code=404, detail="Audio not found in storage")
 
     file_id = str(uuid.uuid4())
-    voice = repo.create({
-        "id": file_id,
-        "name": request.name or os.path.basename(path),
-        "voice": {"model": "", "voice_type": "upload"},
-        "voice_params": {"": {"source_audio_path": path, "params": {"prompt_text": request.prompt_text or None}}},
-        "project_id": request.project_id or None,
-    })
+    voice = repo.create(
+        {
+            "id": file_id,
+            "name": request.name or os.path.basename(path),
+            "voice": {"model": "", "voice_type": "upload"},
+            "voice_params": {
+                "": {
+                    "source_audio_path": path,
+                    "params": {"prompt_text": request.prompt_text or None},
+                }
+            },
+            "project_id": request.project_id or None,
+        }
+    )
 
     return voice
 
@@ -562,7 +583,9 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/create-clone-mimo", response_model=VoiceProfileOut)
-async def create_clone_mimo(request: RegisterRequest, repo: VoiceProfileRepository = Depends(get_voice_repo)):
+async def create_clone_mimo(
+    request: RegisterRequest, repo: VoiceProfileRepository = Depends(get_voice_repo)
+):
     """
     MiMo 声音复刻 - 仅保存音频并标记为 MiMo 复刻，无需注册到云端。
 
@@ -689,7 +712,9 @@ async def create_voice_from_design(
     audio_ext = "wav" if request.engine == "voxcpm" else "mp3"
     voice_id = str(uuid.uuid4())
     # 文件名：角色名_时间戳（可读性好）
-    safe_name = (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    safe_name = (
+        (request.name or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     audio_path = settings.voices_previews_dir / f"{safe_name}_{ts}.{audio_ext}"
 
@@ -721,21 +746,25 @@ async def create_voice_from_design(
     if request.original_prompt_text and request.engine in ("voxcpm",):
         vp_params["original_prompt_text"] = request.original_prompt_text
 
-    voice = repo.create({
-        "id": voice_id,
-        "name": request.name,
-        "description": request.description,
-        "avatar": request.avatar,
-        "project_id": request.project_id,
-        "voice": {"model": model, "voice_type": voice_type},
-        "voice_params": {model: {"source_audio_path": stored_ref, "params": vp_params}},
-        "preview": {
-            "audition_text": request.preview_text,
-            "preview_audio_path": stored_ref,
-        },
-    })
+    voice = repo.create(
+        {
+            "id": voice_id,
+            "name": request.name,
+            "description": request.description,
+            "avatar": request.avatar,
+            "project_id": request.project_id,
+            "voice": {"model": model, "voice_type": voice_type},
+            "voice_params": {model: {"source_audio_path": stored_ref, "params": vp_params}},
+            "preview": {
+                "audition_text": request.preview_text,
+                "preview_audio_path": stored_ref,
+            },
+        }
+    )
 
-    logger.info(f"Created VoiceProfile from design: id={voice_id}, engine={request.engine}, name={request.name}, project_id={request.project_id}")
+    logger.info(
+        f"Created VoiceProfile from design: id={voice_id}, engine={request.engine}, name={request.name}, project_id={request.project_id}"
+    )
 
     return voice
 
@@ -773,7 +802,9 @@ async def save_preview_audio(
         raise HTTPException(status_code=400, detail="Audio data too small")
 
     audio_ext = request.audio_format or "wav"
-    safe_name = (voice["name"] or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    safe_name = (
+        (voice["name"] or "voice").replace("/", "_").replace("\\", "_").replace(" ", "_")[:30]
+    )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     preview_path = settings.voices_previews_dir / f"{safe_name}_{ts}.{audio_ext}"
 
@@ -791,9 +822,10 @@ async def save_preview_audio(
     }
 
 
-
 @router.get("/list", response_model=ItemsOut[VoiceProfileOut])
-async def list_voices(project_id: str | None = None, repo: VoiceProfileRepository = Depends(get_voice_repo)):
+async def list_voices(
+    project_id: str | None = None, repo: VoiceProfileRepository = Depends(get_voice_repo)
+):
     """获取声音列表。无 project_id 时返回全局声音；有 project_id 时返回全局 + 该项目的声音。"""
     return {"items": repo.list(project_id=project_id)}
 
@@ -833,7 +865,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
             existing = None
             for v in all_voices:
                 vp = v.voice_params or {}
-                cosy_vp = (vp.get("cosyvoice") or {})
+                cosy_vp = vp.get("cosyvoice") or {}
                 if cosy_vp.get("params", {}).get("voice_id") == voice_id:
                     existing = v
                     break
@@ -847,12 +879,16 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 existing.voice = voice_data
                 db.commit()
                 db.refresh(existing)
-                results.append({
-                    "id": existing.id,
-                    "name": existing.name,
-                    "qwen_voice_id": ((existing.voice_params or {}).get("cosyvoice", {}) or {}).get("params", {}).get("voice_id"),
-                    "action": "updated"
-                })
+                results.append(
+                    {
+                        "id": existing.id,
+                        "name": existing.name,
+                        "qwen_voice_id": ((existing.voice_params or {}).get("cosyvoice", {}) or {})
+                        .get("params", {})
+                        .get("voice_id"),
+                        "action": "updated",
+                    }
+                )
             else:
                 # 创建新记录
                 new_voice = VoiceProfile(
@@ -865,19 +901,21 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 db.commit()
                 db.refresh(new_voice)
                 synced_count += 1
-                results.append({
-                    "id": new_voice.id,
-                    "name": new_voice.name,
-                    "qwen_voice_id": voice_id,
-                    "action": "created"
-                })
+                results.append(
+                    {
+                        "id": new_voice.id,
+                        "name": new_voice.name,
+                        "qwen_voice_id": voice_id,
+                        "action": "created",
+                    }
+                )
 
         return {
             "message": f"Synced {synced_count} new voices, updated {existing_count} existing",
             "synced": synced_count,
             "updated": existing_count,
             "total_qwen_voices": len(qwen_voices),
-            "results": results
+            "results": results,
         }
 
     except Exception as e:
@@ -928,7 +966,11 @@ async def update_voice_description(
     return {
         "id": voice["id"],
         "description": voice["description"],
-        "prompt_text": ((voice["voice_params"] or {}).get((voice["voice"] or {}).get("model", ""), {}) or {}).get("params", {}).get("prompt_text"),
+        "prompt_text": (
+            (voice["voice_params"] or {}).get((voice["voice"] or {}).get("model", ""), {}) or {}
+        )
+        .get("params", {})
+        .get("prompt_text"),
     }
 
 
@@ -971,7 +1013,11 @@ async def get_voice(voice_id: str, repo: VoiceProfileRepository = Depends(get_vo
 
 
 @router.delete("/{voice_id}")
-async def delete_voice(voice_id: str, db: Session = Depends(get_db), repo: VoiceProfileRepository = Depends(get_voice_repo)):
+async def delete_voice(
+    voice_id: str,
+    db: Session = Depends(get_db),
+    repo: VoiceProfileRepository = Depends(get_voice_repo),
+):
     """删除声音 - 同时删除 Qwen 云端音色（如有）、本地音频文件和数据库记录"""
     voice = repo.get(voice_id)
     if not voice:

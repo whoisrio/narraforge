@@ -10,8 +10,8 @@
 完全零依赖，不调 LLM，不读数据库。
 """
 
-import re
 import logging
+import re
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -52,6 +52,7 @@ _RE_ROLE_ENGLISH = re.compile(r"^[A-Z][A-Z\s()]{1,29}$", re.MULTILINE)
 # 数据结构
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class Segment:
     text: str
@@ -82,6 +83,7 @@ class SplitResult:
 # ---------------------------------------------------------------------------
 # 公开 API
 # ---------------------------------------------------------------------------
+
 
 def analyze_script(
     text: str,
@@ -164,6 +166,7 @@ def analyze_script(
 # ---------------------------------------------------------------------------
 # 内部实现
 # ---------------------------------------------------------------------------
+
 
 def _find_chapter_boundaries(text: str) -> list[tuple[str | None, int, int]]:
     """找到章节标题位置，返回 [(title, start, end), ...]
@@ -322,14 +325,14 @@ def _strip_role_prefix(line: str, role: str | None) -> str:
     if m and m.group(1).strip() == role:
         # 保留冒号后的内容
         idx = line.index(m.group(0))
-        rest = line[idx + len(m.group(0)):]
+        rest = line[idx + len(m.group(0)) :]
         return rest.strip()
 
     # 规则 A 前缀 "角色："
     m = _RE_ROLE_COLON.match(line)
     if m and m.group(1).strip() == role:
         idx = line.index(m.group(0))
-        rest = line[idx + len(m.group(0)):]
+        rest = line[idx + len(m.group(0)) :]
         return rest.strip()
 
     return line

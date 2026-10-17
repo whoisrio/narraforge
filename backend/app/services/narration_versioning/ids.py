@@ -5,6 +5,7 @@ Stability contract:
 - Chapter id:   `ch{NN}-{slug}` from (position, design_title/name).
 - Segment id:   `s{NNN}` — frozen at first split; deleted IDs never reused.
 """
+
 from __future__ import annotations
 
 import re

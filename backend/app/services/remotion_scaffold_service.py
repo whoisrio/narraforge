@@ -5,6 +5,7 @@ target dir already holds one), then refreshes derived assets: per-chapter
 concatenated audio, per-chapter SRT, ``segment_manifest.json`` and
 ``AGENTS.md``. Idempotent.
 """
+
 from __future__ import annotations
 
 import json

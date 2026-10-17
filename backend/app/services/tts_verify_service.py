@@ -15,6 +15,7 @@
 
 比对逻辑全项目唯一实现：前端只做编排和呈现，不重复实现归一化。
 """
+
 from __future__ import annotations
 
 import difflib

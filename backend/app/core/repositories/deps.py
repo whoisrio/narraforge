@@ -14,6 +14,7 @@ M4 多用户隔离（workers/Supabase 实现专属；Local 实现忽略 user，�
 - 匿名（仅可能到达无状态 allowlist 端点，正常不会触达这些仓储）→
   owner_id=None 且非 see_all：兜底作用域 user_id IS NULL，看不到任何用户数据。
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -139,9 +140,7 @@ async def get_usage_repo(request: Request, db: Session = Depends(get_db)):
 
     if _workers_mode():
         owner_id, see_all = _request_scope(request)
-        return SupabaseUsageRepository(
-            get_supabase_client(), owner_id=owner_id, see_all=see_all
-        )
+        return SupabaseUsageRepository(get_supabase_client(), owner_id=owner_id, see_all=see_all)
     return LocalUsageRepository(db)
 
 

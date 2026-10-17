@@ -5,6 +5,7 @@
 workers 的 Supabase 仓储也要用它们做行 ↔ dict 转换。
 segmented_project_service 继续 re-export，历史 import 路径不变。
 """
+
 from __future__ import annotations
 
 import json

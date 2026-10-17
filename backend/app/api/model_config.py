@@ -7,9 +7,10 @@ PUT  /model-config/{provider} — 更新指定提供商的配置
 GET  /model-config/schema     — 获取配置 schema（前端渲染表单用）
 """
 
+from typing import Any, Dict
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from typing import Any, Dict
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
@@ -17,20 +18,21 @@ try:
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
 
+from app.core.crypto_service import get_rsa_public_key_pem, rsa_decrypt
 from app.core.database import get_db
 from app.core.model_config_service import (
-    get_all_configs,
-    update_provider_config,
-    get_config_schema,
     PROVIDER_SCHEMAS,
+    get_all_configs,
+    get_config_schema,
+    update_provider_config,
 )
-from app.core.crypto_service import get_rsa_public_key_pem, rsa_decrypt
 
 router = APIRouter()
 
 
 class ProviderConfigUpdate(BaseModel):
     """更新提供商配置的请求体 — 字段名到值的映射"""
+
     fields: Dict[str, str]
 
 
@@ -85,13 +87,11 @@ async def update_model_config(
     if provider not in PROVIDER_SCHEMAS:
         raise HTTPException(
             status_code=400,
-            detail=f"Unknown provider: {provider}. Valid: {', '.join(PROVIDER_SCHEMAS.keys())}"
+            detail=f"Unknown provider: {provider}. Valid: {', '.join(PROVIDER_SCHEMAS.keys())}",
         )
 
     # 确定哪些字段是敏感的
-    sensitive_fields = {
-        k for k, v in PROVIDER_SCHEMAS[provider].items() if v["sensitive"]
-    }
+    sensitive_fields = {k for k, v in PROVIDER_SCHEMAS[provider].items() if v["sensitive"]}
 
     updates = {}
     for key, value in data.fields.items():
@@ -103,17 +103,14 @@ async def update_model_config(
             try:
                 value = rsa_decrypt(value[4:])  # 去掉 "RSA:" 前缀后解密
             except Exception as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Failed to decrypt field '{key}': {e}"
-                )
+                raise HTTPException(status_code=400, detail=f"Failed to decrypt field '{key}': {e}")
         updates[key] = value
 
     if not updates:
         return {"message": "No changes"}
 
     try:
-        result = update_provider_config(db, provider, updates)
+        update_provider_config(db, provider, updates)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

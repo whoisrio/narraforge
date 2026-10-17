@@ -7,14 +7,15 @@
 - 多用户隔离仅在 Supabase 实现（UserScope）：insert 写入 user_id，select 追加
   user_id=eq 过滤；Local 单租户忽略用户。
 """
+
 from __future__ import annotations
 
 import logging
 import uuid
 from typing import Any, Protocol, runtime_checkable
 
-from app.core.supabase_client import SupabaseClient
 from app.core.repositories.user_scope import UserScope
+from app.core.supabase_client import SupabaseClient
 
 # workers bundle 不含 sqlalchemy / app.models：Local* 只在 local 模式实例化。
 try:
@@ -72,15 +73,17 @@ class LocalUsageRepository:
         estimated: bool = False,
     ) -> None:
         try:
-            self._db.add(UsageEvent(
-                id=str(uuid.uuid4()),
-                project_id=project_id,
-                kind=kind,
-                chars=chars,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-                estimated=estimated,
-            ))
+            self._db.add(
+                UsageEvent(
+                    id=str(uuid.uuid4()),
+                    project_id=project_id,
+                    kind=kind,
+                    chars=chars,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    estimated=estimated,
+                )
+            )
             self._db.commit()
         except Exception:  # noqa: BLE001 — best-effort，不拖垮主链路
             logger.warning("record usage event failed", exc_info=True)
@@ -117,9 +120,7 @@ class LocalUsageRepository:
     def usage_for_user(self) -> list[dict]:
         # local 单租户：全部行按 project_id 分桶（含 NULL 桶）
         rows = (
-            self._aggregate_query(self._db.query(UsageEvent))
-            .group_by(UsageEvent.project_id)
-            .all()
+            self._aggregate_query(self._db.query(UsageEvent)).group_by(UsageEvent.project_id).all()
         )
         return [
             {
@@ -150,15 +151,17 @@ class SupabaseUsageRepository(UserScope):
         estimated: bool = False,
     ) -> None:
         try:
-            row = self._stamp_row({
-                "id": str(uuid.uuid4()),
-                "project_id": project_id,
-                "kind": kind,
-                "chars": chars,
-                "input_tokens": input_tokens,
-                "output_tokens": output_tokens,
-                "estimated": estimated,
-            })
+            row = self._stamp_row(
+                {
+                    "id": str(uuid.uuid4()),
+                    "project_id": project_id,
+                    "kind": kind,
+                    "chars": chars,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "estimated": estimated,
+                }
+            )
             self._client.insert(TABLE, [row])
         except Exception:  # noqa: BLE001 — best-effort，不拖垮主链路
             logger.warning("record usage event failed", exc_info=True)

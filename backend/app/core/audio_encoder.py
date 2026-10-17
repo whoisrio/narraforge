@@ -1,4 +1,5 @@
 """ffmpeg-backed audio transcoding for segmented project storage."""
+
 from __future__ import annotations
 
 import logging
@@ -66,10 +67,14 @@ def trim_audio_silence_bytes(
         cmd = [
             "ffmpeg",
             "-y",
-            "-loglevel", "error",
-            "-i", str(in_path),
-            "-af", af,
-            "-f", "wav",
+            "-loglevel",
+            "error",
+            "-i",
+            str(in_path),
+            "-af",
+            af,
+            "-f",
+            "wav",
             str(out_path),
         ]
         proc = subprocess.run(cmd, capture_output=True, timeout=60)
@@ -109,11 +114,16 @@ def transcode_to_mp3(
     cmd = [
         "ffmpeg",
         "-y",
-        "-loglevel", "error",
-        "-i", str(in_path),
-        "-codec:a", "libmp3lame",
-        "-b:a", bitrate,
-        "-f", "mp3",
+        "-loglevel",
+        "error",
+        "-i",
+        str(in_path),
+        "-codec:a",
+        "libmp3lame",
+        "-b:a",
+        bitrate,
+        "-f",
+        "mp3",
         str(out_tmp),
     ]
     try:
@@ -148,7 +158,6 @@ def concat_to_mp3(
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    list_path: Path | None = None
     wav_path: Path | None = None
     out_tmp = output_path.with_suffix(output_path.suffix + ".tmp")
     try:
@@ -167,15 +176,24 @@ def concat_to_mp3(
             filters.append(f"[{i}:a]")
 
         # Pass 1
-        cmd1 = [
-            "ffmpeg", "-y", "-loglevel", "error",
-        ] + inputs + [
-            "-filter_complex",
-            f"{''.join(filters)}concat=n={len(input_paths)}:v=0:a=1,aformat=s16:44100[out]",
-            "-map", "[out]",
-            "-f", "wav",
-            str(wav_path),
-        ]
+        cmd1 = (
+            [
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+            ]
+            + inputs
+            + [
+                "-filter_complex",
+                f"{''.join(filters)}concat=n={len(input_paths)}:v=0:a=1,aformat=s16:44100[out]",
+                "-map",
+                "[out]",
+                "-f",
+                "wav",
+                str(wav_path),
+            ]
+        )
         proc1 = subprocess.run(cmd1, capture_output=True, timeout=180)
         if proc1.returncode != 0:
             raise AudioEncoderError(
@@ -184,11 +202,18 @@ def concat_to_mp3(
 
         # Pass 2
         cmd2 = [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-i", str(wav_path),
-            "-codec:a", "libmp3lame",
-            "-b:a", bitrate,
-            "-f", "mp3",
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-i",
+            str(wav_path),
+            "-codec:a",
+            "libmp3lame",
+            "-b:a",
+            bitrate,
+            "-f",
+            "mp3",
             str(out_tmp),
         ]
         proc2 = subprocess.run(cmd2, capture_output=True, timeout=180)
@@ -226,9 +251,19 @@ def probe_audio_duration(audio_path: Path) -> float | None:
     if ffprobe:
         try:
             r = subprocess.run(
-                [ffprobe, "-v", "error", "-show_entries", "format=duration",
-                 "-of", "default=noprint_wrappers=1:nokey=1", str(audio_path)],
-                capture_output=True, text=True, timeout=10,
+                [
+                    ffprobe,
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(audio_path),
+                ],
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             if r.returncode == 0:
                 txt = (r.stdout or "").strip()
@@ -243,7 +278,9 @@ def probe_audio_duration(audio_path: Path) -> float | None:
         try:
             r = subprocess.run(
                 [ffmpeg, "-i", str(audio_path)],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True,
+                text=True,
+                timeout=10,
             )
             # ffmpeg prints "Duration: 00:00:12.34" to stderr even on success
             for line in (r.stderr or "").splitlines():

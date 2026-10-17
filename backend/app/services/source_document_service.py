@@ -1,4 +1,5 @@
 """Source documents CRUD — 项目级原始素材 (P2 v2)."""
+
 from __future__ import annotations
 
 import logging
@@ -10,11 +11,12 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.source_document import SourceDocument
 from app.models.segmented_project import SegmentedProject
-from app.schemas.segmented_project import SourceDocumentIn, SourceDocumentOut
+from app.models.source_document import SourceDocument
+from app.schemas.segmented_project import SourceDocumentOut
 
 logger = logging.getLogger(__name__)
+
 
 # 上传文件存储目录: <segmented_dir>/<project_id>/sources/
 def sources_dir(project_id: str) -> Path:
@@ -55,11 +57,7 @@ def list_sources(db: Session, project_id: str) -> list[SourceDocumentOut]:
 
 
 def get_source(db: Session, project_id: str, source_id: str) -> SourceDocument | None:
-    return (
-        db.query(SourceDocument)
-        .filter_by(id=source_id, project_id=project_id)
-        .first()
-    )
+    return db.query(SourceDocument).filter_by(id=source_id, project_id=project_id).first()
 
 
 def create_source_paste(
@@ -108,6 +106,7 @@ def create_source_audio(
     if duration_sec is None:
         try:
             from app.core.audio_encoder import probe_audio_duration
+
             duration_sec = probe_audio_duration(file_path)
         except Exception as e:
             logger.warning(f"failed to probe duration for {file_path}: {e}")
@@ -125,7 +124,9 @@ def create_source_audio(
     db.add(src)
     db.commit()
     db.refresh(src)
-    logger.info(f"created audio source {src.id} for project {project_id}, {src.file_size} bytes, {duration_sec}s")
+    logger.info(
+        f"created audio source {src.id} for project {project_id}, {src.file_size} bytes, {duration_sec}s"
+    )
     return source_to_out(src)
 
 

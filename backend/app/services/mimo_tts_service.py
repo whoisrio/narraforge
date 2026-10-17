@@ -9,13 +9,12 @@ MiMo-V2.5-TTS 系列 语音合成服务
 API 兼容 OpenAI Chat Completions 格式，通过 audio 参数控制音色和输出格式。
 """
 
+import asyncio
 import base64
 import json
 import logging
-import os
-import asyncio
-from typing import Optional
 from pathlib import Path
+from typing import Optional
 
 import httpx
 
@@ -25,15 +24,69 @@ logger = logging.getLogger(__name__)
 
 # MiMo TTS 预置音色列表
 MIMO_PRESET_VOICES = [
-    {"voice_id": "mimo_default", "name": "MiMo-默认", "language": "中英", "gender": "-", "description": "默认音色，中国集群为冰糖，其他集群为Mia"},
-    {"voice_id": "冰糖", "name": "冰糖", "language": "中文", "gender": "女性", "description": "中文女声"},
-    {"voice_id": "茉莉", "name": "茉莉", "language": "中文", "gender": "女性", "description": "中文女声"},
-    {"voice_id": "苏打", "name": "苏打", "language": "中文", "gender": "男性", "description": "中文男声"},
-    {"voice_id": "白桦", "name": "白桦", "language": "中文", "gender": "男性", "description": "中文男声"},
-    {"voice_id": "Mia", "name": "Mia", "language": "英文", "gender": "女性", "description": "英文女声"},
-    {"voice_id": "Chloe", "name": "Chloe", "language": "英文", "gender": "女性", "description": "英文女声"},
-    {"voice_id": "Milo", "name": "Milo", "language": "英文", "gender": "男性", "description": "英文男声"},
-    {"voice_id": "Dean", "name": "Dean", "language": "英文", "gender": "男性", "description": "英文男声"},
+    {
+        "voice_id": "mimo_default",
+        "name": "MiMo-默认",
+        "language": "中英",
+        "gender": "-",
+        "description": "默认音色，中国集群为冰糖，其他集群为Mia",
+    },
+    {
+        "voice_id": "冰糖",
+        "name": "冰糖",
+        "language": "中文",
+        "gender": "女性",
+        "description": "中文女声",
+    },
+    {
+        "voice_id": "茉莉",
+        "name": "茉莉",
+        "language": "中文",
+        "gender": "女性",
+        "description": "中文女声",
+    },
+    {
+        "voice_id": "苏打",
+        "name": "苏打",
+        "language": "中文",
+        "gender": "男性",
+        "description": "中文男声",
+    },
+    {
+        "voice_id": "白桦",
+        "name": "白桦",
+        "language": "中文",
+        "gender": "男性",
+        "description": "中文男声",
+    },
+    {
+        "voice_id": "Mia",
+        "name": "Mia",
+        "language": "英文",
+        "gender": "女性",
+        "description": "英文女声",
+    },
+    {
+        "voice_id": "Chloe",
+        "name": "Chloe",
+        "language": "英文",
+        "gender": "女性",
+        "description": "英文女声",
+    },
+    {
+        "voice_id": "Milo",
+        "name": "Milo",
+        "language": "英文",
+        "gender": "男性",
+        "description": "英文男声",
+    },
+    {
+        "voice_id": "Dean",
+        "name": "Dean",
+        "language": "英文",
+        "gender": "男性",
+        "description": "英文男声",
+    },
 ]
 
 
@@ -208,7 +261,6 @@ class MiMoTTSService:
             audio_bytes = f.read()
 
         # 检查文件大小（Base64 编码后不超过 10MB，即原始文件约 7.5MB）
-        import sys
         estimated_b64_size = len(audio_bytes) * 4 / 3
         if estimated_b64_size > 10 * 1024 * 1024:
             raise ValueError("音频文件太大，Base64 编码后不能超过 10MB")
@@ -326,6 +378,7 @@ async def get_mimo_tts_service(db=None) -> MiMoTTSService:
     if db is not None:
         try:
             from app.core.model_config_service import get_effective_config
+
             config = get_effective_config(db, "mimo_tts")
             api_key = config.get("api_key") or api_key
             base_url = config.get("base_url") or base_url

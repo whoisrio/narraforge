@@ -2,6 +2,7 @@
 
 与计费配额（workers-only）不同，这里是内容质量约束：segment 文本长度上限。
 """
+
 from __future__ import annotations
 
 from typing import Any, Iterable

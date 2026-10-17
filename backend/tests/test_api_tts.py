@@ -88,23 +88,22 @@ def test_synthesize_edge_tts_frontend_storage_never_touches_disk(
 
     monkeypatch.setattr("app.api.tts.is_frontend_storage", lambda db: True)
 
-    # 若实现回退（frontend 分支仍写盘），aiofiles.open 被调用即失败
-    async def _fail_if_called(*args, **kwargs):
-        raise AssertionError("frontend storage must not write audio to disk")
-
-    monkeypatch.setattr("app.api.tts.aiofiles.open", _fail_if_called)
-
+    repo_mock, store_mock = MagicMock(), MagicMock()
     result = asyncio.run(_synthesize_edge_tts(
         TTSRequest(text="Hello", engine="edge_tts", edge_voice="en-US-GuyNeural"),
         db=None,
-        repo=MagicMock(),  # frontend 分支不触碰仓储/资产存储
-        store=MagicMock(),
+        repo=repo_mock,  # frontend 分支不触碰仓储/资产存储
+        store=store_mock,
     ))
 
     fake_audio = b"\xff\xfb\x90\x00" * 50  # conftest mock_edge_tts_service 的假音频
     assert result["audio_base64"] == base64.b64encode(fake_audio).decode("utf-8")
     assert result["params"]["engine"] == "edge_tts"
     assert result["params"]["edge_voice"] == "en-US-GuyNeural"
+    # 落盘护栏：当前实现的持久化通道是 asset store 落盘 + 仓储记录，
+    # frontend 分支两者都不得调用（回归即在此处崩）
+    store_mock.put.assert_not_called()
+    repo_mock.create.assert_not_called()
 
 
 def test_synthesize_edge_tts_backend_storage_persists(

@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import relationship
 import uuid
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, String
 
 from app.core.database import Base
 from app.core.time_utils import utcnow
@@ -18,7 +18,9 @@ class VoiceProfile(Base):
     description = Column(String, nullable=True)
     avatar = Column(String, nullable=True)
 
-    project_id = Column(String, ForeignKey("segmented_projects.id", ondelete="SET NULL"), nullable=True)
+    project_id = Column(
+        String, ForeignKey("segmented_projects.id", ondelete="SET NULL"), nullable=True
+    )
 
     voice = Column(JSON, nullable=False, default=dict)
     voice_params = Column(JSON, nullable=False, default=dict)

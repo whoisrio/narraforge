@@ -1,35 +1,37 @@
+import json
+from typing import Any, List, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import Any, List, Optional
-import json
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
     from sqlalchemy.orm import Session
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
-from app.core.database import get_db
 from app.core.config import settings
+from app.core.database import get_db
 from app.core.deploy_capabilities import get_capabilities
 from app.core.repositories.deps import get_system_config_repo
 from app.core.repositories.system_configs import SystemConfigRepository
 from app.core.system_config_service import (
-    get_storage_mode,
-    set_storage_mode,
-    STORAGE_MODE_BACKEND,
-    STORAGE_MODE_FRONTEND,
     ANIMATION_ROOT_FOLDER_KEY,
     NARRATION_GIT_REMOTE_KEY,
     PRONUNCIATION_MAP_GLOBAL_KEY,
-    normalize_animation_root_folder,
+    STORAGE_MODE_BACKEND,
+    STORAGE_MODE_FRONTEND,
     get_narration_git_remote,
+    get_storage_mode,
+    normalize_animation_root_folder,
+    set_storage_mode,
 )
+
 # workers bundle 不含 app.models（依赖 sqlalchemy）：仅 local 端点运行时引用。
 try:
-    from app.models import TTSConfig, ModelProvider, Emotion
+    from app.models import Emotion, ModelProvider, TTSConfig
 except ImportError:  # workers bundle
     TTSConfig = ModelProvider = Emotion = None  # type: ignore[assignment,misc]
 
@@ -78,7 +80,7 @@ async def list_configs(db: Session = Depends(get_db)):
             "volume": c.volume,
             "pitch": c.pitch,
             "emotion": c.emotion.value if c.emotion else "neutral",
-            "is_default": c.is_default
+            "is_default": c.is_default,
         }
         for c in configs
     ]
@@ -96,7 +98,7 @@ async def create_config(data: ConfigCreate, db: Session = Depends(get_db)):
         volume=data.volume,
         pitch=data.pitch,
         emotion=Emotion(data.emotion),
-        is_default=False
+        is_default=False,
     )
     db.add(config)
     db.commit()
@@ -110,7 +112,7 @@ async def create_config(data: ConfigCreate, db: Session = Depends(get_db)):
         "speed": config.speed,
         "volume": config.volume,
         "pitch": config.pitch,
-        "emotion": config.emotion.value
+        "emotion": config.emotion.value,
     }
 
 
@@ -147,7 +149,7 @@ async def update_config(config_id: str, data: ConfigUpdate, db: Session = Depend
         "speed": config.speed,
         "volume": config.volume,
         "pitch": config.pitch,
-        "emotion": config.emotion.value
+        "emotion": config.emotion.value,
     }
 
 
@@ -184,6 +186,7 @@ async def set_default_config(config_id: str, db: Session = Depends(get_db)):
 # 存储模式配置
 # ---------------------------------------------------------------------------
 
+
 class StorageModeRequest(BaseModel):
     storage_mode: str  # "backend" | "frontend"
 
@@ -201,7 +204,7 @@ async def set_storage_mode_endpoint(data: StorageModeRequest, db: Session = Depe
     if data.storage_mode not in (STORAGE_MODE_BACKEND, STORAGE_MODE_FRONTEND):
         raise HTTPException(
             status_code=400,
-            detail=f"Invalid storage_mode: {data.storage_mode}. Must be 'backend' or 'frontend'"
+            detail=f"Invalid storage_mode: {data.storage_mode}. Must be 'backend' or 'frontend'",
         )
     set_storage_mode(db, data.storage_mode)
     if db is not None:
@@ -212,6 +215,7 @@ async def set_storage_mode_endpoint(data: StorageModeRequest, db: Session = Depe
 # ---------------------------------------------------------------------------
 # Remotion 脚手架根目录（全局设置）
 # ---------------------------------------------------------------------------
+
 
 class AnimationRootRequest(BaseModel):
     value: str
@@ -236,7 +240,9 @@ def _probe_animation_root(value: str) -> tuple[bool, str | None]:
 
 
 @router.get("/animation-root")
-async def get_animation_root_endpoint(repo: SystemConfigRepository = Depends(get_system_config_repo)):
+async def get_animation_root_endpoint(
+    repo: SystemConfigRepository = Depends(get_system_config_repo),
+):
     """获取全局 Remotion 脚手架根目录。"""
     return {"value": repo.get(ANIMATION_ROOT_FOLDER_KEY).strip() or None}
 
@@ -312,8 +318,9 @@ async def narration_git_snapshot_endpoint(db: Session = Depends(get_db)):
 # 全局发音映射字典（合成时文本替换，所有项目共享；项目字典存 project.configs）
 # ---------------------------------------------------------------------------
 
+
 class PronunciationMapEntryIn(BaseModel):
-    id: str           # 全局条目 gpm_ 前缀（项目条目 pm_ 前缀，两层 id 不冲突）
+    id: str  # 全局条目 gpm_ 前缀（项目条目 pm_ 前缀，两层 id 不冲突）
     source: str
     target: str
     note: Optional[str] = None

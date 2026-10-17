@@ -7,33 +7,33 @@ MiMo-V2.5-TTS API 路由
 3. 音频克隆合成 (/mimo/voiceclone)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
-from typing import Any, Optional
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
     from sqlalchemy.orm import Session
 except ImportError:  # workers bundle
     Session = Any  # type: ignore[assignment,misc]
-import uuid
-import os
 import base64
 import logging
+import os
 import tempfile
-from pathlib import Path
+import uuid
 
-from app.core.database import get_db
-from app.core.config import settings
 from app.core.asset_store import AssetStore, get_asset_store
 from app.core.auth_deps import is_workers_anonymous
+from app.core.config import settings
+from app.core.database import get_db
 from app.core.repositories.deps import get_tts_results_repo, get_usage_repo, get_voice_repo
 from app.core.repositories.tts_results import TTSResultRepository
 from app.core.repositories.usage import UsageRepository
 from app.core.repositories.voice_profiles import VoiceProfileRepository
-from app.schemas.common import ItemsOut, validate_base64_field
-from app.schemas.tts import TTSResultOut
 from app.core.system_config_service import is_frontend_storage
+from app.schemas.common import validate_base64_field
+from app.schemas.tts import TTSResultOut
 from app.services.mimo_tts_service import get_mimo_tts_service
 
 logger = logging.getLogger(__name__)
@@ -51,40 +51,54 @@ def _extract_context(ctx: list[dict] | None) -> str | None:
 
 # ============ Request Models ============
 
+
 class MiMoPresetRequest(BaseModel):
     """预置音色合成请求"""
+
     text: str = Field(..., min_length=1, description="待合成的文本")
     voice: str = Field(default="冰糖", description="预置音色ID，如 冰糖、Mia、Chloe 等")
     instruction: str = Field(default="", description="风格指令（自然语言或音频标签）")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
 
+
 class MiMoVoiceDesignRequest(BaseModel):
     """文本设计音色合成请求"""
-    voice_description: str = Field(..., min_length=1, description="音色描述文本，如 '年轻的男性声音，低沉有磁性'")
+
+    voice_description: str = Field(
+        ..., min_length=1, description="音色描述文本，如 '年轻的男性声音，低沉有磁性'"
+    )
     text: str = Field(default="", description="待合成的文本，为空时自动生成适配文本")
-    optimize_text_preview: bool = Field(default=False, description="是否智能润色目标播报文本（默认 False，严格使用传入文本）")
+    optimize_text_preview: bool = Field(
+        default=False, description="是否智能润色目标播报文本（默认 False，严格使用传入文本）"
+    )
     format: str = Field(default="wav", description="输出格式: wav / mp3")
     context: list[dict] | None = None  # [{role: "user", content: "..."}] 上下文对话
 
+
 class MiMoVoiceCloneRequest(BaseModel):
     """音频克隆合成请求 - 使用已上传的音频文件ID"""
+
     text: str = Field(..., min_length=1, description="待合成的文本")
     profile_id: str = Field(..., description="本地数据库中已上传的声音ID")
     instruction: str = Field(default="", description="风格指令")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
     context: list[dict] | None = None  # [{role: "user", content: "..."}] 上下文对话
 
+
 class MiMoVoiceCloneDirectRequest(BaseModel):
     _validate = field_validator("audio_base64", mode="before")(validate_base64_field)
     """音频克隆合成请求 - 直接上传 Base64 编码音频"""
     text: str = Field(..., min_length=1, description="待合成的文本")
     audio_base64: str = Field(..., description="音频文件的 Base64 编码（不含前缀），最大 1MB")
-    mime_type: str = Field(default="audio/mpeg", description="音频 MIME 类型: audio/mpeg 或 audio/wav")
+    mime_type: str = Field(
+        default="audio/mpeg", description="音频 MIME 类型: audio/mpeg 或 audio/wav"
+    )
     instruction: str = Field(default="", description="风格指令")
     format: str = Field(default="wav", description="输出格式: wav / mp3")
 
 
 # ============ Helper ============
+
 
 async def _save_and_respond(
     audio_bytes: bytes,
@@ -127,20 +141,22 @@ async def _save_and_respond(
     # 后端存储模式：音频进 asset store（local 写盘 / workers 写 Supabase Storage）
     ext = audio_fmt if audio_fmt in ("wav", "mp3") else "wav"
     ref = await store.put(f"data/tts-history/mimo_{audio_id}.{ext}", audio_bytes)
-    repo.create({
-        "id": audio_id,
-        "text": text,
-        "voice_id": voice_label,
-        "voice_name": voice_label,
-        "audio_path": ref,
-        "audio_format": ext,
-        "speed": 1.0,
-        "volume": 80,
-        "pitch": 1.0,
-        "instruction": instruction,
-        "language": "Chinese",
-        "source": None,
-    })
+    repo.create(
+        {
+            "id": audio_id,
+            "text": text,
+            "voice_id": voice_label,
+            "voice_name": voice_label,
+            "audio_path": ref,
+            "audio_format": ext,
+            "speed": 1.0,
+            "volume": 80,
+            "pitch": 1.0,
+            "instruction": instruction,
+            "language": "Chinese",
+            "source": None,
+        }
+    )
     # Phase 3 用量计量：workers 匿名走 force_frontend 到不了这里（best-effort）
     if usage_repo is not None:
         usage_repo.record_event(kind="tts", chars=len(text))
@@ -159,10 +175,12 @@ async def _save_and_respond(
 
 # ============ Routes ============
 
+
 @router.get("/voices")
 async def list_mimo_voices():
     """获取 MiMo TTS 预置音色列表"""
     from app.services.mimo_tts_service import MIMO_PRESET_VOICES
+
     return {"items": MIMO_PRESET_VOICES}
 
 
@@ -226,7 +244,9 @@ async def synthesize_voice_design(
             context=ctx,
         )
         # 截取描述前30字作为标签
-        label = request.voice_description[:30] + ("..." if len(request.voice_description) > 30 else "")
+        label = request.voice_description[:30] + (
+            "..." if len(request.voice_description) > 30 else ""
+        )
         return await _save_and_respond(
             audio_bytes=audio_bytes,
             audio_fmt=request.format,
@@ -275,8 +295,9 @@ async def synthesize_voice_clone(
             try:
                 service = await get_mimo_tts_service(db)
                 # 下载外部音频
-                import urllib.request as req
                 import tempfile
+                import urllib.request as req
+
                 with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
                     req.urlretrieve(ext_url, tmp.name)
                     tmp_path = tmp.name
@@ -302,7 +323,7 @@ async def synthesize_voice_clone(
                     force_frontend=is_workers_anonymous(http_request),
                     usage_repo=usage_repo,
                 )
-            except Exception as e:
+            except Exception:
                 if tmp_path and os.path.exists(tmp_path):
                     os.unlink(tmp_path)
                 raise
@@ -381,6 +402,7 @@ async def synthesize_voice_clone_direct(
 
 # ---- Segmented editor integration ----
 
+
 def synthesize_mimo_internal(
     *,
     text: str,
@@ -393,6 +415,7 @@ def synthesize_mimo_internal(
     context: list[dict] | None = None,
 ) -> tuple[bytes, str]:
     """Synthesize for the segmented editor. Returns (audio_bytes, native_format)."""
+
     async def _run() -> bytes:
         service = await get_mimo_tts_service(db)
         ctx = _extract_context(context)
@@ -429,6 +452,7 @@ def synthesize_mimo_internal(
                 ext_url = vp.get("params", {}).get("external_audio_url")
                 if ext_url:
                     import urllib.request as url_req
+
                     tmp = tempfile.NamedTemporaryFile(suffix=".mp3", delete=False)
                     try:
                         url_req.urlretrieve(ext_url, tmp.name)

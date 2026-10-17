@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 # 注意: 在 fenced code block 内的 # 不算
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 # 中文 "第 N 章" 模式 (一二三四五六七八九十百千0-9 + 章), 允许中间有空格
-CHINESE_CHAPTER_RE = re.compile(
-    r"^第\s*[一二三四五六七八九十百千0-9]+\s*章"
-)
+CHINESE_CHAPTER_RE = re.compile(r"^第\s*[一二三四五六七八九十百千0-9]+\s*章")
 # fenced code block 起止
 FENCE_RE = re.compile(r"^```")
 
@@ -77,13 +75,15 @@ def markdown_detect(
         if m:
             level = len(m.group(1))
             raw = m.group(2).strip()
-            candidates.append({
-                "level": level,
-                "raw": raw,
-                "title": raw,
-                "char_pos": line_offsets[i],
-                "is_chinese_chapter": bool(CHINESE_CHAPTER_RE.match(raw)),
-            })
+            candidates.append(
+                {
+                    "level": level,
+                    "raw": raw,
+                    "title": raw,
+                    "char_pos": line_offsets[i],
+                    "is_chinese_chapter": bool(CHINESE_CHAPTER_RE.match(raw)),
+                }
+            )
 
     # doc_title = 第一个 H1
     doc_title: str | None = None
@@ -104,12 +104,13 @@ def markdown_detect(
         # 去掉标题行本身
         first_nl = preview.find("\n")
         if first_nl != -1:
-            preview = preview[first_nl + 1:].strip()
+            preview = preview[first_nl + 1 :].strip()
         c["preview"] = preview[:200]
 
     # 默认推荐: 按 H2 切, 短章合并
     recommended = _build_chapters(
-        text, filtered,
+        text,
+        filtered,
         min_chars=min_chars,
         front_matter_mode=front_matter_mode,
         default_level=2,
@@ -159,28 +160,32 @@ def _build_chapters(
             boundaries = candidates
     if not boundaries:
         # 无任何标题: 整篇当 1 章
-        return [{
-            "index": 0,
-            "title": _default_titles(text)["full"],
-            "level": 0,
-            "start_char": 0,
-            "end_char": len(text),
-            "char_count": len(text),
-            "preview": text[:200],
-        }]
+        return [
+            {
+                "index": 0,
+                "title": _default_titles(text)["full"],
+                "level": 0,
+                "start_char": 0,
+                "end_char": len(text),
+                "char_count": len(text),
+                "preview": text[:200],
+            }
+        ]
 
     # 算每个 boundary 的 start_char / end_char
     raw_chapters: list[dict] = []
     for idx, c in enumerate(boundaries):
         start = c["char_pos"]
         end = boundaries[idx + 1]["char_pos"] if idx + 1 < len(boundaries) else len(text)
-        raw_chapters.append({
-            "title": c["title"],
-            "level": c["level"],
-            "start_char": start,
-            "end_char": end,
-            "char_count": end - start,
-        })
+        raw_chapters.append(
+            {
+                "title": c["title"],
+                "level": c["level"],
+                "start_char": start,
+                "end_char": end,
+                "char_count": end - start,
+            }
+        )
 
     # front matter 处理
     first_start = raw_chapters[0]["start_char"]
@@ -193,13 +198,16 @@ def _build_chapters(
                 raw_chapters[0]["char_count"] = raw_chapters[0]["end_char"]
                 raw_chapters[0]["title"] = f"{raw_chapters[0]['title']} {titles['intro_suffix']}"
             elif front_matter_mode == "own_chapter":
-                raw_chapters.insert(0, {
-                    "title": titles["intro"],
-                    "level": 0,
-                    "start_char": 0,
-                    "end_char": first_start,
-                    "char_count": first_start,
-                })
+                raw_chapters.insert(
+                    0,
+                    {
+                        "title": titles["intro"],
+                        "level": 0,
+                        "start_char": 0,
+                        "end_char": first_start,
+                        "char_count": first_start,
+                    },
+                )
             # skip 模式: 直接扔掉
 
     # 短章合并: 短于 min_chars 的合并到下一章
@@ -216,9 +224,9 @@ def _build_chapters(
     # 加 index + preview
     for i, ch in enumerate(merged):
         ch["index"] = i
-        body = text[ch["start_char"]:ch["end_char"]]
+        body = text[ch["start_char"] : ch["end_char"]]
         first_nl = body.find("\n")
-        preview = body[first_nl + 1:].strip() if first_nl != -1 else body.strip()
+        preview = body[first_nl + 1 :].strip() if first_nl != -1 else body.strip()
         ch["preview"] = preview[:200]
 
     return merged
@@ -248,7 +256,8 @@ def markdown_split(
         return full["chapters"]
 
     return _build_chapters(
-        text, filtered,
+        text,
+        filtered,
         min_chars=min_chars,
         front_matter_mode=front_matter_mode,
         default_level=None,  # 多层级拍平: 所有候选都是边界
@@ -330,11 +339,7 @@ def _merge_short(
     """短段合并：当前段 < min_len_to_merge 且下一段 < next_max_len_to_merge → 合并。"""
     merged: list[str] = []
     for seg in segments:
-        if (
-            merged
-            and len(merged[-1]) < min_len_to_merge
-            and len(seg) < next_max_len_to_merge
-        ):
+        if merged and len(merged[-1]) < min_len_to_merge and len(seg) < next_max_len_to_merge:
             merged[-1] = merged[-1] + seg
         else:
             merged.append(seg)
@@ -440,11 +445,12 @@ def rule_split(
 # llm_split
 # ---------------------------------------------------------------------------
 
-Emotion = Literal['happy', 'sad', 'angry', 'calm', 'neutral', 'excited']
+Emotion = Literal["happy", "sad", "angry", "calm", "neutral", "excited"]
 
 
 class _SplitSegment(BaseModel):
     """LLM 返回的单条拆分结果（schema 用）。"""
+
     text: str = Field(..., description="切分后的文本片段，必须是原文的连续子串")
     reason: str = Field(default="", description="本次切分的简短理由")
     emotion: Emotion = Field(default="neutral", description="本段的感情色彩")
@@ -452,17 +458,18 @@ class _SplitSegment(BaseModel):
 
 class _SplitResponse(BaseModel):
     """LLM 顶层响应：response_format=json_object 要求顶层必须是对象。"""
+
     segments: list[_SplitSegment]
 
 
 @dataclass
 class SplitResult:
-    segments: list[dict]   # [{"text": str, "reason": str, "emotion": str}]
+    segments: list[dict]  # [{"text": str, "reason": str, "emotion": str}]
     model: str | None
 
 
 # Re-export so monkeypatch in tests can target this module's binding.
-from app.services.llm_client import get_llm_config
+from app.services.llm_client import get_llm_config  # noqa: E402
 
 _SPLIT_PROMPT_TEMPLATE = """你是中文文本分句助手。请将下面这段文本按语义和语气节奏拆成多个短句，便于
 逐句进行语音合成。
@@ -490,8 +497,13 @@ _SPLIT_PROMPT_TEMPLATE = """你是中文文本分句助手。请将下面这段�
 """
 
 
-def llm_split(text: str, delimiters: list[str] | None = None, db=None, max_len: int | None = None,
-              usage_sink=None) -> SplitResult:
+def llm_split(
+    text: str,
+    delimiters: list[str] | None = None,
+    db=None,
+    max_len: int | None = None,
+    usage_sink=None,
+) -> SplitResult:
     """调 LLM 智能拆分。失败抛 ValueError / RuntimeError / LLMValidationError。
 
     ``max_len``：不信任 LLM 输出长度，返回的每段同样按标点截断到 max_len
@@ -540,9 +552,10 @@ def llm_split(text: str, delimiters: list[str] | None = None, db=None, max_len: 
 # ssml_annotate
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SSMLAnnotateResult:
-    annotations: list[dict]   # [{"text", "ssml", "rationale"}]
+    annotations: list[dict]  # [{"text", "ssml", "rationale"}]
     model: str | None
 
 
@@ -550,14 +563,16 @@ class SSMLAnnotateResult:
 _SSML_ALLOWED_TAGS = {"speak", "break", "prosody", "emphasis"}
 
 # 匹配 XML 标签（含属性）：<tag>, </tag>, <tag attr="x">, <tag/>
-_TAG_RE = re.compile(r'<(/?)([a-zA-Z][a-zA-Z0-9]*)(\s[^>]*)?(/?)>')
+_TAG_RE = re.compile(r"<(/?)([a-zA-Z][a-zA-Z0-9]*)(\s[^>]*)?(/?)>")
 
 
 def _strip_non_whitelist_tags(ssml: str) -> str:
     """删除所有不在白名单中的标签（保留其内部文字）。"""
+
     def repl(m: re.Match) -> str:
         tag_name = m.group(2).lower()
         return m.group(0) if tag_name in _SSML_ALLOWED_TAGS else ""
+
     return _TAG_RE.sub(repl, ssml)
 
 
@@ -591,7 +606,9 @@ _SSML_PROMPT_TEMPLATE = """你是 SSML 标注助手。请为下面的若干段�
 """
 
 
-def ssml_annotate(texts: list[str], style_hint: str = "", db=None, usage_sink=None) -> SSMLAnnotateResult:
+def ssml_annotate(
+    texts: list[str], style_hint: str = "", db=None, usage_sink=None
+) -> SSMLAnnotateResult:
     """调 LLM 为每段加 SSML 标签。带白名单与原文一致性校验。
 
     ``usage_sink``：用量计量回调（Phase 3），透传给 call_llm_structured。
@@ -601,7 +618,7 @@ def ssml_annotate(texts: list[str], style_hint: str = "", db=None, usage_sink=No
 
     _, _, model = get_llm_config(db=db)
 
-    numbered = "\n".join(f"{i+1}. {t}" for i, t in enumerate(texts))
+    numbered = "\n".join(f"{i + 1}. {t}" for i, t in enumerate(texts))
     prompt = _SSML_PROMPT_TEMPLATE.format(
         style_hint=style_hint or "（无）",
         numbered_texts=numbered,
@@ -627,7 +644,9 @@ def ssml_annotate(texts: list[str], style_hint: str = "", db=None, usage_sink=No
 
         if not raw_ssml:
             # LLM 没给 ssml，退化
-            annotations.append({"text": original, "ssml": f"<speak>{original}</speak>", "rationale": rationale})
+            annotations.append(
+                {"text": original, "ssml": f"<speak>{original}</speak>", "rationale": rationale}
+            )
             continue
 
         # 1. 剥除非白名单标签
@@ -635,7 +654,9 @@ def ssml_annotate(texts: list[str], style_hint: str = "", db=None, usage_sink=No
         # 2. diff 校验：剥所有标签后的纯文本必须 == 原文（忽略首尾空白）
         plain = _ssml_to_plain(cleaned).strip()
         if plain != original.strip():
-            logger.warning(f"SSML annotate: 段{i+1} 文字与原文不一致，退化。plain={plain!r} original={original!r}")
+            logger.warning(
+                f"SSML annotate: 段{i + 1} 文字与原文不一致，退化。plain={plain!r} original={original!r}"
+            )
             cleaned = f"<speak>{original}</speak>"
         # 3. 确保 <speak> 包裹
         if not cleaned.startswith("<speak"):

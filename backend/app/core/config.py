@@ -1,10 +1,10 @@
 import os
 import re
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import BeforeValidator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
-from pathlib import Path
 
 # 匹配 ${ENV_VAR} 或 ${ENV_VAR:-default} 格式
 _ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}")
@@ -12,6 +12,7 @@ _ENV_VAR_PATTERN = re.compile(r"\$\{([^}]+)\}")
 
 def _resolve_env_refs(value: str) -> str:
     """解析字符串中的 ${ENV_VAR} 和 ${ENV_VAR:-default} 引用"""
+
     def _replace(match: re.Match) -> str:
         expr = match.group(1)
         if ":-" in expr:
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
 
     # App
     app_name: str = "NarraForge"
-    app_env: str = "production"   # production | e2e (set by .env.e2e overlay)
+    app_env: str = "production"  # production | e2e (set by .env.e2e overlay)
     debug: bool = True
     # 部署目标：local（本地全量，含本地模型路由/SQLite/scheduler）| workers（Cloudflare Workers，纯在线路由）
     deploy_target: str = "local"
@@ -63,14 +64,18 @@ class Settings(BaseSettings):
     # 项目资产根（原 uploads/segmented）。DB 中的 audio.path 均相对此目录。
     segmented_dir: Path = data_dir / "projects"
     # 音色库（原 uploads/voices + output/clone_voices 两处合并）
-    voices_profiles_dir: Path = data_dir / "voices" / "profiles"   # 克隆样本原音
-    voices_previews_dir: Path = data_dir / "voices" / "previews"   # 克隆/引擎试听
+    voices_profiles_dir: Path = data_dir / "voices" / "profiles"  # 克隆样本原音
+    voices_previews_dir: Path = data_dir / "voices" / "previews"  # 克隆/引擎试听
     voices_dir: Path = uploads_dir / "voices"  # legacy：历史样本/TTS 历史音频，迁移后仅作回退读取
-    tts_history_dir: Path = data_dir / "tts-history"  # TTS 历史音频（合并 voices/tts_* 与 uploads/tts_results）
+    tts_history_dir: Path = (
+        data_dir / "tts-history"
+    )  # TTS 历史音频（合并 voices/tts_* 与 uploads/tts_results）
     srt_output_dir: Path = data_dir / "srt"
     temp_dir: Path = data_dir / "temp"
     output_dir: Path = base_dir / "output"  # legacy（PR-B 收敛后废弃）
-    clone_voices_dir: Path = output_dir / "clone_voices"  # legacy alias，迁移后由 voices_previews_dir 取代
+    clone_voices_dir: Path = (
+        output_dir / "clone_voices"
+    )  # legacy alias，迁移后由 voices_previews_dir 取代
     logs_dir: Path = base_dir / "logs"
 
     @property
@@ -158,8 +163,8 @@ class Settings(BaseSettings):
     tts_verify_stub_text: str = ""
 
     # LLM 字幕校准/翻译（默认复用 MiMo 配置）
-    llm_api_key: str = ""           # 留空则自动回退到 mimo_api_key
-    llm_base_url: str = ""          # 留空则自动回退到 mimo_base_url
+    llm_api_key: str = ""  # 留空则自动回退到 mimo_api_key
+    llm_base_url: str = ""  # 留空则自动回退到 mimo_base_url
     llm_model: str = "mimo-v2.5-pro"
 
     # Agent LLM（工作流脚本生成/审查/拆分等非 TTS 功能，留空则回退到 llm_* 配置）
@@ -179,23 +184,25 @@ class Settings(BaseSettings):
     bucket_domain: str = ""
 
     # VoxCPM 本地 GPU 模型
-    voxcpm_model_path: str = "openbmb/VoxCPM2"   # HuggingFace 模型ID 或本地权重目录
-    voxcpm_device: str = "auto"                    # auto / cuda / cuda:0 / cpu
-    voxcpm_dtype: str = "auto"                     # auto / float16 / bfloat16
-    voxcpm_load_on_start: bool = False             # 启动时自动加载模型
-    voxcpm_inference_timesteps: int = 10           # 去噪步数（越高质量越好，越慢）
-    voxcpm_cfg_value: float = 2.0                  # Classifier-Free Guidance 强度
+    voxcpm_model_path: str = "openbmb/VoxCPM2"  # HuggingFace 模型ID 或本地权重目录
+    voxcpm_device: str = "auto"  # auto / cuda / cuda:0 / cpu
+    voxcpm_dtype: str = "auto"  # auto / float16 / bfloat16
+    voxcpm_load_on_start: bool = False  # 启动时自动加载模型
+    voxcpm_inference_timesteps: int = 10  # 去噪步数（越高质量越好，越慢）
+    voxcpm_cfg_value: float = 2.0  # Classifier-Free Guidance 强度
 
     # IndexTTS 本地 sidecar 服务（IndexTTS-2.5，独立进程 HTTP 调用）
     indextts_sidecar_url: str = "http://127.0.0.1:8310"  # sidecar 服务地址
-    indextts_timeout_sec: float = 300                    # 合成请求超时（秒）
+    indextts_timeout_sec: float = 300  # 合成请求超时（秒）
 
     # 配置加密密钥（Fernet 对称加密，首次启动自动生成）
     config_encryption_key: str = ""
 
     # 日志配置
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
-    log_format: str = "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+    log_format: str = (
+        "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s"
+    )
     log_to_file: bool = True
     log_file_max_bytes: int = 10 * 1024 * 1024  # 10MB
     log_backup_count: int = 7  # 保留 7 个备份
@@ -221,7 +228,7 @@ class Settings(BaseSettings):
     @classmethod
     def _load_env_with_refs(cls) -> dict:
         """读取 .env 文件并解析 ${ENV_VAR} 引用。
-        
+
         加载顺序：
         1. 先加载 .env（生产配置）
         2. 如果设置了 ENV_FILE 环境变量（如 ENV_FILE=.env.e2e），叠加加载该文件，
