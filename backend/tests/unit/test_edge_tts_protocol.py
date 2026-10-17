@@ -5,6 +5,7 @@
 二进制帧解析（header_len 含自身 2 字节的坑）、跨帧音频重组。
 """
 import hashlib
+import time
 
 import pytest
 
@@ -46,6 +47,65 @@ class TestSecMsGec:
         ticks *= 10**9 / 100
         s = f"{ticks:.0f}{proto.TRUSTED_CLIENT_TOKEN}"
         assert hashlib.sha256(s.encode("ascii")).hexdigest().upper() == self.REFERENCE_HASH
+
+
+# --- Sec-MS-GEC v2 token ---
+
+class TestSecMsGecV2:
+    """v2 token：微软 2026-10 起强制，v1 token 一律 403（edge-tts PR #492）。"""
+
+    # 参考值：从真实 Edge 155 线上抓包逐字节复现的向量（edge-tts PR #492）。
+    # REFERENCE_NOW = 2026-10-13T10:40:00Z 起的 5 分钟窗口起点。
+    REFERENCE_NOW = 1_791_888_000
+    REFERENCE_TOKEN = (
+        "492D7694A183A45E-"
+        "56E821F95D4579C5B7C7E33DC7303FF379EC36D510213555BBBB9EB17EF15876"
+    )
+
+    def test_matches_on_wire_reference_value(self):
+        assert (
+            proto.generate_sec_ms_gec_v2(now=self.REFERENCE_NOW) == self.REFERENCE_TOKEN
+        )
+
+    def test_token_format_is_16hex_dash_64hex(self):
+        token = proto.generate_sec_ms_gec_v2()
+        left, sep, right = token.partition("-")
+        assert sep == "-"
+        assert len(left) == 16 and len(right) == 64
+        int(left, 16)
+        int(right, 16)
+
+    def test_rounds_down_to_5min_window(self):
+        """同一 5 分钟窗口内时间产生相同 token，跨窗口则不同。
+
+        REFERENCE_NOW 恰是窗口起点（unix 与 win32 epoch 均被 300 整除），
+        因此 +299s 同窗，+300s 跨窗。
+        """
+        t1 = proto.generate_sec_ms_gec_v2(self.REFERENCE_NOW)
+        t2 = proto.generate_sec_ms_gec_v2(self.REFERENCE_NOW + 299)
+        t3 = proto.generate_sec_ms_gec_v2(self.REFERENCE_NOW + 300)
+        assert t1 == t2
+        assert t1 != t3
+
+    def test_cross_check_against_edge_tts_package(self):
+        """交叉验证：与 edge-tts>=7.3.1 官方实现在多个时间点逐字节一致。
+
+        防止移植时抄错魔改 SHA-256 / CS64 的常数表——算法是从
+        edge-tts 7.3.x drm.py 移植的，两侧必须完全等价。
+        """
+        edge_tts = pytest.importorskip("edge_tts")
+        pkg_fn = getattr(getattr(edge_tts, "drm", None), "generate_sec_ms_gec_v2", None)
+        if pkg_fn is None:
+            pytest.fail("edge-tts 缺少 generate_sec_ms_gec_v2，请升级到 >=7.3.1")
+        samples = [
+            0,
+            1_700_000_000,
+            self.REFERENCE_NOW,
+            self.REFERENCE_NOW + 300,
+            time.time(),
+        ]
+        for now in samples:
+            assert proto.generate_sec_ms_gec_v2(now) == pkg_fn(now), f"mismatch at {now}"
 
 
 # --- 小工具函数 ---
@@ -110,12 +170,18 @@ class TestMessages:
 
 class TestWssUrl:
     def test_contains_required_params(self):
-        url = proto.build_wss_url(now=1_700_000_000, connection_id="c" * 32)
-        assert url.startswith("wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1")
+        url = proto.build_wss_url(
+            now=TestSecMsGecV2.REFERENCE_NOW, connection_id="c" * 32
+        )
+        assert url.startswith(
+            "wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1"
+        )
         assert f"TrustedClientToken={proto.TRUSTED_CLIENT_TOKEN}" in url
         assert f"ConnectionId={'c' * 32}" in url
-        assert f"Sec-MS-GEC={TestSecMsGec.REFERENCE_HASH}" in url
+        # v2 token + v2 版本前缀（微软 2026-10 起强制，v1 一律 403）
+        assert f"Sec-MS-GEC={TestSecMsGecV2.REFERENCE_TOKEN}" in url
         assert f"Sec-MS-GEC-Version={proto.SEC_MS_GEC_VERSION}" in url
+        assert proto.SEC_MS_GEC_VERSION.startswith("2-")
 
 
 # --- 二进制帧解析（header_len 含自身 2 字节的坑） ---
