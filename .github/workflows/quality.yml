@@ -25,7 +25,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: backend
-        run: uv sync --extra test --extra local-ml --extra local-services
+        run: uv sync --extra dev --extra test --extra local-ml --extra local-services
 
       - name: Ruff check
         working-directory: backend
