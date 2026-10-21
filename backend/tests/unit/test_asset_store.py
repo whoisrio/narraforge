@@ -13,11 +13,10 @@ R2 Python 语义（workers-py FFI）：
 - 对象体经 ``array_buffer()``/``arrayBuffer()`` 读出（Pyodide ArrayBuffer
   需经 Uint8Array 转 bytes，见 spike VERDICT 坑 3）。
 """
+import httpx
 import pytest
 from fastapi import HTTPException  # noqa: F401  # 保留：历史 501 语义参照
-import httpx
 
-import app.core.asset_store as asset_store_module
 from app.core.asset_store import (
     AssetStore,
     LocalAssetStore,

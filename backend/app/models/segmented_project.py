@@ -44,7 +44,12 @@ class SegmentedProject(Base):
     narration_document_path = Column(String, nullable=True)
     default_narrator_role_id = Column(
         String,
-        ForeignKey("roles.id", ondelete="SET NULL"),
+        ForeignKey(
+            "roles.id",
+            name="fk_segmented_projects_default_narrator_role_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
         nullable=True,
     )
     configs = Column(JSON(none_as_null=True), nullable=True)

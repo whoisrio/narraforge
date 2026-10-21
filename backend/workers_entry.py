@@ -71,7 +71,6 @@ def _get_app(env):
     if _app is None:
         applied = apply_workers_env(env)
         import main as main_module
-
         from app.core.asset_store import set_r2_binding
 
         set_r2_binding(getattr(env, "ASSETS", None))

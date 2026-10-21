@@ -10,10 +10,13 @@ from unittest.mock import patch
 import pytest
 
 from app.core import config
-from app.core.audio_encoder import (
-    AudioEncoderError, is_ffmpeg_available, probe_audio_duration, transcode_to_mp3,
-)
 from app.core import segmented_assets as assets
+from app.core.audio_encoder import (
+    AudioEncoderError,
+    is_ffmpeg_available,
+    probe_audio_duration,
+    transcode_to_mp3,
+)
 from app.models.segmented_project import SegmentedProjectChapter, SegmentedProjectSegment
 from app.schemas.segmented_project import ProjectIn
 from app.services import segmented_project_service as svc
@@ -262,8 +265,8 @@ def test_resynth_then_bulk_readjust_renders_from_original(db_session, tmp_path, 
     seg = db_session.query(SegmentedProjectSegment).filter_by(id="s1").one()
     prev_path = seg.audio["previous"]["path"]
     after_synth_cur_d = probe_audio_duration(tmp_path / seg.audio["current"]["path"])
-    # current was rendered at 2x from the original
-    assert after_synth_cur_d is not None and after_synth_cur_d < 0.3
+    # current was rendered at 2x; allow one MP3 encoder frame of padding
+    assert after_synth_cur_d is not None and after_synth_cur_d < 0.36
 
     # bulk re-adjust to 1.5x: must render from previous (original), not cascade
     svc.adjust_chapter_audio(db_session, "p1", "c1", tempo=1.5)

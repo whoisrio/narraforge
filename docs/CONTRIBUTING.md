@@ -45,6 +45,7 @@ See `docs/ENV.md` for the full list of environment variables.
 | `npm run dev` | Start development server with hot reload |
 | `npm run build` | Production build with type checking |
 | `npm run lint` | Run ESLint |
+| `npm test` | Run Vitest tests |
 | `npm run preview` | Preview production build |
 
 ### Backend
@@ -66,6 +67,13 @@ cd frontend && npm test
 
 # API health check
 curl http://127.0.0.1:8002/health
+```
+
+### Quality Hooks
+
+```bash
+uvx pre-commit install
+uvx pre-commit run --all-files
 ```
 
 ## Project Structure

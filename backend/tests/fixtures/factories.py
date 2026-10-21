@@ -2,16 +2,15 @@
 工厂模式创建测试对象
 """
 import uuid
-from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
 
 import factory
 from factory.alchemy import SQLAlchemyModelFactory
 
 from app.core.database import SessionLocal
-from app.models.voice_profile import VoiceProfile
-from app.models.tts_config import TTSConfig
 from app.core.time_utils import utcnow
+from app.models.tts_config import TTSConfig
+from app.models.voice_profile import VoiceProfile
 
 
 class VoiceProfileFactory(SQLAlchemyModelFactory):

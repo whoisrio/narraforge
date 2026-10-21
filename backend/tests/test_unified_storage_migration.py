@@ -2,8 +2,8 @@
 from pathlib import Path
 
 from app.core.config import settings
-from app.models.tts_result import TTSResultRecord as TTSResult
 from app.models.transcription_record import TranscriptionRecord
+from app.models.tts_result import TTSResultRecord as TTSResult
 from app.models.voice_profile import VoiceProfile
 from app.services.unified_storage_migration import apply_storage, plan_storage
 
@@ -97,7 +97,7 @@ def test_plan_and_apply_end_to_end(db_session, tmp_path, monkeypatch):
 
 def test_apply_is_idempotent(db_session, tmp_path, monkeypatch):
     dirs = _mkdirs(tmp_path, monkeypatch)
-    f = _touch(dirs["legacy_clone"] / "a.mp3")
+    _touch(dirs["legacy_clone"] / "a.mp3")
     db_session.commit()
 
     apply_storage(db_session, plan_storage(db_session))

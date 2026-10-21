@@ -1,7 +1,6 @@
 """Tests for text_split_service."""
 import pytest
 
-
 # ------- rule_split -------
 
 def test_rule_split_all_delimiters():
@@ -281,7 +280,7 @@ def test_rule_split_english_thousands_separator_not_split():
 
 def test_rule_split_english_comma_does_not_split_clause():
     """英文段落：逗号只是分句符，子句不得从句中拆出（按 . ! ? 句读切）。"""
-    from app.services.text_split_service import rule_split, DEFAULT_RULE_DELIMITERS
+    from app.services.text_split_service import DEFAULT_RULE_DELIMITERS, rule_split
     text = (
         "It started with one annoying loop: change a line of subtitles, and you have to "
         "regenerate the TTS for that whole segment — which changes the audio length, which "

@@ -16,7 +16,7 @@ from app.core.database import init_db
 def setup_logging():
     """
     配置日志系统
-    
+
     为什么需要这个配置：
     - 统一的日志格式，便于问题排查
     - 同时输出到控制台和文件
@@ -37,23 +37,23 @@ def setup_logging():
 
     # 获取日志级别
     log_level = getattr(logging, settings.log_level.upper(), logging.INFO)
-    
+
     # 创建根 logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
-    
+
     # 清除已有的 handler（避免重复）
     root_logger.handlers.clear()
-    
+
     # 创建日志格式器
     formatter = logging.Formatter(settings.log_format)
-    
+
     # 1. 控制台处理器 - 输出到 stdout（使用 UTF-8 包装器）
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
-    
+
     # 2. 文件处理器 - 输出到文件（按大小轮转）
     if settings.log_to_file:
         log_file = settings.logs_dir / "app.log"
@@ -205,7 +205,7 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
             return obj
         errors = _clean(errors)
         first = errors[0] if errors else {}
-        loc = ".".join(str(l) for l in first.get("loc", []))
+        loc = ".".join(str(location_part) for location_part in first.get("loc", []))
         msg = first.get("msg", "validation error")
         message = f"{loc}: {msg}" if loc else msg
         return JSONResponse(

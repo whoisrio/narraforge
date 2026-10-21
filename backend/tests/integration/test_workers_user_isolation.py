@@ -16,7 +16,6 @@ import time
 from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
-
 import jwt as pyjwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import ec

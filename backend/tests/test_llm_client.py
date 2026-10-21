@@ -1,6 +1,6 @@
 """Tests for the extracted LLM client helpers."""
-from unittest.mock import patch, MagicMock
 import pytest
+from pydantic import BaseModel as _BM
 
 
 def test_extract_json_array_pure_json():
@@ -157,9 +157,6 @@ def test_supports_response_format_unknown_defaults_false():
 # ---------------------------------------------------------------------------
 # call_llm_structured
 # ---------------------------------------------------------------------------
-from pydantic import BaseModel as _BM
-
-
 class _SampleItem(_BM):
     name: str
     score: int
@@ -333,6 +330,7 @@ def test_extract_usage_fallback_when_tokens_zero():
 def test_call_llm_invokes_usage_sink_with_api_tokens(monkeypatch):
     """call_llm 成功时调用一次 sink，优先用 API 返回的 token 数。"""
     from unittest.mock import Mock
+
     from app.services import llm_client
 
     fake_response = {
@@ -357,6 +355,7 @@ def test_call_llm_invokes_usage_sink_with_api_tokens(monkeypatch):
 def test_call_llm_sink_falls_back_to_char_estimate(monkeypatch):
     """API 未返回 usage → sink 收到字符估算值（estimated=True）。"""
     from unittest.mock import Mock
+
     from app.services import llm_client
 
     fake_response = {
@@ -399,6 +398,7 @@ def test_call_llm_without_sink_still_works(monkeypatch):
 def test_call_llm_structured_sink_fires_per_attempt_including_retries(monkeypatch):
     """校验失败重试时每次尝试都是一次真实 API 调用，sink 每次都触发。"""
     from unittest.mock import Mock
+
     from app.services import llm_client
 
     monkeypatch.setattr(llm_client, "get_llm_config",
@@ -428,6 +428,7 @@ def test_call_llm_structured_sink_fires_per_attempt_including_retries(monkeypatc
 
 def test_call_agent_llm_invokes_usage_sink(monkeypatch):
     from unittest.mock import Mock
+
     from app.services import llm_client
 
     fake_response = {

@@ -1,7 +1,6 @@
-import { useState, useEffect, useContext } from 'react';
+import { lazy, Suspense, useState, useEffect, useContext } from 'react';
 import Landing from './pages/Landing';
 import { VoiceClone } from './pages/VoiceClone';
-import { TTSSynthesis } from './pages/TTSSynthesis';
 import { SpeechToText } from './pages/SpeechToText';
 import { ModelConfig } from './pages/ModelConfig';
 import { ProjectHub } from './components/ProjectHub/ProjectHub';
@@ -35,6 +34,10 @@ import type { SegmentedProject } from './types';
 import styles from './App.module.css';
 
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
+
+const TTSSynthesis = lazy(() =>
+  import('./pages/TTSSynthesis').then(({ TTSSynthesis }) => ({ default: TTSSynthesis })),
+);
 
 type Page = 'home' | 'auth';
 type Tab = 'tts-synthesis' | 'voice-clone' | 'speech-to-text' | 'model-config' | 'admin' | 'usage';
@@ -424,13 +427,15 @@ function AppContent() {
                   />
                 )}
                 {activeTab === 'tts-synthesis' && activeProjectId && storageModeLoaded && (
-                  <TTSSynthesis
-                    key={activeProjectId}
-                    initialProjectId={activeProjectId}
-                    hideProjectSidebar
-                    onBackToProjects={() => setActiveProjectId(null)}
-                    onNavigateToClone={() => handleTabClick('voice-clone')}
-                  />
+                  <Suspense fallback={<div className={styles.loading}><div className={styles.spinner} /></div>}>
+                    <TTSSynthesis
+                      key={activeProjectId}
+                      initialProjectId={activeProjectId}
+                      hideProjectSidebar
+                      onBackToProjects={() => setActiveProjectId(null)}
+                      onNavigateToClone={() => handleTabClick('voice-clone')}
+                    />
+                  </Suspense>
                 )}
                 {activeTab === 'admin' && <Admin />}
                 {activeTab === 'usage' && (

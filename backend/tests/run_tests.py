@@ -3,10 +3,10 @@
 测试运行脚本
 支持不同测试类型的运行和覆盖率报告
 """
-import os
-import sys
-import subprocess
 import argparse
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -116,7 +116,7 @@ def install_test_dependencies():
         cmd = f"pip install -r {requirements_file}"
         return run_command(cmd, "安装测试依赖")
     else:
-        print(f"错误: 未找到 requirements-test.txt 文件")
+        print("错误: 未找到 requirements-test.txt 文件")
         return False
 
 

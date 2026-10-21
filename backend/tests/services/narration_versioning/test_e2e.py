@@ -1,6 +1,5 @@
 """E2E smoke: seed via API → snapshot → verify files + git log."""
 import subprocess
-from pathlib import Path
 
 from app.services.narration_versioning.job import snapshot_all
 

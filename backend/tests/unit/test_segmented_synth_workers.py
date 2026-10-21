@@ -6,8 +6,9 @@ mock 仓储（sync）+ 资产存储（async）+ edge-tts 合成，验证：
 - 录音上传：原样存 + origin='recorded' 锁定；
 - 读取：从 store.get 返回音频字节。
 """
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.services import segmented_synth_workers as w
 
@@ -153,7 +154,7 @@ async def test_upload_recorded_audio():
     repo = _repo(project)
     store = _store()
 
-    detail = await w.upload_segment_audio_workers(
+    await w.upload_segment_audio_workers(
         repo, store,
         project_id="p1", chapter_id="c1", segment_id="s1",
         audio_bytes=b"REC", filename="rec.webm", duration_sec=1.5,

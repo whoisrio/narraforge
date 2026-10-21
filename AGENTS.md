@@ -43,6 +43,7 @@ cd frontend
 npm run dev      # Start dev server on port 5173
 npm run build    # Production build
 npm run lint     # Run ESLint
+npm test         # Run Vitest
 ```
 
 ### Backend
@@ -51,6 +52,7 @@ npm run lint     # Run ESLint
 cd backend
 uv sync --extra local-ml --extra local-services   # Install dependencies with uv, not pip
 uv run uvicorn main:app --host 127.0.0.1 --port 8002 --reload
+uv run ruff check .                              # Run after backend Python changes
 ```
 
 ### Agent
@@ -87,6 +89,16 @@ share a venv. The backend talks to it over HTTP (`INDEXTTS_SIDECAR_URL`).
 ```bash
 curl http://127.0.0.1:8002/health
 ```
+
+### Local Quality Hooks
+
+```bash
+uvx pre-commit install
+uvx pre-commit run --all-files
+```
+
+Pre-commit runs backend Ruff and frontend ESLint when their corresponding source files change.
+GitHub Actions runs backend Ruff/pytest, agent pytest, and frontend lint/test/build on pull requests and non-master pushes.
 
 ## Architecture
 
@@ -143,6 +155,8 @@ Key tables include VoiceProfile, TTSConfig, TTSResult, TranscriptionRecord, Syst
 
 ### Backend Tests
 
+When backend Python code changes, run `cd backend && uv run ruff check .` before running the tests.
+
 ```bash
 cd backend && uv sync --extra test --extra local-ml --extra local-services && uv run pytest -q
 ```
@@ -152,6 +166,8 @@ See [`backend/tests/TEST_MAP.md`](backend/tests/TEST_MAP.md) for test structure,
 ### Frontend Tests
 
 All frontend test files with `.test.ts`, `.test.tsx`, `.spec.ts`, or `.spec.tsx` extensions must be placed in the same directory as the source code they test.
+
+Run frontend tests with `cd frontend && npm test`.
 
 ### E2E Tests
 

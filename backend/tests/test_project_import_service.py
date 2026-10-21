@@ -10,10 +10,8 @@ from app.core.segmented_assets import segment_audio_path
 from app.models.role import Role
 from app.models.segmented_project import (
     SegmentedProject,
-    SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
-from app.models.voice_profile import VoiceProfile
 from app.schemas.segmented_project import ProjectIn
 from app.services import segmented_project_service as svc
 from app.services.project_export_service import export_project

@@ -1,7 +1,7 @@
 import os
-import time
+
 import dashscope
-from dashscope.audio.tts_v2 import VoiceEnrollmentService, SpeechSynthesizer
+from dashscope.audio.tts_v2 import SpeechSynthesizer, VoiceEnrollmentService
 
 # 1. 环境准备
 # 推荐通过环境变量配置API Key
@@ -18,7 +18,7 @@ dashscope.base_http_api_url = 'https://dashscope.aliyuncs.com/api/v1'
 
 
 # 2. 定义复刻参数
-TARGET_MODEL = "cosyvoice-v3.5-plus" 
+TARGET_MODEL = "cosyvoice-v3.5-plus"
 # 为音色起一个有意义的前缀
 VOICE_PREFIX = "myvoice" # 仅允许数字和小写字母，小于十个字符
 # 公网可访问音频URL
@@ -37,7 +37,7 @@ print("\n--- Step 3: Synthesizing speech with the new voice ---")
 try:
     synthesizer = SpeechSynthesizer(model=TARGET_MODEL, voice=voice_id,speech_rate=1.35)
     text_to_synthesize = "你必须会使用的Claude 命令: `/insight`，及时更新 Claude.md，保持准确而简洁"
-    
+
     # call()方法返回二进制音频数据
     audio_data = synthesizer.call(text_to_synthesize)
     print(f"Speech synthesis successful. Request ID: {synthesizer.get_last_request_id()}")

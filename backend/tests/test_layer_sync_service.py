@@ -3,12 +3,12 @@ from types import SimpleNamespace
 
 from app.services.layer_sync_service import (
     hash_text,
-    segments_hash,
-    sync_status,
+    mark_consistent,
     mark_l2_derived,
     mark_split,
-    mark_consistent,
     rewrite_script_from_segments,
+    segments_hash,
+    sync_status,
 )
 
 

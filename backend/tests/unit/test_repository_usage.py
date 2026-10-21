@@ -3,7 +3,6 @@
 Local：SQLAlchemy（内存 SQLite，db_session fixture）；
 Supabase：内存版 PostgREST（postgrest_fake），验证 user_id 归属标记与作用域过滤。
 """
-import pytest
 
 from app.core.repositories.usage import LocalUsageRepository, SupabaseUsageRepository
 from tests.fixtures.postgrest_fake import make_fake_supabase_client

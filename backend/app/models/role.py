@@ -15,7 +15,14 @@ class Role(Base):
     description = Column(String, nullable=True)
     role_kind = Column(String, nullable=False, default="cast")
     project_id = Column(
-        String, ForeignKey("segmented_projects.id", ondelete="SET NULL"), nullable=True
+        String,
+        ForeignKey(
+            "segmented_projects.id",
+            name="fk_roles_project_id",
+            ondelete="SET NULL",
+            use_alter=True,
+        ),
+        nullable=True,
     )
     voice = Column(JSON, nullable=False, default=lambda: {"engine": "edge_tts", "params": {}})
     favorite_styles = Column(JSON, nullable=False, default=list)

@@ -9,13 +9,19 @@ from app.models.segmented_project import (
     SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
-from app.schemas.segmented_project import ProjectIn
+from app.schemas.segmented_project import ChapterPatchIn, ProjectIn, StructureSegmentIn
 from app.services.segmented_project_service import (
-    list_projects,
-    get_project_detail,
-    save_project,
-    delete_project,
     _to_iso,
+    create_chapter,
+    create_segment,
+    delete_chapter,
+    delete_project,
+    get_project_detail,
+    list_projects,
+    patch_chapter,
+    reconcile_chapter_structure,
+    reorder_chapters,
+    save_project,
 )
 
 
@@ -403,8 +409,9 @@ def test_project_rename_without_assets_is_noop(db_session, tmp_path, monkeypatch
 
 def test_save_project_rejects_duplicate_chapter_positions(db_session, tmp_path, monkeypatch):
     """Two chapters at the same position must violate the unique constraint."""
-    from app.core import config
     from sqlalchemy.exc import IntegrityError
+
+    from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
 
     project = ProjectIn(
@@ -437,8 +444,9 @@ def test_save_project_rejects_duplicate_chapter_positions(db_session, tmp_path, 
 
 def test_save_project_rejects_duplicate_segment_positions(db_session, tmp_path, monkeypatch):
     """Two segments in the same chapter at the same position must violate the unique constraint."""
-    from app.core import config
     from sqlalchemy.exc import IntegrityError
+
+    from app.core import config
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
 
     project = ProjectIn(
@@ -564,6 +572,7 @@ def test_patch_segment_voice_change_writes_sql_null_not_json_null_text(db_sessio
     行为会把 None 序列化成 'null' 字符串，ORM 读回无感，但裸 SQL 读者
     （e2e dbReader、迁移脚本）会看到 'null'。"""
     from sqlalchemy import text as sql_text
+
     from app.core import config
     from app.schemas.segmented_project import SegmentPatchIn
     from app.services.segmented_project_service import patch_segment
@@ -585,12 +594,6 @@ def test_patch_segment_voice_change_writes_sql_null_not_json_null_text(db_sessio
 
 
 # ── 段结构端点 service（2026-08-27 粒度重构 Phase 3）──
-
-from app.schemas.segmented_project import StructureSegmentIn
-from app.services.segmented_project_service import (
-    create_segment,
-    reconcile_chapter_structure,
-)
 
 
 def _seed_three_segment_project(pid: str = "p-struct") -> ProjectIn:
@@ -863,14 +866,6 @@ def test_structure_reconcile_bumps_chapter_and_project_updated_at(db_session, tm
 
 
 # ── 章节操作端点 service（2026-08-27 粒度重构 Phase 4）──
-
-from app.schemas.segmented_project import ChapterPatchIn
-from app.services.segmented_project_service import (
-    create_chapter,
-    patch_chapter,
-    delete_chapter,
-    reorder_chapters,
-)
 
 
 def test_create_chapter_appends_position_and_defaults(db_session, tmp_path, monkeypatch):
@@ -1167,7 +1162,8 @@ def test_put_source_document_writes_file_and_updates_path(db_session, tmp_path, 
     detail 回读新内容，manifest 同步刷新。"""
     from app.core import config
     from app.services.segmented_project_service import (
-        get_project_detail, put_source_document,
+        get_project_detail,
+        put_source_document,
     )
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     save_project(db_session, _seed_meta_project())
@@ -1194,7 +1190,8 @@ def test_put_source_document_writes_file_and_updates_path(db_session, tmp_path, 
 def test_put_narration_script_writes_file_and_updates_path(db_session, tmp_path, monkeypatch):
     from app.core import config
     from app.services.segmented_project_service import (
-        get_project_detail, put_narration_script,
+        get_project_detail,
+        put_narration_script,
     )
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     detail = save_project(db_session, _seed_meta_project())
@@ -1214,7 +1211,8 @@ def test_put_narration_script_writes_file_and_updates_path(db_session, tmp_path,
 def test_put_project_document_missing_project_returns_none(db_session, tmp_path, monkeypatch):
     from app.core import config
     from app.services.segmented_project_service import (
-        put_narration_script, put_source_document,
+        put_narration_script,
+        put_source_document,
     )
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     assert put_source_document(db_session, "p-nope", "x") is None

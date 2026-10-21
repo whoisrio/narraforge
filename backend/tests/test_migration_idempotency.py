@@ -2,13 +2,13 @@
 modern DBs (re-add/drop ping-pong every startup otherwise)."""
 from sqlalchemy import create_engine, inspect, text
 
+from app import models  # noqa: F401  (register metadata)
 from app.core.database import (
     _ALL_ALTER_STMTS,
+    Base,
     _run_alter_or_skip,
     _run_migrations,
-    Base,
 )
-from app import models  # noqa: F401  (register metadata)
 
 ZOMBIE_COLS = {
     "engine", "engine_params", "source_audio_path", "cloned_preview_path",
@@ -131,26 +131,10 @@ def test_p9007_noop_when_no_duplicates():
                 text("PRAGMA index_list(segmented_project_segments)")
             ).fetchall()
         }
-        # SQLite auto-index names vary; check that *some* unique index exists
-        # on the (chapter_id, position) columns.
-        has_unique_seg = any(
-            conn.execute(text(f"PRAGMA index_info({name})")).fetchall()
-            for name in seg_indexes
-            if any(
-                r[2] in ("chapter_id", "position")
-                for r in conn.execute(text(f"PRAGMA index_info({name})")).fetchall()
-            )
-        )
         # At minimum, the PK exists; the unique constraint is enforced by
         # create_all via __table_args__.
         assert len(seg_indexes) >= 2  # PK + unique constraint
 
-        # P9007 must NOT create a second unique index on the same columns
-        # (the auto-index from __table_args__ already covers it).
-        unique_seg_count = sum(
-            1 for name in seg_indexes
-            if conn.execute(text(f"PRAGMA index_list(segmented_project_segments)")).fetchall()
-        )
         # Count only truly unique indexes on (chapter_id, position).
         unique_count = 0
         for row in conn.execute(text("PRAGMA index_list(segmented_project_segments)")).fetchall():

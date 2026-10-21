@@ -6,6 +6,7 @@ process.env.HTTP_PROXY = ''
 process.env.HTTPS_PROXY = ''
 process.env.NO_PROXY = ''
 process.env.no_proxy = ''
+process.env.VITE_SITE_URL ||= 'https://narraforge.rio-dong.workers.dev'
 
 /** 按 VITE_SITE_URL 在构建产物中生成 robots.txt / sitemap.xml / llms.txt（爬虫要求绝对 URL）。
  * 未配置站点 URL 时 robots.txt 不含 Sitemap 行、llms.txt 用相对路径，避免发出无效链接。 */

@@ -11,7 +11,6 @@ from app.services.text_transform_service import (
     resolve_lowercase_latin,
 )
 
-
 # ---- merge_maps ----
 
 def test_merge_project_overrides_global_same_source():

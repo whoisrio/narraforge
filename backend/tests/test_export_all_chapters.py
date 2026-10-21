@@ -8,6 +8,7 @@ Covers:
 """
 import io
 import math
+import re
 import struct
 import wave
 
@@ -143,17 +144,23 @@ def test_export_all_writes_mp3_and_srt_per_chapter(db_session, tmp_path, monkeyp
     for f in (mp3_1, srt_1, mp3_2, srt_2):
         assert f.exists(), f"missing {f}"
 
-    # chapter 1: two 0.5s segments -> ~1.0s mp3, SRT 0.0 -> 0.5 -> 1.0
+    # Chapter 1: two 0.5s segments -> ~1.0s mp3; SRT starts at 0 and the
+    # second cue starts exactly when the first ends. MP3 frame padding varies
+    # by encoder, so cue boundaries are validated relative to each other.
     d = probe_audio_duration(mp3_1)
     assert d is not None and 0.8 < d < 1.3
     srt = srt_1.read_text(encoding="utf-8")
-    assert "00:00:00,000 --> 00:00:00,500" in srt
-    assert "00:00:00,500 --> 00:00:01,000" in srt
+    timestamps = re.findall(r"(\d{2}:\d{2}:\d{2},\d{3}) --> (\d{2}:\d{2}:\d{2},\d{3})", srt)
+    assert len(timestamps) == 2
+    first_start, first_end = timestamps[0]
+    second_start, _ = timestamps[1]
+    assert first_start == "00:00:00,000"
+    assert second_start == first_end
     assert "夜色渐浓。" in srt and "犬吠几声。" in srt
 
     # chapter 2 SRT restarts from 0 (chapter-local timeline)
     srt2 = srt_2.read_text(encoding="utf-8")
-    assert "00:00:00,000 --> 00:00:00,500" in srt2
+    assert srt2.startswith("1\n00:00:00,000 --> ")
 
 
 # ----- API -----

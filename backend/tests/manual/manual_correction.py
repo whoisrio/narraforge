@@ -1,12 +1,16 @@
 """校准功能端到端验证"""
-import sys, io, os, re
+import io
+import os
+import re
+import sys
+
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 _backend = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
-from app.services.voice_to_srt_service import VoiceToSrt, detect_gpu
-from app.services.llm_subtitle_service import correct_subtitles, _get_llm_config
+from app.services.llm_subtitle_service import _get_llm_config, correct_subtitles  # noqa: E402
+from app.services.voice_to_srt_service import VoiceToSrt, detect_gpu  # noqa: E402
 
 AUDIO = r'E:\repos\video_prjs\deepseek_strategy\out\deepseek_strategy.mp3'
 DOCS  = r'E:\repos\video_prjs\deepseek_strategy\docs\配音旁白.txt'
@@ -34,7 +38,7 @@ def main():
         blocks.append({'i': int(m.group(1)), 't': m.group(3).strip()})
 
     lens = [cn_len(b['t']) for b in blocks]
-    over15 = sum(1 for l in lens if l > 15)
+    over15 = sum(1 for subtitle_len in lens if subtitle_len > 15)
     print("[3] 字幕:", len(blocks), "条, avg=", round(sum(lens)/len(lens), 1),
           "字, >15字:", over15, "条, max=", max(lens))
 
@@ -60,7 +64,6 @@ def main():
     except Exception as e:
         print("[7] 校准异常:", e)
         # 直接调用 LLM 看原始返回
-        import json, urllib.request, ssl
         from app.services.llm_subtitle_service import _call_llm, _parse_srt_blocks
         blocks = _parse_srt_blocks(result.content)
         srt_lines = ["[" + str(b["index"]) + "] " + b["text"] for b in blocks[:10]]

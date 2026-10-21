@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { lazy, Suspense, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from '../i18n';
 import { GlobalControlBar } from '../components/TTSSynthesis/GlobalControlBar';
 import { EdgeTTSPanel } from '../components/TTSSynthesis/EdgeTTSPanel';
@@ -69,13 +69,22 @@ import { SegmentRecordPanel } from '../components/SegmentedTTS/SegmentRecordPane
 
 import { RoleLibraryPanel } from '../components/SegmentedTTS/RoleLibraryPanel';
 import { ProjectShell, type ProjectSectionId } from '../components/ProjectShell/ProjectShell';
-import { ProjectLibrary } from '../components/ProjectLibrary/ProjectLibrary';
-import { ProjectVoices } from '../components/ProjectVoices/ProjectVoices';
-import { ProjectOverview } from '../components/ProjectOverview/ProjectOverview';
-import { ProjectSettings } from '../components/ProjectSettings/ProjectSettings';
 import { VoiceStudioLayout } from '../components/VoiceStudio/VoiceStudioLayout';
 import { assignRoleForSplitItem, type SplitVoiceMode } from '../services/segmentKindInference';
 import styles from './TTSSynthesis.module.css';
+
+const ProjectLibrary = lazy(() =>
+  import('../components/ProjectLibrary/ProjectLibrary').then(({ ProjectLibrary }) => ({ default: ProjectLibrary })),
+);
+const ProjectVoices = lazy(() =>
+  import('../components/ProjectVoices/ProjectVoices').then(({ ProjectVoices }) => ({ default: ProjectVoices })),
+);
+const ProjectOverview = lazy(() =>
+  import('../components/ProjectOverview/ProjectOverview').then(({ ProjectOverview }) => ({ default: ProjectOverview })),
+);
+const ProjectSettings = lazy(() =>
+  import('../components/ProjectSettings/ProjectSettings').then(({ ProjectSettings }) => ({ default: ProjectSettings })),
+);
 
 type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm' | 'indextts';
 
@@ -593,6 +602,41 @@ export function TTSSynthesis({
   const [conflictArchives, setConflictArchives] = useState<ConflictedDraftEntry[]>([]);
   const [conflictArchiveOpen, setConflictArchiveOpen] = useState(false);
 
+  /** Restore global state from a chapter's saved voice */
+  const restoreChapterSettings = useCallback((ch: Chapter) => {
+    const v = ch.voice;
+    const engine = (v?.engine || 'edge_tts') as Engine;
+    setEngine(engine);
+    setMuteTags(v?.mute_tags ?? false);
+    setUnderscoreToSpace(v?.underscore_to_space ?? false);
+    setSkipParenthesized(v?.skip_parenthesized ?? false);
+    if (engine === 'edge_tts') {
+      setEdgeVoice((v as EdgeTTSParams).voice || '');
+      setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
+      setEdgeVolume(parseFloat((v as EdgeTTSParams).volume) || 0);
+    } else if (engine === 'cosyvoice') {
+      setSelectedVoiceId((v as CosyVoiceParams).voice_id || '');
+      setParams({ language: ((v as CosyVoiceParams).language || 'Chinese') as TTSRequest['language'], speed: (v as CosyVoiceParams).speed ?? 1.0, volume: (v as CosyVoiceParams).volume ?? 80, pitch: (v as CosyVoiceParams).pitch ?? 1.0 });
+    } else if (engine === 'mimo_tts') {
+      setMimoMode(((v as MiMoParams).mode || 'preset') as MiMoMode);
+      setMimoPresetVoice((v as MiMoParams).voice_id || t('tts.defaultMimoPresetVoice'));
+      setMimoInstruction((v as MiMoParams).instruction || '');
+      setMimoCloneVoiceId((v as MiMoParams).voice_id || '');
+    } else if (engine === 'voxcpm') {
+      setVoxcpmMode(((v as VoxCPMParams).mode || 'clone') as VoxCPMMode);
+      setSelectedVoiceId((v as VoxCPMParams).voice_id || '');
+      setVoxcpmStyleControl((v as VoxCPMParams).style_control || '');
+      setVoxcpmPromptText((v as VoxCPMParams).prompt_text || '');
+      setVoxcpmCfgValue((v as VoxCPMParams).cfg_value ?? 2.0);
+      setVoxcpmInferenceTimesteps((v as VoxCPMParams).inference_timesteps ?? 10);
+    } else if (engine === 'indextts') {
+      setSelectedVoiceId((v as IndexTTSParams).voice_id || '');
+      setIndexttsLang((v as IndexTTSParams).lang || 'ZH');
+      setIndexttsEmoAlpha((v as IndexTTSParams).emo_alpha ?? 1.0);
+      setIndexttsDurationFactor((v as IndexTTSParams).duration_factor ?? 1.0);
+    }
+  }, [t]);
+
   const refreshConflictArchives = useCallback(async () => {
     if (storageMode !== 'backend' || !project?.id || project.id === SCRATCHPAD_PROJECT_ID) {
       setConflictArchives([]);
@@ -662,44 +706,9 @@ export function TTSSynthesis({
     initialLoadDoneRef.current = true; // 修复：加载期冲突裁决后 autosave 永久暂停的旧 bug
     draftSync.resume();
     void refreshConflictArchives();
-  }, [conflict, draftSync, projectStorage, dispatch, t, showToast, refreshConflictArchives]);
+  }, [conflict, draftSync, projectStorage, dispatch, t, showToast, refreshConflictArchives, restoreChapterSettings]);
 
   // ---- Chapter management ----
-
-  /** Restore global state from a chapter's saved voice */
-  const restoreChapterSettings = useCallback((ch: Chapter) => {
-    const v = ch.voice;
-    const engine = (v?.engine || 'edge_tts') as Engine;
-    setEngine(engine);
-    setMuteTags(v?.mute_tags ?? false);
-    setUnderscoreToSpace(v?.underscore_to_space ?? false);
-    setSkipParenthesized(v?.skip_parenthesized ?? false);
-    if (engine === 'edge_tts') {
-      setEdgeVoice((v as EdgeTTSParams).voice || '');
-      setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
-      setEdgeVolume(parseFloat((v as EdgeTTSParams).volume) || 0);
-    } else if (engine === 'cosyvoice') {
-      setSelectedVoiceId((v as CosyVoiceParams).voice_id || '');
-      setParams({ language: ((v as CosyVoiceParams).language || 'Chinese') as TTSRequest['language'], speed: (v as CosyVoiceParams).speed ?? 1.0, volume: (v as CosyVoiceParams).volume ?? 80, pitch: (v as CosyVoiceParams).pitch ?? 1.0 });
-    } else if (engine === 'mimo_tts') {
-      setMimoMode(((v as MiMoParams).mode || 'preset') as MiMoMode);
-      setMimoPresetVoice((v as MiMoParams).voice_id || t('tts.defaultMimoPresetVoice'));
-      setMimoInstruction((v as MiMoParams).instruction || '');
-      setMimoCloneVoiceId((v as MiMoParams).voice_id || '');
-    } else if (engine === 'voxcpm') {
-      setVoxcpmMode(((v as VoxCPMParams).mode || 'clone') as VoxCPMMode);
-      setSelectedVoiceId((v as VoxCPMParams).voice_id || '');
-      setVoxcpmStyleControl((v as VoxCPMParams).style_control || '');
-      setVoxcpmPromptText((v as VoxCPMParams).prompt_text || '');
-      setVoxcpmCfgValue((v as VoxCPMParams).cfg_value ?? 2.0);
-      setVoxcpmInferenceTimesteps((v as VoxCPMParams).inference_timesteps ?? 10);
-    } else if (engine === 'indextts') {
-      setSelectedVoiceId((v as IndexTTSParams).voice_id || '');
-      setIndexttsLang((v as IndexTTSParams).lang || 'ZH');
-      setIndexttsEmoAlpha((v as IndexTTSParams).emo_alpha ?? 1.0);
-      setIndexttsDurationFactor((v as IndexTTSParams).duration_factor ?? 1.0);
-    }
-  }, []);
 
   const handleSelectChapter = useCallback((chapterId: string) => {
     dispatch({ type: 'SELECT_CHAPTER', id: chapterId });
@@ -1065,7 +1074,7 @@ export function TTSSynthesis({
       restoreChapterSettings(newActive);
     }
     showToast(t('tts.chapterDeleted', { name: ch?.name || t('tts.chapter') }));
-  }, [project.chapters, project.active_chapter_id, dispatch, restoreChapterSettings, showToast]);
+  }, [project.chapters, project.active_chapter_id, dispatch, restoreChapterSettings, showToast, t]);
 
   const handleDeleteChapter = useCallback((chapterId: string) => {
     if (project.chapters.length <= 1) return;
@@ -1078,7 +1087,7 @@ export function TTSSynthesis({
       variant: 'warning', confirmLabel: t('common.delete'),
       onConfirm: () => { setConfirmDialog(prev => ({ ...prev, open: false })); doDeleteChapter(chapterId); },
     });
-  }, [project.chapters, doDeleteChapter]);
+  }, [project.chapters, doDeleteChapter, t]);
 
   // ---- Segmented mode handlers ----
 
@@ -1139,7 +1148,7 @@ export function TTSSynthesis({
       return (voiceId || v.id) === selectedVoiceId;
     });
     return { name: vObj?.name || t('tts.cosyVoiceVoice'), source: 'global', voice_id: selectedVoiceId, engine: 'cosyvoice' };
-  }, [engine, selectedVoiceId, voices, edgeVoice, mimoMode, mimoPresetVoice, mimoCloneVoiceId]);
+  }, [engine, selectedVoiceId, voices, edgeVoice, mimoMode, mimoPresetVoice, mimoCloneVoiceId, t]);
 
   const resetGlobalSettings = useCallback(() => {
     setEngine('edge_tts');
@@ -1158,7 +1167,7 @@ export function TTSSynthesis({
     setVoxcpmInferenceTimesteps(10);
     setParams({ language: 'Chinese', speed: 1.0, volume: 80, pitch: 1.0 });
     setPanelOpen(true);
-  }, []);
+  }, [t]);
 
   const loadProjectById = useCallback(async (projectId: string) => {
     const p = await projectStorage.getProject(projectId);
@@ -1175,7 +1184,7 @@ export function TTSSynthesis({
     }
     initialLoadDoneRef.current = true;
     lastSavedUpdatedAtRef.current = migrated.updated_at;
-  }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync]);
+  }, [projectStorage, dispatch, restoreChapterSettings, storageMode, draftSync, t]);
 
   // Lighter reload after an in-place mutation (e.g. layer-sync action): refetch
   // project data without jumping to the overview section.
@@ -1318,7 +1327,7 @@ export function TTSSynthesis({
       }
       showToast(t('tts.projectDeleted'));
     } catch (e) { console.error('Delete project failed:', e); showToast(t('tts.deleteFailed'), 'error'); }
-  }, [project.id, projectStorage, storageMode, loadProjectById, dispatch, resetGlobalSettings, showToast]);
+  }, [project.id, projectStorage, storageMode, loadProjectById, dispatch, resetGlobalSettings, showToast, t]);
 
   const handleDeleteProject = useCallback((projectId = project.id) => {
     if (projectId === SCRATCHPAD_PROJECT_ID) {
@@ -1364,7 +1373,7 @@ export function TTSSynthesis({
         }
       },
     });
-  }, [activeChapter.segments, dispatch, editSegmentRemote, storageMode]);
+  }, [activeChapter.segments, dispatch, editSegmentRemote, storageMode, t]);
 
   const handleMerge = useCallback((id: string, direction: 'up' | 'down') => {
     const segs = activeChapter.segments;
@@ -1661,7 +1670,7 @@ export function TTSSynthesis({
       showToast(t('tts.roleSaveFailed'), 'error');
       throw error;
     }
-  }, [roles, showToast]);
+  }, [roles, showToast, t]);
 
   const handleDeleteRole = useCallback(async (roleId: string) => {
     const target = roles.find(role => role.id === roleId);
@@ -1694,7 +1703,7 @@ export function TTSSynthesis({
     } finally {
       setPreviewingRoleId(null);
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handleRegenerate = useCallback(async (id: string, opts?: { force?: boolean; internal?: boolean }) => {
     // 全本/批量合成在跑时，禁止手动触发单段合成；循环内部调用传 internal=true 绕过。
@@ -2310,7 +2319,7 @@ export function TTSSynthesis({
       for (const s of targetSegs) { dispatch({ type: 'UPDATE_PARAMS', id: s.id, params: { enable_ssml: true } }); }
       showToast(t('tts.ssmlAnnotatedForN', { count: targetSegs.length }));
     } catch { showToast(t('tts.ssmlAnnotateFailed'), 'error'); }
-  }, [activeChapter.segments, dispatch, showToast]);
+  }, [activeChapter.segments, dispatch, showToast, t]);
 
   /** Stop whatever is currently playing (single or play-all) and reset state */
   const stopCurrentAudio = useCallback(() => {
@@ -2566,7 +2575,7 @@ export function TTSSynthesis({
       dispatch({ type: 'GENERATE_SUCCESS', id, audio_id: newId, duration_sec: newDuration, origin: currentOrigin });
       showToast(t('tts.trimmedSilence', { ms: trimmedMs }));
     } catch (e) { console.error('Trim failed:', e); showToast(t('tts.trimFailed'), 'error'); }
-  }, [activeChapter.segments, dispatch, showToast]);
+  }, [activeChapter.segments, dispatch, showToast, t]);
 
   // 一键导出所有章节的 mp3 + srt 到项目导出目录（仅 backend 存储模式）
   const handleExportAll = useCallback(async () => {
@@ -2597,7 +2606,7 @@ export function TTSSynthesis({
         showToast(getErrorMessage(error, t('common.generationFailed')), 'error');
       }
     }
-  }, [storageMode, project?.id, isScratchpadProject, showToast, t]);
+  }, [storageMode, project?.id, isScratchpadProject, showToast, t, run]);
 
   const selectedVoice = voices.find(v => {
     const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
@@ -3082,6 +3091,7 @@ export function TTSSynthesis({
         </div>
         </VoiceStudioLayout>
         ) : projectSection === 'library' ? (
+          <Suspense fallback={null}>
           <ProjectLibrary
             projectId={project.id}
             projectName={project.name}
@@ -3110,7 +3120,9 @@ export function TTSSynthesis({
               handleSelectChapter(chapterId);              setProjectSection('studio');
             }}
           />
+          </Suspense>
         ) : projectSection === 'voices' ? (
+          <Suspense fallback={null}>
           <ProjectVoices
             roles={roles}
             projectId={project.id}
@@ -3119,7 +3131,9 @@ export function TTSSynthesis({
             onPreviewRole={handlePreviewRole}
             onManageRoles={() => setRoleLibraryOpen(true)}
           />
+          </Suspense>
         ) : projectSection === 'overview' ? (
+          <Suspense fallback={null}>
           <ProjectOverview
             projectName={project.name}
             projectId={storageMode === 'backend' && !isScratchpadProject ? project.id : undefined}
@@ -3134,7 +3148,9 @@ export function TTSSynthesis({
             }}
             onOpenVoices={() => setProjectSection('voices')}
           />
+          </Suspense>
         ) : projectSection === 'settings' ? (
+          <Suspense fallback={null}>
           <ProjectSettings
             projectName={project.name}
             remotionPath={project.remotion_project_path}
@@ -3153,6 +3169,7 @@ export function TTSSynthesis({
             onUpdateProjectMeta={(meta) => dispatch({ type: 'SET_PROJECT_META', meta })}
             onBackToOverview={() => setProjectSection('overview')}
           />
+          </Suspense>
         ) : null}
         </ProjectShell>
       </div>

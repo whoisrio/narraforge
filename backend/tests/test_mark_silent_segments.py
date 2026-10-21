@@ -3,10 +3,8 @@ import io
 import wave
 from pathlib import Path
 
-import pytest
-
-from app.services.segmented_project_service import mark_silent_segments_as_missing
 from app.models.segmented_project import SegmentedProjectSegment
+from app.services.segmented_project_service import mark_silent_segments_as_missing
 
 
 def _wav_bytes(duration_ms: int = 50) -> bytes:
@@ -21,9 +19,9 @@ def _wav_bytes(duration_ms: int = 50) -> bytes:
 def _seed_project(db_session, base_dir: Path) -> str:
     """Insert one project with three segments, each pointing to a different
     backend file. Returns the project id."""
-    from app.core import config
     from app.models.segmented_project import (
-        SegmentedProject, SegmentedProjectChapter,
+        SegmentedProject,
+        SegmentedProjectChapter,
     )
 
     p = SegmentedProject(id="p-silent", name="T", schema_version=2, layout="list")

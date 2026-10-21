@@ -60,7 +60,7 @@ def test_export_returns_zip_with_manifest_and_segment_audio(db_session, tmp_path
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     svc.save_project(db_session, _seed())
     db_session.commit()
-    orig_rel = _add_segment_audio(db_session, monkeypatch, tmp_path)
+    _add_segment_audio(db_session, monkeypatch, tmp_path)
 
     z = _export_zip(db_session)
     names = z.namelist()

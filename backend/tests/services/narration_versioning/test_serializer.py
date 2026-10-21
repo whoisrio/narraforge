@@ -1,7 +1,7 @@
-from pathlib import Path
 
 from app.services.narration_versioning.serializer import (
-    write_project, parse_segments_md,
+    parse_segments_md,
+    write_project,
 )
 
 

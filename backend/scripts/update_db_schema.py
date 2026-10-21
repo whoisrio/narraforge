@@ -1,9 +1,9 @@
 """
 更新数据库 Schema - 添加 clone_engine 字段到 voice_profiles 表
 """
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import inspect, text
+
 from app.core.database import Base, engine
-from app.core.config import settings
 
 # 检查数据库是否存在
 inspector = inspect(engine)
@@ -15,7 +15,7 @@ if 'voice_profiles' in tables:
     # 检查 clone_engine 列是否存在
     columns = [col['name'] for col in inspector.get_columns('voice_profiles')]
     print(f"voice_profiles columns: {columns}")
-    
+
     if 'clone_engine' not in columns:
         print("Adding clone_engine column...")
         with engine.connect() as conn:

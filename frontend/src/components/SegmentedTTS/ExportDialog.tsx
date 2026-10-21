@@ -174,7 +174,7 @@ export function ExportDialog({ projectId, chapterId, segments, chapterDesignTitl
     } finally {
       setExporting(false);
     }
-  }, [segments, name, options, targetLang, storageMode, folderExport, projectId, chapterId, chapterDesignTitle, remotionProjectPath, exportDirectory, srtUseGlobalTime, globalStartOffset, t]);
+  }, [segments, name, options, targetLang, storageMode, folderExport, projectId, chapterId, chapterDesignTitle, remotionProjectPath, exportDirectory, srtUseGlobalTime, globalStartOffset, t, confirm]);
 
   return (
     <div className={styles.overlay} onClick={onClose}>

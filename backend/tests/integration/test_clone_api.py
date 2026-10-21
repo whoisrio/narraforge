@@ -1,8 +1,8 @@
 """Voice Clone API 集成测试"""
 import os
 import tempfile
-import pytest
-from unittest.mock import patch, AsyncMock
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 
@@ -61,9 +61,10 @@ class TestCloneAPI:
         assert len(data["items"]) == 0
 
     def test_list_voices_with_data(self, client: TestClient, db_session):
-        from app.models.voice_profile import VoiceProfile
         import uuid
         from datetime import datetime, timezone
+
+        from app.models.voice_profile import VoiceProfile
 
         voice1 = VoiceProfile(
             id=str(uuid.uuid4()),
@@ -105,9 +106,10 @@ class TestCloneAPI:
         assert response.status_code == 404
 
     def test_get_voice_success(self, client: TestClient, db_session):
-        from app.models.voice_profile import VoiceProfile
         import uuid
         from datetime import datetime, timezone
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         voice = VoiceProfile(
@@ -135,8 +137,9 @@ class TestCloneAPI:
 
     def test_delete_voice_success(self, client: TestClient, db_session):
         """测试删除声音成功"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         # 使用跨平台临时目录
@@ -173,8 +176,9 @@ class TestCloneAPI:
 
     def test_create_clone_success(self, client: TestClient, db_session, mock_tts_service):
         """测试创建克隆声音成功：本地音频会先上传为公网 URL，再注册到 Qwen。"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         audio_path = os.path.join(tempfile.gettempdir(), f"clone_test_{voice_id}.wav")
@@ -244,8 +248,9 @@ class TestCloneAPI:
 
     def test_create_clone_audio_file_not_found(self, client: TestClient, db_session):
         """测试音频文件不存在时创建克隆"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         voice = VoiceProfile(
@@ -272,8 +277,9 @@ class TestCloneAPI:
 
     def test_create_clone_mimo_engine_params(self, client: TestClient, db_session):
         """MiMo 克隆后 voice_params 保存传入的参数"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         audio_path = os.path.join(tempfile.gettempdir(), f"mimo_test_{voice_id}.wav")
@@ -309,8 +315,9 @@ class TestCloneAPI:
 
     def test_create_clone_voxcpm_engine_params(self, client: TestClient, db_session):
         """VoxCPM 克隆后 voice_params 保存传入的参数"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         audio_path = os.path.join(tempfile.gettempdir(), f"voxcpm_test_{voice_id}.wav")
@@ -350,8 +357,9 @@ class TestCloneAPI:
 
     def test_create_clone_voxcpm_ultimate_sub_type(self, client: TestClient, db_session):
         """VoxCPM 极致克隆时 voice.model 应为 voxcpm，params 含 voxcpm_mode=ultimate"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         audio_path = os.path.join(tempfile.gettempdir(), f"voxcpm_ultimate_{voice_id}.wav")
@@ -380,8 +388,9 @@ class TestCloneAPI:
 
     def test_create_clone_engine_params_default_empty(self, client: TestClient, db_session):
         """不传 engine_params 时默认为空 dict"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         audio_path = os.path.join(tempfile.gettempdir(), f"empty_params_{voice_id}.wav")
@@ -409,9 +418,10 @@ class TestCloneAPI:
 
     def test_save_preview_audio(self, client: TestClient, db_session):
         """保存试听音频到 preview.preview_audio_path"""
-        from app.models.voice_profile import VoiceProfile
-        import uuid
         import base64
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         voice = VoiceProfile(
@@ -449,8 +459,9 @@ class TestCloneAPI:
 
     def test_save_preview_audio_invalid_base64(self, client: TestClient, db_session):
         """无效 base64 数据应返回 422"""
-        from app.models.voice_profile import VoiceProfile
         import uuid
+
+        from app.models.voice_profile import VoiceProfile
 
         voice_id = str(uuid.uuid4())
         voice = VoiceProfile(id=voice_id, name="Bad Base64 Test")

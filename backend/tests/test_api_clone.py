@@ -1,7 +1,7 @@
-import pytest
-from fastapi.testclient import TestClient
 from io import BytesIO
 
+import pytest
+from fastapi.testclient import TestClient
 
 # Fields every VoiceProfile API response must include (the canonical
 # `voice_to_dict` shape). /upload previously returned a trimmed 5-field dict

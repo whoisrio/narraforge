@@ -1,8 +1,9 @@
 # coding=utf-8
 
 import os
+
 import dashscope
-from dashscope.audio.tts_v2 import *
+from dashscope.audio.tts_v2 import SpeechSynthesizer
 from dotenv import load_dotenv
 
 load_dotenv()

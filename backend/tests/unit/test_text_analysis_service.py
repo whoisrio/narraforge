@@ -3,12 +3,13 @@
 """
 
 import pytest
+
 from app.services.text_analysis_service import (
-    analyze_script,
+    _assign_role,
     _find_chapter_boundaries,
     _scan_roles,
-    _assign_role,
     _strip_role_prefix,
+    analyze_script,
 )
 
 # ────────────────────────────────────────────────────────────

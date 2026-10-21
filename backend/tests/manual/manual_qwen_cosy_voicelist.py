@@ -1,9 +1,8 @@
 import os
-import time
-import dashscope
-from dashscope.audio.tts_v2 import VoiceEnrollmentService, SpeechSynthesizer
-from dotenv import load_dotenv
 
+import dashscope
+from dashscope.audio.tts_v2 import VoiceEnrollmentService
+from dotenv import load_dotenv
 
 load_dotenv()
 # 1. 环境准备

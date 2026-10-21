@@ -1,13 +1,13 @@
 """EdgeTTSService 单元测试"""
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.services.edge_tts_service import (
     EdgeTTSService,
-    get_edge_tts_service,
     _locale_to_language,
+    get_edge_tts_service,
 )
-
 
 # --- _locale_to_language ---
 

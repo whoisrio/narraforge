@@ -54,7 +54,7 @@ def test_export_endpoint_404_unknown(client):
 
 
 def test_export_endpoint_refuses_scratchpad(client):
-    resp = client.get(f"/api/segmented-projects/__scratchpad__/export")
+    resp = client.get("/api/segmented-projects/__scratchpad__/export")
     assert resp.status_code == 403
 
 

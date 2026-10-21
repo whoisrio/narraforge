@@ -3,7 +3,14 @@ from __future__ import annotations
 import pytest
 
 from app.schemas.role import RoleIn, RoleUpdate
-from app.services.role_service import create_role, delete_role, get_role, list_roles, role_to_out, update_role
+from app.services.role_service import (
+    create_role,
+    delete_role,
+    get_role,
+    list_roles,
+    role_to_out,
+    update_role,
+)
 
 
 def _role_in(role_id: str = "role-narrator") -> RoleIn:
