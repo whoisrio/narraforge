@@ -251,7 +251,9 @@ class TestJwksCache:
     def test_ttl_expiry_refetches(self, monkeypatch):
         calls = self._stub_http(monkeypatch)
         auth_middleware._load_jwks()
-        auth_middleware._jwks_cache["fetched_at"] = 0.0  # 强制过期
+        auth_middleware._jwks_cache["fetched_at"] = (
+            time.monotonic() - auth_middleware._JWKS_CACHE_TTL_SECONDS - 1
+        )
         auth_middleware._load_jwks()
         assert len(calls) == 2
 
