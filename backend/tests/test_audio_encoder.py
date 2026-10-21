@@ -58,8 +58,8 @@ def test_probe_audio_duration_for_real_mp3(tmp_path: Path):
     transcode_to_mp3(_silent_wav_bytes(expected_ms), out, bitrate="64k")
     duration = probe_audio_duration(out)
     assert duration is not None
-    # Allow 60ms slack — MP3 frame boundaries can shift things slightly
-    assert abs(duration - expected_ms / 1000) < 0.06, (
+    # Allow 120ms slack — MP3 frame padding varies by encoder/build
+    assert abs(duration - expected_ms / 1000) < 0.12, (
         f"expected ~{expected_ms/1000:.2f}s, got {duration:.2f}s"
     )
 
