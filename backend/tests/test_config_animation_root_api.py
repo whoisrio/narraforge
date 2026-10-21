@@ -1,5 +1,4 @@
 """API tests for the animation-root global setting endpoints."""
-import pytest
 
 
 def test_get_animation_root_unset_returns_null(client):

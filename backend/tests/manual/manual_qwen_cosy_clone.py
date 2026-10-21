@@ -1,9 +1,9 @@
 import os
 import time
-import dashscope
-from dashscope.audio.tts_v2 import VoiceEnrollmentService, SpeechSynthesizer
-from dotenv import load_dotenv
 
+import dashscope
+from dashscope.audio.tts_v2 import VoiceEnrollmentService
+from dotenv import load_dotenv
 
 load_dotenv()
 # 1. 环境准备
@@ -21,7 +21,7 @@ dashscope.base_http_api_url = 'https://dashscope.aliyuncs.com/api/v1'
 
 
 # 2. 定义复刻参数
-TARGET_MODEL = "cosyvoice-v3.5-flash" 
+TARGET_MODEL = "cosyvoice-v3.5-flash"
 # 为音色起一个有意义的前缀
 VOICE_PREFIX = "myvoice" # 仅允许数字和小写字母，小于十个字符
 # 公网可访问音频URL
@@ -58,7 +58,7 @@ for attempt in range(max_attempts):
         voice_info = service.query_voice(voice_id=voice_id)
         status = voice_info.get("status")
         print(f"Attempt {attempt + 1}/{max_attempts}: Voice status is '{status}'")
-        
+
         if status == "OK":
             print("Voice is ready for synthesis.")
             break

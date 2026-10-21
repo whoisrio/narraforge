@@ -5,13 +5,13 @@ import asyncio
 import os
 import tempfile
 from pathlib import Path
-from typing import Generator, AsyncGenerator
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from typing import Generator
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
@@ -158,8 +158,8 @@ def mock_openai_api():
 @pytest.fixture
 def sample_audio_file():
     """创建测试音频文件"""
-    import wave
     import struct
+    import wave
 
     # 创建简单的 WAV 文件
     temp_file = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
@@ -284,7 +284,7 @@ def cleanup_test_files():
             for file in os.listdir(test_dir):
                 try:
                     os.remove(os.path.join(test_dir, file))
-                except:
+                except OSError:
                     pass
 
     # 清理 srt 子目录
@@ -293,5 +293,5 @@ def cleanup_test_files():
         for file in os.listdir(srt_dir):
             try:
                 os.remove(os.path.join(srt_dir, file))
-            except:
+            except OSError:
                 pass

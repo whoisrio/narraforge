@@ -4,7 +4,6 @@
   字符、LLM token），项目不存在 404；
 - GET /api/me/usage：单租户全量用量，按项目分桶 + 项目名解析 + totals。
 """
-import pytest
 
 from app.core.repositories.usage import LocalUsageRepository
 

@@ -17,7 +17,6 @@ CORS（3.7）：
   字面 ``"*"`` 不可用，Starlette 降级为反射请求 Origin（两种模式 ACAO 均为具体
   origin 而非 "*"）。
 """
-import pytest
 from fastapi.testclient import TestClient
 
 import main as main_module

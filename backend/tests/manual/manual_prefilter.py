@@ -1,10 +1,12 @@
 """测试本地预筛效果"""
-import sys, os, re
+import os
+import sys
+
 sys.stdout = __import__('io').TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from app.services.voice_to_srt_service import VoiceToSrt, detect_gpu
-from app.services.llm_subtitle_service import _parse_srt_blocks, _local_prefilter
+from app.services.llm_subtitle_service import _local_prefilter, _parse_srt_blocks  # noqa: E402
+from app.services.voice_to_srt_service import VoiceToSrt, detect_gpu  # noqa: E402
 
 AUDIO = r'E:\repos\video_prjs\deepseek_strategy\out\deepseek_strategy.mp3'
 DOCS  = r'E:\repos\video_prjs\deepseek_strategy\docs\配音旁白.txt'
@@ -27,7 +29,7 @@ def main():
     print(f'    Saved: {len(matched)} blocks skipped from LLM')
     print(f'    LLM only needs to check {len(suspects)} blocks')
 
-    print(f'\n[5] Suspect lines:')
+    print('\n[5] Suspect lines:')
     for s in suspects:
         ratio = s.get('_match_ratio', '?')
         print(f'  [{s["index"]}] ratio={ratio} | {s["text"]}')

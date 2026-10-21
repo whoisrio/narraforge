@@ -10,10 +10,13 @@ from unittest.mock import patch
 import pytest
 
 from app.core import config
-from app.core.audio_encoder import (
-    AudioEncoderError, is_ffmpeg_available, probe_audio_duration, transcode_to_mp3,
-)
 from app.core import segmented_assets as assets
+from app.core.audio_encoder import (
+    AudioEncoderError,
+    is_ffmpeg_available,
+    probe_audio_duration,
+    transcode_to_mp3,
+)
 from app.models.segmented_project import SegmentedProjectChapter, SegmentedProjectSegment
 from app.schemas.segmented_project import ProjectIn
 from app.services import segmented_project_service as svc

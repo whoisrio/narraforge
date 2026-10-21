@@ -17,7 +17,6 @@ import pytest
 from app.models.segmented_project import SegmentedProjectSegment
 from app.models.voice_profile import VoiceProfile
 from app.services import segmented_project_service as svc
-
 from tests.test_segmented_synthesis import _seed
 
 

@@ -5,7 +5,6 @@ structured dict inside the `detail` envelope (matching FastAPI convention).
 Machine codes (snake_case) become both `code` and `message`;
 sentences/exceptions get a status-derived `code` and the original string as `message`.
 """
-from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 

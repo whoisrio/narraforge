@@ -2,7 +2,6 @@
 智能文稿解析 API 集成测试
 """
 
-import pytest
 
 
 SAMPLE_SCRIPT = (

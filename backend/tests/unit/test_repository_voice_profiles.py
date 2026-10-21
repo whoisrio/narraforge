@@ -7,7 +7,6 @@ list / get / create / update / delete / find_by_description。
 import json
 
 import httpx
-import pytest
 
 from app.core.repositories.voice_profiles import (
     LocalVoiceProfileRepository,

@@ -38,8 +38,8 @@ def test_whisper_download_includes_vocabulary_files():
 
 def test_funasr_streaming_model_not_offered_for_offline():
     """流式模型不应出现在离线转写预设与 API 允许列表中。"""
-    from app.services.funasr_service import FunASRService
     from app.api.speech_to_text import FUNASR_MODELS
+    from app.services.funasr_service import FunASRService
 
     assert 'paraformer-zh-streaming' not in FunASRService.MODEL_PRESETS
     assert 'paraformer-zh-streaming' not in FunASRService.MODEL_PRESETS_NO_VAD

@@ -1,12 +1,13 @@
 """
 VoiceProfile 模型单元测试
 """
-import pytest
 from datetime import datetime
+
+import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models.voice_profile import VoiceProfile
 from app.core.time_utils import utcnow
+from app.models.voice_profile import VoiceProfile
 
 
 class TestVoiceProfileModel:

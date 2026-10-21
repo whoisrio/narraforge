@@ -1,7 +1,11 @@
 import pytest
+
 from app.services.narration_versioning.ids import (
-    project_slug, chapter_id, next_segment_id,
-    is_valid_slug, is_valid_segment_id,
+    chapter_id,
+    is_valid_segment_id,
+    is_valid_slug,
+    next_segment_id,
+    project_slug,
 )
 
 

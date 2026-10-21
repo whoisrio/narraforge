@@ -4,9 +4,8 @@
 或:   .venv/bin/python tests/test_funasr_real.py
 """
 
-import sys
-import uuid
 import logging
+import uuid
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 

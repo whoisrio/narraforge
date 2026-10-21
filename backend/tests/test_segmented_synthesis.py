@@ -4,8 +4,10 @@ import struct
 import wave
 from unittest.mock import patch
 
-from app.models.segmented_project import SegmentedProjectSegment
+import pytest
+
 from app.models.role import Role
+from app.models.segmented_project import SegmentedProjectSegment
 from app.schemas.segmented_project import ProjectIn
 from app.services import segmented_project_service as svc
 
@@ -124,9 +126,6 @@ def test_mimo_internal_uses_real_service(monkeypatch):
 
     assert audio_format == "wav"
     assert audio_bytes == expected
-
-
-import pytest
 
 
 @pytest.mark.asyncio

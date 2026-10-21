@@ -1,7 +1,7 @@
-from qiniu import Auth, put_file_v2,etag
-import qiniu.config
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+from qiniu import Auth, etag, put_file_v2
 
 load_dotenv()
 ak = os.getenv("OSS_AK")

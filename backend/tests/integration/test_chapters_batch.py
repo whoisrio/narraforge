@@ -32,7 +32,7 @@ def test_batch_create_chapters_and_segments(client, db_session):
             },
         ]
     }
-    r = client.post(f"/api/segmented-projects/p-batch-1/chapters:batch", json=payload)
+    r = client.post("/api/segmented-projects/p-batch-1/chapters:batch", json=payload)
     assert r.status_code == 200, r.text
     data = r.json()
     assert len(data["chapters"]) == 2
@@ -53,7 +53,7 @@ def test_batch_replaces_existing_chapters(client, db_session):
     db_session.commit()
 
     payload = {"chapters": [{"chapter_title": "new", "segments": [{"text": "x", "emotion": "neutral"}]}]}
-    r = client.post(f"/api/segmented-projects/p-batch-2/chapters:batch", json=payload)
+    r = client.post("/api/segmented-projects/p-batch-2/chapters:batch", json=payload)
     assert r.status_code == 200
 
     db_session.expire_all()

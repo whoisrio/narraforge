@@ -3,10 +3,13 @@ from pathlib import Path
 
 from app.core import segmented_assets as assets
 from app.models.segmented_project import (
-    SegmentedProject, SegmentedProjectChapter, SegmentedProjectSegment,
+    SegmentedProject,
+    SegmentedProjectChapter,
+    SegmentedProjectSegment,
 )
 from app.services.data_root_migration import (
-    apply_migration, plan_migration, plan_project,
+    apply_migration,
+    plan_migration,
 )
 
 

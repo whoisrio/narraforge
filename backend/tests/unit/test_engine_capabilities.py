@@ -3,7 +3,6 @@ from app.services.engine_capabilities import (
     EMOTION_LEADING_TAG,
     EMOTION_TO_EMO_VECTOR,
     ENGINE_CAPABILITIES,
-    VOXCPM_MODE_CAPS,
     apply_leading_tag,
     emo_vector_for_emotion,
     prepare_text_for_engine,
@@ -12,7 +11,6 @@ from app.services.engine_capabilities import (
     strip_parenthesized,
     voxcpm_supports,
 )
-
 
 # ----- capability matrices -----
 

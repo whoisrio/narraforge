@@ -5,11 +5,9 @@ from sqlalchemy import text
 from app.models.role import Role
 from app.models.segmented_project import (
     SegmentedProject,
-    SegmentedProjectChapter,
     SegmentedProjectSegment,
 )
 from app.services.role_service import delete_role
-
 from tests.test_segmented_synthesis import _seed
 
 

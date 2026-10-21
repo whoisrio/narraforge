@@ -1,8 +1,10 @@
 import sys
+
 sys.path.insert(0, '.')
+import os
+
 from app.core.database import SessionLocal
 from app.models.voice_profile import VoiceProfile
-import os
 
 db = SessionLocal()
 voices = db.query(VoiceProfile).all()

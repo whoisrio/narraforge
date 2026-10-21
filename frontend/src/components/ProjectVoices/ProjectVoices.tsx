@@ -335,7 +335,7 @@ function VoiceRoleEditor({
     }).catch((err) => {
       console.error('加载克隆音色列表失败:', err);
     });
-  }, []);
+  }, [projectId, t]);
 
   // 当已保存的角色有 clone voice id 时，按 ID 查询对应的 VoiceProfile
   // 从 engine 还原 UI 状态（音色来源分类、引擎、参数）
@@ -1392,7 +1392,7 @@ export function ProjectVoices({
       } catch { /* fall through to live synthesis */ }
     }
     onPreviewRole(roleToSnapshot(role), roleSample);
-  }, [onPreviewRole]);
+  }, [onPreviewRole, roleSample]);
 
   const saveEditingRole = async (draft: RoleSnapshot) => {
     if (saving) return;

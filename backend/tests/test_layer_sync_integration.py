@@ -153,7 +153,8 @@ def test_rewrite_endpoint_writes_l3_edits_back_to_l2(client, db_session, tmp_pat
     db_session.commit()
     ch = _chapter(db_session)
     from app.services.layer_sync_service import mark_consistent
-    mark_consistent(ch); db_session.commit()
+    mark_consistent(ch)
+    db_session.commit()
     cid = ch.id
     ch.segments[0].text = "改过的第一句。"
     db_session.commit()
@@ -171,7 +172,8 @@ def test_rewrite_endpoint_409_when_l2_dirty(client, db_session, tmp_path, monkey
     db_session.commit()
     ch = _chapter(db_session)
     from app.services.layer_sync_service import mark_consistent
-    mark_consistent(ch); db_session.commit()
+    mark_consistent(ch)
+    db_session.commit()
     cid = ch.id
     ch.narration_script = "L2 被改过了"
     ch.segments[0].text = "L3 也改了"
@@ -187,7 +189,8 @@ def test_resplit_endpoint_regenerates_segments_from_l2(client, db_session, tmp_p
     db_session.commit()
     ch = _chapter(db_session)
     from app.services.layer_sync_service import mark_consistent
-    mark_consistent(ch); db_session.commit()
+    mark_consistent(ch)
+    db_session.commit()
     cid = ch.id
     # edit L2 -> l2 dirty; resplit should regenerate segments from the new L2
     ch.narration_script = "新第一句。新第二句。新第三句。"

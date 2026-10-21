@@ -11,7 +11,6 @@ import pytest
 
 from app.services import edge_tts_protocol as proto
 
-
 # --- Sec-MS-GEC token ---
 
 class TestSecMsGec:

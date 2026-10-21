@@ -1,7 +1,7 @@
 import subprocess
 
-from app.services.narration_versioning.job import snapshot_all
 from app.services.narration_versioning.git_ops import git_log
+from app.services.narration_versioning.job import snapshot_all
 
 
 def _seed_project(client, pid="deepseek-strategy", name="DeepSeek 策略"):

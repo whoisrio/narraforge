@@ -1,12 +1,14 @@
 import io
 import wave
-import pytest
 from pathlib import Path
+
+import pytest
+
 from app.core.audio_encoder import (
-    is_ffmpeg_available,
-    transcode_to_mp3,
-    probe_audio_duration,
     AudioEncoderError,
+    is_ffmpeg_available,
+    probe_audio_duration,
+    transcode_to_mp3,
 )
 
 

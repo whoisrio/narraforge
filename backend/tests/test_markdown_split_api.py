@@ -1,7 +1,6 @@
 """P2 v3+ Markdown 检测 + 切分测试."""
 from __future__ import annotations
 
-
 # ===== 测试用 markdown 文档 =====
 
 SAMPLE_MD = """# DeepSeek 战略拆解

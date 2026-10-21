@@ -1,0 +1,16 @@
+repos:
+  - repo: local
+    hooks:
+      - id: backend-ruff
+        name: backend ruff check
+        entry: uv run --project backend ruff check backend
+        language: system
+        files: ^backend/.*\.py$
+        pass_filenames: false
+
+      - id: frontend-lint
+        name: frontend eslint
+        entry: npm run lint --prefix frontend
+        language: system
+        files: ^frontend/(src|tests)/.*\.(ts|tsx)$
+        pass_filenames: false

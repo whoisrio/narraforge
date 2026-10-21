@@ -190,7 +190,7 @@ export function ProjectShell({
     } finally {
       setSyncBusy(false);
     }
-  }, [projectId, toast, refetchSyncStatus, onProjectChanged]);
+  }, [projectId, toast, t, refetchSyncStatus, onProjectChanged]);
 
   const startRename = (chapter: Chapter) => {
     setEditingChapterId(chapter.id);

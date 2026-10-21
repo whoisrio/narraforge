@@ -13,8 +13,6 @@ import logging
 import tomllib
 from pathlib import Path
 
-import pytest
-
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
 

@@ -83,7 +83,6 @@ export function VoiceClone() {
   const [designSampleText, setDesignSampleText] = useState('');
   useEffect(() => {
     setDesignSampleText(t('voiceDesign.defaultSampleText'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);
   const [designIntensity, setDesignIntensity] = useState(72);
   const [designStability, setDesignStability] = useState(68);

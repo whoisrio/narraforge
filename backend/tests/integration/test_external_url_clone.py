@@ -12,15 +12,15 @@
 import os
 import sys
 import time
+from datetime import datetime
+
 import pytest
 import requests
-from datetime import datetime
 
 # 确保能 import app 模块
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from app.core.config import settings
-
 
 BLOB_URL = "https://github.com/whoisrio/rio-image-bed/blob/main/voices/05571403-8f31-4de3-89a0-8a0540b462b8.mp3"
 RAW_URL = "https://raw.githubusercontent.com/whoisrio/rio-image-bed/main/voices/05571403-8f31-4de3-89a0-8a0540b462b8.mp3"
@@ -117,7 +117,7 @@ def test_qwen_clone_with_blob_url_should_fail():
     用 GitHub blob URL（HTML 页面）调用 Qwen 应失败 / 最终 status 不为 OK
     """
     import dashscope
-    from dashscope.audio.tts_v2 import VoiceEnrollmentService, VoiceEnrollmentException
+    from dashscope.audio.tts_v2 import VoiceEnrollmentException, VoiceEnrollmentService
 
     dashscope.api_key = settings.qwen_api_key
 

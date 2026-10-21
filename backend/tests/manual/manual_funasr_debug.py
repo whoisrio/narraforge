@@ -3,10 +3,8 @@
 .venv/bin/python tests/test_funasr_debug.py
 """
 
-import sys
-import os
-import uuid
 import logging
+import os
 
 logging.basicConfig(level=logging.INFO)
 

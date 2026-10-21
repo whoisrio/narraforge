@@ -7,14 +7,15 @@
 - SRT 输出格式
 """
 
-import pytest
 import os
 import sys
 import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from app.services.funasr_service import FunASRService, FunASRResult
+import pytest
+
+from app.services.funasr_service import FunASRResult, FunASRService
 
 
 class TestFunASRServiceInit:

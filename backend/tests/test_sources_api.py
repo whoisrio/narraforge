@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import io
 
-import pytest
-
 
 def _create_project(client, project_id: str = "p-test"):
     """辅助：先创建一个项目."""
@@ -180,6 +178,7 @@ def test_delete_source_not_found(client):
 
 def test_delete_audio_source_removes_file(client, tmp_path, monkeypatch):
     from pathlib import Path
+
     from app.core import config as cfg
     monkeypatch.setattr(cfg.settings, "segmented_dir", tmp_path)
     _create_project(client, "p-srcs-11")

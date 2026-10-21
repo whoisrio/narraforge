@@ -7,14 +7,12 @@
 """
 import httpx
 import pytest
-from fastapi.testclient import TestClient
-
-from app.core.asset_store import SupabaseStorageAssetStore, get_asset_store
-from app.core.config import settings
-from main import app
 
 # 依赖覆盖点（实现后存在于 app.api.clone）
 from app.api.clone import get_signed_upload_store
+from app.core.asset_store import SupabaseStorageAssetStore, get_asset_store
+from app.core.config import settings
+from main import app
 
 
 def _make_store(handler) -> SupabaseStorageAssetStore:

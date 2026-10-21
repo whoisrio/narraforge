@@ -4,7 +4,13 @@ from pathlib import Path
 import pytest
 
 from app.services.narration_versioning.git_ops import (
-    GitError, ensure_repo, add_all, has_staged_changes, commit, git_log, push,
+    GitError,
+    add_all,
+    commit,
+    ensure_repo,
+    git_log,
+    has_staged_changes,
+    push,
 )
 
 
@@ -74,10 +80,12 @@ def test_git_log_filtered_by_path(tmp_path):
     (repo / "projects" / "b").mkdir()
     (repo / "projects" / "a" / "x.md").write_text("1")
     (repo / "projects" / "b" / "y.md").write_text("1")
-    add_all(repo); commit(repo, "both")
+    add_all(repo)
+    commit(repo, "both")
 
     (repo / "projects" / "a" / "x.md").write_text("2")
-    add_all(repo); commit(repo, "only a")
+    add_all(repo)
+    commit(repo, "only a")
 
     log_a = git_log(repo, path_filter="projects/a", limit=10)
     log_b = git_log(repo, path_filter="projects/b", limit=10)
