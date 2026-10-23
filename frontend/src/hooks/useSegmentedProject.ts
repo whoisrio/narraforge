@@ -8,15 +8,15 @@ function uid(): string {
   return `${Date.now()}-${_idCounter}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function makeChapter(name: string, inheritFrom?: Chapter): Chapter {
+function makeChapter(name: string, inheritFrom?: Chapter, overrides?: { id?: string; voice?: EngineParams; split_config?: Chapter['split_config'] }): Chapter {
   const now = new Date().toISOString();
-  const defaultVoice = inheritFrom?.voice || { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' };
+  const defaultVoice = overrides?.voice || inheritFrom?.voice || { engine: 'edge_tts' as const, voice: '', rate: '+0%', volume: '+0%' };
   return {
-    id: uid(),
+    id: overrides?.id ?? uid(),
     name,
     voice: defaultVoice,
     segments: [],
-    split_config: inheritFrom?.split_config || { delimiters: [...DEFAULT_SPLIT_DELIMITERS], mode: 'rule' },
+    split_config: overrides?.split_config || inheritFrom?.split_config || { delimiters: [...DEFAULT_SPLIT_DELIMITERS], mode: 'rule' },
     created_at: now,
     updated_at: now,
   };
@@ -190,7 +190,7 @@ export type Action =
   | { type: 'SET_NARRATION_SCRIPT'; text: string }
   | { type: 'SET_LAYOUT'; layout: 'vertical' | 'horizontal' }
   // Chapter management
-  | { type: 'ADD_CHAPTER'; name: string }
+  | { type: 'ADD_CHAPTER'; name: string; id?: string; voice?: EngineParams; split_config?: Chapter['split_config'] }
   | { type: 'DELETE_CHAPTER'; id: string }
   | { type: 'SELECT_CHAPTER'; id: string }
   | { type: 'RENAME_CHAPTER'; id: string; name: string }
@@ -358,7 +358,11 @@ export function segmentedReducer(state: State, action: Action): State {
     case 'ADD_CHAPTER': {
       // New chapter inherits all settings from the currently active chapter
       const activeCh = p.chapters.find(c => c.id === p.active_chapter_id);
-      const ch = makeChapter(action.name, activeCh);
+      const ch = makeChapter(action.name, activeCh, {
+        id: action.id,
+        voice: action.voice,
+        split_config: action.split_config,
+      });
       return { project: { ...p, chapters: [...p.chapters, ch], active_chapter_id: ch.id, updated_at: new Date().toISOString() } };
     }
     case 'DELETE_CHAPTER': {

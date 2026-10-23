@@ -389,15 +389,29 @@ When in the Studio sidebar, each engine has specific voice source restrictions:
 
 ### 4.8 Project Auto-Save & Conflict Detection
 
-- Backend mode: debounce PUT via `useSegmentedDraftSync`
-- IndexedDB as draft cache with `base_updated_at` for conflict detection
+- Backend mode: autosave is entity-scoped, not a whole-project PUT. Each reducer action
+  maps to the narrowest endpoint (`PATCH /segmented-projects/{id}` for project fields,
+  `PATCH .../chapters/{cid}` for chapter fields and `original_text`, `PUT
+  .../source-document` / `PUT .../narration-script` for documents, `PATCH
+  .../segments/{sid}` for segment fields). Structure operations use the
+  structure/create/reorder/delete endpoints, with segment metadata
+  (`emotion`/`role_id`/`segment_kind`/`voice`) carried in the structure payload.
+- The whole-project `PUT` is no longer part of the autosave hot path. It remains for
+  explicit save/import/restore and for the conflict-adjudication force-save channel.
+- `useSegmentedEntitySync` debounces per entity and serializes writes per entity, so an
+  out-of-order response cannot overwrite a newer field with an older value.
+- IndexedDB remains the draft cache with `base_updated_at` for load-time conflict detection
 - 2000ms tolerance: only triggers conflict when backend `updated_at` exceeds local by >2 seconds
 - Initial load does not trigger `markDirty` to prevent false conflicts
 - Chapter sync-status badges poll only backend-persisted chapters: the page tracks the server-known chapter id set (from GET on load/reload, expanded to all in-memory chapters after each successful autosave via the draft-sync `onSaved` callback), and `ProjectShell` skips polling for in-memory-only chapters — e.g. the default chapter injected when opening an empty project — which would otherwise 404 and spam the console.
 
-**409 stale_payload handling — two layers** (design: `docs/plans/2026-09-23-segmented-save-conflict-recovery-design.md`)
+**409 stale_payload handling** (design: `docs/plans/2026-09-23-segmented-save-conflict-recovery-design.md`)
 
-The optimistic lock is project-level, but ~20 fine-grained endpoints (segment PATCH, synthesis, adjust-audio, chapter structure) all advance the same `updated_at`. Most 409s are therefore the client colliding with its own writes.
+Moving autosave off the whole-project PUT removes the main source of self-collisions:
+there is no longer a stale full snapshot racing fine-grained writes during normal
+editing or synthesis. The remaining 409 entries are the explicit force-save channel and
+load-time stale drafts. The layer-1 self-heal below is retained as a safety net for any
+remaining full-PUT caller.
 
 - **Layer 1 — false-conflict self-heal, fully inside `useSegmentedDraftSync`.** It remembers the server versions its own writes produced (fine-grained endpoint responses via `noteServerVersion` plus successful PUT responses, 64 kept per project). A 409 whose `server_updated_at` is already in that set means no other writer touched the project, so it retries with that version as the new base — at most 3 retries, no toast, no dialog, no draft loss. When the 409 arrives before the in-flight self-write response, it polls for up to 1s for that version to register first.
 - Each retry re-reads the draft and sends its latest content, so a fine-grained write that landed while the PUT was in flight is not clobbered by the stale snapshot (the big PUT does write `text` on existing segments).

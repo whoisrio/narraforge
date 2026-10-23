@@ -998,6 +998,7 @@ class SupabaseSegmentedProjectRepository(UserScope):
         result_rows: list[dict[str, Any]] = []
         for s_in in segments:
             prev = existing_by_id.get(s_in.id) if s_in.id else None
+            fields = getattr(s_in, "model_fields_set", set())
             if prev is None:
                 # id 缺省 → 服务端分配；id 存在但该章无此行 → 按新建播种（给定 id）
                 row = {
@@ -1005,11 +1006,15 @@ class SupabaseSegmentedProjectRepository(UserScope):
                     "chapter_id": chapter_id,
                     "position": s_in.position,
                     "text": s_in.text or "",
-                    "segment_kind": "narration",
-                    "voice": {"source": "chapter"},
+                    "segment_kind": (s_in.segment_kind or "narration") if "segment_kind" in fields else "narration",
+                    "voice": (s_in.voice or {"source": "chapter"}) if "voice" in fields else {"source": "chapter"},
                     "created_at": now,
                     "updated_at": now,
                 }
+                if "emotion" in fields:
+                    row["emotion"] = s_in.emotion
+                if "role_id" in fields:
+                    row["role_id"] = s_in.role_id
                 self._client.insert(SEGMENTS, [row])
             else:
                 updates: dict[str, Any] = {
@@ -1023,6 +1028,19 @@ class SupabaseSegmentedProjectRepository(UserScope):
                     "position": s_in.position,
                     "updated_at": now,
                 }
+                if "segment_kind" in fields:
+                    updates["segment_kind"] = s_in.segment_kind or "narration"
+                    row["segment_kind"] = updates["segment_kind"]
+                if "emotion" in fields:
+                    updates["emotion"] = s_in.emotion
+                    row["emotion"] = s_in.emotion
+                if "role_id" in fields:
+                    updates["role_id"] = s_in.role_id
+                    row["role_id"] = s_in.role_id
+                if "voice" in fields:
+                    new_voice = s_in.voice or {"source": "chapter"}
+                    updates["voice"] = new_voice
+                    row["voice"] = new_voice
                 # 结构性文本变更（合并等）→ 旧音频失效降级（与 local 同语义：
                 # current→previous、文件保留、generated_* 置空）；纯重排不动
                 if (prev.get("text") or "") != (s_in.text or ""):
@@ -1040,6 +1058,19 @@ class SupabaseSegmentedProjectRepository(UserScope):
                     updates["generated_at"] = None
                     row["generated_params"] = None
                     row["generated_at"] = None
+                elif "voice" in fields and (prev.get("voice") or {"source": "chapter"}) != (
+                    s_in.voice or {"source": "chapter"}
+                ):
+                    audio = dict(prev.get("audio") or {})
+                    current = audio.get("current")
+                    if isinstance(current, dict) and (
+                        current.get("path") or current.get("id") or current.get("audio_id")
+                    ):
+                        audio["previous"] = current
+                        audio["current"] = None
+                        audio.pop("duration_sec", None)
+                        updates["audio"] = audio
+                        row["audio"] = audio
                 self._client.update(
                     SEGMENTS,
                     updates,
@@ -1112,6 +1143,8 @@ class SupabaseSegmentedProjectRepository(UserScope):
             updates["split_config"] = patch.split_config or {}
         if "design_title" in fields:
             updates["design_title"] = patch.design_title
+        if "original_text" in fields:
+            updates["original_text"] = patch.original_text
         now = utcnow().isoformat()
         updates["updated_at"] = now
         self._client.update(CHAPTERS, updates, params={"id": f"eq.{chapter_id}"})

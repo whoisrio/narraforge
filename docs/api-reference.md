@@ -1067,13 +1067,13 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | PUT | `/api/segmented-projects/{id}/narration-script` | 写项目级完整旁白稿（local：落 narration.md 文件+路径列；workers：不持久化，no-op 警告；不动章节级 sync_state） |
 | POST | `/api/segmented-projects/{id}/chapters:batch` | 批量重建章节+分片（agent split_segment） |
 | POST | `/api/segmented-projects/{id}/chapters` | 新建章节（position 追加到末尾；workers 模式受章节配额约束；201 响应 `{chapter, project_updated_at}`） |
-| PATCH | `/api/segmented-projects/{id}/chapters/{cid}` | 章节部分更新（name/voice/split_config/design_title，tri-state：只更新出现的字段，显式 null = 清空；纯字段更新不碰分片音频；响应 `{chapter, project_updated_at}`） |
+| PATCH | `/api/segmented-projects/{id}/chapters/{cid}` | 章节部分更新（name/voice/split_config/design_title/original_text，tri-state：只更新出现的字段，显式 null = 清空；纯字段更新不碰分片音频；响应 `{chapter, project_updated_at}`） |
 | DELETE | `/api/segmented-projects/{id}/chapters/{cid}` | 删除章节（该章分片行级联删除，**音频文件保留在盘上**待 sweep；200 响应 `{project_updated_at}` 供前端推进乐观锁 base） |
 | POST | `/api/segmented-projects/{id}/chapters:reorder` | 章节重排（`chapter_ids` 须恰好覆盖项目全部章节 id，缺/多/未知 → 422 `chapter_ids_mismatch`；按数组顺序赋 position 0..n-1；响应 `{chapters: [{id, name, position}], project_updated_at}`） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` | 生成分片音频（`force` 可强制覆盖已录入音频） |
 | PATCH | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}` | 段级部分更新（text/emotion/role_id/segment_kind/voice/unlock_audio，tri-state：只更新出现的字段，显式 null = 清空；voice 变更会把旧音频降级为 previous、清空 current 但保留文件；`unlock_audio=true` 清除录音 origin 锁；audio/generated_params/generated_at 为服务端自产字段不接受写入；响应为 `{segment, project_updated_at}`，后者供前端推进乐观锁 base） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments` | 新建分片（`after_id` 锚点插入 / 缺省追加章末；响应含章内全量 position 列表 + `project_updated_at`） |
-| PATCH | `/api/segmented-projects/{id}/chapters/{cid}/structure` | 章内结构 reconcile（删除/合并/拆段/排序的唯一入口；已存在段文本变化时旧音频降级为 previous 并保留文件，被删分片只删 DB 行、音频文件留盘） |
+| PATCH | `/api/segmented-projects/{id}/chapters/{cid}/structure` | 章内结构 reconcile（删除/合并/拆段/排序的唯一入口；payload 段可选带 `emotion/role_id/segment_kind/voice`，新建段按传入值播种、已存在段仅在显式出现时更新，voice 变更同样降级旧音频；已存在段文本变化时旧音频降级为 previous 并保留文件，被删分片只删 DB 行、音频文件留盘） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/audio` | 上传用户自行录入的分片音频（multipart） |
 | GET | `/api/segmented-projects/{id}/audio/{cid}/{sid}` | 读取分片 mp3 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |

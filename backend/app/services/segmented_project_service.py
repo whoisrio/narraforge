@@ -985,6 +985,7 @@ def reconcile_chapter_structure(
     for s_in in segments:
         seg = existing.get(s_in.id) if s_in.id else None
         is_existing = seg is not None
+        fields = getattr(s_in, "model_fields_set", set())
         if seg is None:
             seg = SegmentedProjectSegment(
                 id=s_in.id or str(uuid.uuid4()),
@@ -1002,6 +1003,18 @@ def reconcile_chapter_structure(
         # 已存在段仅更新 text/position（自产字段不碰）；新建段即播种 text
         seg.text = new_text
         seg.position = s_in.position
+        # 客户端字段（拆分时的角色/情绪/音色）随结构端点一次落库。
+        if "segment_kind" in fields:
+            seg.segment_kind = s_in.segment_kind or "narration"
+        if "emotion" in fields:
+            seg.emotion = s_in.emotion
+        if "role_id" in fields:
+            setattr(seg, "role_id", s_in.role_id)
+        if "voice" in fields:
+            new_voice = s_in.voice or {"source": "chapter"}
+            if is_existing and new_voice != (seg.voice or {"source": "chapter"}):
+                _demote_current_audio(seg)
+            seg.voice = new_voice
         seg.updated_at = now
         keep_ids.add(seg.id)
         final.append(seg)
@@ -1076,6 +1089,8 @@ def patch_chapter(
         ch.split_config = patch.split_config or {}
     if "design_title" in fields:
         setattr(ch, "design_title", patch.design_title)
+    if "original_text" in fields:
+        ch.original_text = patch.original_text
     now = utcnow()
     ch.updated_at = now
     ch.project.updated_at = now

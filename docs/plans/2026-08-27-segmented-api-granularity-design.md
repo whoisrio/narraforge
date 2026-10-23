@@ -99,7 +99,7 @@
 ### 5.3 段结构（B 类）
 
 - `POST /api/segmented-projects/{pid}/chapters/{cid}/segments` — 新建段。body：`{text?, after_id?: string | null}`。返回 `{segment, positions: [{id, position}], project_updated_at}`（positions 为插入后章内全部段的终态；`after_id` 在章内无对应段 → 404 `segment_not_found`）。
-- `PATCH /api/segmented-projects/{pid}/chapters/{cid}/structure` — 章节内结构 reconcile（删除/合并/拆段/排序的唯一入口）。body：`{segments: [{id?, text, position}]}`，与现有 save_project 的段 reconcile 同语义但范围收敛到一章；被删段的 DB 行删除、音频文件保留（原则 2）；事务内完成 position 两阶段重排（沿用现有负哨兵手法）。返回 `{segments: 该章全部段（按 position 升序）, project_updated_at}`。**实现后修订**：已存在段的 `text` 发生变化时（合并等结构操作），旧音频在后端失效降级（`current`→`previous`、文件保留、`generated_params`/`generated_at` 置空）——原则 4 要求文本变更的音频失效由后端在意图明确的端点内完成；纯重排（text 未变）不动音频。
+- `PATCH /api/segmented-projects/{pid}/chapters/{cid}/structure` — 章节内结构 reconcile（删除/合并/拆段/排序的唯一入口）。body：`{segments: [{id?, text, position, emotion?, role_id?, segment_kind?, voice?}]}`，与现有 save_project 的段 reconcile 同语义但范围收敛到一章；可选元数据字段按 `model_fields_set` 三态处理（缺省 = 新建段用服务端默认值 / 已存在段保持现值，显式 null = 清空），使拆分/重拆可一次落库段级角色/情绪/音色，前端无需逐段补 PATCH。被删段的 DB 行删除、音频文件保留（原则 2）；事务内完成 position 两阶段重排（沿用现有负哨兵手法）。返回 `{segments: 该章全部段（按 position 升序）, project_updated_at}`。**实现后修订**：已存在段的 `text` 发生变化时（合并等结构操作），旧音频在后端失效降级（`current`→`previous`、文件保留、`generated_params`/`generated_at` 置空）；显式 voice 变更同样降级旧音频——原则 4 要求文本变更的音频失效由后端在意图明确的端点内完成；纯重排（text 未变）不动音频。
 
 ### 5.3.1 前端切换现状（e2e 回归修复 2026-08-27；Phase 7 收尾 2026-08-28）
 
@@ -117,7 +117,7 @@
 ### 5.4 章节操作（C 类）
 
 - `POST /api/segmented-projects/{pid}/chapters` — `{name}` → 新章节（workers 模式走章节配额检查 `_enforce_chapter_quota`）。
-- `PATCH /api/segmented-projects/{pid}/chapters/{cid}` — `{name?, voice?, split_config?, design_title?}` 部分更新。
+- `PATCH /api/segmented-projects/{pid}/chapters/{cid}` — `{name?, voice?, split_config?, design_title?, original_text?}` 部分更新。
 - `DELETE /api/segmented-projects/{pid}/chapters/{cid}` — 删章（DB 行；音频文件保留待 sweep）。
 - `POST /api/segmented-projects/{pid}/chapters:reorder` — `{chapter_ids: [...]}` 按数组顺序重排 position。
 
@@ -154,6 +154,7 @@
 | 5 | 项目 PATCH + 文档 PUT | ✅ 已实现并通过测试（服务层 6 + API 7 + workers 6；实现后修订：项目级 narration-script PUT 不动章节级 sync_state——两套机制，章节层置脏由 chapters:batch/resplit 等端点管理） |
 | 6 | 孤儿文件 sweep（脚本或管理端点，dry-run 默认） | ✅ 已实现并通过测试（`POST /segmented-projects/sweep-orphan-audio`，local-only；dry-run 默认，execute=true 才删；service 4 + API 1 + workers 未挂载断言） |
 | 7 | 清理：reducer 冗余 action、draftSync 瘦身、docs/e2e 更新 | ✅ 已完成（2026-08-28）：删除/拆段/重排切 structure 端点（reducer 四 action 加 `touch` 透传），插入切 `POST /segments`（`createSegment` 封装）；删 `handleProduceAll` 的 `initialLoadDoneRef` 暂停 hack；删 draftSync 无调用方的 `loadDraft`（`flush` 保留：防抖保存核心且有单测覆盖）；reducer action 本体因本地模式仍在用而全部保留；前端 621 单测全绿 |
+| 8 | 整包 PUT 完全退出自动保存热路径 | ✅ 已完成（2026-10）：新增 `segmentedActionPersistence` 把 reducer action 映射到项目/章节/文档/段写，`useSegmentedEntitySync` 按实体防抖 + 串行；TTSSynthesis backend autosave 仅保留 frontend IndexedDB 分支；Try 接力改走章节 PATCH；structure 端点一次携带段元数据；章节 CRUD/reorder 全部走专用端点。保存期假冲突随之消失，整包 PUT 仅保留给显式保存/导入/恢复与冲突 force-save。 |
 
 每阶段保持双写兼容：旧路径（全量 PUT autosave）在新端点上线、前端切换并回归后才下线对应 action 的 autosave 触发。
 
@@ -171,3 +172,4 @@
 - 并发测试：陈旧 `base_updated_at` 的 PUT 被 409；自产字段在 PUT 后保持 DB 原值。
 - 段编辑 PATCH 后：文本更新、音频标记 missing、文件仍在盘上、其余段不受影响。
 - 前端：批量合成全程无全量 PUT（网络面板断言），编辑段后 IndexedDB 与后端数据一致（dual-read）。
+- 前端：普通编辑（改章节名/项目元信息/文档/段字段）全程只发对应实体的细粒度请求，零整包 PUT、零冲突弹窗；合成在途时已有音频仍可播放。

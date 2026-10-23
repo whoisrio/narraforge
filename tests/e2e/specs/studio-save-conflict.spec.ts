@@ -1,26 +1,24 @@
 /**
- * 分段项目保存冲突自愈与草稿保护 E2E.
+ * 分段项目细粒度保存 + 冲突恢复 E2E.
  *
- * 链路：UI 编辑 → 整包 PUT 撞乐观锁 409 → 第一层自愈（假冲突静默重试）或
- * 第二层裁决（真冲突模态弹窗 + 草稿归档）→ API 层 + DB 层双读校验。
+ * 背景：整包 PUT 已退出自动保存热路径。项目/章节/段/文档分别走 PATCH/PUT
+ * 专用端点，因此"保存期间的假冲突"不再存在；只有加载期检测到的陈旧本地草稿
+ * 会进入第二层裁决（force save 仍走整包 PUT，且不带 base）。
  *
- * 三层场景：
- *   1. 假冲突自愈 —— 整包 PUT 在途时本端细粒度写推进服务端版本，PUT 落地即 409，
- *      但该版本是本端自己写的 → 零 UI 打扰重试成功，编辑零丢失。
- *   2. 真冲突裁决「用草稿」—— 外部写入（模拟 agent / 另一标签页）推进服务端，
- *      PUT 409 → 归档 + 模态弹窗 → force save 把用户选的草稿真正落库。
- *   3. 真冲突裁决「用后端」+ 归档找回 —— 采纳权威态后仍可从「冲突草稿」入口
- *      找回被放弃的草稿，再走一次裁决落库。
- *
- * 关键手法：用 page.route 把整包 PUT 扣住不发给服务端，让"制造并发写"与
- * "放行 PUT"两步的顺序完全可控，避免靠 sleep 赌时序。
+ * 覆盖：
+ *   1. 章节改名只发 PATCH /chapters/{id}，零整包 PUT、零冲突弹窗，API + DB 双读一致。
+ *   2. 加载期真冲突「用草稿」：陈旧 IndexedDB 草稿 + 外部写入 → 裁决弹窗 →
+ *      force save（无 base）落库；被放弃的后端版本不是草稿，不进入归档。
+ *   3. 加载期真冲突「用后端」：采纳权威态，仍可从冲突草稿归档找回并再次裁决落库。
  *
  * @feature docs/plans/2026-09-23-segmented-save-conflict-recovery-design.md
+ * @feature docs/plans/2026-08-27-segmented-api-granularity-design.md
  */
 import { expect, test, type Page } from '@playwright/test';
 import { E2E_BACKEND_URL } from '../helpers/ports';
 import {
   collectErrors,
+  enterWorkspace,
   goToStudio,
   readBackendProject,
   seedTestProject,
@@ -35,10 +33,22 @@ const CHAPTER1_ID = 'test-chapter-1';
 
 const LOCAL_CHAPTER_NAME = '第1章 夜路·本地改';
 const EXTERNAL_CHAPTER_NAME = '第1章 外部改名';
-const LOCAL_SEGMENT_TEXT = '这是一段被 E2E 改写过的段落文本。';
 
-/** 本项目整包 PUT 的 URL（正则锚定结尾，不吃 PATCH/POST 的段级端点）。 */
+/**
+ * 后端 updated_at 是**不带时区**的 UTC ISO（如 2026-10-21T09:28:32.743179）。
+ * 加载期冲突比较用 `new Date()` 解析两端，必须保持同一种格式；混入 `Z`
+ * 会让浏览器把服务端值当本地时间，在 UTC+8 下差出 8 小时，冲突永远判不出来。
+ */
+function naiveIsoMinus(iso: string, secondsAgo: number): string {
+  return new Date(Date.parse(iso) - secondsAgo * 1000).toISOString().replace(/Z$/, '');
+}
+
+/** 整包 PUT 的 URL（正则锚定结尾，不吃 PATCH/POST 的段级端点）。 */
 const PROJECT_PUT_RE = new RegExp(`/api/segmented-projects/${PROJECT_ID}$`);
+/** 章节 PATCH 的 URL。 */
+const CHAPTER_PATCH_RE = new RegExp(
+  `/api/segmented-projects/${PROJECT_ID}/chapters/${CHAPTER1_ID}$`,
+);
 
 // ── 读取 ─────────────────────────────────────────────────────────────────────
 
@@ -80,57 +90,9 @@ async function waitForStableProject(page: Page): Promise<void> {
   }
 }
 
-// ── 整包 PUT 闸门 ─────────────────────────────────────────────────────────────
-
-interface PutGate {
-  /** 放行所有被扣住的 PUT（放行后再来的 PUT 直接通过）。 */
-  release: () => void;
-  /** 等到至少一个 PUT 已被扣住。 */
-  waitForFirstPut: () => Promise<void>;
-}
-
-/**
- * 扣住前端发往服务端的整包 PUT，直到 release()。
- * 这样"PUT 已在途但还没落地"这个窗口可以被无限拉长，制造并发写变得确定。
- */
-async function gateProjectPuts(page: Page): Promise<PutGate> {
-  let release!: () => void;
-  const gate = new Promise<void>((resolve) => { release = resolve; });
-  let markSeen!: () => void;
-  const firstPut = new Promise<void>((resolve) => { markSeen = resolve; });
-  let seen = false;
-
-  await page.route(PROJECT_PUT_RE, async (route) => {
-    if (route.request().method() !== 'PUT') {
-      await route.continue();
-      return;
-    }
-    if (!seen) {
-      seen = true;
-      markSeen();
-    }
-    await gate;
-    await route.continue();
-  });
-
-  return { release, waitForFirstPut: () => firstPut };
-}
-
 // ── 操作 ─────────────────────────────────────────────────────────────────────
 
-/** 应用内切到「工作室」（TTSSynthesis 保持挂载，draftSync 不重建）。 */
-async function goStudioSection(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /◉ 工作室/ }).first().click();
-  await expect(page.getByRole('button', { name: /批量合成|Batch Synthesize/ }).first())
-    .toBeVisible({ timeout: 15_000 });
-}
-
-/**
- * 确保文本库的章节编辑器打开（幂等）：
- * 已在编辑器里就直接返回；否则 文本库 → 章节 → 打开文本。
- * 不能无脑重复点「文本库」——冲突裁决后页面本来就停在编辑器里，
- * 再点一次侧边栏会退到别的视图，反而找不到「章节」标签。
- */
+/** 确保文本库的章节编辑器打开（幂等）。 */
 async function openChapterEditor(page: Page): Promise<void> {
   const titleInput = page.getByRole('textbox', { name: '章节标题' });
   if (await titleInput.isVisible().catch(() => false)) return;
@@ -145,10 +107,7 @@ async function openChapterEditor(page: Page): Promise<void> {
   await expect(titleInput).toBeVisible({ timeout: 10_000 });
 }
 
-/**
- * 在文本库改第一章标题 → RENAME_CHAPTER（touch=true）→ markDirty → 1s 防抖整包 PUT。
- * 这是"产生脏草稿"的最省事入口，也是设计 §1.3 里用户最常走的路径。
- */
+/** 在文本库改第一章标题 → RENAME_CHAPTER → 章节 PATCH（细粒度）。 */
 async function renameChapterInLibrary(page: Page, name: string): Promise<void> {
   await openChapterEditor(page);
   const titleInput = page.getByRole('textbox', { name: '章节标题' });
@@ -162,30 +121,6 @@ async function expectChapterTitleInLibrary(page: Page, name: string): Promise<vo
     .toHaveValue(name, { timeout: 15_000 });
 }
 
-/** 在工作室改写第一个段落的文本 → 段级 PATCH（细粒度端点，touch=false）。 */
-async function editFirstSegmentText(page: Page, text: string): Promise<string> {
-  await goStudioSection(page);
-  const row = page.locator('[class*="compactCard"]').first();
-  await expect(row).toBeVisible({ timeout: 15_000 });
-  const segId = await row.getAttribute('data-segment-id');
-  expect(segId, 'compact 段落行应带 data-segment-id').toBeTruthy();
-
-  // onSelect 是 toggle 语义：已展开时再点会关掉，故先探一下
-  const panel = page.locator('[class*="accordionWrapper"]');
-  if (!(await panel.isVisible())) {
-    await row.locator('[class*="compactText"]').click();
-  }
-  await expect(panel).toBeVisible({ timeout: 10_000 });
-
-  const patchDone = page.waitForResponse(
-    (r) => r.request().method() === 'PATCH' && r.url().includes(`/segments/${segId}`),
-    { timeout: 15_000 },
-  );
-  await panel.locator('textarea').fill(text);
-  expect((await patchDone).status()).toBe(200);
-  return segId!;
-}
-
 /** 绕开前端直连后端改章节名（模拟 agent 写入 / 另一个标签页）。 */
 async function externalRenameChapter(page: Page, name: string): Promise<void> {
   const r = await page.request.get(`${BACKEND}/api/segmented-projects/${PROJECT_ID}`);
@@ -197,167 +132,239 @@ async function externalRenameChapter(page: Page, name: string): Promise<void> {
   expect(put.status(), '外部整包 PUT 应被放行').toBe(200);
 }
 
-/** 把 409 冲突响应本身从 console 错误里滤掉（它是被测行为，不是缺陷）。 */
+interface DraftRecordShape {
+  project_id: string;
+  draft: Record<string, unknown>;
+  base_updated_at: string;
+  updated_at: string;
+  dirty: boolean;
+}
+
+async function readDraftRecord(page: Page, projectId: string): Promise<DraftRecordShape | null> {
+  return page.evaluate(async (pid) => {
+    return await new Promise<DraftRecordShape | null>((resolve, reject) => {
+      const open = indexedDB.open('voice_clone_studio');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction('project_drafts', 'readonly');
+        const req = tx.objectStore('project_drafts').get(pid);
+        req.onsuccess = () => { db.close(); resolve((req.result as DraftRecordShape) ?? null); };
+        req.onerror = () => reject(req.error);
+      };
+    });
+  }, projectId);
+}
+
+/** 直接写 IndexedDB 草稿，模拟"上次会话留下的、基于旧服务端版本的本地草稿"。 */
+async function writeStaleDraft(page: Page, record: DraftRecordShape): Promise<void> {
+  await page.evaluate(async (rec) => {
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open('voice_clone_studio');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const tx = db.transaction('project_drafts', 'readwrite');
+        tx.objectStore('project_drafts').put(rec);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    });
+  }, record);
+}
+
+/**
+ * 先等页面自己 adopt 完（IndexedDB 出现 clean 记录），再写陈旧草稿，
+ * 避免与 StrictMode/加载期 adopt 的 putDraft 竞争。写完再读回确认未被覆盖。
+ */
+async function seedStaleDraft(page: Page, record: DraftRecordShape): Promise<void> {
+  await expect.poll(async () => {
+    const rec = await readDraftRecord(page, record.project_id);
+    return rec ? rec.dirty : null;
+  }, { timeout: 10_000 }).toBe(false);
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await writeStaleDraft(page, record);
+    await page.waitForTimeout(400);
+    const rec = await readDraftRecord(page, record.project_id);
+    if (rec?.dirty && rec.base_updated_at === record.base_updated_at) return;
+  }
+  throw new Error('陈旧草稿写入后仍被加载期 adopt 覆盖');
+}
+
+/** 打开项目并进入工作室，预期加载期冲突弹窗出现。 */
+async function openProjectExpectingConflict(page: Page): Promise<void> {
+  await page.goto('/');
+  await enterWorkspace(page);
+  await page.getByRole('button', { name: /打开 test/ }).first().click();
+  const dialog = page.getByRole('alertdialog', { name: '检测到版本冲突' });
+  // 冲突检测在 TTSSynthesis 挂载时执行。工作区可能恢复到上次所在的「工作室」
+  // （弹窗会立刻出现并挡住导航），也可能先落在「总览」（需要点一下工作室）。
+  // 两种情况都用短超时探测，未出现弹窗才点导航，避免点击被 overlay 拦截。
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    if (await dialog.isVisible().catch(() => false)) break;
+    const studioNav = page.getByRole('button', { name: /◉ 工作室/ }).first();
+    if (await studioNav.isVisible().catch(() => false)) {
+      try {
+        await studioNav.click({ timeout: 1_000 });
+      } catch {
+        // 点击瞬间弹窗出现并拦截：下一轮由 isVisible 分支结束循环
+      }
+    }
+    await page.waitForTimeout(200);
+  }
+  await expect(dialog).toBeVisible({ timeout: 30_000 });
+}
+
 function nonConflictErrors(errors: string[]): string[] {
   return errors.filter((e) => !e.includes('favicon') && !/409 \(Conflict\)|stale_payload/i.test(e));
 }
 
-test.describe('分段保存冲突：自愈与裁决', () => {
+test.describe('分段保存：细粒度端点与冲突恢复', () => {
   test.beforeEach(async ({ page }) => {
     await seedTestProject(page);
     await setLocaleToZhCN(page);
   });
 
-  test('假冲突自愈：整包 PUT 在途时本端细粒度写推进版本，409 静默重试（无弹窗、编辑零丢失）', async ({ page }) => {
-    test.setTimeout(150_000);
+  test('章节改名只发 PATCH /chapters/{id}：零整包 PUT、零冲突弹窗、双读一致', async ({ page }) => {
+    test.setTimeout(90_000);
     const errors = collectErrors(page);
 
     await goToStudio(page);
     await waitForStableProject(page);
-    const initialVersion = (await readProject(page)).updated_at;
 
-    const putStatuses: number[] = [];
-    page.on('response', (r) => {
-      if (r.request().method() === 'PUT' && PROJECT_PUT_RE.test(new URL(r.url()).pathname)) {
-        putStatuses.push(r.status());
+    const fullPuts: string[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'PUT' && PROJECT_PUT_RE.test(new URL(r.url()).pathname)) {
+        fullPuts.push(r.url());
       }
     });
 
-    const gate = await gateProjectPuts(page);
-
-    // 1) 文本库改章节名 → 脏草稿 → 1s 后整包 PUT 发出，被闸门扣住（此时还没到服务端）
+    const patchDone = page.waitForResponse(
+      (r) => r.request().method() === 'PATCH'
+        && CHAPTER_PATCH_RE.test(new URL(r.url()).pathname)
+        && r.status() === 200,
+      { timeout: 20_000 },
+    );
     await renameChapterInLibrary(page, LOCAL_CHAPTER_NAME);
-    await gate.waitForFirstPut();
+    const patch = await patchDone;
+    expect(patch.request().postDataJSON()).toEqual({ name: LOCAL_CHAPTER_NAME });
 
-    // 2) PUT 在途期间做一次细粒度写：段文本 PATCH 推进服务端版本，
-    //    且该版本经 noteServerVersion 登记进"本端已知集合"
-    const segId = await editFirstSegmentText(page, LOCAL_SEGMENT_TEXT);
-    const advancedAfterPatch = (await readProject(page)).updated_at;
+    // 跨过旧实现的 1s 防抖窗口：确认没有任何整包 PUT 被触发
+    await page.waitForTimeout(1_500);
+    expect(fullPuts, `章节改名不得触发整包 PUT（实际 ${JSON.stringify(fullPuts)}）`).toEqual([]);
 
-    // 3) 放行：扣住的 PUT 携带旧 base 落地 → 409（S=advancedAfterPatch ∈ 已知集）→
-    //    第一层换 base + 换最新草稿内容重试 → 200。全程不外泄到 UI
-    gate.release();
-
-    await expect.poll(() => putStatuses.length, { timeout: 30_000 }).toBeGreaterThanOrEqual(2);
-    await expect.poll(() => putStatuses[putStatuses.length - 1], { timeout: 30_000 }).toBe(200);
-
-    // 核心断言 1：确实撞过锁（否则本用例没验到东西）
-    expect(putStatuses, `PUT 状态序列应含一次 409（实际 ${JSON.stringify(putStatuses)}）`).toContain(409);
-    // 核心断言 2：段级 PATCH 确实推进了服务端版本（并发写真实发生过）
-    expect(advancedAfterPatch).not.toBe(initialVersion);
-    // 核心断言 3：零 UI 打扰 —— 无裁决弹窗、无"已在别处更新"提示
+    // 零 UI 打扰
     await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(page.getByText(/检测到项目已在别处更新|检测到版本冲突/)).toHaveCount(0);
 
-    // 双读：两处编辑都落库，一段不丢（重试若复用旧快照，段文本会被覆盖回旧值）
+    // 双读：API + DB 都是新章节名
     await expect.poll(() => readApiChapterName(page), { timeout: 20_000 }).toBe(LOCAL_CHAPTER_NAME);
-    const api = await readProject(page);
-    expect(api.chapters.find((c) => c.id === CHAPTER1_ID)?.segments.find((s) => s.id === segId)?.text)
-      .toBe(LOCAL_SEGMENT_TEXT);
-
-    await verifyDbWithScreenshot(page, PROJECT_ID, '假冲突自愈-双读');
+    await verifyDbWithScreenshot(page, PROJECT_ID, '章节改名-细粒度PATCH-双读');
     expect(await readDbChapterName()).toBe(LOCAL_CHAPTER_NAME);
 
     expect(nonConflictErrors(errors)).toEqual([]);
   });
 
-  test('真冲突裁决「用草稿」：外部写入触发 409 → 草稿归档 + 模态弹窗 → force save 落库', async ({ page }) => {
-    test.setTimeout(150_000);
+  test('加载期真冲突「用草稿」：裁决后 force save（无 base）落库，不产生草稿归档', async ({ page }) => {
+    test.setTimeout(120_000);
     const errors = collectErrors(page);
 
     await goToStudio(page);
     await waitForStableProject(page);
 
-    const gate = await gateProjectPuts(page);
-
-    // 1) 本地脏草稿（改章节名），整包 PUT 被扣住
-    await renameChapterInLibrary(page, LOCAL_CHAPTER_NAME);
-    await gate.waitForFirstPut();
-
-    // 2) 外部写入推进服务端版本（该版本不属于本端任何写）
+    const serverProject = await readProject(page);
+    const staleDraft: DraftRecordShape = {
+      project_id: PROJECT_ID,
+      draft: {
+        ...serverProject,
+        chapters: serverProject.chapters.map((c) =>
+          c.id === CHAPTER1_ID ? { ...c, name: LOCAL_CHAPTER_NAME } : c),
+      },
+      // 远旧于服务端版本（>2s 容差），确保加载期判为真冲突；格式与服务端一致
+      base_updated_at: naiveIsoMinus(serverProject.updated_at, 60),
+      updated_at: new Date().toISOString(),
+      dirty: true,
+    };
+    await seedStaleDraft(page, staleDraft);
     await externalRenameChapter(page, EXTERNAL_CHAPTER_NAME);
 
-    // 3) 放行 → 409 且 S 未知 → 真冲突 → 归档 + 拉权威态 + 模态裁决
-    gate.release();
+    await openProjectExpectingConflict(page);
     const dialog = page.getByRole('alertdialog', { name: '检测到版本冲突' });
-    await expect(dialog).toBeVisible({ timeout: 30_000 });
-    await expect(dialog).toContainText('本地草稿已自动归档');
-    // 弹窗同时给出两侧版本，用户能看到自己会丢什么
     await expect(dialog).toContainText('本地草稿');
+    await expect(dialog).toContainText('恢复本地修改或使用后端版本');
 
-    // 4) 裁决：用草稿 → force save（base_updated_at=null），用户的选择真正落库
     const forceSaveReq = page.waitForRequest(
       (r) => r.method() === 'PUT' && PROJECT_PUT_RE.test(new URL(r.url()).pathname),
       { timeout: 20_000 },
     );
     await dialog.getByRole('button', { name: '恢复本地草稿' }).click();
     const req = await forceSaveReq;
-    expect(req.postDataJSON().base_updated_at, 'force save 不得携带 base（否则又被锁拦下）').toBeUndefined();
+    expect(req.postDataJSON().base_updated_at, 'force save 不得携带 base').toBeUndefined();
     await expect(dialog).toBeHidden({ timeout: 20_000 });
 
-    // 5) 双读：服务端 = 本地草稿内容（不是外部写入的内容）
     await expect.poll(() => readApiChapterName(page), { timeout: 20_000 }).toBe(LOCAL_CHAPTER_NAME);
-    await verifyDbWithScreenshot(page, PROJECT_ID, '真冲突-用草稿-双读');
+    await verifyDbWithScreenshot(page, PROJECT_ID, '加载期冲突-用草稿-双读');
     expect(await readDbChapterName()).toBe(LOCAL_CHAPTER_NAME);
 
-    // 6) 被放弃的一侧已归档，工具栏入口可见（归档 +1）
-    await goStudioSection(page);
-    await expect(page.getByRole('button', { name: '冲突草稿 (1)' })).toBeVisible({ timeout: 20_000 });
-
-    // 7) 裁决后 autosave 已恢复：再编辑一次能正常落库（回归：裁决后永久暂停）
-    await renameChapterInLibrary(page, `${LOCAL_CHAPTER_NAME}·二次`);
-    await expect.poll(() => readApiChapterName(page), { timeout: 20_000 }).toBe(`${LOCAL_CHAPTER_NAME}·二次`);
+    // "用草稿"放弃的是后端版本，它不是本地草稿，不应出现在冲突草稿归档里
+    // （只有裁决为"用后端"时才会归档被放弃的本地草稿）。
+    await page.waitForTimeout(1_000);
+    await expect(page.getByRole('button', { name: /^冲突草稿/ })).toHaveCount(0);
 
     expect(nonConflictErrors(errors)).toEqual([]);
   });
 
-  test('真冲突裁决「用后端」+ 归档找回：采纳权威态后仍可找回被放弃的草稿并落库', async ({ page }) => {
+  test('加载期真冲突「用后端」：采纳权威态后仍可从归档找回并再次裁决落库', async ({ page }) => {
     test.setTimeout(150_000);
     const errors = collectErrors(page);
 
     await goToStudio(page);
     await waitForStableProject(page);
 
-    const gate = await gateProjectPuts(page);
-
-    await renameChapterInLibrary(page, LOCAL_CHAPTER_NAME);
-    await gate.waitForFirstPut();
+    const serverProject = await readProject(page);
+    const staleDraft: DraftRecordShape = {
+      project_id: PROJECT_ID,
+      draft: {
+        ...serverProject,
+        chapters: serverProject.chapters.map((c) =>
+          c.id === CHAPTER1_ID ? { ...c, name: LOCAL_CHAPTER_NAME } : c),
+      },
+      base_updated_at: naiveIsoMinus(serverProject.updated_at, 60),
+      updated_at: new Date().toISOString(),
+      dirty: true,
+    };
+    await seedStaleDraft(page, staleDraft);
     await externalRenameChapter(page, EXTERNAL_CHAPTER_NAME);
-    gate.release();
 
+    await openProjectExpectingConflict(page);
     const dialog = page.getByRole('alertdialog', { name: '检测到版本冲突' });
-    await expect(dialog).toBeVisible({ timeout: 30_000 });
-
-    // 1) 裁决：用后端 → 采纳权威态
     await dialog.getByRole('button', { name: '使用后端版本' }).click();
     await expect(dialog).toBeHidden({ timeout: 20_000 });
 
     await expect.poll(() => readApiChapterName(page), { timeout: 20_000 }).toBe(EXTERNAL_CHAPTER_NAME);
-    await verifyDbWithScreenshot(page, PROJECT_ID, '真冲突-用后端-双读');
+    await verifyDbWithScreenshot(page, PROJECT_ID, '加载期冲突-用后端-双读');
     expect(await readDbChapterName()).toBe(EXTERNAL_CHAPTER_NAME);
 
-    // UI 回显权威态：文本库章节标题 = 外部改名（裁决后就停在编辑器里，直接断言）
+    // UI 回显权威态
     await expectChapterTitleInLibrary(page, EXTERNAL_CHAPTER_NAME);
 
-    // 2) 被放弃的本地草稿仍在归档里可找回
-    await goStudioSection(page);
+    // 归档找回 → 再次进入裁决 → 用草稿落库（仍在工作室，直接点侧栏）
+    await page.getByRole('button', { name: /◉ 工作室/ }).first().click();
     const entry = page.getByRole('button', { name: '冲突草稿 (1)' });
     await expect(entry).toBeVisible({ timeout: 20_000 });
     await entry.click();
 
     const archiveDialog = page.getByRole('alertdialog', { name: '冲突草稿归档' });
     await expect(archiveDialog).toBeVisible({ timeout: 15_000 });
-    // 归档项按 spec §6.5 展示归档时间 / 草稿更新时间 / 章段计数（不展示章节名）
     await expect(archiveDialog).toContainText('归档于');
-    // 归档的是整份项目草稿：种子项目共 2 章 5 段
     await expect(archiveDialog).toContainText('2 章 · 5 段');
 
-    // 3) 恢复该归档 → 拉当前后端态 → 再次进入同一个裁决弹窗（不做静默覆盖服务器的捷径）
     await archiveDialog.getByRole('button', { name: '恢复此草稿' }).click();
     const again = page.getByRole('alertdialog', { name: '检测到版本冲突' });
     await expect(again).toBeVisible({ timeout: 30_000 });
 
-    // 4) 用草稿 → 归档内容落库
     const forceSaveReq = page.waitForRequest(
       (r) => r.method() === 'PUT' && PROJECT_PUT_RE.test(new URL(r.url()).pathname),
       { timeout: 20_000 },
