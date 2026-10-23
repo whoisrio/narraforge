@@ -466,6 +466,7 @@ export const enUS: Messages = {
       snapshot: 'Commit & push now',
       snapshotting: 'Running…',
       pushed: 'Committed and pushed',
+      notPushed: 'Committed locally, but not pushed',
       committedLocal: 'Committed locally (no remote configured)',
       snapshotFailed: 'Snapshot failed',
       sha: 'Commit',

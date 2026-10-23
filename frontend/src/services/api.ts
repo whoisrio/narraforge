@@ -339,10 +339,13 @@ export const configApi = {
     const { data } = await api.put<{ value: string | null }>('/config/narration-git-remote', { value });
     return data;
   },
-  snapshotNarrationGit: async (): Promise<{
+  snapshotNarrationGit: async (remote?: string): Promise<{
     commit_sha: string | null; projects: number; pushed: boolean; push_error: string | null; remote_configured: boolean;
   }> => {
-    const { data } = await api.post('/config/narration-git/snapshot');
+    const { data } = await api.post(
+      '/config/narration-git/snapshot',
+      remote === undefined ? undefined : { value: remote },
+    );
     return data;
   },
 

@@ -954,7 +954,7 @@ IndexTTS 8 维情绪向量（happy/angry/sad/afraid/disgusted/melancholic/surpri
 | POST | `/api/config/animation-root/test` | 探测路径可用性，不保存 |
 | GET | `/api/config/narration-git-remote` | 获取 narration git 远端地址 |
 | PUT | `/api/config/narration-git-remote` | 设置 narration git 远端地址（空=清除，只本地 commit） |
-| POST | `/api/config/narration-git/snapshot` | 手动触发 narration 快照（commit，remote 已配则 push） |
+| POST | `/api/config/narration-git/snapshot` | 手动触发 narration 快照（可先保存请求体中的 remote，再 commit / push） |
 | GET | `/api/config/pronunciation-map-global` | 获取全局发音映射字典 |
 | PUT | `/api/config/pronunciation-map-global` | 全量替换全局发音映射字典（对所有项目生效） |
 | GET | `/api/model-config` | 获取所有提供商配置 |
@@ -986,7 +986,11 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 
 - `GET /api/config/narration-git-remote` -> `{ "value": str | null }`
 - `PUT /api/config/narration-git-remote` body `{ "value": str }` -> 空字符串清除；成功返回 `{ "value": str | null }`。
-- `POST /api/config/narration-git/snapshot` -> 手动触发一次 `snapshot_all`：`{ "commit_sha": str|null, "projects": int, "pushed": bool, "push_error": str|null, "remote_configured": bool }`。push 失败不抛（本地 commit 仍生效），错误进 `push_error`。
+- `POST /api/config/narration-git/snapshot` body `{ "value"?: str }` -> 手动触发一次 `snapshot_all`。
+  - `value` 省略时使用已保存的远端；提供时先持久化（`strip` 后写入，空字符串 = 清除）再执行快照。
+    因此 `/settings` 的「立即提交并推送」会使用输入框中当前地址，无需先点「保存」。
+  - 返回 `{ "commit_sha": str|null, "projects": int, "pushed": bool, "push_error": str|null, "remote_configured": bool }`。
+  - push 失败不抛（本地 commit 仍生效），错误进 `push_error`。
 
 远端鉴权：remote URL 内嵌凭证（`https://user:token@host/repo.git`）或 SSH key。多环境 push 同一远端会非快进冲突（普通 push，不 force）。
 
