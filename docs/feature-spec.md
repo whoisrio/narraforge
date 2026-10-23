@@ -197,6 +197,13 @@ idle → queued → pending → ready
                      ↘ failed → (retry) → pending
 ```
 
+Playability is intentionally decoupled from this state machine: the play button is
+rendered whenever the segment still holds an audio reference (`audio.current` or
+`current_audio_id`), including while status is `queued`/`pending`. Regeneration no
+longer clears or deletes the old audio up front; the new result atomically replaces
+`current` on success (the backend keeps the old take as `previous`). TTS and playback
+therefore never block each other.
+
 #### Narrator Voice Sidebar
 
 The Studio sidebar has a **Narrator Voice** panel with engine selector (Edge-TTS / CosyVoice / MiMo-TTS / VoxCPM) and engine-specific parameter controls. All controls update **panel state immediately** but do NOT affect existing segments. A segmented narración does not reference engine-voice from the panel at real-time.

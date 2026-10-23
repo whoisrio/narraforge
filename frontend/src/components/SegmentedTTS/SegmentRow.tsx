@@ -144,6 +144,13 @@ export function SegmentRow({
   const isReady = segment.status === 'ready';
   const isFailed = segment.status === 'failed';
   const isIdle = segment.status === 'idle';
+  // 可播放性只取决于是否还持有音频引用，与 TTS 状态解耦：
+  // 重新合成期间 status 会变成 pending/queued，但旧音频仍然有效且应可播放。
+  const hasPlayableAudio = !!(
+    segment.audio.current?.id
+    || segment.audio.current?.path
+    || segment.current_audio_id
+  );
   // 用户自录入音频（origin === 'recorded'）的片段处于锁定状态，跳过 TTS 合成
   const isAudioRecorded = segment.audio.current?.origin === 'recorded';
   // SSML is stored in generated_params (or custom voice.params for un-generated segments)
@@ -531,7 +538,7 @@ export function SegmentRow({
         {onMerge && (
           <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} compact />
         )}
-        {isReady && (
+        {hasPlayableAudio && (
           <button className={styles.compactPlayBtn} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
             onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
             {isPlaying && !isPaused ? '⏸' : '▶'}
@@ -654,7 +661,7 @@ export function SegmentRow({
               </button>
             )}
             {isGenerating && <span className={styles.genBadge}>⏳</span>}
-            {isReady && (
+            {hasPlayableAudio && (
               <button className={styles.actPlay} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
                 onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
                 {isPlaying && !isPaused ? '⏸' : '▶'}

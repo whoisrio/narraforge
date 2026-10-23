@@ -2168,22 +2168,13 @@ export function TTSSynthesis({
       // 先把未落库的草稿 PUT 冲刷掉：批量合成期间合成端点会持续前进服务端
       // updated_at，任何滞后的整包 PUT 都会撞 409 stale_payload。
       await draftSync.flush();
-      // Step 1: Delete existing audio for segments that have it
-      // backend 模式下清除只是本地 UI 态（合成端点会在服务端覆盖音频）：
-      // touch=false 不触发整包 PUT，避免与合成端点并发撞 409 stale_payload。
-      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
-      for (const seg of toRegenerate) {
-        const audioId = segAudioId(seg);
-        if (audioId) {
-          try { await deleteTTSResult(audioId); } catch { /* ignore */ }
-        }
-        dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id, touch: !remote });
-      }
-
-      // Step 2: Mark all as queued
+      // Step 1: Mark all as queued. 旧音频保持可播放（status 变成 pending/queued
+      // 后播放按钮仍按 audio 引用渲染），生成成功时再原子替换 current。
+      // 不在开始时删除/清空旧音频：那会让重新合成期间无法试听，且后端合成端点
+      // 本就会把旧 current 降级为 previous。
       dispatch({ type: 'MARK_QUEUED', ids: toRegenerate.map(s => s.id) });
 
-      // Step 3: Generate sequentially to avoid rate-limiting external TTS services
+      // Step 2: Generate sequentially to avoid rate-limiting external TTS services
       // 本章节批量与全本共用 produceAllRun 进度条/停止入口：contextBar 常显进度，
       // 段间停止——当前段跑完即停，已合成段保留、未合成段保持 queued/idle。
       setProduceAllRun({ running: true, mode, total: toRegenerate.length, done: 0, currentChapterName: progressLabel ?? activeChapter.name, startedAt: Date.now() });
@@ -2457,7 +2448,7 @@ export function TTSSynthesis({
 
   const handlePlayAll = useCallback(async () => {
     const readySegs = activeChapter.segments.filter(s =>
-      s.status === 'ready' && (s.audio.current?.id || s.audio.current?.path),
+      !!(s.audio.current?.id || s.audio.current?.path || s.current_audio_id),
     );
     if (readySegs.length === 0) return;
 
