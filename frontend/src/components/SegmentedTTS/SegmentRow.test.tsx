@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { Segment } from '../../types';
 import { SegmentRow } from './SegmentRow';
 
@@ -47,5 +47,27 @@ describe('SegmentRow 发音映射 badge', () => {
   it('根元素带 data-segment-id（搜索结果滚动定位锚点）', () => {
     const { container } = renderRow();
     expect(container.querySelector('[data-segment-id="s1"]')).toBeTruthy();
+  });
+});
+
+describe('SegmentRow 合成期间播放', () => {
+  it.each(['pending', 'queued'] as const)('%s 段保留旧音频时仍显示播放按钮', (status) => {
+    const onPlay = vi.fn();
+    const segment: Segment = {
+      ...makeSegment(),
+      status,
+      audio: { format: 'mp3', current: { path: 'projects/p/audio/s1.mp3' } },
+    };
+
+    renderRow({ segment, onPlay });
+
+    const play = screen.getByTitle('播放');
+    fireEvent.click(play);
+    expect(onPlay).toHaveBeenCalledWith('s1');
+  });
+
+  it('没有可播放音频时仍不显示播放按钮', () => {
+    renderRow({ segment: { ...makeSegment(), status: 'pending' } });
+    expect(screen.queryByTitle('播放')).toBeNull();
   });
 });

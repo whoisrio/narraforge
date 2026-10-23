@@ -172,6 +172,12 @@ class StructureSegmentIn(BaseModel):
     id: str | None = None
     text: str = ""
     position: int
+    # 客户端可持久化字段：拆分/重拆新建段时一并播种，避免前端为每段补 PATCH。
+    # 缺省 = 新建段用服务端默认值 / 已存在段保持现值；显式 null = 清空。
+    emotion: str | None = None
+    role_id: str | None = None
+    segment_kind: str | None = None
+    voice: dict[str, Any] | None = None
 
 
 class ChapterStructureIn(BaseModel):
@@ -207,6 +213,7 @@ class ChapterPatchIn(BaseModel):
     voice: dict[str, Any] | None = None
     split_config: dict[str, Any] | None = None
     design_title: str | None = None
+    original_text: str | None = None
 
 
 class ChapterMutationOut(BaseModel):

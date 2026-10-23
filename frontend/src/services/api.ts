@@ -339,10 +339,13 @@ export const configApi = {
     const { data } = await api.put<{ value: string | null }>('/config/narration-git-remote', { value });
     return data;
   },
-  snapshotNarrationGit: async (): Promise<{
+  snapshotNarrationGit: async (remote?: string): Promise<{
     commit_sha: string | null; projects: number; pushed: boolean; push_error: string | null; remote_configured: boolean;
   }> => {
-    const { data } = await api.post('/config/narration-git/snapshot');
+    const { data } = await api.post(
+      '/config/narration-git/snapshot',
+      remote === undefined ? undefined : { value: remote },
+    );
     return data;
   },
 
@@ -667,6 +670,10 @@ export interface StructureSegmentPayload {
   id?: string | null;
   text: string;
   position: number;
+  emotion?: string | null;
+  role_id?: string | null;
+  segment_kind?: string;
+  voice?: Record<string, unknown>;
 }
 
 export interface ChapterStructureResponse {
@@ -690,7 +697,101 @@ export interface SegmentCreateResponse {
   project_updated_at: string;
 }
 
+export interface ProjectPatchBody {
+  name?: string;
+  layout?: string;
+  configs?: Record<string, unknown> | null;
+  default_narrator_role_id?: string | null;
+  logo?: string | null;
+  remotion_project_path?: string | null;
+  animation_theme?: string | null;
+}
+
+export interface ChapterPatchBody {
+  name?: string;
+  voice?: Record<string, unknown>;
+  split_config?: Record<string, unknown>;
+  design_title?: string | null;
+  original_text?: string | null;
+}
+
+export interface ChapterMutationResponse {
+  chapter: import('../types').Chapter;
+  project_updated_at: string;
+}
+
+export interface ChapterReorderResponse {
+  chapters: { id: string; name: string; position: number }[];
+  project_updated_at: string;
+}
+
+export interface DocumentPutResponse {
+  path: string | null;
+  project_updated_at: string;
+}
+
 export const segmentedProjectApi = {
+  /** 项目元信息部分更新（tri-state：只发送出现的字段） */
+  patchProject: async (projectId: string, body: ProjectPatchBody): Promise<import('../types').SegmentedProject> => {
+    const { data } = await api.patch<import('../types').SegmentedProject>(
+      `/segmented-projects/${projectId}`,
+      body,
+    );
+    return data;
+  },
+  /** 新建章节（position 追加到项目末尾） */
+  createChapter: async (projectId: string, body: { name: string }): Promise<ChapterMutationResponse> => {
+    const { data } = await api.post<ChapterMutationResponse>(
+      `/segmented-projects/${projectId}/chapters`,
+      body,
+    );
+    return data;
+  },
+  /** 章节字段部分更新（name/voice/split_config/design_title） */
+  patchChapter: async (
+    projectId: string,
+    chapterId: string,
+    body: ChapterPatchBody,
+  ): Promise<ChapterMutationResponse> => {
+    const { data } = await api.patch<ChapterMutationResponse>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}`,
+      body,
+    );
+    return data;
+  },
+  deleteChapter: async (
+    projectId: string,
+    chapterId: string,
+  ): Promise<{ project_updated_at: string }> => {
+    const { data } = await api.delete<{ project_updated_at: string }>(
+      `/segmented-projects/${projectId}/chapters/${chapterId}`,
+    );
+    return data;
+  },
+  reorderChapters: async (
+    projectId: string,
+    chapterIds: string[],
+  ): Promise<ChapterReorderResponse> => {
+    const { data } = await api.post<ChapterReorderResponse>(
+      `/segmented-projects/${projectId}/chapters:reorder`,
+      { chapter_ids: chapterIds },
+    );
+    return data;
+  },
+  putSourceDocument: async (projectId: string, text: string): Promise<DocumentPutResponse> => {
+    const { data } = await api.put<DocumentPutResponse>(
+      `/segmented-projects/${projectId}/source-document`,
+      { text },
+    );
+    return data;
+  },
+  putNarrationScript: async (projectId: string, text: string): Promise<DocumentPutResponse> => {
+    const { data } = await api.put<DocumentPutResponse>(
+      `/segmented-projects/${projectId}/narration-script`,
+      { text },
+    );
+    return data;
+  },
   /** 段级部分更新（tri-state：只更新出现的字段，显式 null = 清空） */
   patchSegment: async (
     projectId: string,

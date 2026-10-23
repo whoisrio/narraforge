@@ -26,6 +26,8 @@ import { indexedDBStorage, type SegmentedProjectStorage } from '../services/segm
 import { backendStorage } from '../services/backendSegmentedProjectStorage';
 import { useSegmentedDraftSync } from '../hooks/useSegmentedDraftSync';
 import { useSegmentPatchSync } from '../hooks/useSegmentPatchSync';
+import { useSegmentedEntitySync } from '../hooks/useSegmentedEntitySync';
+import { collectPersistentWrites } from '../services/segmentedActionPersistence';
 import { handleStaleSave } from '../hooks/handleStaleSave';
 import { peekTryHandoffText, consumeTryHandoffText } from '../try/tryHandoff';
 import { applyTryHandoffToProject } from '../try/applyTryHandoff';
@@ -203,6 +205,15 @@ export function TTSSynthesis({
 
   // Project workbench state
   const [project, setProject] = useState<SegmentedProject>(() => createScratchpadProject(t));
+  // dispatch 同步维护 ref：连续多个 action 能读到最新态；持久化在 setState 之外执行，
+  // 避免 StrictMode 双调用 updater 造成重复网络写。
+  const projectRef = useRef(project);
+  useEffect(() => { projectRef.current = project; }, [project]);
+  const persistActionRef = useRef<(
+    action: Action,
+    prev: SegmentedProject,
+    next: SegmentedProject,
+  ) => void>(() => undefined);
   const [projectList, setProjectList] = useState<SegmentedProject[]>([]);
   const [exportOpen, setExportOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
@@ -433,9 +444,23 @@ export function TTSSynthesis({
       if (ch) restoreChapterSettings(ch);
       await draftSync.adoptBackendVersion(migrated);
       if (withHandoff !== migrated) {
-        // 接力文本属于真实内容变更：标记脏让自动保存落库（否则首轮 adopt 的
-        // 干净基线不含接力文本，页面刷新后丢失）。
-        await draftSync.markDirty(withHandoff);
+        // 接力文本属于真实内容变更，但只改活动章节的 original_text：走章节
+        // PATCH 落库，不再用整包 PUT（整包 PUT 会与并发细粒度写撞乐观锁）。
+        const handoffChapter = getActiveChapter(withHandoff);
+        try {
+          if (handoffChapter) {
+            const resp = await segmentedProjectApi.patchChapter(
+              withHandoff.id,
+              handoffChapter.id,
+              { original_text: handoffChapter.original_text ?? null },
+            );
+            await draftSync.noteServerVersion(resp.project_updated_at);
+          }
+        } catch (error) {
+          // 网络失败时保留旧兜底：草稿仍含接力文本，后续 flush 可重试。
+          console.warn('[TTSSynthesis] handoff persist failed:', error);
+          await draftSync.markDirty(withHandoff);
+        }
       }
       initialLoadDoneRef.current = true; // 初始加载完成，后续变更可触发自动保存
       lastSavedUpdatedAtRef.current = migrated.updated_at; // 跳过首次无变更的自动保存
@@ -459,33 +484,29 @@ export function TTSSynthesis({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageMode, initialProjectId, run, t]);
 
-  // Auto-save: debounce PUT in backend mode; IndexedDB direct in frontend mode
+  // Auto-save（仅 frontend 模式）：backend 模式所有写都走项目/章节/段/文档的
+  // 细粒度端点，整包 PUT 仅保留给显式恢复/导入，不再参与自动保存热路径。
   useEffect(() => {
-    // 初始加载期间不触发自动保存，避免 markDirty 导致误判冲突
+    if (storageMode !== 'frontend') return;
+    // 初始加载期间不触发自动保存
     if (!initialLoadDoneRef.current) return;
     // 跳过纯 UI 状态变更（如 SELECT_SEGMENT 不 bump updated_at）
-    if (project.updated_at === lastSavedUpdatedAtRef.current) {
-      // touch=false 的变更（PATCH/结构端点已远端持久化）：不触发整包 PUT，
-      // 但刷新草稿内容，防待冲刷的陈旧草稿把 PATCH 写入的字段覆盖回旧值
-      if (storageMode === 'backend') void draftSync.refreshDraft(project);
-      return;
-    }
+    if (project.updated_at === lastSavedUpdatedAtRef.current) return;
     lastSavedUpdatedAtRef.current = project.updated_at;
-    if (storageMode === 'backend') {
-      void draftSync.markDirty(project);
-    } else {
-      const t = setTimeout(async () => {
-        try {
-          await indexedDBStorage.saveProject(project);
-        } catch (e) { console.warn('Auto-save failed:', e); }
-      }, 1000);
-      return () => clearTimeout(t);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    const t = setTimeout(async () => {
+      try {
+        await indexedDBStorage.saveProject(project);
+      } catch (e) { console.warn('Auto-save failed:', e); }
+    }, 1000);
+    return () => clearTimeout(t);
   }, [project, storageMode]);
 
   const dispatch = useCallback((action: Action) => {
-    setProject(prev => segmentedReducer({ project: prev }, action).project);
+    const prev = projectRef.current;
+    const next = segmentedReducer({ project: prev }, action).project;
+    projectRef.current = next;
+    setProject(next);
+    persistActionRef.current(action, prev, next);
   }, []);
 
   // Sync global settings to active chapter whenever they change
@@ -554,8 +575,6 @@ export function TTSSynthesis({
   });
 
   // ---- 段级编辑远端同步（Phase 2：PATCH 取代整包 PUT autosave）----
-  const projectRef = useRef(project);
-  useEffect(() => { projectRef.current = project; });
   const segmentPatchSync = useSegmentPatchSync({
     projectId: project.id,
     enabled: storageMode === 'backend' && project.id !== '__scratchpad__',
@@ -569,6 +588,31 @@ export function TTSSynthesis({
       showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
     },
   });
+
+  // ---- 项目/章节/文档细粒度自动保存（Phase 3：整包 PUT 退出自动保存热路径）----
+  const entitySync = useSegmentedEntitySync({
+    projectId: project.id,
+    enabled: storageMode === 'backend' && project.id !== '__scratchpad__',
+    onServerVersion: (version) => { void draftSync.noteServerVersion(version); },
+    onError: (error) => {
+      console.warn('[entitySync] failed:', error);
+      showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+    },
+  });
+
+  persistActionRef.current = (action, prev, next) => {
+    // 用 action 之后的项目判断 scratchpad：dispatch 同步更新 projectRef，
+    // 上一帧闭包里的 project 可能仍是刚被替换掉的旧项目。
+    if (storageMode !== 'backend' || next.id === SCRATCHPAD_PROJECT_ID) return;
+    for (const write of collectPersistentWrites(action, prev, next)) {
+      if (write.kind === 'project') entitySync.queueProject(write.patch);
+      else if (write.kind === 'chapter') entitySync.queueChapter(write.chapterId, write.patch);
+      else if (write.kind === 'document') entitySync.queueDocument(write.document, write.text);
+      else if (write.kind === 'segment') {
+        segmentPatchSync.queue(write.segmentId, write.chapterId, write.patch);
+      }
+    }
+  };
 
   /**
    * 段内容编辑：本地 dispatch 立即生效 + 远端 PATCH 持久化。
@@ -1047,7 +1091,7 @@ export function TTSSynthesis({
     [storageMode, user, isAdmin, project.chapters.length],
   );
 
-  const handleAddChapter = useCallback((requestedName?: string) => {
+  const handleAddChapter = useCallback(async (requestedName?: string) => {
     // 双保险：后端 409 chapter_limit_reached 由 draftSync.onSaveError 兜底提示
     if (addChapterBlocked) {
       showToast(t('projectShell.chapterQuotaReached'), 'error');
@@ -1055,9 +1099,35 @@ export function TTSSynthesis({
     }
     const fallbackName = t('tts.newChapterName', { n: project.chapters.length + 1 });
     const name = requestedName?.trim() || fallbackName;
-    dispatch({ type: 'ADD_CHAPTER', name });
+    const remote = storageMode === 'backend' && project.id !== '__scratchpad__';
+    if (!remote) {
+      dispatch({ type: 'ADD_CHAPTER', name });
+      return;
+    }
+    try {
+      const created = await segmentedProjectApi.createChapter(project.id, { name });
+      const active = getActiveChapter(projectRef.current);
+      dispatch({
+        type: 'ADD_CHAPTER',
+        name,
+        id: created.chapter.id,
+        voice: active?.voice,
+        split_config: active?.split_config,
+      });
+      // POST 端点只接受 name（新章使用服务端默认音色/拆分配置）；把本地继承的
+      // 配置补一次 chapter PATCH，保持与旧行为一致。
+      if (active) {
+        entitySync.queueChapter(created.chapter.id, {
+          voice: active.voice as unknown as Record<string, unknown>,
+          split_config: active.split_config as unknown as Record<string, unknown>,
+        });
+      }
+      void draftSync.noteServerVersion(created.project_updated_at);
+    } catch (error) {
+      showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+    }
     // New chapter inherits settings from previous active chapter, so no need to reset global state
-  }, [addChapterBlocked, project.chapters.length, dispatch, showToast, t]);
+  }, [addChapterBlocked, project.chapters.length, project.id, storageMode, dispatch, entitySync, draftSync, showToast, t]);
 
   const doDeleteChapter = useCallback(async (chapterId: string) => {
     const ch = project.chapters.find(c => c.id === chapterId);
@@ -1067,14 +1137,45 @@ export function TTSSynthesis({
         if (seg.audio.previous?.id) { try { await deleteTTSResult(seg.audio.previous.id); } catch { /* ignore */ } }
       }
     }
-    dispatch({ type: 'DELETE_CHAPTER', id: chapterId });
+    const remote = storageMode === 'backend' && project.id !== '__scratchpad__';
+    if (remote) {
+      try {
+        const resp = await segmentedProjectApi.deleteChapter(project.id, chapterId);
+        entitySync.cancelChapter(chapterId);
+        dispatch({ type: 'DELETE_CHAPTER', id: chapterId });
+        void draftSync.noteServerVersion(resp.project_updated_at);
+      } catch (error) {
+        showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+        return;
+      }
+    } else {
+      dispatch({ type: 'DELETE_CHAPTER', id: chapterId });
+    }
     const remaining = project.chapters.filter(c => c.id !== chapterId);
     if (remaining.length > 0) {
       const newActive = project.active_chapter_id === chapterId ? remaining[0] : remaining.find(c => c.id === project.active_chapter_id) || remaining[0];
       restoreChapterSettings(newActive);
     }
     showToast(t('tts.chapterDeleted', { name: ch?.name || t('tts.chapter') }));
-  }, [project.chapters, project.active_chapter_id, dispatch, restoreChapterSettings, showToast, t]);
+  }, [project.chapters, project.active_chapter_id, project.id, storageMode, dispatch, entitySync, draftSync, restoreChapterSettings, showToast, t]);
+
+  const handleMoveChapter = useCallback(async (id: string, direction: 'up' | 'down') => {
+    const action = { type: 'MOVE_CHAPTER', id, direction } as const;
+    const remote = storageMode === 'backend' && project.id !== '__scratchpad__';
+    if (!remote) { dispatch(action); return; }
+    const next = segmentedReducer({ project: projectRef.current }, action).project;
+    if (next === projectRef.current) return;
+    try {
+      const resp = await segmentedProjectApi.reorderChapters(
+        project.id,
+        next.chapters.map(c => c.id),
+      );
+      dispatch(action);
+      void draftSync.noteServerVersion(resp.project_updated_at);
+    } catch (error) {
+      showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+    }
+  }, [project.id, storageMode, dispatch, draftSync, showToast, t]);
 
   const handleDeleteChapter = useCallback((chapterId: string) => {
     if (project.chapters.length <= 1) return;
@@ -1407,16 +1508,24 @@ export function TTSSynthesis({
       try {
         const resp = await segmentedProjectApi.reconcileChapterStructure(
           projectRef.current.id, chapter.id,
-          chapter.segments.map((s, i) => ({ id: s.id, text: s.text, position: i })),
+          chapter.segments.map((s, i) => ({
+            id: s.id,
+            text: s.text,
+            position: i,
+            emotion: s.emotion ?? null,
+            role_id: s.role_id ?? null,
+            segment_kind: s.segment_kind,
+            voice: s.voice as unknown as Record<string, unknown>,
+          })),
         );
         dispatch({ type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: chapter.id, segments: resp.segments });
         void draftSync.noteServerVersion(resp.project_updated_at);
       } catch (error) {
-        // 远端失败：本地已合并，回退整包 PUT 兜底（结构 reconcile 语义仍在，
-        // 仅音频降级丢失，文件始终在盘上）
-        console.warn('[structureSync] merge failed, fallback to full save:', error);
-        void draftSync.markDirty(projectRef.current);
+        // 远端失败：不退回整包 PUT（会重新引入项目级乐观锁冲突）。
+        // 拉回服务端权威态，避免本地与 DB 长期分叉。
+        console.warn('[structureSync] merge failed:', error);
         showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+        await reloadProjectData();
       }
     };
     if (hasAudio) {
@@ -1429,7 +1538,7 @@ export function TTSSynthesis({
     } else {
       doMerge();
     }
-  }, [activeChapter.id, activeChapter.segments, dispatch, storageMode, draftSync, showToast, t]);
+  }, [activeChapter.id, activeChapter.segments, dispatch, storageMode, draftSync, showToast, t, reloadProjectData]);
 
   /**
    * 段结构操作远端同步（Phase 7，对齐 handleMerge 的模式）：本地 touch=false
@@ -1446,17 +1555,26 @@ export function TTSSynthesis({
     try {
       const resp = await segmentedProjectApi.reconcileChapterStructure(
         projectRef.current.id, chapter.id,
-        chapter.segments.map((s, i) => ({ id: s.id, text: s.text, position: i })),
+        chapter.segments.map((s, i) => ({
+          id: s.id,
+          text: s.text,
+          position: i,
+          emotion: s.emotion ?? null,
+          role_id: s.role_id ?? null,
+          segment_kind: s.segment_kind,
+          voice: s.voice as unknown as Record<string, unknown>,
+        })),
       );
       dispatch({ type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: chapter.id, segments: resp.segments });
       void draftSync.noteServerVersion(resp.project_updated_at);
     } catch (error) {
-      // 远端失败：本地已变更，回退整包 PUT 兜底（结构 reconcile 语义仍在）
-      console.warn('[structureSync] failed, fallback to full save:', error);
-      void draftSync.markDirty(projectRef.current);
+      // 远端失败：不退回整包 PUT（会重新引入项目级乐观锁冲突）。
+      // 拉回服务端权威态，避免本地与 DB 长期分叉。
+      console.warn('[structureSync] failed:', error);
       showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+      await reloadProjectData();
     }
-  }, [activeChapter.id, dispatch, draftSync, showToast, t]);
+  }, [activeChapter.id, dispatch, draftSync, showToast, t, reloadProjectData]);
 
   const handleSplit = useCallback((id: string, position: number) => {
     const seg = activeChapter.segments.find(s => s.id === id);
@@ -1628,10 +1746,50 @@ export function TTSSynthesis({
     });
 
     const apply = async () => {
-      for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch { /* ignore */ } }
+      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
+      if (!remote) {
+        for (const aid of oldAudioIds) { try { await deleteTTSResult(aid); } catch { /* ignore */ } }
+      }
+      const params = buildCurrentParams();
+      let next = segmentedReducer(
+        { project: projectRef.current },
+        { type: 'SET_DEFAULT_PARAMS', params },
+      ).project;
+      next = segmentedReducer(
+        { project: next },
+        { type: 'SET_CHAPTER_META', meta: { original_text: originalText } },
+      ).project;
+      next = segmentedReducer(
+        { project: next },
+        { type: 'APPLY_SPLIT', items: itemsWithVoiceRef },
+      ).project;
       dispatch({ type: 'SET_DEFAULT_PARAMS', params: buildCurrentParams() });
       dispatch({ type: 'SET_CHAPTER_META', meta: { original_text: originalText } });
       dispatch({ type: 'APPLY_SPLIT', items: itemsWithVoiceRef });
+      if (!remote) return;
+
+      const chapter = next.chapters.find(c => c.id === activeChapter.id);
+      if (!chapter) return;
+      try {
+      const resp = await segmentedProjectApi.reconcileChapterStructure(
+        projectRef.current.id,
+        chapter.id,
+        chapter.segments.map((s, i) => ({
+          id: s.id,
+          text: s.text,
+          position: i,
+          emotion: s.emotion ?? null,
+          role_id: s.role_id ?? null,
+          segment_kind: s.segment_kind,
+          voice: s.voice as unknown as Record<string, unknown>,
+        })),
+      );
+        dispatch({ type: 'APPLY_SERVER_CHAPTER_SEGMENTS', chapterId: chapter.id, segments: resp.segments });
+        void draftSync.noteServerVersion(resp.project_updated_at);
+      } catch (error) {
+        showToast(getErrorMessage(error, t('common.saveFailed')), 'error');
+        await reloadProjectData();
+      }
     };
 
     if (oldAudioIds.length > 0) {
@@ -1645,7 +1803,7 @@ export function TTSSynthesis({
       apply();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeChapter.segments, dispatch, buildCurrentParams, buildGlobalVoiceRef, selectedVoiceId, edgeVoice, engine]);
+  }, [activeChapter.segments, activeChapter.id, dispatch, buildCurrentParams, buildGlobalVoiceRef, selectedVoiceId, edgeVoice, engine, storageMode, draftSync, showToast, t, reloadProjectData]);
 
   const buildSplitItemsWithRoles = useCallback((
     items: { text: string; emotion?: string }[],
@@ -2168,22 +2326,13 @@ export function TTSSynthesis({
       // 先把未落库的草稿 PUT 冲刷掉：批量合成期间合成端点会持续前进服务端
       // updated_at，任何滞后的整包 PUT 都会撞 409 stale_payload。
       await draftSync.flush();
-      // Step 1: Delete existing audio for segments that have it
-      // backend 模式下清除只是本地 UI 态（合成端点会在服务端覆盖音频）：
-      // touch=false 不触发整包 PUT，避免与合成端点并发撞 409 stale_payload。
-      const remote = storageMode === 'backend' && projectRef.current.id !== '__scratchpad__';
-      for (const seg of toRegenerate) {
-        const audioId = segAudioId(seg);
-        if (audioId) {
-          try { await deleteTTSResult(audioId); } catch { /* ignore */ }
-        }
-        dispatch({ type: 'CLEAR_SEGMENT_AUDIO', id: seg.id, touch: !remote });
-      }
-
-      // Step 2: Mark all as queued
+      // Step 1: Mark all as queued. 旧音频保持可播放（status 变成 pending/queued
+      // 后播放按钮仍按 audio 引用渲染），生成成功时再原子替换 current。
+      // 不在开始时删除/清空旧音频：那会让重新合成期间无法试听，且后端合成端点
+      // 本就会把旧 current 降级为 previous。
       dispatch({ type: 'MARK_QUEUED', ids: toRegenerate.map(s => s.id) });
 
-      // Step 3: Generate sequentially to avoid rate-limiting external TTS services
+      // Step 2: Generate sequentially to avoid rate-limiting external TTS services
       // 本章节批量与全本共用 produceAllRun 进度条/停止入口：contextBar 常显进度，
       // 段间停止——当前段跑完即停，已合成段保留、未合成段保持 queued/idle。
       setProduceAllRun({ running: true, mode, total: toRegenerate.length, done: 0, currentChapterName: progressLabel ?? activeChapter.name, startedAt: Date.now() });
@@ -2457,7 +2606,7 @@ export function TTSSynthesis({
 
   const handlePlayAll = useCallback(async () => {
     const readySegs = activeChapter.segments.filter(s =>
-      s.status === 'ready' && (s.audio.current?.id || s.audio.current?.path),
+      !!(s.audio.current?.id || s.audio.current?.path || s.current_audio_id),
     );
     if (readySegs.length === 0) return;
 
@@ -2657,7 +2806,7 @@ export function TTSSynthesis({
           createChapterDisabledHint={addChapterBlocked ? t('projectShell.chapterQuotaHint') : undefined}
           onRenameChapter={(id, name) => dispatch({ type: 'RENAME_CHAPTER', id, name })}
           onDeleteChapter={handleDeleteChapter}
-          onMoveChapter={(id, direction) => dispatch({ type: 'MOVE_CHAPTER', id, direction })}
+          onMoveChapter={(id, direction) => { void handleMoveChapter(id, direction); }}
           rightPanelCollapsed={projectSection === 'studio' ? rightPanelCollapsed : true}
           onSectionChange={setProjectSection}
           onBackToProjects={onBackToProjects}

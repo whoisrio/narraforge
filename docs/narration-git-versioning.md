@@ -99,6 +99,8 @@ The daily snapshot can also push to a configured remote. The remote URL is a
 - Remote set -> after commit, `git push origin main` (regular push, **no force**).
 - A manual `POST /api/config/narration-git/snapshot` (or the `/settings`「立即提交并推送」
   button) runs the same snapshot + push on demand.
+  The button sends the URL currently in the input as `{ "value": "..." }`, so it is
+  persisted and used even when the user has not pressed Save first.
 
 Auth: embed credentials in the URL (`https://user:token@host/repo.git`) or rely on
 an SSH key. Multi-environment pushes to the same remote diverge histories and

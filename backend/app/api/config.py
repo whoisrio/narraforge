@@ -26,6 +26,7 @@ from app.core.system_config_service import (
     get_narration_git_remote,
     get_storage_mode,
     normalize_animation_root_folder,
+    set_narration_git_remote,
     set_storage_mode,
 )
 
@@ -276,6 +277,12 @@ class GitRemoteRequest(BaseModel):
     value: str
 
 
+class NarrationSnapshotRequest(BaseModel):
+    """可选：把设置页当前输入一并保存后再快照，避免"输入了但没点保存"的误操作。"""
+
+    value: Optional[str] = None
+
+
 @router.get("/narration-git-remote")
 async def get_git_remote_endpoint(repo: SystemConfigRepository = Depends(get_system_config_repo)):
     """获取 narration git 远端地址。"""
@@ -293,12 +300,22 @@ async def set_git_remote_endpoint(
 
 
 @router.post("/narration-git/snapshot")
-async def narration_git_snapshot_endpoint(db: Session = Depends(get_db)):
+async def narration_git_snapshot_endpoint(
+    data: NarrationSnapshotRequest | None = None,
+    db: Session = Depends(get_db),
+):
     """手动触发一次 narration 快照（序列化 + commit），remote 已配则 push。
-    narration 版本化是本地能力（git + 文件系统），workers 模式不可用。"""
+    narration 版本化是本地能力（git + 文件系统），workers 模式不可用。
+
+    ``data.value`` 存在时先持久化远端地址再执行快照；这保证前端"立即提交并
+    推送"使用输入框里当前的地址，而不是上一次保存的地址。"""
     if settings.deploy_target == "workers":
         raise HTTPException(status_code=501, detail="narration_versioning_local_only")
     from app.services.narration_versioning.job import snapshot_all
+
+    if data is not None and data.value is not None:
+        set_narration_git_remote(db, data.value)
+        db.commit()
 
     remote = get_narration_git_remote(db)
     # Pass the request-scoped session: tests override get_db to an isolated

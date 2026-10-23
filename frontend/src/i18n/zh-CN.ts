@@ -464,6 +464,7 @@ export const zhCN = {
       snapshot: '立即提交并推送',
       snapshotting: '执行中…',
       pushed: '已提交并推送',
+      notPushed: '已本地提交，但未推送',
       committedLocal: '已本地提交（未配置远端）',
       snapshotFailed: '快照失败',
       sha: '提交',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { configApi } from '../../services/api';
 import { useTranslation } from '../../i18n';
 import styles from './AnimationRootSetting.module.css';
@@ -21,13 +21,18 @@ export function NarrationGitSetting() {
   const [status, setStatus] = useState<Status | null>(null);
   const [snapshot, setSnapshot] = useState<SnapshotResult | null>(null);
   const [busy, setBusy] = useState<'save' | 'snapshot' | null>(null);
+  const editedRef = useRef(false);
   const { t } = useTranslation();
 
   useEffect(() => {
     let alive = true;
     configApi
       .getNarrationGitRemote()
-      .then((res) => { if (alive) setRemote(res.value ?? ''); })
+      .then((res) => {
+        // A late initial GET must never overwrite what the user is editing
+        // (or has already saved) on this screen.
+        if (alive && !editedRef.current) setRemote(res.value ?? '');
+      })
       .catch(() => { /* leave empty */ });
     return () => { alive = false; };
   }, []);
@@ -36,7 +41,8 @@ export function NarrationGitSetting() {
     setBusy('save');
     setStatus(null);
     try {
-      await configApi.setNarrationGitRemote(remote);
+      const result = await configApi.setNarrationGitRemote(remote.trim());
+      setRemote(result.value ?? '');
       setStatus({ type: 'success', message: t('settings.narrationGit.saveSuccess') });
     } catch {
       setStatus({ type: 'error', message: t('settings.narrationGit.saveFailed') });
@@ -50,19 +56,25 @@ export function NarrationGitSetting() {
     setStatus(null);
     setSnapshot(null);
     try {
-      const result = await configApi.snapshotNarrationGit();
+      const target = remote.trim();
+      const result = await configApi.snapshotNarrationGit(target);
+      setRemote(target);
       setSnapshot(result);
       if (result.push_error) {
         setStatus({ type: 'error', message: result.push_error });
+      } else if (result.pushed) {
+        setStatus({ type: 'success', message: t('settings.narrationGit.pushed') });
+      } else if (result.remote_configured) {
+        setStatus({ type: 'error', message: t('settings.narrationGit.notPushed') });
       } else {
-        setStatus({ type: 'success', message: result.pushed ? t('settings.narrationGit.pushed') : t('settings.narrationGit.committedLocal') });
+        setStatus({ type: 'success', message: t('settings.narrationGit.committedLocal') });
       }
     } catch {
       setStatus({ type: 'error', message: t('settings.narrationGit.snapshotFailed') });
     } finally {
       setBusy(null);
     }
-  }, [t]);
+  }, [remote, t]);
 
   return (
     <section className={styles.card}>
@@ -81,7 +93,10 @@ export function NarrationGitSetting() {
             className={styles.input}
             value={remote}
             placeholder={t('settings.narrationGit.placeholder')}
-            onChange={(e) => setRemote(e.target.value)}
+            onChange={(e) => {
+              editedRef.current = true;
+              setRemote(e.target.value);
+            }}
           />
         </label>
         <div className={styles.actions}>

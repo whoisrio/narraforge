@@ -97,14 +97,19 @@ async function injectIndexedDBProject(
   page: import('@playwright/test').Page,
 ): Promise<void> {
   await page.evaluate(async ({ project, audioBytes }) => {
+    // 复用应用已打开的数据库版本（v4+），不要再硬编码旧版本号：
+    // 请求低于现有版本会直接 VersionError，高于现有版本会触发空升级。
+    const existing = await indexedDB.databases();
+    const current = existing.find((d) => d.name === 'voice_clone_studio')?.version ?? 4;
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open('voice_clone_studio', 3);
+      const req = indexedDB.open('voice_clone_studio', current);
       req.onupgradeneeded = () => {
         const d = req.result;
         if (!d.objectStoreNames.contains('tts_results')) d.createObjectStore('tts_results', { keyPath: 'id' });
         if (!d.objectStoreNames.contains('stt_results')) d.createObjectStore('stt_results', { keyPath: 'id' });
         if (!d.objectStoreNames.contains('segmented_projects')) d.createObjectStore('segmented_projects', { keyPath: 'id' });
         if (!d.objectStoreNames.contains('project_drafts')) d.createObjectStore('project_drafts', { keyPath: 'project_id' });
+        if (!d.objectStoreNames.contains('conflicted_drafts')) d.createObjectStore('conflicted_drafts', { keyPath: 'id' });
       };
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);

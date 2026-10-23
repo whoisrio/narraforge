@@ -68,3 +68,47 @@ def test_snapshot_endpoint_with_remote_pushes(client, db_session, monkeypatch, t
         ["git", "log", "--all", "--pretty=%s"], cwd=remote, text=True
     )
     assert "snapshot:" in log
+
+
+def test_snapshot_endpoint_saves_body_remote_before_pushing(client, db_session, monkeypatch, tmp_path):
+    """The settings page must be able to commit with the URL currently typed,
+    even when the user did not press Save first."""
+    client.post("/api/segmented-projects", json={
+        "id": "snap-test3", "name": "Snap3", "layout": "vertical",
+        "source_document": "# s", "chapters": [],
+    })
+    from app.services.narration_versioning import config as nv_config
+    monkeypatch.setattr(nv_config, "repo_path", lambda: tmp_path / "repo")
+    remote = tmp_path / "remote.git"
+    subprocess.check_call(["git", "init", "--bare", "-q", str(remote)])
+
+    resp = client.post("/api/config/narration-git/snapshot", json={"value": f"  {remote}  "})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["remote_configured"] is True
+    assert body["pushed"] is True
+    assert body["push_error"] is None
+    assert client.get("/api/config/narration-git-remote").json()["value"] == str(remote)
+    log = subprocess.check_output(
+        ["git", "log", "--all", "--pretty=%s"], cwd=remote, text=True
+    )
+    assert "snapshot:" in log
+
+
+def test_snapshot_endpoint_empty_body_remote_clears_and_stays_local(client, db_session, monkeypatch, tmp_path):
+    client.post("/api/segmented-projects", json={
+        "id": "snap-test4", "name": "Snap4", "layout": "vertical",
+        "source_document": "# s", "chapters": [],
+    })
+    from app.services.narration_versioning import config as nv_config
+    monkeypatch.setattr(nv_config, "repo_path", lambda: tmp_path / "repo")
+    client.put("/api/config/narration-git-remote", json={"value": "https://example.com/old.git"})
+
+    resp = client.post("/api/config/narration-git/snapshot", json={"value": "   "})
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["remote_configured"] is False
+    assert body["pushed"] is False
+    assert client.get("/api/config/narration-git-remote").json()["value"] is None

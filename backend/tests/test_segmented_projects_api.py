@@ -742,6 +742,68 @@ def test_structure_reconcile_text_change_demotes_audio(client, tmp_path, monkeyp
     assert seg["generated_params"] is None
 
 
+def test_structure_reconcile_persists_segment_metadata(client, tmp_path, monkeypatch):
+    """拆分/重拆时新段的 voice/emotion/role/kind 随结构端点一次落库，
+    不需要前端为每段补 PATCH（避免整包 PUT 回到自动保存热路径）。"""
+    monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
+    assert client.post("/api/segmented-projects", json=_three_segment_payload()).status_code == 201
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/structure",
+        json={"segments": [
+            {
+                "id": "new-role-seg",
+                "text": "角色台词。",
+                "position": 0,
+                "emotion": "happy",
+                "role_id": "role-1",
+                "segment_kind": "dialogue",
+                "voice": {"source": "role", "role_id": "role-1"},
+            },
+            {"id": "s2", "text": "二", "position": 1},
+            {"id": "s3", "text": "三", "position": 2},
+        ]},
+    )
+    assert r.status_code == 200, r.text
+    seg = next(s for s in r.json()["segments"] if s["id"] == "new-role-seg")
+    assert seg["emotion"] == "happy"
+    assert seg["role_id"] == "role-1"
+    assert seg["segment_kind"] == "dialogue"
+    assert seg["voice"] == {"source": "role", "role_id": "role-1"}
+
+    got = client.get("/api/segmented-projects/p1").json()
+    persisted = next(s for s in got["chapters"][0]["segments"] if s["id"] == "new-role-seg")
+    assert persisted["emotion"] == "happy"
+    assert persisted["role_id"] == "role-1"
+    assert persisted["segment_kind"] == "dialogue"
+    assert persisted["voice"] == {"source": "role", "role_id": "role-1"}
+
+    # 已存在段也按显式字段更新（手动拆分时新段与保留段都要与本地一致）
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1/structure",
+        json={"segments": [
+            {"id": "new-role-seg", "text": "角色台词。", "position": 0},
+            {
+                "id": "s2",
+                "text": "二",
+                "position": 1,
+                "emotion": "sad",
+                "role_id": "role-2",
+                "segment_kind": "dialogue",
+                "voice": {"source": "role", "role_id": "role-2"},
+            },
+            {"id": "s3", "text": "三", "position": 2},
+        ]},
+    )
+    assert r.status_code == 200, r.text
+    got = client.get("/api/segmented-projects/p1").json()
+    updated = next(s for s in got["chapters"][0]["segments"] if s["id"] == "s2")
+    assert updated["emotion"] == "sad"
+    assert updated["role_id"] == "role-2"
+    assert updated["segment_kind"] == "dialogue"
+    assert updated["voice"] == {"source": "role", "role_id": "role-2"}
+
+
 def test_structure_reconcile_404_and_422(client, tmp_path, monkeypatch):
     monkeypatch.setattr(config.settings, "segmented_dir", tmp_path)
     assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
@@ -825,6 +887,30 @@ def test_patch_chapter_partial_update(client, tmp_path, monkeypatch):
     got = client.get("/api/segmented-projects/p1").json()
     assert got["chapters"][0]["name"] == "改名章"
     assert got["chapters"][0]["voice"] == {"engine": "cosyvoice"}
+
+
+def test_patch_chapter_original_text_round_trips(client):
+    """章节 PATCH 支持 original_text（Try 接力/文本库编辑走细粒度端点，
+    不再依赖整包 PUT）。显式 null 可清空。"""
+    assert client.post("/api/segmented-projects", json=_payload("p1")).status_code == 201
+
+    r = client.patch(
+        "/api/segmented-projects/p1/chapters/c1",
+        json={"original_text": "接力进来的正文"},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["chapter"]["original_text"] == "接力进来的正文"
+
+    got = client.get("/api/segmented-projects/p1").json()
+    assert got["chapters"][0]["original_text"] == "接力进来的正文"
+    assert got["chapters"][0]["segments"][0]["text"] == "hello"  # 分片不受影响
+
+    cleared = client.patch(
+        "/api/segmented-projects/p1/chapters/c1",
+        json={"original_text": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["chapter"]["original_text"] is None
 
 
 def test_patch_chapter_404_on_missing(client, tmp_path, monkeypatch):

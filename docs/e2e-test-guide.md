@@ -176,20 +176,33 @@ CSS Modules hash class names. Use partial match selectors:
 
 ## Testing Optimistic-Lock Conflicts
 
-`studio-save-conflict.spec.ts` (feature §4.8) needs a **deterministic** race between the
-debounced whole-project PUT and a concurrent write, so it never sleeps and hopes:
+`studio-save-conflict.spec.ts` (feature §4.8) now tests two different contracts:
 
-- `gateProjectPuts(page)` installs a `page.route` handler that parks every
-  `PUT /api/segmented-projects/{id}` inside the browser until `release()` is called.
-  A parked request has **not** reached the backend yet, so it does **not** show up in the
-  webServer log until release — the backend log order does not reflect issue order.
-- With the PUT parked, the test performs the concurrent write and then releases the gate:
-  a segment PATCH through the UI produces a *false* conflict (the server version is one
-  this client produced), a raw API write produces a *real* one.
+1. **Normal editing has no whole-project PUT.** Renaming a chapter must emit exactly one
+   `PATCH /api/segmented-projects/{id}/chapters/{cid}`. The spec records every full
+   `PUT /api/segmented-projects/{id}` request and asserts the list stays empty across the
+   old debounce window, with no conflict dialog and API + DB double reads.
+2. **Load-time stale drafts still get adjudicated.** There is no deterministic way to
+   produce a save-time 409 through the UI anymore (autosave is entity-scoped), so the
+   spec writes a stale `project_drafts` record directly into IndexedDB with an old
+   `base_updated_at`, advances the server through a raw API write, then reloads and
+   opens the project. The conflict modal must appear; "use draft" must force-save with
+   **no** `base_updated_at` and persist to API + DB, while "use backend" must adopt the
+   server state and leave a retrievable archive.
+
+Useful techniques:
+
+- `page.evaluate` + `indexedDB.open('voice_clone_studio')` seeds the stale draft; the
+  draft must be `dirty: true` and its `base_updated_at` more than 2s older than the
+  server's `updated_at` (the conflict tolerance).
 - `page.request.*` bypasses `page.route` completely, which is exactly what makes the
   "external writer" (agent / second tab) simulation possible from inside the same test.
-- Assert the PUT status sequence (e.g. a `409` followed by a `200`) rather than only the
-  end state — otherwise the test passes even when the self-heal path was never taken.
+- `page.route` is still used in `studio-playback-during-tts.spec.ts` to park the
+  regenerate POST. A parked request has not reached the backend, so the `queued` /
+  `pending` window can be held open indefinitely while the test clicks play and asserts
+  the old audio GET returns 200.
+- Assert request payloads (not just end state): e.g. chapter rename sends only
+  `{name}`, force-save omits `base_updated_at`.
 
 ## Pending E2E Coverage (Gap Analysis)
 
@@ -214,8 +227,9 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G12 | **Try 页（/try 获客页）** | SEO 静态内容、3000 字上限、真实 edge_tts 合成链路、历史记录（重复下载/删除/清空）、全部下载打包 zip、下载推荐弹窗每 5 次下载一次（页面停留计数、刷新归零）、「试用完整功能」内容接力进主应用 | `try-page.spec.ts` | High | ✅ Done |
 | G11 | **Library 文档优先 IA** | 默认落 doc 视图、形态 A 粘贴 CTA + 去源文档、拆分后留在 doc + 结果反馈跳转、源文档视图可访问、视图记忆；章节/段落逐字段 API + DB 双读 | `library-doc-first.spec.ts` | High | ✅ Done |
 | G13 | **Studio 搜索 + 合成时文本变换** | 全项目搜索跳转（切章节/定位/闪烁）、发音映射（逐段勾选 + apply_all）、大写转小写（项目默认 + 段级三态覆盖）；`generated_params.effective_text` 双读断言 | `studio-text-transforms.spec.ts` | High | ✅ Done |
-| G14 | **整包保存冲突自愈与裁决** | 假冲突自愈（PUT 在途时本端细粒度写推进版本 → 409 静默重试、无弹窗、编辑零丢失）、真冲突「用草稿」（归档 + 模态 → force save 落库）、「用后端」采纳后归档找回；PUT 状态序列断言 + API/DB 双读 | `studio-save-conflict.spec.ts` | High | ✅ Done |
+| G14 | **细粒度保存 + 加载期冲突裁决** | 章节改名只发 `PATCH /chapters/{id}`、零整包 PUT、零冲突弹窗；加载期陈旧草稿（IndexedDB 注入）→ 模态 → 「用草稿」force save（无 base）落库、「用后端」采纳后归档找回；请求 payload + API/DB 双读 | `studio-save-conflict.spec.ts` | High | ✅ Done |
 | G15 | **TTS 语音核对（ASR 回读验收）** | 紧凑行角标双职责：未核对点角标直接核对（不建 run，runs 快照对比）→ 全量核对 → 报告弹层（不一致计数 + ASR 回读文本）→ 不一致（badge + API/SQLite 双读）→ 只看不一致过滤 → 忽略 → 重挂音频（audio_key 作废，真实 edge-tts 被 403 时等价驱动）→ 幂等续跑只补缺（报告仅含本次 run 发现）→ 防重 409 + 快照 pill + 回拨心跳 → interrupted 提示 → 续跑（runs 表双读）。后端以 `TTS_VERIFY_STUB=1` 运行（`.env.e2e`） | `studio-tts-verify.spec.ts` | High | ✅ Done |
+| G16 | **合成期间播放旧音频** | 先真实合成首段 → 用 `page.route` 扣住重新合成 POST → 状态 queued/pending 时播放按钮仍可见 → 点击播放请求旧音频返回 200，无「暂无音频/播放失败」提示 → 放行合成 | `studio-playback-during-tts.spec.ts` | High | ✅ Done |
 
 **Additional rules**:
 - G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;

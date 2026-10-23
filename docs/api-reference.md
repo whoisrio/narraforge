@@ -954,7 +954,7 @@ IndexTTS 8 维情绪向量（happy/angry/sad/afraid/disgusted/melancholic/surpri
 | POST | `/api/config/animation-root/test` | 探测路径可用性，不保存 |
 | GET | `/api/config/narration-git-remote` | 获取 narration git 远端地址 |
 | PUT | `/api/config/narration-git-remote` | 设置 narration git 远端地址（空=清除，只本地 commit） |
-| POST | `/api/config/narration-git/snapshot` | 手动触发 narration 快照（commit，remote 已配则 push） |
+| POST | `/api/config/narration-git/snapshot` | 手动触发 narration 快照（可先保存请求体中的 remote，再 commit / push） |
 | GET | `/api/config/pronunciation-map-global` | 获取全局发音映射字典 |
 | PUT | `/api/config/pronunciation-map-global` | 全量替换全局发音映射字典（对所有项目生效） |
 | GET | `/api/model-config` | 获取所有提供商配置 |
@@ -986,7 +986,11 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 
 - `GET /api/config/narration-git-remote` -> `{ "value": str | null }`
 - `PUT /api/config/narration-git-remote` body `{ "value": str }` -> 空字符串清除；成功返回 `{ "value": str | null }`。
-- `POST /api/config/narration-git/snapshot` -> 手动触发一次 `snapshot_all`：`{ "commit_sha": str|null, "projects": int, "pushed": bool, "push_error": str|null, "remote_configured": bool }`。push 失败不抛（本地 commit 仍生效），错误进 `push_error`。
+- `POST /api/config/narration-git/snapshot` body `{ "value"?: str }` -> 手动触发一次 `snapshot_all`。
+  - `value` 省略时使用已保存的远端；提供时先持久化（`strip` 后写入，空字符串 = 清除）再执行快照。
+    因此 `/settings` 的「立即提交并推送」会使用输入框中当前地址，无需先点「保存」。
+  - 返回 `{ "commit_sha": str|null, "projects": int, "pushed": bool, "push_error": str|null, "remote_configured": bool }`。
+  - push 失败不抛（本地 commit 仍生效），错误进 `push_error`。
 
 远端鉴权：remote URL 内嵌凭证（`https://user:token@host/repo.git`）或 SSH key。多环境 push 同一远端会非快进冲突（普通 push，不 force）。
 
@@ -1063,13 +1067,13 @@ workers 模式 `engines` 只含 `edge_tts`/`mimo_tts`、`clone_engines` 只含 `
 | PUT | `/api/segmented-projects/{id}/narration-script` | 写项目级完整旁白稿（local：落 narration.md 文件+路径列；workers：不持久化，no-op 警告；不动章节级 sync_state） |
 | POST | `/api/segmented-projects/{id}/chapters:batch` | 批量重建章节+分片（agent split_segment） |
 | POST | `/api/segmented-projects/{id}/chapters` | 新建章节（position 追加到末尾；workers 模式受章节配额约束；201 响应 `{chapter, project_updated_at}`） |
-| PATCH | `/api/segmented-projects/{id}/chapters/{cid}` | 章节部分更新（name/voice/split_config/design_title，tri-state：只更新出现的字段，显式 null = 清空；纯字段更新不碰分片音频；响应 `{chapter, project_updated_at}`） |
+| PATCH | `/api/segmented-projects/{id}/chapters/{cid}` | 章节部分更新（name/voice/split_config/design_title/original_text，tri-state：只更新出现的字段，显式 null = 清空；纯字段更新不碰分片音频；响应 `{chapter, project_updated_at}`） |
 | DELETE | `/api/segmented-projects/{id}/chapters/{cid}` | 删除章节（该章分片行级联删除，**音频文件保留在盘上**待 sweep；200 响应 `{project_updated_at}` 供前端推进乐观锁 base） |
 | POST | `/api/segmented-projects/{id}/chapters:reorder` | 章节重排（`chapter_ids` 须恰好覆盖项目全部章节 id，缺/多/未知 → 422 `chapter_ids_mismatch`；按数组顺序赋 position 0..n-1；响应 `{chapters: [{id, name, position}], project_updated_at}`） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/synthesize` | 生成分片音频（`force` 可强制覆盖已录入音频） |
 | PATCH | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}` | 段级部分更新（text/emotion/role_id/segment_kind/voice/unlock_audio，tri-state：只更新出现的字段，显式 null = 清空；voice 变更会把旧音频降级为 previous、清空 current 但保留文件；`unlock_audio=true` 清除录音 origin 锁；audio/generated_params/generated_at 为服务端自产字段不接受写入；响应为 `{segment, project_updated_at}`，后者供前端推进乐观锁 base） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments` | 新建分片（`after_id` 锚点插入 / 缺省追加章末；响应含章内全量 position 列表 + `project_updated_at`） |
-| PATCH | `/api/segmented-projects/{id}/chapters/{cid}/structure` | 章内结构 reconcile（删除/合并/拆段/排序的唯一入口；已存在段文本变化时旧音频降级为 previous 并保留文件，被删分片只删 DB 行、音频文件留盘） |
+| PATCH | `/api/segmented-projects/{id}/chapters/{cid}/structure` | 章内结构 reconcile（删除/合并/拆段/排序的唯一入口；payload 段可选带 `emotion/role_id/segment_kind/voice`，新建段按传入值播种、已存在段仅在显式出现时更新，voice 变更同样降级旧音频；已存在段文本变化时旧音频降级为 previous 并保留文件，被删分片只删 DB 行、音频文件留盘） |
 | POST | `/api/segmented-projects/{id}/chapters/{cid}/segments/{sid}/audio` | 上传用户自行录入的分片音频（multipart） |
 | GET | `/api/segmented-projects/{id}/audio/{cid}/{sid}` | 读取分片 mp3 |
 | GET | `/api/segmented-projects/{id}/chapters/{cid}/export-audio` | 导出整章合并音频 |

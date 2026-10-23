@@ -371,3 +371,26 @@ force save 通道（`base_updated_at=None`）的使用范围严格限定为：�
 - §10 第三层未动（乐观锁粒度、`SET_CHAPTER_META` 改走 chapter PATCH）。
 - 归档草稿没有 diff 视图（§2 非目标）。
 - `noteServerVersion` 仍靠多处调用点人肉追新 base；合成入口的显式 `draftSync.flush()`（`TTSSynthesis.tsx` 的 `doRegenerateAll` / `handleProduceAll` / `handleRegenerate`）是第一层之外的额外护栏，第三层落地后可一并简化。
+
+## 12. 2026-10 后记：第三层落地，整包 PUT 退出自动保存
+
+§10 的第三层已实现，本条 supersede §11.4 的第一条遗留：
+
+- backend 模式的自动保存不再发整包 PUT。`segmentedActionPersistence` 把 reducer
+  action 映射到实体级写：项目 → `PATCH /segmented-projects/{id}`、章节 →
+  `PATCH .../chapters/{cid}`（含新增的 `original_text`）、文档 → `PUT
+  .../source-document` / `PUT .../narration-script`、段 → `PATCH .../segments/{sid}`。
+- 章节新建/删除/排序走章节端点；拆分/重拆走 structure 端点，段元数据
+  （`emotion`/`role_id`/`segment_kind`/`voice`）随一次 reconcile 落库。
+- `useSegmentedEntitySync` 对每个实体独立防抖、独立串行链，避免同实体响应乱序把
+  旧字段覆盖回新值；成功响应的 `project_updated_at` 仍喂给 `noteServerVersion`，
+  保持草稿 base 前进。
+- Try 接力文本改走章节 PATCH，不再用整包 PUT 标脏。
+
+结果：
+
+- 日常编辑与合成期间的"自己撞自己"假冲突从源头消失，不再依赖第一层自愈兜底。
+- 整包 PUT 只剩显式保存/导入/恢复与第二层 force-save（`base_updated_at: null`）。
+- 加载期陈旧草稿冲突仍走本文第二层流程，行为不变；E2E 改为注入陈旧 IndexedDB
+  草稿来验证该路径。
+- 第一层的已知版本自愈保留，作为任何残余整包 PUT 调用方的安全网。
