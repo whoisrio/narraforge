@@ -34,17 +34,34 @@ async function gotoProjectHub(page: import('@playwright/test').Page) {
   return openBtn;
 }
 
+/**
+ * 预热 TTSSynthesis 的 lazy chunk（以及其全部 Vite 模块）。
+ *
+ * 这些测试用 Slow 3G 节流，但本意是拖慢"打开项目"的后端读请求，让
+ * LoadingProvider 的 250ms 延迟阈值触发。TTSSynthesis 是 React.lazy：
+ * 若模块本身还没加载，节流会先把数秒花在下载/编译模块上，编辑器尚未挂载，
+ * 全局加载模态自然不存在，断言就会误报。先无节流打开一次再返回项目总览，
+ * 模块进入浏览器缓存；随后节流只影响 API 请求。
+ */
+async function warmStudioBundle(page: import('@playwright/test').Page, openBtn: import('@playwright/test').Locator) {
+  await openBtn.click();
+  await expect(page.getByText('第1章 夜路', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('button', { name: /返回项目总览/ }).first().click();
+  await expect(page.getByRole('button', { name: /打开 test/ }).first()).toBeVisible({ timeout: 15_000 });
+}
+
 test.describe('全局加载反馈', () => {
   // @feature §8 E2E — 打开项目：慢网络下模态出现且文案正确，数据到达后消失、编辑器可交互
   test('打开项目：慢网络下模态出现且文案正确，数据到达后消失、编辑器可交互', async ({ page }) => {
     const openBtn = await gotoProjectHub(page);
+    await warmStudioBundle(page, openBtn);
 
     // 节流网络，让后端 getProject 超过模态延迟阈值（250ms）
     const client = await page.context().newCDPSession(page);
     await client.send('Network.enable');
     await client.send('Network.emulateNetworkConditions', SLOW_3G);
 
-    await openBtn.click();
+    await page.getByRole('button', { name: /打开 test/ }).first().click();
 
     // 模态应浮现（role=dialog + aria-busy 标记加载中）
     const modal = page.locator('[role="dialog"][aria-busy="true"]');
@@ -66,12 +83,13 @@ test.describe('全局加载反馈', () => {
   // @feature §8 E2E — 模态不可手动关闭（无关闭按钮、点遮罩无效）
   test('打开项目：加载模态不可手动关闭', async ({ page }) => {
     const openBtn = await gotoProjectHub(page);
+    await warmStudioBundle(page, openBtn);
 
     const client = await page.context().newCDPSession(page);
     await client.send('Network.enable');
     await client.send('Network.emulateNetworkConditions', SLOW_3G);
 
-    await openBtn.click();
+    await page.getByRole('button', { name: /打开 test/ }).first().click();
 
     const modal = page.locator('[role="dialog"][aria-busy="true"]');
     await expect(modal).toBeVisible({ timeout: 8_000 });

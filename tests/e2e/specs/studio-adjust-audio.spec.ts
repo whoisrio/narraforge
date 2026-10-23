@@ -210,23 +210,14 @@ test.describe('合成后音频调整', () => {
     await page.getByRole('button', { name: '确认', exact: true }).click();
     await expect(page.getByTitle('已录入音频，点击解锁后可重新合成').first()).toBeVisible({ timeout: 15_000 });
 
-    // 录音落库后，前端会把本地草稿在安静期（防抖 1s）后整包 PUT 回后端。
-    // 若该 PUT 落在本用例后续 API 调整/还原之后，旧草稿会回写覆盖服务端状态
-    // （P6 flaky 根因：force 重合成被草稿里的 recorded 音频盖回）。
-    // 先挂起等待这次 PUT，待其落库、再离开工作室页面后，才继续纯 API 步骤。
-    const draftPut = page.waitForResponse(
-      (r) => r.request().method() === 'PUT' && r.url().includes(`/api/segmented-projects/${PROJECT_ID}`),
-      { timeout: 20_000 },
-    );
-
-    // 等草稿同步收敛到 recorded（防抖 PUT）
+    // 录音走段级端点直接落库，整包 PUT 已退出自动保存热路径。
+    // 等 API 读到 recorded 即代表写入完成，之后离开工作室，避免页面继续产生写操作。
     let recAudio: any;
     await expect.poll(async () => {
       recAudio = (await getSeg(page, CHAPTER_ID, 'seg-1-1')).audio;
       return recAudio?.current?.origin;
     }, { timeout: 15_000 }).toBe('recorded');
-    await draftPut; // 草稿 PUT 已落库，服务端状态与页面草稿一致
-    // 卸载工作室页面（草稿同步随之销毁），确保后续 API 步骤期间页面不再产生任何写操作
+    // 卸载工作室页面，确保后续 API 步骤期间页面不再产生任何写操作
     await page.goto('about:blank');
     const recPath = recAudio.current.path as string;
     const recDur = recAudio.current.duration_sec as number;
