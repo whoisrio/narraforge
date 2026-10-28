@@ -499,9 +499,14 @@ export function SegmentRow({
         {renderText(styles.compactText)}
         <span className={styles.compactDur}>{dur}</span>
         {(isIdle || isFailed) && (
-          <button className={styles.compactGenBtn} disabled={isGenerating}
-            onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>
-            {isGenerating ? '⏳' : '▶'}
+          <button
+            className={styles.compactGenBtn}
+            disabled={isGenerating}
+            title={hasPlayableAudio ? t('segment.segmentRow.regenerate') : t('segment.segmentRow.generate')}
+            onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}
+          >
+            {/* 有旧音频时用 ↻ 区别于播放 ▶（合成失败后旧音频保留，两键并存） */}
+            {isGenerating ? '⏳' : hasPlayableAudio ? '↻' : '▶'}
           </button>
         )}
         {isReady && isStale && (
@@ -658,8 +663,9 @@ export function SegmentRow({
             {/* Generate button for idle/failed */}
             {(isIdle || isFailed) && (
               <button className={isFailed ? styles.genBtnFail : styles.genBtn} disabled={isGenerating}
+                title={hasPlayableAudio ? t('segment.segmentRow.regenerate') : t('segment.segmentRow.generate')}
                 onClick={(e) => { e.stopPropagation(); onRegenerate(segment.id); }}>
-                {isGenerating ? '⏳' : `▶ ${t('segment.segmentRow.generate')}`}
+                {isGenerating ? '⏳' : hasPlayableAudio ? `↻ ${t('segment.segmentRow.regenerate')}` : `▶ ${t('segment.segmentRow.generate')}`}
               </button>
             )}
             {isGenerating ? (

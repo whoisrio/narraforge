@@ -96,4 +96,46 @@ describe('SegmentRow 合成状态', () => {
     expect(screen.queryByTitle('播放')).toBeNull();
     expect(screen.getByTitle('合成中...')).toBeTruthy();
   });
+
+  it('合成失败但旧音频保留时：合成入口显示为重新生成（↻），与播放按钮可区分', () => {
+    // 回归：failed + 旧音频保留（#112 起）曾渲染两个一模一样的 ▶（合成 ▶ + 播放 ▶）。
+    const onRegenerate = vi.fn();
+    const segment: Segment = {
+      ...makeSegment(),
+      status: 'failed',
+      audio: { format: 'mp3', current: { path: 'projects/p/audio/s1.mp3' } },
+    };
+
+    renderRow({ segment, onRegenerate });
+
+    // 播放按钮仍在（旧音频可播），但不再是两个 ▶
+    expect(screen.getByTitle('播放')).toBeTruthy();
+    const gen = screen.getByTitle('重新生成');
+    expect(gen.textContent).not.toContain('▶');
+    expect(gen.textContent).toContain('↻');
+    fireEvent.click(gen);
+    expect(onRegenerate).toHaveBeenCalledWith('s1');
+  });
+
+  it('展开态合成失败但旧音频保留时：合成按钮同样显示为重新生成', () => {
+    const segment: Segment = {
+      ...makeSegment(),
+      status: 'failed',
+      audio: { format: 'mp3', current: { path: 'projects/p/audio/s1.mp3' } },
+    };
+
+    renderRow({ segment, compact: false });
+
+    expect(screen.getByTitle('播放')).toBeTruthy();
+    const gen = screen.getByTitle('重新生成');
+    expect(gen.textContent).toContain('↻');
+    expect(gen.textContent).not.toContain('▶');
+  });
+
+  it('无音频的 failed 段合成入口仍为「▶ 生成」', () => {
+    renderRow({ segment: { ...makeSegment(), status: 'failed' } });
+    expect(screen.getByTitle('生成')).toBeTruthy();
+    expect(screen.queryByTitle('重新生成')).toBeNull();
+    expect(screen.queryByTitle('播放')).toBeNull();
+  });
 });

@@ -99,23 +99,29 @@ def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_projec
         raise HTTPException(status_code=403, detail=detail)
 
 
-def _e2e_synthesis_delay_seconds(request: Request) -> float:
-    """E2E-only hook: hold a synthesis request in flight without parking it in the browser.
+def _e2e_synth_hook_seconds(request: Request) -> tuple[float, float]:
+    """E2E-only hooks: deterministic slow / failing synthesis without parking the browser.
 
-    The regression test for "play another segment while TTS runs" needs a
-    deterministic slow backend call. Only honored when the app runs under the
-    e2e env file.
+    ``x-e2e-synth-delay-ms`` holds a synthesis request in flight (worker-thread
+    sleep) so the "play another segment while TTS runs" regression test gets a
+    deterministic window. ``x-e2e-synth-fail-ms`` makes the synthesis fail after
+    a delay so the "failed synthesis keeps old audio playable" regression test
+    can drive a real GENERATE_FAIL flow. Only honored under the e2e env file.
     """
     if settings.app_env != "e2e":
-        return 0.0
-    raw = request.headers.get("x-e2e-synth-delay-ms")
-    if not raw:
-        return 0.0
-    try:
-        delay_ms = float(raw)
-    except ValueError:
-        return 0.0
-    return max(0.0, min(delay_ms, 10_000.0)) / 1000.0
+        return 0.0, 0.0
+
+    def _parse(header: str) -> float:
+        raw = request.headers.get(header)
+        if not raw:
+            return 0.0
+        try:
+            delay_ms = float(raw)
+        except ValueError:
+            return 0.0
+        return max(0.0, min(delay_ms, 10_000.0)) / 1000.0
+
+    return _parse("x-e2e-synth-delay-ms"), _parse("x-e2e-synth-fail-ms")
 
 
 def _enforce_project_quota(request: Request, repo: SegmentedProjectRepository) -> None:
@@ -373,7 +379,7 @@ async def synthesize_segment(
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         return detail
-    delay_seconds = _e2e_synthesis_delay_seconds(request)
+    delay_seconds, fail_after_seconds = _e2e_synth_hook_seconds(request)
 
     def _run_local_synthesis() -> dict[str, Any] | None:
         # TTS engines and ffmpeg are synchronous and can take seconds. Running
@@ -382,6 +388,9 @@ async def synthesize_segment(
         # session lifecycle stays on this worker thread (no cross-thread reuse).
         if delay_seconds:
             time.sleep(delay_seconds)
+        if fail_after_seconds:
+            time.sleep(fail_after_seconds)
+            raise ValueError("e2e_forced_synthesis_failure")
         svc.synthesize_segment(
             db,
             project_id=project_id,

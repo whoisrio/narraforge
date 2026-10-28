@@ -168,4 +168,69 @@ test.describe('合成期间播放', () => {
 
     expect(errors.filter((e) => !e.includes('favicon'))).toEqual([]);
   });
+
+  test('A 段合成失败后：旧音频仍可播放，合成入口显示为重新生成而非第二个 ▶', async ({ page }) => {
+    // 回归：failed + 旧音频保留（#112 起）曾同时渲染合成 ▶ 与播放 ▶，
+    // 用户看到两个一模一样的播放按钮（云端 TTS 易失败，本地难以复现）。
+    test.setTimeout(180_000);
+    const errors = collectErrors(page);
+
+    await goToStudio(page);
+    await synthesizeSegment(page, SEGMENT_A);
+
+    // 展开 A 段，让这次重新合成真实地失败（后端 worker 线程延迟 2s 后 422）。
+    const rowA = page.locator(`[class*="compactCard"][data-segment-id="${SEGMENT_A}"]`);
+    await rowA.locator('[class*="compactText"]').click();
+    const panel = page.locator('[class*="accordionWrapper"]');
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    await page.route(
+      new RegExp(`/segments/${SEGMENT_A}/synthesize$`),
+      (route) => route.continue({
+        headers: {
+          ...route.request().headers(),
+          'x-e2e-synth-fail-ms': '2000',
+        },
+      }),
+    );
+
+    const synthDone = interceptPostResponse(page, `/segments/${SEGMENT_A}/synthesize`);
+    await panel.getByRole('button', { name: '重新生成' }).click();
+    expect((await synthDone).status).toBe(422);
+
+    // 失败后行内按钮构成：恰好一个播放 ▶ + 一个重新生成 ↻，不再有两个 ▶。
+    await expect(rowA.locator('button[title="播放"]')).toHaveCount(1, { timeout: 10_000 });
+    await expect(rowA.locator('button[title="重新生成"]')).toHaveCount(1);
+    const regenBtn = rowA.locator('button[title="重新生成"]');
+    expect((await regenBtn.textContent())?.trim()).toBe('↻');
+    expect(await rowA.locator('button').evaluateAll(
+      (btns) => btns.filter((b) => b.textContent?.includes('▶')).length,
+    )).toBe(1);
+
+    // 旧音频字节级未变，仍可播放。
+    const audioBefore = await backendSegmentAudio(page, SEGMENT_A);
+    const aAudioUrl =
+      `${E2E_BACKEND_URL}/api/segmented-projects/${PROJECT_ID}/audio/${CHAPTER1_ID}/${SEGMENT_A}`;
+    const before = await page.request.get(aAudioUrl);
+    expect(before.status()).toBe(200);
+    const beforeBody = await before.body();
+
+    const duringResp = page.waitForResponse(
+      (r) => r.request().method() === 'GET'
+        && r.url().includes(`/audio/${CHAPTER1_ID}/${SEGMENT_A}`),
+      { timeout: 20_000 },
+    );
+    await rowA.locator('button[title="播放"]').click();
+    const during = await duringResp;
+    expect(during.status()).toBe(200);
+    expect(sha256(await during.body())).toBe(sha256(beforeBody));
+
+    // 展开态同样：面板重新生成按钮恢复可用，合成中状态已退出。
+    const panelRegen = panel.getByRole('button', { name: '重新生成' });
+    await expect(panelRegen).toBeVisible();
+    await expect(panelRegen).toBeEnabled();
+
+    // 浏览器会把有意注入的 422 合成失败记为 console error，这里豁免。
+    expect(errors.filter((e) => !e.includes('favicon') && !e.includes('422'))).toEqual([]);
+  });
 });
