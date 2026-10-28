@@ -1117,6 +1117,7 @@ export const zhCN = {
       suggestRegenerate: '，建议重新生成',
       generate: '生成',
       play: '播放',
+      synthesizing: '合成中...',
       pause: '暂停',
       moveUp: '上移段落',
       moveDown: '下移段落',

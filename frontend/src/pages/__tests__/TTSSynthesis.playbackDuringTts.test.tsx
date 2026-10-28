@@ -1,6 +1,7 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TTSSynthesis } from '../TTSSynthesis';
+import { TranslationProvider } from '../../i18n';
 
 // 重新合成期间旧音频必须保持可播放：TTS 状态（pending/queued）不得阻塞播放，
 // 也不得在开始批量合成时删除/清空旧音频。
@@ -20,6 +21,16 @@ const mockProject = vi.hoisted(() => {
       voice: { source: 'chapter' },
       status: 'ready',
       audio: { format: 'mp3', current: { id: 'audio-1', duration_sec: 1.5 }, duration_sec: 1.5 },
+      role_id: null,
+      segment_kind: 'narration',
+      created_at: now,
+      updated_at: now,
+    }, {
+      id: 'seg-2',
+      text: '已经生成过的第二句。',
+      voice: { source: 'chapter' },
+      status: 'ready',
+      audio: { format: 'mp3', current: { id: 'audio-2', duration_sec: 1.5 }, duration_sec: 1.5 },
       role_id: null,
       segment_kind: 'narration',
       created_at: now,
@@ -139,21 +150,38 @@ describe('TTSSynthesis 重新合成期间的播放', () => {
     vi.restoreAllMocks();
   });
 
-  it('批量重新合成开始后仍可播放旧音频，且不删除旧音频', async () => {
-    render(<TTSSynthesis hideProjectSidebar />);
+  it('重新合成 A 段时，A 段进入合成中且 B 段仍可播放', async () => {
+    render(
+      <TranslationProvider>
+        <TTSSynthesis hideProjectSidebar />
+      </TranslationProvider>,
+    );
 
     fireEvent.click(await screen.findByRole('button', { name: /工作室/ }));
-    fireEvent.click(await screen.findByRole('button', { name: /批量合成/ }));
-    fireEvent.click(await screen.findByRole('button', { name: /重新合成全部/ }));
+
+    await waitFor(() => {
+      expect(document.querySelectorAll('[data-segment-id]')).toHaveLength(2);
+    });
+
+    // 展开 A 段编辑面板：点击行内文本即可选中该段。
+    const rowA = document.querySelector('[data-segment-id="seg-1"]') as HTMLElement;
+    fireEvent.click(within(rowA).getByText('已经生成过的第一句。'));
+
     fireEvent.click(await screen.findByRole('button', { name: '重新生成' }));
+    await waitFor(() => expect(synthesizeMock).toHaveBeenCalledTimes(1));
 
-    await screen.findByTestId('produce-all-progress');
+    // A 段进入 pending：播放按钮让位给「合成中」状态。
+    await waitFor(() => {
+      const a = document.querySelector('[data-segment-id="seg-1"]') as HTMLElement;
+      expect(within(a).queryByTitle('播放')).toBeNull();
+      expect(within(a).getByTitle('合成中...')).toBeTruthy();
+    });
 
-    // status 已进入 pending，但旧音频引用仍在，播放按钮必须保留。
-    const play = await screen.findByTitle('播放');
-    fireEvent.click(play);
+    // B 段已经完成过 TTS，不受 A 段合成影响，仍可播放。
+    const rowB = document.querySelector('[data-segment-id="seg-2"]') as HTMLElement;
+    fireEvent.click(within(rowB).getByTitle('播放'));
 
-    await waitFor(() => expect(getTTSAudioBlobMock).toHaveBeenCalledWith('audio-1'));
+    await waitFor(() => expect(getTTSAudioBlobMock).toHaveBeenCalledWith('audio-2'));
     expect(deleteTTSResultMock).not.toHaveBeenCalled();
 
     resolveSynth?.({ audio_base64: btoa('new-audio'), audio_format: 'mp3' });

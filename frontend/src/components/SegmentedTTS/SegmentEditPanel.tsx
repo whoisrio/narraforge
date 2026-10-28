@@ -51,6 +51,7 @@ export function SegmentEditPanel({
   onUpdateEmotion, onUndo, onRegenerate, onConfirmCustom, onAnnotateSSML, onSplit, onUpdateTextTransforms,
 }: SegmentEditPanelProps) {
   const { t } = useTranslation();
+  const isGenerating = segment?.status === 'pending' || segment?.status === 'queued';
   const [localText, setLocalText] = useState(segment?.text ?? '');
   const [showParams, setShowParams] = useState(false);
   const [edgeVoices, setEdgeVoices] = useState<{ short_name: string; display_name: string; gender: string }[]>([]);
@@ -282,9 +283,14 @@ export function SegmentEditPanel({
           {segment.status === 'ready' && onUndo && (
             <button className={styles.btnSecondary} onClick={() => onUndo(segment.id)}>{t('segmentEdit.undo')}</button>
           )}
-          <button className={styles.btnPrimary} onClick={() => onRegenerate(segment.id)}>
+          <button
+            className={styles.btnPrimary}
+            disabled={isGenerating}
+            onClick={() => onRegenerate(segment.id)}
+            aria-busy={isGenerating}
+          >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ verticalAlign: '-1px', marginRight: 3 }}><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            {t('segmentEdit.regenerate')}
+            {isGenerating ? t('segment.segmentRow.synthesizing') : t('segmentEdit.regenerate')}
           </button>
         </div>
 

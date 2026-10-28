@@ -538,7 +538,9 @@ export function SegmentRow({
         {onMerge && (
           <MergeMenu segmentId={segment.id} canUp={index > 1} canDown={!isLast} onMerge={onMerge} compact />
         )}
-        {hasPlayableAudio && (
+        {isGenerating ? (
+          <span className={styles.compactSynthBadge} title={t('segment.segmentRow.synthesizing')} aria-label={t('segment.segmentRow.synthesizing')}>⏳</span>
+        ) : hasPlayableAudio && (
           <button className={styles.compactPlayBtn} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
             onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
             {isPlaying && !isPaused ? '⏸' : '▶'}
@@ -660,8 +662,9 @@ export function SegmentRow({
                 {isGenerating ? '⏳' : `▶ ${t('segment.segmentRow.generate')}`}
               </button>
             )}
-            {isGenerating && <span className={styles.genBadge}>⏳</span>}
-            {hasPlayableAudio && (
+            {isGenerating ? (
+              <span className={styles.genBadge} title={t('segment.segmentRow.synthesizing')}>{`⏳ ${t('segment.segmentRow.synthesizing')}`}</span>
+            ) : hasPlayableAudio && (
               <button className={styles.actPlay} title={t(isPlaying && !isPaused ? 'segment.segmentRow.pause' : 'segment.segmentRow.play')}
                 onClick={(e) => { e.stopPropagation(); onPlay(segment.id); }}>
                 {isPlaying && !isPaused ? '⏸' : '▶'}

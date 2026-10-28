@@ -197,12 +197,18 @@ idle → queued → pending → ready
                      ↘ failed → (retry) → pending
 ```
 
-Playability is intentionally decoupled from this state machine: the play button is
-rendered whenever the segment still holds an audio reference (`audio.current` or
-`current_audio_id`), including while status is `queued`/`pending`. Regeneration no
-longer clears or deletes the old audio up front; the new result atomically replaces
-`current` on success (the backend keeps the old take as `previous`). TTS and playback
-therefore never block each other.
+Playability is intentionally decoupled from this state machine. A segment that is
+NOT synthesizing renders its play button whenever it still holds an audio
+reference (`audio.current` or `current_audio_id`), regardless of status.
+Regeneration no longer clears or deletes the old audio up front; the new result
+atomically replaces `current` on success (the backend keeps the old take as
+`previous`). While a segment IS synthesizing, its own play button is replaced by
+a 「合成中」 indicator (compact row badge, expanded row badge, and the edit
+panel's disabled regenerate button) — other segments' play buttons and playback
+are untouched. The local synthesis endpoint runs the TTS engine in a worker
+thread (`run_in_threadpool`), so the event loop keeps serving audio GETs for
+other segments while TTS is in flight: synthesizing segment A never blocks
+listening to finished segment B.
 
 #### Narrator Voice Sidebar
 

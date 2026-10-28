@@ -1119,6 +1119,7 @@ export const enUS: Messages = {
       suggestRegenerate: ', regeneration recommended',
       generate: 'Generate',
       play: 'Play',
+      synthesizing: 'Synthesizing...',
       pause: 'Pause',
       moveUp: 'Move segment up',
       moveDown: 'Move segment down',

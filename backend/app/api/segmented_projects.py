@@ -15,12 +15,14 @@ import copy
 import io
 import json
 import logging
+import time
 import zipfile
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from starlette.concurrency import run_in_threadpool
 
 # workers bundle 不含 sqlalchemy：Session 仅作注解（Depends 注入不看它）。
 try:
@@ -95,6 +97,25 @@ def _reject_scratchpad(project_id: str, detail: str = "forbidden_internal_projec
     """防止草稿项目污染后端数据库."""
     if project_id == SCRATCHPAD_PROJECT_ID:
         raise HTTPException(status_code=403, detail=detail)
+
+
+def _e2e_synthesis_delay_seconds(request: Request) -> float:
+    """E2E-only hook: hold a synthesis request in flight without parking it in the browser.
+
+    The regression test for "play another segment while TTS runs" needs a
+    deterministic slow backend call. Only honored when the app runs under the
+    e2e env file.
+    """
+    if settings.app_env != "e2e":
+        return 0.0
+    raw = request.headers.get("x-e2e-synth-delay-ms")
+    if not raw:
+        return 0.0
+    try:
+        delay_ms = float(raw)
+    except ValueError:
+        return 0.0
+    return max(0.0, min(delay_ms, 10_000.0)) / 1000.0
 
 
 def _enforce_project_quota(request: Request, repo: SegmentedProjectRepository) -> None:
@@ -320,6 +341,7 @@ async def synthesize_segment(
     chapter_id: str,
     segment_id: str,
     body: SynthesizeSegmentRequest,
+    request: Request,
     db: Session = Depends(get_db),
     repo: SegmentedProjectRepository = Depends(get_segmented_repo),
     store: AssetStore = Depends(get_asset_store),
@@ -351,7 +373,15 @@ async def synthesize_segment(
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         return detail
-    try:
+    delay_seconds = _e2e_synthesis_delay_seconds(request)
+
+    def _run_local_synthesis() -> dict[str, Any] | None:
+        # TTS engines and ffmpeg are synchronous and can take seconds. Running
+        # them in a worker thread keeps the event loop free so audio GETs for
+        # already synthesized segments stay responsive during TTS. The whole
+        # session lifecycle stays on this worker thread (no cross-thread reuse).
+        if delay_seconds:
+            time.sleep(delay_seconds)
         svc.synthesize_segment(
             db,
             project_id=project_id,
@@ -363,11 +393,14 @@ async def synthesize_segment(
             keep_previous=body.keep_previous,
             force=body.force,
         )
+        return svc.get_project_detail(db, project_id)
+
+    try:
+        detail = await run_in_threadpool(_run_local_synthesis)
     except LookupError:
         raise HTTPException(status_code=404, detail="segment_not_found")
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    detail = svc.get_project_detail(db, project_id)
     assert detail is not None
     return detail
 
