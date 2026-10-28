@@ -205,10 +205,12 @@ atomically replaces `current` on success (the backend keeps the old take as
 `previous`). While a segment IS synthesizing, its own play button is replaced by
 a 「合成中」 indicator (compact row badge, expanded row badge, and the edit
 panel's disabled regenerate button) — other segments' play buttons and playback
-are untouched. The local synthesis endpoint runs the TTS engine in a worker
-thread (`run_in_threadpool`), so the event loop keeps serving audio GETs for
-other segments while TTS is in flight: synthesizing segment A never blocks
-listening to finished segment B.
+are untouched. After a failed synthesis the old audio stays playable: the row
+keeps exactly one 播放 ▶, and the synthesis entry renders as 重新生成 ↻
+(never a second identical ▶). The local synthesis endpoint runs the TTS engine
+in a worker thread (`run_in_threadpool`), so the event loop keeps serving audio
+GETs for other segments while TTS is in flight: synthesizing segment A never
+blocks listening to finished segment B.
 
 #### Narrator Voice Sidebar
 

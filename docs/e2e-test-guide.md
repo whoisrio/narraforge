@@ -198,13 +198,16 @@ Useful techniques:
 - `page.request.*` bypasses `page.route` completely, which is exactly what makes the
   "external writer" (agent / second tab) simulation possible from inside the same test.
 - `page.route` is still used in `studio-playback-during-tts.spec.ts`, but instead of
-  parking the regenerate POST it injects the e2e-only `x-e2e-synth-delay-ms` header
-  (honored only when `APP_ENV=e2e`): the backend runs the synthesis in a worker
-  thread and sleeps there, so the "synthesis in flight" window is deterministic
-  while the event loop stays free. The test clicks another segment's play button
-  during that window and asserts its audio GET returns immediately with
-  byte-identical content (sha256), plus that the synthesizing segment shows
-  「合成中」 instead of a play button.
+  parking the regenerate POST it injects e2e-only headers (honored only when `APP_ENV=e2e`):
+  `x-e2e-synth-delay-ms` makes the backend run the synthesis in a worker thread and sleep
+  there, so the "synthesis in flight" window is deterministic while the event loop stays
+  free — the test clicks another segment's play button during that window and asserts its
+  audio GET returns immediately with byte-identical content (sha256), plus that the
+  synthesizing segment shows 「合成中」 instead of a play button. `x-e2e-synth-fail-ms`
+  makes the synthesis really fail (worker sleeps then raises → 422), driving the frontend's
+  real GENERATE_FAIL flow: the failed segment must keep its old audio playable with exactly
+  one 播放 ▶ and one 重新生成 ↻ (never two identical ▶ buttons — the cloud-only bug where
+  local TTS rarely fails hid the regression).
 - Assert request payloads (not just end state): e.g. chapter rename sends only
   `{name}`, force-save omits `base_updated_at`.
 
@@ -233,7 +236,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G13 | **Studio 搜索 + 合成时文本变换** | 全项目搜索跳转（切章节/定位/闪烁）、发音映射（逐段勾选 + apply_all）、大写转小写（项目默认 + 段级三态覆盖）；`generated_params.effective_text` 双读断言 | `studio-text-transforms.spec.ts` | High | ✅ Done |
 | G14 | **细粒度保存 + 加载期冲突裁决** | 章节改名只发 `PATCH /chapters/{id}`、零整包 PUT、零冲突弹窗；加载期陈旧草稿（IndexedDB 注入）→ 模态 → 「用草稿」force save（无 base）落库、「用后端」采纳后归档找回；请求 payload + API/DB 双读 | `studio-save-conflict.spec.ts` | High | ✅ Done |
 | G15 | **TTS 语音核对（ASR 回读验收）** | 紧凑行角标双职责：未核对点角标直接核对（不建 run，runs 快照对比）→ 全量核对 → 报告弹层（不一致计数 + ASR 回读文本）→ 不一致（badge + API/SQLite 双读）→ 只看不一致过滤 → 忽略 → 重挂音频（audio_key 作废，真实 edge-tts 被 403 时等价驱动）→ 幂等续跑只补缺（报告仅含本次 run 发现）→ 防重 409 + 快照 pill + 回拨心跳 → interrupted 提示 → 续跑（runs 表双读）。后端以 `TTS_VERIFY_STUB=1` 运行（`.env.e2e`） | `studio-tts-verify.spec.ts` | High | ✅ Done |
-| G16 | **合成期间播放互不阻塞** | 真实合成 A、B 两段 → `page.route` 给 A 的重新合成 POST 注入 `x-e2e-synth-delay-ms`（后端 worker 线程真实慢合成 8s）→ A 紧凑/展开行播放按钮替换为「合成中」、编辑面板重新生成按钮禁用 → B 播放按钮仍可见，点击后音频 GET 立即返回（<4s）且 sha256 与合成前一致 → 无「暂无音频/播放失败」提示 → 合成完成后 A 恢复播放按钮，current/previous 独立落盘、B 字节级未变 | `studio-playback-during-tts.spec.ts` | High | ✅ Done |
+| G16 | **合成期间播放互不阻塞 + 失败后旧音频可播** | 真实合成 A、B 两段 → `page.route` 给 A 的重新合成 POST 注入 `x-e2e-synth-delay-ms`（后端 worker 线程真实慢合成 8s）→ A 紧凑/展开行播放按钮替换为「合成中」、编辑面板重新生成按钮禁用 → B 播放按钮仍可见，点击后音频 GET 立即返回（<4s）且 sha256 与合成前一致 → 无「暂无音频/播放失败」提示 → 合成完成后 A 恢复播放按钮，current/previous 独立落盘、B 字节级未变；第二例注入 `x-e2e-synth-fail-ms` 让合成真实 422 → 失败后旧音频字节级可播、行内恰好一个 ▶ 播放 + 一个 ↻ 重新生成（无双 ▶） | `studio-playback-during-tts.spec.ts` | High | ✅ Done |
 
 **Additional rules**:
 - G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;
