@@ -25,7 +25,7 @@ Each worktree has its own SQLite e2e DB (`backend/voice_clone_e2e.db` is per-wor
 Note: two e2e runs in the **same** worktree still share one stack — `webServer.reuseExistingServer` means the second run attaches to the first run's servers; run them serially.
 
 ```bash
-npm run e2e          # Full suite (79 tests, --workers=1, HTML report)
+npm run e2e          # Full suite (83 tests, --workers=1, HTML report)
 npm run e2e:ui       # Playwright visual test explorer
 npm run e2e:report   # Open latest HTML report
 npm run e2e:clean    # Remove all test-results/ and playwright-report/ dirs
@@ -44,7 +44,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 | Path | Purpose |
 |---|---|
-| `tests/e2e/specs/` | Automated browser E2E specs (79 tests; main app in zh-CN locale, Try page spec in en-US) |
+| `tests/e2e/specs/` | Automated browser E2E specs (83 tests; main app in zh-CN locale, Try page spec in en-US) |
 | `tests/e2e/fixtures/` | Stable input fixtures (sample audio, images) |
 | `tests/e2e/helpers/` | Shared code: data assertions, dbReader, dualReadSnapshot, navigation, seed |
 | `tests/e2e/global-setup.ts` | Seed data before all tests |
@@ -53,7 +53,7 @@ Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block 
 
 ```text
 tests/e2e/
-├── specs/                  ← Automated Playwright browser specs (79 tests)
+├── specs/                  ← Automated Playwright browser specs (83 tests)
 ├── fixtures/               ← Stable E2E input fixtures (audio, images)
 ├── helpers/                ← Shared utilities
 │   ├── dataAssertions.ts   ← API-layer validators (validateChapter, validateSegment, …)
@@ -197,16 +197,20 @@ Useful techniques:
   server's `updated_at` (the conflict tolerance).
 - `page.request.*` bypasses `page.route` completely, which is exactly what makes the
   "external writer" (agent / second tab) simulation possible from inside the same test.
-- `page.route` is still used in `studio-playback-during-tts.spec.ts` to park the
-  regenerate POST. A parked request has not reached the backend, so the `queued` /
-  `pending` window can be held open indefinitely while the test clicks play and asserts
-  the old audio GET returns 200.
+- `page.route` is still used in `studio-playback-during-tts.spec.ts`, but instead of
+  parking the regenerate POST it injects the e2e-only `x-e2e-synth-delay-ms` header
+  (honored only when `APP_ENV=e2e`): the backend runs the synthesis in a worker
+  thread and sleeps there, so the "synthesis in flight" window is deterministic
+  while the event loop stays free. The test clicks another segment's play button
+  during that window and asserts its audio GET returns immediately with
+  byte-identical content (sha256), plus that the synthesizing segment shows
+  「合成中」 instead of a play button.
 - Assert request payloads (not just end state): e.g. chapter rename sends only
   `{name}`, force-save omits `base_updated_at`.
 
 ## Pending E2E Coverage (Gap Analysis)
 
-All 81 current tests pass (count via `npx playwright test --list`). The following scenarios are not yet covered.
+All 83 current tests pass (count via `npx playwright test --list`). The following scenarios are not yet covered.
 
 **Verification standard for new tests**: Every test must verify both API and DB layers
 against their own contracts (API → `docs/api-reference.md` + Pydantic schema; DB →
@@ -218,7 +222,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G2 | **CosyVoice / VoxCPM role creation** | voice-role-flows only tests MiMo preset; other engines not verified | Extend `voice-role-flows.spec.ts` | Medium |
 | G3 | **Voice Clone flow** | MiMo clone: upload → preview → create → verify — covered by `voice-clone.spec.ts` | `voice-clone.spec.ts` | Medium | ✅ Done |
 | G4 | **Actual audio playback** | Only checks player UI visibility; does not verify audio src is valid and duration > 0 | Extend existing studio specs | Medium |
-| G5 | **English locale UI** | All 79 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
+| G5 | **English locale UI** | All 83 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
 | G6 | **Error recovery** | Synthesis-failure retry, state rollback, user feedback — untested | Extend `studio-segment-operations` / `studio-batch-export` | Low |
 | G7 | **Mobile / responsive** | No viewport-dimension tests | New `responsive.spec.ts` | Low |
 | G8 | **Knowledge video workflow entry + storyboard** | 工作流类型入口 + 分镜视图（brief API 预置 + 双层验证） | `knowledge-video-workflow.spec.ts` | Medium | ✅ Done |
@@ -229,7 +233,7 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 | G13 | **Studio 搜索 + 合成时文本变换** | 全项目搜索跳转（切章节/定位/闪烁）、发音映射（逐段勾选 + apply_all）、大写转小写（项目默认 + 段级三态覆盖）；`generated_params.effective_text` 双读断言 | `studio-text-transforms.spec.ts` | High | ✅ Done |
 | G14 | **细粒度保存 + 加载期冲突裁决** | 章节改名只发 `PATCH /chapters/{id}`、零整包 PUT、零冲突弹窗；加载期陈旧草稿（IndexedDB 注入）→ 模态 → 「用草稿」force save（无 base）落库、「用后端」采纳后归档找回；请求 payload + API/DB 双读 | `studio-save-conflict.spec.ts` | High | ✅ Done |
 | G15 | **TTS 语音核对（ASR 回读验收）** | 紧凑行角标双职责：未核对点角标直接核对（不建 run，runs 快照对比）→ 全量核对 → 报告弹层（不一致计数 + ASR 回读文本）→ 不一致（badge + API/SQLite 双读）→ 只看不一致过滤 → 忽略 → 重挂音频（audio_key 作废，真实 edge-tts 被 403 时等价驱动）→ 幂等续跑只补缺（报告仅含本次 run 发现）→ 防重 409 + 快照 pill + 回拨心跳 → interrupted 提示 → 续跑（runs 表双读）。后端以 `TTS_VERIFY_STUB=1` 运行（`.env.e2e`） | `studio-tts-verify.spec.ts` | High | ✅ Done |
-| G16 | **合成期间播放旧音频** | 先真实合成首段 → 用 `page.route` 扣住重新合成 POST → 状态 queued/pending 时播放按钮仍可见 → 点击播放请求旧音频返回 200，无「暂无音频/播放失败」提示 → 放行合成 | `studio-playback-during-tts.spec.ts` | High | ✅ Done |
+| G16 | **合成期间播放互不阻塞** | 真实合成 A、B 两段 → `page.route` 给 A 的重新合成 POST 注入 `x-e2e-synth-delay-ms`（后端 worker 线程真实慢合成 8s）→ A 紧凑/展开行播放按钮替换为「合成中」、编辑面板重新生成按钮禁用 → B 播放按钮仍可见，点击后音频 GET 立即返回（<4s）且 sha256 与合成前一致 → 无「暂无音频/播放失败」提示 → 合成完成后 A 恢复播放按钮，current/previous 独立落盘、B 字节级未变 | `studio-playback-during-tts.spec.ts` | High | ✅ Done |
 
 **Additional rules**:
 - G1 i18n regression: primarily covered by **unit tests (vitest)** validating key resolution;

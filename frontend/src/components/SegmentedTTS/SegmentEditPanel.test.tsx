@@ -55,3 +55,12 @@ describe('SegmentEditPanel 大写词转小写三态', () => {
     expect(screen.getByRole('button', { name: '关' }).getAttribute('aria-pressed')).toBe('true');
   });
 });
+
+describe('SegmentEditPanel 合成状态', () => {
+  it.each(['pending', 'queued'] as const)('%s 时重新生成按钮禁用并显示合成中', (status) => {
+    renderPanel({ ...makeSegment(), status });
+    const button = screen.getByRole('button', { name: '合成中...' });
+    expect(button).toBeDisabled();
+    expect(button.getAttribute('aria-busy')).toBe('true');
+  });
+});

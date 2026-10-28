@@ -1531,10 +1531,37 @@ def synthesize_segment(
 
     existing_audio = seg.audio or {}
     prev_current = (existing_audio.get("current") or {}) if isinstance(existing_audio, dict) else {}
-    prev_rel: str | None = prev_current.get("path")
+    old_current_path: str | None = prev_current.get("path")
+    old_current_abs = (
+        assets.settings.segmented_dir / old_current_path if old_current_path else None
+    )
     prev_duration: float | None = prev_current.get("duration_sec")
     prev_origin: str | None = prev_current.get("origin")
+    previous_rel: str | None = old_current_path if keep_previous else None
+    previous_duration: float | None = prev_duration
+    previous_origin: str | None = prev_origin
     adjust_applied = False
+
+    def _preserve_current_before_replace(new_path: Path, new_rel_path: str) -> None:
+        """Keep the old take as ``previous`` when current and new share a path.
+
+        The normal synthesis target is the canonical ``{segment_id}.mp3``. It
+        is replaced atomically at the end of encoding, so playback of the old
+        file remains valid while TTS is running. For undo, however, ``previous``
+        must point at a *different* file; copying it aside before the replace
+        avoids pointing both slots at the newly written take.
+        """
+        nonlocal previous_rel
+        if not keep_previous or old_current_path is None:
+            return
+        if old_current_path != new_rel_path:
+            return
+        if old_current_abs is None or not old_current_abs.is_file():
+            previous_rel = None
+            return
+        backup = new_path.with_name(f"{seg.id}.prev{new_path.suffix}")
+        shutil.copy2(old_current_abs, backup)
+        previous_rel = backup.relative_to(assets.settings.segmented_dir).as_posix()
 
     if is_ffmpeg_available():
         target_mp3 = assets.segment_audio_path(
@@ -1546,6 +1573,8 @@ def synthesize_segment(
             position=seg.position or 0,
             fmt="mp3",
         )
+        new_rel = target_mp3.relative_to(assets.settings.segmented_dir).as_posix()
+        _preserve_current_before_replace(target_mp3, new_rel)
         leading_keep_ms = 80
         trailing_keep_ms = 100 if _ends_with_sentence_period(str(text_to_speak)) else 80
         try:
@@ -1557,7 +1586,6 @@ def synthesize_segment(
         except AudioEncoderError as e:
             logger.warning("silence trim skipped for segment %s: %s", seg.id, e)
         transcode_to_mp3(audio_bytes, target_mp3)
-        new_rel = target_mp3.relative_to(assets.settings.segmented_dir).as_posix()
         audio_format = "mp3"
         try:
             duration_sec = probe_audio_duration(target_mp3)
@@ -1601,13 +1629,13 @@ def synthesize_segment(
                     f"chapter audio adjust failed for segment {seg.id}: {e}",
                 ) from e
             else:
-                prev_rel = prev_abs.relative_to(
+                previous_rel = prev_abs.relative_to(
                     assets.settings.segmented_dir,
                 ).as_posix()
-                prev_duration = duration_sec
+                previous_duration = duration_sec
                 # The `.prev.mp3` stash is the fresh TTS original (pre-adjust),
                 # not whatever audio the segment had before this synthesis.
-                prev_origin = "tts"
+                previous_origin = "tts"
                 new_duration = probe_audio_duration(target_mp3)
                 if new_duration is None:
                     # probe 失败不吞成 None（SRT 会按 0s 处理）：
@@ -1622,7 +1650,7 @@ def synthesize_segment(
                 duration_sec = new_duration
                 _delete_dropped_audio_files(
                     seg,
-                    {"current": {"path": new_rel}, "previous": {"path": prev_rel}},
+                    {"current": {"path": new_rel}, "previous": {"path": previous_rel}},
                 )
                 adjust_applied = True
     else:
@@ -1635,30 +1663,44 @@ def synthesize_segment(
             position=seg.position or 0,
             fmt="wav",
         )
-        wav_path.write_bytes(audio_bytes)
         new_rel = wav_path.relative_to(assets.settings.segmented_dir).as_posix()
+        _preserve_current_before_replace(wav_path, new_rel)
+        tmp_wav = wav_path.with_suffix(".wav.tmp")
+        try:
+            tmp_wav.write_bytes(audio_bytes)
+            tmp_wav.replace(wav_path)
+        finally:
+            try:
+                tmp_wav.unlink()
+            except FileNotFoundError:
+                pass
         audio_format = "wav"
         duration_sec = _duration_from_bytes(audio_bytes, "wav") if audio_bytes else None
 
-    if not adjust_applied and not keep_previous and prev_rel:
+    if (
+        not adjust_applied
+        and not keep_previous
+        and old_current_abs is not None
+        and old_current_path != new_rel
+    ):
         try:
-            (assets.settings.segmented_dir / prev_rel).unlink()
+            old_current_abs.unlink()
         except FileNotFoundError:
             pass
-        prev_rel = None
-        prev_origin = None
+        previous_rel = None
+        previous_origin = None
 
     update_segment_after_synth(
         db,
         seg,
         current_audio_path=new_rel,
-        previous_audio_path=prev_rel,
-        previous_duration_sec=prev_duration,
+        previous_audio_path=previous_rel,
+        previous_duration_sec=previous_duration,
         audio_format=audio_format,
         duration_sec=duration_sec,
         generated_params=effective,
         current_origin="tts",
-        previous_origin=prev_origin,
+        previous_origin=previous_origin,
     )
     # Phase 3 用量计量：kind='tts'，chars=合成文本字符数（best-effort，不抛出）。
     # local 单租户，service 只有 db，直接用 Local 实现（workers 走

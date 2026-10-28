@@ -425,6 +425,19 @@
   color: white;
 }
 
+.compactSynthBadge {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-info) 14%, var(--color-surface));
+  color: var(--color-info);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
 .compactPlayBtn:hover {
   background: var(--color-success);
   transform: scale(1.1);

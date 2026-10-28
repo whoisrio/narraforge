@@ -50,24 +50,50 @@ describe('SegmentRow 发音映射 badge', () => {
   });
 });
 
-describe('SegmentRow 合成期间播放', () => {
-  it.each(['pending', 'queued'] as const)('%s 段保留旧音频时仍显示播放按钮', (status) => {
-    const onPlay = vi.fn();
+describe('SegmentRow 合成状态', () => {
+  it.each(['pending', 'queued'] as const)('%s 段显示合成中，而不是播放按钮', (status) => {
     const segment: Segment = {
       ...makeSegment(),
       status,
       audio: { format: 'mp3', current: { path: 'projects/p/audio/s1.mp3' } },
     };
 
-    renderRow({ segment, onPlay });
+    renderRow({ segment });
 
-    const play = screen.getByTitle('播放');
-    fireEvent.click(play);
-    expect(onPlay).toHaveBeenCalledWith('s1');
+    expect(screen.queryByTitle('播放')).toBeNull();
+    expect(screen.getByTitle('合成中...')).toBeTruthy();
   });
 
-  it('没有可播放音频时仍不显示播放按钮', () => {
-    renderRow({ segment: { ...makeSegment(), status: 'pending' } });
+  it('已完成的段仍然显示播放按钮并可播放', () => {
+    const onPlay = vi.fn();
+    const segment: Segment = {
+      ...makeSegment(),
+      status: 'ready',
+      audio: { format: 'mp3', current: { path: 'projects/p/audio/s1.mp3' } },
+    };
+
+    renderRow({ segment, onPlay });
+
+    fireEvent.click(screen.getByTitle('播放'));
+    expect(onPlay).toHaveBeenCalledWith('s1');
+    expect(screen.queryByTitle('合成中...')).toBeNull();
+  });
+
+  it('没有可播放音频且未合成时不显示播放按钮', () => {
+    renderRow({ segment: { ...makeSegment(), status: 'ready' } });
     expect(screen.queryByTitle('播放')).toBeNull();
+  });
+
+  it('展开态合成中同样不显示播放按钮', () => {
+    const segment: Segment = {
+      ...makeSegment(),
+      status: 'pending',
+      audio: { format: 'mp3', current: { path: 'projects/p/audio/s1.mp3' } },
+    };
+
+    renderRow({ segment, compact: false });
+
+    expect(screen.queryByTitle('播放')).toBeNull();
+    expect(screen.getByTitle('合成中...')).toBeTruthy();
   });
 });
