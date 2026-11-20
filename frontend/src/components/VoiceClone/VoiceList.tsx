@@ -153,16 +153,22 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
     if (!selectedVoice) return;
     setRegisteringId(selectedVoice.id);
     try {
-      const result = await fetch(apiUrl('/clone/create-clone'), {
+      // 后端 RegisterRequest 期待 profile_id（历史误传 voice_id 导致恒 422）
+      const resp = await fetch(apiUrl('/clone/create-clone'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          voice_id: selectedVoice.id,
+          profile_id: selectedVoice.id,
           name: registerName,
           role: registerRole,
         }),
-      }).then(r => r.json());
+      });
+      if (!resp.ok) {
+        toast.error(t('voiceList.registrationFailed'));
+        return;
+      }
+      const result = await resp.json();
       setRegisterResult(result);
       fetchVoices();
       triggerRefresh();
