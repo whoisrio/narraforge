@@ -51,13 +51,6 @@ async def get_tts_service(db=None):
     return await _get_tts_service(db)
 
 
-def is_qiniu_configured(db=None) -> bool:
-    """延迟 import qiniu_service（保留 patch 点，见上）。"""
-    from app.services.qiniu_service import is_qiniu_configured as _impl
-
-    return _impl(db)
-
-
 def _enforce_designed_voice_quota(request: Request, repo: VoiceProfileRepository) -> None:
     """每用户设计音色配额（workers 模式，仅普通登录用户）。
 
@@ -85,13 +78,6 @@ def _enforce_designed_voice_quota(request: Request, repo: VoiceProfileRepository
                 "message": "每位用户限保存一个设计音色，可删除已有设计音色后再新建",
             },
         )
-
-
-def upload_to_qiniu(local_file_path: str, key: str, db=None) -> str:
-    """延迟 import qiniu_service（保留 patch 点，见上）。"""
-    from app.services.qiniu_service import upload_to_qiniu as _impl
-
-    return _impl(local_file_path, key, db=db)
 
 
 def _resolve(db_path: str | None) -> str | None:
@@ -512,56 +498,41 @@ async def upload_voice_from_storage(
 
 @local_router.post("/create-clone", response_model=VoiceProfileOut)
 async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
-    """注册克隆声音 - 调用千问 API（workers 模式不挂载）"""
+    """注册克隆声音 - 本地音频 base64 直传 voice-enrollment API（workers 模式不挂载）
+
+    音频无需公网 URL：后端直接读取本地存储的源音频，编码为 Base64 Data URI
+    调用新式 voice-enrollment 定制端点注册，成功后落库 voice_id/target_model。
+    """
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    # 优先使用外部音频 URL（如果有），否则上传本地文件到七牛云
     vp = dict(voice.voice_params or {})
     model = (voice.voice or {}).get("model", "")
     model_vp = dict(vp.get(model, {}) or {})
-    ext_audio_url = model_vp.get("params", {}).get("external_audio_url")
-    if not ext_audio_url:
-        resolved_src = _resolve(model_vp.get("source_audio_path", ""))
-        if not resolved_src:
-            raise HTTPException(status_code=404, detail="Audio file not found")
-        if not is_qiniu_configured(db):
-            raise HTTPException(
-                status_code=500,
-                detail="Qiniu not configured; cannot generate public URL for cloning",
-            )
-        try:
-            key = os.path.basename(resolved_src)
-            qiniu_url = upload_to_qiniu(resolved_src, key, db=db)
-            model_vp.setdefault("params", {})["external_audio_url"] = qiniu_url
-            audio_path_for_clone = qiniu_url
-        except RuntimeError as e:
-            raise HTTPException(status_code=500, detail=f"Qiniu upload failed: {e}")
-    else:
-        audio_path_for_clone = ext_audio_url
-
-    logger.info(f"Using external audio URL for cloning: {audio_path_for_clone}")
+    resolved_src = _resolve(model_vp.get("source_audio_path", ""))
+    if not resolved_src:
+        raise HTTPException(status_code=404, detail="Audio file not found")
 
     try:
         tts_service = await get_tts_service(db)
 
-        # 调用千问声音克隆 API 进行注册
+        # 调用千问声音克隆 API 进行注册（service 层自动选择 base64 直传路径）
         result = await tts_service.register_cloned_voice(
-            reference_audio_path=audio_path_for_clone,
+            reference_audio_path=resolved_src,
             voice_name=request.name or voice.name,
         )
 
         # 更新数据库
-        new_vp = {}
         new_model_vp = dict(model_vp)
         new_model_vp.setdefault("params", {})
         new_model_vp["params"]["voice_id"] = result["voice_id"]
-        if audio_path_for_clone and audio_path_for_clone != ext_audio_url:
-            new_model_vp["params"]["external_audio_url"] = audio_path_for_clone
+        if result.get("target_model"):
+            new_model_vp["params"]["target_model"] = result["target_model"]
+        new_model_vp["params"]["enrollment_method"] = result.get("enrollment_method", "base64")
         if request.engine_params:
             new_model_vp["params"].update(request.engine_params)
-        new_vp["cosyvoice"] = new_model_vp
+        new_vp = {**vp, "cosyvoice": new_model_vp}
         voice.voice = {"model": "cosyvoice", "voice_type": "clone"}
         voice.voice_params = new_vp
 

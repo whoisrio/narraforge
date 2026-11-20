@@ -1,7 +1,6 @@
 """Voice Clone API 集成测试"""
 import os
 import tempfile
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -175,7 +174,7 @@ class TestCloneAPI:
         assert response.status_code == 404
 
     def test_create_clone_success(self, client: TestClient, db_session, mock_tts_service):
-        """测试创建克隆声音成功：本地音频会先上传为公网 URL，再注册到 Qwen。"""
+        """测试创建克隆声音成功：本地音频 base64 直传注册，无需公网 URL/七牛。"""
         import uuid
 
         from app.models.voice_profile import VoiceProfile
@@ -196,13 +195,6 @@ class TestCloneAPI:
         db_session.add(voice)
         db_session.commit()
 
-        mock_tts_service.register_cloned_voice.return_value = {
-            "voice_id": "qwen_cloned_123",
-            "voice_name": "Cloned Voice",
-            "role": "custom"
-        }
-
-        public_url = "https://cdn.example.com/clone.wav"
         request_data = {
             "profile_id": voice_id,
             "name": "Cloned Voice Name",
@@ -210,29 +202,69 @@ class TestCloneAPI:
             "engine_params": {"speed": 1, "language": "Chinese", "volume": 80}
         }
 
-        with patch("app.api.clone.is_qiniu_configured", return_value=True), \
-             patch("app.api.clone.upload_to_qiniu", return_value=public_url):
-            response = client.post("/api/clone/create-clone", json=request_data)
+        response = client.post("/api/clone/create-clone", json=request_data)
 
         assert response.status_code == 200
         data = response.json()
 
         assert data["id"] == voice_id
         assert data["name"] == "Cloned Voice Name"
-        assert data["voice_params"]["cosyvoice"]["params"]["voice_id"] == "qwen_cloned_123"
         assert data["voice"]["model"] == "cosyvoice"
         assert data["voice"]["voice_type"] == "clone"
 
-        # 验证 voice_params 正确写入
+        # 验证 voice_params 正确写入（含注册元数据）
         vp_params = data["voice_params"]["cosyvoice"]["params"]
+        assert vp_params["voice_id"] == "test_cloned_voice_123"
+        assert vp_params["target_model"] == "cosyvoice-v3.5-plus"
+        assert vp_params["enrollment_method"] == "base64"
         assert vp_params["speed"] == 1
         assert vp_params["language"] == "Chinese"
         assert vp_params["volume"] == 80
 
+        # 注册调用应使用本地音频路径（base64 直传），而非公网 URL
         mock_tts_service.register_cloned_voice.assert_called_once_with(
-            reference_audio_path=public_url,
+            reference_audio_path=audio_path,
             voice_name="Cloned Voice Name"
         )
+
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_create_clone_failure_keeps_upload_state(self, client: TestClient, db_session, mock_tts_service):
+        """注册失败 → 500（错误信息含 voice_id），profile 保持「已上传未注册」可重试。"""
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"clone_fail_{voice_id}.wav")
+
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        voice = VoiceProfile(
+            id=voice_id,
+            name="Fail Case",
+            voice={"model": "", "voice_type": "upload"},
+            voice_params={"": {"source_audio_path": audio_path}},
+        )
+
+        db_session.add(voice)
+        db_session.commit()
+
+        mock_tts_service.register_cloned_voice.side_effect = Exception(
+            "Voice processing failed with status 'UNDEPLOYED' (voice_id=voice-x)"
+        )
+
+        response = client.post("/api/clone/create-clone", json={"profile_id": voice_id})
+
+        assert response.status_code == 500
+        # 错误中间件将 detail 重塑为 {detail: {code, message}}，voice_id 需可追溯
+        assert "voice-x" in response.json()["detail"]["message"]
+
+        refreshed = client.get(f"/api/clone/{voice_id}").json()
+        assert refreshed["voice"]["voice_type"] == "upload"
+        assert refreshed["voice"]["model"] == ""
 
         if os.path.exists(audio_path):
             os.unlink(audio_path)
