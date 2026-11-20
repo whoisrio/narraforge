@@ -4,6 +4,7 @@ import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../../types';
 import { ttsApi, voiceApi, mimoTtsApi, voxcpmApi, apiErrorCode } from '../../services/api';
 import { fetchVoiceRolePreview, synthesizeVoiceRolePreview } from '../../services/voiceRolePreview';
 import { useVoiceRefresh } from '../../hooks/useVoiceRefresh';
+import { useCapabilities } from '../../hooks/useCapabilities';
 import { DEFAULT_EDGE_CAST_VOICE, DEFAULT_EDGE_NARRATOR_VOICE } from '../../services/voiceRoleDefaults';
 import { VoiceAvatar } from '../ui/VoiceAvatar';
 import { ImageUploadZone } from '../ui/ImageUploadZone';
@@ -189,6 +190,10 @@ function VoiceRoleEditor({
   );
   const [cloneInputMethod, setCloneInputMethod] = useState<'record' | 'upload' | 'url'>('record');
   const [clonePendingFile, setClonePendingFile] = useState<File | null>(null);
+  // Qwen 目标 TTS 模型（音色注册时永久绑定；预选全局默认）
+  const { qwen_target_models: qwenTargetModels, qwen_default_model: qwenDefaultModel } = useCapabilities();
+  const [qwenTargetModel, setQwenTargetModel] = useState('');
+  const effectiveQwenTargetModel = qwenTargetModel || qwenDefaultModel || qwenTargetModels?.[0] || '';
 
   // 音色设计流程状态
   const [designSubEngine, setDesignSubEngine] = useState<'mimo' | 'voxcpm'>(
@@ -594,7 +599,16 @@ function VoiceRoleEditor({
     const v = draft.voice;
     if (engine === 'qwen') {
       const cv = v?.engine === 'qwen' ? v as QwenParams : undefined;
-      return { speed: cv?.speed ?? 1, volume: cv?.volume ?? 80, pitch: cv?.pitch ?? 1, language: cv?.language || 'Chinese', instruction: cv?.instruction || '', input_method: cloneInputMethod };
+      const effectiveTargetModel = effectiveQwenTargetModel;
+      return {
+        speed: cv?.speed ?? 1,
+        volume: cv?.volume ?? 80,
+        pitch: cv?.pitch ?? 1,
+        language: cv?.language || 'Chinese',
+        instruction: cv?.instruction || '',
+        input_method: cloneInputMethod,
+        ...(effectiveTargetModel ? { target_model: effectiveTargetModel } : {}),
+      };
     }
     if (engine === 'mimo') {
       const mv = v?.engine === 'mimo_tts' ? v as MiMoParams : undefined;
@@ -873,9 +887,65 @@ function VoiceRoleEditor({
                     </div>
                   </div>
 
-                  {/* CosyVoice 克隆 */}
+                  {/* Qwen 克隆：目标模型选择 + 录音/上传/URL 三种输入 */}
                   {cloneSubEngine === 'qwen' && (
                     <>
+                      <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
+                        <div className={styles.enginePills} style={{ marginBottom: '0.5rem' }}>
+                          {(['record', 'upload', 'url'] as const).map(m => (
+                            <button key={m} type="button"
+                              className={`${styles.enginePill} ${cloneInputMethod === m ? styles.enginePillActive : ''}`}
+                              onClick={() => { setCloneInputMethod(m); setClonePendingFile(null); }}>
+                              {m === 'record' ? t('common.record') : m === 'upload' ? t('common.upload') : 'URL'}
+                            </button>
+                          ))}
+                          {(qwenTargetModels?.length ?? 0) > 0 && (
+                            <select
+                              aria-label={t('voiceClone.targetModel')}
+                              value={effectiveQwenTargetModel}
+                              onChange={(e) => setQwenTargetModel(e.target.value)}
+                              style={{ marginLeft: 'auto', padding: '0.25rem 0.5rem' }}
+                            >
+                              {qwenTargetModels?.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+
+                      {cloneInputMethod === 'record' && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          {clonePendingFile ? (
+                            <AudioPreview
+                              file={clonePendingFile}
+                              engine="qwen"
+                              projectId={projectId}
+                              engineParams={cloneEngineParams('qwen')}
+                              onCloneSuccess={() => handleCloneSuccess('qwen')}
+                              onCancel={() => { setClonePendingFile(null); setCloneInputMethod('record'); }}
+                            />
+                          ) : (
+                            <AudioRecorder onRecordComplete={file => setClonePendingFile(file)} />
+                          )}
+                        </div>
+                      )}
+
+                      {cloneInputMethod === 'upload' && (
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <AudioUploader onFileSelected={file => setClonePendingFile(file)} />
+                          {clonePendingFile && (
+                            <AudioPreview
+                              file={clonePendingFile}
+                              engine="qwen"
+                              projectId={projectId}
+                              engineParams={cloneEngineParams('qwen')}
+                              onCloneSuccess={() => handleCloneSuccess('qwen')}
+                              onCancel={() => { setClonePendingFile(null); setCloneInputMethod('record'); }}
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {cloneInputMethod === 'url' && (
                       <div style={{ gridColumn: '1 / -1' }}>
                         {cloneOriginalAudioSrc && !clonePendingFile ? (
                           <div style={{ padding: '0.75rem', border: '1px solid var(--color-border)', borderRadius: '8px' }}>
@@ -900,6 +970,7 @@ function VoiceRoleEditor({
                           />
                         )}
                       </div>
+                      )}
 
                       <label className={styles.paramField}>{t('tts.speed')}
                         <input className={styles.range} aria-label={t('tts.speed')} type="range" min={0.5} max={2} step={0.01} value={(vox as QwenParams).speed ?? 1} onChange={(event) => setParams({ speed: Number(event.target.value) })} />
