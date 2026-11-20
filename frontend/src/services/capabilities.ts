@@ -19,13 +19,19 @@ export interface Capabilities {
     /** 克隆音频直传 Supabase Storage（workers=true；local=false 走 multipart 上传） */
     direct_storage_upload: boolean;
   };
+  /** Qwen 音色注册可选的目标 TTS 模型（音色创建时永久绑定） */
+  qwen_target_models?: string[];
+  /** 当前全局默认目标模型（下拉框预选值） */
+  qwen_default_model?: string;
 }
 
 /** 本地全量能力：探测失败或未包 Provider 时的默认值（本地开发体验不变）。 */
 export const LOCAL_CAPABILITIES: Capabilities = {
   deploy_target: 'local',
-  engines: ['edge_tts', 'mimo_tts', 'cosyvoice', 'voxcpm', 'indextts'],
+  engines: ['edge_tts', 'mimo_tts', 'qwen', 'voxcpm', 'indextts'],
   clone_engines: ['qwen', 'mimo', 'voxcpm'],
+  qwen_target_models: [],
+  qwen_default_model: '',
   features: { speech_to_text: true, agent_workflow: true, backend_storage: true, direct_storage_upload: false },
 };
 

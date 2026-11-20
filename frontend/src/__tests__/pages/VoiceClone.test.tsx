@@ -43,8 +43,8 @@ describe('VoiceClone Page', () => {
         id: 'voice-1',
         name: '我的声音',
         has_preview: true,
-        voice: { model: 'cosyvoice', voice_type: 'clone' },
-        voice_params: { cosyvoice: { params: { voice_id: 'qwen-1' } } },
+        voice: { model: 'qwen', voice_type: 'clone' },
+        voice_params: { qwen: { params: { voice_id: 'qwen-1' } } },
         created_at: new Date().toISOString(),
       },
     ];
@@ -86,8 +86,8 @@ describe('VoiceClone Page', () => {
         id: 'voice-1',
         name: '测试声音',
         has_preview: true,
-        voice: { model: 'cosyvoice', voice_type: 'clone' },
-        voice_params: { cosyvoice: { params: {} } },
+        voice: { model: 'qwen', voice_type: 'clone' },
+        voice_params: { qwen: { params: {} } },
         created_at: new Date().toISOString(),
       },
     ];
@@ -140,8 +140,8 @@ describe('VoiceClone Page', () => {
         id: 'voice-del',
         name: '删除测试',
         has_preview: true,
-        voice: { model: 'cosyvoice', voice_type: 'clone' },
-        voice_params: { cosyvoice: { params: {} } },
+        voice: { model: 'qwen', voice_type: 'clone' },
+        voice_params: { qwen: { params: {} } },
         created_at: new Date().toISOString(),
       },
     ];

@@ -83,7 +83,7 @@ function fmtTime(sec: number): string {
 }
 
 const ENGINE_LABELS: Record<string, string> = {
-  cosyvoice: 'CosyVoice', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM', indextts: 'IndexTTS-2.5',
+  qwen: 'Qwen', edge_tts: 'Edge-TTS', mimo_tts: 'MiMo', voxcpm: 'VoxCPM', indextts: 'IndexTTS-2.5',
 };
 
 const EMOTION_LABELS: Record<EmotionType, string> = {
@@ -182,7 +182,7 @@ export function SegmentRow({
   // effectiveEngine: what engine this segment WOULD use right now
   const effectiveEngine = segment.voice.source === 'custom'
     ? segment.voice.engine
-    : (resolvedRole?.voice?.engine || engine || 'cosyvoice');
+    : (resolvedRole?.voice?.engine || engine || 'qwen');
 
   // Resolve voice display from the VoiceSource discriminated union
   const resolveVoiceDisplay = (): { engine: string; voice: string } => {

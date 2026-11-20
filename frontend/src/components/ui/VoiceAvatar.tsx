@@ -17,7 +17,7 @@ interface VoiceAvatarProps {
 
 const ENGINE_COLORS: Record<string, string> = {
   edge_tts: '#6366f1',
-  cosyvoice: '#f59e0b',
+  qwen: '#f59e0b',
   mimo_tts: '#10b981',
   voxcpm: '#ec4899',
   indextts: '#14b8a6',

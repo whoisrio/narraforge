@@ -7,7 +7,7 @@ function makeChapter(overrides: Partial<Chapter> = {}): Chapter {
   const now = new Date().toISOString();
   return {
     id: 'ch1', name: '第一章',
-    voice: { engine: 'cosyvoice', voice_id: '', speed: 1, volume: 80, pitch: 1, language: 'Chinese' },
+    voice: { engine: 'qwen', voice_id: '', speed: 1, volume: 80, pitch: 1, language: 'Chinese' },
     segments: [],
     split_config: { delimiters: ['，', '。'], mode: 'rule' },
     created_at: now, updated_at: now,
@@ -532,7 +532,7 @@ describe('segmentedReducer', () => {
     const v1: any = {
       voice: { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' },
       schema_version: 1, id: 'old', name: 'Old Project',
-      segments: [{ id: 's1', text: 'hello', params: { engine: 'cosyvoice' }, status: 'idle', created_at: '', updated_at: '' }],
+      segments: [{ id: 's1', text: 'hello', params: { engine: 'qwen' }, status: 'idle', created_at: '', updated_at: '' }],
       split_config: { delimiters: ['，'], mode: 'rule' },
       created_at: '', updated_at: '',
     };

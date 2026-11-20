@@ -42,7 +42,7 @@ import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useAuth } from '../hooks/authContext';
 import { isAuthRequired } from '../services/auth';
 import { getAccessToken } from '../services/authSession';
-import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, CosyVoiceParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms, PronunciationMapEntry, SegmentVerification, VerifyRunRecord } from '../types';
+import type { TTSRequest, TTSResult, VoiceProfile, SegmentedProject, Chapter, Segment, EngineParams, EdgeTTSParams, QwenParams, MiMoParams, VoxCPMParams, IndexTTSParams, Role, RoleSnapshot, SegmentKind, SegmentTextTransforms, PronunciationMapEntry, SegmentVerification, VerifyRunRecord } from '../types';
 import { segEffectiveParams, segHasOverride } from '../services/segmentShims';
 import { applyEngineTextCleaning } from '../services/styleTags';
 import { mergePronunciationMaps, resolveSegmentEngineText } from '../services/textTransforms';
@@ -88,7 +88,7 @@ const ProjectSettings = lazy(() =>
   import('../components/ProjectSettings/ProjectSettings').then(({ ProjectSettings }) => ({ default: ProjectSettings })),
 );
 
-type Engine = 'cosyvoice' | 'edge_tts' | 'mimo_tts' | 'voxcpm' | 'indextts';
+type Engine = 'qwen' | 'edge_tts' | 'mimo_tts' | 'voxcpm' | 'indextts';
 
 /** 将角色 voice (EngineParams) 转换为 old flat 字段名，供 handleRegenerate 内部使用 */
 const SCRATCHPAD_PROJECT_ID = '__scratchpad__';
@@ -658,9 +658,9 @@ export function TTSSynthesis({
       setEdgeVoice((v as EdgeTTSParams).voice || '');
       setEdgeRate(parseFloat((v as EdgeTTSParams).rate) || 0);
       setEdgeVolume(parseFloat((v as EdgeTTSParams).volume) || 0);
-    } else if (engine === 'cosyvoice') {
-      setSelectedVoiceId((v as CosyVoiceParams).voice_id || '');
-      setParams({ language: ((v as CosyVoiceParams).language || 'Chinese') as TTSRequest['language'], speed: (v as CosyVoiceParams).speed ?? 1.0, volume: (v as CosyVoiceParams).volume ?? 80, pitch: (v as CosyVoiceParams).pitch ?? 1.0 });
+    } else if (engine === 'qwen') {
+      setSelectedVoiceId((v as QwenParams).voice_id || '');
+      setParams({ language: ((v as QwenParams).language || 'Chinese') as TTSRequest['language'], speed: (v as QwenParams).speed ?? 1.0, volume: (v as QwenParams).volume ?? 80, pitch: (v as QwenParams).pitch ?? 1.0 });
     } else if (engine === 'mimo_tts') {
       setMimoMode(((v as MiMoParams).mode || 'preset') as MiMoMode);
       setMimoPresetVoice((v as MiMoParams).voice_id || t('tts.defaultMimoPresetVoice'));
@@ -1207,7 +1207,7 @@ export function TTSSynthesis({
       return { engine: 'indextts', voice_id: selectedVoiceId, lang: indexttsLang, emo_alpha: indexttsEmoAlpha, duration_factor: indexttsDurationFactor, mute_tags: muteTags, underscore_to_space: underscoreToSpace, skip_parenthesized: skipParenthesized } as IndexTTSParams;
     }
     return {
-      engine: 'cosyvoice', voice_id: selectedVoiceId,
+      engine: 'qwen', voice_id: selectedVoiceId,
       instruction: params.instruction || '', speed: params.speed ?? 1.0, volume: params.volume ?? 80,
       pitch: params.pitch ?? 1.0, language: params.language || 'Chinese',
       enable_ssml: params.enable_ssml ?? false, enable_markdown_filter: params.enable_markdown_filter ?? false,
@@ -1248,7 +1248,7 @@ export function TTSSynthesis({
       const voiceId = (v.voice_params?.[v.voice?.model || '']?.params as Record<string, unknown>)?.voice_id as string | undefined;
       return (voiceId || v.id) === selectedVoiceId;
     });
-    return { name: vObj?.name || t('tts.cosyVoiceVoice'), source: 'global', voice_id: selectedVoiceId, engine: 'cosyvoice' };
+    return { name: vObj?.name || t('tts.cosyVoiceVoice'), source: 'global', voice_id: selectedVoiceId, engine: 'qwen' };
   }, [engine, selectedVoiceId, voices, edgeVoice, mimoMode, mimoPresetVoice, mimoCloneVoiceId, t]);
 
   const resetGlobalSettings = useCallback(() => {
@@ -1954,7 +1954,7 @@ export function TTSSynthesis({
         effectiveIndexttsEmoAlpha = x.emo_alpha ?? 1.0;
         effectiveIndexttsDurationFactor = x.duration_factor ?? 1.0;
       } else {
-        const c = effectiveParams as CosyVoiceParams;
+        const c = effectiveParams as QwenParams;
         voiceId = c.voice_id || '';
         speed = c.speed ?? 1.0;
         volume = c.volume ?? 80;
@@ -2148,7 +2148,7 @@ export function TTSSynthesis({
         resp = await indexttsApi.tts({ text: textForEngine, voice_id: voiceId ?? '', lang: effectiveIndexttsLang, emo_alpha: effectiveIndexttsEmoAlpha, duration_factor: effectiveIndexttsDurationFactor, format: 'wav' });
       } else {
         // 原代码引用了未定义的 sp；按上下文恢复为 cosyvoice 的 effectiveParams（该分支原本会因 ReferenceError 崩溃）
-        const sp = effectiveParams as CosyVoiceParams;
+        const sp = effectiveParams as QwenParams;
         resp = await ttsApi.synthesize({ text: textForEngine, voice_id: voiceId ?? '', language: (language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean', speed: speed ?? 1.0, volume: volume ?? 80, pitch: pitch ?? 1.0, instruction: instruction ?? '', enable_ssml: sp.enable_ssml ?? false, enable_markdown_filter: sp.enable_markdown_filter ?? false, format: 'mp3' });
       }
       if (!resp.audio_base64) throw new Error('No audio returned');
@@ -2458,7 +2458,7 @@ export function TTSSynthesis({
   }, []);
 
   const handleAnnotateSSML = useCallback(async (idsArg?: string[]) => {
-    const ids = idsArg ?? activeChapter.segments.filter(s => (segEffectiveParams(s).engine as string) === 'cosyvoice').map(s => s.id);
+    const ids = idsArg ?? activeChapter.segments.filter(s => (segEffectiveParams(s).engine as string) === 'qwen').map(s => s.id);
     const targetSegs = activeChapter.segments.filter(s => ids.includes(s.id));
     if (!targetSegs.length) return;
     try {
@@ -2866,7 +2866,7 @@ export function TTSSynthesis({
                       availableEngines={capabilities.engines}
                       onChange={(next: EngineId) => setEngine(next)}
                     />
-                    {engine === 'cosyvoice' ? (
+                    {engine === 'qwen' ? (
                       <GlobalControlBar
                         voices={voices} selectedVoiceId={selectedVoiceId} onVoiceSelect={setSelectedVoiceId}
                         speed={params.speed ?? 1.0} volume={params.volume ?? 80} pitch={params.pitch ?? 1.0} language={params.language || 'Chinese'}
@@ -3037,7 +3037,7 @@ export function TTSSynthesis({
                   {activeChapter.segments.length} {t('projectOverview.segments')} · {activeChapter.segments.reduce((a, s) => a + (s.audio.duration_sec ?? 0), 0).toFixed(1)}s
                   {activeChapter.segments.filter(s => s.status === 'ready').length > 0 && ` · ${activeChapter.segments.filter(s => s.status === 'ready').length}/${activeChapter.segments.length} ${t('projectOverview.generated')}`}
                 </span>
-                {engine === 'cosyvoice' && (
+                {engine === 'qwen' && (
                   <button className={styles.segmentedActionBtn} onClick={() => handleAnnotateSSML()}>{t('tts.annotate')}</button>
                 )}
               </div>

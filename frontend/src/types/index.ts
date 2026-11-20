@@ -37,7 +37,7 @@ export function voiceSourceAudioUrl(voiceId: string): string {
 }
 
 export interface VoiceProfileVoice {
-  model: 'edge_tts' | 'cosyvoice' | 'mimo_tts' | 'voxcpm';
+  model: 'edge_tts' | 'qwen' | 'mimo_tts' | 'voxcpm';
   voice_type: 'preset' | 'clone' | 'design';
 }
 
@@ -82,8 +82,8 @@ export interface MiMoParams {
   skip_parenthesized?: boolean;
 }
 
-export interface CosyVoiceParams {
-  engine: 'cosyvoice';
+export interface QwenParams {
+  engine: 'qwen';
   voice_id: string;
   instruction?: string;
   ssml?: string;
@@ -134,7 +134,7 @@ export interface IndexTTSParams {
   skip_parenthesized?: boolean;
 }
 
-export type EngineParams = EdgeTTSParams | MiMoParams | CosyVoiceParams | VoxCPMParams | IndexTTSParams;
+export type EngineParams = EdgeTTSParams | MiMoParams | QwenParams | VoxCPMParams | IndexTTSParams;
 
 // ── Voice source for segments ──
 
@@ -191,7 +191,7 @@ export interface MiMoPresetVoice {
 // TTS Request params
 export interface TTSRequest {
   text: string;
-  engine?: 'cosyvoice' | 'edge_tts';
+  engine?: 'qwen' | 'edge_tts';
   voice_id: string;
   language?: 'Chinese' | 'English' | 'Japanese' | 'Korean';
   speed?: number; // 0.5 - 2.0

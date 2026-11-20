@@ -7,7 +7,7 @@ export const DEFAULT_EDGE_CAST_VOICE = 'zh-CN-YunyangNeural';
 
 function hasUsableVoice(params: EngineParams): boolean {
   if (params.engine === 'edge_tts') return Boolean((params as EdgeTTSParams).voice?.trim());
-  if (params.engine === 'cosyvoice') return Boolean(params.voice_id?.trim());
+  if (params.engine === 'qwen') return Boolean(params.voice_id?.trim());
   if (params.engine === 'mimo_tts') {
     const mode = (params as MiMoParams).mode ?? 'preset';
     if (mode === 'voiceclone') return Boolean(params.voice_id?.trim());

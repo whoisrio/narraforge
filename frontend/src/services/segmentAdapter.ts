@@ -7,7 +7,7 @@
  * 使用 resolveEffectiveVoice() 和 isAudioStale() 作为核心引擎。
  */
 
-import type { EngineParams, Segment, Role, CosyVoiceParams, EdgeTTSParams, MiMoParams, VoxCPMParams, IndexTTSParams } from '../types';
+import type { EngineParams, Segment, Role, QwenParams, EdgeTTSParams, MiMoParams, VoxCPMParams, IndexTTSParams } from '../types';
 import { resolveEffectiveVoice, isAudioStale } from './voiceResolution';
 
 /** 从 Segment 的 voice 字段提取旧式 params 对象 */
@@ -33,8 +33,8 @@ export function getSegmentEngine(seg: Segment): string {
 export function getSegmentVoiceId(seg: Segment): string {
   if (seg.voice.source === 'custom') {
     const params = seg.voice.params;
-    if (seg.voice.engine === 'cosyvoice') {
-      return (params as Partial<CosyVoiceParams>).voice_id || '';
+    if (seg.voice.engine === 'qwen') {
+      return (params as Partial<QwenParams>).voice_id || '';
     }
     if (seg.voice.engine === 'mimo_tts') {
       return (params as Partial<MiMoParams>).voice_id || '';

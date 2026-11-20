@@ -11,7 +11,7 @@ interface Props {
 
 const ENGINE_LABELS: Record<string, string> = {
   edge_tts: 'Edge-TTS',
-  cosyvoice: 'CosyVoice',
+  qwen: 'Qwen',
   mimo_tts: 'MiMo TTS',
   voxcpm: 'VoxCPM',
   indextts: 'IndexTTS-2.5',

@@ -24,7 +24,7 @@ export interface EngineStyleCapability {
 export const ENGINE_CAPABILITIES: Record<StyleTagEngine, EngineStyleCapability> = {
   mimo_tts: { inline: false, leading: true, instruction: true },
   voxcpm: { inline: true, leading: true, instruction: true },
-  cosyvoice: { inline: false, leading: false, instruction: true },
+  qwen: { inline: false, leading: false, instruction: true },
   edge_tts: { inline: false, leading: false, instruction: false },
   indextts: { inline: false, leading: false, instruction: false },
 };

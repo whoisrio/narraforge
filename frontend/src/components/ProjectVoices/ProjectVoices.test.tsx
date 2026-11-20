@@ -199,7 +199,7 @@ describe('ProjectVoices', () => {
       ...cast,
       id: 'role-cosy',
       name: 'Cosy角色',
-      voice: { engine: 'cosyvoice', voice_id: 'voice-123' },
+      voice: { engine: 'qwen', voice_id: 'voice-123' },
     };
 
     render(
@@ -215,7 +215,7 @@ describe('ProjectVoices', () => {
     expect(screen.getByText('Cosy角色')).toBeInTheDocument();
 
     // Filter to CosyVoice only
-    fireEvent.change(screen.getByDisplayValue('全部引擎'), { target: { value: 'cosyvoice' } });
+    fireEvent.change(screen.getByDisplayValue('全部引擎'), { target: { value: 'qwen' } });
 
     expect(screen.queryByText('默认旁白')).not.toBeInTheDocument();
     expect(screen.getByText('Cosy角色')).toBeInTheDocument();

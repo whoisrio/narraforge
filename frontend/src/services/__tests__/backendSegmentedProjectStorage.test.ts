@@ -51,10 +51,10 @@ describe('backendStorage', () => {
       id: 'p1', name: 'n', schema_version: 2, layout: 'vertical',
       active_chapter_id: 'ch1', created_at: 't', updated_at: 't',
       chapters: [{
-        id: 'ch1', name: '第一章', default_params: { engine: 'cosyvoice' } as Record<string, unknown>, split_config: { delimiters: [], mode: 'rule' },
+        id: 'ch1', name: '第一章', default_params: { engine: 'qwen' } as Record<string, unknown>, split_config: { delimiters: [], mode: 'rule' },
         segments: [{
           id: 's1', text: '片段',
-          voice: { source: 'custom' as const, engine: 'cosyvoice' as const, params: { voice_id: 'v1', speed: 1.2 } },
+          voice: { source: 'custom' as const, engine: 'qwen' as const, params: { voice_id: 'v1', speed: 1.2 } },
           status: 'idle',
           audio: { format: 'mp3' },
           segment_kind: 'narration',
@@ -64,7 +64,7 @@ describe('backendStorage', () => {
     };
     await backendStorage.saveProject(project);
     const payload = fakeApi.put.mock.calls[0][1];
-    expect(payload.chapters[0].segments[0].voice).toEqual({ source: 'custom', engine: 'cosyvoice', params: { voice_id: 'v1', speed: 1.2 } });
+    expect(payload.chapters[0].segments[0].voice).toEqual({ source: 'custom', engine: 'qwen', params: { voice_id: 'v1', speed: 1.2 } });
   });
 
   it('deleteProject calls DELETE /segmented-projects/{id}', async () => {

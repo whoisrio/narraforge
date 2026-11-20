@@ -36,7 +36,7 @@ describe('VoiceClone capabilities gating', () => {
     renderVoiceClone(LOCAL_CAPABILITIES);
     fireEvent.click(screen.getByRole('button', { name: '克隆声音' }));
 
-    expect(screen.getByRole('button', { name: 'CosyVoice' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Qwen' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'MiMo-TTS' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'VoxCPM' })).toBeInTheDocument();
   });
@@ -46,7 +46,7 @@ describe('VoiceClone capabilities gating', () => {
     fireEvent.click(screen.getByRole('button', { name: '克隆声音' }));
 
     expect(screen.getByRole('button', { name: 'MiMo-TTS' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'CosyVoice' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Qwen' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'VoxCPM' })).not.toBeInTheDocument();
   });
 

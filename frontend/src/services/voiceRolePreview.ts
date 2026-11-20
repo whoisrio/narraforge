@@ -29,10 +29,10 @@ export async function synthesizeVoiceRolePreview(
     });
   }
 
-  if (engine === 'cosyvoice') {
+  if (engine === 'qwen') {
     return ttsApi.synthesize({
       text: sampleText,
-      engine: 'cosyvoice',
+      engine: 'qwen',
       voice_id: (params.voice_id as string) || role.default_voice || '',
       language: ((params.language ?? 'Chinese') as 'Chinese' | 'English' | 'Japanese' | 'Korean'),
       speed: (params.speed as number) ?? 1,

@@ -25,7 +25,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
         setVoices(data);
         // 未选择声音时，自动选中第一个
         if (data.length > 0 && !selectedVoiceId) {
-          const voiceKey = (data[0].voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || data[0].id;
+          const voiceKey = (data[0].voice_params?.qwen?.params as Record<string, unknown>)?.voice_id as string || data[0].id;
           onVoiceSelect(voiceKey);
         }
       } catch (err) {
@@ -65,7 +65,7 @@ export function VoiceSelector({ selectedVoiceId, onVoiceSelect }: VoiceSelectorP
           <option value="" disabled>{t('voiceSelector.pleaseSelectVoice')}</option>
         )}
         {voices.map(voice => {
-          const voiceKey = (voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || voice.id;
+          const voiceKey = (voice.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id as string || voice.id;
           return (
             <option key={voice.id} value={voiceKey}>
               {voice.name} · 克隆

@@ -26,7 +26,7 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
   const [localSSML, setLocalSSML] = useState('');
   const [dirty, setDirty] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const isCosyVoice = segEngine(segment) === 'cosyvoice';
+  const isQwenEngine = segEngine(segment) === 'qwen';
   const eff = segEffectiveParams(segment);
 
   useEffect(() => {
@@ -65,7 +65,7 @@ function SegmentEditDrawerContent({ segment, onClose, onUpdateText, onUpdateSSML
           />
           <div className={styles.charCount}>{t('segmentEdit.charCounter', { n: localText.length })}</div>
 
-          {isCosyVoice && (
+          {isQwenEngine && (
             <>
               <div className={styles.ssmlHeader}>
                 <label className={styles.label}>{t('segment.editDrawer.ssml')}</label>

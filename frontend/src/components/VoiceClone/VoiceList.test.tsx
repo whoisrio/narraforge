@@ -12,7 +12,7 @@ vi.mock('../../services/api', async (importOriginal) => {
         {
           id: 'v1',
           name: '测试声音',
-          voice: { voice_type: 'clone', model: 'cosyvoice' },
+          voice: { voice_type: 'clone', model: 'qwen' },
           voice_params: {},
           created_at: '2026-01-01',
         },

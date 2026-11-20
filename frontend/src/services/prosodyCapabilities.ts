@@ -5,7 +5,7 @@ import { ENGINE_CAPABILITIES } from './styleTags';
 // 避免两套矩阵漂移。supportsSsml / requiresSplitFallback 是 styleTags 之外的既有语义，保持原值。
 const SSML_SUPPORT: Record<EngineParams['engine'], boolean> = {
   edge_tts: false,
-  cosyvoice: true,
+  qwen: true,
   mimo_tts: false,
   voxcpm: false,
   indextts: false,

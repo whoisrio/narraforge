@@ -28,7 +28,7 @@ type UsageState =
 
 const ENGINE_LABELS: Record<string, string> = {
   edge_tts: 'Edge-TTS',
-  cosyvoice: 'CosyVoice',
+  qwen: 'Qwen',
   mimo_tts: 'MiMo',
   voxcpm: 'VoxCPM',
   indextts: 'IndexTTS-2.5',
@@ -101,7 +101,7 @@ function RolePreviewButton({ role }: { role: Role }) {
       const v = role.voice as unknown as Record<string, unknown>;
       const engine = (v?.engine as string) ?? 'edge_tts';
       let voiceId = '';
-      if (engine === 'cosyvoice' || engine === 'mimo_tts' || engine === 'voxcpm' || engine === 'indextts') {
+      if (engine === 'qwen' || engine === 'mimo_tts' || engine === 'voxcpm' || engine === 'indextts') {
         voiceId = (v as { voice_id?: string }).voice_id ?? '';
       }
 
@@ -137,7 +137,7 @@ function RolePreviewButton({ role }: { role: Role }) {
         } else {
           const params = (v as { voice_id?: string; speed?: number; volume?: number; pitch?: number }) || {};
           resp = await ttsApi.synthesize({
-            text, engine: engine as 'cosyvoice', voice_id: params.voice_id || '',
+            text, engine: engine as 'qwen', voice_id: params.voice_id || '',
             speed: params.speed ?? 1, volume: params.volume ?? 80,
             pitch: params.pitch ?? 1, format: 'mp3',
           }) as { audio_base64: string; audio_format: string };

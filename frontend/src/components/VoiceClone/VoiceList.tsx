@@ -62,7 +62,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
         if (v.voice?.voice_type !== 'clone') return false;
         if (engine === 'mimo') return v.voice?.model === 'mimo_tts';
         if (engine === 'voxcpm') return v.voice?.model === 'voxcpm';
-        return v.voice?.model === 'cosyvoice' || (!v.voice?.model && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
+        return v.voice?.model === 'qwen' || (!v.voice?.model && (v.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id);
       });
       setVoices(cloned);
     } catch (err) {
@@ -303,7 +303,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
     <div>
       <div style={headerStyle}>
         <h3 style={h3Style}>
-          🎤 {engine === 'mimo' ? t('voiceList.titleMiMo') : engine === 'voxcpm' ? t('voiceList.titleVoxCPM') : t('voiceList.titleCosyVoice')}
+          🎤 {engine === 'mimo' ? t('voiceList.titleMiMo') : engine === 'voxcpm' ? t('voiceList.titleVoxCPM') : t('voiceList.titleQwen')}
         </h3>
         <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
           {/* Sync from Qwen 仅在 CosyVoice 模式下显示 */}
@@ -387,7 +387,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <div style={voiceNameStyle}>
-                          {voice.name || ((voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string) || 'N/A'}
+                          {voice.name || ((voice.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id as string) || 'N/A'}
                         </div>
                         {voice.voice?.model && (
                           <span style={engineBadgeStyle(voice.voice.model)}>
@@ -513,7 +513,7 @@ export function VoiceList({ engine = 'qwen', onRefresh }: VoiceListProps) {
       >
         <p style={{ marginBottom: 'var(--spacing-sm)' }}>
           {deleteTarget === null
-            ? t('voiceList.confirmDeleteAll', { engine: engine === 'mimo' ? 'MiMo' : 'CosyVoice' })
+            ? t('voiceList.confirmDeleteAll', { engine: engine === 'mimo' ? 'MiMo' : 'Qwen' })
             : t('voiceList.confirmDeleteSingle', { name: voices.find(v => v.id === deleteTarget)?.name || deleteTarget })}
         </p>
         <p style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--font-size-sm)' }}>

@@ -8,7 +8,7 @@ import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
 import { voiceApi, ttsApi, apiErrorCode } from '../services/api';
-import { isCloudSyncedVoice, isManageableVoice, SYNTH_AUDITION_TEXT } from './voiceManageability';
+import { isCloudSyncedVoice, isManageableVoice, SYNTH_AUDITION_TEXT, voiceTargetModel, voiceTargetModelShort } from './voiceManageability';
 import { useToast } from '../components/ui/useToast';
 import { VoiceAvatar } from '../components/ui/VoiceAvatar';
 import { Modal } from '../components/ui/Modal';
@@ -39,7 +39,7 @@ function engineLabel(profile: VoiceProfile): string {
   const model = profile.voice?.model;
   if (model === 'mimo_tts') return 'MiMo';
   if (model === 'voxcpm') return 'VoxCPM';
-  if (model === 'cosyvoice') return 'CosyVoice';
+  if (model === 'qwen') return 'CosyVoice';
   if (model === 'edge_tts') return 'Edge-TTS';
   return 'Unknown';
 }
@@ -47,7 +47,7 @@ function engineLabel(profile: VoiceProfile): string {
 export function VoiceClone() {
   const { t } = useTranslation();
   const toast = useToast();
-  const { clone_engines: availableCloneEngines } = useCapabilities();
+  const { clone_engines: availableCloneEngines, qwen_target_models: qwenTargetModels, qwen_default_model: qwenDefaultModel } = useCapabilities();
   // ---- 声音列表 ----
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(true);
@@ -60,6 +60,8 @@ export function VoiceClone() {
   const [cloneStep, setCloneStep] = useState<CloneStep>('choose-method');
   const [cloneMethod, setCloneMethod] = useState<InputMethod>(null);
   const [cloneEngine, setCloneEngine] = useState<CloneEngine>('qwen');
+  // Qwen 目标 TTS 模型（音色创建时永久绑定；预选全局默认，编辑流预选已绑定值）
+  const [targetModel, setTargetModel] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [urlVoice, setUrlVoice] = useState<VoiceProfile | null>(null);
 
@@ -142,6 +144,8 @@ export function VoiceClone() {
   // ---- 编辑/删除 ----
   const handleStartEdit = (voice: VoiceProfile) => {
     setEditingVoice(voice);
+    // 编辑/替换已有 Qwen 音色：预选其绑定的 target_model
+    setTargetModel(voiceTargetModel(voice) || qwenDefaultModel || '');
     const vt = voice.voice?.voice_type;
     const model = voice.voice?.model;
     
@@ -167,7 +171,7 @@ export function VoiceClone() {
     // Clone/preset voices → open clone panel
     if (model === 'mimo_tts') setCloneEngine('mimo');
     else if (model === 'voxcpm') setCloneEngine('voxcpm');
-    else if (model === 'cosyvoice') setCloneEngine('qwen');
+    else if (model === 'qwen') setCloneEngine('qwen');
     else setCloneEngine('qwen');
     setActivePanel('clone');
     setCloneStep('choose-method');
@@ -226,13 +230,13 @@ export function VoiceClone() {
   const [auditioningId, setAuditioningId] = useState<string | null>(null);
 
   const handleSynthAudition = async (v: VoiceProfile) => {
-    const voiceId = (v.voice_params?.cosyvoice?.params as Record<string, unknown> | undefined)?.voice_id as string | undefined;
+    const voiceId = (v.voice_params?.qwen?.params as Record<string, unknown> | undefined)?.voice_id as string | undefined;
     if (!voiceId) return;
     setAuditioningId(v.id);
     try {
       const result = await ttsApi.synthesize({
         text: SYNTH_AUDITION_TEXT,
-        engine: 'cosyvoice',
+        engine: 'qwen',
         voice_id: voiceId,
         speed: 1.0,
         volume: 80,
@@ -527,10 +531,28 @@ export function VoiceClone() {
                 className={`${styles.engineOption} ${cloneEngine === e ? styles.active : ''}`}
                 onClick={() => setCloneEngine(e)}
               >
-                {e === 'qwen' ? 'CosyVoice' : e === 'mimo' ? 'MiMo-TTS' : 'VoxCPM'}
+                {e === 'qwen' ? 'Qwen' : e === 'mimo' ? 'MiMo-TTS' : 'VoxCPM'}
               </button>
             ))}
           </div>
+
+          {/* Qwen 目标 TTS 模型选择（音色注册时永久绑定该模型） */}
+          {cloneEngine === 'qwen' && (qwenTargetModels?.length ?? 0) > 0 && (
+            <div className={styles.syncSection}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', fontSize: 'var(--font-size-sm)' }}>
+                {t('voiceClone.targetModel')}
+                <select
+                  value={targetModel || qwenDefaultModel || qwenTargetModels?.[0] || ''}
+                  onChange={(e) => setTargetModel(e.target.value)}
+                  style={{ padding: '0.25rem 0.5rem' }}
+                >
+                  {qwenTargetModels?.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
 
           {/* CosyVoice 同步云端音色 */}
           {cloneEngine === 'qwen' && (
@@ -620,10 +642,10 @@ export function VoiceClone() {
             <div className={styles.inputStep}>
               <button className={styles.backButton} onClick={resetClone}>← {t('voiceClone.backToMethod')}</button>
               {pendingFile && (
-                <AudioPreview file={pendingFile} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
+                <AudioPreview file={pendingFile} engine={cloneEngine} engineParams={cloneEngine === 'qwen' && targetModel ? { target_model: targetModel } : undefined} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
               )}
               {urlVoice && (
-                <AudioPreview voiceId={urlVoice.id} audioUrl={voiceSourceAudioUrl(urlVoice.id)} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
+                <AudioPreview voiceId={urlVoice.id} audioUrl={voiceSourceAudioUrl(urlVoice.id)} engine={cloneEngine} engineParams={cloneEngine === 'qwen' && targetModel ? { target_model: targetModel } : undefined} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
               )}
             </div>
           )}
@@ -657,6 +679,9 @@ export function VoiceClone() {
                   <strong className={styles.voiceCardName}>{v.name || v.description || t('common.unnamed')}</strong>
                   <div className={styles.voiceCardChips}>
                     <span className={styles.chipEngine}>{engineLabel(v)}</span>
+                    {voiceTargetModelShort(v) && (
+                      <span className={styles.chipDesc}>{voiceTargetModelShort(v)}</span>
+                    )}
                     {v.description && v.description !== v.name && (
                       <span className={styles.chipDesc}>{v.description.slice(0, 30)}</span>
                     )}

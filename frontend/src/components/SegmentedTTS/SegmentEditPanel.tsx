@@ -153,7 +153,7 @@ export function SegmentEditPanel({
   const _eff = segEffectiveParams(segment);
   // Merge local edits on top of effective params (for preview when not custom)
   const eff: Record<string, unknown> = isCustom ? _eff : { ..._eff, ...localParams };
-  const isCosyVoice = eff.engine === 'cosyvoice';
+  const isQwenEngine = eff.engine === 'qwen';
   const isEdgeTTS = eff.engine === 'edge_tts';
   const isMiMo = eff.engine === 'mimo_tts';
   const isVoxCPM = eff.engine === 'voxcpm';
@@ -225,7 +225,7 @@ export function SegmentEditPanel({
         )}
 
         {/* SSML (CosyVoice only) */}
-        {isCosyVoice && (
+        {isQwenEngine && (
           <div className={styles.ssmlBar}>
             <button className={styles.ssmlBtn} onClick={() => onAnnotateSSML(segment.id)}>{t('segmentEdit.smartAnnotate')}</button>
           </div>
@@ -308,10 +308,10 @@ export function SegmentEditPanel({
             <div className={styles.engineRow}>
               <span className={styles.paramLabel}>{t('segmentEdit.model')}</span>
               <div className={styles.enginePills}>
-                {(['cosyvoice', 'edge_tts', 'mimo_tts', 'voxcpm', 'indextts'] as const).map(eng => (
+                {(['qwen', 'edge_tts', 'mimo_tts', 'voxcpm', 'indextts'] as const).map(eng => (
                   <button key={eng} className={`${styles.enginePill} ${eff.engine === eng ? styles.enginePillActive : ''}`}
                     onClick={() => handleParamChange('engine', eng)}>
-                    {eng === 'cosyvoice' ? 'CosyVoice' : eng === 'edge_tts' ? 'Edge-TTS' : eng === 'mimo_tts' ? 'MiMo' : eng === 'voxcpm' ? 'VoxCPM' : 'IndexTTS'}
+                    {eng === 'qwen' ? 'Qwen' : eng === 'edge_tts' ? 'Edge-TTS' : eng === 'mimo_tts' ? 'MiMo' : eng === 'voxcpm' ? 'VoxCPM' : 'IndexTTS'}
                   </button>
                 ))}
               </div>
@@ -319,14 +319,14 @@ export function SegmentEditPanel({
 
             <div className={styles.paramsGrid}>
               {/* CosyVoice: cloned voice selector */}
-              {isCosyVoice && (
+              {isQwenEngine && (
                 <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                   <div className={styles.paramLabel}>{t('segmentEdit.voice')}</div>
                   <select className={styles.paramSelect} value={(eff.voice_id as string) || ''}
                     onChange={e => handleParamChange('voice_id', e.target.value)}>
                     {!isCustom && <option value="">🌐 {t('segmentEdit.followGlobal')}</option>}
-                      {voices.filter(v => v.voice?.model === 'cosyvoice').map(v => {
-                        const key = (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string || v.id;
+                      {voices.filter(v => v.voice?.model === 'qwen').map(v => {
+                        const key = (v.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id as string || v.id;
                         return <option key={key} value={key}>⭐ {v.name || key}</option>;
                       })}
                   </select>
@@ -474,7 +474,7 @@ export function SegmentEditPanel({
               )}
 
               {/* Instruction */}
-              {(isCosyVoice || isMiMo || isVoxCPM) && (
+              {(isQwenEngine || isMiMo || isVoxCPM) && (
                 <div className={styles.paramField} style={{ gridColumn: '1 / -1' }}>
                   <div className={styles.paramLabel}>{t('segmentEdit.styleInstruction')}</div>
                   <StyleInstructionPicker

@@ -53,7 +53,7 @@ export async function synthesizeVoiceDesignPreview(
 
   return ttsApi.synthesize({
     text: sampleText,
-    engine: 'cosyvoice',
+    engine: 'qwen',
     voice_id: '',
     language: 'Chinese',
     speed: 1,

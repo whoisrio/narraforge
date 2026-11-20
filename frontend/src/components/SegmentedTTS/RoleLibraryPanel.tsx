@@ -154,7 +154,7 @@ export function RoleLibraryPanel({ open, onClose, onRolesChanged, projectId }: R
               }}
             >
               <option value="edge_tts">Edge-TTS</option>
-              <option value="cosyvoice">CosyVoice</option>
+              <option value="qwen">Qwen</option>
               <option value="mimo_tts">MiMo</option>
               <option value="voxcpm">VoxCPM</option>
               <option value="indextts">IndexTTS-2.5</option>

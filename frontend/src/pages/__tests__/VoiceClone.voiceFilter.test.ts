@@ -2,7 +2,7 @@
  * VoiceClone 声音卡片可见性过滤。
  *
  * 云端同步（sync-from-qwen）的音色本地没有 source/preview 音频，
- * 旧过滤会全部隐藏导致无法管理 —— 必须按 cosyvoice voice_id 放行。
+ * 旧过滤会全部隐藏导致无法管理 —— 必须按 qwen voice_id 放行。
  */
 import { describe, expect, it } from 'vitest';
 import { isManageableVoice } from '../voiceManageability';
@@ -30,11 +30,11 @@ describe('isManageableVoice', () => {
     expect(isManageableVoice(makeVoice({ has_preview: true }))).toBe(true);
   });
 
-  it('云端同步音色（cosyvoice voice_id，无本地音频）可见', () => {
+  it('云端同步音色（qwen voice_id，无本地音频）可见', () => {
     const v = makeVoice({
-      voice: { model: 'cosyvoice', voice_type: 'clone' },
+      voice: { model: 'qwen', voice_type: 'clone' },
       voice_params: {
-        cosyvoice: { params: { voice_id: 'cosyvoice-v3.5-plus-guanyu-abc' } },
+        qwen: { params: { voice_id: 'cosyvoice-v3.5-plus-guanyu-abc' } },
       },
     });
     expect(isManageableVoice(v)).toBe(true);
