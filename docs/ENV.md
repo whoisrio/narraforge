@@ -127,10 +127,6 @@ Used for CosyVoice voice registration, which requires a publicly accessible audi
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `PUBLIC_BASE_URL` | No | Public base URL for audio hosting. Use an ngrok URL for local dev, or your production domain. | *(empty)* |
-| `OSS_AK` | No | Qiniu Cloud object storage access key | *(empty)* |
-| `OSS_SK` | No | Qiniu Cloud object storage secret key | *(empty)* |
-| `BUCKET_NAME` | No | Qiniu Cloud bucket name | *(empty)* |
-| `BUCKET_DOMAIN` | No | Qiniu Cloud bucket domain | *(empty)* |
 
 ## Storage Paths
 

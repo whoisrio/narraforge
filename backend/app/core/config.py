@@ -179,12 +179,6 @@ class Settings(BaseSettings):
     # 生产环境使用实际域名，如：https://your-domain.com
     public_base_url: str = ""
 
-    # 七牛云对象存储
-    oss_ak: str = ""
-    oss_sk: str = ""
-    bucket_name: str = ""
-    bucket_domain: str = ""
-
     # VoxCPM 本地 GPU 模型
     voxcpm_model_path: str = "openbmb/VoxCPM2"  # HuggingFace 模型ID 或本地权重目录
     voxcpm_device: str = "auto"  # auto / cuda / cuda:0 / cpu
