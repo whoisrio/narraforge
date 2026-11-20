@@ -60,7 +60,7 @@ legacy admin 看全部行；匿名兜底为 `user_id IS NULL` 作用域（只触
 | GET | `/api/clone/{voice_id}` | 获取单个声音详情 |
 | DELETE | `/api/clone/{voice_id}` | 删除声音（同时清理云端注册和本地文件） |
 | POST | `/api/clone/sync-from-qwen` | 从 Qwen 云端同步声音列表 |
-| PATCH | `/api/clone/{voice_id}/description` | 更新声音描述和/或 prompt_text |
+| PATCH | `/api/clone/{voice_id}/description` | 更新声音描述和/或 prompt_text；支持可选 `name` 重命名 |
 | PATCH | `/api/clone/{voice_id}/preview-audio` | 保存克隆音色的试听音频 |
 | GET | `/api/clone/audio/{voice_id}` | 获取声音音频文件（支持 `field` 查询参数） |
 
@@ -201,6 +201,38 @@ CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64
 失败时 profile 保持「已上传未注册」状态，可直接重试。
 
 **Response:** `VoiceProfile` 对象（见下方通用 VoiceProfile 响应格式）
+
+### PATCH `/api/clone/{voice_id}/description`
+
+更新声音的描述、prompt_text 和/或重命名。
+
+**Request Body:**
+```json
+{
+  "description": "三国武将音色",
+  "prompt_text": "参考音频转录文本",
+  "name": "关羽"
+}
+```
+
+**字段说明:**
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `description` | string | `""` | 声音描述；空字符串视为清除（存为 NULL），不得与其他声音重复（409） |
+| `prompt_text` | string | `null` | 参考音频转录文本 |
+| `name` | string | `null` | 可选；提供时重命名声音，非空、≤100 字符，空/纯空白返回 400 |
+
+**Response:**
+
+```json
+{
+  "id": "uuid",
+  "name": "关羽",
+  "description": "三国武将音色",
+  "prompt_text": null
+}
+```
 
 ### POST `/api/clone/create-from-design`
 
