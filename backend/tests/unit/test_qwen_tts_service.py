@@ -507,3 +507,51 @@ class TestGetTTSServiceBaseUrlConfig:
 
         tts_module._tts_service = None
         tts_module._tts_config_fingerprint = None
+
+
+class TestListClonedVoicesPagination:
+    """list_cloned_voices 分页拉取全部云端音色（不限于单页 10 条）"""
+
+    def test_paginates_until_short_page(self):
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3.5-plus")
+
+        page1 = [{"voice_id": f"v1-{i}", "status": "OK"} for i in range(50)]
+        page2 = [{"voice_id": f"v2-{i}", "status": "OK"} for i in range(20)]
+        calls: list[tuple] = []
+
+        def fake_list(prefix, page_index=0, page_size=10):
+            calls.append((prefix, page_index, page_size))
+            return page1 if page_index == 0 else page2
+
+        with patch("app.services.qwen_tts_service.settings") as ms, \
+             patch("app.services.qwen_tts_service.VoiceEnrollmentService") as mock_cls:
+            ms.qwen_api_key = "test_api_key"
+            ms.qwen_model = "cosyvoice-v3.5-plus"
+            inst = Mock()
+            inst.list_voices.side_effect = fake_list
+            mock_cls.return_value = inst
+
+            result = service._list_cloned_voices_sync()
+
+        assert len(result) == 70
+        assert calls[0] == ("", 0, 50)
+        assert calls[1] == ("", 1, 50)
+
+    def test_stops_at_quota_cap(self):
+        """配额上限 1000：每页都满时不得无限翻页。"""
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3.5-plus")
+
+        full_page = [{"voice_id": f"v{i}", "status": "OK"} for i in range(50)]
+
+        with patch("app.services.qwen_tts_service.settings") as ms, \
+             patch("app.services.qwen_tts_service.VoiceEnrollmentService") as mock_cls:
+            ms.qwen_api_key = "test_api_key"
+            ms.qwen_model = "cosyvoice-v3.5-plus"
+            inst = Mock()
+            inst.list_voices.return_value = full_page
+            mock_cls.return_value = inst
+
+            result = service._list_cloned_voices_sync()
+
+        assert len(result) == 1000
+        assert inst.list_voices.call_count == 20

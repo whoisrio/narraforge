@@ -1240,9 +1240,10 @@ class QwenTTSService:
 
     def _list_cloned_voices_sync(self) -> List[Dict[str, Any]]:
         """
-        同步执行列出已克隆的声音
+        同步执行列出已克隆的声音（分页拉全量）
 
-        调用 qwen-voice-enrollment API 的 list action 获取所有已注册的声音
+        SDK 单页 page_size 有上限，硬编码单页会漏掉第 11 个及以后的音色；
+        循环翻页直到出现短页，并以账号音色配额（1000）为上限防死循环。
         """
 
         load_dotenv()
@@ -1259,7 +1260,18 @@ class QwenTTSService:
         logger.info("Listing cloned voices from Qwen API")
 
         service = VoiceEnrollmentService()
-        voices = service.list_voices("", page_index=0, page_size=10)
+        voices: List[Dict[str, Any]] = []
+        page_index = 0
+        page_size = 50
+        # 每个百炼账号自定义音色上限 1000，作为翻页上限
+        while page_index * page_size < 1000:
+            batch = service.list_voices("", page_index=page_index, page_size=page_size)
+            if not batch:
+                break
+            voices.extend(batch)
+            if len(batch) < page_size:
+                break
+            page_index += 1
 
         return voices
 
