@@ -52,6 +52,13 @@ PROVIDER_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
             "default_from_settings": "qwen_model",
             "description": "如 cosyvoice-v2 或 qwen-tts",
         },
+        "base_url": {
+            "label": "API Base URL",
+            "type": "text",
+            "sensitive": False,
+            "default_from_settings": "qwen_base_url",
+            "description": "DashScope API 地址（可用业务空间专属域名）",
+        },
     },
     "mimo_tts": {
         "api_key": {

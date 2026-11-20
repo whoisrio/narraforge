@@ -1295,8 +1295,8 @@ _tts_service: Optional[QwenTTSService] = None
 _tts_config_fingerprint: Optional[str] = None
 
 
-def _make_tts_fingerprint(api_key: str, model: str, public_base_url: str) -> str:
-    return f"{api_key}:{model}:{public_base_url}"
+def _make_tts_fingerprint(api_key: str, model: str, public_base_url: str, base_url: str) -> str:
+    return f"{api_key}:{model}:{public_base_url}:{base_url}"
 
 
 async def get_tts_service(db=None) -> QwenTTSService:
@@ -1312,6 +1312,7 @@ async def get_tts_service(db=None) -> QwenTTSService:
     api_key = settings.qwen_api_key
     model = settings.qwen_model
     public_base_url = settings.public_base_url
+    base_url = settings.qwen_base_url
     if db is not None:
         try:
             from app.core.model_config_service import get_effective_config
@@ -1319,6 +1320,7 @@ async def get_tts_service(db=None) -> QwenTTSService:
             config = get_effective_config(db, "qwen_tts")
             api_key = config.get("api_key") or api_key
             model = config.get("model") or model
+            base_url = config.get("base_url") or base_url
         except Exception:
             pass  # 降级到 settings
     if db is not None:
@@ -1330,11 +1332,13 @@ async def get_tts_service(db=None) -> QwenTTSService:
         except Exception:
             pass  # 降级到 settings
 
-    fp = _make_tts_fingerprint(api_key, model, public_base_url)
+    fp = _make_tts_fingerprint(api_key, model, public_base_url, base_url)
     if _tts_service is not None and _tts_config_fingerprint == fp:
         return _tts_service
 
-    _tts_service = QwenTTSService(api_key=api_key, model=model, public_base_url=public_base_url)
+    _tts_service = QwenTTSService(
+        api_key=api_key, model=model, public_base_url=public_base_url, base_url=base_url
+    )
     _tts_config_fingerprint = fp
     return _tts_service
 

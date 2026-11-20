@@ -150,6 +150,8 @@ class Settings(BaseSettings):
     # API Keys (千问)
     qwen_api_key: str = ""
     qwen_model: str = "qwen-tts"
+    # voice-enrollment HTTP API base（可用业务空间专属域名，如 https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1）
+    qwen_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
 
     # MiMo TTS API (小米 MiMo-V2.5-TTS 系列)
     mimo_api_key: str = ""

@@ -463,3 +463,47 @@ class TestCosyVoiceBase64Enrollment:
         with patch.object(service, "_register_cloned_voice_cosyvoice") as mock_sdk:
             service._register_cloned_voice_sync("https://cdn.example.com/a.wav", "n")
         mock_sdk.assert_called_once_with("https://cdn.example.com/a.wav", "n")
+
+
+class TestGetTTSServiceBaseUrlConfig:
+    """get_tts_service 读取界面配置的 base_url 并参与单例指纹"""
+
+    @pytest.mark.asyncio
+    async def test_base_url_from_ui_config_rebuilds_singleton(self):
+        import app.services.qwen_tts_service as tts_module
+        from app.services.qwen_tts_service import get_tts_service
+
+        tts_module._tts_service = None
+        tts_module._tts_config_fingerprint = None
+
+        fake_db = object()
+        config_by_key = {
+            "qwen_tts": {
+                "api_key": "k1",
+                "model": "cosyvoice-v3.5-plus",
+                "base_url": "https://ws.cn-beijing.maas.aliyuncs.com/api/v1",
+            },
+            "app": {},
+        }
+
+        with patch("app.services.qwen_tts_service.settings") as mock_settings, \
+             patch("app.core.model_config_service.get_effective_config",
+                   side_effect=lambda db, key: config_by_key.get(key, {})):
+            mock_settings.qwen_api_key = ""
+            mock_settings.qwen_model = ""
+            mock_settings.public_base_url = ""
+            mock_settings.qwen_base_url = "https://dashscope.aliyuncs.com/api/v1"
+
+            svc = await get_tts_service(fake_db)
+            assert svc.base_url == "https://ws.cn-beijing.maas.aliyuncs.com/api/v1"
+
+            config_by_key["qwen_tts"] = {
+                **config_by_key["qwen_tts"],
+                "base_url": "https://dashscope.aliyuncs.com/api/v1",
+            }
+            svc2 = await get_tts_service(fake_db)
+            assert svc2 is not svc
+            assert svc2.base_url == "https://dashscope.aliyuncs.com/api/v1"
+
+        tts_module._tts_service = None
+        tts_module._tts_config_fingerprint = None
