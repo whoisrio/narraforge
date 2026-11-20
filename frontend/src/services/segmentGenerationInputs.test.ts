@@ -55,7 +55,7 @@ describe('segmentGenerationInputs', () => {
     const seg = makeSegment({
       voice: { source: 'chapter' },
       status: 'ready',
-      generated_params: { engine: 'cosyvoice', voice_id: 'vc1' },
+      generated_params: { engine: 'qwen', voice_id: 'vc1' },
     });
     expect(isSegmentAudioStale(seg, undefined, { engine: 'edge_tts', voice: 'zh-CN-XiaoxiaoNeural', rate: '+0%', volume: '+0%' })).toBe(true);
   });

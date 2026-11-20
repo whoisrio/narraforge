@@ -27,6 +27,7 @@ from app.core.asset_store import (
 )
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.deploy_capabilities import QWEN_TARGET_MODELS
 from app.core.repositories.deps import get_voice_repo
 from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.core.supabase_client import SupabaseError
@@ -49,13 +50,6 @@ async def get_tts_service(db=None):
     from app.services.qwen_tts_service import get_tts_service as _get_tts_service
 
     return await _get_tts_service(db)
-
-
-def is_qiniu_configured(db=None) -> bool:
-    """延迟 import qiniu_service（保留 patch 点，见上）。"""
-    from app.services.qiniu_service import is_qiniu_configured as _impl
-
-    return _impl(db)
 
 
 def _enforce_designed_voice_quota(request: Request, repo: VoiceProfileRepository) -> None:
@@ -85,13 +79,6 @@ def _enforce_designed_voice_quota(request: Request, repo: VoiceProfileRepository
                 "message": "每位用户限保存一个设计音色，可删除已有设计音色后再新建",
             },
         )
-
-
-def upload_to_qiniu(local_file_path: str, key: str, db=None) -> str:
-    """延迟 import qiniu_service（保留 patch 点，见上）。"""
-    from app.services.qiniu_service import upload_to_qiniu as _impl
-
-    return _impl(local_file_path, key, db=db)
 
 
 def _resolve(db_path: str | None) -> str | None:
@@ -187,6 +174,7 @@ class UploadFromUrlRequest(BaseModel):
 class UpdateDescriptionRequest(BaseModel):
     description: str = ""
     prompt_text: Optional[str] = None
+    name: Optional[str] = None
 
 
 class SignedUploadUrlRequest(BaseModel):
@@ -512,57 +500,52 @@ async def upload_voice_from_storage(
 
 @local_router.post("/create-clone", response_model=VoiceProfileOut)
 async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
-    """注册克隆声音 - 调用千问 API（workers 模式不挂载）"""
+    """注册克隆声音 - 本地音频 base64 直传 voice-enrollment API（workers 模式不挂载）
+
+    音频无需公网 URL：后端直接读取本地存储的源音频，编码为 Base64 Data URI
+    调用新式 voice-enrollment 定制端点注册，成功后落库 voice_id/target_model。
+    """
     voice = db.query(VoiceProfile).filter(VoiceProfile.id == request.profile_id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
 
-    # 优先使用外部音频 URL（如果有），否则上传本地文件到七牛云
     vp = dict(voice.voice_params or {})
     model = (voice.voice or {}).get("model", "")
     model_vp = dict(vp.get(model, {}) or {})
-    ext_audio_url = model_vp.get("params", {}).get("external_audio_url")
-    if not ext_audio_url:
-        resolved_src = _resolve(model_vp.get("source_audio_path", ""))
-        if not resolved_src:
-            raise HTTPException(status_code=404, detail="Audio file not found")
-        if not is_qiniu_configured(db):
-            raise HTTPException(
-                status_code=500,
-                detail="Qiniu not configured; cannot generate public URL for cloning",
-            )
-        try:
-            key = os.path.basename(resolved_src)
-            qiniu_url = upload_to_qiniu(resolved_src, key, db=db)
-            model_vp.setdefault("params", {})["external_audio_url"] = qiniu_url
-            audio_path_for_clone = qiniu_url
-        except RuntimeError as e:
-            raise HTTPException(status_code=500, detail=f"Qiniu upload failed: {e}")
-    else:
-        audio_path_for_clone = ext_audio_url
+    resolved_src = _resolve(model_vp.get("source_audio_path", ""))
+    if not resolved_src:
+        raise HTTPException(status_code=404, detail="Audio file not found")
 
-    logger.info(f"Using external audio URL for cloning: {audio_path_for_clone}")
+    # 目标 TTS 模型可选（音色创建时永久绑定该模型）；白名单校验，缺省用全局配置
+    engine_params = request.engine_params or {}
+    target_model = engine_params.get("target_model")
+    if target_model is not None and target_model not in QWEN_TARGET_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported target_model: {target_model}. Allowed: {', '.join(QWEN_TARGET_MODELS)}",
+        )
 
     try:
         tts_service = await get_tts_service(db)
 
-        # 调用千问声音克隆 API 进行注册
+        # 调用千问声音克隆 API 进行注册（service 层自动选择 base64 直传路径）
         result = await tts_service.register_cloned_voice(
-            reference_audio_path=audio_path_for_clone,
+            reference_audio_path=resolved_src,
             voice_name=request.name or voice.name,
+            target_model=target_model,
         )
 
         # 更新数据库
-        new_vp = {}
         new_model_vp = dict(model_vp)
         new_model_vp.setdefault("params", {})
         new_model_vp["params"]["voice_id"] = result["voice_id"]
-        if audio_path_for_clone and audio_path_for_clone != ext_audio_url:
-            new_model_vp["params"]["external_audio_url"] = audio_path_for_clone
+        if result.get("target_model"):
+            new_model_vp["params"]["target_model"] = result["target_model"]
+        new_model_vp["params"]["enrollment_method"] = result.get("enrollment_method", "base64")
         if request.engine_params:
             new_model_vp["params"].update(request.engine_params)
-        new_vp["cosyvoice"] = new_model_vp
-        voice.voice = {"model": "cosyvoice", "voice_type": "clone"}
+        new_vp = {**vp, "qwen": new_model_vp}
+        voice.voice = {"model": "qwen", "voice_type": "clone"}
         voice.voice_params = new_vp
 
         if request.name:
@@ -844,7 +827,10 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
     tts_service = await get_tts_service(db)
 
     try:
-        # 获取 Qwen 上的所有已克隆声音
+        # 获取 Qwen 上的所有已克隆声音（list_cloned_voices 内部分页拉全量）
+        # 新式 list_voice 响应无 name 字段，用 voice_id 派生可读名
+        from app.services.qwen_tts_service import derive_voice_display_name
+
         qwen_voices = await tts_service.list_cloned_voices()
         logger.info(f"Processing voice {qwen_voices}")
         synced_count = 0
@@ -853,37 +839,48 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
 
         for qwen_voice in qwen_voices:
             voice_id = qwen_voice.get("voice_id")
-            name = qwen_voice.get("name", f"voice_{voice_id}")
             status = qwen_voice.get("status", "UNKNOWN")
+            target_model = qwen_voice.get("target_model") or ""
 
             # 只同步状态为 OK 的音色
             if status != "OK":
                 continue
+
+            name = qwen_voice.get("name") or derive_voice_display_name(voice_id, target_model)
 
             # 检查是否已存在 (use Python filter since JSON column)
             all_voices = db.query(VoiceProfile).all()
             existing = None
             for v in all_voices:
                 vp = v.voice_params or {}
-                cosy_vp = vp.get("cosyvoice") or {}
+                cosy_vp = vp.get("qwen") or {}
                 if cosy_vp.get("params", {}).get("voice_id") == voice_id:
                     existing = v
                     break
 
             if existing:
                 existing_count += 1
-                # 更新已有记录
-                existing.name = name
+                # 仅刷新旧版同步的 fallback 垃圾名（voice_{voice_id}），保留用户自定义名
+                if existing.name == f"voice_{voice_id}":
+                    existing.name = name
                 voice_data = copy.deepcopy(existing.voice or {})
                 voice_data["role"] = qwen_voice.get("role", "custom")
                 existing.voice = voice_data
+                # 补齐注册元数据（旧记录可能缺失）
+                params = copy.deepcopy(existing.voice_params or {})
+                cosy_params = params.setdefault("qwen", {}).setdefault("params", {})
+                cosy_params.setdefault("voice_id", voice_id)
+                if target_model:
+                    cosy_params.setdefault("target_model", target_model)
+                cosy_params.setdefault("enrollment_method", "sync")
+                existing.voice_params = params
                 db.commit()
                 db.refresh(existing)
                 results.append(
                     {
                         "id": existing.id,
                         "name": existing.name,
-                        "qwen_voice_id": ((existing.voice_params or {}).get("cosyvoice", {}) or {})
+                        "qwen_voice_id": ((existing.voice_params or {}).get("qwen", {}) or {})
                         .get("params", {})
                         .get("voice_id"),
                         "action": "updated",
@@ -894,8 +891,16 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 new_voice = VoiceProfile(
                     id=str(uuid.uuid4()),
                     name=name,
-                    voice={"model": "cosyvoice", "voice_type": "clone"},
-                    voice_params={"cosyvoice": {"params": {"voice_id": voice_id}}},
+                    voice={"model": "qwen", "voice_type": "clone"},
+                    voice_params={
+                        "qwen": {
+                            "params": {
+                                "voice_id": voice_id,
+                                "target_model": target_model or None,
+                                "enrollment_method": "sync",
+                            }
+                        }
+                    },
                 )
                 db.add(new_voice)
                 db.commit()
@@ -951,6 +956,15 @@ async def update_voice_description(
 
     fields: dict = {"description": new_description}
 
+    # 重命名（可选；历史原因 name 曾被视为敏感字段，实际是展示用可安全修改）
+    if request.name is not None:
+        new_name = request.name.strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="Voice name cannot be empty")
+        if len(new_name) > 100:
+            raise HTTPException(status_code=400, detail="Voice name too long (max 100 chars)")
+        fields["name"] = new_name
+
     # 更新 prompt_text（如果提供了的话）
     if request.prompt_text is not None:
         voice_data = voice["voice"] or {}
@@ -965,6 +979,7 @@ async def update_voice_description(
 
     return {
         "id": voice["id"],
+        "name": voice["name"],
         "description": voice["description"],
         "prompt_text": (
             (voice["voice_params"] or {}).get((voice["voice"] or {}).get("model", ""), {}) or {}
@@ -1026,8 +1041,8 @@ async def delete_voice(
     # Qwen 声音需要删除云端音色；MiMo/VoxCPM 声音无云端数据，跳过
     # 云端删除失败不应阻止本地清理，记录警告即可
     voice_data = voice["voice"] or {}
-    cosy_vp = (voice["voice_params"] or {}).get("cosyvoice", {}) or {}
-    if voice_data.get("model") == "cosyvoice" and cosy_vp.get("params", {}).get("voice_id"):
+    cosy_vp = (voice["voice_params"] or {}).get("qwen", {}) or {}
+    if voice_data.get("model") == "qwen" and cosy_vp.get("params", {}).get("voice_id"):
         try:
             tts_service = await get_tts_service(db)
             await tts_service.delete_cloned_voice(cosy_vp["params"]["voice_id"])

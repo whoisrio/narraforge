@@ -145,7 +145,7 @@ def _derive_default_voice(old_chapters: list[dict[str, Any]]) -> dict[str, Any]:
         if ch_voice.get("voice") and ch_voice.get("engine") == "edge_tts":
             return copy.deepcopy(ch_voice)
         if ch_voice.get("voice_id") and ch_voice.get("engine") in (
-            "cosyvoice",
+            "qwen",
             "mimo_tts",
             "voxcpm",
         ):

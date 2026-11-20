@@ -83,18 +83,20 @@ def engine():
 
 @pytest.fixture
 def db_session(engine) -> Generator[Session, None, None]:
-    """创建数据库会话"""
-    connection = engine.connect()
-    transaction = connection.begin()
-    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    """创建数据库会话
 
+    采用生产语义：不包外部事务，session.commit()/rollback() 与真实请求一致；
+    用例隔离靠每个测试前重建全部表（engine 是 session 级共享的内存库）。
+    旧模式（外部事务包裹）下应用侧任何 rollback() 会连夹具已提交数据一起摧毁，
+    无法测试“失败后保留状态”这类真实行为。
+    """
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    session = sessionmaker(autocommit=False, autoflush=False, bind=engine)()
     try:
         yield session
     finally:
         session.close()
-        if transaction.is_active:
-            transaction.rollback()
-        connection.close()
 
 
 @pytest.fixture
@@ -129,7 +131,9 @@ def mock_tts_service():
     service.register_cloned_voice = AsyncMock(return_value={
         "voice_id": "test_cloned_voice_123",
         "voice_name": "Test Voice",
-        "role": "custom"
+        "role": "custom",
+        "target_model": "cosyvoice-v3.5-plus",
+        "enrollment_method": "base64",
     })
     service.list_cloned_voices = AsyncMock(return_value=[])
 

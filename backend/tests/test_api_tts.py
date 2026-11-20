@@ -16,8 +16,8 @@ def test_list_cloned_qwen_voices(client, db_session):
     voice = VoiceProfile(
         id="v1",
         name="Narrator",
-        voice={"model": "cosyvoice", "voice_type": "clone"},
-        voice_params={"cosyvoice": {"source_audio_path": "/tmp/narrator.wav", "params": {"voice_id": "cosyvoice-v3-narrator"}}},
+        voice={"model": "qwen", "voice_type": "clone"},
+        voice_params={"qwen": {"source_audio_path": "/tmp/narrator.wav", "params": {"voice_id": "cosyvoice-v3-narrator"}}},
     )
     db_session.add(voice)
     db_session.commit()
@@ -27,7 +27,7 @@ def test_list_cloned_qwen_voices(client, db_session):
     voices = response.json()["items"]
     assert len(voices) == 1
     assert voices[0]["id"] == "v1"
-    assert voices[0]["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cosyvoice-v3-narrator"
+    assert voices[0]["voice_params"]["qwen"]["params"]["voice_id"] == "cosyvoice-v3-narrator"
 
 
 def test_list_edge_voices(client, mock_edge_tts_service):

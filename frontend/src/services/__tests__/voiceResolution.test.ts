@@ -31,9 +31,9 @@ function mimoParams(overrides: Partial<EngineParams> = {}): EngineParams {
   } as EngineParams;
 }
 
-function cosyvoiceParams(overrides: Partial<EngineParams> = {}): EngineParams {
+function qwenParams(overrides: Partial<EngineParams> = {}): EngineParams {
   return {
-    engine: 'cosyvoice',
+    engine: 'qwen',
     voice_id: 'v_01',
     instruction: '',
     speed: 1.0,
@@ -189,11 +189,11 @@ describe('resolveEffectiveVoice', () => {
     });
 
     it('custom params takes highest priority (custom > role > chapter)', () => {
-      const role = makeRole('r1', '小明', cosyvoiceParams({ instruction: 'role-instr' }));
-      const chapter = cosyvoiceParams({ instruction: 'chap-instr' });
+      const role = makeRole('r1', '小明', qwenParams({ instruction: 'role-instr' }));
+      const chapter = qwenParams({ instruction: 'chap-instr' });
       const voice: VoiceSource = {
         source: 'custom',
-        engine: 'cosyvoice',
+        engine: 'qwen',
         params: { instruction: 'custom-instr' },
       };
 

@@ -870,12 +870,12 @@ def test_patch_chapter_partial_update(client, tmp_path, monkeypatch):
 
     r = client.patch(
         "/api/segmented-projects/p1/chapters/c1",
-        json={"design_title": "分镜标题", "voice": {"engine": "cosyvoice"}},
+        json={"design_title": "分镜标题", "voice": {"engine": "qwen"}},
     )
     assert r.status_code == 200
     ch = r.json()["chapter"]
     assert ch["design_title"] == "分镜标题"
-    assert ch["voice"] == {"engine": "cosyvoice"}
+    assert ch["voice"] == {"engine": "qwen"}
     assert ch["name"] == "改名章"  # 上轮结果保持
 
     # 显式 null 清空 design_title
@@ -886,7 +886,7 @@ def test_patch_chapter_partial_update(client, tmp_path, monkeypatch):
     # GET 回读一致
     got = client.get("/api/segmented-projects/p1").json()
     assert got["chapters"][0]["name"] == "改名章"
-    assert got["chapters"][0]["voice"] == {"engine": "cosyvoice"}
+    assert got["chapters"][0]["voice"] == {"engine": "qwen"}
 
 
 def test_patch_chapter_original_text_round_trips(client):

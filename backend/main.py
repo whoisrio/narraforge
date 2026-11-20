@@ -235,7 +235,7 @@ def create_app(deploy_target: str | None = None) -> FastAPI:
         from app.api import indextts, speech_to_text, tts_verify, voxcpm
 
     if is_local:
-        # qwen/dashscope/voxcpm 专属端点（依赖 dashscope/qiniu SDK 或本地 GPU），workers 不挂载。
+        # qwen/dashscope/voxcpm 专属端点（依赖 dashscope SDK 或本地 GPU），workers 不挂载。
         # 必须先于通用 router 注册：/list-from-qwen、/sync-from-qwen 等具体路径
         # 否则会被 clone.router 的 /{voice_id} 抢先匹配（404 "Voice not found"）。
         app.include_router(clone.local_router, prefix="/api/clone", tags=["voice-clone"])

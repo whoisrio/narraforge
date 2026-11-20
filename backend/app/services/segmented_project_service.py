@@ -159,7 +159,7 @@ def _flatten_voice_for_synthesis(voice: dict[str, Any]) -> dict[str, Any]:
         flat["edge_voice"] = voice.get("voice", "") or "zh-CN-YunxiNeural"
         flat["edge_rate"] = voice.get("rate", "+0%")
         flat["edge_volume"] = voice.get("volume", "+0%")
-    elif engine == "cosyvoice":
+    elif engine == "qwen":
         flat["voice_id"] = voice.get("voice_id", "")
         flat["speed"] = voice.get("speed", 1.0)
         flat["volume"] = voice.get("volume", 80)
@@ -1329,7 +1329,7 @@ def synthesize_with_engine(
             edge_rate=p.edge_rate,
             edge_volume=p.edge_volume,
         )
-    if engine == "cosyvoice":
+    if engine == "qwen":
         from app.api.tts import synthesize_speech_internal
 
         return synthesize_speech_internal(
@@ -1458,7 +1458,7 @@ def synthesize_segment(
         style = sp.voxcpm_style_control or None
     elif sp.engine == "mimo_tts":
         style = sp.mimo_instruction or None
-    elif sp.engine == "cosyvoice":
+    elif sp.engine == "qwen":
         style = sp.instruction or None
     # indextts 不支持文本 tag，情绪经 emo_vector 传递（neutral/未知为 None）
     indextts_emo_vector: list[float] | None = None

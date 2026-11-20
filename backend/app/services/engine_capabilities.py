@@ -22,7 +22,7 @@ class EngineCapability:
 ENGINE_CAPABILITIES: dict[str, EngineCapability] = {
     "mimo_tts": EngineCapability(inline_tags=False, leading_style_tag=True, instruction=True),
     "voxcpm": EngineCapability(inline_tags=True, leading_style_tag=True, instruction=True),
-    "cosyvoice": EngineCapability(inline_tags=False, leading_style_tag=False, instruction=True),
+    "qwen": EngineCapability(inline_tags=False, leading_style_tag=False, instruction=True),
     "edge_tts": EngineCapability(inline_tags=False, leading_style_tag=False, instruction=False),
     # indextts 情绪不走文本 tag，经 EMOTION_TO_EMO_VECTOR 映射为 emo_vector 传给 sidecar
     "indextts": EngineCapability(inline_tags=False, leading_style_tag=False, instruction=False),

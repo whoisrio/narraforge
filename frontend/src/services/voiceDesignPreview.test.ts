@@ -82,7 +82,7 @@ describe('voiceDesignPreview', () => {
     });
 
     expect(ttsApi.synthesize).toHaveBeenCalledWith(expect.objectContaining({
-      engine: 'cosyvoice',
+      engine: 'qwen',
       text: '这是一段试听文本。',
       instruction: '温暖旁白',
       format: 'mp3',

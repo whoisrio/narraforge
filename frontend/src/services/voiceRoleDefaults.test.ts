@@ -50,7 +50,7 @@ describe('voiceRoleDefaults', () => {
       name: '默认旁白',
       roleKind: 'Narrator',
       currentParams: {
-        engine: 'cosyvoice',
+        engine: 'qwen',
         voice_id: '',
         speed: 1,
         volume: 80,

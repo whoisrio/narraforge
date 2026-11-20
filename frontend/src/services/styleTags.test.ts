@@ -20,7 +20,7 @@ describe('ENGINE_CAPABILITIES', () => {
   it('matches the backend engine_capabilities mirror', () => {
     expect(ENGINE_CAPABILITIES.mimo_tts).toEqual({ inline: false, leading: true, instruction: true });
     expect(ENGINE_CAPABILITIES.voxcpm).toEqual({ inline: true, leading: true, instruction: true });
-    expect(ENGINE_CAPABILITIES.cosyvoice).toEqual({ inline: false, leading: false, instruction: true });
+    expect(ENGINE_CAPABILITIES.qwen).toEqual({ inline: false, leading: false, instruction: true });
     expect(ENGINE_CAPABILITIES.edge_tts).toEqual({ inline: false, leading: false, instruction: false });
     expect(ENGINE_CAPABILITIES.indextts).toEqual({ inline: false, leading: false, instruction: false });
   });
@@ -33,7 +33,7 @@ describe('ENGINE_CAPABILITIES', () => {
     const t = createTranslator('zh-CN');
     expect(describeEngineCapability('voxcpm', t)).toBe('位置 tag + 开头风格');
     expect(describeEngineCapability('mimo_tts', t)).toBe('开头风格标签');
-    expect(describeEngineCapability('cosyvoice', t)).toBe('仅指令');
+    expect(describeEngineCapability('qwen', t)).toBe('仅指令');
     expect(describeEngineCapability('edge_tts', t)).toBe('不支持');
   });
 });

@@ -420,7 +420,7 @@ The voice configuration for a role. Format depends on `engine`.
 **CosyVoice (clone):**
 ```json
 {
-  "engine": "cosyvoice",
+  "engine": "qwen",
   "voice_id": "cosyvoice-v3.5-plus-bailian-xxxxxx",
   "speed": 1.0,
   "volume": 80,
@@ -483,7 +483,7 @@ Stores the chapter-level TTS configuration in the same EngineParams discriminate
 **CosyVoice:**
 ```json
 {
-  "engine": "cosyvoice",
+  "engine": "qwen",
   "voice_id": "cosyvoice-v3.5-plus-bailian-xxxxxx",
   "speed": 1.0,
   "volume": 80,
@@ -580,7 +580,7 @@ Determines how a segment's TTS voice parameters are resolved.
 ```
 
 - `source`: `"chapter"` | `"role"` | `"custom"`
-- `engine` (custom only): `"edge_tts"` | `"cosyvoice"` | `"mimo_tts"` | `"voxcpm"`
+- `engine` (custom only): `"edge_tts"` | `"qwen"` | `"mimo_tts"` | `"voxcpm"`
 - `params` (custom only): full set of engine parameters (flat SegmentEngineParams format)
 - `role_id` (optional): retains the role association even after becoming custom
 
@@ -647,7 +647,7 @@ Records what params were actually used for the last synthesis. Used for stalenes
 
 | Field | Values | Purpose |
 |---|---|---|
-| `model` | `edge_tts` / `cosyvoice` / `mimo_tts` / `voxcpm` | Which TTS model |
+| `model` | `edge_tts` / `qwen` / `mimo_tts` / `voxcpm` | Which TTS model |
 | `voice_type` | `preset` / `clone` / `design` | How the voice was created |
 
 `voice_id` is NOT stored here — it lives in `voice_params.{model}.params.voice_id` when applicable (preset voices, CosyVoice cloned voices, MiMo design voices). For other clone/design voices, the VoiceProfile's own `id` is the identifier.
@@ -667,7 +667,7 @@ Structure: `{ "<model>": { "mode"? , "source_audio_path"? , "params": {...} } }`
 
 **params by model:**
 
-| Field | edge_tts | cosyvoice | mimo_tts | voxcpm | Notes |
+| Field | edge_tts | qwen | mimo_tts | voxcpm | Notes |
 |-------|----------|-----------|----------|--------|-------|
 | `voice_id` | ✅ | ✅ | ✅ (preset) | — | Preset name / cloud ID |
 | `rate` | ✅ | — | — | — | `"+10%"` format |
@@ -688,8 +688,8 @@ Structure: `{ "<model>": { "mode"? , "source_audio_path"? , "params": {...} } }`
 // edge_tts (preset)
 { "edge_tts": { "params": { "voice_id": "zh-CN-YunxiNeural", "rate": "+10%", "volume": "+0%" } } }
 
-// cosyvoice (clone)
-{ "cosyvoice": { "source_audio_path": "/voices/clone_xxx.wav", "params": { "voice_id": "cosyvoice-v3-xxx", "speed": 1.0, "volume": 80, "pitch": 1.0, "language": "Chinese" } } }
+// qwen (clone; CosyVoice model family)
+{ "qwen": { "source_audio_path": "/voices/clone_xxx.wav", "params": { "voice_id": "cosyvoice-v3-xxx", "target_model": "cosyvoice-v3.5-plus", "enrollment_method": "base64", "speed": 1.0, "volume": 80, "pitch": 1.0, "language": "Chinese" } } }
 
 // mimo_tts (clone)
 { "mimo_tts": { "source_audio_path": "/voices/clone_xxx.mp3", "mode": "voiceclone", "params": { "instruction": "" } } }

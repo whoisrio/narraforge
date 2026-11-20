@@ -80,7 +80,7 @@ export const voiceApi = {
   // 只获取已克隆的声音（从 Qwen 同步的）
   listCloned: async (): Promise<VoiceProfile[]> => {
     const all = await voiceApi.list();
-    return all.filter(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
+    return all.filter(v => v.voice?.voice_type === 'clone' && (v.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id);
   },
 
   createClone: async (voiceId: string, name?: string, avatar?: string, projectId?: string, engineParams?: Record<string, unknown>): Promise<VoiceProfile> => {
@@ -164,6 +164,11 @@ export const voiceApi = {
   // 更新声音的 prompt_text
   updatePromptText: async (id: string, promptText: string): Promise<void> => {
     await api.patch(`/clone/${id}/description`, { description: '', prompt_text: promptText });
+  },
+
+  // 重命名声音（可选字段，与 description 共用 PATCH 端点）
+  renameVoice: async (id: string, name: string): Promise<void> => {
+    await api.patch(`/clone/${id}/description`, { name });
   },
 };
 

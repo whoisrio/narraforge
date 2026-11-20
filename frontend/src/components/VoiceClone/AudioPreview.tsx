@@ -130,7 +130,7 @@ export function AudioPreview({ file, voiceId, audioUrl, engine = 'qwen', project
     onCancel();
   };
 
-  const engineLabel = engine === 'mimo' ? 'MiMo-TTS' : engine === 'voxcpm' ? 'VoxCPM' : 'CosyVoice';
+  const engineLabel = engine === 'mimo' ? 'MiMo-TTS' : engine === 'voxcpm' ? 'VoxCPM' : 'Qwen';
   /** VoxCPM 模式下，prompt_text 为空时禁用克隆按钮 */
   const canClone = engine === 'voxcpm' ? promptText.trim().length > 0 : true;
 

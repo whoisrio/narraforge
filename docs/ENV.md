@@ -56,7 +56,8 @@ Required only when `DEPLOY_TARGET=workers`: the workers runtime has no raw socke
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `QWEN_API_KEY` | Yes (for clone) | Qwen / DashScope API key for CosyVoice voice cloning | *(empty)* |
-| `QWEN_MODEL` | No | CosyVoice model identifier | `qwen-tts` |
+| `QWEN_MODEL` | No | 默认目标 TTS 模型（音色未绑定 target_model 时的回退），如 cosyvoice-v3.5-plus | `qwen-tts` |
+| `QWEN_BASE_URL` | No | voice-enrollment HTTP API base（可用业务空间专属域名，如 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1`） | `https://dashscope.aliyuncs.com/api/v1` |
 
 ## MiMo TTS API (Xiaomi MiMo-V2.5-TTS)
 
@@ -126,10 +127,6 @@ Used for CosyVoice voice registration, which requires a publicly accessible audi
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
 | `PUBLIC_BASE_URL` | No | Public base URL for audio hosting. Use an ngrok URL for local dev, or your production domain. | *(empty)* |
-| `OSS_AK` | No | Qiniu Cloud object storage access key | *(empty)* |
-| `OSS_SK` | No | Qiniu Cloud object storage secret key | *(empty)* |
-| `BUCKET_NAME` | No | Qiniu Cloud bucket name | *(empty)* |
-| `BUCKET_DOMAIN` | No | Qiniu Cloud bucket domain | *(empty)* |
 
 ## Storage Paths
 

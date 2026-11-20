@@ -23,9 +23,9 @@ def test_engine_capabilities_matrix():
     assert ENGINE_CAPABILITIES["voxcpm"].leading_style_tag is True
     assert ENGINE_CAPABILITIES["voxcpm"].instruction is True
 
-    assert ENGINE_CAPABILITIES["cosyvoice"].inline_tags is False
-    assert ENGINE_CAPABILITIES["cosyvoice"].leading_style_tag is False
-    assert ENGINE_CAPABILITIES["cosyvoice"].instruction is True
+    assert ENGINE_CAPABILITIES["qwen"].inline_tags is False
+    assert ENGINE_CAPABILITIES["qwen"].leading_style_tag is False
+    assert ENGINE_CAPABILITIES["qwen"].instruction is True
 
     assert ENGINE_CAPABILITIES["edge_tts"].inline_tags is False
     assert ENGINE_CAPABILITIES["edge_tts"].leading_style_tag is False
@@ -168,7 +168,7 @@ def test_prepare_edge_tts_strips_everything():
 
 def test_prepare_cosyvoice_strips_tags_no_leading():
     out = prepare_text_for_engine(
-        "你好[笑]世界", engine="cosyvoice", emotion="happy", style="温柔"
+        "你好[笑]世界", engine="qwen", emotion="happy", style="温柔"
     )
     assert out == "你好世界"
 

@@ -41,7 +41,7 @@
 
 | 功能 | 端点 | 阻塞点 |
 |---|---|---|
-| CosyVoice 克隆/合成 | `POST /api/clone/create-clone`、`GET /api/clone/list-from-qwen`、`POST /api/clone/sync-from-qwen`、`POST /api/tts/batch` | dashscope SDK（WebSocket 声音注册）+ qiniu SDK（OSS 上传公网 URL） |
+| CosyVoice 克隆/合成 | `POST /api/clone/create-clone`、`GET /api/clone/list-from-qwen`、`POST /api/clone/sync-from-qwen`、`POST /api/tts/batch` | dashscope SDK（WebSocket 合成 + 音色列举/删除）；音色注册已改为纯 HTTP `voice-enrollment` API（base64 直传，无 qiniu 依赖） |
 | LangGraph agent 服务 | `agent/`（narration / knowledge_video 图） | 运行时本身无本地算力（全是 LLM + HTTP 调后端），但 `langgraph dev` 是有状态内存服务，不适合 serverless；且 voxcpm 引擎与 scaffold 节点依赖本地后端能力 |
 
 ## C. 只能本地（算力/环境依赖，架构上无法上 serverless）

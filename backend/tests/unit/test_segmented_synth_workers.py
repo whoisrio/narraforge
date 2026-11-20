@@ -117,7 +117,7 @@ async def test_synthesize_mimo_tts(monkeypatch):
 @pytest.mark.asyncio
 async def test_synthesize_engine_not_supported(monkeypatch):
     project = _project()
-    project["chapters"][0]["voice"] = {"engine": "cosyvoice", "params": {"voice_id": "v1"}}
+    project["chapters"][0]["voice"] = {"engine": "qwen", "params": {"voice_id": "v1"}}
     repo = _repo(project)
     store = _store()
 

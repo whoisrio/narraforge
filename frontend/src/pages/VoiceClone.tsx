@@ -7,8 +7,13 @@ import { ImageUploadZone } from '../components/ui/ImageUploadZone';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
-import { voiceApi, apiErrorCode } from '../services/api';
+import { voiceApi, ttsApi, apiErrorCode } from '../services/api';
+import { isCloudSyncedVoice, isManageableVoice, SYNTH_AUDITION_TEXT, voiceTargetModel, voiceTargetModelShort } from './voiceManageability';
+import { useToast } from '../components/ui/useToast';
 import { VoiceAvatar } from '../components/ui/VoiceAvatar';
+import { Modal } from '../components/ui/Modal';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
 import { useTranslation } from '../i18n';
 import type { TTSResult, VoiceProfile } from '../types';
 import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../types';
@@ -34,15 +39,15 @@ function engineLabel(profile: VoiceProfile): string {
   const model = profile.voice?.model;
   if (model === 'mimo_tts') return 'MiMo';
   if (model === 'voxcpm') return 'VoxCPM';
-  if (model === 'cosyvoice') return 'CosyVoice';
+  if (model === 'qwen') return 'CosyVoice';
   if (model === 'edge_tts') return 'Edge-TTS';
   return 'Unknown';
 }
 
-
 export function VoiceClone() {
   const { t } = useTranslation();
-  const { clone_engines: availableCloneEngines } = useCapabilities();
+  const toast = useToast();
+  const { clone_engines: availableCloneEngines, qwen_target_models: qwenTargetModels, qwen_default_model: qwenDefaultModel } = useCapabilities();
   // ---- 声音列表 ----
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(true);
@@ -55,6 +60,8 @@ export function VoiceClone() {
   const [cloneStep, setCloneStep] = useState<CloneStep>('choose-method');
   const [cloneMethod, setCloneMethod] = useState<InputMethod>(null);
   const [cloneEngine, setCloneEngine] = useState<CloneEngine>('qwen');
+  // Qwen 目标 TTS 模型（音色创建时永久绑定；预选全局默认，编辑流预选已绑定值）
+  const [targetModel, setTargetModel] = useState('');
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [urlVoice, setUrlVoice] = useState<VoiceProfile | null>(null);
 
@@ -100,7 +107,7 @@ export function VoiceClone() {
     setVoicesLoading(true);
     try {
       const all = await voiceApi.list();
-      setVoices(all.filter(v => v.has_preview || v.has_source));
+      setVoices(all.filter(isManageableVoice));
     } catch (err) {
       console.error('加载声音列表失败:', err);
     } finally {
@@ -137,6 +144,8 @@ export function VoiceClone() {
   // ---- 编辑/删除 ----
   const handleStartEdit = (voice: VoiceProfile) => {
     setEditingVoice(voice);
+    // 编辑/替换已有 Qwen 音色：预选其绑定的 target_model
+    setTargetModel(voiceTargetModel(voice) || qwenDefaultModel || '');
     const vt = voice.voice?.voice_type;
     const model = voice.voice?.model;
     
@@ -162,7 +171,7 @@ export function VoiceClone() {
     // Clone/preset voices → open clone panel
     if (model === 'mimo_tts') setCloneEngine('mimo');
     else if (model === 'voxcpm') setCloneEngine('voxcpm');
-    else if (model === 'cosyvoice') setCloneEngine('qwen');
+    else if (model === 'qwen') setCloneEngine('qwen');
     else setCloneEngine('qwen');
     setActivePanel('clone');
     setCloneStep('choose-method');
@@ -192,6 +201,56 @@ export function VoiceClone() {
       console.error('Failed to delete voice:', err);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // ---- 重命名 ----
+  const [renameTarget, setRenameTarget] = useState<VoiceProfile | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+
+  const handleRenameSave = async () => {
+    if (!renameTarget || !renameName.trim()) return;
+    setRenamingId(renameTarget.id);
+    try {
+      await voiceApi.renameVoice(renameTarget.id, renameName.trim());
+      setVoices(prev => prev.map(v => (v.id === renameTarget.id ? { ...v, name: renameName.trim() } : v)));
+      setRenameTarget(null);
+      triggerRefresh();
+    } catch (err) {
+      const code = apiErrorCode(err);
+      console.error('Failed to rename voice:', err);
+      toast.error(code ? t('voiceClone.renameFailedWithCode', { code }) : t('voiceClone.renameFailed'));
+    } finally {
+      setRenamingId(null);
+    }
+  };
+
+  // ---- 云端音色合成试听 ----
+  const [auditioningId, setAuditioningId] = useState<string | null>(null);
+
+  const handleSynthAudition = async (v: VoiceProfile) => {
+    const voiceId = (v.voice_params?.qwen?.params as Record<string, unknown> | undefined)?.voice_id as string | undefined;
+    if (!voiceId) return;
+    setAuditioningId(v.id);
+    try {
+      const result = await ttsApi.synthesize({
+        text: SYNTH_AUDITION_TEXT,
+        engine: 'qwen',
+        voice_id: voiceId,
+        speed: 1.0,
+        volume: 80,
+        pitch: 1.0,
+      });
+      const src = result.audio_base64
+        ? `data:audio/${result.audio_format || 'mp3'};base64,${result.audio_base64}`
+        : result.audio_url!;
+      new Audio(src).play().catch(() => {});
+    } catch (err) {
+      console.error('Synth audition failed:', err);
+      toast.error(t('voiceClone.auditionFailed'));
+    } finally {
+      setAuditioningId(null);
     }
   };
 
@@ -472,10 +531,28 @@ export function VoiceClone() {
                 className={`${styles.engineOption} ${cloneEngine === e ? styles.active : ''}`}
                 onClick={() => setCloneEngine(e)}
               >
-                {e === 'qwen' ? 'CosyVoice' : e === 'mimo' ? 'MiMo-TTS' : 'VoxCPM'}
+                {e === 'qwen' ? 'Qwen' : e === 'mimo' ? 'MiMo-TTS' : 'VoxCPM'}
               </button>
             ))}
           </div>
+
+          {/* Qwen 目标 TTS 模型选择（音色注册时永久绑定该模型） */}
+          {cloneEngine === 'qwen' && (qwenTargetModels?.length ?? 0) > 0 && (
+            <div className={styles.syncSection}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-sm)', fontSize: 'var(--font-size-sm)' }}>
+                {t('voiceClone.targetModel')}
+                <select
+                  value={targetModel || qwenDefaultModel || qwenTargetModels?.[0] || ''}
+                  onChange={(e) => setTargetModel(e.target.value)}
+                  style={{ padding: '0.25rem 0.5rem' }}
+                >
+                  {qwenTargetModels?.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
 
           {/* CosyVoice 同步云端音色 */}
           {cloneEngine === 'qwen' && (
@@ -565,10 +642,10 @@ export function VoiceClone() {
             <div className={styles.inputStep}>
               <button className={styles.backButton} onClick={resetClone}>← {t('voiceClone.backToMethod')}</button>
               {pendingFile && (
-                <AudioPreview file={pendingFile} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
+                <AudioPreview file={pendingFile} engine={cloneEngine} engineParams={cloneEngine === 'qwen' && targetModel ? { target_model: targetModel } : undefined} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
               )}
               {urlVoice && (
-                <AudioPreview voiceId={urlVoice.id} audioUrl={voiceSourceAudioUrl(urlVoice.id)} engine={cloneEngine} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
+                <AudioPreview voiceId={urlVoice.id} audioUrl={voiceSourceAudioUrl(urlVoice.id)} engine={cloneEngine} engineParams={cloneEngine === 'qwen' && targetModel ? { target_model: targetModel } : undefined} onCloneSuccess={handleCloneSuccess} onCancel={resetClone} />
               )}
             </div>
           )}
@@ -602,21 +679,39 @@ export function VoiceClone() {
                   <strong className={styles.voiceCardName}>{v.name || v.description || t('common.unnamed')}</strong>
                   <div className={styles.voiceCardChips}>
                     <span className={styles.chipEngine}>{engineLabel(v)}</span>
+                    {voiceTargetModelShort(v) && (
+                      <span className={styles.chipDesc}>{voiceTargetModelShort(v)}</span>
+                    )}
                     {v.description && v.description !== v.name && (
                       <span className={styles.chipDesc}>{v.description.slice(0, 30)}</span>
                     )}
                   </div>
                 </div>
                 <div className={styles.voiceCardActions}>
+                  {isCloudSyncedVoice(v) ? (
+                    <button
+                      type="button"
+                      className={styles.previewBtn}
+                      onClick={(e) => { e.stopPropagation(); handleSynthAudition(v); }}
+                      disabled={auditioningId === v.id}
+                    >{auditioningId === v.id ? t('voiceClone.auditioning') : t('voiceClone.synthAudition')}</button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.previewBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const audio = new Audio(voicePreviewAudioUrl(v.id));
+                        audio.play().catch(() => {});
+                      }}
+                    >{t('common.listen')}</button>
+                  )}
                   <button
                     type="button"
                     className={styles.previewBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const audio = new Audio(voicePreviewAudioUrl(v.id));
-                      audio.play().catch(() => {});
-                    }}
-                  >{t('common.listen')}</button>
+                    onClick={(e) => { e.stopPropagation(); setRenameTarget(v); setRenameName(v.name || ''); }}
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >{t('voiceClone.rename')}</button>
                   <button
                     type="button"
                     className={styles.previewBtn}
@@ -636,6 +731,31 @@ export function VoiceClone() {
           </div>
         )}
       </section>
+
+      {/* 重命名弹窗 */}
+      <Modal
+        isOpen={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title={t('voiceClone.rename')}
+        footer={
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={() => setRenameTarget(null)}>{t('common.cancel')}</Button>
+            <Button
+              variant="primary"
+              onClick={handleRenameSave}
+              loading={renamingId !== null}
+              disabled={!renameName.trim()}
+            >{t('common.save')}</Button>
+          </div>
+        }
+      >
+        <Input
+          label={t('voiceClone.newNameLabel')}
+          type="text"
+          value={renameName}
+          onChange={(e) => setRenameName(e.target.value)}
+        />
+      </Modal>
     </div>
   );
 }

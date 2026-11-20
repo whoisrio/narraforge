@@ -152,7 +152,7 @@ class TestWorkersApp:
         script = (
             "import sys; import main; "
             "heavy = {'voxcpm', 'faster_whisper', 'funasr', 'torch', 'torchaudio', 'modelscope',"
-            "        'edge_tts', 'dashscope', 'qiniu'}; "
+            "        'edge_tts', 'dashscope'}; "
             "bad = [m for m in sys.modules "
             "if m.split('.')[0] in heavy "
             "or m in ('app.api.speech_to_text', 'app.api.voxcpm')]; "

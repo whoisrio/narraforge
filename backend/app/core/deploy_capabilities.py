@@ -7,9 +7,18 @@ workers 清单必须保持为 local 清单的子集。
 
 from __future__ import annotations
 
-LOCAL_ENGINES = ["edge_tts", "mimo_tts", "cosyvoice", "voxcpm", "indextts"]
+LOCAL_ENGINES = ["edge_tts", "mimo_tts", "qwen", "voxcpm", "indextts"]
 # indextts 不进 clone_engines：zero-shot 直接引用已有 VoiceProfile 音频，无克隆注册流程
 LOCAL_CLONE_ENGINES = ["qwen", "mimo", "voxcpm"]
+
+# Qwen 音色注册可选的目标 TTS 模型（复刻音色创建时永久绑定该模型，合成必须一致）
+QWEN_TARGET_MODELS = [
+    "cosyvoice-v3.5-plus",
+    "cosyvoice-v3.5-flash",
+    "cosyvoice-v3-plus",
+    "cosyvoice-v3-flash",
+    "cosyvoice-v2",
+]
 
 WORKERS_ENGINES = ["edge_tts", "mimo_tts"]
 WORKERS_CLONE_ENGINES = ["mimo"]
@@ -26,6 +35,8 @@ _LOCAL_FEATURES = {
 
 def get_capabilities(deploy_target: str) -> dict:
     """按部署目标返回能力清单。未知目标按 local 全量处理（本地开发体验不变）。"""
+    from app.core.config import settings
+
     if deploy_target == "workers":
         features = {key: False for key in _LOCAL_FEATURES}
         features["direct_storage_upload"] = True
@@ -43,4 +54,7 @@ def get_capabilities(deploy_target: str) -> dict:
         "engines": list(LOCAL_ENGINES),
         "clone_engines": list(LOCAL_CLONE_ENGINES),
         "features": dict(_LOCAL_FEATURES),
+        # Qwen 音色注册可选的目标 TTS 模型与当前默认值（音色永久绑定注册时的模型）
+        "qwen_target_models": list(QWEN_TARGET_MODELS),
+        "qwen_default_model": settings.qwen_model,
     }

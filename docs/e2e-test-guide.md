@@ -223,7 +223,8 @@ against their own contracts (API → `docs/api-reference.md` + Pydantic schema; 
 |---|---|---|---|---|
 | G1 | **Regenerate All flow** | i18n raw-key regression covered by `studio-resynthesis.spec.ts` + `i18n.test.ts` + E2E guard | `studio-resynthesis.spec.ts` | High | ✅ Done |
 | G2 | **CosyVoice / VoxCPM role creation** | voice-role-flows only tests MiMo preset; other engines not verified | Extend `voice-role-flows.spec.ts` | Medium |
-| G3 | **Voice Clone flow** | MiMo clone: upload → preview → create → verify — covered by `voice-clone.spec.ts` | `voice-clone.spec.ts` | Medium | ✅ Done |
+| G3 | **Voice Clone flow** | MiMo clone: upload → preview → create → verify — covered by `voice-clone.spec.ts`；CosyVoice base64 直传注册的失败路径（错误呈现 + 回滚 + 数据未污染）见同文件 `语音克隆 - CosyVoice base64 直传注册` describe，无真实 DashScope Key 的环境自动运行、有 Key 自动 skip；云端同步音色管理（可见性/合成试听/重命名/删除）为前端+API 手工验收，已在一台带 Key 机器上验证（sync 11 个音色 → 可读名 → 重命名 → 再同步保名 → 合成试听 → 删除） | `voice-clone.spec.ts` | Medium | ✅ Done |
+| G13 | **CosyVoice 注册真实 happy path** | 带真实 Key 环境手工验收：上传 → `create-clone`（base64 直传）→ DB 断言 `voice_id`/`target_model`/`enrollment_method` → 合成出声 → 删除清理（同时删云端音色）。已在一台带 Key 机器上验证通过（voice_id `cosyvoice-v3.5-plus-clone...`，合成 2s 音频） | 手工步骤 | Medium | ✅ Done (manual) |
 | G4 | **Actual audio playback** | Only checks player UI visibility; does not verify audio src is valid and duration > 0 | Extend existing studio specs | Medium |
 | G5 | **English locale UI** | All 83 tests use Chinese locale; no English locale coverage | New locale-parameterized spec or standalone `i18n-en.spec.ts` | Medium |
 | G6 | **Error recovery** | Synthesis-failure retry, state rollback, user feedback — untested | Extend `studio-segment-operations` / `studio-batch-export` | Low |

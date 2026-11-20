@@ -56,8 +56,8 @@ def test_export_chapter_audio_marks_missing(db_session, tmp_path, monkeypatch):
 def test_sync_from_qwen_updates_role_on_existing_voice(client, db_session, monkeypatch):
     voice = VoiceProfile(
         name="n",
-        voice={"engine": "cosyvoice", "role": "custom"},
-        voice_params={"cosyvoice": {"params": {"voice_id": "qv1"}}},
+        voice={"engine": "qwen", "role": "custom"},
+        voice_params={"qwen": {"params": {"voice_id": "qv1"}}},
     )
     db_session.add(voice)
     db_session.commit()
@@ -78,8 +78,8 @@ def test_sync_from_qwen_updates_role_on_existing_voice(client, db_session, monke
 def test_update_description_persists_prompt_text(client, db_session):
     voice = VoiceProfile(
         name="n",
-        voice={"model": "cosyvoice"},
-        voice_params={"cosyvoice": {"params": {"prompt_text": "old"}}},
+        voice={"model": "qwen"},
+        voice_params={"qwen": {"params": {"prompt_text": "old"}}},
     )
     db_session.add(voice)
     db_session.commit()
@@ -92,4 +92,4 @@ def test_update_description_persists_prompt_text(client, db_session):
 
     db_session.expire_all()
     v = db_session.query(VoiceProfile).filter_by(id=voice.id).one()
-    assert v.voice_params["cosyvoice"]["params"]["prompt_text"] == "new"
+    assert v.voice_params["qwen"]["params"]["prompt_text"] == "new"

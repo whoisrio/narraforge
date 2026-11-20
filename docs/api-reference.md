@@ -60,7 +60,7 @@ legacy admin 看全部行；匿名兜底为 `user_id IS NULL` 作用域（只触
 | GET | `/api/clone/{voice_id}` | 获取单个声音详情 |
 | DELETE | `/api/clone/{voice_id}` | 删除声音（同时清理云端注册和本地文件） |
 | POST | `/api/clone/sync-from-qwen` | 从 Qwen 云端同步声音列表 |
-| PATCH | `/api/clone/{voice_id}/description` | 更新声音描述和/或 prompt_text |
+| PATCH | `/api/clone/{voice_id}/description` | 更新声音描述和/或 prompt_text；支持可选 `name` 重命名 |
 | PATCH | `/api/clone/{voice_id}/preview-audio` | 保存克隆音色的试听音频 |
 | GET | `/api/clone/audio/{voice_id}` | 获取声音音频文件（支持 `field` 查询参数） |
 
@@ -160,10 +160,14 @@ local 模式继续走 multipart `/upload`。
 
 ### POST `/api/clone/create-clone`
 
+CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64 Data URI 直传新式 `voice-enrollment` HTTP API，无需公网 URL、无需配置七牛 OSS 或 `PUBLIC_BASE_URL`。
+
+以 `http(s)://` 开头的音频地址仍兼容旧 SDK 路径（仅内部使用，正常流程不会传入）。
+
 **Request Body:**
 ```json
 {
-  "voice_id": "已上传音频的ID",
+  "profile_id": "已上传音频的ID",
   "name": "我的声音",
   "role": "custom",
   "avatar": "data:image/png;base64,...",
@@ -175,13 +179,60 @@ local 模式继续走 multipart `/upload`。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `voice_id` | string | 必填 | 已通过 upload 上传的音频 ID |
+| `profile_id` | string | 必填 | 已通过 upload 上传的音频 ID |
 | `name` | string | `null` | 声音名称 |
 | `role` | string | `"custom"` | 角色标签 |
 | `avatar` | string | `null` | 头像（data URL 或外部 URL） |
 | `engine_params` | object | `{}` | 引擎特有参数，前端透传存储。常用字段：`input_method`（`record`/`upload`/`url`） |
 
+**注册前置校验（后端）：**
+
+本地音频必须满足官方音频要求：MP3/WAV/M4A、时长 ≤60s、大小 ≤10MB。
+
+**落库字段：**
+
+成功后 `voice_params.qwen.params` 写入 `voice_id`、`target_model`（音色永久绑定的模型，合成时必须一致）、`enrollment_method`（`base64` / `url`）。
+
+**错误：**
+
+本地音频缺失返回 404。
+注册失败（音频不合规、API Key 无效、账号音色配额满等）返回 500，错误信息透出上游 message。
+若失败发生在音色已创建之后（如部署超时/质检不过 `UNDEPLOYED`），错误信息包含 `voice_id` 以便追溯与清理云端孤儿音色。
+失败时 profile 保持「已上传未注册」状态，可直接重试。
+
 **Response:** `VoiceProfile` 对象（见下方通用 VoiceProfile 响应格式）
+
+### PATCH `/api/clone/{voice_id}/description`
+
+更新声音的描述、prompt_text 和/或重命名。
+
+**Request Body:**
+```json
+{
+  "description": "三国武将音色",
+  "prompt_text": "参考音频转录文本",
+  "name": "关羽"
+}
+```
+
+**字段说明:**
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `description` | string | `""` | 声音描述；空字符串视为清除（存为 NULL），不得与其他声音重复（409） |
+| `prompt_text` | string | `null` | 参考音频转录文本 |
+| `name` | string | `null` | 可选；提供时重命名声音，非空、≤100 字符，空/纯空白返回 400 |
+
+**Response:**
+
+```json
+{
+  "id": "uuid",
+  "name": "关羽",
+  "description": "三国武将音色",
+  "prompt_text": null
+}
+```
 
 ### POST `/api/clone/create-from-design`
 
@@ -265,11 +316,11 @@ local 模式继续走 multipart `/upload`。
       "avatar": null,
       "project_id": null,
       "voice": {
-        "model": "cosyvoice",
+        "model": "qwen",
         "voice_type": "clone"
       },
       "voice_params": {
-        "cosyvoice": {
+        "qwen": {
           "source_audio_path": "output/clone_voices/audio.mp3",
           "params": {
             "voice_id": "xxx",
@@ -329,7 +380,7 @@ local 模式继续走 multipart `/upload`。
 ```json
 {
   "text": "要合成的文字",
-  "engine": "cosyvoice",
+  "engine": "qwen",
   "voice_id": "xxx",
   "language": "Chinese",
   "speed": 1.0,
@@ -350,8 +401,8 @@ local 模式继续走 multipart `/upload`。
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `text` | string | 必填 | 要合成的文本 |
-| `engine` | string | `"cosyvoice"` | 引擎：`cosyvoice` 或 `edge_tts` |
-| `voice_id` | string | `""` | CosyVoice 声音 ID（engine=cosyvoice 时必填） |
+| `engine` | string | `"qwen"` | 引擎：`qwen`（Qwen/CosyVoice 模型族）或 `edge_tts` |
+| `voice_id` | string | `""` | Qwen 声音 ID（engine=qwen 时必填） |
 | `language` | string | `"Chinese"` | 语言 |
 | `speed` | float | `1.0` | 语速 0.5-2.0 |
 | `volume` | float | `80` | 音量 0-100 |
@@ -411,9 +462,9 @@ local 模式继续走 multipart `/upload`。
       "description": "温柔女声",
       "avatar": null,
       "project_id": null,
-      "voice": { "model": "cosyvoice", "voice_type": "clone" },
+      "voice": { "model": "qwen", "voice_type": "clone" },
       "voice_params": {
-        "cosyvoice": {
+        "qwen": {
           "source_audio_path": "output/clone_voices/audio.mp3",
           "params": { "voice_id": "xxx" }
         }
@@ -1326,7 +1377,7 @@ TTS 合成后的 ASR 回读验收：把段音频转回文本与「实际朗读�
 | `chapters[].chapter_title` | string | 必填 | 章节标题 |
 | `chapters[].narration_script` | string | `null` | 本章旁白稿正文（L2，不含标题行），持久化到章节的 `narration_script` 字段；未传则为 `null` |
 | `chapters[].original_text` | string | `null` | 本章旁白稿正文，持久化到章节的 `original_text` 字段（章节卡片显示与工作室拆分源文本）；未传则为 `null` |
-| `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`cosyvoice`/`mimo_tts`/`voxcpm`/`indextts`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
+| `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`qwen`/`mimo_tts`/`voxcpm`/`indextts`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
 | `chapters[].split_config` | object | `null` | 本章分段规则（`delimiters` + `mode`）。优先级：payload 显式值 > 匹配旧章节的沿承值 > 默认 |
 | `chapters[].segments[].text` | string | 必填 | 分片文本 |
 | `chapters[].segments[].emotion` | string | `null` | 分片情绪 |
@@ -2050,9 +2101,9 @@ Layer-sync Phase B：把 L3 分段文本的改动定位合并回写 L2。
   "description": "温柔女声",
   "avatar": null,
   "project_id": null,
-  "voice": { "model": "cosyvoice", "voice_type": "clone" },
+  "voice": { "model": "qwen", "voice_type": "clone" },
   "voice_params": {
-    "cosyvoice": {
+    "qwen": {
       "source_audio_path": "output/clone_voices/audio.mp3",
       "params": { "voice_id": "xxx", "voice_description": "..." }
     }

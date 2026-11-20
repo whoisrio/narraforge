@@ -1,7 +1,6 @@
 """Voice Clone API 集成测试"""
 import os
 import tempfile
-from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -76,8 +75,8 @@ class TestCloneAPI:
         voice2 = VoiceProfile(
             id=str(uuid.uuid4()),
             name="Voice 2",
-            voice={"model": "cosyvoice", "voice_type": "clone"},
-            voice_params={"cosyvoice": {"source_audio_path": "/tmp/voice2.wav", "params": {"voice_id": "cloned_123"}}},
+            voice={"model": "qwen", "voice_type": "clone"},
+            voice_params={"qwen": {"source_audio_path": "/tmp/voice2.wav", "params": {"voice_id": "cloned_123"}}},
             created_at=datetime.now(timezone.utc)
         )
 
@@ -98,8 +97,8 @@ class TestCloneAPI:
         assert voice1_data["voice"]["model"] == ""
 
         assert voice2_data["voice"]["voice_type"] == "clone"
-        assert voice2_data["voice"]["model"] == "cosyvoice"
-        assert voice2_data["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cloned_123"
+        assert voice2_data["voice"]["model"] == "qwen"
+        assert voice2_data["voice_params"]["qwen"]["params"]["voice_id"] == "cloned_123"
 
     def test_get_voice_not_found(self, client: TestClient):
         response = client.get("/api/clone/nonexistent_voice_id")
@@ -115,8 +114,8 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Test Voice",
-            voice={"model": "cosyvoice", "voice_type": "clone"},
-            voice_params={"cosyvoice": {"source_audio_path": "/tmp/test.wav", "params": {"voice_id": "cloned_456"}}},
+            voice={"model": "qwen", "voice_type": "clone"},
+            voice_params={"qwen": {"source_audio_path": "/tmp/test.wav", "params": {"voice_id": "cloned_456"}}},
             created_at=datetime.now(timezone.utc)
         )
 
@@ -131,8 +130,8 @@ class TestCloneAPI:
         assert data["name"] == "Test Voice"
         assert data["has_source"] is True
         assert data["voice"]["voice_type"] == "clone"
-        assert data["voice"]["model"] == "cosyvoice"
-        assert data["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cloned_456"
+        assert data["voice"]["model"] == "qwen"
+        assert data["voice_params"]["qwen"]["params"]["voice_id"] == "cloned_456"
         assert data["created_at"] is not None
 
     def test_delete_voice_success(self, client: TestClient, db_session):
@@ -151,8 +150,8 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Delete Test",
-            voice={"model": "cosyvoice", "voice_type": "clone"},
-            voice_params={"cosyvoice": {"source_audio_path": audio_path, "params": {}}},
+            voice={"model": "qwen", "voice_type": "clone"},
+            voice_params={"qwen": {"source_audio_path": audio_path, "params": {}}},
         )
 
         db_session.add(voice)
@@ -175,7 +174,7 @@ class TestCloneAPI:
         assert response.status_code == 404
 
     def test_create_clone_success(self, client: TestClient, db_session, mock_tts_service):
-        """测试创建克隆声音成功：本地音频会先上传为公网 URL，再注册到 Qwen。"""
+        """测试创建克隆声音成功：本地音频 base64 直传注册，无需公网 URL/七牛。"""
         import uuid
 
         from app.models.voice_profile import VoiceProfile
@@ -196,13 +195,6 @@ class TestCloneAPI:
         db_session.add(voice)
         db_session.commit()
 
-        mock_tts_service.register_cloned_voice.return_value = {
-            "voice_id": "qwen_cloned_123",
-            "voice_name": "Cloned Voice",
-            "role": "custom"
-        }
-
-        public_url = "https://cdn.example.com/clone.wav"
         request_data = {
             "profile_id": voice_id,
             "name": "Cloned Voice Name",
@@ -210,29 +202,70 @@ class TestCloneAPI:
             "engine_params": {"speed": 1, "language": "Chinese", "volume": 80}
         }
 
-        with patch("app.api.clone.is_qiniu_configured", return_value=True), \
-             patch("app.api.clone.upload_to_qiniu", return_value=public_url):
-            response = client.post("/api/clone/create-clone", json=request_data)
+        response = client.post("/api/clone/create-clone", json=request_data)
 
         assert response.status_code == 200
         data = response.json()
 
         assert data["id"] == voice_id
         assert data["name"] == "Cloned Voice Name"
-        assert data["voice_params"]["cosyvoice"]["params"]["voice_id"] == "qwen_cloned_123"
-        assert data["voice"]["model"] == "cosyvoice"
+        assert data["voice"]["model"] == "qwen"
         assert data["voice"]["voice_type"] == "clone"
 
-        # 验证 voice_params 正确写入
-        vp_params = data["voice_params"]["cosyvoice"]["params"]
+        # 验证 voice_params 正确写入（含注册元数据）
+        vp_params = data["voice_params"]["qwen"]["params"]
+        assert vp_params["voice_id"] == "test_cloned_voice_123"
+        assert vp_params["target_model"] == "cosyvoice-v3.5-plus"
+        assert vp_params["enrollment_method"] == "base64"
         assert vp_params["speed"] == 1
         assert vp_params["language"] == "Chinese"
         assert vp_params["volume"] == 80
 
+        # 注册调用应使用本地音频路径（base64 直传），而非公网 URL
         mock_tts_service.register_cloned_voice.assert_called_once_with(
-            reference_audio_path=public_url,
-            voice_name="Cloned Voice Name"
+            reference_audio_path=audio_path,
+            voice_name="Cloned Voice Name",
+            target_model=None,
         )
+
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_create_clone_failure_keeps_upload_state(self, client: TestClient, db_session, mock_tts_service):
+        """注册失败 → 500（错误信息含 voice_id），profile 保持「已上传未注册」可重试。"""
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"clone_fail_{voice_id}.wav")
+
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        voice = VoiceProfile(
+            id=voice_id,
+            name="Fail Case",
+            voice={"model": "", "voice_type": "upload"},
+            voice_params={"": {"source_audio_path": audio_path}},
+        )
+
+        db_session.add(voice)
+        db_session.commit()
+
+        mock_tts_service.register_cloned_voice.side_effect = Exception(
+            "Voice processing failed with status 'UNDEPLOYED' (voice_id=voice-x)"
+        )
+
+        response = client.post("/api/clone/create-clone", json={"profile_id": voice_id})
+
+        assert response.status_code == 500
+        # 错误中间件将 detail 重塑为 {detail: {code, message}}，voice_id 需可追溯
+        assert "voice-x" in response.json()["detail"]["message"]
+
+        refreshed = client.get(f"/api/clone/{voice_id}").json()
+        assert refreshed["voice"]["voice_type"] == "upload"
+        assert refreshed["voice"]["model"] == ""
 
         if os.path.exists(audio_path):
             os.unlink(audio_path)
@@ -481,3 +514,190 @@ class TestCloneAPI:
             json={"audio_base64": "dGVzdA==", "audio_format": "wav"},
         )
         assert response.status_code == 404
+
+
+class TestSyncFromQwen:
+    """sync-from-qwen：可读命名 + 注册元数据落库 + 自定义名保护"""
+
+    def test_sync_creates_profiles_with_derived_names_and_metadata(
+        self, client: TestClient, db_session, mock_tts_service
+    ):
+        mock_tts_service.list_cloned_voices.return_value = [
+            {
+                "voice_id": "cosyvoice-v3.5-plus-guanyu-" + "a" * 32,
+                "status": "OK",
+                "target_model": "cosyvoice-v3.5-plus",
+            },
+            {
+                "voice_id": "cosyvoice-v3.5-plus-bailian-24dfc9059ecd4f0b907fcb5d5efe2852",
+                "status": "OK",
+                "target_model": "cosyvoice-v3.5-plus",
+            },
+            {
+                "voice_id": "cosyvoice-v3.5-plus-deadbeef-" + "b" * 32,
+                "status": "UNDEPLOYED",
+                "target_model": "cosyvoice-v3.5-plus",
+            },
+        ]
+
+        response = client.post("/api/clone/sync-from-qwen")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["synced"] == 2
+
+        items = client.get("/api/clone/list").json()["items"]
+        synced = {
+            (v["voice_params"]["qwen"]["params"]["voice_id"]): v
+            for v in items
+            if v["voice"]["model"] == "qwen"
+        }
+        assert len(synced) == 2
+
+        guanyu = synced["cosyvoice-v3.5-plus-guanyu-" + "a" * 32]
+        assert guanyu["name"] == "guanyu"
+        assert guanyu["voice_params"]["qwen"]["params"]["target_model"] == "cosyvoice-v3.5-plus"
+        assert guanyu["voice_params"]["qwen"]["params"]["enrollment_method"] == "sync"
+
+        bailian = synced["cosyvoice-v3.5-plus-bailian-24dfc9059ecd4f0b907fcb5d5efe2852"]
+        assert bailian["name"] == "bailian"
+
+    def test_resync_preserves_custom_name_but_fills_metadata(
+        self, client: TestClient, db_session, mock_tts_service
+    ):
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = "cosyvoice-v3.5-plus-custom-" + "c" * 32
+        db_session.add(
+            VoiceProfile(
+                id=str(uuid.uuid4()),
+                name="关云长",
+                voice={"model": "qwen", "voice_type": "clone"},
+                voice_params={"qwen": {"params": {"voice_id": voice_id}}},
+            )
+        )
+        db_session.commit()
+
+        mock_tts_service.list_cloned_voices.return_value = [
+            {"voice_id": voice_id, "status": "OK", "target_model": "cosyvoice-v3.5-plus"}
+        ]
+        response = client.post("/api/clone/sync-from-qwen")
+        assert response.status_code == 200
+        assert response.json()["updated"] == 1
+
+        items = client.get("/api/clone/list").json()["items"]
+        match = [v for v in items if v["name"] == "关云长"]
+        assert len(match) == 1
+        params = match[0]["voice_params"]["qwen"]["params"]
+        assert params["target_model"] == "cosyvoice-v3.5-plus"
+        assert params["enrollment_method"] == "sync"
+
+    def test_resync_refreshes_legacy_fallback_name(
+        self, client: TestClient, db_session, mock_tts_service
+    ):
+        """旧版同步产生的 voice_{voice_id} 垃圾名应被刷新为可读名。"""
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = "cosyvoice-v3.5-plus-legacy-" + "d" * 32
+        db_session.add(
+            VoiceProfile(
+                id=str(uuid.uuid4()),
+                name=f"voice_{voice_id}",
+                voice={"model": "qwen", "voice_type": "clone"},
+                voice_params={"qwen": {"params": {"voice_id": voice_id}}},
+            )
+        )
+        db_session.commit()
+
+        mock_tts_service.list_cloned_voices.return_value = [
+            {"voice_id": voice_id, "status": "OK", "target_model": "cosyvoice-v3.5-plus"}
+        ]
+        response = client.post("/api/clone/sync-from-qwen")
+        assert response.status_code == 200
+
+        items = client.get("/api/clone/list").json()["items"]
+        match = [v for v in items if v["voice_params"]["qwen"]["params"]["voice_id"] == voice_id]
+        assert len(match) == 1
+        assert match[0]["name"] == "legacy"
+
+
+class TestTargetModelSelection:
+    """create-clone 支持可选 target_model（白名单校验 + 透传注册）"""
+
+    def test_create_clone_with_target_model(self, client: TestClient, db_session, mock_tts_service):
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"clone_tm_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        db_session.add(
+            VoiceProfile(
+                id=voice_id,
+                name="TM Case",
+                voice={"model": "", "voice_type": "upload"},
+                voice_params={"": {"source_audio_path": audio_path}},
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/clone/create-clone",
+            json={
+                "profile_id": voice_id,
+                "name": "Flash Voice",
+                "engine_params": {"target_model": "cosyvoice-v3.5-flash"},
+            },
+        )
+
+        assert response.status_code == 200
+        vp_params = response.json()["voice_params"]["qwen"]["params"]
+        assert vp_params["target_model"] == "cosyvoice-v3.5-flash"
+        mock_tts_service.register_cloned_voice.assert_called_once_with(
+            reference_audio_path=audio_path,
+            voice_name="Flash Voice",
+            target_model="cosyvoice-v3.5-flash",
+        )
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_create_clone_rejects_unknown_target_model(
+        self, client: TestClient, db_session, mock_tts_service
+    ):
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"clone_bad_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        db_session.add(
+            VoiceProfile(
+                id=voice_id,
+                name="Bad TM",
+                voice={"model": "", "voice_type": "upload"},
+                voice_params={"": {"source_audio_path": audio_path}},
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/clone/create-clone",
+            json={
+                "profile_id": voice_id,
+                "engine_params": {"target_model": "cosyvoice-v9-imaginary"},
+            },
+        )
+
+        assert response.status_code == 400
+        assert "Unsupported target_model" in response.json()["detail"]["message"]
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)

@@ -31,9 +31,9 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
     try {
       const list = await voiceApi.list();
       setVoices(list);
-      const clonedVoice = list.find(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
+      const clonedVoice = list.find(v => v.voice?.voice_type === 'clone' && (v.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id);
       if (clonedVoice) {
-        setSelectedVoiceId(((clonedVoice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string)!);
+        setSelectedVoiceId(((clonedVoice.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id as string)!);
         setUseClonedVoice(true);
       }
     } catch (err) {
@@ -79,10 +79,10 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
       setUseClonedVoice(false);
       setSelectedVoiceId('xiaoyun');
     } else {
-      const clonedVoice = voices.find(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id);
+      const clonedVoice = voices.find(v => v.voice?.voice_type === 'clone' && (v.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id);
       if (clonedVoice) {
         setUseClonedVoice(true);
-        setSelectedVoiceId(((clonedVoice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string)!);
+        setSelectedVoiceId(((clonedVoice.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id as string)!);
       }
     }
   };
@@ -96,9 +96,9 @@ export function TTSControls({ onSynthesize }: TTSControlsProps) {
   ];
 
   const clonedVoiceOptions = voices
-    .filter(v => v.voice?.voice_type === 'clone' && (v.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id)
+    .filter(v => v.voice?.voice_type === 'clone' && (v.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id)
     .map(voice => {
-      const voiceId = (voice.voice_params?.cosyvoice?.params as Record<string, unknown>)?.voice_id as string;
+      const voiceId = (voice.voice_params?.qwen?.params as Record<string, unknown>)?.voice_id as string;
       return { value: voiceId, label: voice.description || voiceId };
     });
 

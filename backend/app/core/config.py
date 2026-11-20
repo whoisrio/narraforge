@@ -150,6 +150,8 @@ class Settings(BaseSettings):
     # API Keys (千问)
     qwen_api_key: str = ""
     qwen_model: str = "qwen-tts"
+    # voice-enrollment HTTP API base（可用业务空间专属域名，如 https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1）
+    qwen_base_url: str = "https://dashscope.aliyuncs.com/api/v1"
 
     # MiMo TTS API (小米 MiMo-V2.5-TTS 系列)
     mimo_api_key: str = ""
@@ -176,12 +178,6 @@ class Settings(BaseSettings):
     # 本地开发可以使用 ngrok 暴露的 URL，如：https://xxxx.ngrok.io
     # 生产环境使用实际域名，如：https://your-domain.com
     public_base_url: str = ""
-
-    # 七牛云对象存储
-    oss_ak: str = ""
-    oss_sk: str = ""
-    bucket_name: str = ""
-    bucket_domain: str = ""
 
     # VoxCPM 本地 GPU 模型
     voxcpm_model_path: str = "openbmb/VoxCPM2"  # HuggingFace 模型ID 或本地权重目录

@@ -11,8 +11,8 @@ function makeProject(overrides: Partial<SegmentedProject> = {}): SegmentedProjec
     id: 'p1',
     name: 'Test',
     chapters: [{
-      id: 'ch1', name: '第一章', engine: 'cosyvoice',
-      default_params: { engine: 'cosyvoice' },
+      id: 'ch1', name: '第一章', engine: 'qwen',
+      default_params: { engine: 'qwen' },
       split_config: { delimiters: ['，', '。'], mode: 'rule' },
       segments: [], created_at: now, updated_at: now,
     }],
@@ -60,8 +60,8 @@ describe('segmentedProjectDB', () => {
     await segmentedProjectDB.saveProject(makeProject({
       id: 'pa',
       chapters: [{
-        id: 'ch1', name: '第一章', engine: 'cosyvoice',
-        default_params: { engine: 'cosyvoice' },
+        id: 'ch1', name: '第一章', engine: 'qwen',
+        default_params: { engine: 'qwen' },
         split_config: { delimiters: ['，', '。'], mode: 'rule' },
         segments: [
           { id: 's1', text: 'a', status: 'ready',

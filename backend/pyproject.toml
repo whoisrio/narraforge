@@ -60,7 +60,6 @@ local-services = [
     "pyyaml>=6.0",
     "edge-tts>=7.3.1",
     "dashscope>=1.25.0",
-    "qiniu>=7.17.0",
     # 遗留工作流依赖（app 代码已无引用，agent/ 服务独立管理依赖）
     "langgraph>=1.2.0",
     "langgraph-checkpoint-sqlite>=1.0.0",
