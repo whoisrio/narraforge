@@ -57,6 +57,7 @@ Required only when `DEPLOY_TARGET=workers`: the workers runtime has no raw socke
 |----------|----------|-------------|---------|
 | `QWEN_API_KEY` | Yes (for clone) | Qwen / DashScope API key for CosyVoice voice cloning | *(empty)* |
 | `QWEN_MODEL` | No | CosyVoice model identifier | `qwen-tts` |
+| `QWEN_BASE_URL` | No | voice-enrollment HTTP API base（可用业务空间专属域名，如 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api/v1`） | `https://dashscope.aliyuncs.com/api/v1` |
 
 ## MiMo TTS API (Xiaomi MiMo-V2.5-TTS)
 

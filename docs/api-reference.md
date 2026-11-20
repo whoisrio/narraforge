@@ -160,10 +160,14 @@ local 模式继续走 multipart `/upload`。
 
 ### POST `/api/clone/create-clone`
 
+CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64 Data URI 直传新式 `voice-enrollment` HTTP API，无需公网 URL、无需配置七牛 OSS 或 `PUBLIC_BASE_URL`。
+
+以 `http(s)://` 开头的音频地址仍兼容旧 SDK 路径（仅内部使用，正常流程不会传入）。
+
 **Request Body:**
 ```json
 {
-  "voice_id": "已上传音频的ID",
+  "profile_id": "已上传音频的ID",
   "name": "我的声音",
   "role": "custom",
   "avatar": "data:image/png;base64,...",
@@ -175,11 +179,26 @@ local 模式继续走 multipart `/upload`。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `voice_id` | string | 必填 | 已通过 upload 上传的音频 ID |
+| `profile_id` | string | 必填 | 已通过 upload 上传的音频 ID |
 | `name` | string | `null` | 声音名称 |
 | `role` | string | `"custom"` | 角色标签 |
 | `avatar` | string | `null` | 头像（data URL 或外部 URL） |
 | `engine_params` | object | `{}` | 引擎特有参数，前端透传存储。常用字段：`input_method`（`record`/`upload`/`url`） |
+
+**注册前置校验（后端）：**
+
+本地音频必须满足官方音频要求：MP3/WAV/M4A、时长 ≤60s、大小 ≤10MB。
+
+**落库字段：**
+
+成功后 `voice_params.cosyvoice.params` 写入 `voice_id`、`target_model`（音色永久绑定的模型，合成时必须一致）、`enrollment_method`（`base64` / `url`）。
+
+**错误：**
+
+本地音频缺失返回 404。
+注册失败（音频不合规、API Key 无效、账号音色配额满等）返回 500，错误信息透出上游 message。
+若失败发生在音色已创建之后（如部署超时/质检不过 `UNDEPLOYED`），错误信息包含 `voice_id` 以便追溯与清理云端孤儿音色。
+失败时 profile 保持「已上传未注册」状态，可直接重试。
 
 **Response:** `VoiceProfile` 对象（见下方通用 VoiceProfile 响应格式）
 

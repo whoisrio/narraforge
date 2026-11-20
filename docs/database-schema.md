@@ -689,7 +689,7 @@ Structure: `{ "<model>": { "mode"? , "source_audio_path"? , "params": {...} } }`
 { "edge_tts": { "params": { "voice_id": "zh-CN-YunxiNeural", "rate": "+10%", "volume": "+0%" } } }
 
 // cosyvoice (clone)
-{ "cosyvoice": { "source_audio_path": "/voices/clone_xxx.wav", "params": { "voice_id": "cosyvoice-v3-xxx", "speed": 1.0, "volume": 80, "pitch": 1.0, "language": "Chinese" } } }
+{ "cosyvoice": { "source_audio_path": "/voices/clone_xxx.wav", "params": { "voice_id": "cosyvoice-v3-xxx", "target_model": "cosyvoice-v3.5-plus", "enrollment_method": "base64", "speed": 1.0, "volume": 80, "pitch": 1.0, "language": "Chinese" } } }
 
 // mimo_tts (clone)
 { "mimo_tts": { "source_audio_path": "/voices/clone_xxx.mp3", "mode": "voiceclone", "params": { "instruction": "" } } }
