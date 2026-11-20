@@ -1033,7 +1033,7 @@ class QwenTTSService:
                     "PUBLIC_BASE_URL not configured. CosyVoice requires a publicly accessible URL for audio files. "
                     "Please either: "
                     "1. Set PUBLIC_BASE_URL environment variable (e.g., https://your-domain.com), or "
-                    "2. Provide an external audio URL directly (e.g., from cloud storage like Qiniu, AWS S3)"
+                    "2. Provide an external audio URL directly (e.g., from cloud storage)"
                 )
 
         # CosyVoice 的 prefix 要求：仅允许数字和小写字母，少于 10 个字符
