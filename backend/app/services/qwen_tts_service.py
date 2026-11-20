@@ -30,6 +30,24 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 
+def derive_voice_display_name(voice_id: str, target_model: str = "") -> str:
+    """
+    从 Qwen voice_id 派生可读显示名。
+
+    voice_id 形如 `{target_model}-{prefix}-{32位hash}`，新式 list_voice 响应没有
+    name 字段，取中间的 prefix 段（注册时用户自定义的前缀）作为显示名；
+    解析失败时回退到尽可能短的原始 ID 片段。
+    """
+    name = voice_id or ""
+    if target_model and name.startswith(target_model + "-"):
+        name = name[len(target_model) + 1:]
+    if "-" in name:
+        stem, _, tail = name.rpartition("-")
+        if len(tail) == 32 and all(c in "0123456789abcdef" for c in tail.lower()):
+            name = stem
+    return name or voice_id
+
+
 class QwenTTSService:
     """千问 TTS 服务 - 支持 TTS 和 CosyVoice 两个系列"""
 

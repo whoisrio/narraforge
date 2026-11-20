@@ -555,3 +555,34 @@ class TestListClonedVoicesPagination:
 
         assert len(result) == 1000
         assert inst.list_voices.call_count == 20
+
+
+class TestDeriveVoiceDisplayName:
+    """从 Qwen voice_id 派生可读显示名（新 API list 响应无 name 字段）"""
+
+    def test_strips_target_model_and_hash(self):
+        from app.services.qwen_tts_service import derive_voice_display_name
+
+        voice_id = "cosyvoice-v3.5-plus-guanyu-" + "a" * 32
+        assert derive_voice_display_name(voice_id, "cosyvoice-v3.5-plus") == "guanyu"
+
+    def test_bailian_prefix(self):
+        from app.services.qwen_tts_service import derive_voice_display_name
+
+        voice_id = "cosyvoice-v3.5-plus-bailian-24dfc9059ecd4f0b907fcb5d5efe2852"
+        assert derive_voice_display_name(voice_id, "cosyvoice-v3.5-plus") == "bailian"
+
+    def test_strips_hash_without_target_model(self):
+        from app.services.qwen_tts_service import derive_voice_display_name
+
+        voice_id = "cosyvoice-v3.5-plus-guanyu-" + "0123abcd" * 4
+        assert derive_voice_display_name(voice_id) == "cosyvoice-v3.5-plus-guanyu"
+
+    def test_fallback_keeps_id_when_no_hash_tail(self):
+        from app.services.qwen_tts_service import derive_voice_display_name
+
+        assert (
+            derive_voice_display_name("cosyvoice-v3.5-plus-guanyu", "cosyvoice-v3.5-plus")
+            == "guanyu"
+        )
+        assert derive_voice_display_name("some-weird-id") == "some-weird-id"
