@@ -191,7 +191,7 @@ CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64
 
 **落库字段：**
 
-成功后 `voice_params.cosyvoice.params` 写入 `voice_id`、`target_model`（音色永久绑定的模型，合成时必须一致）、`enrollment_method`（`base64` / `url`）。
+成功后 `voice_params.qwen.params` 写入 `voice_id`、`target_model`（音色永久绑定的模型，合成时必须一致）、`enrollment_method`（`base64` / `url`）。
 
 **错误：**
 
@@ -316,11 +316,11 @@ CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64
       "avatar": null,
       "project_id": null,
       "voice": {
-        "model": "cosyvoice",
+        "model": "qwen",
         "voice_type": "clone"
       },
       "voice_params": {
-        "cosyvoice": {
+        "qwen": {
           "source_audio_path": "output/clone_voices/audio.mp3",
           "params": {
             "voice_id": "xxx",
@@ -380,7 +380,7 @@ CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64
 ```json
 {
   "text": "要合成的文字",
-  "engine": "cosyvoice",
+  "engine": "qwen",
   "voice_id": "xxx",
   "language": "Chinese",
   "speed": 1.0,
@@ -401,8 +401,8 @@ CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `text` | string | 必填 | 要合成的文本 |
-| `engine` | string | `"cosyvoice"` | 引擎：`cosyvoice` 或 `edge_tts` |
-| `voice_id` | string | `""` | CosyVoice 声音 ID（engine=cosyvoice 时必填） |
+| `engine` | string | `"qwen"` | 引擎：`qwen`（Qwen/CosyVoice 模型族）或 `edge_tts` |
+| `voice_id` | string | `""` | Qwen 声音 ID（engine=qwen 时必填） |
 | `language` | string | `"Chinese"` | 语言 |
 | `speed` | float | `1.0` | 语速 0.5-2.0 |
 | `volume` | float | `80` | 音量 0-100 |
@@ -462,9 +462,9 @@ CosyVoice 注册克隆：后端读取本地存储的源音频，编码为 Base64
       "description": "温柔女声",
       "avatar": null,
       "project_id": null,
-      "voice": { "model": "cosyvoice", "voice_type": "clone" },
+      "voice": { "model": "qwen", "voice_type": "clone" },
       "voice_params": {
-        "cosyvoice": {
+        "qwen": {
           "source_audio_path": "output/clone_voices/audio.mp3",
           "params": { "voice_id": "xxx" }
         }
@@ -1377,7 +1377,7 @@ TTS 合成后的 ASR 回读验收：把段音频转回文本与「实际朗读�
 | `chapters[].chapter_title` | string | 必填 | 章节标题 |
 | `chapters[].narration_script` | string | `null` | 本章旁白稿正文（L2，不含标题行），持久化到章节的 `narration_script` 字段；未传则为 `null` |
 | `chapters[].original_text` | string | `null` | 本章旁白稿正文，持久化到章节的 `original_text` 字段（章节卡片显示与工作室拆分源文本）；未传则为 `null` |
-| `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`cosyvoice`/`mimo_tts`/`voxcpm`/`indextts`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
+| `chapters[].engine` | string | `null` | 本章 TTS 引擎（`edge_tts`/`qwen`/`mimo_tts`/`voxcpm`/`indextts`），写入 `chapter.voice` JSON 的 `engine` 键并保留其他键；未传则沿用默认 voice |
 | `chapters[].split_config` | object | `null` | 本章分段规则（`delimiters` + `mode`）。优先级：payload 显式值 > 匹配旧章节的沿承值 > 默认 |
 | `chapters[].segments[].text` | string | 必填 | 分片文本 |
 | `chapters[].segments[].emotion` | string | `null` | 分片情绪 |
@@ -2101,9 +2101,9 @@ Layer-sync Phase B：把 L3 分段文本的改动定位合并回写 L2。
   "description": "温柔女声",
   "avatar": null,
   "project_id": null,
-  "voice": { "model": "cosyvoice", "voice_type": "clone" },
+  "voice": { "model": "qwen", "voice_type": "clone" },
   "voice_params": {
-    "cosyvoice": {
+    "qwen": {
       "source_audio_path": "output/clone_voices/audio.mp3",
       "params": { "voice_id": "xxx", "voice_description": "..." }
     }

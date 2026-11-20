@@ -46,11 +46,11 @@ PROVIDER_SCHEMAS: dict[str, dict[str, dict[str, Any]]] = {
             "description": "千问 DashScope API Key",
         },
         "model": {
-            "label": "模型名称",
+            "label": "默认目标模型",
             "type": "text",
             "sensitive": False,
             "default_from_settings": "qwen_model",
-            "description": "如 cosyvoice-v2 或 qwen-tts",
+            "description": "音色未绑定 target_model 时的回退模型，如 cosyvoice-v3.5-plus",
         },
         "base_url": {
             "label": "API Base URL",
