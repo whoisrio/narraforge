@@ -533,8 +533,8 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         new_model_vp["params"]["enrollment_method"] = result.get("enrollment_method", "base64")
         if request.engine_params:
             new_model_vp["params"].update(request.engine_params)
-        new_vp = {**vp, "cosyvoice": new_model_vp}
-        voice.voice = {"model": "cosyvoice", "voice_type": "clone"}
+        new_vp = {**vp, "qwen": new_model_vp}
+        voice.voice = {"model": "qwen", "voice_type": "clone"}
         voice.voice_params = new_vp
 
         if request.name:
@@ -842,7 +842,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
             existing = None
             for v in all_voices:
                 vp = v.voice_params or {}
-                cosy_vp = vp.get("cosyvoice") or {}
+                cosy_vp = vp.get("qwen") or {}
                 if cosy_vp.get("params", {}).get("voice_id") == voice_id:
                     existing = v
                     break
@@ -857,7 +857,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 existing.voice = voice_data
                 # 补齐注册元数据（旧记录可能缺失）
                 params = copy.deepcopy(existing.voice_params or {})
-                cosy_params = params.setdefault("cosyvoice", {}).setdefault("params", {})
+                cosy_params = params.setdefault("qwen", {}).setdefault("params", {})
                 cosy_params.setdefault("voice_id", voice_id)
                 if target_model:
                     cosy_params.setdefault("target_model", target_model)
@@ -869,7 +869,7 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                     {
                         "id": existing.id,
                         "name": existing.name,
-                        "qwen_voice_id": ((existing.voice_params or {}).get("cosyvoice", {}) or {})
+                        "qwen_voice_id": ((existing.voice_params or {}).get("qwen", {}) or {})
                         .get("params", {})
                         .get("voice_id"),
                         "action": "updated",
@@ -880,9 +880,9 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                 new_voice = VoiceProfile(
                     id=str(uuid.uuid4()),
                     name=name,
-                    voice={"model": "cosyvoice", "voice_type": "clone"},
+                    voice={"model": "qwen", "voice_type": "clone"},
                     voice_params={
-                        "cosyvoice": {
+                        "qwen": {
                             "params": {
                                 "voice_id": voice_id,
                                 "target_model": target_model or None,
@@ -1030,8 +1030,8 @@ async def delete_voice(
     # Qwen 声音需要删除云端音色；MiMo/VoxCPM 声音无云端数据，跳过
     # 云端删除失败不应阻止本地清理，记录警告即可
     voice_data = voice["voice"] or {}
-    cosy_vp = (voice["voice_params"] or {}).get("cosyvoice", {}) or {}
-    if voice_data.get("model") == "cosyvoice" and cosy_vp.get("params", {}).get("voice_id"):
+    cosy_vp = (voice["voice_params"] or {}).get("qwen", {}) or {}
+    if voice_data.get("model") == "qwen" and cosy_vp.get("params", {}).get("voice_id"):
         try:
             tts_service = await get_tts_service(db)
             await tts_service.delete_cloned_voice(cosy_vp["params"]["voice_id"])

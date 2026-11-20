@@ -414,12 +414,12 @@ class TestChapterCrud:
 
         resp = client.patch(
             "/api/segmented-projects/proj-1/chapters/ch-1",
-            json={"design_title": "分镜标题", "voice": {"engine": "cosyvoice"}},
+            json={"design_title": "分镜标题", "voice": {"engine": "qwen"}},
         )
         assert resp.status_code == 200
         ch = resp.json()["chapter"]
         assert ch["design_title"] == "分镜标题"
-        assert ch["voice"] == {"engine": "cosyvoice"}
+        assert ch["voice"] == {"engine": "qwen"}
         assert ch["name"] == "改名章"
 
         got = client.get("/api/segmented-projects/proj-1").json()

@@ -84,15 +84,15 @@ class TestVoiceProfileModel:
         db_session.commit()
 
         voice.name = "Updated Name"
-        voice.voice_params = {"cosyvoice": {"source_audio_path": "/tmp/updated_audio.wav", "params": {}}}
-        voice.voice = {"model": "cosyvoice", "voice_type": "clone"}
+        voice.voice_params = {"qwen": {"source_audio_path": "/tmp/updated_audio.wav", "params": {}}}
+        voice.voice = {"model": "qwen", "voice_type": "clone"}
         db_session.commit()
 
         updated_voice = db_session.query(VoiceProfile).filter_by(id="test_voice_007").first()
         assert updated_voice.name == "Updated Name"
-        assert updated_voice.voice_params.get("cosyvoice", {}).get("source_audio_path") == "/tmp/updated_audio.wav"
+        assert updated_voice.voice_params.get("qwen", {}).get("source_audio_path") == "/tmp/updated_audio.wav"
         assert updated_voice.voice["voice_type"] == "clone"
-        assert updated_voice.voice["model"] == "cosyvoice"
+        assert updated_voice.voice["model"] == "qwen"
 
     def test_voice_profile_delete(self, db_session):
         """测试删除 VoiceProfile"""
@@ -171,15 +171,15 @@ class TestVoiceProfileModel:
             id="test_engine_001",
             name="Engine Voice",
             voice={
-                "model": "cosyvoice",
+                "model": "qwen",
                 "voice_type": "clone",
             },
-            voice_params={"cosyvoice": {"params": {"instruction": "warm"}}},
+            voice_params={"qwen": {"params": {"instruction": "warm"}}},
         )
         db_session.add(voice)
         db_session.commit()
 
         retrieved = db_session.query(VoiceProfile).filter_by(id="test_engine_001").first()
-        assert retrieved.voice["model"] == "cosyvoice"
+        assert retrieved.voice["model"] == "qwen"
         assert retrieved.voice["voice_type"] == "clone"
-        assert retrieved.voice_params == {"cosyvoice": {"params": {"instruction": "warm"}}}
+        assert retrieved.voice_params == {"qwen": {"params": {"instruction": "warm"}}}

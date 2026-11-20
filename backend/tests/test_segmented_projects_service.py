@@ -921,11 +921,11 @@ def test_patch_chapter_partial_update_leaves_others_untouched(db_session, tmp_pa
     # voice / split_config / design_title 可各自独立更新；显式 null 清空 design_title
     ch_in, _ = patch_chapter(
         db_session, "p1", "c-a-p1",
-        ChapterPatchIn(voice={"engine": "cosyvoice", "voice_id": "v9"},
+        ChapterPatchIn(voice={"engine": "qwen", "voice_id": "v9"},
                        design_title="分镜标题"),
     )
     assert ch_in.name == "甲章（改）"  # 上轮结果保持
-    assert ch_in.voice == {"engine": "cosyvoice", "voice_id": "v9"}
+    assert ch_in.voice == {"engine": "qwen", "voice_id": "v9"}
     assert ch_in.design_title == "分镜标题"
     ch_in, _ = patch_chapter(db_session, "p1", "c-a-p1", ChapterPatchIn(design_title=None))
     assert ch_in.design_title is None
@@ -933,7 +933,7 @@ def test_patch_chapter_partial_update_leaves_others_untouched(db_session, tmp_pa
     db_session.expire_all()
     row = db_session.query(SegmentedProjectChapter).filter_by(id="c-a-p1").one()
     assert row.name == "甲章（改）"
-    assert row.voice == {"engine": "cosyvoice", "voice_id": "v9"}
+    assert row.voice == {"engine": "qwen", "voice_id": "v9"}
     assert row.design_title is None
     # 其他章节不受影响
     other = db_session.query(SegmentedProjectChapter).filter_by(id="c-b-p1").one()

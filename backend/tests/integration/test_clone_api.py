@@ -75,8 +75,8 @@ class TestCloneAPI:
         voice2 = VoiceProfile(
             id=str(uuid.uuid4()),
             name="Voice 2",
-            voice={"model": "cosyvoice", "voice_type": "clone"},
-            voice_params={"cosyvoice": {"source_audio_path": "/tmp/voice2.wav", "params": {"voice_id": "cloned_123"}}},
+            voice={"model": "qwen", "voice_type": "clone"},
+            voice_params={"qwen": {"source_audio_path": "/tmp/voice2.wav", "params": {"voice_id": "cloned_123"}}},
             created_at=datetime.now(timezone.utc)
         )
 
@@ -97,8 +97,8 @@ class TestCloneAPI:
         assert voice1_data["voice"]["model"] == ""
 
         assert voice2_data["voice"]["voice_type"] == "clone"
-        assert voice2_data["voice"]["model"] == "cosyvoice"
-        assert voice2_data["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cloned_123"
+        assert voice2_data["voice"]["model"] == "qwen"
+        assert voice2_data["voice_params"]["qwen"]["params"]["voice_id"] == "cloned_123"
 
     def test_get_voice_not_found(self, client: TestClient):
         response = client.get("/api/clone/nonexistent_voice_id")
@@ -114,8 +114,8 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Test Voice",
-            voice={"model": "cosyvoice", "voice_type": "clone"},
-            voice_params={"cosyvoice": {"source_audio_path": "/tmp/test.wav", "params": {"voice_id": "cloned_456"}}},
+            voice={"model": "qwen", "voice_type": "clone"},
+            voice_params={"qwen": {"source_audio_path": "/tmp/test.wav", "params": {"voice_id": "cloned_456"}}},
             created_at=datetime.now(timezone.utc)
         )
 
@@ -130,8 +130,8 @@ class TestCloneAPI:
         assert data["name"] == "Test Voice"
         assert data["has_source"] is True
         assert data["voice"]["voice_type"] == "clone"
-        assert data["voice"]["model"] == "cosyvoice"
-        assert data["voice_params"]["cosyvoice"]["params"]["voice_id"] == "cloned_456"
+        assert data["voice"]["model"] == "qwen"
+        assert data["voice_params"]["qwen"]["params"]["voice_id"] == "cloned_456"
         assert data["created_at"] is not None
 
     def test_delete_voice_success(self, client: TestClient, db_session):
@@ -150,8 +150,8 @@ class TestCloneAPI:
         voice = VoiceProfile(
             id=voice_id,
             name="Delete Test",
-            voice={"model": "cosyvoice", "voice_type": "clone"},
-            voice_params={"cosyvoice": {"source_audio_path": audio_path, "params": {}}},
+            voice={"model": "qwen", "voice_type": "clone"},
+            voice_params={"qwen": {"source_audio_path": audio_path, "params": {}}},
         )
 
         db_session.add(voice)
@@ -209,11 +209,11 @@ class TestCloneAPI:
 
         assert data["id"] == voice_id
         assert data["name"] == "Cloned Voice Name"
-        assert data["voice"]["model"] == "cosyvoice"
+        assert data["voice"]["model"] == "qwen"
         assert data["voice"]["voice_type"] == "clone"
 
         # 验证 voice_params 正确写入（含注册元数据）
-        vp_params = data["voice_params"]["cosyvoice"]["params"]
+        vp_params = data["voice_params"]["qwen"]["params"]
         assert vp_params["voice_id"] == "test_cloned_voice_123"
         assert vp_params["target_model"] == "cosyvoice-v3.5-plus"
         assert vp_params["enrollment_method"] == "base64"
@@ -546,16 +546,16 @@ class TestSyncFromQwen:
 
         items = client.get("/api/clone/list").json()["items"]
         synced = {
-            (v["voice_params"]["cosyvoice"]["params"]["voice_id"]): v
+            (v["voice_params"]["qwen"]["params"]["voice_id"]): v
             for v in items
-            if v["voice"]["model"] == "cosyvoice"
+            if v["voice"]["model"] == "qwen"
         }
         assert len(synced) == 2
 
         guanyu = synced["cosyvoice-v3.5-plus-guanyu-" + "a" * 32]
         assert guanyu["name"] == "guanyu"
-        assert guanyu["voice_params"]["cosyvoice"]["params"]["target_model"] == "cosyvoice-v3.5-plus"
-        assert guanyu["voice_params"]["cosyvoice"]["params"]["enrollment_method"] == "sync"
+        assert guanyu["voice_params"]["qwen"]["params"]["target_model"] == "cosyvoice-v3.5-plus"
+        assert guanyu["voice_params"]["qwen"]["params"]["enrollment_method"] == "sync"
 
         bailian = synced["cosyvoice-v3.5-plus-bailian-24dfc9059ecd4f0b907fcb5d5efe2852"]
         assert bailian["name"] == "bailian"
@@ -572,8 +572,8 @@ class TestSyncFromQwen:
             VoiceProfile(
                 id=str(uuid.uuid4()),
                 name="关云长",
-                voice={"model": "cosyvoice", "voice_type": "clone"},
-                voice_params={"cosyvoice": {"params": {"voice_id": voice_id}}},
+                voice={"model": "qwen", "voice_type": "clone"},
+                voice_params={"qwen": {"params": {"voice_id": voice_id}}},
             )
         )
         db_session.commit()
@@ -588,7 +588,7 @@ class TestSyncFromQwen:
         items = client.get("/api/clone/list").json()["items"]
         match = [v for v in items if v["name"] == "关云长"]
         assert len(match) == 1
-        params = match[0]["voice_params"]["cosyvoice"]["params"]
+        params = match[0]["voice_params"]["qwen"]["params"]
         assert params["target_model"] == "cosyvoice-v3.5-plus"
         assert params["enrollment_method"] == "sync"
 
@@ -605,8 +605,8 @@ class TestSyncFromQwen:
             VoiceProfile(
                 id=str(uuid.uuid4()),
                 name=f"voice_{voice_id}",
-                voice={"model": "cosyvoice", "voice_type": "clone"},
-                voice_params={"cosyvoice": {"params": {"voice_id": voice_id}}},
+                voice={"model": "qwen", "voice_type": "clone"},
+                voice_params={"qwen": {"params": {"voice_id": voice_id}}},
             )
         )
         db_session.commit()
@@ -618,6 +618,6 @@ class TestSyncFromQwen:
         assert response.status_code == 200
 
         items = client.get("/api/clone/list").json()["items"]
-        match = [v for v in items if v["voice_params"]["cosyvoice"]["params"]["voice_id"] == voice_id]
+        match = [v for v in items if v["voice_params"]["qwen"]["params"]["voice_id"] == voice_id]
         assert len(match) == 1
         assert match[0]["name"] == "legacy"

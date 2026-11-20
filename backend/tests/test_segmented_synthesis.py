@@ -286,7 +286,7 @@ def test_synth_mimo_strips_inline_and_adds_leading(db_session, tmp_path, monkeyp
 def test_synth_cosyvoice_strips_all_tags(db_session, tmp_path, monkeypatch):
     captured = _run_synth_capture_text(
         db_session, tmp_path, monkeypatch,
-        chapter_voice={"engine": "cosyvoice", "voice_id": "v1", "instruction": "温柔"},
+        chapter_voice={"engine": "qwen", "voice_id": "v1", "instruction": "温柔"},
         seg_text="(旧风格)你好[笑]世界", seg_emotion="happy",
     )
     assert captured["text"] == "你好世界"

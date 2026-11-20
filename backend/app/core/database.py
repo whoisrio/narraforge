@@ -758,7 +758,7 @@ def _migrate_v3_reduce_schema(conn):
             voice = {"engine": re or "edge_tts", "params": rp_dict}
             if rv:
                 engine = re or "edge_tts"
-                if engine in ("cosyvoice", "voxcpm", "mimo_tts"):
+                if engine in ("qwen", "voxcpm", "mimo_tts"):
                     voice["params"]["voice_id"] = rv
                 elif engine == "edge_tts":
                     voice["params"]["voice"] = rv
@@ -841,7 +841,7 @@ def _migrate_chapter_voice(conn):
             raw_vol = dp.get("edge_volume", 0)
             voice["rate"] = f"+{raw_rate}%" if isinstance(raw_rate, (int, float)) else str(raw_rate)
             voice["volume"] = f"+{raw_vol}%" if isinstance(raw_vol, (int, float)) else str(raw_vol)
-        elif engine_type == "cosyvoice":
+        elif engine_type == "qwen":
             voice["voice_id"] = dp.get("voice_id", "")
             voice["speed"] = dp.get("speed", 1.0)
             voice["volume"] = dp.get("volume", 80)
@@ -914,7 +914,7 @@ def _migrate_segment_voice_params(conn):
                 new_params["volume"] = (
                     f"+{raw_vol}%" if isinstance(raw_vol, (int, float)) else str(raw_vol)
                 )
-            elif engine == "cosyvoice":
+            elif engine == "qwen":
                 new_params["voice_id"] = p.get("voice_id", "")
                 new_params["speed"] = p.get("speed", 1.0)
                 new_params["volume"] = p.get("volume", 80)
@@ -959,7 +959,7 @@ def _migrate_segment_voice_params(conn):
                     for k in ("edge_voice", "edge_rate", "edge_volume"):
                         if k in gp:
                             cropped[k] = gp[k]
-                elif engine == "cosyvoice":
+                elif engine == "qwen":
                     for k in ("voice_id", "speed", "volume", "pitch", "language", "instruction"):
                         if k in gp:
                             cropped[k] = gp[k]
@@ -1064,7 +1064,7 @@ def _migrate_voice_profile(conn):
 
         old_type = engine_data.get("type", "")
         model = (
-            "cosyvoice"
+            "qwen"
             if old_type == "qwen"
             else "mimo_tts"
             if old_type == "mimo"
@@ -1099,7 +1099,7 @@ def _migrate_voice_profile(conn):
             pp["voice_id"] = engine_data.get("qwen_voice_id", "")
             pp["rate"] = "+0%"
             pp["volume"] = "+0%"
-        elif model == "cosyvoice":
+        elif model == "qwen":
             pp["voice_id"] = engine_data.get("qwen_voice_id", "")
             pp["speed"] = 1.0
             pp["volume"] = 80
@@ -1221,7 +1221,7 @@ def _build_voice_from_legacy(params_dict, voice_ref_dict, locked_params_list, ss
                 )
             if params_dict.get("mimo_instruction"):
                 result["params"]["instruction"] = params_dict["mimo_instruction"]
-        elif engine == "cosyvoice":
+        elif engine == "qwen":
             result["params"]["voice_id"] = params_dict.get("voice_id", "")
             if params_dict.get("instruction"):
                 result["params"]["instruction"] = params_dict["instruction"]
@@ -1236,7 +1236,7 @@ def _build_voice_from_legacy(params_dict, voice_ref_dict, locked_params_list, ss
             if params_dict.get("voxcpm_voice_description"):
                 result["params"]["voice_description"] = params_dict["voxcpm_voice_description"]
         # Include ssml if cosyvoice
-        if engine == "cosyvoice" and ssml_text:
+        if engine == "qwen" and ssml_text:
             result["params"]["ssml"] = ssml_text
         return result
 

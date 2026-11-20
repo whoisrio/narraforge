@@ -319,7 +319,7 @@ class TestWorkersEngineWhitelist:
         client, _, _ = workers_client
         resp = client.post(
             "/api/tts/synthesize",
-            json={"text": "你好", "engine": "cosyvoice", "voice_id": "v1"},
+            json={"text": "你好", "engine": "qwen", "voice_id": "v1"},
         )
         assert resp.status_code == 400
         assert resp.json()["detail"]["code"] == "engine_unavailable"
@@ -328,7 +328,7 @@ class TestWorkersEngineWhitelist:
         client, _, _ = workers_client
         resp = client.post(
             "/api/tts/synthesize",
-            json={"text": "你好", "engine": "cosyvoice", "voice_id": "v1"},
+            json={"text": "你好", "engine": "qwen", "voice_id": "v1"},
             headers=AUTH_A,
         )
         assert resp.status_code == 400

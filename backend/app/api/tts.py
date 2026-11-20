@@ -57,7 +57,7 @@ async def get_tts_service(db=None):
 
 class TTSRequest(BaseModel):
     text: str
-    engine: str = "cosyvoice"  # "cosyvoice" | "edge_tts"
+    engine: str = "qwen"  # "qwen"（Qwen/CosyVoice 模型族） | "edge_tts"
     # CosyVoice params
     voice_id: str = ""
     instruction: str = "音调偏高，语速中等，充满活力和感染力，适合广告配音"
@@ -145,10 +145,10 @@ async def synthesize_speech(
         )
     else:
         # cosyvoice 依赖 dashscope/qwen SDK，workers 模式不挂载/不支持，保持原逻辑
-        return await _synthesize_cosyvoice(request, db)
+        return await _synthesize_qwen(request, db)
 
 
-async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_db)):
+async def _synthesize_qwen(request: TTSRequest, db: Session = Depends(get_db)):
     """CosyVoice 引擎合成 - 根据存储模式决定是否持久化到后端"""
     audio_fmt = request.format or "mp3"
 
@@ -183,7 +183,7 @@ async def _synthesize_cosyvoice(request: TTSRequest, db: Session = Depends(get_d
             (
                 v
                 for v in all_voices
-                if (v.voice_params or {}).get("cosyvoice", {}).get("params", {}).get("voice_id")
+                if (v.voice_params or {}).get("qwen", {}).get("params", {}).get("voice_id")
                 == request.voice_id
             ),
             None,
@@ -382,7 +382,7 @@ async def delete_synthesis_result(
 
 @local_router.post("/batch")
 async def batch_synthesize(request: BatchTTSRequest, db: Session = Depends(get_db)):
-    """批量合成语音（仅 qwen/cosyvoice，workers 模式不挂载）"""
+    """批量合成语音（仅 qwen，workers 模式不挂载）"""
     results = []
 
     try:
