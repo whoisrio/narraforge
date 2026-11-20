@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import ssl
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -40,6 +41,14 @@ class QwenTTSService:
     # CosyVoice 系列使用声音复刻 API
     VOICE_ENROLLMENT_API_PATH = "/api/v1/services/audio/tts/customization"
 
+    # 新式统一音色注册 API（Qwen-Audio-TTS / CosyVoice 共用，支持 Base64 Data URI 直传）
+    ENROLLMENT_MODEL = "voice-enrollment"
+    ENROLLMENT_PATH = "/services/audio/tts/customization"
+    AUDIO_DATA_URI_MIME = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".m4a": "audio/mp4"}
+    MAX_ENROLL_AUDIO_BYTES = 10 * 1024 * 1024
+    MAX_ENROLL_AUDIO_SECONDS = 60.0
+    DEFAULT_DASHSCOPE_API_BASE = "https://dashscope.aliyuncs.com/api/v1"
+
     # 模型系列判断前缀
     COSYVOICE_PREFIX = "cosyvoice"
     TTS_PREFIX = "qwen-tts"
@@ -49,10 +58,13 @@ class QwenTTSService:
         api_key: Optional[str] = None,
         model: Optional[str] = None,
         public_base_url: Optional[str] = None,
+        base_url: Optional[str] = None,
     ):
         self.api_key = api_key or settings.qwen_api_key
         self.model = model or settings.qwen_model
         self.public_base_url = public_base_url or settings.public_base_url
+        # voice-enrollment HTTP API 的 base（支持业务空间专属域名，Task 3 接入 settings）
+        self.base_url = (base_url or self.DEFAULT_DASHSCOPE_API_BASE).rstrip("/")
         if not self.api_key:
             raise ValueError("QWEN_API_KEY is not configured")
         if not self.model:
@@ -616,12 +628,16 @@ class QwenTTSService:
         - CosyVoice 系列：使用 VoiceEnrollmentService 进行声音复刻
 
         注意：
+        - 本地文件路径自动走 base64 直传（新式 voice-enrollment HTTP API，无需公网 URL）
+        - 以 http(s):// 开头的入参走 VoiceEnrollmentService（公网 URL）
         - Qwen API 支持的音频格式：MP3, WAV, OGG
         - WebM 格式会在上传时自动转换为 MP3
         - preferred_name 使用克隆时间戳，避免特殊字符问题
         """
         if self.is_cosyvoice:
-            return self._register_cloned_voice_cosyvoice(reference_audio_path, voice_name)
+            if reference_audio_path.startswith(("http://", "https://")):
+                return self._register_cloned_voice_cosyvoice(reference_audio_path, voice_name)
+            return self._register_cloned_voice_cosyvoice_base64(reference_audio_path, voice_name)
         else:
             return self._register_cloned_voice_tts(reference_audio_path, voice_name)
 
@@ -786,6 +802,165 @@ class QwenTTSService:
             logger.error(f"Voice Registration failed: {str(e)}")
             raise
 
+    # ============ 新式统一注册 API（base64 直传，无需公网 URL） ============
+
+    def _make_voice_prefix(self) -> str:
+        """音色名前缀：仅字母数字、≤10 字符（官方限制）。"""
+        from datetime import datetime
+
+        return f"clone{datetime.now().strftime('%H%M%S')}"[:10]
+
+    def _probe_audio_duration(self, audio_path: str) -> Optional[float]:
+        """用 ffprobe 探测音频时长（秒）；ffprobe 不可用或无法解析时返回 None。"""
+        try:
+            result = subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    audio_path,
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if result.returncode != 0:
+                return None
+            return float(result.stdout.strip())
+        except (FileNotFoundError, ValueError):
+            return None
+
+    def _build_audio_data_uri(self, audio_path: str) -> str:
+        """校验本地音频并编码为 data URI（base64 直传注册的入参）。"""
+        if not os.path.exists(audio_path):
+            raise FileNotFoundError(f"Reference audio not found: {audio_path}")
+
+        ext = os.path.splitext(audio_path)[1].lower()
+        mime = self.AUDIO_DATA_URI_MIME.get(ext)
+        if not mime:
+            raise ValueError(
+                f"Unsupported audio format: {ext}. Expected MP3, WAV, or M4A."
+            )
+
+        size = os.path.getsize(audio_path)
+        if size > self.MAX_ENROLL_AUDIO_BYTES:
+            raise ValueError(
+                f"Audio file too large: {size} bytes "
+                f"(limit {self.MAX_ENROLL_AUDIO_BYTES} bytes / 10MB)"
+            )
+
+        duration = self._probe_audio_duration(audio_path)
+        if duration is not None and duration > self.MAX_ENROLL_AUDIO_SECONDS:
+            raise ValueError(
+                f"Audio too long: {duration:.1f}s (limit {self.MAX_ENROLL_AUDIO_SECONDS:.0f}s)"
+            )
+
+        with open(audio_path, "rb") as f:
+            audio_base64 = base64.b64encode(f.read()).decode("ascii")
+        return f"data:{mime};base64,{audio_base64}"
+
+    def _enrollment_post(self, action_input: Dict[str, Any]) -> Dict:
+        """调用 voice-enrollment 定制端点并解析 JSON 响应。"""
+        request_body = {"model": self.ENROLLMENT_MODEL, "input": action_input}
+        url = f"{self.base_url}{self.ENROLLMENT_PATH}"
+        data = json.dumps(request_body).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=self._get_headers())
+        context = ssl.create_default_context()
+        with urllib.request.urlopen(req, context=context) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        if "code" in result and result["code"] not in ("", "Success"):
+            raise Exception(
+                f"Voice enrollment API error: {result.get('code')} - "
+                f"{result.get('message', 'Unknown error')}"
+            )
+        return result
+
+    def _wait_for_voice_ready_http(
+        self, voice_id: str, max_attempts: int = 45, poll_interval: float = 2.0
+    ) -> str:
+        """
+        轮询 query_voice 直到 status == OK。
+
+        失败（UNDEPLOYED）/超时的异常信息必须包含 voice_id：
+        云端此时已产生音色记录，需要可追溯、可清理（sync-from-qwen）。
+        """
+        for attempt in range(max_attempts):
+            try:
+                result = self._enrollment_post({"action": "query_voice", "voice_id": voice_id})
+                output = result.get("output", {})
+                status = output.get("status")
+                logger.info(f"Voice query attempt {attempt + 1}/{max_attempts}: status='{status}'")
+                if status == "OK":
+                    return voice_id
+                if status not in ("DEPLOYING", None):
+                    raise RuntimeError(
+                        f"Voice processing failed with status '{status}' (voice_id={voice_id}). "
+                        f"The cloud record must be cleaned up manually or via /clone/sync-from-qwen."
+                    )
+            except RuntimeError:
+                raise
+            except Exception as e:
+                logger.warning(f"Voice query error (attempt {attempt + 1}): {e}")
+            time.sleep(poll_interval)
+
+        raise RuntimeError(
+            f"Voice registration timeout: voice_id={voice_id} did not become OK "
+            f"after {max_attempts} attempts. The cloud record may still deploy later; "
+            f"check via query or /clone/sync-from-qwen."
+        )
+
+    def _register_cloned_voice_cosyvoice_base64(
+        self,
+        reference_audio_path: str,
+        voice_name: str = "cloned_voice",
+        max_attempts: int = 45,
+        poll_interval: float = 2.0,
+    ) -> Dict[str, Any]:
+        """
+        CosyVoice base64 直传注册（新式 voice-enrollment HTTP API）。
+
+        本地音频编码为 Data URI 直接上传，无需公网 URL/七牛/PUBLIC_BASE_URL。
+        create_voice 同步返回 voice_id，随后轮询 query_voice 直到 OK。
+        音色创建时永久绑定 target_model，返回值中带回供落库。
+        """
+        audio_uri = self._build_audio_data_uri(reference_audio_path)
+        prefix = self._make_voice_prefix()
+
+        logger.info(
+            f"Registering cloned voice (CosyVoice base64): {voice_name} "
+            f"(prefix: {prefix}, target_model: {self.model})"
+        )
+
+        result = self._enrollment_post(
+            {
+                "action": "create_voice",
+                "target_model": self.model,
+                "prefix": prefix,
+                "audio": audio_uri,
+            }
+        )
+
+        voice_id = (result.get("output") or {}).get("voice_id")
+        if not voice_id:
+            raise Exception(f"Voice enrollment response missing voice_id: {result}")
+
+        logger.info(f"Voice created. voice_id: {voice_id}; waiting for deploy...")
+        self._wait_for_voice_ready_http(
+            voice_id, max_attempts=max_attempts, poll_interval=poll_interval
+        )
+
+        return {
+            "voice_id": voice_id,
+            "voice_name": voice_name,
+            "role": "custom",
+            "target_model": self.model,
+            "enrollment_method": "base64",
+        }
+
     def _register_cloned_voice_cosyvoice(
         self,
         reference_audio_path: str,
@@ -795,14 +970,14 @@ class QwenTTSService:
         CosyVoice 系列模型的声音注册方法
 
         根据 Qwen 文档，CosyVoice 需要：
-        1. 使用公网可访问的音频 URL（而不是 base64）
+        1. 使用公网可访问的音频 URL（而不是 base64；本地文件请走 base64 直传路径）
         2. 调用 VoiceEnrollmentService.create_voice() 创建音色
         3. 轮询 query_voice() 等待 status 变为 "OK"
         4. 使用返回的 voice_id 进行语音合成
 
         注意：
         - 需要提供公网可访问的音频 URL
-        - 可以通过 external_audio_url 参数直接传入外部音频 URL（如七牛云、AWS S3 等）
+        - 可以通过 external_audio_url 参数直接传入外部音频 URL（云存储等）
         - 如果没有提供 external_audio_url，则需要配置 PUBLIC_BASE_URL 环境变量
         """
         from datetime import datetime
@@ -903,6 +1078,8 @@ class QwenTTSService:
                 "voice_id": final_voice_id,
                 "voice_name": voice_name,
                 "role": "custom",
+                "target_model": self.model,
+                "enrollment_method": "url",
             }
 
         except VoiceEnrollmentException as e:
