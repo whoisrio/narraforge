@@ -108,3 +108,43 @@ def test_create_from_design_returns_full_voice_profile_shape(client: TestClient)
     assert VOICE_PROFILE_FIELDS.issubset(data.keys())
     assert data["name"] == "designed-voice"
     assert data["has_preview"] is True
+
+
+def test_update_voice_renames_voice(client: TestClient, fake_transcode):
+    """PATCH description 端点支持可选 name 字段（重命名）。"""
+    import io
+
+    files = {"file": ("rename_me.mp3", io.BytesIO(b"\xff\xfb" + b"\x00" * 256), "audio/mpeg")}
+    created = client.post("/api/clone/upload", files=files).json()
+
+    resp = client.patch(
+        f"/api/clone/{created['id']}/description",
+        json={"name": "关羽", "description": "三国武将音色"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "关羽"
+
+    detail = client.get(f"/api/clone/{created['id']}").json()
+    assert detail["name"] == "关羽"
+    assert detail["description"] == "三国武将音色"
+
+
+def test_update_voice_rename_rejects_blank_name(client: TestClient, fake_transcode):
+    import io
+
+    files = {"file": ("rename_blank.mp3", io.BytesIO(b"\xff\xfb" + b"\x00" * 256), "audio/mpeg")}
+    created = client.post("/api/clone/upload", files=files).json()
+
+    resp = client.patch(f"/api/clone/{created['id']}/description", json={"name": "   "})
+    assert resp.status_code == 400
+
+
+def test_update_voice_without_name_keeps_existing_name(client: TestClient, fake_transcode):
+    import io
+
+    files = {"file": ("keep_name.mp3", io.BytesIO(b"\xff\xfb" + b"\x00" * 256), "audio/mpeg")}
+    created = client.post("/api/clone/upload", files=files).json()
+
+    resp = client.patch(f"/api/clone/{created['id']}/description", json={"description": "只改描述"})
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "keep_name.mp3"

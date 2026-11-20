@@ -173,6 +173,7 @@ class UploadFromUrlRequest(BaseModel):
 class UpdateDescriptionRequest(BaseModel):
     description: str = ""
     prompt_text: Optional[str] = None
+    name: Optional[str] = None
 
 
 class SignedUploadUrlRequest(BaseModel):
@@ -944,6 +945,15 @@ async def update_voice_description(
 
     fields: dict = {"description": new_description}
 
+    # 重命名（可选；历史原因 name 曾被视为敏感字段，实际是展示用可安全修改）
+    if request.name is not None:
+        new_name = request.name.strip()
+        if not new_name:
+            raise HTTPException(status_code=400, detail="Voice name cannot be empty")
+        if len(new_name) > 100:
+            raise HTTPException(status_code=400, detail="Voice name too long (max 100 chars)")
+        fields["name"] = new_name
+
     # 更新 prompt_text（如果提供了的话）
     if request.prompt_text is not None:
         voice_data = voice["voice"] or {}
@@ -958,6 +968,7 @@ async def update_voice_description(
 
     return {
         "id": voice["id"],
+        "name": voice["name"],
         "description": voice["description"],
         "prompt_text": (
             (voice["voice_params"] or {}).get((voice["voice"] or {}).get("model", ""), {}) or {}
