@@ -7,8 +7,13 @@ import { ImageUploadZone } from '../components/ui/ImageUploadZone';
 import { useVoiceRefresh } from '../hooks/useVoiceRefresh';
 import { useCapabilities } from '../hooks/useCapabilities';
 import { playVoiceDesignPreview, type VoiceDesignEngine } from '../services/voiceDesignPreview';
-import { voiceApi, apiErrorCode } from '../services/api';
+import { voiceApi, ttsApi, apiErrorCode } from '../services/api';
+import { isCloudSyncedVoice, isManageableVoice, SYNTH_AUDITION_TEXT } from './voiceManageability';
+import { useToast } from '../components/ui/useToast';
 import { VoiceAvatar } from '../components/ui/VoiceAvatar';
+import { Modal } from '../components/ui/Modal';
+import { Input } from '../components/ui/Input';
+import { Button } from '../components/ui/Button';
 import { useTranslation } from '../i18n';
 import type { TTSResult, VoiceProfile } from '../types';
 import { voicePreviewAudioUrl, voiceSourceAudioUrl } from '../types';
@@ -39,9 +44,9 @@ function engineLabel(profile: VoiceProfile): string {
   return 'Unknown';
 }
 
-
 export function VoiceClone() {
   const { t } = useTranslation();
+  const toast = useToast();
   const { clone_engines: availableCloneEngines } = useCapabilities();
   // ---- 声音列表 ----
   const [voices, setVoices] = useState<VoiceProfile[]>([]);
@@ -100,7 +105,7 @@ export function VoiceClone() {
     setVoicesLoading(true);
     try {
       const all = await voiceApi.list();
-      setVoices(all.filter(v => v.has_preview || v.has_source));
+      setVoices(all.filter(isManageableVoice));
     } catch (err) {
       console.error('加载声音列表失败:', err);
     } finally {
@@ -192,6 +197,56 @@ export function VoiceClone() {
       console.error('Failed to delete voice:', err);
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  // ---- 重命名 ----
+  const [renameTarget, setRenameTarget] = useState<VoiceProfile | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+
+  const handleRenameSave = async () => {
+    if (!renameTarget || !renameName.trim()) return;
+    setRenamingId(renameTarget.id);
+    try {
+      await voiceApi.renameVoice(renameTarget.id, renameName.trim());
+      setVoices(prev => prev.map(v => (v.id === renameTarget.id ? { ...v, name: renameName.trim() } : v)));
+      setRenameTarget(null);
+      triggerRefresh();
+    } catch (err) {
+      const code = apiErrorCode(err);
+      console.error('Failed to rename voice:', err);
+      toast.error(code ? t('voiceClone.renameFailedWithCode', { code }) : t('voiceClone.renameFailed'));
+    } finally {
+      setRenamingId(null);
+    }
+  };
+
+  // ---- 云端音色合成试听 ----
+  const [auditioningId, setAuditioningId] = useState<string | null>(null);
+
+  const handleSynthAudition = async (v: VoiceProfile) => {
+    const voiceId = (v.voice_params?.cosyvoice?.params as Record<string, unknown> | undefined)?.voice_id as string | undefined;
+    if (!voiceId) return;
+    setAuditioningId(v.id);
+    try {
+      const result = await ttsApi.synthesize({
+        text: SYNTH_AUDITION_TEXT,
+        engine: 'cosyvoice',
+        voice_id: voiceId,
+        speed: 1.0,
+        volume: 80,
+        pitch: 1.0,
+      });
+      const src = result.audio_base64
+        ? `data:audio/${result.audio_format || 'mp3'};base64,${result.audio_base64}`
+        : result.audio_url!;
+      new Audio(src).play().catch(() => {});
+    } catch (err) {
+      console.error('Synth audition failed:', err);
+      toast.error(t('voiceClone.auditionFailed'));
+    } finally {
+      setAuditioningId(null);
     }
   };
 
@@ -608,15 +663,30 @@ export function VoiceClone() {
                   </div>
                 </div>
                 <div className={styles.voiceCardActions}>
+                  {isCloudSyncedVoice(v) ? (
+                    <button
+                      type="button"
+                      className={styles.previewBtn}
+                      onClick={(e) => { e.stopPropagation(); handleSynthAudition(v); }}
+                      disabled={auditioningId === v.id}
+                    >{auditioningId === v.id ? t('voiceClone.auditioning') : t('voiceClone.synthAudition')}</button>
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.previewBtn}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const audio = new Audio(voicePreviewAudioUrl(v.id));
+                        audio.play().catch(() => {});
+                      }}
+                    >{t('common.listen')}</button>
+                  )}
                   <button
                     type="button"
                     className={styles.previewBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const audio = new Audio(voicePreviewAudioUrl(v.id));
-                      audio.play().catch(() => {});
-                    }}
-                  >{t('common.listen')}</button>
+                    onClick={(e) => { e.stopPropagation(); setRenameTarget(v); setRenameName(v.name || ''); }}
+                    style={{ color: 'var(--color-text-secondary)' }}
+                  >{t('voiceClone.rename')}</button>
                   <button
                     type="button"
                     className={styles.previewBtn}
@@ -636,6 +706,31 @@ export function VoiceClone() {
           </div>
         )}
       </section>
+
+      {/* 重命名弹窗 */}
+      <Modal
+        isOpen={renameTarget !== null}
+        onClose={() => setRenameTarget(null)}
+        title={t('voiceClone.rename')}
+        footer={
+          <div style={{ display: 'flex', gap: 'var(--spacing-sm)', justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={() => setRenameTarget(null)}>{t('common.cancel')}</Button>
+            <Button
+              variant="primary"
+              onClick={handleRenameSave}
+              loading={renamingId !== null}
+              disabled={!renameName.trim()}
+            >{t('common.save')}</Button>
+          </div>
+        }
+      >
+        <Input
+          label={t('voiceClone.newNameLabel')}
+          type="text"
+          value={renameName}
+          onChange={(e) => setRenameName(e.target.value)}
+        />
+      </Modal>
     </div>
   );
 }

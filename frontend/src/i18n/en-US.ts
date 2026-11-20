@@ -631,6 +631,13 @@ export const enUS: Messages = {
     voiceCount: '{count} voices',
     noVoices: 'No voices yet. Click the buttons above to design or clone your first voice.',
     deleting: 'Deleting...',
+    synthAudition: 'Audition',
+    auditioning: 'Synthesizing...',
+    auditionFailed: 'Audition failed, please retry',
+    rename: 'Rename',
+    newNameLabel: 'New voice name',
+    renameFailed: 'Rename failed, please retry',
+    renameFailedWithCode: 'Rename failed ({code}), please retry',
   },
   common: {
     unknown: 'Unknown',

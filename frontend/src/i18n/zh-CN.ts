@@ -629,6 +629,13 @@ export const zhCN = {
     voiceCount: '{count} 个音色',
     noVoices: '还没有音色，点击上方按钮设计或克隆第一个音色。',
     deleting: '删除中...',
+    synthAudition: '合成试听',
+    auditioning: '合成试听中...',
+    auditionFailed: '合成试听失败，请重试',
+    rename: '重命名',
+    newNameLabel: '新的音色名称',
+    renameFailed: '重命名失败，请重试',
+    renameFailedWithCode: '重命名失败（{code}），请重试',
   },
   common: {
     unknown: '未知',

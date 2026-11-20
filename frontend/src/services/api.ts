@@ -165,6 +165,11 @@ export const voiceApi = {
   updatePromptText: async (id: string, promptText: string): Promise<void> => {
     await api.patch(`/clone/${id}/description`, { description: '', prompt_text: promptText });
   },
+
+  // 重命名声音（可选字段，与 description 共用 PATCH 端点）
+  renameVoice: async (id: string, name: string): Promise<void> => {
+    await api.patch(`/clone/${id}/description`, { name });
+  },
 };
 
 // TTS API
