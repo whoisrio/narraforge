@@ -563,6 +563,21 @@ def synthesize_speech_internal(
         # CosyVoice / Qwen TTS — needs QWEN_API_KEY, returns wav bytes.
         from app.services.qwen_tts_service import get_tts_service
 
+        # 音色绑定的 target_model：复刻音色永久绑定注册时的模型，合成必须一致；
+        # 未绑定（旧音色）或无 db 时回退 None（service 层用全局配置模型）。
+        target_model: str | None = None
+        if db is not None:
+            try:
+                from app.models import VoiceProfile
+
+                for v in db.query(VoiceProfile).all():
+                    params = ((v.voice_params or {}).get("qwen", {}) or {}).get("params", {})
+                    if params.get("voice_id") == voice_id:
+                        target_model = params.get("target_model")
+                        break
+            except Exception:  # pragma: no cover - best effort，不影响合成回退
+                target_model = None
+
         async def _synthesize() -> bytes:
             tts_service = await get_tts_service(db=db)
             result = await tts_service.synthesize_speech(
@@ -576,6 +591,7 @@ def synthesize_speech_internal(
                 sample_rate=16000,
                 enable_ssml=enable_ssml,
                 enable_markdown_filter=enable_markdown_filter,
+                model_override=target_model,
             )
             if isinstance(result, (str, os.PathLike)):
                 return Path(result).read_bytes()
