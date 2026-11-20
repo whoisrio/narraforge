@@ -27,6 +27,7 @@ from app.core.asset_store import (
 )
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.deploy_capabilities import QWEN_TARGET_MODELS
 from app.core.repositories.deps import get_voice_repo
 from app.core.repositories.voice_profiles import VoiceProfileRepository
 from app.core.supabase_client import SupabaseError
@@ -515,6 +516,15 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
     if not resolved_src:
         raise HTTPException(status_code=404, detail="Audio file not found")
 
+    # 目标 TTS 模型可选（音色创建时永久绑定该模型）；白名单校验，缺省用全局配置
+    engine_params = request.engine_params or {}
+    target_model = engine_params.get("target_model")
+    if target_model is not None and target_model not in QWEN_TARGET_MODELS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported target_model: {target_model}. Allowed: {', '.join(QWEN_TARGET_MODELS)}",
+        )
+
     try:
         tts_service = await get_tts_service(db)
 
@@ -522,6 +532,7 @@ async def create_clone(request: RegisterRequest, db: Session = Depends(get_db)):
         result = await tts_service.register_cloned_voice(
             reference_audio_path=resolved_src,
             voice_name=request.name or voice.name,
+            target_model=target_model,
         )
 
         # 更新数据库

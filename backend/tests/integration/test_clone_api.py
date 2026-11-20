@@ -224,7 +224,8 @@ class TestCloneAPI:
         # 注册调用应使用本地音频路径（base64 直传），而非公网 URL
         mock_tts_service.register_cloned_voice.assert_called_once_with(
             reference_audio_path=audio_path,
-            voice_name="Cloned Voice Name"
+            voice_name="Cloned Voice Name",
+            target_model=None,
         )
 
         if os.path.exists(audio_path):
@@ -621,3 +622,82 @@ class TestSyncFromQwen:
         match = [v for v in items if v["voice_params"]["qwen"]["params"]["voice_id"] == voice_id]
         assert len(match) == 1
         assert match[0]["name"] == "legacy"
+
+
+class TestTargetModelSelection:
+    """create-clone 支持可选 target_model（白名单校验 + 透传注册）"""
+
+    def test_create_clone_with_target_model(self, client: TestClient, db_session, mock_tts_service):
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"clone_tm_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        db_session.add(
+            VoiceProfile(
+                id=voice_id,
+                name="TM Case",
+                voice={"model": "", "voice_type": "upload"},
+                voice_params={"": {"source_audio_path": audio_path}},
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/clone/create-clone",
+            json={
+                "profile_id": voice_id,
+                "name": "Flash Voice",
+                "engine_params": {"target_model": "cosyvoice-v3.5-flash"},
+            },
+        )
+
+        assert response.status_code == 200
+        vp_params = response.json()["voice_params"]["qwen"]["params"]
+        assert vp_params["target_model"] == "cosyvoice-v3.5-flash"
+        mock_tts_service.register_cloned_voice.assert_called_once_with(
+            reference_audio_path=audio_path,
+            voice_name="Flash Voice",
+            target_model="cosyvoice-v3.5-flash",
+        )
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)
+
+    def test_create_clone_rejects_unknown_target_model(
+        self, client: TestClient, db_session, mock_tts_service
+    ):
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        voice_id = str(uuid.uuid4())
+        audio_path = os.path.join(tempfile.gettempdir(), f"clone_bad_{voice_id}.wav")
+        with open(audio_path, "w") as f:
+            f.write("dummy audio data")
+
+        db_session.add(
+            VoiceProfile(
+                id=voice_id,
+                name="Bad TM",
+                voice={"model": "", "voice_type": "upload"},
+                voice_params={"": {"source_audio_path": audio_path}},
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/clone/create-clone",
+            json={
+                "profile_id": voice_id,
+                "engine_params": {"target_model": "cosyvoice-v9-imaginary"},
+            },
+        )
+
+        assert response.status_code == 400
+        assert "Unsupported target_model" in response.json()["detail"]["message"]
+        if os.path.exists(audio_path):
+            os.unlink(audio_path)

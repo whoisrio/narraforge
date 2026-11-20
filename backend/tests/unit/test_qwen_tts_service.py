@@ -72,7 +72,7 @@ class TestQwenTTSService:
 
                 assert result == mock_audio_data
                 mock_sync.assert_called_once_with(
-                    "xiaoyun", "Hello, world!", "clear narration", 1.0, 80, 1.0, "wav", 16000, False, False
+                    "xiaoyun", "Hello, world!", "clear narration", 1.0, 80, 1.0, "wav", 16000, False, False, None
                 )
 
     @pytest.mark.asyncio
@@ -104,7 +104,7 @@ class TestQwenTTSService:
 
             assert result == "/tmp/cloned_audio.wav"
             mock_sync.assert_called_once_with(
-                "cloned_voice_123", "Hello from cloned voice!", "clear narration", 1.2, 90, 1.0, "mp3", 22050, False, False
+                "cloned_voice_123", "Hello from cloned voice!", "clear narration", 1.2, 90, 1.0, "mp3", 22050, False, False, None
             )
 
     @pytest.mark.asyncio
@@ -132,7 +132,7 @@ class TestQwenTTSService:
 
                 assert result == expected_result
                 mock_sync.assert_called_once_with(
-                    test_audio_path, "Test Voice"
+                    test_audio_path, "Test Voice", None
                 )
 
     @pytest.mark.asyncio
@@ -155,7 +155,7 @@ class TestQwenTTSService:
                 )
 
                 mock_sync.assert_called_once_with(
-                    "/tmp/test.wav", "cloned_voice"
+                    "/tmp/test.wav", "cloned_voice", None
                 )
 
     def test_wait_for_task_completion_success(self):
@@ -456,7 +456,7 @@ class TestCosyVoiceBase64Enrollment:
         service = self._make_service()
         with patch.object(service, "_register_cloned_voice_cosyvoice_base64") as mock_b64:
             service._register_cloned_voice_sync("/tmp/local.mp3", "n")
-        mock_b64.assert_called_once_with("/tmp/local.mp3", "n")
+        mock_b64.assert_called_once_with("/tmp/local.mp3", "n", target_model=None)
 
     def test_dispatch_url_routes_to_sdk_path(self):
         service = self._make_service()
@@ -586,3 +586,108 @@ class TestDeriveVoiceDisplayName:
             == "guanyu"
         )
         assert derive_voice_display_name("some-weird-id") == "some-weird-id"
+
+
+class TestTargetModelSelection:
+    """目标 TTS 模型可选：注册时显式指定、合成按音色绑定覆盖"""
+
+    def test_base64_enrollment_uses_explicit_target_model(self, tmp_path):
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3.5-plus")
+        path = tmp_path / "ref.mp3"
+        path.write_bytes(b"\xff\xfb" + b"\x00" * 128)
+
+        captured: list[dict] = []
+
+        def fake_urlopen(req, context=None, **kwargs):
+            body = json.loads(req.data.decode("utf-8"))
+            captured.append(body)
+            if body["input"]["action"] == "create_voice":
+                resp = MagicMock()
+                resp.read.return_value = json.dumps({"output": {"voice_id": "v-flash"}}).encode()
+                resp.__enter__.return_value = resp
+                resp.__exit__.return_value = False
+                return resp
+            resp = MagicMock()
+            resp.read.return_value = json.dumps({"output": {"voice_id": "v-flash", "status": "OK"}}).encode()
+            resp.__enter__.return_value = resp
+            resp.__exit__.return_value = False
+            return resp
+
+        with patch("app.services.qwen_tts_service.urllib.request.urlopen", side_effect=fake_urlopen), \
+             patch.object(QwenTTSService, "_probe_audio_duration", return_value=12.0):
+            result = service._register_cloned_voice_cosyvoice_base64(
+                str(path), "n", target_model="cosyvoice-v3.5-flash"
+            )
+
+        assert captured[0]["input"]["target_model"] == "cosyvoice-v3.5-flash"
+        assert result["target_model"] == "cosyvoice-v3.5-flash"
+
+    def test_base64_enrollment_defaults_to_configured_model(self, tmp_path):
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3.5-plus")
+        path = tmp_path / "ref.mp3"
+        path.write_bytes(b"\xff\xfb" + b"\x00" * 128)
+
+        captured: list[dict] = []
+
+        def fake_urlopen(req, context=None, **kwargs):
+            body = json.loads(req.data.decode("utf-8"))
+            captured.append(body)
+            resp = MagicMock()
+            payload = (
+                {"output": {"voice_id": "v2"}}
+                if body["input"]["action"] == "create_voice"
+                else {"output": {"voice_id": "v2", "status": "OK"}}
+            )
+            resp.read.return_value = json.dumps(payload).encode()
+            resp.__enter__.return_value = resp
+            resp.__exit__.return_value = False
+            return resp
+
+        with patch("app.services.qwen_tts_service.urllib.request.urlopen", side_effect=fake_urlopen), \
+             patch.object(QwenTTSService, "_probe_audio_duration", return_value=12.0):
+            result = service._register_cloned_voice_cosyvoice_base64(str(path), "n")
+
+        assert captured[0]["input"]["target_model"] == "cosyvoice-v3.5-plus"
+        assert result["target_model"] == "cosyvoice-v3.5-plus"
+
+    @pytest.mark.asyncio
+    async def test_synthesize_speech_passes_model_override(self):
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3.5-plus")
+
+        with patch.object(service, "_synthesize_speech_sync") as mock_sync:
+            mock_sync.return_value = "/tmp/out.wav"
+            await service.synthesize_speech(
+                voice_id="v1",
+                text="hi",
+                instruction="clear",
+                model_override="cosyvoice-v3.5-flash",
+            )
+
+        assert mock_sync.call_args.args[-1] == "cosyvoice-v3.5-flash"
+
+    def test_synthesize_voice_cosyvoice_uses_override_model(self, tmp_path, monkeypatch):
+        """合成调用必须使用 model_override（音色绑定的 target_model）。"""
+        service = QwenTTSService(api_key="test_api_key", model="cosyvoice-v3.5-plus")
+
+        captured: dict = {}
+
+        class FakeResult:
+            audio_url = None
+
+        def fake_call(**kwargs):
+            captured.update(kwargs)
+            return FakeResult()
+
+        monkeypatch.setattr(
+            "dashscope.audio.http_tts.http_speech_synthesizer.HttpSpeechSynthesizer.call",
+            staticmethod(fake_call),
+        )
+        monkeypatch.setattr(service, "_probe_audio_duration", lambda *_: None, raising=False)
+
+        with pytest.raises(Exception):
+            # audio_url 缺失会抛错，但我们只关心 call 的参数
+            service._synthesize_voice_cosyvoice(
+                "v1", "text", "instr", model_override="cosyvoice-v3.5-flash"
+            )
+
+        assert captured.get("model") == "cosyvoice-v3.5-flash"

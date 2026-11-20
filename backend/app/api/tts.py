@@ -160,6 +160,25 @@ async def _synthesize_qwen(request: TTSRequest, db: Session = Depends(get_db)):
         tts_service = await get_tts_service(db)
 
         logger.info(f"Synthesizing with cloned voice: {request.voice_id}")
+
+        # 先查音色：取展示名与绑定的 target_model（复刻音色永久绑定注册时的模型）
+        all_voices = db.query(VoiceProfile).all()
+        voice = next(
+            (
+                v
+                for v in all_voices
+                if (v.voice_params or {}).get("qwen", {}).get("params", {}).get("voice_id")
+                == request.voice_id
+            ),
+            None,
+        )
+        voice_name = voice.description or voice.name if voice else request.voice_id
+        target_model = (
+            ((voice.voice_params or {}).get("qwen", {}) or {}).get("params", {}).get("target_model")
+            if voice
+            else None
+        )
+
         # clone_voice 现在直接下载并落盘到 settings.clone_voices_dir，
         # 返回文件绝对路径，文件名形如 {voice_id}_{YYYYMMDDHHMMSS}.{ext}
         audio_path = await tts_service.synthesize_speech(
@@ -173,22 +192,10 @@ async def _synthesize_qwen(request: TTSRequest, db: Session = Depends(get_db)):
             instruction=request.instruction,
             enable_ssml=request.enable_ssml,
             enable_markdown_filter=request.enable_markdown_filter,
+            model_override=target_model,
         )
 
         audio_id = Path(audio_path).stem
-
-        # 查询声音名称用于历史记录展示
-        all_voices = db.query(VoiceProfile).all()
-        voice = next(
-            (
-                v
-                for v in all_voices
-                if (v.voice_params or {}).get("qwen", {}).get("params", {}).get("voice_id")
-                == request.voice_id
-            ),
-            None,
-        )
-        voice_name = voice.description or voice.name if voice else request.voice_id
 
         if is_frontend_storage(db):
             # 前端存储模式：读取音频返回 base64，不落盘到后端持久目录

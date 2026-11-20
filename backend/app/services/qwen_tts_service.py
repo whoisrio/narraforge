@@ -379,6 +379,7 @@ class QwenTTSService:
         sample_rate: int = 16000,
         enable_ssml: bool = False,
         enable_markdown_filter: bool = False,
+        model_override: Optional[str] = None,
     ) -> bytes:
         """
         声音克隆 - 使用已注册的 voice_id 进行语音合成 (异步版本)
@@ -386,6 +387,8 @@ class QwenTTSService:
         Args:
             voice_id: 注册后返回的 voice 参数
             text: 要合成的文本
+            model_override: 音色绑定的 target_model（复刻音色永久绑定模型，
+                必须用注册时的模型合成；None 时回退全局配置模型）
             speed: 语速
             volume: 音量
             pitch: 音调
@@ -408,6 +411,7 @@ class QwenTTSService:
             sample_rate,
             enable_ssml,
             enable_markdown_filter,
+            model_override,
         )
 
     def _synthesize_speech_sync(
@@ -422,6 +426,7 @@ class QwenTTSService:
         sample_rate: int = 16000,
         enable_ssml: bool = False,
         enable_markdown_filter: bool = False,
+        model_override: Optional[str] = None,
     ) -> bytes:
         """
         同步执行声音克隆 - 根据模型系列自动选择调用方式
@@ -442,6 +447,7 @@ class QwenTTSService:
                 sample_rate,
                 enable_ssml,
                 enable_markdown_filter,
+                model_override,
             )
         else:
             return self._synthesize_voice_tts(
@@ -535,9 +541,13 @@ class QwenTTSService:
         sample_rate: int = 16000,
         enable_ssml: bool = False,
         enable_markdown_filter: bool = False,
+        model_override: Optional[str] = None,
     ) -> str:
         """
         CosyVoice 系列模型的声音克隆方法。
+
+        复刻音色在注册时永久绑定 target_model，合成必须用同一模型：
+        model_override（音色存储的绑定模型）优先，缺省回退全局配置模型。
 
         使用 dashscope HttpSpeechSynthesizer 提交非流式合成请求，拿到 audio_url 后
         立即下载到 backend/output/clone_voices/{voice_id}_{YYYYMMDDHHMMSS}.{ext}，
@@ -549,14 +559,17 @@ class QwenTTSService:
         """
         from datetime import datetime
 
-        import dashscope
         import requests as req
         from dashscope.audio.http_tts.http_speech_synthesizer import HttpSpeechSynthesizer
 
         dashscope.api_key = self.api_key
         dashscope.base_http_api_url = "https://dashscope.aliyuncs.com/api/v1"
 
-        logger.info(f"Synthesizing speech with CosyVoice: model={self.model}, voice={voice_id}")
+        effective_model = model_override or self.model
+        logger.info(
+            f"Synthesizing speech with CosyVoice: model={effective_model} "
+            f"(override={model_override}, configured={self.model}), voice={voice_id}"
+        )
 
         try:
             ops = {
@@ -570,7 +583,7 @@ class QwenTTSService:
 
             logger.info(f"ops is : {ops}")
             result = HttpSpeechSynthesizer.call(
-                model=self.model,
+                model=effective_model,
                 text=text,
                 voice=voice_id,
                 sample_rate=sample_rate,
@@ -617,6 +630,7 @@ class QwenTTSService:
         self,
         reference_audio_path: str,
         voice_name: str = "cloned_voice",
+        target_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         注册克隆声音 - 将参考音频提交给千问，创建持久的声音 ID
@@ -624,19 +638,21 @@ class QwenTTSService:
         Args:
             reference_audio_path: 参考音频文件路径
             voice_name: 声音名称（用于显示，不直接用于 API）
+            target_model: 音色绑定的目标 TTS 模型（可选；缺省用全局配置模型）
 
         Returns:
-            包含 voice_id, role 等信息的字典
+            包含 voice_id, target_model 等信息的字典
         """
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None, self._register_cloned_voice_sync, reference_audio_path, voice_name
+            None, self._register_cloned_voice_sync, reference_audio_path, voice_name, target_model
         )
 
     def _register_cloned_voice_sync(
         self,
         reference_audio_path: str,
         voice_name: str = "cloned_voice",
+        target_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         同步执行声音注册 - 根据模型系列自动选择调用方式
@@ -655,7 +671,9 @@ class QwenTTSService:
         if self.is_cosyvoice:
             if reference_audio_path.startswith(("http://", "https://")):
                 return self._register_cloned_voice_cosyvoice(reference_audio_path, voice_name)
-            return self._register_cloned_voice_cosyvoice_base64(reference_audio_path, voice_name)
+            return self._register_cloned_voice_cosyvoice_base64(
+                reference_audio_path, voice_name, target_model=target_model
+            )
         else:
             return self._register_cloned_voice_tts(reference_audio_path, voice_name)
 
@@ -937,26 +955,29 @@ class QwenTTSService:
         voice_name: str = "cloned_voice",
         max_attempts: int = 45,
         poll_interval: float = 2.0,
+        target_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         CosyVoice base64 直传注册（新式 voice-enrollment HTTP API）。
 
         本地音频编码为 Data URI 直接上传，无需公网 URL/七牛/PUBLIC_BASE_URL。
         create_voice 同步返回 voice_id，随后轮询 query_voice 直到 OK。
-        音色创建时永久绑定 target_model，返回值中带回供落库。
+        音色创建时永久绑定 target_model（显式指定优先，缺省用全局配置模型），
+        返回值中带回供落库。
         """
+        effective_target_model = target_model or self.model
         audio_uri = self._build_audio_data_uri(reference_audio_path)
         prefix = self._make_voice_prefix()
 
         logger.info(
             f"Registering cloned voice (CosyVoice base64): {voice_name} "
-            f"(prefix: {prefix}, target_model: {self.model})"
+            f"(prefix: {prefix}, target_model: {effective_target_model})"
         )
 
         result = self._enrollment_post(
             {
                 "action": "create_voice",
-                "target_model": self.model,
+                "target_model": effective_target_model,
                 "prefix": prefix,
                 "audio": audio_uri,
             }
@@ -975,7 +996,7 @@ class QwenTTSService:
             "voice_id": voice_id,
             "voice_name": voice_name,
             "role": "custom",
-            "target_model": self.model,
+            "target_model": effective_target_model,
             "enrollment_method": "base64",
         }
 

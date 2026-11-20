@@ -53,6 +53,7 @@ class TestTTSAPI:
             instruction="clear narration",
             enable_ssml=False,
             enable_markdown_filter=False,
+            model_override=None,
         )
         assert not Path(audio_path).exists()
 
@@ -285,3 +286,70 @@ def test_voxcpm_tts_response_contract(client: TestClient, monkeypatch):
     assert isinstance(data["params"], dict)
     # voxcpm is the one engine that surfaces a top-level `engine`.
     assert data["engine"]
+
+
+class TestQwenModelOverride:
+    """合成必须使用音色绑定的 target_model（model_override）"""
+
+    def test_synthesize_passes_bound_target_model(self, client: TestClient, db_session, mock_tts_service, tmp_path):
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        audio_path = tmp_path / "ovr_out.mp3"
+        audio_path.write_bytes(b"RIFF fake")
+        mock_tts_service.synthesize_speech.return_value = str(audio_path)
+
+        voice_id = "cosyvoice-v3.5-flash-ovr-123"
+        db_session.add(
+            VoiceProfile(
+                id=str(uuid.uuid4()),
+                name="Bound Voice",
+                voice={"model": "qwen", "voice_type": "clone"},
+                voice_params={
+                    "qwen": {
+                        "source_audio_path": "/tmp/nonexistent_ovr.mp3",
+                        "params": {"voice_id": voice_id, "target_model": "cosyvoice-v3.5-flash"},
+                    }
+                },
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/tts/synthesize",
+            json={"text": "绑定模型验证", "voice_id": voice_id, "engine": "qwen"},
+        )
+
+        assert response.status_code == 200
+        _, kwargs = mock_tts_service.synthesize_speech.call_args
+        assert kwargs["model_override"] == "cosyvoice-v3.5-flash"
+
+    def test_synthesize_without_binding_falls_back_to_none(self, client: TestClient, db_session, mock_tts_service, tmp_path):
+        import uuid
+
+        from app.models.voice_profile import VoiceProfile
+
+        audio_path = tmp_path / "nobind_out.mp3"
+        audio_path.write_bytes(b"RIFF fake")
+        mock_tts_service.synthesize_speech.return_value = str(audio_path)
+
+        voice_id = "cosyvoice-v3.5-plus-nobind-123"
+        db_session.add(
+            VoiceProfile(
+                id=str(uuid.uuid4()),
+                name="NoBind Voice",
+                voice={"model": "qwen", "voice_type": "clone"},
+                voice_params={"qwen": {"params": {"voice_id": voice_id}}},
+            )
+        )
+        db_session.commit()
+
+        response = client.post(
+            "/api/tts/synthesize",
+            json={"text": "回退验证", "voice_id": voice_id, "engine": "qwen"},
+        )
+
+        assert response.status_code == 200
+        _, kwargs = mock_tts_service.synthesize_speech.call_args
+        assert kwargs["model_override"] is None
