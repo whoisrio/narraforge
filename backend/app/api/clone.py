@@ -815,7 +815,10 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
     tts_service = await get_tts_service(db)
 
     try:
-        # 获取 Qwen 上的所有已克隆声音
+        # 获取 Qwen 上的所有已克隆声音（list_cloned_voices 内部分页拉全量）
+        # 新式 list_voice 响应无 name 字段，用 voice_id 派生可读名
+        from app.services.qwen_tts_service import derive_voice_display_name
+
         qwen_voices = await tts_service.list_cloned_voices()
         logger.info(f"Processing voice {qwen_voices}")
         synced_count = 0
@@ -824,12 +827,14 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
 
         for qwen_voice in qwen_voices:
             voice_id = qwen_voice.get("voice_id")
-            name = qwen_voice.get("name", f"voice_{voice_id}")
             status = qwen_voice.get("status", "UNKNOWN")
+            target_model = qwen_voice.get("target_model") or ""
 
             # 只同步状态为 OK 的音色
             if status != "OK":
                 continue
+
+            name = qwen_voice.get("name") or derive_voice_display_name(voice_id, target_model)
 
             # 检查是否已存在 (use Python filter since JSON column)
             all_voices = db.query(VoiceProfile).all()
@@ -843,11 +848,20 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
 
             if existing:
                 existing_count += 1
-                # 更新已有记录
-                existing.name = name
+                # 仅刷新旧版同步的 fallback 垃圾名（voice_{voice_id}），保留用户自定义名
+                if existing.name == f"voice_{voice_id}":
+                    existing.name = name
                 voice_data = copy.deepcopy(existing.voice or {})
                 voice_data["role"] = qwen_voice.get("role", "custom")
                 existing.voice = voice_data
+                # 补齐注册元数据（旧记录可能缺失）
+                params = copy.deepcopy(existing.voice_params or {})
+                cosy_params = params.setdefault("cosyvoice", {}).setdefault("params", {})
+                cosy_params.setdefault("voice_id", voice_id)
+                if target_model:
+                    cosy_params.setdefault("target_model", target_model)
+                cosy_params.setdefault("enrollment_method", "sync")
+                existing.voice_params = params
                 db.commit()
                 db.refresh(existing)
                 results.append(
@@ -866,7 +880,15 @@ async def sync_voices_from_qwen(db: Session = Depends(get_db)):
                     id=str(uuid.uuid4()),
                     name=name,
                     voice={"model": "cosyvoice", "voice_type": "clone"},
-                    voice_params={"cosyvoice": {"params": {"voice_id": voice_id}}},
+                    voice_params={
+                        "cosyvoice": {
+                            "params": {
+                                "voice_id": voice_id,
+                                "target_model": target_model or None,
+                                "enrollment_method": "sync",
+                            }
+                        }
+                    },
                 )
                 db.add(new_voice)
                 db.commit()
