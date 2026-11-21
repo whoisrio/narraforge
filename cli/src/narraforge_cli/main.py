@@ -398,6 +398,72 @@ def project_synthesize(
     execute(ctx, run)
 
 
+@project_app.command("export")
+def project_export(
+    ctx: typer.Context,
+    project_id: str,
+    remotion_path: Optional[str] = typer.Option(
+        None,
+        "--remotion-path",
+        help="Remotion project dir; stored on the project before exporting.",
+    ),
+    export_dir: Optional[str] = typer.Option(
+        None, "--export-dir", help="Export directory override (configs.export_directory)."
+    ),
+    scaffold: bool = typer.Option(
+        False,
+        "--scaffold",
+        help="Create/refresh the full Remotion project (audio + subtitles + manifest) "
+        "instead of a plain audio export.",
+    ),
+) -> None:
+    """Export chapter audio (and srt) into the Remotion project.
+
+    Without --scaffold, calls export-all-chapters (mp3+srt per chapter into the
+    resolved export directory, default `{remotion_path}/public/audio`). With
+    --scaffold, calls scaffold-remotion which also writes subtitles and a
+    segment manifest.
+    """
+
+    def run() -> None:
+        client = ctx.obj.client
+        if remotion_path is not None or export_dir is not None:
+            detail = client.get_project(project_id)
+            patch: dict[str, object] = {}
+            if remotion_path is not None:
+                patch["remotion_project_path"] = remotion_path
+            if export_dir is not None:
+                # PATCH replaces the whole configs bucket: merge client-side.
+                configs = dict(detail.get("configs") or {})
+                configs["export_directory"] = export_dir
+                patch["configs"] = configs
+            client.patch_project(project_id, patch)
+        if scaffold:
+            raw = client.scaffold_remotion(project_id, remotion_path)
+            payload = {
+                "project_dir": raw.get("project_dir"),
+                "created": raw.get("created"),
+                "chapters": raw.get("chapters"),
+            }
+            if ctx.obj.json_mode:
+                output.emit_json(payload)
+            else:
+                typer.echo(
+                    f"remotion project: {payload['project_dir']} "
+                    f"(created={payload['created']}, chapters={payload['chapters']})"
+                )
+            return
+        raw = client.export_all_chapters(project_id)
+        payload = {"exported": raw.get("exported", []), "count": raw.get("count")}
+        if ctx.obj.json_mode:
+            output.emit_json(payload)
+        else:
+            for item in payload["exported"]:
+                typer.echo(f"{item.get('title')}\t{item.get('audio_path')}\t{item.get('srt_path')}")
+
+    execute(ctx, run)
+
+
 @app.command("health")
 def health(ctx: typer.Context) -> None:
     """Check backend reachability, deployment target and available engines."""
