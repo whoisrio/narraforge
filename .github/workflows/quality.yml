@@ -55,6 +55,28 @@ jobs:
         working-directory: agent
         run: uv run --extra test pytest -q
 
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        working-directory: cli
+        run: uv sync
+
+      - name: Ruff check
+        working-directory: cli
+        run: uv run ruff check .
+
+      # Unit tests only; the E2E suite needs a running backend and network access.
+      - name: Pytest
+        working-directory: cli
+        run: uv run pytest -q -m "not e2e"
+
   frontend:
     runs-on: ubuntu-latest
     steps:

@@ -34,6 +34,22 @@ npm run dev
 | `GET /health` | Service health | `{"status": "ok"}` |
 | `GET /` | Root endpoint | HTML page |
 
+## CLI (`nf`)
+
+The `cli/` package provides the `nf` command for driving the narration workflow
+over HTTP (create → split → set-engine → synthesize → export). Full reference:
+[`docs/cli.md`](cli.md).
+
+```bash
+cd cli && uv sync
+uv run nf health                                   # backend reachability + capabilities
+uv run nf project create --name X --script narration.md
+```
+
+Exit codes: `0` ok, `1` operation error, `2` backend unreachable. Pass `--json` for
+machine-readable stdout (progress goes to stderr). Unit tests run without a backend;
+the `-m e2e` suite needs a running backend and network access (edge_tts engine).
+
 ## Common Issues
 
 ### Backend Won't Start
