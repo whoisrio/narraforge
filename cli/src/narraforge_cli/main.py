@@ -1,0 +1,491 @@
+"""NarraForge CLI entry point (typer app)."""
+from __future__ import annotations
+
+import json
+import uuid
+from enum import Enum
+from pathlib import Path
+from typing import Optional
+
+import typer
+
+from . import output, splitting
+from . import segments as segments_mod
+from . import voice as voice_mod
+from .client import Client
+from .config import load_config
+from .errors import ApiError, NarraForgeCliError
+
+app = typer.Typer(
+    add_completion=False,
+    no_args_is_help=True,
+    help="Drive the NarraForge backend from the command line.",
+)
+project_app = typer.Typer(no_args_is_help=True, help="Manage segmented projects.")
+app.add_typer(project_app, name="project")
+
+
+class Context:
+    """Per-invocation state shared by commands."""
+
+    def __init__(self, client: Client, json_mode: bool) -> None:
+        self.client = client
+        self.json_mode = json_mode
+
+
+@app.callback()
+def main_callback(
+    ctx: typer.Context,
+    api_url: Optional[str] = typer.Option(
+        None, "--api-url", help="Backend base URL (env: NARRAFORGE_API_URL)."
+    ),
+    json_out: bool = typer.Option(False, "--json", help="Print machine-readable JSON to stdout."),
+) -> None:
+    output.set_json_mode(json_out)
+    ctx.obj = Context(Client(load_config(api_url)), json_out)
+
+
+def execute(ctx: typer.Context, fn) -> None:
+    """Run a command body; map CLI errors to exit codes; always close the client."""
+    try:
+        fn()
+    except NarraForgeCliError as exc:
+        output.info(f"error: {exc}")
+        raise typer.Exit(exc.exit_code) from exc
+    finally:
+        ctx.obj.client.close()
+
+
+@project_app.command("list")
+def project_list(ctx: typer.Context) -> None:
+    """List projects (lightweight summaries)."""
+
+    def run() -> None:
+        items = ctx.obj.client.list_projects()
+        if ctx.obj.json_mode:
+            output.emit_json({"items": items})
+        else:
+            for p in items:
+                typer.echo(f"{p.get('id')}\t{p.get('name')}\t{p.get('updated_at', '')}")
+
+    execute(ctx, run)
+
+
+@project_app.command("get")
+def project_get(ctx: typer.Context, project_id: str) -> None:
+    """Print the full project detail (JSON)."""
+
+    def run() -> None:
+        detail = ctx.obj.client.get_project(project_id)
+        if ctx.obj.json_mode:
+            output.emit_json(detail)
+        else:
+            typer.echo(json.dumps(detail, ensure_ascii=False, indent=2))
+
+    execute(ctx, run)
+
+
+@project_app.command("create")
+def project_create(
+    ctx: typer.Context,
+    name: str = typer.Option(..., "--name", help="Project name."),
+    script: Optional[Path] = typer.Option(
+        None, "--script", help="Path to the narration script markdown file."
+    ),
+    remotion_path: Optional[str] = typer.Option(
+        None, "--remotion-path", help="Remotion project directory to store on the project."
+    ),
+) -> None:
+    """Create a project and optionally attach the narration script."""
+
+    def run() -> None:
+        client = ctx.obj.client
+        project_id = str(uuid.uuid4())
+        payload = {
+            "id": project_id,
+            "name": name,
+            "schema_version": 2,
+            "layout": "vertical",
+            "configs": {},
+        }
+        detail = client.create_project(payload)
+        narration_path = None
+        if script is not None:
+            text = script.read_text(encoding="utf-8")
+            put = client.put_narration_script(project_id, text)
+            narration_path = put.get("path")
+        if remotion_path is not None:
+            detail = client.patch_project(project_id, {"remotion_project_path": remotion_path})
+        result = {
+            "id": project_id,
+            "name": detail.get("name"),
+            "narration_script_path": narration_path,
+            "remotion_project_path": detail.get("remotion_project_path"),
+        }
+        if ctx.obj.json_mode:
+            output.emit_json(result)
+        else:
+            typer.echo(f"created project {project_id} ({name})")
+
+    execute(ctx, run)
+
+
+@project_app.command("set-engine")
+def project_set_engine(
+    ctx: typer.Context,
+    project_id: str,
+    engine: str = typer.Argument(
+        ..., help="TTS engine: edge_tts / qwen / mimo_tts / voxcpm / indextts."
+    ),
+    param: list[str] = typer.Option([], "--param", help="Voice param as key=value (repeatable)."),
+    chapter_id: Optional[str] = typer.Option(
+        None, "--chapter", help="Target one chapter instead of all."
+    ),
+) -> None:
+    """Set the TTS engine (and voice params) on all chapters or one chapter."""
+
+    def run() -> None:
+        try:
+            voice = voice_mod.build_voice(engine, list(param))
+        except ValueError as exc:
+            raise NarraForgeCliError(str(exc)) from exc
+        detail = ctx.obj.client.get_project(project_id)
+        targets = [
+            ch
+            for ch in detail.get("chapters", [])
+            if chapter_id is None or ch.get("id") == chapter_id
+        ]
+        if not targets:
+            raise NarraForgeCliError(
+                "no matching chapters" + (f" for --chapter {chapter_id}" if chapter_id else "")
+            )
+        updated = []
+        for ch in targets:
+            ctx.obj.client.patch_chapter(project_id, ch["id"], {"voice": voice})
+            updated.append({"chapter_id": ch["id"], "name": ch.get("name")})
+        result = {"updated": updated, "voice": voice}
+        if ctx.obj.json_mode:
+            output.emit_json(result)
+        else:
+            for item in updated:
+                typer.echo(f"{item['chapter_id']}\t{item['name']}\t{engine}")
+
+    execute(ctx, run)
+
+
+segment_app = typer.Typer(no_args_is_help=True, help="Inspect segment status.")
+app.add_typer(segment_app, name="segment")
+
+
+@segment_app.command("list")
+def segment_list(
+    ctx: typer.Context,
+    project_id: str,
+    chapter_id: Optional[str] = typer.Option(None, "--chapter"),
+    missing_only: bool = typer.Option(False, "--missing-only"),
+) -> None:
+    """List segments with audio status."""
+
+    def run() -> None:
+        detail = ctx.obj.client.get_project(project_id)
+        rows = segments_mod.list_rows(detail, chapter_id=chapter_id, missing_only=missing_only)
+        if ctx.obj.json_mode:
+            output.emit_json({"items": rows, "count": len(rows)})
+        else:
+            for r in rows:
+                status = "ready" if r["ready"] else "MISSING"
+                origin = r["origin"] or ""
+                typer.echo(
+                    f"{r['chapter_name']}\t#{r['position']}\t{status}\t{origin}\t{r['text'][:30]}"
+                )
+
+    execute(ctx, run)
+
+
+@project_app.command("status")
+def project_status(ctx: typer.Context, project_id: str) -> None:
+    """Show per-chapter audio readiness and export configuration."""
+
+    def run() -> None:
+        detail = ctx.obj.client.get_project(project_id)
+        rows = []
+        for ch in detail.get("chapters", []):
+            segs = ch.get("segments", [])
+            missing = [s.get("id") for s in segs if not segments_mod.segment_ready(s)]
+            rows.append(
+                {
+                    "chapter_id": ch.get("id"),
+                    "name": ch.get("name"),
+                    "engine": ((ch.get("voice") or {}).get("engine")),
+                    "total": len(segs),
+                    "ready": len(segs) - len(missing),
+                    "missing_segment_ids": missing,
+                }
+            )
+        result = {
+            "id": detail.get("id"),
+            "name": detail.get("name"),
+            "remotion_project_path": detail.get("remotion_project_path"),
+            "export_directory": (detail.get("configs") or {}).get("export_directory"),
+            "chapters": rows,
+            "all_ready": bool(rows) and all(r["ready"] == r["total"] for r in rows),
+        }
+        if ctx.obj.json_mode:
+            output.emit_json(result)
+        else:
+            typer.echo(f"project {result['name']}  remotion={result['remotion_project_path']}")
+            for r in rows:
+                typer.echo(f"{r['name']}\t{r['engine']}\t{r['ready']}/{r['total']} ready")
+
+    execute(ctx, run)
+
+
+class SplitMode(str, Enum):
+    rule = "rule"
+    llm = "llm"
+
+
+@project_app.command("split")
+def project_split(
+    ctx: typer.Context,
+    project_id: str,
+    levels: Optional[int] = typer.Option(
+        None, "--levels", help="Markdown heading level to split on (default: auto-detect)."
+    ),
+    min_chars: int = typer.Option(
+        80, "--min-chars", help="Minimum chapter length before merging."
+    ),
+    mode: SplitMode = typer.Option(SplitMode.rule, "--mode", help="Segment split mode."),
+    engine: Optional[str] = typer.Option(
+        None, "--engine", help="TTS engine written onto every created chapter."
+    ),
+    preserve_audio: bool = typer.Option(
+        False, "--preserve-audio", help="Reuse audio of segments whose text is unchanged."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Reuse report only; nothing is written."
+    ),
+) -> None:
+    """Split the project narration script into chapters and segments.
+
+    Reads the project-level narration script, detects markdown headings,
+    rebuilds all chapters via chapters:batch and rule- (or LLM-) splits each
+    chapter into segments.
+    """
+
+    def run() -> None:
+        client = ctx.obj.client
+        detail = client.get_project(project_id)
+        text = detail.get("narration_script") or ""
+        if not text.strip():
+            raise NarraForgeCliError(
+                "project has no narration script; "
+                "create one with `nf project create --script <file>`"
+            )
+        if engine is not None and engine not in voice_mod.ENGINE_VOICE_KEYS:
+            raise NarraForgeCliError(
+                f"unknown engine {engine!r}; supported: {', '.join(voice_mod.ENGINE_VOICE_KEYS)}"
+            )
+        detect = client.markdown_detect(text, min_chars)
+        if detect.get("candidates"):
+            level_list = [levels] if levels else splitting.pick_markdown_level(detect)
+            split = client.markdown_split(text, level_list, min_chars)
+            bodies = splitting.slice_chapter_bodies(text, split.get("chapters", []))
+        else:
+            bodies = [{"title": detect.get("doc_title") or "全文", "body": text.strip()}]
+        llm_segments = None
+        if mode == SplitMode.llm:
+            llm_segments = []
+            for item in bodies:
+                if not item["body"].strip():
+                    llm_segments.append([])
+                    continue
+                res = client.llm_split(item["body"])
+                llm_segments.append(
+                    [
+                        {"text": s["text"], "emotion": s.get("emotion")}
+                        for s in res.get("segments", [])
+                    ]
+                )
+        payload = splitting.build_batch_payload(
+            bodies,
+            full_text=text,
+            engine=engine,
+            mode=mode.value,
+            preserve_audio=preserve_audio,
+            dry_run=dry_run,
+            llm_segments=llm_segments,
+        )
+        batch = client.chapters_batch(project_id, payload)
+        if dry_run:
+            result = {"dry_run": True, "reuse": batch.get("reuse")}
+        else:
+            created = batch.get("chapters", [])
+            result = {
+                "chapters": len(created),
+                "segments": sum(len(c.get("segments", [])) for c in created),
+                "reuse": batch.get("reuse"),
+            }
+        if ctx.obj.json_mode:
+            output.emit_json(result)
+        elif dry_run:
+            output.info(
+                f"dry-run reuse report: {json.dumps(batch.get('reuse'), ensure_ascii=False)}"
+            )
+        else:
+            output.info(f"created {result['chapters']} chapters / {result['segments']} segments")
+
+    execute(ctx, run)
+
+
+@project_app.command("synthesize")
+def project_synthesize(
+    ctx: typer.Context,
+    project_id: str,
+    chapter_id: Optional[str] = typer.Option(None, "--chapter", help="Only this chapter."),
+    segment_id: Optional[str] = typer.Option(None, "--segment", help="Only this segment."),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Re-synthesize segments that already have audio and unlock user-recorded ones.",
+    ),
+    stop_on_error: bool = typer.Option(
+        False, "--stop-on-error", help="Abort at the first failure."
+    ),
+) -> None:
+    """Synthesize audio for all (or selected) segments, sequentially.
+
+    User-recorded segments are skipped unless --force; segments with empty
+    text are skipped. Exit code 1 when any segment fails.
+    """
+
+    def run() -> None:
+        client = ctx.obj.client
+        detail = client.get_project(project_id)
+        plan = segments_mod.plan_segments(detail, chapter_id=chapter_id, segment_id=segment_id)
+        results = []
+        total = len(plan)
+        for done, item in enumerate(plan, start=1):
+            label = f"{item['chapter_name']}#{item['position']}"
+            if item["origin"] == "recorded" and not force:
+                results.append({**item, "status": "skipped", "reason": "recorded"})
+                output.info(f"[{done}/{total}] skip {label} (user-recorded audio)")
+                continue
+            if not item["text"].strip():
+                results.append({**item, "status": "skipped", "reason": "empty_text"})
+                output.info(f"[{done}/{total}] skip {label} (empty text)")
+                continue
+            try:
+                client.synthesize_segment(
+                    project_id, item["chapter_id"], item["segment_id"], force=force
+                )
+                results.append({**item, "status": "ok"})
+                output.info(f"[{done}/{total}] ok {label}")
+            except ApiError as exc:
+                results.append({**item, "status": "failed", "error": exc.message})
+                output.info(f"[{done}/{total}] FAILED {label}: [{exc.status_code}] {exc.code}")
+                if stop_on_error:
+                    break
+        counts = segments_mod.summarize(results)
+        output.info(
+            f"synthesis done: ok={counts['ok']} failed={counts['failed']} "
+            f"skipped={counts['skipped']} planned={total}"
+        )
+        output.emit_json({"summary": counts, "planned": total, "results": results})
+        if counts["failed"]:
+            raise typer.Exit(1)
+
+    execute(ctx, run)
+
+
+@project_app.command("export")
+def project_export(
+    ctx: typer.Context,
+    project_id: str,
+    remotion_path: Optional[str] = typer.Option(
+        None,
+        "--remotion-path",
+        help="Remotion project dir; stored on the project before exporting.",
+    ),
+    export_dir: Optional[str] = typer.Option(
+        None, "--export-dir", help="Export directory override (configs.export_directory)."
+    ),
+    scaffold: bool = typer.Option(
+        False,
+        "--scaffold",
+        help="Create/refresh the full Remotion project (audio + subtitles + manifest) "
+        "instead of a plain audio export.",
+    ),
+) -> None:
+    """Export chapter audio (and srt) into the Remotion project.
+
+    Without --scaffold, calls export-all-chapters (mp3+srt per chapter into the
+    resolved export directory, default `{remotion_path}/public/audio`). With
+    --scaffold, calls scaffold-remotion which also writes subtitles and a
+    segment manifest.
+    """
+
+    def run() -> None:
+        client = ctx.obj.client
+        if remotion_path is not None or export_dir is not None:
+            detail = client.get_project(project_id)
+            patch: dict[str, object] = {}
+            if remotion_path is not None:
+                patch["remotion_project_path"] = remotion_path
+            if export_dir is not None:
+                # PATCH replaces the whole configs bucket: merge client-side.
+                configs = dict(detail.get("configs") or {})
+                configs["export_directory"] = export_dir
+                patch["configs"] = configs
+            client.patch_project(project_id, patch)
+        if scaffold:
+            raw = client.scaffold_remotion(project_id, remotion_path)
+            payload = {
+                "project_dir": raw.get("project_dir"),
+                "created": raw.get("created"),
+                "chapters": raw.get("chapters"),
+            }
+            if ctx.obj.json_mode:
+                output.emit_json(payload)
+            else:
+                typer.echo(
+                    f"remotion project: {payload['project_dir']} "
+                    f"(created={payload['created']}, chapters={payload['chapters']})"
+                )
+            return
+        raw = client.export_all_chapters(project_id)
+        payload = {"exported": raw.get("exported", []), "count": raw.get("count")}
+        if ctx.obj.json_mode:
+            output.emit_json(payload)
+        else:
+            for item in payload["exported"]:
+                typer.echo(f"{item.get('title')}\t{item.get('audio_path')}\t{item.get('srt_path')}")
+
+    execute(ctx, run)
+
+
+@app.command("health")
+def health(ctx: typer.Context) -> None:
+    """Check backend reachability, deployment target and available engines."""
+
+    def run() -> None:
+        data = {
+            "health": ctx.obj.client.health(),
+            "capabilities": ctx.obj.client.capabilities(),
+        }
+        caps = data["capabilities"]
+        if ctx.obj.json_mode:
+            output.emit_json(data)
+        else:
+            typer.echo(
+                f"backend: {data['health'].get('status')} (app_env={data['health'].get('app_env')})"
+            )
+            typer.echo(f"deploy_target: {caps.get('deploy_target')}")
+            typer.echo(f"engines: {', '.join(caps.get('engines', []))}")
+            if not (caps.get("features") or {}).get("backend_storage", False):
+                output.info(
+                    "warning: backend storage disabled - "
+                    "project audio persistence and export will not work"
+                )
+
+    execute(ctx, run)

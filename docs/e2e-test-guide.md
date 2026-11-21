@@ -40,6 +40,23 @@ npx playwright test --grep "打开项目" --workers=1
 Tests run **serially** (`--workers=1`) because they share a single SQLite database.
 Playwright's `webServer` config bypasses WorkBuddy's sandbox (which would block `shutil.rmtree` during project deletion).
 
+### CLI E2E suite (separate from Playwright)
+
+The `nf` CLI has its own backend-level E2E suite in `cli/tests/test_e2e_workflow.py`
+(marked `e2e`). It runs the full narration workflow against a **real running backend**
+(default `http://127.0.0.1:8002`, configurable via `NARRAFORGE_API_URL`) using the
+`edge_tts` engine, verifies exported mp3/srt files on disk, dual-reads the backend
+API, and deletes the uniquely-named test project afterwards. It skips automatically
+when no backend is reachable:
+
+```bash
+cd cli && uv run pytest -q -m e2e       # requires running backend + network (edge_tts)
+```
+
+This suite is **not** part of the Playwright stack (no auto-started servers, no
+e2e database) — it targets whatever backend instance is running, so do not point
+it at a production instance you cannot mutate (it creates and deletes one project).
+
 ## Directory Layout
 
 | Path | Purpose |

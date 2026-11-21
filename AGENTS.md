@@ -90,6 +90,19 @@ share a venv. The backend talks to it over HTTP (`INDEXTTS_SIDECAR_URL`).
 curl http://127.0.0.1:8002/health
 ```
 
+### CLI (`cli/`)
+
+```bash
+cd cli && uv sync                  # install (entry point: nf)
+uv run nf health                   # backend reachability + capabilities
+uv run nf project create --name X --script narration.md
+uv run pytest -q                   # CLI tests (add `-m e2e` for backend E2E, uses edge_tts)
+uv run ruff check .
+```
+
+The CLI drives the backend over HTTP for the narration workflow
+(create → split → set-engine → synthesize → export). See `docs/cli.md`.
+
 ### Local Quality Hooks
 
 ```bash
@@ -97,8 +110,8 @@ uvx pre-commit install
 uvx pre-commit run --all-files
 ```
 
-Pre-commit runs backend Ruff and frontend ESLint when their corresponding source files change.
-GitHub Actions runs backend Ruff/pytest, agent pytest, and frontend lint/test/build on pull requests and non-master pushes.
+Pre-commit runs backend Ruff, frontend ESLint, and CLI Ruff when their corresponding source files change.
+GitHub Actions runs backend Ruff/pytest, agent pytest, CLI Ruff/pytest (unit), and frontend lint/test/build on pull requests and non-master pushes.
 
 ## Architecture
 

@@ -14,3 +14,10 @@ repos:
         language: system
         files: ^frontend/(src|tests)/.*\.(ts|tsx)$
         pass_filenames: false
+
+      - id: cli-ruff
+        name: cli ruff check
+        entry: uv run --project cli ruff check cli/src cli/tests
+        language: system
+        files: ^cli/.*\.py$
+        pass_filenames: false
