@@ -9,6 +9,7 @@ from typing import Optional
 import typer
 
 from . import output
+from . import segments as segments_mod
 from . import voice as voice_mod
 from .client import Client
 from .config import load_config
@@ -167,6 +168,73 @@ def project_set_engine(
         else:
             for item in updated:
                 typer.echo(f"{item['chapter_id']}\t{item['name']}\t{engine}")
+
+    execute(ctx, run)
+
+
+segment_app = typer.Typer(no_args_is_help=True, help="Inspect segment status.")
+app.add_typer(segment_app, name="segment")
+
+
+@segment_app.command("list")
+def segment_list(
+    ctx: typer.Context,
+    project_id: str,
+    chapter_id: Optional[str] = typer.Option(None, "--chapter"),
+    missing_only: bool = typer.Option(False, "--missing-only"),
+) -> None:
+    """List segments with audio status."""
+
+    def run() -> None:
+        detail = ctx.obj.client.get_project(project_id)
+        rows = segments_mod.list_rows(detail, chapter_id=chapter_id, missing_only=missing_only)
+        if ctx.obj.json_mode:
+            output.emit_json({"items": rows, "count": len(rows)})
+        else:
+            for r in rows:
+                status = "ready" if r["ready"] else "MISSING"
+                origin = r["origin"] or ""
+                typer.echo(
+                    f"{r['chapter_name']}\t#{r['position']}\t{status}\t{origin}\t{r['text'][:30]}"
+                )
+
+    execute(ctx, run)
+
+
+@project_app.command("status")
+def project_status(ctx: typer.Context, project_id: str) -> None:
+    """Show per-chapter audio readiness and export configuration."""
+
+    def run() -> None:
+        detail = ctx.obj.client.get_project(project_id)
+        rows = []
+        for ch in detail.get("chapters", []):
+            segs = ch.get("segments", [])
+            missing = [s.get("id") for s in segs if not segments_mod.segment_ready(s)]
+            rows.append(
+                {
+                    "chapter_id": ch.get("id"),
+                    "name": ch.get("name"),
+                    "engine": ((ch.get("voice") or {}).get("engine")),
+                    "total": len(segs),
+                    "ready": len(segs) - len(missing),
+                    "missing_segment_ids": missing,
+                }
+            )
+        result = {
+            "id": detail.get("id"),
+            "name": detail.get("name"),
+            "remotion_project_path": detail.get("remotion_project_path"),
+            "export_directory": (detail.get("configs") or {}).get("export_directory"),
+            "chapters": rows,
+            "all_ready": bool(rows) and all(r["ready"] == r["total"] for r in rows),
+        }
+        if ctx.obj.json_mode:
+            output.emit_json(result)
+        else:
+            typer.echo(f"project {result['name']}  remotion={result['remotion_project_path']}")
+            for r in rows:
+                typer.echo(f"{r['name']}\t{r['engine']}\t{r['ready']}/{r['total']} ready")
 
     execute(ctx, run)
 
