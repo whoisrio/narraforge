@@ -82,11 +82,13 @@ playwright-report/
 # ai tools
 .claude/skills/
 .claude/worktrees/
-.agents/skills/
+.agents/skills/*
+!.agents/skills/narraforge/
 .claude
 .workbuddy
 .hermes
-.agents
+.agents/*
+!.agents/skills/
 .trae
 .codebuddy
 .superpowers
