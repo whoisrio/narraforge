@@ -9,6 +9,7 @@ from typing import Optional
 import typer
 
 from . import output
+from . import voice as voice_mod
 from .client import Client
 from .config import load_config
 from .errors import NarraForgeCliError
@@ -123,6 +124,49 @@ def project_create(
             output.emit_json(result)
         else:
             typer.echo(f"created project {project_id} ({name})")
+
+    execute(ctx, run)
+
+
+@project_app.command("set-engine")
+def project_set_engine(
+    ctx: typer.Context,
+    project_id: str,
+    engine: str = typer.Argument(
+        ..., help="TTS engine: edge_tts / qwen / mimo_tts / voxcpm / indextts."
+    ),
+    param: list[str] = typer.Option([], "--param", help="Voice param as key=value (repeatable)."),
+    chapter_id: Optional[str] = typer.Option(
+        None, "--chapter", help="Target one chapter instead of all."
+    ),
+) -> None:
+    """Set the TTS engine (and voice params) on all chapters or one chapter."""
+
+    def run() -> None:
+        try:
+            voice = voice_mod.build_voice(engine, list(param))
+        except ValueError as exc:
+            raise NarraForgeCliError(str(exc)) from exc
+        detail = ctx.obj.client.get_project(project_id)
+        targets = [
+            ch
+            for ch in detail.get("chapters", [])
+            if chapter_id is None or ch.get("id") == chapter_id
+        ]
+        if not targets:
+            raise NarraForgeCliError(
+                "no matching chapters" + (f" for --chapter {chapter_id}" if chapter_id else "")
+            )
+        updated = []
+        for ch in targets:
+            ctx.obj.client.patch_chapter(project_id, ch["id"], {"voice": voice})
+            updated.append({"chapter_id": ch["id"], "name": ch.get("name")})
+        result = {"updated": updated, "voice": voice}
+        if ctx.obj.json_mode:
+            output.emit_json(result)
+        else:
+            for item in updated:
+                typer.echo(f"{item['chapter_id']}\t{item['name']}\t{engine}")
 
     execute(ctx, run)
 
