@@ -1,9 +1,13 @@
 ---
 name: narraforge
+version: 0.1.0
 description: Drive the NarraForge backend via the `nf` CLI to turn a narration markdown script into per-chapter audio + subtitles for a Remotion project. Use when the user asks to create a NarraForge project, paste a narration script, split it into segments, synthesize TTS audio, or export audio into a Remotion project's public/audio directory.
 ---
 
 # NarraForge narration pipeline via the nf CLI
+
+> Skill version tracks the `nf` CLI it drives (keep in sync with `cli/pyproject.toml`;
+> currently 0.1.0).
 
 ## Prerequisites
 
