@@ -8,6 +8,17 @@ The CLI is a pure HTTP client of the backend API — no direct database access,
 no business-logic duplication. Lives in `cli/` (own uv environment, deps:
 `typer` + `httpx`).
 
+## Requirements
+
+- **A running NarraForge backend** (default `http://127.0.0.1:8002`). The frontend
+  and the LangGraph agent service are not required — the CLI talks to the backend
+  directly. `nf health` exits with code `2` when the backend is unreachable; start
+  the backend with `cd backend && uv run uvicorn main:app --host 127.0.0.1 --port 8002`.
+- Engine availability depends on the engine: `edge_tts` needs only internet access
+  (no API keys / GPU); `mimo_tts` / `qwen` need API keys; `voxcpm` needs local
+  models; `indextts` needs the IndexTTS-2.5 sidecar (port 8310).
+- `ffmpeg` must be available to the backend for audio export.
+
 ## Install
 
 ```bash
