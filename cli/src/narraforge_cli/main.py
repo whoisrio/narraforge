@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import json
 import uuid
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 import typer
 
-from . import output
+from . import output, splitting
 from . import segments as segments_mod
 from . import voice as voice_mod
 from .client import Client
@@ -235,6 +236,104 @@ def project_status(ctx: typer.Context, project_id: str) -> None:
             typer.echo(f"project {result['name']}  remotion={result['remotion_project_path']}")
             for r in rows:
                 typer.echo(f"{r['name']}\t{r['engine']}\t{r['ready']}/{r['total']} ready")
+
+    execute(ctx, run)
+
+
+class SplitMode(str, Enum):
+    rule = "rule"
+    llm = "llm"
+
+
+@project_app.command("split")
+def project_split(
+    ctx: typer.Context,
+    project_id: str,
+    levels: Optional[int] = typer.Option(
+        None, "--levels", help="Markdown heading level to split on (default: auto-detect)."
+    ),
+    min_chars: int = typer.Option(
+        80, "--min-chars", help="Minimum chapter length before merging."
+    ),
+    mode: SplitMode = typer.Option(SplitMode.rule, "--mode", help="Segment split mode."),
+    engine: Optional[str] = typer.Option(
+        None, "--engine", help="TTS engine written onto every created chapter."
+    ),
+    preserve_audio: bool = typer.Option(
+        False, "--preserve-audio", help="Reuse audio of segments whose text is unchanged."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Reuse report only; nothing is written."
+    ),
+) -> None:
+    """Split the project narration script into chapters and segments.
+
+    Reads the project-level narration script, detects markdown headings,
+    rebuilds all chapters via chapters:batch and rule- (or LLM-) splits each
+    chapter into segments.
+    """
+
+    def run() -> None:
+        client = ctx.obj.client
+        detail = client.get_project(project_id)
+        text = detail.get("narration_script") or ""
+        if not text.strip():
+            raise NarraForgeCliError(
+                "project has no narration script; "
+                "create one with `nf project create --script <file>`"
+            )
+        if engine is not None and engine not in voice_mod.ENGINE_VOICE_KEYS:
+            raise NarraForgeCliError(
+                f"unknown engine {engine!r}; supported: {', '.join(voice_mod.ENGINE_VOICE_KEYS)}"
+            )
+        detect = client.markdown_detect(text, min_chars)
+        if detect.get("candidates"):
+            level_list = [levels] if levels else splitting.pick_markdown_level(detect)
+            split = client.markdown_split(text, level_list, min_chars)
+            bodies = splitting.slice_chapter_bodies(text, split.get("chapters", []))
+        else:
+            bodies = [{"title": detect.get("doc_title") or "全文", "body": text.strip()}]
+        llm_segments = None
+        if mode == SplitMode.llm:
+            llm_segments = []
+            for item in bodies:
+                if not item["body"].strip():
+                    llm_segments.append([])
+                    continue
+                res = client.llm_split(item["body"])
+                llm_segments.append(
+                    [
+                        {"text": s["text"], "emotion": s.get("emotion")}
+                        for s in res.get("segments", [])
+                    ]
+                )
+        payload = splitting.build_batch_payload(
+            bodies,
+            full_text=text,
+            engine=engine,
+            mode=mode.value,
+            preserve_audio=preserve_audio,
+            dry_run=dry_run,
+            llm_segments=llm_segments,
+        )
+        batch = client.chapters_batch(project_id, payload)
+        if dry_run:
+            result = {"dry_run": True, "reuse": batch.get("reuse")}
+        else:
+            created = batch.get("chapters", [])
+            result = {
+                "chapters": len(created),
+                "segments": sum(len(c.get("segments", [])) for c in created),
+                "reuse": batch.get("reuse"),
+            }
+        if ctx.obj.json_mode:
+            output.emit_json(result)
+        elif dry_run:
+            output.info(
+                f"dry-run reuse report: {json.dumps(batch.get('reuse'), ensure_ascii=False)}"
+            )
+        else:
+            output.info(f"created {result['chapters']} chapters / {result['segments']} segments")
 
     execute(ctx, run)
 
