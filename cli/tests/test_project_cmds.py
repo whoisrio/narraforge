@@ -21,7 +21,7 @@ def test_project_list_json(runner, backend) -> None:
     )
     result = runner.invoke(app, ["--json", "project", "list"])
     assert result.exit_code == 0
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert [p["id"] for p in data["items"]] == ["p1", "p2"]
 
 
@@ -29,7 +29,7 @@ def test_project_get_json(runner, backend) -> None:
     backend.route("GET", "/api/segmented-projects/p1", 200, make_project_detail())
     result = runner.invoke(app, ["--json", "project", "get", "p1"])
     assert result.exit_code == 0
-    assert json.loads(result.output)["id"] == "proj-1"  # the canned detail's id
+    assert json.loads(result.stdout)["id"] == "proj-1"  # the canned detail's id
 
 
 def test_project_create_with_script(tmp_path, runner, backend) -> None:
@@ -70,7 +70,7 @@ def test_project_create_with_script(tmp_path, runner, backend) -> None:
         ],
     )
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     posted = backend.calls_for("POST", "/api/segmented-projects")[0]["json"]
     assert data["id"] == posted["id"]  # client generates the UUID and echoes it
     assert posted["schema_version"] == 2

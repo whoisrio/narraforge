@@ -54,7 +54,7 @@ def test_split_rule_mode_end_to_end(runner, backend) -> None:
     )
     result = runner.invoke(app, ["--json", "project", "split", "p1"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["chapters"] == 1 and data["segments"] == 2
 
     detect = backend.calls_for("POST", "/api/text-split/markdown-detect")[0]["json"]
@@ -207,7 +207,7 @@ def test_split_dry_run_and_preserve_audio(runner, backend) -> None:
         app, ["--json", "project", "split", "p1", "--dry-run", "--preserve-audio"]
     )
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["dry_run"] is True
     assert data["reuse"]["segments_reused"] == 4
     batch = [c for c in backend.calls if c["path"].endswith("/chapters:batch")][0]["json"]

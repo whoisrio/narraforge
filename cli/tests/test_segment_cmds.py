@@ -40,7 +40,7 @@ def test_segment_list_json(runner, backend) -> None:
     backend.route("GET", "/api/segmented-projects/p1", 200, make_detail())
     result = runner.invoke(app, ["--json", "segment", "list", "p1"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["count"] == 2
     assert [r["segment_id"] for r in data["items"]] == ["s1", "s2"]
     assert data["items"][0]["ready"] is True and data["items"][1]["ready"] is False
@@ -50,14 +50,14 @@ def test_segment_list_missing_only(runner, backend) -> None:
     backend.route("GET", "/api/segmented-projects/p1", 200, make_detail())
     result = runner.invoke(app, ["--json", "segment", "list", "p1", "--missing-only"])
     assert result.exit_code == 0
-    assert [r["segment_id"] for r in json.loads(result.output)["items"]] == ["s2"]
+    assert [r["segment_id"] for r in json.loads(result.stdout)["items"]] == ["s2"]
 
 
 def test_project_status_json(runner, backend) -> None:
     backend.route("GET", "/api/segmented-projects/p1", 200, make_detail())
     result = runner.invoke(app, ["--json", "project", "status", "p1"])
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["all_ready"] is False
     assert data["chapters"][0]["ready"] == 1 and data["chapters"][0]["total"] == 2
     assert data["chapters"][0]["missing_segment_ids"] == ["s2"]

@@ -10,7 +10,7 @@ from narraforge_cli.main import app
 def test_health_json(runner) -> None:
     result = runner.invoke(app, ["--json", "health"])
     assert result.exit_code == 0
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["health"]["status"] == "healthy"
     assert data["capabilities"]["deploy_target"] == "local"
 

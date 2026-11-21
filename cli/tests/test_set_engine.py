@@ -26,7 +26,7 @@ def test_set_engine_all_chapters(runner, backend) -> None:
         app, ["--json", "project", "set-engine", "p1", "mimo_tts", "--param", "voice_id=preset-7"]
     )
     assert result.exit_code == 0, result.output
-    data = json.loads(result.output)
+    data = json.loads(result.stdout)
     assert data["voice"] == {"engine": "mimo_tts", "mode": "preset", "voice_id": "preset-7"}
     calls = [c for c in backend.calls if c["method"] == "PATCH" and "/chapters/" in c["path"]]
     assert len(calls) == 2

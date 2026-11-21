@@ -14,7 +14,7 @@ from . import segments as segments_mod
 from . import voice as voice_mod
 from .client import Client
 from .config import load_config
-from .errors import NarraForgeCliError
+from .errors import ApiError, NarraForgeCliError
 
 app = typer.Typer(
     add_completion=False,
@@ -334,6 +334,66 @@ def project_split(
             )
         else:
             output.info(f"created {result['chapters']} chapters / {result['segments']} segments")
+
+    execute(ctx, run)
+
+
+@project_app.command("synthesize")
+def project_synthesize(
+    ctx: typer.Context,
+    project_id: str,
+    chapter_id: Optional[str] = typer.Option(None, "--chapter", help="Only this chapter."),
+    segment_id: Optional[str] = typer.Option(None, "--segment", help="Only this segment."),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Re-synthesize segments that already have audio and unlock user-recorded ones.",
+    ),
+    stop_on_error: bool = typer.Option(
+        False, "--stop-on-error", help="Abort at the first failure."
+    ),
+) -> None:
+    """Synthesize audio for all (or selected) segments, sequentially.
+
+    User-recorded segments are skipped unless --force; segments with empty
+    text are skipped. Exit code 1 when any segment fails.
+    """
+
+    def run() -> None:
+        client = ctx.obj.client
+        detail = client.get_project(project_id)
+        plan = segments_mod.plan_segments(detail, chapter_id=chapter_id, segment_id=segment_id)
+        results = []
+        total = len(plan)
+        for done, item in enumerate(plan, start=1):
+            label = f"{item['chapter_name']}#{item['position']}"
+            if item["origin"] == "recorded" and not force:
+                results.append({**item, "status": "skipped", "reason": "recorded"})
+                output.info(f"[{done}/{total}] skip {label} (user-recorded audio)")
+                continue
+            if not item["text"].strip():
+                results.append({**item, "status": "skipped", "reason": "empty_text"})
+                output.info(f"[{done}/{total}] skip {label} (empty text)")
+                continue
+            try:
+                client.synthesize_segment(
+                    project_id, item["chapter_id"], item["segment_id"], force=force
+                )
+                results.append({**item, "status": "ok"})
+                output.info(f"[{done}/{total}] ok {label}")
+            except ApiError as exc:
+                results.append({**item, "status": "failed", "error": exc.message})
+                output.info(f"[{done}/{total}] FAILED {label}: [{exc.status_code}] {exc.code}")
+                if stop_on_error:
+                    break
+        counts = segments_mod.summarize(results)
+        output.info(
+            f"synthesis done: ok={counts['ok']} failed={counts['failed']} "
+            f"skipped={counts['skipped']} planned={total}"
+        )
+        output.emit_json({"summary": counts, "planned": total, "results": results})
+        if counts["failed"]:
+            raise typer.Exit(1)
 
     execute(ctx, run)
 
